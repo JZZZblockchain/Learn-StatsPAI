@@ -638,6 +638,31 @@ class CausalForest(BaseModel):
         upper = np.percentile(predictions, upper_percentile, axis=0)
         
         return lower, upper
+
+    def average_treatment_effect(
+        self,
+        X: Optional[np.ndarray] = None,
+        T: Optional[np.ndarray] = None,
+        target_sample: str = "all",
+        alpha: float = 0.05,
+    ) -> Dict[str, float]:
+        """GRF-style ATE/ATT/ATC/ATO aggregation of CATE predictions."""
+        from .forest_inference import average_treatment_effect
+        return average_treatment_effect(
+            self, X=X, T=T, target_sample=target_sample, alpha=alpha,
+        )
+
+    def forest_diagnostics(
+        self,
+        X: Optional[np.ndarray] = None,
+        T: Optional[np.ndarray] = None,
+        propensity_bounds: Tuple[float, float] = (0.05, 0.95),
+    ) -> Dict[str, object]:
+        """Overlap and CATE-distribution diagnostics for this fitted forest."""
+        from .forest_inference import forest_diagnostics
+        return forest_diagnostics(
+            self, X=X, T=T, propensity_bounds=propensity_bounds,
+        )
     
     def summary(self) -> str:
         """

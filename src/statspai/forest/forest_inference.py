@@ -22,6 +22,9 @@ Implements:
   aggregate quantities (ATE / GATE) computed on a forest with honest
   sample splits. Uses the half-sample delta-method bootstrap of Wager-
   Athey (2018).
+- :func:`average_treatment_effect`: GRF-style ATE/ATT/ATC/ATO aggregation
+  of CATE predictions with effective sample size and normal CIs.
+- :func:`forest_diagnostics`: overlap and CATE-distribution diagnostics.
 
 These functions are stateless and take a fitted :class:`CausalForest`
 object (plus, for some, outcome / treatment / feature arrays). They
@@ -420,6 +423,157 @@ def honest_variance(
     }
 
 
+def average_treatment_effect(
+    forest: "CausalForest",
+    X: Optional[np.ndarray] = None,
+    T: Optional[np.ndarray] = None,
+    target_sample: str = "all",
+    alpha: float = 0.05,
+) -> Dict[str, float]:
+    """Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.
+
+    This mirrors the most-used ``grf::average_treatment_effect`` targets:
+    ``"all"`` (ATE), ``"treated"`` (ATT), ``"control"`` (ATC), and
+    ``"overlap"`` (ATO, weighted by ``e(X)(1-e(X))``).
+    """
+    if not forest.fitted_:
+        raise ValueError("Forest must be fitted.")
+
+    target = target_sample.lower().strip()
+    aliases = {
+        "ate": "all",
+        "all": "all",
+        "att": "treated",
+        "treated": "treated",
+        "atc": "control",
+        "control": "control",
+        "ato": "overlap",
+        "overlap": "overlap",
+    }
+    target = aliases.get(target)
+    if target is None:
+        raise ValueError(
+            "target_sample must be one of 'all', 'treated', 'control', "
+            "or 'overlap'"
+        )
+
+    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
+    tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
+    T_ = np.asarray(
+        T if T is not None else getattr(forest, "_T_original", None),
+        dtype=np.float64,
+    ).ravel()
+    if len(T_) != len(tau):
+        raise ValueError("T must have the same length as X/effect predictions.")
+
+    _m_hat, e_hat = _get_nuisances(
+        forest,
+        X_,
+        np.asarray(getattr(forest, "_Y_original", np.zeros_like(T_)), dtype=float),
+        T_,
+    )
+    e_hat = np.clip(np.asarray(e_hat, dtype=np.float64).ravel(), 1e-6, 1 - 1e-6)
+    if len(e_hat) != len(tau):
+        e_hat = np.full(len(tau), float(np.mean(T_)))
+
+    if target == "all":
+        weights = np.ones_like(tau)
+        estimand = "ATE"
+    elif target == "treated":
+        weights = (T_ == 1).astype(float)
+        estimand = "ATT"
+    elif target == "control":
+        weights = (T_ == 0).astype(float)
+        estimand = "ATC"
+    else:
+        weights = e_hat * (1.0 - e_hat)
+        estimand = "ATO"
+
+    if float(weights.sum()) <= 0:
+        raise ValueError(f"No observations contribute to target_sample={target_sample!r}.")
+
+    estimate = float(np.average(tau, weights=weights))
+    norm_w = weights / weights.sum()
+    var = float(np.sum((norm_w ** 2) * (tau - estimate) ** 2))
+    se = float(np.sqrt(max(var, 0.0)))
+    z = stats.norm.ppf(1 - alpha / 2)
+    ess = float((weights.sum() ** 2) / np.sum(weights ** 2))
+    return {
+        "estimate": estimate,
+        "se": se,
+        "ci_low": estimate - z * se,
+        "ci_high": estimate + z * se,
+        "target_sample": target,
+        "estimand": estimand,
+        "effective_sample_size": ess,
+        "n": int(len(tau)),
+        "alpha": float(alpha),
+        "pscore_min": float(e_hat.min()),
+        "pscore_max": float(e_hat.max()),
+    }
+
+
+def forest_diagnostics(
+    forest: "CausalForest",
+    X: Optional[np.ndarray] = None,
+    T: Optional[np.ndarray] = None,
+    propensity_bounds: Tuple[float, float] = (0.05, 0.95),
+) -> Dict[str, object]:
+    """Return overlap and CATE-distribution diagnostics for a fitted forest."""
+    if not forest.fitted_:
+        raise ValueError("Forest must be fitted.")
+
+    low, high = propensity_bounds
+    if not 0 <= low < high <= 1:
+        raise ValueError("propensity_bounds must satisfy 0 <= low < high <= 1.")
+
+    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
+    tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
+    T_ = np.asarray(
+        T if T is not None else getattr(forest, "_T_original", np.zeros(len(tau))),
+        dtype=np.float64,
+    ).ravel()
+    Y_ = np.asarray(
+        getattr(forest, "_Y_original", np.zeros(len(tau))),
+        dtype=np.float64,
+    ).ravel()
+    _m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
+    e_hat = np.clip(np.asarray(e_hat, dtype=np.float64).ravel(), 0.0, 1.0)
+    if len(e_hat) != len(tau):
+        e_hat = np.full(len(tau), float(np.mean(T_)))
+
+    overlap = (e_hat >= low) & (e_hat <= high)
+    warnings = []
+    if e_hat.min() < low or e_hat.max() > high:
+        warnings.append(
+            "propensity scores outside requested overlap bounds; report "
+            "ATE/ATT with caution or use target_sample='overlap'"
+        )
+    if float(np.std(tau)) < 1e-8:
+        warnings.append("predicted CATE is nearly constant; heterogeneity is weak")
+    if not getattr(forest, "honest", True):
+        warnings.append("forest was fitted with honest=False")
+
+    return {
+        "n": int(len(tau)),
+        "n_treated": int(np.sum(T_ == 1)),
+        "n_control": int(np.sum(T_ == 0)),
+        "cate_mean": float(np.mean(tau)),
+        "cate_sd": float(np.std(tau, ddof=1)) if len(tau) > 1 else 0.0,
+        "cate_min": float(np.min(tau)),
+        "cate_max": float(np.max(tau)),
+        "cate_iqr": float(np.subtract(*np.percentile(tau, [75, 25]))),
+        "pscore_min": float(np.min(e_hat)),
+        "pscore_max": float(np.max(e_hat)),
+        "overlap_low": float(low),
+        "overlap_high": float(high),
+        "overlap_share": float(np.mean(overlap)),
+        "n_low_pscore": int(np.sum(e_hat < low)),
+        "n_high_pscore": int(np.sum(e_hat > high)),
+        "warnings": warnings,
+    }
+
+
 # GRF-compatible alias: the R ``grf`` package exposes this test as
 # ``test_calibration``. We keep ``test_calibration`` as an alias so
 # users familiar with GRF can reach for the same name, while the
@@ -432,4 +586,6 @@ __all__ = [
     "test_calibration",
     "rate",
     "honest_variance",
+    "average_treatment_effect",
+    "forest_diagnostics",
 ]

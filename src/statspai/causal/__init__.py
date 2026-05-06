@@ -37,6 +37,7 @@ warnings.warn(
 from ..forest import (  # noqa: F401
     CausalForest, causal_forest,
     calibration_test, test_calibration, rate, honest_variance,
+    average_treatment_effect, forest_diagnostics,
     multi_arm_forest, MultiArmForestResult,
     iv_forest, IVForestResult,
 )
@@ -93,6 +94,8 @@ __all__ = [
     "test_calibration",
     "rate",
     "honest_variance",
+    "average_treatment_effect",
+    "forest_diagnostics",
     "multi_arm_forest", "MultiArmForestResult",
     "iv_forest", "IVForestResult",
 ]

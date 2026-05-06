@@ -8,7 +8,13 @@ import pandas as pd
 import pytest
 
 import statspai as sp
-from statspai.forest.forest_inference import calibration_test, rate, honest_variance
+from statspai.forest.forest_inference import (
+    calibration_test,
+    rate,
+    honest_variance,
+    average_treatment_effect,
+    forest_diagnostics,
+)
 
 
 def _sim_hte(n=600, seed=0):
@@ -66,3 +72,24 @@ def test_honest_variance_reports_ci():
     assert "ci_low" in out
     assert "ci_high" in out
     assert out["ci_low"] <= out["ate"] <= out["ci_high"]
+
+
+def test_average_treatment_effect_targets_run():
+    cf, X, T, _ = _fit_forest()
+    ate = average_treatment_effect(cf, X=X, T=T, target_sample="all")
+    att = cf.average_treatment_effect(X=X, T=T, target_sample="treated")
+    ato = average_treatment_effect(cf, X=X, T=T, target_sample="overlap")
+    assert ate["estimand"] == "ATE"
+    assert att["estimand"] == "ATT"
+    assert ato["effective_sample_size"] > 0
+    assert ate["ci_low"] <= ate["estimate"] <= ate["ci_high"]
+
+
+def test_forest_diagnostics_reports_overlap_and_warnings():
+    cf, X, T, _ = _fit_forest()
+    out = forest_diagnostics(cf, X=X, T=T, propensity_bounds=(0.05, 0.95))
+    out_method = cf.forest_diagnostics(X=X, T=T)
+    assert "cate_mean" in out
+    assert "overlap_share" in out
+    assert 0 <= out["overlap_share"] <= 1
+    assert out_method["n"] == out["n"]

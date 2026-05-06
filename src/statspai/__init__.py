@@ -694,6 +694,8 @@ __all__ = [
     "test_calibration",  # GRF-compatible alias of calibration_test
     "rate",
     "honest_variance",
+    "average_treatment_effect",
+    "forest_diagnostics",
     # HDFE primitives
     "Absorber",
     "demean",
@@ -1559,6 +1561,7 @@ _register_lazy("forest.forest_inference",
     "calibration_test",
     ("test_calibration", "calibration_test"),
     "rate", "honest_variance",
+    "average_treatment_effect", "forest_diagnostics",
 )
 _register_lazy("forest.multi_arm_forest",
     "multi_arm_forest", "MultiArmForestResult",
