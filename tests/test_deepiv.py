@@ -101,7 +101,7 @@ class TestDeepIVClass:
         result = est.fit()
         assert isinstance(result, CausalResult)
 
-    def test_effect_method(self, linear_iv_data):
+    def test_effect_method(self, linear_iv_data, monkeypatch):
         est = DeepIV(
             data=linear_iv_data, y='y', treat='treat',
             instruments=['instrument'], covariates=['covar'],
@@ -109,9 +109,12 @@ class TestDeepIVClass:
             hidden_layers=(32,), n_components=3,
         )
         est.fit()
+        monkeypatch.setenv("STATSPAI_TORCH_DEVICE", "cuda")
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
         effects = est.effect(t0=0.0, t1=1.0)
         assert len(effects) == 2000
         assert np.isfinite(effects).all()
+        assert next(est._response_net.parameters()).device.type == "cpu"
 
 
 class TestDeepIVValidation:

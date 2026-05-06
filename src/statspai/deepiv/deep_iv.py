@@ -538,6 +538,7 @@ class DeepIV:
         self._effects = effects
         self._x_means = X_means
         self._x_stds = X_stds
+        self._device = device
 
         return CausalResult(
             method='DeepIV (Hartford et al. 2017)',
@@ -592,8 +593,7 @@ class DeepIV:
         t1_s = (t1 - self._t_mean) / self._t_std
         n = len(X_s)
 
-        from ..utils._torch_device import resolve_torch_device
-        device = resolve_torch_device()
+        device = next(self._response_net.parameters()).device
         X_t = torch.tensor(X_s, dtype=torch.float32, device=device)
 
         with torch.no_grad():

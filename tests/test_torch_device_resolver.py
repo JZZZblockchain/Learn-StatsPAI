@@ -54,6 +54,14 @@ def test_explicit_cuda_returns_when_available(monkeypatch):
     assert dev.type == "cuda"
 
 
+def test_explicit_cuda_index_checks_device_count(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setenv("STATSPAI_TORCH_DEVICE", "cuda:1")
+    with pytest.raises(RuntimeError, match="only 1 device"):
+        resolve_torch_device()
+
+
 def test_auto_falls_back_to_cpu_when_no_accelerator(monkeypatch):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     # Force the MPS probe to return False even on Apple Silicon.

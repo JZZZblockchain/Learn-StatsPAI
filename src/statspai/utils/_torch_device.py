@@ -69,13 +69,19 @@ def resolve_torch_device(prefer: Optional[str] = None):
             return torch.device("mps")
         return torch.device("cpu")
 
-    if spec.startswith("cuda"):
+    if spec == "cuda" or spec.startswith("cuda:"):
         if not torch.cuda.is_available():
             raise RuntimeError(
                 f"{_ENV_VAR}={raw!r} requested CUDA but torch.cuda.is_available() is False. "
                 "Install a CUDA-enabled PyTorch build or set STATSPAI_TORCH_DEVICE=cpu."
             )
-        return torch.device(spec)
+        device = torch.device(spec)
+        if device.index is not None and device.index >= torch.cuda.device_count():
+            raise RuntimeError(
+                f"{_ENV_VAR}={raw!r} requested CUDA device {device.index}, "
+                f"but only {torch.cuda.device_count()} device(s) are available."
+            )
+        return device
 
     if spec == "mps":
         if not _mps_available(torch):

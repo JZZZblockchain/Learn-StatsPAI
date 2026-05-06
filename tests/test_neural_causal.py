@@ -6,13 +6,32 @@ import pytest
 import numpy as np
 import pandas as pd
 
-pytest.importorskip("torch", reason="PyTorch required for neural causal tests")
+torch = pytest.importorskip(
+    "torch", reason="PyTorch required for neural causal tests"
+)
 
 from statspai.neural_causal import (
     tarnet, cfrnet, dragonnet,
     TARNet, CFRNet, DragonNet,
 )
 from statspai.core.results import CausalResult
+
+
+def _spy_tensor_devices(monkeypatch):
+    """Capture devices passed to torch.tensor after model fitting."""
+    devices = []
+    original_tensor = torch.tensor
+
+    def spy_tensor(*args, **kwargs):
+        devices.append(kwargs.get("device"))
+        return original_tensor(*args, **kwargs)
+
+    monkeypatch.setattr(torch, "tensor", spy_tensor)
+    return devices
+
+
+def _module_device(module):
+    return next(module.parameters()).device
 
 
 # ======================================================================
@@ -138,7 +157,7 @@ class TestTARNet:
         cate = est.effect()
         assert len(cate) == len(small_data)
 
-    def test_effect_new_data(self, small_data):
+    def test_effect_new_data(self, small_data, monkeypatch):
         est = TARNet(data=small_data, y='y', treat='d',
                      covariates=['x1', 'x2'],
                      epochs=50, repr_layers=(64,),
@@ -146,8 +165,10 @@ class TestTARNet:
         est.fit()
 
         X_new = np.random.randn(10, 2).astype(np.float32)
+        devices = _spy_tensor_devices(monkeypatch)
         cate_new = est.effect(X_new)
         assert len(cate_new) == 10
+        assert devices[-1] == _module_device(est._repr_net)
 
     def test_summary_renders(self, small_data):
         result = tarnet(small_data, y='y', treat='d',
@@ -233,7 +254,7 @@ class TestCFRNet:
         bib = result.cite()
         assert 'shalit2017' in bib
 
-    def test_class_effect_method(self, small_data):
+    def test_class_effect_method(self, small_data, monkeypatch):
         est = CFRNet(data=small_data, y='y', treat='d',
                      covariates=['x1', 'x2'],
                      epochs=50, repr_layers=(64,),
@@ -243,8 +264,10 @@ class TestCFRNet:
         assert len(cate) == len(small_data)
 
         X_new = np.random.randn(5, 2).astype(np.float32)
+        devices = _spy_tensor_devices(monkeypatch)
         cate_new = est.effect(X_new)
         assert len(cate_new) == 5
+        assert devices[-1] == _module_device(est._repr_net)
 
 
 # ======================================================================
@@ -285,7 +308,7 @@ class TestDragonNet:
         assert np.all(e >= 0.01)
         assert np.all(e <= 0.99)
 
-    def test_propensity_new_data(self, small_data):
+    def test_propensity_new_data(self, small_data, monkeypatch):
         est = DragonNet(data=small_data, y='y', treat='d',
                         covariates=['x1', 'x2'],
                         epochs=50, repr_layers=(64,),
@@ -293,10 +316,12 @@ class TestDragonNet:
         est.fit()
 
         X_new = np.random.randn(10, 2).astype(np.float32)
+        devices = _spy_tensor_devices(monkeypatch)
         e_new = est.propensity(X_new)
         assert len(e_new) == 10
         assert np.all(e_new >= 0.01)
         assert np.all(e_new <= 0.99)
+        assert devices[-1] == _module_device(est._repr_net)
 
     def test_constant_effect_recovery(self, constant_effect_data):
         result = dragonnet(constant_effect_data, y='y', treat='d',
@@ -324,7 +349,7 @@ class TestDragonNet:
         bib = result.cite()
         assert 'shi2019' in bib
 
-    def test_effect_method(self, small_data):
+    def test_effect_method(self, small_data, monkeypatch):
         est = DragonNet(data=small_data, y='y', treat='d',
                         covariates=['x1', 'x2'],
                         epochs=50, repr_layers=(64,),
@@ -335,8 +360,10 @@ class TestDragonNet:
         assert len(cate) == len(small_data)
 
         X_new = np.random.randn(5, 2).astype(np.float32)
+        devices = _spy_tensor_devices(monkeypatch)
         cate_new = est.effect(X_new)
         assert len(cate_new) == 5
+        assert devices[-1] == _module_device(est._repr_net)
 
 
 # ======================================================================

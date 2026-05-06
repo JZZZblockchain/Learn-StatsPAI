@@ -395,6 +395,11 @@ def _build_head(input_dim, hidden_layers):
     return nn.Sequential(*layers)
 
 
+def _module_device(module):
+    """Return the device that holds a fitted torch module's parameters."""
+    return next(module.parameters()).device
+
+
 # ======================================================================
 # TARNet
 # ======================================================================
@@ -554,6 +559,7 @@ class TARNet:
         self._head_0 = head_0
         self._head_1 = head_1
         self._cate = cate
+        self._device = device
 
         model_info = self._build_model_info(cate, D, n)
 
@@ -595,7 +601,8 @@ class TARNet:
 
         X_new = np.asarray(X_new, dtype=np.float32)
         X_s = (X_new - self._x_mean) / self._x_std
-        X_t = torch.tensor(X_s, dtype=torch.float32)
+        device = _module_device(self._repr_net)
+        X_t = torch.tensor(X_s, dtype=torch.float32, device=device)
 
         self._repr_net.eval()
         self._head_0.eval()
@@ -796,6 +803,7 @@ class CFRNet:
         self._head_0 = head_0
         self._head_1 = head_1
         self._cate = cate
+        self._device = device
 
         model_info = {
             'architecture': 'CFRNet',
@@ -844,7 +852,8 @@ class CFRNet:
 
         X_new = np.asarray(X_new, dtype=np.float32)
         X_s = (X_new - self._x_mean) / self._x_std
-        X_t = torch.tensor(X_s, dtype=torch.float32)
+        device = _module_device(self._repr_net)
+        X_t = torch.tensor(X_s, dtype=torch.float32, device=device)
 
         self._repr_net.eval()
         self._head_0.eval()
@@ -1085,6 +1094,7 @@ class DragonNet:
         self._prop_head = prop_head
         self._cate = cate
         self._e_hat = e_hat
+        self._device = device
 
         model_info = {
             'architecture': 'DragonNet',
@@ -1139,7 +1149,8 @@ class DragonNet:
 
         X_new = np.asarray(X_new, dtype=np.float32)
         X_s = (X_new - self._x_mean) / self._x_std
-        X_t = torch.tensor(X_s, dtype=torch.float32)
+        device = _module_device(self._repr_net)
+        X_t = torch.tensor(X_s, dtype=torch.float32, device=device)
 
         self._repr_net.eval()
         self._head_0.eval()
@@ -1176,7 +1187,8 @@ class DragonNet:
 
         X_new = np.asarray(X_new, dtype=np.float32)
         X_s = (X_new - self._x_mean) / self._x_std
-        X_t = torch.tensor(X_s, dtype=torch.float32)
+        device = _module_device(self._repr_net)
+        X_t = torch.tensor(X_s, dtype=torch.float32, device=device)
 
         self._repr_net.eval()
         self._prop_head.eval()
