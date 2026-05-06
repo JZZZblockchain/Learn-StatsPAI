@@ -86,7 +86,29 @@ NBER_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-DOI_RE = re.compile(r"\b(?P<id>10\.\d{4,9}/[^\s)\"'`,;}\]\[]+?)\.?(?=[\s)\"'`,;}\]\[]|$)")
+# DOI body allows ASCII printable except whitespace and string-literal /
+# punctuation closers. We allow balanced ``( ... )`` because some serial
+# DOIs encode volume / year inside parens (Elsevier handbook chapters
+# like ``10.1016/S0169-7218(11)00407-2``, Emerald volume 20 like
+# ``10.1108/S1049-2585(2012)0000020009``). Up to 2 levels of nesting
+# is plenty in practice.
+_DOI_NO_PAREN = r"[^\s()\"'`,;}\]\[]+"
+_DOI_PAREN = rf"\(?:{_DOI_NO_PAREN}\)?"  # placeholder, see verbose form
+DOI_RE = re.compile(
+    r"""
+    \b(?P<id>
+        10\.\d{4,9}/                       # DOI prefix
+        (?:
+              [^\s()"'`,;}\]\[]            # non-paren body char
+            | \( [^\s()"'`,;}\]\[]* \)     # balanced (...) one level
+        )+?
+    )
+    \.?                                    # optional trailing period
+    (?= [\s)\"'`,;}\]\[] | $ )
+    """,
+    re.VERBOSE,
+)
+del _DOI_NO_PAREN, _DOI_PAREN
 
 YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
@@ -172,6 +194,23 @@ SURNAME_STOPWORDS = {
     "q-network", "q-networks", "q-learning", "q-function", "q-functions",
     "deep-q", "dqn", "ddqn", "ppo", "a3c", "trpo",
     "actor-critic", "soft-actor-critic", "double-dqn",
+    # Python typing class names that appear in registry.py code blocks
+    # ("FunctionSpec(...)" / "ParamSpec(...)") and read as PascalCase
+    # surnames after _normalise().
+    "functionspec", "paramspec",
+    # title-word fragments leaking through from quoted paper titles
+    # (Blinder/Oaxaca/Neumark/Cotton/Reimers/Kline decomposition canon
+    # + Fairlie logit/probit + DiNardo-Fortin-Lemieux institutions +
+    # VanderWeele mediation + Gelbach "which ones" + Kline "Papers &
+    # Proceedings"). Verified against author lists on Crossref so none
+    # of these are real surnames in our citation corpus.
+    "form", "ones", "papers", "behavior", "mediation",
+    "economics", "economic", "hispanic", "institutions", "logit",
+    # "ses" = "OLS SEs" leaks via the IGNORECASE bug fixed below; keep
+    # it stopworded as belt+braces.
+    "ses",
+    # CHANGELOG / docstring meta-text words ("Verified via Crossref")
+    "crossref", "verified", "datacite", "openalex", "scite",
 }
 
 
@@ -305,8 +344,31 @@ def extract_citations(roots: Iterable[Path]) -> list[Citation]:
                     ("doi", DOI_RE),
                 ):
                     for m in regex.finditer(line):
+                        # Find the CLOSEST markdown-bullet / blank-line
+                        # boundary above the citation line. If found
+                        # within ±8, anchor the block start there so
+                        # that long bullets (e.g. Yadlowsky 2025 where
+                        # the DOI is 4 lines below the author list)
+                        # capture their attribution. If no boundary is
+                        # found within ±8, fall back to a flat ±3 to
+                        # keep neighbouring-bullet surnames out of
+                        # scope for compact id-only references.
+                        boundary_line = None
+                        for k in range(i - 1, max(-1, i - 9), -1):
+                            if k < 0:
+                                break
+                            ln = lines[k]
+                            if not ln.strip():           # blank line
+                                boundary_line = k + 1
+                                break
+                            if re.match(r"^\s*[-*•]\s|^\s*\d+\.\s", ln):
+                                boundary_line = k        # bullet opener
+                                break
+                        start = (boundary_line
+                                 if boundary_line is not None
+                                 else max(0, i - 3))
                         block = "\n".join(
-                            lines[max(0, i - 3): min(len(lines), i + 4)]
+                            lines[start: min(len(lines), i + 4)]
                         )
                         # Mask ALL arXiv id patterns before year search —
                         # the leading 4 digits of an arXiv id (e.g.
@@ -569,6 +631,22 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
     )
     is_bibtex = any(m in c.claim_block for m in _bibtex_markers)
 
+    # Detect meta-text that documents a citation FIX (CHANGELOG /
+    # release-note prose like "previously listed `Seetharam, Liang` as
+    # co-authors — those are invented names. Correct authors: ..."
+    # or "corrected from \"Yan, X.\" to \"Tang, A.\""). The literal
+    # incorrect names appear inside the claim block but are explicitly
+    # marked as wrong. Phantom-author detection on this prose would
+    # flag the just-fixed names — skip it.
+    _fix_meta_markers = (
+        "invented name",  "invented co-authors",  "fictional author",
+        "previously listed",  "corrected from",  "was a misattribution",
+        "wrong author",  "incorrect author",  "mis-attributed",
+        "misattributed",  "typo",
+    )
+    _claim_block_lower = c.claim_block.lower()
+    is_fix_meta = any(m in _claim_block_lower for m in _fix_meta_markers)
+
     # 1) missing truth authors (claim lacks someone actually on the paper)
     has_et_al = "et al" in claim_norm
     missing = [a for a in truth.authors
@@ -580,11 +658,15 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
         if first and first in claim_tokens:
             # acceptable shorthand
             missing = []
-    if missing and not is_bare_reference and not is_bibtex:
+    if (missing and not is_bare_reference and not is_bibtex
+            and not is_fix_meta):
         # Bibtex blocks frequently span more than ±3 lines (Python
         # triple-quoted literals embed full entries), so a partial
         # author hit inside the window is not evidence of a real
         # omission — trust the structured ``author={...}`` field.
+        # Fix-meta prose ("previously listed X — those are invented
+        # names. Correct authors: Y, Z") deliberately mentions wrong
+        # author tokens; skip the missing check there too.
         issues.append(
             f"missing author(s) in claim: {', '.join(missing)}"
         )
@@ -604,9 +686,12 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
     # ``is_bibtex`` was computed above (shared with the missing-author
     # check). Reuse it so the two heuristics stay in sync.
     is_table_row = c.same_line.lstrip().startswith("|") and "|" in c.same_line[1:]
-    if is_bibtex:
+    if is_bibtex or is_fix_meta:
         # BibTeX 'Last, First' swaps cannot be disentangled without a
         # real parser; skip phantom detection entirely for this scope.
+        # Fix-meta prose deliberately quotes wrong-author tokens
+        # alongside the corrected authors — phantom detection there
+        # would re-flag the literal names that the prose is correcting.
         full_scope = ""
     elif is_table_row:
         full_scope = c.same_line
@@ -630,11 +715,67 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
         other_matches = list(other_re.finditer(before_id))
         if other_matches:
             before_id = before_id[other_matches[-1].end():]
+    # Multi-citation reference fields stack 5+ citations in one string
+    # (registry.py FunctionSpec.reference fields, JOSS bullet lists,
+    # etc.). When prior citations don't carry a parseable id (no DOI /
+    # arXiv / NBER number, e.g. "Lee, McCrary, Moreira and Porter (2022)
+    # AER 112(10), 3260-3290."), the chop loop above can't separate
+    # them. Detect the "(YYYY) ... Pages. " citation-boundary pattern
+    # and cut at the LAST such boundary preceding the current id —
+    # only the actual citation's leading authors then remain in scope.
+    # NB the boundary uses ``re.DOTALL``-style spanning via ``[\s\S]``
+    # because Python ``reference=("..." "...")`` string-concat blocks
+    # split adjacent citations across lines with intervening
+    # ``"\n    "`` quote / whitespace runs.
+    cite_boundary = re.compile(
+        r"\(\d{4}(?:[/-]\d{2,4})?\)"     # (2024)  or  (2022/2025)
+        r"[^.]*?"                         # journal name + volume/issue
+                                          # (allow internal parens like
+                                          #  "AER 112(10), 3260-3290")
+        r"\.\s*"                          # closing period
+        r"(?:[\"'\s]|\\n)*"               # optional quotes/newlines
+                                          # between concatenated string
+                                          # literals
+        r"(?=[A-Z][a-z])"                 # next token is a capitalised
+                                          # word (a real surname, not
+                                          # an initial)
+    )
+    boundary_matches = list(cite_boundary.finditer(before_id))
+    if boundary_matches:
+        before_id = before_id[boundary_matches[-1].end():]
+    # Strip book-chapter editor/title segments: " In Editor1 & Editor2
+    # (eds), Book Title (Series, Vol. N). " — none of those tokens are
+    # the chapter's authors and they otherwise read as phantom names.
+    # We allow editor initials with internal periods (`J. A.`) by
+    # constraining the run on parens (`[^()]*?`) rather than periods,
+    # then close on the optional series ``(...)``  + trailing ``.``.
+    before_id = re.sub(
+        r"\bIn\s+[^()]*?\(eds?\.?\)\s*,?\s*[^()]*?"
+        r"(?:\s*\([^)]*\))?"     # optional "(Series, Vol. N)"
+        r"\s*\.\s*",
+        " ",
+        before_id,
+        flags=re.IGNORECASE,
+    )
     semi_m = re.search(r";\s*[^;]*$", before_id)
     head = semi_m.group(0) if semi_m else before_id
     head_tokens = set(_normalise(head).split())
     candidates: set[str] = set()
+    # Detect Python-style PascalCase class names (e.g. ``FunctionSpec``,
+    # ``DNCGNNDIDResult``, ``CausalForestResult``) so they can be
+    # excluded as phantoms BEFORE _normalise() flattens their case
+    # information. Heuristic: 3+ uppercase clusters separated by lowercase,
+    # OR a token ending in a known type-suffix.
+    _class_suffix_re = re.compile(
+        r"(?:Result|Spec|Config|Output|Builder|Factory|Manager|"
+        r"Handler|Wrapper|Adapter|Mixin|Base|Info|Fit|Estimator|"
+        r"Test|Model|Bundle|Report)$"
+    )
+    _camel_internal_re = re.compile(r"^(?:[A-Z]+[a-z]+){2,}|^[A-Z]{3,}[A-Z][a-z]")
     for tok in SURNAME_RE.findall(head):
+        # Skip obvious Python class identifiers before normalising
+        if _class_suffix_re.search(tok) or _camel_internal_re.match(tok):
+            continue
         norm = _normalise(tok)
         if norm in SURNAME_STOPWORDS:
             continue
@@ -672,11 +813,26 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
         head_dia = _strip_diacritics(head)
         actually_used: list[str] = []
         for p in sorted(phantoms):
+            # The `(?-i:...)` inline flag locally disables IGNORECASE so
+            # the "next-token must be capitalised" anchors actually
+            # require an uppercase letter. Without it, IGNORECASE on the
+            # outer flag would let ", which" match `,\s*[A-Z]\.?` (the
+            # "w" in "which" matches the lowercased [A-Z]) — that was
+            # the FP source for tokens like "ses" in "OLS SEs, which
+            # was anti-conservative". Real author lists always have an
+            # uppercase next token (initial, ampersand-then-name,
+            # "and Surname", etc.).
             patt = re.compile(
-                rf"\b{re.escape(p)}\b"                    # surname
-                rf"\s*(?:,\s*[A-Z]\.?|,\s*&|&|\band\b|"   # , I. / , & / & / and
-                rf"\set\s+al|\()",
-                re.IGNORECASE,
+                rf"\b{re.escape(p)}\b"                          # surname
+                rf"\s*"
+                rf"(?:"
+                rf"  ,\s*(?-i:[A-Z])\.?"                        # ", J." / ", J"
+                rf"  | \s*&\s*(?-i:[A-Z])"                      # " & Smith"
+                rf"  | \s+and\s+(?-i:[A-Z][a-z])"               # " and Smith"
+                rf"  | \s+et\s+al"                              # " et al"
+                rf"  | \s*\("                                   # " ("
+                rf")",
+                re.IGNORECASE | re.VERBOSE,
             )
             if patt.search(head_dia):
                 actually_used.append(p)

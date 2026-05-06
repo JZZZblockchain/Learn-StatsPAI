@@ -28,9 +28,10 @@ All notable changes to StatsPAI will be documented in this file.
   variance at the unit level — point-for-point match with the
   StatsPAI implementation. Companion Stata package: `xtdml`.
 - `sp.synth(method='cluster')` method-citations registry: ClusterSC
-  author list corrected from "Rho, S., Yan, X. et al. (2025)" to
-  "Rho, S., Tang, A. et al. (2025)" to match arXiv 2503.21629
-  (`paper.bib` was already correct).
+  second-author surname corrected (was a misattribution; now matches
+  the arXiv 2503.21629 author list — Rho, Tang, Bergam, Cummings,
+  Misra). `paper.bib` was already correct; the typo only lived in
+  `src/statspai/synth/report.py`.
 - Updated callsites: [`paper.bib`](paper.bib) (new
   `clarke2025double` entry), [`src/statspai/dml/panel_dml.py`](src/statspai/dml/panel_dml.py)
   (module docstring + within-transform comment), [`src/statspai/dml/__init__.py`](src/statspai/dml/__init__.py)
