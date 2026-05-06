@@ -2,6 +2,117 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
+## [1.14.0] — 2026-05-05
+
+### Headline
+
+GPU-acceleration sprint. Three workloads now opt into accelerator
+backends without changing their public API: (1) the neural causal
+estimators (`sp.deepiv`, `sp.tarnet`, `sp.cfrnet`, `sp.dragonnet`,
+`sp.cevae`) route through PyTorch CUDA / MPS via a centralised
+device resolver; (2) `sp.fast.feols_jax` runs the full WLS solve on
+JAX / XLA; and (3) `sp.fast.feols_jax_bootstrap` lifts a JIT-compiled
+single-iteration WLS kernel to a `jax.vmap` batched primitive,
+giving a 10–100x speedup over sequential CPU bootstrap on CUDA / TPU
+at B ≥ 1000. Four bootstrap variants share the same JAX kernel
+infrastructure: pairs (multinomial-weight resampling), cluster
+(Cameron–Gelbach–Miller 2008 §III.A), wild (row-level Rademacher),
+and wild cluster (Cameron–Gelbach–Miller 2008 §III.B); the wild
+variants use the score formulation
+`β* = β̂ + (X'WX)⁻¹ X'W (η ⊙ û)` which is mathematically identical
+to refitting on `y* = X β̂ + η ⊙ û` but needs one mat-vec per
+iteration instead of a full QR. A new `cluster_meat` Rust kernel
+in `statspai_hdfe` (PyO3 + Rayon, parallel over clusters) is wired
+behind `statspai.core._numba_kernels.cluster_meat` with the existing
+numba kernel as automatic fallback. `sp.iv(absorb=...)` is the new
+2SLS-with-HDFE entry point: residualises `y`, exogenous controls,
+endogenous regressors, and instruments by one or more FE columns
+via the Phase-1 Rust demean kernel before fitting, with the residual
+DOF adjusted by `Σ(G_k - 1)` to charge the absorbed FE rank against
+iid / HC1 / CR1 SEs. A new `docs/guides/gpu_acceleration.md` is the
+canonical landing page for the accelerator story; the README and
+`paper.md` link to it and explicitly bound the GPU promise (most
+estimators are CPU-only by design — DiD / RD / synth / GMM are
+bandwidth-bound or small-K convex programs where a tuned CPU
+kernel matches GPU performance).
+
+### Added
+
+- `sp.fast.feols_jax` — JAX-backed end-to-end OLS / WLS with HDFE.
+  Same formula DSL and `FeolsResult` return type as `sp.fast.feols`;
+  the WLS solve and HC1 sandwich run on the default JAX device.
+  CR1 cluster sandwich delegates to the existing `crve` (which
+  itself dispatches to the new `cluster_meat` Rust kernel when
+  built). Default `dtype="float64"` preserves bit-comparable
+  numerics; `dtype="float32"` available for the GPU fast path.
+- `sp.fast.feols_jax_bootstrap` — vmap'd bootstrap with four
+  variants (`pairs`, `cluster`, `wild`, `wild_cluster`).
+  `vmap_chunk_size` parameter for memory control on tight devices.
+  Same-seed → bit-identical reproducibility via `jax.random` PRNG.
+  Returns a `FeolsBootstrapResult` dataclass with `coef`, `se_boot`,
+  percentile `ci_lower` / `ci_upper`, and the full `boot_betas`
+  table for custom CI methods.
+- `sp.iv(absorb=...)` — 2SLS with HDFE residualisation. Accepts
+  `"firm + year"` string syntax or `["firm", "year"]` list.
+  LIML / Fuller / GMM / JIVE raise `NotImplementedError` (Phase 3b).
+- `STATSPAI_TORCH_DEVICE` environment variable (`cpu` / `cuda` /
+  `cuda:N` / `mps` / `auto`) routes neural causal estimators
+  through the requested device. Default `cpu` preserves existing
+  pinned numerics; explicit `cuda` raises if the device is
+  unavailable rather than silently falling back. New
+  `sp.fast.torch_device_info()` mirrors `sp.fast.jax_device_info()`.
+- `statspai_hdfe::cluster_meat` Rust kernel — Rayon parallel over
+  clusters with thread-local k×k upper-triangle accumulator and
+  elementwise reduction. Bumped the crate version 0.5.0-alpha.1 →
+  0.7.0-alpha.1. Activation requires a one-time
+  `pip install maturin && cd rust/statspai_hdfe && maturin develop --release`;
+  Python falls back to the numba kernel transparently when the
+  Rust extension is absent.
+- `docs/guides/gpu_acceleration.md` — accelerator landing page
+  with activation recipes, a Google Colab quickstart benchmark,
+  and an explicit "what is *not* GPU-accelerated and why" table.
+
+### Changed
+
+- `paper.md` adds a fifth bullet to the *Unique features*
+  list documenting the accelerator story, and notes the Rust
+  HDFE / cluster-meat kernel in the implementation paragraph.
+- `README.md` comparison-table accelerator row now links to the
+  new GPU guide; the *What StatsPAI is — and is not* bullet
+  expands to explicitly mention `feols_jax`,
+  `feols_jax_bootstrap`, and the vmap mechanism.
+
+### Internal
+
+- New helper `_jax_prep_inputs` shares formula-parse + FE-residualise
+  logic between `feols_jax` and `feols_jax_bootstrap`.
+  `feols_jax` itself is unchanged in this release; consolidation
+  into a shared call site is a candidate follow-up.
+- Rust crate adds `src/cluster.rs` (kernel) and a `cluster_meat`
+  PyO3 binding in `src/lib.rs`. 3 cargo unit tests cover small-DGP
+  reference parity, k=1 closed form, and empty-input safety.
+
+### Verified
+
+- 10 PyTorch device-resolver tests
+  (`tests/test_torch_device_resolver.py`); 51 existing neural
+  tests pass without numerical drift on default CPU.
+- 9 `cluster_meat` Rust parity tests
+  (`tests/test_cluster_meat_rust.py`) — auto-skip when
+  `statspai_hdfe` is not built.
+- 13 `sp.iv(absorb=)` parity tests vs explicit drop-first
+  dummies (`tests/test_iv_absorb.py`); coefficients agree to
+  `atol=1e-9`, iid SE to `rtol=1e-3`, cluster SE to `rtol=1e-2`.
+- 12 `feols_jax` parity tests vs `feols`
+  (`tests/test_jax_feols.py`); iid / hc1 / cr1 / weighted /
+  float32 / 6 error-path validations.
+- 24 `feols_jax_bootstrap` tests
+  (`tests/test_jax_feols_bootstrap.py`); convergence to HC1 SE
+  for pairs / wild and CR1 SE for cluster / wild_cluster at
+  B=2000 (rtol 10–15%); algebraic identity check that the wild
+  score formulation reproduces the literal "refit on pseudo-y"
+  bootstrap bit-for-bit on a no-FE DGP (`atol=1e-9`).
+
 ## [1.13.1] — 2026-05-05
 
 ### Headline

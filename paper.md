@@ -234,11 +234,38 @@ interface: `.summary()`, `.plot()`, `.to_latex()`, `.to_docx()`, and
    progress notifications, and `sp.citation()` together with a
    `paper.bib`-checked DOI verifier that refuses to emit citations
    not present in the curated bibliography.
+5. **Selective accelerator backends** for the workloads that
+   benefit from them. Neural causal estimators (TARNet, CFRNet,
+   DragonNet, CEVAE, DeepIV) route through PyTorch CUDA / MPS via
+   the `STATSPAI_TORCH_DEVICE` environment variable. The HDFE
+   residualiser exposes `backend="jax"` and `sp.fast.feols_jax`
+   runs the full WLS solve on JAX / XLA. The largest GPU win in
+   v1.14 is `sp.fast.feols_jax_bootstrap`: the same JIT-compiled
+   WLS kernel is lifted to a `jax.vmap` batched primitive, giving
+   a 10--100x speedup over sequential CPU bootstrap on CUDA / TPU
+   at $B \geq 1{,}000$. Four bootstrap variants share the same
+   JAX kernel infrastructure --- pairs, cluster, wild, and wild
+   cluster [@cameron2008bootstrap] --- with the wild
+   variants using the score formulation $\hat\beta^*_b =
+   \hat\beta + (X'WX)^{-1}\, X'W\, (\eta_b \odot \hat u)$ which
+   is mathematically identical to refitting on
+   $y^* = X\hat\beta + \eta \odot \hat u$ but needs only a single
+   matrix--vector multiply per iteration. The remainder of the
+   package (DiD, RD, synthetic control, GMM) is CPU-only by
+   design: these workloads are bandwidth-bound or involve small-$K$
+   convex programs where a tuned Rust + Numba kernel matches GPU
+   performance. Cluster-robust meat matrices use a Rust + Rayon
+   kernel parallel over clusters
+   (`statspai.core._numba_kernels.cluster_meat`) introduced in
+   v1.14, and `sp.iv(absorb=...)` newly wires the Rust HDFE
+   residualiser into the 2SLS first stage.
 
 The package is implemented in pure Python atop NumPy, SciPy, Pandas,
 statsmodels, scikit-learn, and linearmodels, with optional PyTorch and
-JAX backends. It supports Python $\geq$ 3.9 and is distributed via
-PyPI under the MIT license.
+JAX backends and a Rust HDFE / cluster-meat kernel
+(`statspai_hdfe`, PyO3 + Rayon) that the Python wrappers prefer when
+built and silently fall through when absent. It supports Python
+$\geq$ 3.9 and is distributed via PyPI under the MIT license.
 
 # Validation
 
