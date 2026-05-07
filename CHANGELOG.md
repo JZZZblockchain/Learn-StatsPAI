@@ -2,6 +2,50 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
+## [Unreleased]
+
+### Added — R-parity opt-in for `sp.rdrobust`
+
+- **New `bwselect='cct'`** in [`sp.rdrobust`](src/statspai/rd/rdrobust.py)
+  delegates the entire estimation (bandwidth selection + bias-corrected
+  inference) to the official `rdrobust>=1.3` Python port (Calonico,
+  Cattaneo & Titiunik 2014). This guarantees **bit-equal alignment with
+  R `rdrobust::rdrobust`** for users who need exact replication of
+  CCT-2014 published numbers — for example the canonical Lee/CCT Senate
+  case where R returns `Conv = 7.4141 / Robust = 7.5065 / h = 17.754`.
+  The internal `bwselect='mserd'` (default) is **kept unchanged for
+  backward compatibility** — it uses StatsPAI's own MSE-optimal recipe
+  which can drift from R's `rdbwselect` by up to ~70% on certain
+  datasets (documented in
+  [`tests/orig_parity/results/parity_table_orig.md`](tests/orig_parity/results/parity_table_orig.md)
+  row 52, module `05_lee_original`).
+- Install with `pip install statspai[rd-cct]` (adds the official
+  `rdrobust>=1.3` dependency).  Calling `bwselect='cct'` without it
+  raises a clear `ImportError` pointing to the install command.
+- See [MIGRATION.md](MIGRATION.md#sp-rdrobust-bwselect-cct-r-parity-opt-in)
+  for guidance on when to switch from `'mserd'` to `'cct'`.
+
+### Tests — `did::aggte` parity lock
+
+- Added [`TestAggteRParity`](tests/external_parity/test_published_replications.py)
+  in `tests/external_parity/test_published_replications.py`. Asserts
+  `sp.aggte(type='simple')` is bit-equal (≤1e-10) with R `did::aggte`
+  recorded in [`tests/orig_parity/results/02_mpdta_original_R.json`](tests/orig_parity/results/02_mpdta_original_R.json),
+  and `type='dynamic'` matches R's published vignette output to 1e-3.
+  Prevents future refactors from silently drifting away from R.
+- Added [`TestCCTDelegationParity`](tests/external_parity/test_published_replications.py)
+  and an `ImportError`-guarded test that pin the new `bwselect='cct'`
+  delegation to R `rdrobust` Senate-replication numbers (Conv 7.4141,
+  Robust 7.5065, h=17.754, 1e-3 tolerance).
+
+### Internal
+
+- Added `[project.optional-dependencies] rd-cct = ["rdrobust>=1.3"]` to
+  [`pyproject.toml`](pyproject.toml).
+- `sp.datasets.list_datasets()` now returns six columns
+  (added `paper_original` column to honestly distinguish the published
+  paper number from the simulated-replica's actual estimator output).
+
 ## [1.15.0] — 2026-05-05
 
 ### Docs — `sp.dml_panel` citation correction

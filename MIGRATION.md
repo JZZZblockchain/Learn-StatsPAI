@@ -5,6 +5,63 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+## v1.15 → v1.16 — `sp.rdrobust(bwselect='cct')` R-parity opt-in
+
+**No breaking change.** `sp.rdrobust` keeps `bwselect='mserd'` (StatsPAI's
+own MSE-optimal recipe) as the default — every existing call returns the
+same numbers. A new opt-in value `bwselect='cct'` is added for users who
+need bit-equal R `rdrobust::rdrobust` parity.
+
+### When to switch from `'mserd'` to `'cct'`
+
+Use `bwselect='cct'` when **any** of these apply:
+
+- You're replicating a CCT 2014 / Cattaneo-Idrobo-Titiunik (2018, 2020)
+  paper and need the published numbers to the 4th decimal.
+- A reviewer asks for "the same number R `rdrobust` gives".
+- Your data has features that stress StatsPAI's internal pilot bandwidth
+  (heavy tails, small `n`, mass points). On the canonical Lee/CCT Senate
+  replication, `'mserd'` gives `Conv = 12.62 / h = 4.6` while `'cct'`
+  gives `Conv = 7.41 / h = 17.75` — the latter matches R bit-equal.
+
+Keep the default `bwselect='mserd'` when:
+
+- You don't need exact R parity, **and**
+- You don't want a soft dependency on the `rdrobust` package, **and**
+- Your downstream tests / pipelines have already been calibrated against
+  StatsPAI's `'mserd'` numbers.
+
+### How to switch
+
+```python
+import statspai as sp
+
+# Before — StatsPAI internal MSE-optimal (kept stable)
+res = sp.rdrobust(data=df, y='y', x='x', c=0)
+# After — R-bit-equal via official rdrobust delegation
+res = sp.rdrobust(data=df, y='y', x='x', c=0, bwselect='cct')
+```
+
+Install the optional dependency once:
+
+```bash
+pip install statspai[rd-cct]   # adds rdrobust>=1.3
+```
+
+Calling `bwselect='cct'` without it raises a clear `ImportError` that
+points you to the install command — no silent fallback.
+
+### Why we didn't change `'mserd'` itself
+
+Aligning the internal `'mserd'` to R `rdbwselect`'s recursive 3-step
+recipe would shift point estimates on every dataset that exercises
+StatsPAI's RD path (5+ test classes, `r_parity` scripts, downstream
+docs / notebooks). The additive `'cct'` route gives anyone who wants R
+parity an immediate path **and** preserves the 1.x line's numerical
+stability. A future major version may flip the default.
+
+---
+
 ## v1.11 → v1.12 — DML module hardening
 
 `sp.dml`, `sp.dml_panel`, `sp.dml_model_averaging` keep all of their

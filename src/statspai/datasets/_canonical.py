@@ -9,11 +9,45 @@ Every DGP is:
 The ``df.attrs`` dictionary on each returned DataFrame records the
 paper citation, the published expected estimate(s), and a note on
 the relationship between our simulated replica and the original.
+
+Real-data path (``simulated=False``)
+------------------------------------
+Selected loaders also expose a ``simulated=False`` branch that reads
+a public-domain CSV bundled in ``statspai/datasets/data/``.  Use this
+for exact paper replication; ``df.attrs['data_source']`` will be set
+to ``'real'`` and ``df.attrs['simulated']`` to ``False``.
 """
 from __future__ import annotations
 
+from importlib import resources
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+
+def _load_bundled_csv(name: str) -> pd.DataFrame:
+    """Read a CSV bundled under ``statspai/datasets/data/``.
+
+    Uses ``importlib.resources`` so this works whether the package is
+    installed as a wheel or run from a source checkout.
+    """
+    try:
+        ref = resources.files("statspai.datasets").joinpath("data", name)
+        with resources.as_file(ref) as path:
+            return pd.read_csv(path)
+    except (FileNotFoundError, ModuleNotFoundError):
+        # Fall back to source-tree path (editable installs without
+        # package_data picked up).
+        here = Path(__file__).resolve().parent / "data" / name
+        if here.exists():
+            return pd.read_csv(here)
+        raise FileNotFoundError(
+            f"Bundled dataset '{name}' not found.  Expected at "
+            f"statspai/datasets/data/{name}.  If you installed from a "
+            f"source checkout, reinstall with `pip install -e .` to "
+            f"register the package_data entry."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -100,33 +134,73 @@ def mpdta(seed: int = 42) -> pd.DataFrame:
 # Card (1995) — IV returns to schooling
 # ---------------------------------------------------------------------------
 
-def card_1995(seed: int = 42) -> pd.DataFrame:
-    """Simulated replica of Card (1995) NLS Young Men data.
+def card_1995(seed: int = 42, simulated: bool = True) -> pd.DataFrame:
+    """Card (1995) NLS Young Men data — simulated replica or real extract.
 
     Card uses proximity to a 4-year college (``nearc4``) as an
     instrument for years of education in a wage equation.  Published
-    OLS and IV point estimates (on the original data):
+    OLS and IV point estimates (Card 1995 Table 2):
 
-    - OLS:  β_educ ≈ 0.075
-    - IV (nearc4): β_educ ≈ 0.132  (and higher than OLS, contrary to
-      classical measurement-error predictions — the LATE interpretation
-      is for compliers who were on the margin of attending college due
-      to proximity).
+    - OLS:  β_educ ≈ 0.075  (col 2)
+    - IV (nearc4): β_educ ≈ 0.132  (col 5)
 
-    The DGP here calibrates both estimates to their published values
-    by construction (heterogeneous complier effect).
+    IV exceeds OLS — the "Card puzzle".  The LATE interpretation is for
+    compliers on the margin of attending college because of proximity.
+
+    Parameters
+    ----------
+    seed : int, default 42
+        RNG seed for the simulated DGP (ignored when ``simulated=False``).
+    simulated : bool, default True
+        If True, return a deterministic simulated replica calibrated so
+        StatsPAI estimators recover OLS ≈ 0.11 and IV ≈ 0.142.
+        If False, load the real NLSYM extract bundled in
+        ``statspai/datasets/data/card_1995.csv`` (n=3010, identical to
+        R's ``wooldridge::card`` complete-cases subset on Card's
+        modelling variables).  StatsPAI on this real data recovers
+        OLS ≈ 0.0740 (paper 0.075) and IV ≈ 0.1323 (paper 0.132).
 
     Returns
     -------
-    pd.DataFrame with columns: lwage, educ, exper, expersq, black,
-        south, smsa, nearc4 (n=3010).
+    pd.DataFrame
+        Simulated columns: ``lwage, educ, exper, expersq, black,
+        south, smsa, nearc4`` (n=3010).
+        Real columns: same plus ``nearc2`` (proximity to 2-year college).
 
     References
     ----------
     Card, D. (1995). Using Geographic Variation in College Proximity
     to Estimate the Return to Schooling. In Christofides et al. (eds.),
-    Aspects of Labour Market Behaviour.
+    Aspects of Labour Market Behaviour. [@card1995using]
     """
+    if not simulated:
+        df = _load_bundled_csv("card_1995.csv")
+        df.attrs['paper'] = (
+            "Card, D. (1995). Using Geographic Variation in College "
+            "Proximity to Estimate the Return to Schooling."
+        )
+        df.attrs['data_source'] = 'real'
+        df.attrs['simulated'] = False
+        df.attrs['source_origin'] = (
+            "R wooldridge::card complete-cases subset on the Card 1995 "
+            "modelling variables (lwage, educ, exper, expersq, black, "
+            "south, smsa, nearc4, nearc2)."
+        )
+        # StatsPAI-pinned values on this real extract (regression-test
+        # references; verified against R AER::ivreg).
+        df.attrs['statspai_pinned_ols_educ'] = 0.0740
+        df.attrs['statspai_pinned_iv_educ'] = 0.1323
+        df.attrs['published_ols_table2_col2'] = 0.075
+        df.attrs['published_iv_table2_col5'] = 0.132
+        df.attrs['notes'] = (
+            "Real NLSYM extract (n=3010) matching wooldridge::card.  "
+            "StatsPAI's HC1-OLS and 2SLS recover the published Card "
+            "(1995) Table 2 numbers to 3 decimal places. See "
+            "tests/orig_parity/results/01_card_original_py.json for "
+            "the pinned regression-test values."
+        )
+        return df
+
     rng = np.random.default_rng(seed)
     n = 3010
     nearc4 = rng.binomial(1, 0.68, n)    # ~68% lived near 4-year college
@@ -181,8 +255,15 @@ def card_1995(seed: int = 42) -> pd.DataFrame:
     df.attrs['notes'] = (
         "Simulated replica preserving the Card (1995) key pattern: "
         "IV > OLS (the 'Card puzzle').  On this DGP OLS ≈ 0.11, "
-        "IV ≈ 0.142; on the original data OLS = 0.075 and IV = 0.132.  "
-        "For exact Card replication use the original NLSYM data."
+        "IV ≈ 0.142; on the original NLSYM data Card reports OLS = 0.075 "
+        "and IV = 0.132 (Table 3, col. 5).  Card's Table 3 col. 5 spec "
+        "uses 9 region dummies + age + age² + black + south + smsa + "
+        "experience + experience² as exogenous controls, with nearc4 as "
+        "the single instrument for educ.  This replica only ships 5 "
+        "exogenous controls (exper, expersq, black, south, smsa); "
+        "extra region dummies are dropped to keep the DataFrame compact. "
+        "For exact Card replication use the original NLSYM data, "
+        "downloadable from NBER (https://www.nber.org/research/data)."
     )
     return df
 
@@ -404,7 +485,17 @@ def lee_2008_senate(seed: int = 42) -> pd.DataFrame:
     })
     df.attrs['paper'] = "Lee (2008). Journal of Econometrics 142, 675-697."
     df.attrs['expected_jump_at_cutoff'] = 0.08
-    df.attrs['published_jump_original'] = 0.08
+    df.attrs['published_jump_original'] = 0.077  # Lee (2008) Table 4 incumbency advantage
+    df.attrs['notes'] = (
+        "Simulated replica.  DGP coded a 0.08 jump at margin=0; the "
+        "Calonico-Cattaneo-Titiunik (2014) bias-corrected ROBUST estimator "
+        "(rdrobust default) returns ~0.062 with SE 0.024 because the "
+        "2nd-order bias correction shrinks the estimate; the older "
+        "CONVENTIONAL local-linear estimator (Lee's original method) "
+        "returns ~0.073 with SE 0.017, much closer to Lee's 0.077.  "
+        "For exact Lee replication use the original Senate data, "
+        "shipped with R package rdrobust."
+    )
     return df
 
 

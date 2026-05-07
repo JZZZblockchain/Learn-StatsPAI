@@ -93,6 +93,12 @@ bayes = [
 tune = [
     "optuna>=3.0",
 ]
+rd-cct = [
+    # Official Calonico-Cattaneo-Titiunik (2014) rdrobust port; opt-in
+    # via ``sp.rdrobust(..., bwselect='cct')`` to get bit-equal R parity
+    # for bandwidth selection + inference.
+    "rdrobust>=1.3",
+]
 
 [project.scripts]
 statspai = "statspai.cli:main"
@@ -109,6 +115,9 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.setuptools.package-data]
+"statspai.datasets" = ["data/*.csv"]
 
 [tool.black]
 line-length = 88

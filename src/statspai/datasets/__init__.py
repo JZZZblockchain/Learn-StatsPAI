@@ -64,10 +64,73 @@ from ._canonical import (
 # Re-export synth-shipped datasets (unchanged DGPs; this is the
 # consolidated namespace)
 from ..synth.datasets import (
-    california_tobacco as california_prop99,
+    california_tobacco as _california_tobacco_simulated,
     basque_terrorism,
     german_reunification,
 )
+from ._canonical import _load_bundled_csv
+
+
+def california_prop99(simulated: bool = True) -> pd.DataFrame:
+    """California Proposition 99 panel (Abadie-Diamond-Hainmueller 2010).
+
+    Parameters
+    ----------
+    simulated : bool, default True
+        If True, return the simulated covariate-rich replica from
+        ``synth.california_tobacco`` (39 states × 31 years, 1970-2000,
+        ADH-shaped DGP).  Default for backward compatibility.
+        If False, load the real ADH (2010) panel bundled in
+        ``statspai/datasets/data/california_prop99.csv`` (39 states ×
+        31 years, with covariates ``cigsale, retprice, lnincome,
+        age15to24, beer``; identical to tidysynth's smoking dataset).
+        Use this for exact paper replication.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns (both branches): ``state, year, cigsale, retprice,
+        lnincome, age15to24, beer``.  The simulated branch additionally
+        provides ``treated``; on the real branch we derive it as
+        ``(state == 'California') & (year >= 1989)``.
+
+    References
+    ----------
+    Abadie, A., Diamond, A. & Hainmueller, J. (2010).
+    Synthetic Control Methods for Comparative Case Studies.
+    Journal of the American Statistical Association 105(490), 493-505.
+    [@abadie2010synthetic]
+    """
+    if simulated:
+        return _california_tobacco_simulated()
+
+    df = _load_bundled_csv("california_prop99.csv")
+    # The bundled real CSV does not carry a 'treated' indicator; derive
+    # it so downstream callers (synth, synthdid, plotting) work uniformly.
+    if 'treated' not in df.columns:
+        df = df.copy()
+        df['treated'] = (
+            (df['state'] == 'California') & (df['year'] >= 1989)
+        ).astype(int)
+    df.attrs['paper'] = (
+        "Abadie, A., Diamond, A. & Hainmueller, J. (2010). "
+        "Synthetic Control Methods for Comparative Case Studies. "
+        "JASA 105(490), 493-505."
+    )
+    df.attrs['data_source'] = 'real'
+    df.attrs['simulated'] = False
+    df.attrs['source_origin'] = (
+        "Public-domain ADH (2010) California Prop 99 panel; "
+        "byte-identical to tidysynth's smoking dataset (1970-2000)."
+    )
+    df.attrs['notes'] = (
+        "Real ADH panel for exact paper replication.  Use the full "
+        "ADH (2010) predictor recipe via sp.synth(method='classic', "
+        "special_predictors=...) for canonical numbers; the headline "
+        "1989-2000 average gap is roughly -19 packs/capita per ADH "
+        "(2010) Figure 2."
+    )
+    return df
 
 # Convenience alias
 teen_employment = mpdta
@@ -76,40 +139,61 @@ teen_employment = mpdta
 def list_datasets() -> pd.DataFrame:
     """Return a DataFrame describing all available datasets.
 
-    Columns: name, design, n_obs, paper, expected_main.
+    Columns: name, design, n_obs, paper, paper_original, expected_main.
+
+    - ``paper_original`` is the headline number from the published paper on the
+      ORIGINAL data (what readers expect to see).
+    - ``expected_main`` is what the canonical estimator recovers on this
+      simulated replica (what users will actually observe). The two differ
+      because the bundled replicas are deterministic DGPs calibrated to the
+      neighbourhood of the published values, not the original data.
+
+    For the strict numerical neighbourhood proofs see
+    ``tests/external_parity/test_published_replications.py`` and
+    ``tests/external_parity/PUBLISHED_REFERENCE_VALUES.md``.
     """
     registry = [
+        # (name, design, n_obs, paper, paper_original, expected_main)
         ('mpdta', 'DID', 2500,
          "Callaway-Sant'Anna (2021)",
-         "Simple ATT ≈ -0.040 (teen employment effect of min-wage)"),
+         "Simple ATT ≈ -0.0454 (R did::att_gt on original mpdta)",
+         "Simple ATT ≈ -0.033, dynamic ATT ≈ -0.034 on this replica"),
         ('card_1995', 'IV', 3010,
          "Card (1995)",
-         "IV returns-to-schooling ≈ 0.132 (OLS ≈ 0.075)"),
+         "IV β_educ ≈ 0.132, OLS ≈ 0.075 (Table 3, NLSYM)",
+         "IV β_educ ≈ 0.142, OLS ≈ 0.110 on this replica"),
         ('nsw_lalonde', 'RCT / matching', 445,
          "LaLonde (1986) / Dehejia-Wahba (1999)",
-         "Experimental ATT ≈ $1,794 (re78)"),
+         "Experimental ATT ≈ $1,794 (DW 1999, re78)",
+         "Naive OLS ≈ $1,556 on this replica (calibrated to $1,794)"),
         ('nsw_dw', 'SOO', 2675,
          "Dehejia-Wahba (1999)",
-         "Naive OLS ≈ -$8,498; PSM ≈ $1,794"),
+         "Naive OLS ≈ -$8,498; PSM ≈ $1,794 (DW 1999)",
+         "Naive OLS ≈ -$8,387; covariate-adjusted ≈ $2,313 on replica"),
         ('lee_2008_senate', 'RD', 6558,
          "Lee (2008)",
-         "Incumbent advantage ≈ 0.08 voteshare points"),
+         "Incumbent advantage ≈ 0.077 voteshare pts (Table 4)",
+         "Conventional ≈ 0.073, CCT robust ≈ 0.062 on this replica"),
         ('angrist_krueger_1991', 'IV', 5000,
          "Angrist-Krueger (1991)",
-         "QOB IV returns-to-schooling ≈ 0.08–0.11"),
+         "QOB IV β_educ ≈ 0.08–0.11 (Table V, range)",
+         "IV β_educ ≈ 0.10 by construction on this replica"),
         ('california_prop99', 'SCM', 1200,
          "Abadie-Diamond-Hainmueller (2010)",
-         "ATT ≈ -15 packs/capita (1988-2000)"),
+         "Mean 1989-2000 ATT ≈ -19 packs/capita (JASA Fig. 2)",
+         "Classic ADH ≈ -13.1, ASCM ≈ -13.3 packs/capita on this replica"),
         ('basque_terrorism', 'SCM', 774,
          "Abadie-Gardeazabal (2003)",
-         "GDP gap ≈ -0.855 (mean 1975-1997)"),
+         "GDP gap ≈ -0.855 (mean 1975-1997)",
+         "GDP gap ≈ -0.855 on this replica (calibrated)"),
         ('german_reunification', 'SCM', 748,
          "Abadie-Diamond-Hainmueller (2015)",
-         "West Germany GDPpc gap ≈ -1,500 (post-1990)"),
+         "West Germany GDPpc gap ≈ -1,500 (post-1990)",
+         "GDPpc gap ≈ -1,500 on this replica (calibrated)"),
     ]
     return pd.DataFrame(registry,
-                        columns=['name', 'design', 'n_obs',
-                                 'paper', 'expected_main'])
+                        columns=['name', 'design', 'n_obs', 'paper',
+                                 'paper_original', 'expected_main'])
 
 
 __all__ = [

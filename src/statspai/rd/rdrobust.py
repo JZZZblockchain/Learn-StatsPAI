@@ -172,12 +172,33 @@ def rdrobust(
     >>> result = rdrobust(df, y='y', x='x', c=0, deriv=1)
     """
     _VALID_BW = {'mserd', 'msetwo', 'cerrd', 'certwo',
-                 'msecomb1', 'msecomb2', 'cercomb1', 'cercomb2'}
+                 'msecomb1', 'msecomb2', 'cercomb1', 'cercomb2',
+                 # ``'cct'`` delegates the entire estimation to the official
+                 # rdrobust Python port (Calonico-Cattaneo-Titiunik 2014) for
+                 # bit-equal R `rdrobust::rdrobust` parity. Opt-in; requires
+                 # ``pip install statspai[rd-cct]``.  Added 2026-05-06.
+                 'cct'}
     if kernel not in ('triangular', 'uniform', 'epanechnikov'):
         raise ValueError(f"kernel must be 'triangular', 'uniform', or "
                          f"'epanechnikov', got '{kernel}'")
     if bwselect not in _VALID_BW:
         raise ValueError(f"bwselect must be one of {_VALID_BW}, got '{bwselect}'")
+
+    # ── R-parity delegation: bwselect='cct' ─────────────────────────────
+    # Route the entire call through the official ``rdrobust`` Python
+    # package (Calonico, Cattaneo, Titiunik 2014). This guarantees
+    # bit-equal alignment with R `rdrobust::rdrobust` on bandwidth
+    # selection AND on the bias-corrected estimator/inference, which
+    # matter for replication of CCT 2014 published numbers (e.g.
+    # Senate data Conv ≈ 7.41, Robust ≈ 7.51). Our internal ``mserd``
+    # path uses an independent MSE-optimal recipe that can drift from
+    # R by 60-70% on certain datasets — see CHANGELOG v1.16 / MIGRATION.md.
+    if bwselect == 'cct':
+        return _delegate_to_cct_rdrobust(
+            data=data, y=y, x=x, c=c, fuzzy=fuzzy, deriv=deriv, p=p, q=q,
+            kernel=kernel, h=h, b=b, rho=rho, covs=covs, cluster=cluster,
+            donut=donut, alpha=alpha,
+        )
     if deriv < 0:
         raise ValueError(f"deriv must be non-negative, got {deriv}")
     if donut < 0:
@@ -444,6 +465,230 @@ def rdrobust(
     except Exception:  # pragma: no cover
         pass
     return _result
+
+
+# ======================================================================
+# R-parity delegation for ``bwselect='cct'``
+# ======================================================================
+
+def _delegate_to_cct_rdrobust(
+    data: pd.DataFrame,
+    y: str,
+    x: str,
+    c: float,
+    fuzzy: Optional[str],
+    deriv: int,
+    p: int,
+    q: Optional[int],
+    kernel: str,
+    h: Optional[float],
+    b: Optional[float],
+    rho: Optional[float],
+    covs: Optional[List[str]],
+    cluster: Optional[str],
+    donut: float,
+    alpha: float,
+) -> CausalResult:
+    """Delegate to the official ``rdrobust`` Python port (Calonico-
+    Cattaneo-Titiunik 2014) and adapt the result to ``CausalResult``.
+
+    Why
+    ---
+    Our internal ``mserd`` recipe is calibrated independently of the
+    canonical CCT 2014 recursive bandwidth selection and can drift from
+    R `rdrobust::rdrobust` by 60–70% on certain datasets (notably the
+    Lee/CCT Senate replication where R returns h=17.75 / Conv=7.41 and
+    StatsPAI's mserd returns h=4.63 / Conv=12.62; see
+    ``tests/orig_parity/results/parity_table_orig.md`` row 52 / module
+    ``05_lee_original``). For exact CCT replication, this path delegates
+    the entire estimation to ``rdrobust>=1.3``.
+
+    See Also
+    --------
+    sp.rdrobust : default ``bwselect='mserd'`` uses StatsPAI's own MSE
+        bandwidth (kept stable for backward compat); set
+        ``bwselect='cct'`` to opt into R-parity.
+
+    References
+    ----------
+    Calonico, S., Cattaneo, M.D. and Titiunik, R. (2014). [@calonico2014robust]
+    """
+    try:
+        import rdrobust as _r  # noqa: WPS433 — opt-in soft dependency
+    except ImportError as exc:  # pragma: no cover — guarded path
+        raise ImportError(
+            "bwselect='cct' delegates to the official rdrobust package "
+            "for bit-equal R parity. Install with: "
+            "`pip install statspai[rd-cct]`  (or `pip install rdrobust>=1.3`)."
+        ) from exc
+
+    # --- Parse data the same way our internal path does ---
+    Y_arr, X_c, D, Z = _parse_data(data, y, x, c, fuzzy, covs)
+
+    # Apply donut filter (rdrobust does not support donut natively).
+    if donut > 0:
+        keep = np.abs(X_c) > donut
+        if keep.sum() < 10:
+            raise ValueError(
+                f"donut={donut} excludes too many observations "
+                f"({(~keep).sum()} dropped, {keep.sum()} remain)."
+            )
+        Y_arr, X_c = Y_arr[keep], X_c[keep]
+        if D is not None:
+            D = D[keep]
+        if Z is not None:
+            Z = Z[keep]
+
+    # rdrobust expects raw (uncentered) X — re-add cutoff.
+    X_raw = X_c + c
+
+    if q is None:
+        q = p + 1
+
+    n_left_total = int((X_c < 0).sum())
+    n_right_total = int((X_c >= 0).sum())
+    n_obs = len(Y_arr)
+
+    cluster_vals = None
+    if cluster is not None:
+        cluster_vals = data[cluster].values
+        if donut > 0:
+            X_full = data[x].values.astype(float) - c
+            cluster_vals = cluster_vals[np.abs(X_full) > donut]
+
+    # --- Call official rdrobust ---
+    kw: Dict[str, Any] = dict(
+        y=Y_arr, x=X_raw, c=c, p=p, q=q,
+        deriv=deriv, kernel=kernel, level=(1 - alpha) * 100,
+    )
+    if fuzzy is not None:
+        kw['fuzzy'] = D
+    if covs is not None and Z is not None:
+        kw['covs'] = pd.DataFrame(Z, columns=list(covs))
+    if cluster_vals is not None:
+        kw['cluster'] = cluster_vals
+    if h is not None:
+        # rdrobust accepts scalar h (common) or two-element list (l/r)
+        kw['h'] = h
+    if b is not None:
+        kw['b'] = b
+    elif rho is not None:
+        kw['rho'] = float(rho)
+
+    result = _r.rdrobust(**kw)
+
+    # --- Adapt to CausalResult ---
+    coef = result.coef
+    se = result.se
+    ci = result.ci
+    pv = result.pv
+    bws = result.bws
+
+    tau_conv = float(coef.iloc[0, 0])
+    tau_bc = float(coef.iloc[1, 0])
+    se_conv = float(se.iloc[0, 0])
+    se_robust = float(se.iloc[2, 0])
+    ci_conv = (float(ci.iloc[0, 0]), float(ci.iloc[0, 1]))
+    ci_robust = (float(ci.iloc[2, 0]), float(ci.iloc[2, 1]))
+    pv_conv = float(pv.iloc[0, 0])
+    pv_robust = float(pv.iloc[2, 0])
+    h_l = float(bws.iloc[0, 0])
+    h_r = float(bws.iloc[0, 1])
+    b_l = float(bws.iloc[1, 0])
+    b_r = float(bws.iloc[1, 1])
+    h_used = h_l if h_l == h_r else (h_l, h_r)
+    b_used = b_l if b_l == b_r else (b_l, b_r)
+    n_eff = result.N_h if hasattr(result, 'N_h') else (None, None)
+
+    detail = pd.DataFrame({
+        'method': ['Conventional', 'Robust'],
+        'estimate': [tau_conv, tau_bc],
+        'se': [se_conv, se_robust],
+        'z': [
+            tau_conv / se_conv if se_conv > 0 else 0.0,
+            tau_bc / se_robust if se_robust > 0 else 0.0,
+        ],
+        'pvalue': [pv_conv, pv_robust],
+        'ci_lower': [ci_conv[0], ci_robust[0]],
+        'ci_upper': [ci_conv[1], ci_robust[1]],
+    })
+
+    if deriv >= 1:
+        rd_type = 'Kink'
+    elif fuzzy:
+        rd_type = 'Fuzzy'
+    else:
+        rd_type = 'Sharp'
+
+    if deriv >= 1:
+        estimand_str = 'RKD Effect (change in slope)'
+    elif fuzzy:
+        estimand_str = 'LATE'
+    else:
+        estimand_str = 'RD Effect'
+
+    model_info: Dict[str, Any] = {
+        'rd_type': rd_type,
+        'deriv': deriv,
+        'donut': donut,
+        'polynomial_p': p,
+        'polynomial_q': q,
+        'kernel': kernel,
+        'bandwidth_h': round(h_l, 6) if h_l == h_r else (round(h_l, 6), round(h_r, 6)),
+        'bandwidth_b': round(b_l, 6) if b_l == b_r else (round(b_l, 6), round(b_r, 6)),
+        'bwselect': 'cct' if h is None else 'manual',
+        'cutoff': c,
+        'n_left': n_left_total,
+        'n_right': n_right_total,
+        'n_effective_left': int(n_eff[0]) if n_eff[0] is not None else None,
+        'n_effective_right': int(n_eff[1]) if n_eff[1] is not None else None,
+        'conventional': {
+            'estimate': tau_conv, 'se': se_conv,
+            'pvalue': pv_conv, 'ci': ci_conv,
+        },
+        'robust': {
+            'estimate': tau_bc, 'se': se_robust,
+            'pvalue': pv_robust, 'ci': ci_robust,
+        },
+        'rho': float(rho) if rho is not None else None,
+        'first_stage_F': None,
+        'n_unique_running': int(np.unique(X_c).size),
+        'cct_delegation': True,
+    }
+
+    res = CausalResult(
+        method=f'{rd_type} RD Estimation (CCT delegation)',
+        estimand=estimand_str,
+        estimate=tau_bc,
+        se=se_robust,
+        pvalue=pv_robust,
+        ci=ci_robust,
+        alpha=alpha,
+        n_obs=n_obs,
+        detail=detail,
+        model_info=model_info,
+        _citation_key='rdrobust',
+    )
+    try:
+        from ..output._lineage import attach_provenance as _attach_prov
+        _attach_prov(
+            res,
+            function="sp.rd.rdrobust",
+            params={
+                "y": y, "x": x, "c": c,
+                "fuzzy": fuzzy, "deriv": deriv,
+                "p": p, "q": q, "kernel": kernel,
+                "bwselect": "cct",
+                "h": h, "b": b, "rho": rho,
+                "covs": covs, "cluster": cluster,
+                "donut": donut, "alpha": alpha,
+            },
+            data=data,
+            overwrite=False,
+        )
+    except Exception:  # pragma: no cover
+        pass
+    return res
 
 
 def rdplot(
