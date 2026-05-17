@@ -4,6 +4,24 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.3] — 2026-05-17
+
+### Fixed — PyPI long-description hero banner
+
+- The v1.15.2 PyPI project page rendered the hero banner as a broken
+  image. Root cause: [`README.md`](README.md) and
+  [`README_CN.md`](README_CN.md) referenced
+  `docs/logo/readme-1.png` with a **repo-relative** path, which GitHub
+  resolves against the rendered tree but PyPI's long-description
+  renderer has no base URL for and therefore leaves as a 404. Both
+  READMEs now point at the absolute raw GitHub URL
+  `https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/logo/readme-1.png`
+  so the banner loads on PyPI / TestPyPI / Open Source Insights /
+  any other off-GitHub README renderer.
+- **No code changes.** All shipped artifacts have the same module
+  hashes as v1.15.2 except for the regenerated long-description
+  metadata baked into the wheel + sdist.
+
 ## [1.15.2] — 2026-05-17
 
 ### Headline

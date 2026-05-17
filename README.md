@@ -1,7 +1,7 @@
 [English](https://github.com/brycewang-stanford/statspai/blob/main/README.md) | [中文](https://github.com/brycewang-stanford/statspai/blob/main/README_CN.md)
 
 <p align="center">
-  <img src="docs/logo/readme-1.png" alt="StatsPAI — Agent-Native Causal Inference for Python" width="780">
+  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/logo/readme-1.png" alt="StatsPAI — Agent-Native Causal Inference for Python" width="780">
 </p>
 
 # StatsPAI: The Agent-Native Causal Inference & Econometrics Toolkit for Python
@@ -127,6 +127,18 @@ StatsPAI's focus is **causal inference** — and on this axis we aim to be the m
 **StatsPAI at a glance**: 950+ registered functions in the live agent registry · 80+ submodules · ~230k LOC (core) + ~70k LOC (tests). All four numbers are reproducible from the canonical generator (`python scripts/registry_stats.py`); the per-module table in [`docs/stats.md`](docs/stats.md) is regenerated from the same script. For the full coverage matrix (23 method families) and cross-ecosystem line-count comparison, see [`docs/stats.md`](docs/stats.md).
 
 ---
+
+**📦 v1.15.3 (2026-05-17) — Doc-only patch: PyPI hero banner image fix**
+
+The v1.15.2 PyPI project page rendered the hero banner as a broken
+image because both READMEs pointed at the repo-relative path
+`docs/logo/readme-1.png`, which GitHub resolves correctly but PyPI's
+long-description renderer cannot. v1.15.3 rewrites the `<img>` tag in
+[`README.md`](README.md) and [`README_CN.md`](README_CN.md) to the
+absolute raw GitHub URL so the banner loads on PyPI / TestPyPI / any
+off-GitHub README renderer. **No code changes** — all shipped module
+files match v1.15.2 exactly; only the long-description metadata baked
+into the wheel + sdist regenerates.
 
 **📦 v1.15.2 (2026-05-17) — Strict-JSON MCP wire + dual-track replicate guides + release-packaging hardening**
 
@@ -1363,7 +1375,7 @@ resolves to the latest version):
   author       = {Wang, Biaoyue},
   title        = {StatsPAI: The Agent-Native Causal Inference \& Econometrics Toolkit for Python},
   year         = {2026},
-  version      = {1.15.2},
+  version      = {1.15.3},
   doi          = {10.5281/zenodo.19933900},
   url          = {https://doi.org/10.5281/zenodo.19933900},
   license      = {MIT},

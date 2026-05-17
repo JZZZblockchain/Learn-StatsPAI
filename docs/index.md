@@ -171,7 +171,7 @@ method that returns the correct BibTeX entry) and this package:
   title   = {StatsPAI: A Unified, Agent-Native Python Toolkit for
              Causal Inference and Applied Econometrics},
   year    = {2026},
-  version = {1.15.2},
+  version = {1.15.3},
   url     = {https://github.com/brycewang-stanford/StatsPAI}
 }
 ```

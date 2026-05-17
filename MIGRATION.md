@@ -7,6 +7,19 @@ Internal version-to-version migrations are at the top; the long-form
 
 <a id="sp-rdrobust-bwselect-cct-r-parity-opt-in"></a>
 
+## v1.15.2 → v1.15.3 — doc-only PyPI hero-banner fix
+
+**No code changes, no migration step.** The v1.15.2 PyPI project page
+rendered the hero banner as a broken image because the `<img>` tag in
+`README.md` / `README_CN.md` used a repo-relative path
+(`docs/logo/readme-1.png`) that PyPI's long-description renderer
+cannot resolve. v1.15.3 swaps the path for the absolute raw GitHub
+URL so the banner loads on PyPI / TestPyPI / off-GitHub mirrors.
+Module hashes match v1.15.2 bit-for-bit; only the long-description
+metadata baked into the wheel + sdist changes.
+
+---
+
 ## v1.15.1 → v1.15.2 — strict-JSON MCP wire, dual-track replicate, packaging
 
 **No estimator numerical path changes.** Three classes of consumers
