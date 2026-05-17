@@ -4,6 +4,140 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.15.2] — 2026-05-17
+
+### Headline
+
+Patch release on top of v1.15.1. **No estimator numerical paths change.**
+Three independent hardening tracks land together:
+
+1. **Agent-native infrastructure** — `sp.agent.mcp_server` is now strict-
+   JSON-clean over the wire (no `NaN` / `Infinity` literals reaching
+   Claude Desktop / RFC 8259 parsers), agent schema metadata extraction
+   is more complete, and a new `text` extra makes
+   `sentence-transformers` an explicit opt-in for the v1.6 `causal_text`
+   surface instead of a soft import surprise.
+2. **`sp.replicate` dual-track** — Card (1995), Abadie-Diamond-
+   Hainmueller (2010), Lalonde (1986) / DW (1999), and Lee (2008)
+   replications are promoted from single-track stubs to full
+   **classic + modern** recipes that ship with the original public-
+   domain CSVs and pinned golden numbers.
+3. **Release packaging** — wheel smoke tests now **fail loudly** on
+   import error, `py.typed` ships in the wheel for downstream
+   `mypy --strict` consumers, the result `_repr_html_` path escapes
+   user-controlled cell content (notebook XSS-safety), and the
+   `formulaic` dependency that `sp.spatial` parses formulas with is
+   declared explicitly instead of relying on `linearmodels`'s
+   transitive resolution.
+
+### Added — `text` optional extra
+
+- New `[project.optional-dependencies] text = ["sentence-transformers>=2.2.0"]`
+  in [`pyproject.toml`](pyproject.toml). The v1.6 `sp.causal_text` MVP
+  used to lazy-import `sentence_transformers` and raise an opaque
+  `ImportError` on first call. `pip install statspai[text]` now wires
+  the dependency explicitly; the lazy import still triggers a clear
+  pointer to the extra when missing.
+
+### Added — `sp.replicate` dual-track guides for four canonical papers
+
+- **Card (1995)** — proximity-to-college IV for returns to schooling.
+- **Abadie, Diamond & Hainmueller (2010)** — California Proposition 99
+  synthetic-control.
+- **Lalonde (1986) / Dehejia-Wahba (1999)** — NSW + PSID-1 (MatchIt
+  subset, `n=614`) propensity-score matching.
+- **Lee (2008)** — US Senate RD (`n=1390`) bandwidth-selected jump.
+
+  Each entry now ships a **classic track** (the estimator the paper
+  used: 2SLS for Card, weighted synthetic-control for Abadie, naive
+  OLS / adjusted OLS / 1:1 NN PSM for Lalonde, local-linear CCT RD
+  for Lee) **and a modern track** (DML PLR + entropy balancing,
+  bias-corrected robust RD, multi-method synth-compare). Real CSVs
+  land under [`src/statspai/datasets/data/`](src/statspai/datasets/data/)
+  (`card_1995.csv`, `california_prop99.csv`, `lalonde_matchit.csv`,
+  `lee_2008_senate.csv`) and `sp.datasets.nsw_lalonde` /
+  `sp.datasets.lee_2008_senate` gain a `simulated=False` real-data
+  branch with published-paper benchmarks exposed via `df.attrs`. The
+  Lalonde classic track now reproduces DW (1999) Table 3-4 within a
+  $5 drift tolerance; the Lee CCT track returns Conv `7.414` and
+  bias-corrected robust `7.507` (SE `1.741`, `h=17.754`), matching the
+  R `rdrobust` reference. All 13 BibTeX keys cited across the four
+  entries are verified in [`paper.bib`](paper.bib).
+
+### Fixed — MCP wire format is strict-JSON-clean
+
+- [`sp.agent.mcp_server`](src/statspai/agent/mcp_server.py) used to
+  serialise responses with `json.dumps(..., default=_json_default)`,
+  which **does not** intercept native Python `float('nan')` /
+  `float('inf')` — those become the non-standard literals `NaN` /
+  `Infinity` in the JSON output, which RFC 8259 parsers (including
+  Claude Desktop's `JSON.parse`) reject with errors like
+  `"No number after minus sign"`. Responses now pass through
+  `_clean_floats` (recursively replaces `NaN` / `±Infinity` with
+  `null` across `dict` / `list` / `tuple` containers) and serialise
+  with `allow_nan=False`, so the server can never emit a JSON token a
+  strict parser refuses. Covered by 273-line regression suite
+  [`tests/test_mcp_nan_inf.py`](tests/test_mcp_nan_inf.py).
+- Agent schema metadata extraction (`sp.function_schema`,
+  `sp.describe_function`) now surfaces more signature detail for
+  registry entries built from auto-introspection.
+- Stability-tier audit (`scripts/stability_audit.py`) accounts for
+  evidence files more precisely; new
+  [`tests/test_agent_schema.py`](tests/test_agent_schema.py) locks
+  the schema metadata fields agents rely on.
+
+### Fixed — result HTML escaping (notebook XSS-safety)
+
+- [`CausalResult._repr_html_`](src/statspai/core/results.py) (and the
+  surrounding rich-display helpers) now route every user-derived cell
+  through `html.escape`. Previously, any string column whose contents
+  contained `<` / `>` / `&` / `"` would interpolate raw into the
+  rendered HTML, opening a path for notebook XSS when a result was
+  displayed in Jupyter / VS Code / nbviewer. New regression test:
+  [`tests/test_results_html_escape.py`](tests/test_results_html_escape.py).
+
+### Fixed — release packaging hygiene
+
+- `pyproject.toml` bumps the build requirement to
+  `setuptools>=77.0.0` and migrates `license = {text = "MIT"}` to the
+  modern PEP 639 `license = "MIT"` + `license-files = ["LICENSE"]`
+  pair. Drops the deprecated `License :: OSI Approved :: ...`
+  classifier path implicitly.
+- [`MANIFEST.in`](MANIFEST.in) now includes `src/statspai/py.typed`
+  and the sdist test fixtures so `pip install --no-binary :all:` and
+  `mypy --strict` both behave correctly on the published artifacts.
+- [`.github/workflows/build-wheels.yml`](.github/workflows/build-wheels.yml)
+  and [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
+  wheel smoke tests now **fail the job** on `ImportError` instead of
+  swallowing it as a warning. Releases that silently ship a broken
+  wheel are no longer possible from a green CI run.
+- New explicit dependency `formulaic>=0.6.0` in `dependencies`
+  (`sp.spatial.*` parses Wilkinson formulas through it; relying on
+  `linearmodels`'s transitive resolution broke when downstream users
+  pinned older `linearmodels`).
+
+### Docs
+
+- JOSS submission [`paper.md`](paper.md) is rewritten for the Scott
+  Rozelle review pass — tighter scope statement, cleaner schema
+  description, explicit AI-use disclosure, 12 May 2026 submission
+  date. Cited bibliography entries in [`paper.bib`](paper.bib) are
+  refreshed to match.
+- README / README\_CN add the hero banner image
+  ([`docs/logo/readme-1.png`](docs/logo/readme-1.png)).
+- Track-C performance comparison table
+  ([`tests/perf/results/perf_table.tex`](tests/perf/results/perf_table.tex))
+  switches to `\scriptsize` with package-name macros and a
+  direction-aware "Winner" column; log-log figure regenerated to match.
+
+### Internal
+
+- Perf-benchmark harness factored — new
+  [`tests/perf/_common.py`](tests/perf/_common.py) shared utilities;
+  `tests/perf/05_feols_jax_bootstrap_bench.py` rewritten on top.
+- Full-suite validation snapshot refreshed in
+  [`test_results_full_suite.md`](test_results_full_suite.md).
+
 ## [1.15.1] — 2026-05-07
 
 ### Headline

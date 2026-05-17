@@ -128,6 +128,25 @@ StatsPAI's focus is **causal inference** — and on this axis we aim to be the m
 
 ---
 
+**📦 v1.15.2 (2026-05-17) — Strict-JSON MCP wire + dual-track replicate guides + release-packaging hardening**
+
+Patch release on top of v1.15.1 with **no estimator numerical change**.
+Three independent hardening tracks land together: (1) `sp.agent.mcp_server`
+now produces strict-JSON-clean output — native `NaN` / `±Infinity` floats
+are walked to `null` before serialisation so RFC 8259 parsers
+(including Claude Desktop) never see a token they reject; (2)
+`sp.replicate` graduates four canonical replications — Card (1995),
+Abadie-Diamond-Hainmueller (2010) California Prop 99, Lalonde (1986) /
+DW (1999), and Lee (2008) Senate RD — from single-track stubs to full
+**classic + modern** recipes on bundled real CSVs with pinned golden
+numbers; (3) release packaging tightens — wheel smoke tests fail loudly
+on `ImportError`, `py.typed` ships in the wheel, the result
+`_repr_html_` path escapes user-controlled cells (notebook XSS-safety),
+and a new `[text]` extra makes `sentence-transformers` an explicit
+opt-in for `sp.causal_text`. Install with
+`pip install --upgrade statspai`. Full notes in
+[`CHANGELOG.md`](CHANGELOG.md) under `[1.15.2]`.
+
 **📦 v1.15.1 (2026-05-07) — R-parity RD opt-in + negative-binomial implementation notes**
 
 Patch release preparing the PyPI cut after v1.15.0. `sp.rdrobust`
@@ -1344,7 +1363,7 @@ resolves to the latest version):
   author       = {Wang, Biaoyue},
   title        = {StatsPAI: The Agent-Native Causal Inference \& Econometrics Toolkit for Python},
   year         = {2026},
-  version      = {1.15.1},
+  version      = {1.15.2},
   doi          = {10.5281/zenodo.19933900},
   url          = {https://doi.org/10.5281/zenodo.19933900},
   license      = {MIT},

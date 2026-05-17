@@ -7,6 +7,43 @@ Internal version-to-version migrations are at the top; the long-form
 
 <a id="sp-rdrobust-bwselect-cct-r-parity-opt-in"></a>
 
+## v1.15.1 → v1.15.2 — strict-JSON MCP wire, dual-track replicate, packaging
+
+**No estimator numerical path changes.** Three classes of consumers
+should take note:
+
+- **`sp.agent.mcp_server` clients** (Claude Desktop / Codex / any
+  RFC 8259-strict JSON parser). v1.15.1 could leak the non-standard
+  literals `NaN` / `Infinity` / `-Infinity` into responses whenever an
+  estimator surfaced a degenerate float (`np.nan` standard errors on a
+  singular covariate, `inf` log-likelihood on a saturated model, etc).
+  v1.15.2 walks all containers before `json.dumps` and serialises with
+  `allow_nan=False`, replacing those values with `null`. **Action**:
+  none — strict parsers that previously failed now succeed; lenient
+  parsers see `null` where they used to see `NaN`. Update your
+  downstream JSON Schema if it explicitly typed those fields as
+  `number` (they should be `["number", "null"]`).
+
+- **`sp.causal_text` users.** The MVP relied on a soft import of
+  `sentence-transformers`. v1.15.2 adds an explicit
+  `pip install statspai[text]` extra. The lazy import path is
+  preserved, but the `ImportError` message now points at the extra
+  instead of suggesting a bare `pip install sentence-transformers`.
+
+- **`sp.replicate` users.** Entries for Card (1995), Abadie-Diamond-
+  Hainmueller (2010), Lalonde (1986) / DW (1999), and Lee (2008) now
+  return classic + modern recipes computed on the bundled real CSVs
+  instead of single-track simulated stubs. If you were pinning to the
+  v1.15.1 simulated numbers in CI, switch to the published-paper
+  benchmarks now exposed via `df.attrs['paper_original']` (see
+  `sp.datasets.nsw_lalonde(simulated=False)` and
+  `sp.datasets.lee_2008_senate(simulated=False)`).
+
+Existing `sp.rdrobust` / `sp.nbreg` / `sp.xtnbreg` / `sp.menbreg`
+call sites carry over unchanged from v1.15.1.
+
+---
+
 ## v1.15.0 → v1.15.1 — `sp.rdrobust(bwselect='cct')` R-parity opt-in
 
 **No breaking change.** `sp.rdrobust` keeps `bwselect='mserd'` (StatsPAI's

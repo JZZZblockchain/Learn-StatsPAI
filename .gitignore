@@ -191,6 +191,7 @@ audit_report.json
 # Paper JSS and JOSS submissions 
 Paper-JSS/
 Paper-JOSS/
+Paper-AgentBench/
 
 # Temp files
 MORNING_REPORT_2026-04-29.md
