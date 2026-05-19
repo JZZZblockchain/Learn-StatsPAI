@@ -1393,7 +1393,7 @@ preferred citation and `sp.citation()` will be updated to return it.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=brycewang-stanford/StatsPAI&type=Date)](https://star-history.com/#brycewang-stanford/StatsPAI&Date)
+[![Stargazers over time](https://starchart.cc/brycewang-stanford/StatsPAI.svg)](https://starchart.cc/brycewang-stanford/StatsPAI)
 
 ## License
 
