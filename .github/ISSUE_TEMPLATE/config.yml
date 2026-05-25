@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage question / how-do-I
+    url: https://github.com/brycewang-stanford/StatsPAI/discussions
+    about: For "how do I do X", methodological discussion, or comparing results across Stata/R/StatsPAI — please use GitHub Discussions.
+  - name: Security vulnerability
+    url: mailto:brycew6m@stanford.edu
+    about: Please report security issues privately via email, not as a public issue.
