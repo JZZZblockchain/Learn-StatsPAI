@@ -1,0 +1,84 @@
+name: Parity guards
+
+# Three CLAUDE.md §3 / §10 contracts enforced as required CI gates,
+# independent of the main ci-cd.yml pipeline so they show up as their own
+# required checks on PRs and never get diluted by the unrelated test matrix:
+#
+#   1. reference_parity  — numerical alignment with R / Stata / paper anchors
+#   2. registry_drift    — registry public-function count + submodule count
+#                          stays within the README floor (1000+ / 80)
+#   3. citation_audit    — every arXiv / NBER / DOI claim in src/ + docs/
+#                          verifies against primary sources (zero phantom refs)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-parity:
+    name: Numerical reference parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-parity-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-parity-pip-
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run reference_parity suite
+        run: |
+          pytest tests/reference_parity/ -q --no-header
+
+  registry-drift:
+    name: Registry / API surface drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install (minimal — registry boot only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: registry_stats --check
+        run: |
+          python scripts/registry_stats.py --check
+      - name: API surface consistency
+        run: |
+          pytest tests/test_api_surface_consistency.py -q --no-header
+
+  citation-audit:
+    name: Citation audit (§10 zero-hallucination)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: tools/audit_citations.py --strict
+        run: |
+          python tools/audit_citations.py --strict
