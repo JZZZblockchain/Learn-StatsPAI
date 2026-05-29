@@ -11,7 +11,7 @@ r = sp.rdrobust(df, y='earnings', x='score', c=0,
                 fuzzy='treatment',                # optional — fuzzy RD
                 deriv=1,                          # sharp=0, kink=1
                 covs=['age', 'sex'],              # Calonico et al. 2019 adjustment
-                bwselect='mserd',                 # 'mserd'|'msetwo'|'certwo'|'cerrd'
+                bwselect='mserd',                 # or 'cct' for R rdrobust parity
                 kernel='triangular',              # 'triangular'|'epanechnikov'|'uniform'
                 vce='hc3',                        # 'hc0'–'hc3' | 'cluster'
 )

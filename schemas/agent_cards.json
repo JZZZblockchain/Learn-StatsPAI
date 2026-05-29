@@ -208,6 +208,91 @@
   },
   {
     "alternatives": [
+      "deepiv",
+      "bartik",
+      "proximal",
+      "regress"
+    ],
+    "assumptions": [
+      "Relevance: instruments predict the endogenous regressor (first-stage F \u2265 10 rule of thumb)",
+      "Exclusion: instruments affect outcome only through the endogenous regressor",
+      "Monotonicity (for LATE interpretation under heterogeneous effects)"
+    ],
+    "category": "regression",
+    "description": "Two-stage least squares (2SLS) IV regression. Alias for sp.iv(method='2sls').",
+    "example": "sp.ivreg(\"wage ~ (education ~ parent_edu + distance) + experience\", data=df)",
+    "failure_modes": [
+      {
+        "alternative": "sp.anderson_rubin_ci",
+        "exception": "AssumptionWarning",
+        "remedy": "Use weak-IV-robust inference (Anderson-Rubin) or LIML.",
+        "symptom": "First-stage F < 10 (Stock-Yogo 5% bias)"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "AssumptionViolation",
+        "remedy": "At least one instrument is invalid; drop instruments or switch to just-identified LIML.",
+        "symptom": "Over-identification test rejects (sp.estat 'overid')"
+      },
+      {
+        "alternative": "sp.regress",
+        "exception": "AssumptionWarning",
+        "remedy": "OLS may be consistent and more efficient; report both.",
+        "symptom": "Hausman endogeneity test fails to reject"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "NumericalInstability",
+        "remedy": "Use LIML or JIVE which are robust to many weak instruments.",
+        "symptom": "Many instruments (\u2265 10) cause many-IV bias"
+      }
+    ],
+    "inherits_from": "iv",
+    "limitations": [],
+    "name": "ivreg",
+    "pre_conditions": [
+      "formula includes the (endog ~ instruments) parenthesised block",
+      "at least as many instruments as endogenous regressors (order condition)",
+      "instruments are not themselves endogenous in the outcome equation"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Two-stage least squares (2SLS) IV regression. Alias for sp.iv(method='2sls'). Validation: certified parity evidence.",
+      "name": "ivreg",
+      "parameters": {
+        "properties": {
+          "data": {
+            "description": "pandas DataFrame",
+            "type": "string"
+          },
+          "formula": {
+            "description": "IV formula: 'y ~ (endog ~ instruments) + exog'",
+            "type": "string"
+          },
+          "robust": {
+            "default": "nonrobust",
+            "description": "Standard error type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "formula",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 100,
+    "validation_notes": [
+      "Track A parity seed",
+      "R parity module 02_iv",
+      "Stata parity module 02_iv"
+    ],
+    "validation_status": "certified"
+  },
+  {
+    "alternatives": [
       "regress",
       "feols"
     ],
@@ -1126,10 +1211,53 @@
       "name": "rdrobust",
       "parameters": {
         "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level",
+            "type": "number"
+          },
+          "b": {
+            "description": "Manual bias-correction bandwidth",
+            "type": "number"
+          },
+          "bootstrap": {
+            "description": "Optional robust-bias-corrected bootstrap mode",
+            "enum": [
+              "rbc"
+            ],
+            "type": "string"
+          },
+          "bwselect": {
+            "default": "mserd",
+            "description": "Bandwidth selector; use cct for canonical R rdrobust parity when the statspai[rd-cct] extra is installed",
+            "enum": [
+              "mserd",
+              "msetwo",
+              "cerrd",
+              "certwo",
+              "msecomb1",
+              "msecomb2",
+              "cercomb1",
+              "cercomb2",
+              "cct"
+            ],
+            "type": "string"
+          },
           "c": {
             "default": 0.0,
             "description": "Cutoff value",
             "type": "number"
+          },
+          "cluster": {
+            "description": "Cluster variable for SEs",
+            "type": "string"
+          },
+          "covs": {
+            "description": "Covariate names for adjusted RD",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "data": {
             "description": "pandas DataFrame containing the variables used by the estimator.",
@@ -1149,6 +1277,10 @@
             "description": "Treatment variable for fuzzy RD",
             "type": "string"
           },
+          "h": {
+            "description": "Manual estimation bandwidth",
+            "type": "number"
+          },
           "kernel": {
             "default": "triangular",
             "description": "Kernel type",
@@ -1158,6 +1290,38 @@
               "uniform"
             ],
             "type": "string"
+          },
+          "n_boot": {
+            "default": 999,
+            "description": "Number of bootstrap draws when bootstrap='rbc'",
+            "type": "integer"
+          },
+          "p": {
+            "default": 1,
+            "description": "Polynomial order for point estimation",
+            "type": "integer"
+          },
+          "q": {
+            "description": "Polynomial order for bias correction",
+            "type": "integer"
+          },
+          "random_state": {
+            "description": "Bootstrap RNG seed",
+            "type": "integer"
+          },
+          "rho": {
+            "description": "Ratio h/b for bias correction",
+            "type": "number"
+          },
+          "warn_mass_points": {
+            "default": true,
+            "description": "Warn when the running variable has few distinct values",
+            "type": "boolean"
+          },
+          "warn_weak_first_stage": {
+            "default": true,
+            "description": "Warn on weak first-stage discontinuity in fuzzy RD",
+            "type": "boolean"
           },
           "weights": {
             "description": "Reserved; currently raises NotImplementedError",
@@ -6919,6 +7083,395 @@
     "alternatives": [
       "mr_ivw",
       "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_heterogeneity",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Bowden et al. (2017)",
+    "signature": {
+      "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy. Validation: validated.",
+      "name": "mr_heterogeneity",
+      "parameters": {
+        "properties": {
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "method": {
+            "default": "ivw",
+            "description": "Estimator or algorithm variant to use.",
+            "enum": [
+              "ivw",
+              "egger"
+            ],
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_diagnostics.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_pleiotropy_egger",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Bowden et al. (2015)",
+    "signature": {
+      "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy. Validation: validated.",
+      "name": "mr_pleiotropy_egger",
+      "parameters": {
+        "properties": {
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_diagnostics.py",
+      "Regression/unit validation: tests/test_correctness_v150.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Drop-one IVW sensitivity \u2014 per-SNP table of estimates when each SNP is removed in turn.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_leave_one_out",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Drop-one IVW sensitivity \u2014 per-SNP table of estimates when each SNP is removed in turn. Validation: validated.",
+      "name": "mr_leave_one_out",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "snp_ids": {
+            "description": "snp_ids parameter (list).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "tests/reference_parity/test_mr_parity.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Steiger directionality test \u2014 verifies that the SNPs explain more variance in the exposure than the outcome, supporting the assumed causal direction.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_steiger",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Hemani et al. (2017)",
+    "signature": {
+      "description": "Steiger directionality test \u2014 verifies that the SNPs explain more variance in the exposure than the outcome, supporting the assumed causal direction. Validation: validated.",
+      "name": "mr_steiger",
+      "parameters": {
+        "properties": {
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "eaf": {
+            "description": "Effect-allele frequencies",
+            "type": "string"
+          },
+          "n_exposure": {
+            "description": "Number of exposure.",
+            "type": "integer"
+          },
+          "n_outcome": {
+            "description": "Number of outcome.",
+            "type": "integer"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "se_exposure",
+          "n_exposure",
+          "beta_outcome",
+          "se_outcome",
+          "n_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_diagnostics.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
       "mr_mode",
       "mr_raps",
       "mr_median",
@@ -7021,6 +7574,100 @@
           "beta_exposure",
           "beta_outcome",
           "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "tests/reference_parity/test_mr_parity.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Radial IVW MR (Bowden 2018) with per-SNP Bonferroni-thresholded outlier flagging.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_radial",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Bowden et al. (2018)",
+    "signature": {
+      "description": "Radial IVW MR (Bowden 2018) with per-SNP Bonferroni-thresholded outlier flagging. Validation: validated.",
+      "name": "mr_radial",
+      "parameters": {
+        "properties": {
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "snp_ids": {
+            "description": "snp_ids parameter (list).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
           "se_outcome"
         ],
         "type": "object"
@@ -7445,6 +8092,207 @@
     "validation_notes": [
       "Regression/unit validation: tests/test_question_dsl.py",
       "Regression/unit validation: tests/test_paper_from_question.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Weighted or simple mode-based MR estimator (Hartwig 2017). Consistent under the ZEMPA (zero-mode pleiotropy) assumption \u2014 more permissive than the median's 50% rule.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_mode",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Hartwig, Davey Smith & Bowden (2017)",
+    "signature": {
+      "description": "Weighted or simple mode-based MR estimator (Hartwig 2017). Consistent under the ZEMPA (zero-mode pleiotropy) assumption \u2014 more permissive than the median's 50% rule. Validation: validated.",
+      "name": "mr_mode",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "method": {
+            "default": "weighted",
+            "description": "Estimator or algorithm variant to use.",
+            "enum": [
+              "weighted",
+              "simple"
+            ],
+            "type": "string"
+          },
+          "n_boot": {
+            "default": 1000,
+            "description": "Number of bootstrap replications.",
+            "type": "integer"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "seed": {
+            "description": "Random seed for reproducible stochastic steps.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_extras.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Per-SNP F-statistic summary for instrument strength. Flags weak-instrument risk when any F < 10 (Staiger-Stock).",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_f_statistic",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Staiger & Stock (1997)",
+    "signature": {
+      "description": "Per-SNP F-statistic summary for instrument strength. Flags weak-instrument risk when any F < 10 (Staiger-Stock). Validation: validated.",
+      "name": "mr_f_statistic",
+      "parameters": {
+        "properties": {
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "n_samples": {
+            "description": "Number of samples.",
+            "type": "integer"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "se_exposure"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_extras.py"
     ],
     "validation_status": "validated"
   },
@@ -9739,6 +10587,100 @@
   },
   {
     "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength.",
+    "example": "sp.mr_multivariable(df, outcome='beta_y', se_outcome='se_y', exposures=['beta_ldl','beta_hdl'])",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_multivariable",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Sanderson et al. (IJE 2019); Yao et al. (arXiv:2509.11519).",
+    "signature": {
+      "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength. Validation: validated.",
+      "name": "mr_multivariable",
+      "parameters": {
+        "properties": {
+          "exposures": {
+            "description": "exposures parameter (list).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "default": "beta_y",
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          },
+          "outcome_se": {
+            "default": "se_y",
+            "description": "outcome_se parameter (str).",
+            "type": "string"
+          },
+          "snp_associations": {
+            "description": "snp_associations parameter (DataFrame).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snp_associations"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_extensions.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
       "mr",
       "mr_egger",
       "mr_ivw"
@@ -9809,6 +10751,536 @@
     "typical_n_min": 10,
     "validation_notes": [
       "Regression/unit validation: tests/test_mr_extensions.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "MR Bayesian model averaging over exposure subsets (Zuber et al. 2020). Outputs marginal inclusion probabilities and top posterior models.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_bma",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Zuber, Colijn, Staley, Burgess (Nat Comm 2020).",
+    "signature": {
+      "description": "MR Bayesian model averaging over exposure subsets (Zuber et al. 2020). Outputs marginal inclusion probabilities and top posterior models. Validation: validated.",
+      "name": "mr_bma",
+      "parameters": {
+        "properties": {
+          "exposures": {
+            "description": "exposures parameter (list).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_model_size": {
+            "description": "max_model_size parameter (int).",
+            "type": "integer"
+          },
+          "outcome": {
+            "default": "beta_y",
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          },
+          "outcome_se": {
+            "default": "se_y",
+            "description": "outcome_se parameter (str).",
+            "type": "string"
+          },
+          "snp_associations": {
+            "description": "snp_associations parameter (DataFrame).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snp_associations"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_extensions.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression).",
+    "example": "sp.mr_lap(bx, by, sx, sy, overlap_fraction=0.4, overlap_rho=0.18)",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_lap",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Burgess, Davies & Thompson (2016) Genet Epidemiol 40(7); Mounier & Kutalik (2023) Genet Epidemiol 47(4).",
+    "signature": {
+      "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression). Validation: validated.",
+      "name": "mr_lap",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "overlap_fraction": {
+            "default": 1.0,
+            "description": "overlap_fraction parameter (float).",
+            "type": "number"
+          },
+          "overlap_rho": {
+            "default": 0.0,
+            "description": "overlap_rho parameter (float).",
+            "type": "number"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_frontier.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Clustered Mendelian randomization via finite Gaussian mixture on Wald ratios (Foley et al. 2021). EM with SNP-specific measurement SE; optional 'null' cluster at theta=0; K selected by BIC. Returns per-cluster estimate, SNP-to-cluster responsibilities, and the K-path.",
+    "example": "sp.mr_clust(bx, by, sx, sy, K_range=(1, 4))",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_clust",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Foley, Mason, Kirk & Burgess (2021) Bioinformatics 37(4).",
+    "signature": {
+      "description": "Clustered Mendelian randomization via finite Gaussian mixture on Wald ratios (Foley et al. 2021). EM with SNP-specific measurement SE; optional 'null' cluster at theta=0; K selected by BIC. Returns per-cluster estimate, SNP-to-cluster responsibilities, and the K-path. Validation: validated.",
+      "name": "mr_clust",
+      "parameters": {
+        "properties": {
+          "K_range": {
+            "default": [
+              1,
+              5
+            ],
+            "description": "K_range parameter (tuple).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "include_null": {
+            "default": true,
+            "description": "Whether to include null.",
+            "type": "boolean"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "seed": {
+            "default": 0,
+            "description": "Random seed for reproducible stochastic steps.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_extensions.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info.",
+    "example": "sp.grapple(bx, by, sx, sy)",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "grapple",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Wang, Zhao, Bowden, Hemani et al. (2021) PLoS Genet 17(6).",
+    "signature": {
+      "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info. Validation: validated.",
+      "name": "grapple",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_init": {
+            "description": "beta_init parameter (float).",
+            "type": "number"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "tau2_init": {
+            "default": 0.0001,
+            "description": "tau2_init parameter (float).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_frontier.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously.",
+    "example": "sp.mr_cml(bx, by, sx, sy)",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_cml",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "Xue, Shen & Pan (2021) AJHG 108(7).",
+    "signature": {
+      "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously. Validation: validated.",
+      "name": "mr_cml",
+      "parameters": {
+        "properties": {
+          "K_max": {
+            "description": "K_max parameter (int).",
+            "type": "integer"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "Regression/unit validation: tests/test_mr_frontier.py"
     ],
     "validation_status": "validated"
   },
@@ -27977,6 +29449,241 @@
   },
   {
     "alternatives": [
+      "deepiv",
+      "bartik",
+      "proximal",
+      "regress"
+    ],
+    "assumptions": [
+      "Relevance: instruments predict the endogenous regressor (first-stage F \u2265 10 rule of thumb)",
+      "Exclusion: instruments affect outcome only through the endogenous regressor",
+      "Monotonicity (for LATE interpretation under heterogeneous effects)"
+    ],
+    "category": "regression",
+    "description": "Limited Information Maximum Likelihood (LIML) estimator.",
+    "example": "sp.liml(data=df, y='lwage', x_endog=['educ'], x_exog=['exper', 'expersq'], z=['nearc4'])",
+    "failure_modes": [
+      {
+        "alternative": "sp.anderson_rubin_ci",
+        "exception": "AssumptionWarning",
+        "remedy": "Use weak-IV-robust inference (Anderson-Rubin) or LIML.",
+        "symptom": "First-stage F < 10 (Stock-Yogo 5% bias)"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "AssumptionViolation",
+        "remedy": "At least one instrument is invalid; drop instruments or switch to just-identified LIML.",
+        "symptom": "Over-identification test rejects (sp.estat 'overid')"
+      },
+      {
+        "alternative": "sp.regress",
+        "exception": "AssumptionWarning",
+        "remedy": "OLS may be consistent and more efficient; report both.",
+        "symptom": "Hausman endogeneity test fails to reject"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "NumericalInstability",
+        "remedy": "Use LIML or JIVE which are robust to many weak instruments.",
+        "symptom": "Many instruments (\u2265 10) cause many-IV bias"
+      }
+    ],
+    "inherits_from": "iv",
+    "limitations": [],
+    "name": "liml",
+    "pre_conditions": [
+      "formula includes the (endog ~ instruments) parenthesised block",
+      "at least as many instruments as endogenous regressors (order condition)",
+      "instruments are not themselves endogenous in the outcome equation"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: validated.",
+      "name": "liml",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "cluster": {
+            "description": "Cluster identifier column for clustered standard errors.",
+            "type": "string"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "formula": {
+            "description": "Model formula using patsy/R-style syntax.",
+            "type": "string"
+          },
+          "fuller": {
+            "description": "Fuller's constant (typically 1 or 4). If None, pure LIML.",
+            "type": "number"
+          },
+          "robust": {
+            "default": "nonrobust",
+            "description": "Robust standard-error or covariance estimator option.",
+            "type": "string"
+          },
+          "x_endog": {
+            "description": "Endogenous regressors.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "x_exog": {
+            "description": "Exogenous regressors (included instruments).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Outcome variable.",
+            "type": "string"
+          },
+          "z": {
+            "description": "Excluded instruments.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 100,
+    "validation_notes": [
+      "tests/reference_parity/test_liml_se_parity.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "deepiv",
+      "bartik",
+      "proximal",
+      "regress"
+    ],
+    "assumptions": [
+      "Relevance: instruments predict the endogenous regressor (first-stage F \u2265 10 rule of thumb)",
+      "Exclusion: instruments affect outcome only through the endogenous regressor",
+      "Monotonicity (for LATE interpretation under heterogeneous effects)"
+    ],
+    "category": "regression",
+    "description": "LASSO-selected instrumental variables.",
+    "example": "sp.lasso_iv(df, y='lwage', x_endog=['educ'], x_exog=['exper'], z=[f'qob_{i}' for i in range(40)])",
+    "failure_modes": [
+      {
+        "alternative": "sp.anderson_rubin_ci",
+        "exception": "AssumptionWarning",
+        "remedy": "Use weak-IV-robust inference (Anderson-Rubin) or LIML.",
+        "symptom": "First-stage F < 10 (Stock-Yogo 5% bias)"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "AssumptionViolation",
+        "remedy": "At least one instrument is invalid; drop instruments or switch to just-identified LIML.",
+        "symptom": "Over-identification test rejects (sp.estat 'overid')"
+      },
+      {
+        "alternative": "sp.regress",
+        "exception": "AssumptionWarning",
+        "remedy": "OLS may be consistent and more efficient; report both.",
+        "symptom": "Hausman endogeneity test fails to reject"
+      },
+      {
+        "alternative": "sp.iv",
+        "exception": "NumericalInstability",
+        "remedy": "Use LIML or JIVE which are robust to many weak instruments.",
+        "symptom": "Many instruments (\u2265 10) cause many-IV bias"
+      }
+    ],
+    "inherits_from": "iv",
+    "limitations": [],
+    "name": "lasso_iv",
+    "pre_conditions": [
+      "formula includes the (endog ~ instruments) parenthesised block",
+      "at least as many instruments as endogenous regressors (order condition)",
+      "instruments are not themselves endogenous in the outcome equation"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "LASSO-selected instrumental variables.",
+      "name": "lasso_iv",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "cluster": {
+            "description": "Cluster identifier column for clustered standard errors.",
+            "type": "string"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "penalty": {
+            "default": "bic",
+            "description": "Instrument selection criterion: 'bic', 'aic', 'cv'.",
+            "type": "string"
+          },
+          "robust": {
+            "default": "robust",
+            "description": "Robust standard-error or covariance estimator option.",
+            "type": "string"
+          },
+          "x_endog": {
+            "description": "x_endog parameter (List[str]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "x_exog": {
+            "description": "x_exog parameter (List[str]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          },
+          "z": {
+            "description": "Full set of candidate instruments.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "x_endog"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 100,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
       "panel",
       "regress",
       "hdfe_ols"
@@ -28453,6 +30160,117 @@
           "se_outcome": {
             "description": "se_outcome parameter (ndarray).",
             "type": "string"
+          }
+        },
+        "required": [
+          "beta_exposure",
+          "beta_outcome",
+          "se_exposure",
+          "se_outcome"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 10,
+    "validation_notes": [
+      "tests/reference_parity/test_mr_parity.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
+      "mr_ivw",
+      "mr_egger",
+      "mr_median",
+      "mr_presso",
+      "mr_multivariable",
+      "iv"
+    ],
+    "assumptions": [
+      "Relevance: SNPs predict exposure (F-statistic \u2265 10 per SNP or set-F)",
+      "Independence: SNPs \u22a5 confounders of exposure-outcome",
+      "Exclusion restriction: SNPs affect outcome only through exposure (InSIDE for Egger; \u2265 50% valid for median; modal for mode-based)",
+      "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
+    ],
+    "category": "mendelian",
+    "description": "Weighted median MR estimator.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "sp.mr_median",
+        "exception": "statspai.AssumptionViolation",
+        "remedy": "Use weighted-median or mode-based estimator; report Egger intercept + I\u00b2 as pleiotropy diagnostic.",
+        "symptom": "Egger intercept p < 0.05 \u2014 directional pleiotropy"
+      },
+      {
+        "alternative": "sp.mr_presso",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Heterogeneity across SNPs \u2014 run sp.mr_presso to detect/remove outliers.",
+        "symptom": "Q-statistic rejects homogeneity (Cochran's Q p < 0.05)"
+      },
+      {
+        "alternative": "sp.mr_lap",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Weak-IV bias in IVW \u2014 use debiased IVW or LAP-type estimator (sp.mr_lap).",
+        "symptom": "Set-F < 10 (weak instruments in aggregate)"
+      },
+      {
+        "alternative": "",
+        "exception": "statspai.IdentificationFailure",
+        "remedy": "SNPs explain more outcome variance than exposure \u2014 direction of effect questionable.",
+        "symptom": "Steiger test flags reverse causation"
+      }
+    ],
+    "inherits_from": "mr",
+    "limitations": [],
+    "name": "mr_median",
+    "pre_conditions": [
+      "SNP-summary statistics for exposure and outcome aligned by SNP",
+      "beta_exposure / beta_outcome / se_exposure / se_outcome arrays of equal length",
+      "\u2265 10 genetic instruments for reliable IVW/median/mode; \u2265 20 for robust Egger intercept",
+      "mvmr needs SNP \u00d7 exposure associations matrix"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Weighted median MR estimator. Validation: validated.",
+      "name": "mr_median",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "beta_exposure": {
+            "description": "beta_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "beta_outcome": {
+            "description": "beta_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "n_boot": {
+            "default": 1000,
+            "description": "Number of bootstrap replications.",
+            "type": "integer"
+          },
+          "penalized": {
+            "default": false,
+            "description": "penalized parameter (bool).",
+            "type": "boolean"
+          },
+          "se_exposure": {
+            "description": "se_exposure parameter (ndarray).",
+            "type": "string"
+          },
+          "se_outcome": {
+            "description": "se_outcome parameter (ndarray).",
+            "type": "string"
+          },
+          "seed": {
+            "description": "Random seed for reproducible stochastic steps.",
+            "type": "integer"
           }
         },
         "required": [

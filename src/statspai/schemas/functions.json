@@ -588,10 +588,53 @@
     "name": "rdrobust",
     "parameters": {
       "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level",
+          "type": "number"
+        },
+        "b": {
+          "description": "Manual bias-correction bandwidth",
+          "type": "number"
+        },
+        "bootstrap": {
+          "description": "Optional robust-bias-corrected bootstrap mode",
+          "enum": [
+            "rbc"
+          ],
+          "type": "string"
+        },
+        "bwselect": {
+          "default": "mserd",
+          "description": "Bandwidth selector; use cct for canonical R rdrobust parity when the statspai[rd-cct] extra is installed",
+          "enum": [
+            "mserd",
+            "msetwo",
+            "cerrd",
+            "certwo",
+            "msecomb1",
+            "msecomb2",
+            "cercomb1",
+            "cercomb2",
+            "cct"
+          ],
+          "type": "string"
+        },
         "c": {
           "default": 0.0,
           "description": "Cutoff value",
           "type": "number"
+        },
+        "cluster": {
+          "description": "Cluster variable for SEs",
+          "type": "string"
+        },
+        "covs": {
+          "description": "Covariate names for adjusted RD",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "data": {
           "description": "pandas DataFrame containing the variables used by the estimator.",
@@ -611,6 +654,10 @@
           "description": "Treatment variable for fuzzy RD",
           "type": "string"
         },
+        "h": {
+          "description": "Manual estimation bandwidth",
+          "type": "number"
+        },
         "kernel": {
           "default": "triangular",
           "description": "Kernel type",
@@ -620,6 +667,38 @@
             "uniform"
           ],
           "type": "string"
+        },
+        "n_boot": {
+          "default": 999,
+          "description": "Number of bootstrap draws when bootstrap='rbc'",
+          "type": "integer"
+        },
+        "p": {
+          "default": 1,
+          "description": "Polynomial order for point estimation",
+          "type": "integer"
+        },
+        "q": {
+          "description": "Polynomial order for bias correction",
+          "type": "integer"
+        },
+        "random_state": {
+          "description": "Bootstrap RNG seed",
+          "type": "integer"
+        },
+        "rho": {
+          "description": "Ratio h/b for bias correction",
+          "type": "number"
+        },
+        "warn_mass_points": {
+          "default": true,
+          "description": "Warn when the running variable has few distinct values",
+          "type": "boolean"
+        },
+        "warn_weak_first_stage": {
+          "default": true,
+          "description": "Warn on weak first-stage discontinuity in fuzzy RD",
+          "type": "boolean"
         },
         "weights": {
           "description": "Reserved; currently raises NotImplementedError",
@@ -28999,6 +29078,11 @@
     "name": "validation_report",
     "parameters": {
       "properties": {
+        "collect_tests": {
+          "default": false,
+          "description": "Run ``pytest --collect-only`` on the reference-parity, external-parity, and coverage Monte Carlo directories and record the authoritative collected-test counts (the integers the JSS manuscript headlines, e.g. 114 / 50 / 12). Off by default because it spawns pytest collection (seconds); the cheap metadata-only path reports test *file* counts instead.",
+          "type": "boolean"
+        },
         "fmt": {
           "default": "object",
           "description": "Return a :class:`ValidationReport`, a JSON-serializable dict, or a Markdown string.",

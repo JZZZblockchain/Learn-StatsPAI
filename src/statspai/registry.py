@@ -1120,6 +1120,34 @@ def _build_registry():
                     "fuzzy", "str", False, None, "Treatment variable for fuzzy RD"
                 ),
                 ParamSpec("deriv", "int", False, 0, "Derivative order (0=RD, 1=RKD)"),
+                ParamSpec("p", "int", False, 1, "Polynomial order for point estimation"),
+                ParamSpec("q", "int", False, None, "Polynomial order for bias correction"),
+                ParamSpec(
+                    "bwselect",
+                    "str",
+                    False,
+                    "mserd",
+                    (
+                        "Bandwidth selector; use cct for canonical R rdrobust "
+                        "parity when the statspai[rd-cct] extra is installed"
+                    ),
+                    [
+                        "mserd",
+                        "msetwo",
+                        "cerrd",
+                        "certwo",
+                        "msecomb1",
+                        "msecomb2",
+                        "cercomb1",
+                        "cercomb2",
+                        "cct",
+                    ],
+                ),
+                ParamSpec("h", "float", False, None, "Manual estimation bandwidth"),
+                ParamSpec("b", "float", False, None, "Manual bias-correction bandwidth"),
+                ParamSpec("rho", "float", False, None, "Ratio h/b for bias correction"),
+                ParamSpec("covs", "list", False, None, "Covariate names for adjusted RD"),
+                ParamSpec("cluster", "str", False, None, "Cluster variable for SEs"),
                 ParamSpec("donut", "float", False, 0.0, "Donut-hole radius"),
                 ParamSpec(
                     "weights",
@@ -1135,6 +1163,37 @@ def _build_registry():
                     "triangular",
                     "Kernel type",
                     ["triangular", "epanechnikov", "uniform"],
+                ),
+                ParamSpec("alpha", "float", False, 0.05, "Significance level"),
+                ParamSpec(
+                    "bootstrap",
+                    "str",
+                    False,
+                    None,
+                    "Optional robust-bias-corrected bootstrap mode",
+                    ["rbc"],
+                ),
+                ParamSpec(
+                    "n_boot",
+                    "int",
+                    False,
+                    999,
+                    "Number of bootstrap draws when bootstrap='rbc'",
+                ),
+                ParamSpec("random_state", "int", False, None, "Bootstrap RNG seed"),
+                ParamSpec(
+                    "warn_mass_points",
+                    "bool",
+                    False,
+                    True,
+                    "Warn when the running variable has few distinct values",
+                ),
+                ParamSpec(
+                    "warn_weak_first_stage",
+                    "bool",
+                    False,
+                    True,
+                    "Warn on weak first-stage discontinuity in fuzzy RD",
                 ),
             ],
             returns="CausalResult",
@@ -12983,8 +13042,9 @@ def agent_cards(
     """Bulk export of agent cards, optionally filtered.
 
     Only entries with at least one agent-native field populated are
-    returned — auto-registered specs without assumptions / failure
-    modes are skipped to keep the output signal-dense.
+    returned — auto-registered specs without assumptions, limitations,
+    failure modes, or alternatives are skipped to keep the output
+    signal-dense.
 
     Parameters
     ----------
@@ -13019,13 +13079,15 @@ def agent_cards(
             continue
         if validation_status and spec.validation_status != validation_status:
             continue
+        card = spec.agent_card()
         if not (
-            spec.assumptions
-            or spec.failure_modes
-            or spec.alternatives
-            or spec.pre_conditions
-            or spec.typical_n_min
+            card.get("assumptions")
+            or card.get("failure_modes")
+            or card.get("alternatives")
+            or card.get("pre_conditions")
+            or card.get("limitations")
+            or card.get("typical_n_min") is not None
         ):
             continue
-        out.append(spec.agent_card())
+        out.append(card)
     return out

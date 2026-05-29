@@ -33,7 +33,26 @@ Tool contract
 Every tool takes a ``data_path`` argument — an absolute CSV path on
 the local filesystem — plus whatever column-name arguments the
 underlying StatsPAI function expects. The server loads the CSV, runs
-the estimator, and returns the result as a JSON object.
+the estimator, and returns the result both as a human-readable JSON
+``text`` block and — for clients on protocol ``2025-06-18`` and up — as
+machine-readable ``structuredContent`` validated against each tool's
+``outputSchema``.
+
+Protocol features
+-----------------
+The server negotiates its protocol revision with the client
+(:data:`SUPPORTED_PROTOCOL_VERSIONS`, newest preferred) and, on top of
+the original ``2024-11-05`` surface, advertises:
+
+* **Tool annotations** (``2025-03-26``) — every tool is tagged
+  ``readOnlyHint=true`` / ``openWorldHint=false`` (StatsPAI estimators
+  read the supplied data and compute; they never mutate state), so a
+  client can auto-approve calls.
+* **Structured tool output** (``2025-06-18``) — ``outputSchema`` on every
+  tool plus ``structuredContent`` on every result.
+
+Older clients negotiate ``2024-11-05`` and simply ignore the extra
+fields, so the additions are fully backward-compatible.
 
 Resources
 ---------
@@ -54,7 +73,25 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 
-MCP_PROTOCOL_VERSION = "2024-11-05"
+#: Protocol revision this server *prefers* (the latest it implements).
+#: Bumped from ``2024-11-05`` once the server gained the two features that
+#: revision lacks: per-tool ``annotations`` (added in ``2025-03-26``) and
+#: structured tool output — ``outputSchema`` + ``structuredContent`` (added
+#: in ``2025-06-18``). Both are now emitted by :func:`_build_mcp_tools` /
+#: :func:`_handle_tools_call`, so advertising the newer revision is honest.
+MCP_PROTOCOL_VERSION = "2025-06-18"
+
+#: Every protocol revision this server can speak, newest first. The
+#: handshake (:func:`_handle_initialize`) negotiates against this set: if
+#: the client asks for one we support we echo it verbatim (per spec, the
+#: server MUST reply with the requested version when supported); otherwise
+#: we fall back to :data:`MCP_PROTOCOL_VERSION` (the latest). The added
+#: tool fields (``annotations`` / ``outputSchema`` / ``structuredContent``)
+#: are backward-compatible — older clients negotiating ``2024-11-05`` simply
+#: ignore the extra keys, so there is no behavioural downside to a client
+#: that only knows the original revision.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+
 SERVER_NAME = "statspai"
 
 
@@ -92,7 +129,7 @@ def _resolve_server_version() -> str:
         v = getattr(_sp, "__version__", None)
         if isinstance(v, str) and v:
             return v
-    except Exception:  # pragma: no cover — statspai must import
+    except (ImportError, AttributeError):  # pragma: no cover — statspai must import
         pass
     return "0.0.0"
 
@@ -259,31 +296,22 @@ def _json_default(o: Any) -> Any:
         import base64
         return {"__bytes_b64__": base64.b64encode(o).decode("ascii")}
 
-    try:
-        from decimal import Decimal
-        if isinstance(o, Decimal):
-            v = float(o)
-            import math
-            return None if (math.isnan(v) or math.isinf(v)) else v
-    except Exception:  # pragma: no cover
-        pass
+    from decimal import Decimal
+    if isinstance(o, Decimal):
+        v = float(o)
+        import math
+        return None if (math.isnan(v) or math.isinf(v)) else v
 
-    try:
-        from pathlib import PurePath
-        if isinstance(o, PurePath):
-            # Use POSIX form so JSON output is byte-stable across
-            # OSes (Windows would otherwise emit ``\\tmp\\x`` which
-            # breaks downstream consumers and round-trip tests).
-            return o.as_posix()
-    except Exception:  # pragma: no cover
-        pass
+    from pathlib import PurePath
+    if isinstance(o, PurePath):
+        # Use POSIX form so JSON output is byte-stable across OSes (Windows
+        # would otherwise emit ``\\tmp\\x`` which breaks downstream consumers
+        # and round-trip tests).
+        return o.as_posix()
 
-    try:
-        from enum import Enum
-        if isinstance(o, Enum):
-            return _clean_floats(o.value)
-    except Exception:  # pragma: no cover
-        pass
+    from enum import Enum
+    if isinstance(o, Enum):
+        return _clean_floats(o.value)
 
     # dataclasses (without using asdict, which recurses and re-hits us)
     if hasattr(o, "__dataclass_fields__"):
@@ -343,6 +371,140 @@ _DATALESS_OVERRIDES = frozenset({"honest_did", "sensitivity",
 #: union; tests / external callers that imported this constant continue
 #: to see a stable surface.
 _DATALESS_TOOLS = _DATALESS_OVERRIDES
+
+
+#: Shared JSON Schema for the *structured* tool result (MCP ``2025-06-18``+
+#: ``outputSchema`` / ``structuredContent``). Estimator payloads are
+#: heterogeneous and vary by ``detail`` level, so this schema is
+#: deliberately permissive — ``additionalProperties: true`` and no
+#: ``required`` keys — while still *documenting* the common agent-facing
+#: envelope so a client gets type hints for the fields it can rely on.
+#: The same object the server serialises into the ``text`` content block is
+#: also returned verbatim as ``structuredContent``; this schema is what a
+#: spec-compliant client validates that object against. Every documented
+#: property mirrors a real key emitted by ``CausalResult.to_dict`` /
+#: ``_default_serializer`` / ``_enrichment.enrich_payload`` / the
+#: ``execute_tool`` error envelope — no invented fields.
+_RESULT_OUTPUT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Agent-facing estimator result. Shape depends on the tool and the "
+        "`detail` level; only a subset of these keys appears on any given "
+        "call, and tools may add estimator-specific keys (additionalProperties "
+        "is permitted). On failure the object instead carries `error` "
+        "(+ `remediation` / `error_kind` / `error_payload`)."
+    ),
+    "properties": {
+        "estimate": {"type": ["number", "null"],
+                     "description": "Point estimate of the target effect."},
+        "std_error": {"type": ["number", "null"],
+                      "description": "Standard error of the estimate."},
+        "p_value": {"type": ["number", "null"]},
+        "conf_low": {"type": ["number", "null"],
+                     "description": "Lower confidence bound."},
+        "conf_high": {"type": ["number", "null"],
+                      "description": "Upper confidence bound."},
+        "estimand": {"type": "string",
+                     "description": "Target estimand (e.g. ATT, ATE, LATE)."},
+        "method": {"type": "string",
+                   "description": "Estimator / method name."},
+        "n_obs": {"type": ["integer", "null"],
+                  "description": "Number of observations used."},
+        "coefficients": {
+            "type": "object",
+            "description": ("Per-regressor table (regression-style results): "
+                            "name → {estimate, std_error, p_value}."),
+            "additionalProperties": True,
+        },
+        "diagnostics": {
+            "type": "object",
+            "description": "Scalar diagnostic statistics keyed by name.",
+            "additionalProperties": True,
+        },
+        "violations": {
+            "type": "array",
+            "description": ("Assumption violations flagged for this design "
+                            "(present at detail='agent')."),
+            "items": {"type": "object", "additionalProperties": True},
+        },
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "next_steps": {
+            "type": "array",
+            "description": "Suggested follow-up analyses (detail='agent').",
+            "items": {"type": "object", "additionalProperties": True},
+        },
+        "suggested_functions": {
+            "type": "array",
+            "description": "StatsPAI functions worth calling next.",
+            "items": {"type": "string"},
+        },
+        "next_calls": {
+            "type": "array",
+            "description": ("Ready-to-dispatch JSON-RPC tools/call payloads "
+                            "for the recommended follow-ups (enrichment)."),
+            "items": {"type": "object", "additionalProperties": True},
+        },
+        "citations": {
+            "type": "array",
+            "description": "Verified bib keys / BibTeX for the methods used.",
+            "items": {"type": ["object", "string"]},
+        },
+        "narrative": {"type": "string",
+                      "description": "Short markdown digest of the result."},
+        "result_id": {
+            "type": "string",
+            "description": ("Server-side handle to the fitted result "
+                            "(present when as_handle=true)."),
+        },
+        "result_uri": {
+            "type": "string",
+            "description": "statspai://result/<id> form of result_id.",
+        },
+        "error": {
+            "type": "string",
+            "description": "Error message when the call failed.",
+        },
+        "error_kind": {
+            "type": "string",
+            "description": ("Stable StatsPAIError code "
+                            "(e.g. assumption_violation, "
+                            "identification_failure) for programmatic "
+                            "branching."),
+        },
+        "remediation": {
+            "type": "object",
+            "description": "Structured repair hints for the next call.",
+            "additionalProperties": True,
+        },
+    },
+    "additionalProperties": True,
+}
+
+
+#: URI of the resource that serves the full :data:`_RESULT_OUTPUT_SCHEMA`.
+RESULT_SCHEMA_URI = "statspai://schema/result"
+
+
+#: The *compact* output schema actually injected into every tool's
+#: ``outputSchema`` in ``tools/list``. The full documented envelope above
+#: is byte-identical for all ~480 tools, so inlining it everywhere would
+#: duplicate ~1.3 MB of the same schema across the manifest (half the
+#: payload) for zero added information. Instead each tool advertises this
+#: compact-but-valid schema — enough for a client to validate
+#: ``structuredContent`` (any object passes) and to learn the result is an
+#: object — and the full field-by-field reference is served **once** as the
+#: :data:`RESULT_SCHEMA_URI` resource. The actual fields are also visible on
+#: every call via the ``structuredContent`` payload itself.
+_RESULT_OUTPUT_SCHEMA_COMPACT: Dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": True,
+    "description": (
+        "Agent-facing estimator result (object). Shape varies by tool and "
+        "the `detail` level; on failure it carries `error` / `error_kind` / "
+        "`remediation` instead. Full typed field reference: read the "
+        f"`{RESULT_SCHEMA_URI}` resource."
+    ),
+}
 
 
 def _schema_snapshot_enabled() -> bool:
@@ -454,7 +616,7 @@ def _dataless_tool_names() -> "frozenset[str]":
                 # that take an OPTIONAL data still get data_path injected
                 # for client convenience but won't be required.
                 derived.add(name)
-    except Exception:
+    except (ImportError, AttributeError, TypeError):
         pass
     return frozenset(derived)
 
@@ -553,28 +715,44 @@ def _build_mcp_tools() -> List[Dict[str, Any]]:
         # (e.g. ``oaxaca`` uses it as a bool), we hide it so the manifest
         # schema is uniform across tools. Reaching that estimator's
         # ``detail`` requires the direct Python API.
-        if True:
-            props["detail"] = {
-                "type": "string",
-                "enum": ["minimal", "standard", "agent"],
-                "default": "agent",
-                "description": (
-                    "Payload depth: 'minimal' (~150 tokens) for "
-                    "sub-step calls where only the point estimate is "
-                    "needed; 'standard' (~1K tokens) for diagnostics "
-                    "+ coefficient table; 'agent' (~2K tokens, "
-                    "default) adds violations / next_steps / "
-                    "suggested_functions so the LLM can plan its "
-                    "next call without another round-trip."
-                ),
-            }
+        props["detail"] = {
+            "type": "string",
+            "enum": list(_DETAIL_LEVELS),
+            "default": "agent",
+            "description": (
+                "Payload depth: 'minimal' (~150 tokens) for "
+                "sub-step calls where only the point estimate is "
+                "needed; 'standard' (~1K tokens) for diagnostics "
+                "+ coefficient table; 'agent' (~2K tokens, "
+                "default) adds violations / next_steps / "
+                "suggested_functions so the LLM can plan its "
+                "next call without another round-trip."
+            ),
+        }
         schema["type"] = schema.get("type", "object")
         schema["properties"] = props
         schema["required"] = sorted(set(required))
+
+        # Tool annotations (MCP ``2025-03-26``+). StatsPAI tools are
+        # estimators / diagnostics / report builders: they read the
+        # supplied dataset, compute, and return — they never mutate the
+        # input file or any external state, and their "world" is the
+        # closed StatsPAI library plus the one dataset handed to them
+        # (not an open set of external entities). So ``readOnlyHint`` and
+        # ``openWorldHint=False`` are honestly uniform; a client can use
+        # ``readOnlyHint`` to auto-approve calls without a confirmation
+        # prompt. A manifest entry may override either hint by carrying
+        # its own ``annotations`` dict (none do today).
+        annotations = dict(t.get("annotations") or {})
+        annotations.setdefault("readOnlyHint", True)
+        annotations.setdefault("openWorldHint", False)
+
         out.append({
             "name": t["name"],
             "description": t["description"],
             "inputSchema": schema,
+            "annotations": annotations,
+            "outputSchema": _RESULT_OUTPUT_SCHEMA_COMPACT,
         })
     return out
 
@@ -698,8 +876,19 @@ def _handle_initialize(params: Dict[str, Any]) -> Dict[str, Any]:
     client_caps = (params.get("capabilities") or {}) if isinstance(params, dict) else {}
     has_sampling = isinstance(client_caps, dict) and "sampling" in client_caps
     _sampling.set_capability(has_sampling)
+
+    # Version negotiation (MCP spec): when the client requests a revision
+    # we support, the server MUST reply with that same revision; otherwise
+    # we offer the latest we implement. A client that sends no
+    # ``protocolVersion`` (or an unknown one) gets our preferred revision.
+    requested = params.get("protocolVersion") if isinstance(params, dict) else None
+    negotiated = (
+        requested
+        if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS
+        else MCP_PROTOCOL_VERSION
+    )
     return {
-        "protocolVersion": MCP_PROTOCOL_VERSION,
+        "protocolVersion": negotiated,
         "capabilities": {
             "tools": {"listChanged": False},
             "resources": {"subscribe": False, "listChanged": False},
@@ -744,7 +933,7 @@ def _make_progress_drain():
         try:
             sink.write(msg + "\n")
             sink.flush()
-        except Exception:
+        except (OSError, ValueError):
             # If stdout is closed mid-call, drop the notification —
             # the next handle_request will surface the real error.
             pass
@@ -849,10 +1038,27 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
             "mimeType": "image/png",
         })
 
-    return {
+    out: Dict[str, Any] = {
         "content": content,
         "isError": bool(isinstance(result, dict) and result.get("error")),
     }
+
+    # Structured tool output (MCP ``2025-06-18``+). We advertise an
+    # ``outputSchema`` on every tool, so we return the result object
+    # *also* as ``structuredContent`` — the machine-readable twin of the
+    # ``text`` block, which spec-compliant clients validate against the
+    # schema and hand to the model as typed data instead of re-parsing
+    # the serialised string. ``result_for_text`` is always a JSON object
+    # (``execute_tool`` returns a dict; the image bytes are already
+    # stripped), so it conforms to the ``type: object`` schema. The
+    # surrounding ``_jsonrpc_result`` re-walks it through
+    # ``_clean_floats`` / ``_json_default``, so numpy / nan values are
+    # scrubbed here exactly as they are in the text block. Older clients
+    # that negotiated an earlier revision simply ignore the extra key.
+    if isinstance(result_for_text, dict):
+        out["structuredContent"] = result_for_text
+
+    return out
 
 
 
@@ -1035,6 +1241,8 @@ __all__ = [
     "handle_request",
     "tool_manifest",
     "MCP_PROTOCOL_VERSION",
+    "SUPPORTED_PROTOCOL_VERSIONS",
+    "RESULT_SCHEMA_URI",
     "SERVER_NAME",
     "SERVER_VERSION",
 ]

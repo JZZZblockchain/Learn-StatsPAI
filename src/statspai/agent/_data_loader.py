@@ -21,6 +21,8 @@ import functools
 import os
 from typing import List, Optional
 
+from ..exceptions import MethodIncompatibility
+
 
 #: Default max file size (bytes) the server will load. A misconfigured
 #: client pointing at a 50GB parquet will OOM the host otherwise.
@@ -75,11 +77,11 @@ def load_dataframe(path: str,
         try:
             sample_size = int(sample_n)
         except (TypeError, ValueError):
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"data_sample_n must be a positive integer, got {sample_n!r}"
             )
         if sample_size < 1:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"data_sample_n must be a positive integer, got {sample_n!r}"
             )
 
@@ -90,20 +92,20 @@ def load_dataframe(path: str,
         df = _load_remote(path, columns=columns)
     else:
         if not os.path.isabs(path):
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"data_path must be absolute or a URL, got {path!r}")
         try:
             stat = os.stat(path)
         except FileNotFoundError:
             raise FileNotFoundError(f"No such file: {path}")
         except OSError as e:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"Could not read data file metadata: {path!r}: {e}"
             ) from e
         size = stat.st_size
         cap = max_data_bytes()
         if cap and size > cap:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"data file is {size:,} bytes; exceeds "
                 f"STATSPAI_MCP_MAX_DATA_BYTES={cap:,}. "
                 f"Pass data_sample_n=<N> for a random subsample, or "
@@ -147,7 +149,7 @@ def _load_local_cached(path: str, mtime: float,
     if lower.endswith(".json"):
         df = pd.read_json(path)
         return df[cols] if cols else df
-    raise ValueError(
+    raise MethodIncompatibility(
         f"Unsupported file extension: {path!r}. Supported: "
         ".csv/.tsv/.txt/.parquet/.pq/.feather/.arrow/.xlsx/.xls/.dta/"
         ".json/.jsonl"
@@ -181,7 +183,7 @@ def _load_remote(url: str, columns: Optional[List[str]] = None):
         return df[cols] if cols else df
     if lower.endswith((".xlsx", ".xls")):
         return pd.read_excel(url, usecols=cols)
-    raise ValueError(
+    raise MethodIncompatibility(
         f"Unsupported remote extension in {url!r}. "
         f"See load_dataframe docs for supported formats."
     )

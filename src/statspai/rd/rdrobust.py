@@ -95,6 +95,9 @@ def rdrobust(
         - 'msecomb2' : median of mserd, mseleft, mseright
         - 'cercomb1' : min of cerrd and certwo
         - 'cercomb2' : median of cerrd, cerleft, cerright
+        - 'cct'      : delegate to the official ``rdrobust`` Python port
+                       for canonical R ``rdrobust`` parity; requires the
+                       optional ``statspai[rd-cct]`` extra
     h : float, optional
         Manual bandwidth for estimation (overrides bwselect).
     b : float, optional
@@ -468,6 +471,8 @@ def rdrobust(
         "rho": float(rho) if rho is not None else None,
         "first_stage_F": fs_F,
         "n_unique_running": n_unique,
+        "cct_delegation": False,
+        "reference_backend": "statspai",
     }
 
     # --- rbc bootstrap (Cattaneo-Jansson-Ma 2026) -----------------------
@@ -760,6 +765,8 @@ def _delegate_to_cct_rdrobust(
         "first_stage_F": None,
         "n_unique_running": int(np.unique(X_c).size),
         "cct_delegation": True,
+        "reference_backend": "rdrobust>=1.3",
+        "reference_language": "R rdrobust parity via official Python port",
     }
 
     res = CausalResult(

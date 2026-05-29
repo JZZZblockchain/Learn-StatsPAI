@@ -39,6 +39,22 @@ class TestRegistry:
         assert "properties" in schema["parameters"]
         assert "formula" in schema["parameters"]["properties"]
 
+    def test_rdrobust_schema_exposes_cct_bandwidth_selector(self):
+        from statspai import function_schema
+
+        schema = function_schema("rdrobust")
+        props = schema["parameters"]["properties"]
+        assert "bwselect" in props
+        assert "cct" in props["bwselect"]["enum"]
+        assert "h" in props
+
+    def test_agent_cards_include_inherited_metadata(self):
+        from statspai import agent_card, agent_cards
+
+        names = {card["name"] for card in agent_cards()}
+        assert "ivreg" in names
+        assert agent_card("ivreg")["inherits_from"] == "iv"
+
     def test_search_functions(self):
         from statspai import search_functions
         results = search_functions("treatment")

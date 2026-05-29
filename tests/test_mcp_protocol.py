@@ -29,6 +29,7 @@ import pytest
 
 from statspai.agent.mcp_server import (
     MCP_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
     SERVER_NAME,
     SERVER_VERSION,
     handle_request,
@@ -68,6 +69,31 @@ class TestInitialize:
         caps = msg["result"]["capabilities"]
         assert "tools" in caps
         assert "resources" in caps
+
+    def test_preferred_version_is_latest_supported(self):
+        # The advertised preferred revision must be the newest entry in the
+        # supported set — otherwise a no-version client would be offered a
+        # stale revision.
+        assert MCP_PROTOCOL_VERSION == SUPPORTED_PROTOCOL_VERSIONS[0]
+        assert "2024-11-05" in SUPPORTED_PROTOCOL_VERSIONS  # original revision
+
+    def test_negotiation_echoes_supported_client_version(self):
+        # Per spec: when the client requests a revision the server supports,
+        # the server MUST reply with that exact revision (not its own latest).
+        for requested in SUPPORTED_PROTOCOL_VERSIONS:
+            msg = _rpc("initialize", {"protocolVersion": requested})
+            assert msg["result"]["protocolVersion"] == requested, (
+                f"requested {requested!r} should be echoed verbatim")
+
+    def test_negotiation_falls_back_for_unknown_version(self):
+        # An unknown / unsupported revision → server offers its latest.
+        msg = _rpc("initialize", {"protocolVersion": "1999-01-01"})
+        assert msg["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION
+
+    def test_negotiation_falls_back_for_missing_version(self):
+        # No ``protocolVersion`` at all → server offers its latest.
+        msg = _rpc("initialize", {})
+        assert msg["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +155,139 @@ class TestToolsList:
         msg = _rpc("tools/call", {"arguments": {}}, request_id=99)
         assert "error" in msg
         assert msg["error"]["code"] == -32602
+
+
+# ---------------------------------------------------------------------------
+#  Tool annotations + structured output (MCP 2025-03-26 / 2025-06-18)
+# ---------------------------------------------------------------------------
+
+class TestAnnotationsAndOutputSchema:
+
+    def test_every_tool_is_annotated_read_only(self):
+        # StatsPAI tools are estimators / diagnostics: read-only and
+        # closed-world. A client can use readOnlyHint to auto-approve.
+        msg = _rpc("tools/list", {})
+        tools = msg["result"]["tools"]
+        assert tools, "manifest unexpectedly empty"
+        for t in tools:
+            ann = t.get("annotations")
+            assert isinstance(ann, dict), f"{t['name']} missing annotations"
+            assert ann.get("readOnlyHint") is True, (
+                f"{t['name']} should be readOnlyHint=true")
+            assert ann.get("openWorldHint") is False, (
+                f"{t['name']} should be openWorldHint=false")
+
+    def test_every_tool_declares_compact_output_schema(self):
+        # Every tool advertises a *compact* outputSchema (valid object
+        # schema so structuredContent validates), and points to the
+        # shared resource for the full field reference — we deliberately
+        # do NOT inline the ~2.7 KB documented schema 480x.
+        from statspai.agent.mcp_server import RESULT_SCHEMA_URI
+        msg = _rpc("tools/list", {})
+        for t in msg["result"]["tools"]:
+            schema = t.get("outputSchema")
+            assert isinstance(schema, dict), (
+                f"{t['name']} missing outputSchema")
+            assert schema.get("type") == "object"
+            assert schema.get("additionalProperties") is True
+            assert RESULT_SCHEMA_URI in schema.get("description", ""), (
+                f"{t['name']} outputSchema should point to the schema "
+                "resource")
+            assert "properties" not in schema, (
+                f"{t['name']} inlines the full property table — that is "
+                "the 1.3 MB duplication we avoid")
+
+    def test_output_schema_not_duplicated_across_manifest(self):
+        # Efficiency guard: the per-tool outputSchema must be small. If a
+        # future change re-inlines the full documented envelope, the
+        # tools/list payload roughly doubles — fail loudly here first.
+        from statspai.agent.mcp_server import _RESULT_OUTPUT_SCHEMA_COMPACT
+        compact_bytes = len(json.dumps(_RESULT_OUTPUT_SCHEMA_COMPACT))
+        assert compact_bytes < 600, (
+            f"compact outputSchema is {compact_bytes} bytes — too large to "
+            "inline across ~480 tools; keep the full schema in the resource")
+
+    def test_result_schema_resource_is_listed_and_readable(self):
+        from statspai.agent.mcp_server import RESULT_SCHEMA_URI
+        listing = _rpc("resources/list", {})
+        uris = {r["uri"] for r in listing["result"]["resources"]}
+        assert RESULT_SCHEMA_URI in uris, "schema resource not enumerated"
+        read = _rpc("resources/read", {"uri": RESULT_SCHEMA_URI})
+        content = read["result"]["contents"][0]
+        assert content["mimeType"] == "application/json"
+        schema = json.loads(content["text"])
+        assert schema["type"] == "object"
+        # The full envelope IS documented here (just not per-tool).
+        for key in ("estimate", "std_error", "violations", "error_kind"):
+            assert key in schema["properties"]
+
+    def test_output_schema_documents_only_real_fields(self):
+        # Guard against documenting invented keys: every documented
+        # property must be one the serializer / enrichment can emit.
+        from statspai.agent.mcp_server import _RESULT_OUTPUT_SCHEMA
+        documented = set(_RESULT_OUTPUT_SCHEMA["properties"])
+        real = {
+            "estimate", "std_error", "p_value", "conf_low", "conf_high",
+            "estimand", "method", "n_obs", "coefficients", "diagnostics",
+            "violations", "warnings", "next_steps", "suggested_functions",
+            "next_calls", "citations", "narrative", "result_id",
+            "result_uri", "error", "error_kind", "remediation",
+        }
+        assert documented <= real, f"undocumented-key drift: {documented - real}"
+
+
+class TestStructuredContent:
+
+    @pytest.fixture
+    def sample_csv(self, tmp_path):
+        rng = np.random.default_rng(2)
+        n = 300
+        df = pd.DataFrame({"y": rng.normal(size=n), "x": rng.normal(size=n)})
+        path = tmp_path / "sc.csv"
+        df.to_csv(path, index=False)
+        return path
+
+    def test_tools_call_returns_structured_content(self, sample_csv):
+        msg = _rpc("tools/call", {
+            "name": "regress",
+            "arguments": {"formula": "y ~ x", "data_path": str(sample_csv)},
+        })
+        result = msg["result"]
+        assert "structuredContent" in result
+        sc = result["structuredContent"]
+        assert isinstance(sc, dict)
+        # structuredContent must be the machine twin of the text block.
+        text_payload = json.loads(result["content"][0]["text"])
+        assert sc == text_payload
+
+    def test_structured_content_is_nan_free(self, sample_csv):
+        # Same strict-JSON guarantee as the text block: no NaN/Infinity
+        # tokens reach the wire (the raw response string is parsed back).
+        raw = handle_request(json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "regress",
+                       "arguments": {"formula": "y ~ x",
+                                     "data_path": str(sample_csv)}},
+        }))
+        assert "NaN" not in raw and "Infinity" not in raw
+        # round-trips through a strict parser without error
+        json.loads(raw)
+
+    def test_error_envelope_also_structured(self, tmp_path):
+        # A failed call still returns structuredContent (the error object),
+        # so agents can branch on error_kind without parsing text.
+        df = pd.DataFrame({"y": [1.0, 2.0, 3.0]})
+        path = tmp_path / "bad.csv"
+        df.to_csv(path, index=False)
+        msg = _rpc("tools/call", {
+            "name": "regress",
+            "arguments": {"formula": "y ~ nonexistent_col",
+                           "data_path": str(path)},
+        })
+        result = msg["result"]
+        assert result["isError"] is True
+        assert isinstance(result.get("structuredContent"), dict)
+        assert "error" in result["structuredContent"]
 
 
 # ---------------------------------------------------------------------------

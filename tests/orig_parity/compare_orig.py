@@ -30,12 +30,13 @@ def main() -> None:
         "reference run on the *same* CSV exported from a public R "
         "package, and (b) the published-paper anchor.",
         "",
-        "Headline finding across all rows: **sp matches R bit-equal "
-        "on the same bytes** for closed-form rows (OLS, IV, naive/"
-        "adjusted regressions). Where sp diverges from the published-"
-        "paper anchor, the divergence is documented per row -- usually "
-        "because the public R package's data subset differs from the "
-        "paper's original extract, or because the canonical R "
+        "Headline finding across all rows: **sp matches R on the same "
+        "bytes** for closed-form rows (OLS, IV, naive/adjusted "
+        "regressions) and for Lee RD when the canonical "
+        "`bwselect='cct'` path is used. Where sp diverges from the "
+        "published-paper anchor, the divergence is documented per row "
+        "-- usually because the public R package's data subset differs "
+        "from the paper's original extract, or because the canonical R "
         "specification differs from the paper's.",
         "",
     ]

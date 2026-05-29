@@ -100,6 +100,7 @@ options:
 | `'msetwo'`   | Different bandwidths on each side of cutoff          |
 | `'cerrd'`    | Coverage-error-rate optimal (better for CI coverage) |
 | `'certwo'`   | CER-optimal, two bandwidths                          |
+| `'cct'`      | Exact R `rdrobust` parity; requires `statspai[rd-cct]` |
 | Fixed `h=`   | Specified by you (for robustness checks)             |
 
 Rule of thumb: use `mserd` for point estimates, run `cerrd` as a

@@ -64,9 +64,9 @@ report = sp.cs_report(data, y="y", time="t", first_treat="g", group="id",
 
 | R                                             | StatsPAI                                               |
 | --------------------------------------------- | ------------------------------------------------------ |
-| `rdrobust::rdrobust(y, x, c = 0)`             | `sp.rdrobust(y, x, c=0)`                               |
+| `rdrobust::rdrobust(y, x, c = 0)`             | `sp.rdrobust(df, y="y", x="x", c=0, bwselect="cct")` for canonical R parity |
 | `rdrobust::rdplot(y, x)`                      | `sp.rdplot(y, x)`                                      |
-| `rdrobust::rdbwselect(y, x)`                  | bandwidth auto-selected inside `sp.rdrobust(...)`      |
+| `rdrobust::rdbwselect(y, x)`                  | `bwselect="cct"` for R parity; default `mserd` is dependency-light |
 | `rddensity::rddensity(x, c = 0)`              | `sp.rdplotdensity(x, c=0)`                             |
 | `rdmulti::rdmc(...)`                          | `sp.rdmc(...)`                                         |
 | `rdmulti::rdms(...)`                          | `sp.rdms(...)`                                         |

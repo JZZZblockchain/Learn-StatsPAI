@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..exceptions import MethodIncompatibility
 from ._numba_kernels import cluster_meat, sandwich_hc
 
 __all__ = [
@@ -88,7 +89,7 @@ def sandwich_vcov(
         elif correction.lower() == "hc1":
             c = n / max(n - p, 1)
         else:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"Without clusters, correction must be 'none'/'hc0'/'hc1'; "
                 f"got {correction!r}."
             )
@@ -127,9 +128,11 @@ def _cluster_labels_array(clusters: np.ndarray, n_obs: int) -> np.ndarray:
 
     labels = np.asarray(clusters)
     if labels.ndim != 1:
-        raise ValueError("clusters must be a one-dimensional array")
+        raise MethodIncompatibility("clusters must be a one-dimensional array")
     if labels.shape[0] != n_obs:
-        raise ValueError("clusters length must match the number of observations")
+        raise MethodIncompatibility(
+            "clusters length must match the number of observations"
+        )
 
     if labels.dtype.kind in "fc":
         has_missing = bool(np.isnan(labels).any())
@@ -138,7 +141,7 @@ def _cluster_labels_array(clusters: np.ndarray, n_obs: int) -> np.ndarray:
     else:
         has_missing = any(_object_label_is_missing(x) for x in labels)
     if has_missing:
-        raise ValueError("clusters must not contain missing values")
+        raise MethodIncompatibility("clusters must not contain missing values")
     return labels
 
 
@@ -167,7 +170,7 @@ def cluster_correction_factor(n_clusters: int, n_obs: int, n_params: int,
         # (the CR1 form used by the multiway / multinomial sandwiches). For
         # G >= 2 and N > K this is identical to 'liang_zeger'.
         return g_factor * ((N - 1.0) / max(N - K, 1))
-    raise ValueError(
+    raise MethodIncompatibility(
         f"Unknown cluster correction {correction!r}; expected one of "
         "'none', 'cgm', 'stata', 'liang_zeger', 'stacked', 'cr1'."
     )

@@ -4,6 +4,46 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added — MCP protocol modernization
+
+- **Protocol version negotiation + bump to `2025-06-18`
+  (`src/statspai/agent/mcp_server.py`)** — the server now negotiates its
+  protocol revision with the client (`SUPPORTED_PROTOCOL_VERSIONS =
+  ("2025-06-18", "2025-03-26", "2024-11-05")`): it echoes the client's
+  requested revision when supported, else offers the latest. Replaces the
+  hard-coded `protocolVersion: "2024-11-05"`. Fully backward-compatible —
+  a client negotiating `2024-11-05` ignores the new fields below.
+- **Tool annotations (MCP `2025-03-26`)** — every advertised tool now
+  carries `annotations: {readOnlyHint: true, openWorldHint: false}`.
+  StatsPAI tools read the supplied dataset and compute; they never mutate
+  the input file or external state, so a client can auto-approve calls
+  without a confirmation prompt. A manifest entry may override either hint.
+- **Structured tool output (MCP `2025-06-18`)** — every `tools/call` now
+  returns the result object as `structuredContent` alongside the existing
+  `text` block, so agents get typed data without re-parsing serialized
+  JSON. Error envelopes are structured too (branch on `error_kind`).
+  Strict-JSON guarantee (no `NaN`/`Infinity`) holds for the structured
+  payload as well. Every tool advertises a compact `outputSchema`; the
+  full documented result envelope (`estimate` / `std_error` / `conf_low` /
+  `conf_high` / `method` / `n_obs` / `coefficients` / `diagnostics` /
+  `violations` / `next_steps` / `next_calls` / `citations` / `result_id` /
+  `error` …) is served once via the new `statspai://schema/result`
+  resource rather than inlined into all ~480 tools — which keeps the
+  `tools/list` payload ~1.2 MB smaller (the schema is byte-identical per
+  tool, so inlining it everywhere was 50% duplication).
+
+### Fixed — MCP cold-start bundle drift
+
+- **Stale schema-bundle guard (`.github/workflows/parity-guards.yml`)** —
+  the MCP server serves `tools/list` + resources from the committed
+  `schemas/` bundle on its cold-start fast path, gated only on a matching
+  `statspai_version`. A registry change within the same version (a refactor
+  between releases) drifted the bundle silently, so the server served a
+  stale tool list. CI now runs `python scripts/dump_schemas.py --check`
+  alongside the existing `registry_stats --check`, failing the build until
+  the bundle is regenerated. Regenerated the bundle (`schemas/` +
+  `src/statspai/schemas/`) to clear the existing drift.
+
 ### Added — agent-native sprint
 
 - **Agent-card metadata overlay (`src/statspai/_agent_cards_extra.py`)** —

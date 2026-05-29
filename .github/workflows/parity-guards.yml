@@ -66,6 +66,15 @@ jobs:
       - name: registry_stats --check
         run: |
           python scripts/registry_stats.py --check
+      - name: dump_schemas --check (MCP cold-start bundle drift)
+        # The MCP server serves tools/list + resources from the committed
+        # schemas/ bundle on its cold-start fast path, gated only on a
+        # matching statspai_version. Without this guard, a registry change
+        # within the same version (e.g. a refactor between releases) drifts
+        # the bundle silently and the server serves a stale tool list. This
+        # check fails the build until the bundle is regenerated + committed.
+        run: |
+          python scripts/dump_schemas.py --check
       - name: API surface consistency
         run: |
           pytest tests/test_api_surface_consistency.py -q --no-header

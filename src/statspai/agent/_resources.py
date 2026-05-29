@@ -30,6 +30,30 @@ from typing import Any, Callable, Dict, List, Optional
 FUNCTION_URI_PREFIX = "statspai://function/"
 RESULT_URI_PREFIX = "statspai://result/"
 
+#: Fallback URI for the result-schema resource. ``mcp_server`` owns the
+#: canonical :data:`RESULT_SCHEMA_URI` (it must reference it early, before
+#: this module is imported), so we read it from there lazily and only fall
+#: back to this literal if that import is unavailable.
+_RESULT_SCHEMA_URI_FALLBACK = "statspai://schema/result"
+
+
+def _result_schema_uri() -> str:
+    """Canonical result-schema URI (from ``mcp_server`` when importable)."""
+    try:
+        from .mcp_server import RESULT_SCHEMA_URI
+        return RESULT_SCHEMA_URI
+    except (ImportError, AttributeError):  # pragma: no cover
+        return _RESULT_SCHEMA_URI_FALLBACK
+
+
+def _result_output_schema() -> Dict[str, Any]:
+    """The full documented result envelope served by the schema resource."""
+    try:
+        from .mcp_server import _RESULT_OUTPUT_SCHEMA
+        return _RESULT_OUTPUT_SCHEMA
+    except (ImportError, AttributeError):  # pragma: no cover
+        return {"type": "object", "additionalProperties": True}
+
 
 # ----------------------------------------------------------------------
 # Catalog / index / detail helpers
@@ -171,6 +195,18 @@ def handle_resources_list(params: Dict[str, Any]) -> Dict[str, Any]:
                                "entries. Read this once during session "
                                "setup to enumerate available tools.",
             },
+            {
+                "uri": _result_schema_uri(),
+                "name": "StatsPAI result output schema",
+                "mimeType": "application/json",
+                "description": "JSON Schema for the agent-facing result "
+                               "envelope returned by every tools/call "
+                               "(estimate / std_error / conf_int / method / "
+                               "diagnostics / violations / next_steps / "
+                               "citations / error …). Each tool's "
+                               "outputSchema points here for the full "
+                               "field-by-field reference.",
+            },
         ],
     }
 
@@ -217,6 +253,22 @@ def handle_resources_read(
                     "uri": uri,
                     "mimeType": "application/json",
                     "text": json.dumps(_clean(functions_index()),
+                                       default=json_default,
+                                       allow_nan=False),
+                },
+            ],
+        }
+    if uri == _result_schema_uri():
+        # The full, documented result envelope. Per-tool ``outputSchema``
+        # entries are kept compact to avoid duplicating this ~2.7 KB schema
+        # across every tool in tools/list; this resource serves the
+        # complete field-by-field reference once, on demand.
+        return {
+            "contents": [
+                {
+                    "uri": uri,
+                    "mimeType": "application/json",
+                    "text": json.dumps(_clean(_result_output_schema()),
                                        default=json_default,
                                        allow_nan=False),
                 },
