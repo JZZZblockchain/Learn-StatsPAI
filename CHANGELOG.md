@@ -4,6 +4,88 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added — agent-native sprint
+
+- **Agent-card metadata overlay (`src/statspai/_agent_cards_extra.py`)** —
+  89 curated Tier-A cards (assumptions / pre_conditions / failure_modes /
+  alternatives / typical_n_min) for certified + validated estimators that
+  previously had none, applied via `registry._apply_agent_card_seeds` with
+  extend-missing semantics (hand-written `FunctionSpec` content always
+  wins). Lifts curated agent-native field coverage roughly threefold. Every
+  `alternative` and `exception` is CI-validated to resolve.
+- **Relational-integrity contract suite (`tests/test_agent_native_contract.py`)**
+  — guards that every agent-card `alternatives` / `failure_modes.alternative`
+  resolves to a real function/MCP tool, every `failure_modes.exception` is a
+  real class, every advertised MCP tool is executable, every
+  `_FOLLOWUP_BY_TOOL` next-call is an advertised tool, and every
+  `_CITATIONS_BY_TOOL` bib key exists in `paper.bib`.
+- **Machine-readable schema bundle (`scripts/dump_schemas.py`,
+  `src/statspai/_schema_export.py`, `schemas/`)** — an import-free, versioned
+  bundle (`tools.json` / `functions.json` / `agent_cards.json` /
+  `result.schema.json` / `index.json`) so a non-Python client can discover
+  the full surface offline. Includes a JSON Schema (draft 2020-12) for the
+  agent-facing result payload, contract-tested against real `CausalResult`
+  and `EconometricResults` outputs. `--check` gates drift.
+- **MCP-sampling LLM client (`statspai.causal_llm.sampling_client`)** —
+  `SamplingLLMClient` / `resolve_llm_client()` bridge the MCP server→client
+  `sampling/createMessage` round-trip into the `LLMClient` interface, so
+  `sp.llm_dag_propose` (and friends) can reuse the connected agent's own
+  model with no extra API key, falling back to the deterministic heuristic
+  when sampling is unavailable.
+- **Auto-tool citation enrichment** — `_enrichment.build_citations` now
+  falls back to verified citation tokens in a function's registry
+  `reference` field, so hundreds of carded estimators carry citations in
+  their MCP output automatically. Only keys that resolve in `paper.bib` are
+  ever surfaced (CLAUDE.md §10 red line holds).
+- **Agent-workflow regression net (`tests/agent_eval/`)** — an end-to-end
+  transcript test (`detect_design → preflight → fit(as_handle) →
+  audit_result → sensitivity_from_result`) plus handle-chaining and
+  graceful-failure UX contracts.
+- **Docs** — [`docs/guides/agent_native_workflow.md`](docs/guides/agent_native_workflow.md),
+  an operational playbook for driving StatsPAI as an agent.
+
+### Added — regression-table export
+
+- **Symmetric single-model export surface on `EconometricResults`** —
+  `sp.regress` / `sp.ols` / `sp.iv` results now expose `.to_latex()`,
+  `.to_html()`, `.to_markdown()`, `.to_excel()`, and `.to_word()`, closing the
+  asymmetry where these lived only on `CausalResult` (so `sp.did(...).to_latex()`
+  worked but `sp.regress(...).to_latex()` raised `AttributeError`). Each method
+  delegates to the canonical `sp.regtable` renderer and forwards every
+  `regtable` keyword (`coef_labels` / `keep` / `drop` / `order` / `stats` /
+  `se_type` / `stars` / `fmt` / `template` / `notes` …); `to_latex` adds
+  `caption=` / `label=`, and the string formats accept an optional `path=`.
+- **Agent-native table serialisation (`RegtableResult.to_dict()` /
+  `.to_json()`)** — a JSON-safe payload with three layers: metadata, the
+  rendered cell grid (the formatted `"2.067***"` / `"(0.074)"` strings), and
+  the numeric truth per model (estimate / SE / t / p / CI / stats / depvar).
+  NaN/Inf coerce to `null`. `renders=True` (or a format list) optionally embeds
+  rendered strings. `RegtableResult.save()` and `regtable(..., filename=...)`
+  now recognise the `.json` extension.
+- **Docs** —
+  [`docs/guides/exporting-regression-tables.md`](docs/guides/exporting-regression-tables.md):
+  single- and multi-model export across all six formats, the agent-native
+  payload, journal templates, multi-panel / `Collection` containers, and a
+  Stata (`esttab` / `estout` / `outreg2`) and R (`modelsummary` / `stargazer` /
+  `fixest::etable` / `texreg`) cross-reference table. Every code snippet was
+  executed to verify it runs. `migration-from-r.md` corrected:
+  `sp.regress` returns `EconometricResults` (not `CausalResult`) and the
+  `etable` mapping points at `sp.regtable`.
+
+### Fixed
+
+- **Two dangling enrichment citations** — `_CITATIONS_BY_TOOL` referenced a
+  mistyped `dechaisemartin2020twoway` (corrected to the existing
+  `dechaisemartin2020two`) and a `cattaneo2015randomization` key absent from
+  `paper.bib` (added, verified via De Gruyter DOI 10.1515/jci-2013-0010 and
+  the rdpackages reference). refs verified via aeaweb.org + RePEc
+  (de Chaisemartin & D'Haultfœuille 2020) and degruyterbrill.com + rdpackages
+  (Cattaneo, Frandsen & Titiunik 2015).
+- **Four dangling agent-card alternatives** — `rif_regression`
+  (→ `rif_decomposition`), `sp.ope_ipw` (→ `sp.ipw`), and two `fixest_in_r`
+  external references (→ `hdfe_ols`) pointed at non-existent functions; an
+  agent following them would have hit `AttributeError`.
+
 ## [1.16.0] — 2026-05-29
 
 ### ⚠️ Correctness fix
