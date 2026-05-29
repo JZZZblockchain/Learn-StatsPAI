@@ -786,7 +786,14 @@ def rdplot(
             Y_adj[valid] = Y[valid] - proj + np.mean(Y[valid])
             Y = Y_adj
         except np.linalg.LinAlgError:
-            pass
+            # Don't silently plot unadjusted Y when the user asked for
+            # covariate adjustment (CLAUDE.md §7).
+            warnings.warn(
+                "rdplot: covariate partial-out failed (singular covariate "
+                "design); the plot shows the *unadjusted* outcome. The point "
+                "estimate from sp.rdrobust(...) is unaffected.",
+                RuntimeWarning, stacklevel=2,
+            )
 
     # Observation weights
     W = None

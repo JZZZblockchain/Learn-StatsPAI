@@ -16,6 +16,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from .core import BridgeResult, _agreement_test, _dr_combine, _register
 
 
@@ -97,33 +98,56 @@ def cb_ipw_bridge(
         m0 = float(np.sum(w * Yc))
         return m1 - m0
 
+    cb_failed = False
+    cb_error = None
     try:
         ate_cb = _ebalance_ate(Y, D, X)
-    except Exception:
-        ate_cb = ate_ipw  # graceful fallback: report IPW twice
+    except Exception as exc:
+        # Do NOT report IPW twice: that would make the agreement test
+        # (path A vs path B) pass trivially and the DR combine meaningless,
+        # silently (CLAUDE.md §7). Mark the CB path invalid and surface it.
+        cb_failed = True
+        cb_error = f"{type(exc).__name__}: {exc}"
+        ate_cb = float("nan")
+        import warnings
+        warnings.warn(
+            f"cb_ipw bridge: entropy-balancing (path B) failed on the main "
+            f"sample ({cb_error}). The CB estimate, the IPW-vs-CB agreement "
+            f"test, and the DR combine are reported as NaN; only the IPW "
+            f"estimate (path A) is valid.",
+            RuntimeWarning, stacklevel=2,
+        )
 
     # ---------- Bootstrap SEs ---------- #
     boot_ipw = np.full(n_boot, np.nan)
     boot_cb = np.full(n_boot, np.nan)
+    n_ipw_fail = 0
+    n_cb_fail = 0
     for b in range(n_boot):
         idx = rng.integers(0, n, size=n)
         try:
             boot_ipw[b] = _ipw_ate(Y[idx], D[idx], X[idx])
         except Exception:
-            pass
-        try:
-            boot_cb[b] = _ebalance_ate(Y[idx], D[idx], X[idx])
-        except Exception:
-            pass
-    se_ipw = float(np.nanstd(boot_ipw, ddof=1)) or 1e-6
-    se_cb = float(np.nanstd(boot_cb, ddof=1)) or 1e-6
+            n_ipw_fail += 1
+        if not cb_failed:
+            try:
+                boot_cb[b] = _ebalance_ate(Y[idx], D[idx], X[idx])
+            except Exception:
+                n_cb_fail += 1
 
-    diff, diff_se, diff_p = _agreement_test(
-        ate_ipw, se_ipw, ate_cb, se_cb
-    )
-    est_dr, se_dr = _dr_combine(
-        ate_ipw, se_ipw, ate_cb, se_cb, diff_p
-    )
+    se_ipw = _bootstrap_se(boot_ipw, n_boot, "cb_ipw IPW path")
+    if cb_failed:
+        se_cb = float("nan")
+        diff = diff_se = diff_p = float("nan")
+        est_dr = se_dr = float("nan")
+    else:
+        se_cb = _bootstrap_se(boot_cb, n_boot, "cb_ipw entropy-balancing path")
+        diff, diff_se, diff_p = _agreement_test(
+            ate_ipw, se_ipw, ate_cb, se_cb
+        )
+        est_dr, se_dr = _dr_combine(
+            ate_ipw, se_ipw, ate_cb, se_cb, diff_p
+        )
 
     _result = BridgeResult(
         kind="cb_ipw",
@@ -139,7 +163,12 @@ def cb_ipw_bridge(
         estimate_dr=est_dr,
         se_dr=se_dr,
         n_obs=n,
-        detail={},
+        detail={
+            "cb_failed": cb_failed,
+            "cb_error": cb_error,
+            "n_boot_ipw_failed": n_ipw_fail,
+            "n_boot_cb_failed": n_cb_fail,
+        },
         reference="Słoczyński, Uysal & Wooldridge (2023), arXiv 2310.18563",
     )
     try:

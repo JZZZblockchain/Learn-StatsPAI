@@ -93,3 +93,49 @@ def test_principal_score_warns_when_logit_degrades(monkeypatch):
             method="principal_score", n_boot=10, seed=1,
         )
     assert res.model_info["principal_score_degraded"] is True
+
+
+# ---------------------------------------------------------------------------
+# WS-A5: shared bootstrap-SE helper replacing `np.nanstd(boot) or 1e-6`.
+# ---------------------------------------------------------------------------
+
+def test_bootstrap_se_healthy_matches_nanstd():
+    """On a fully-successful bootstrap, bootstrap_se == np.std(ddof=1)."""
+    from statspai.core._bootstrap import bootstrap_se
+    boot = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    assert bootstrap_se(boot, 5, "x") == pytest.approx(np.std(boot, ddof=1))
+
+
+def test_bootstrap_se_warns_on_partial_failure():
+    """Some failed replicates -> warn, still compute over survivors."""
+    from statspai.core._bootstrap import bootstrap_se
+    boot = np.array([1.0, 2.0, np.nan, 4.0, np.nan])
+    with pytest.warns(RuntimeWarning, match="2/5 bootstrap replicates failed"):
+        se = bootstrap_se(boot, 5, "myest")
+    assert se == pytest.approx(np.std([1.0, 2.0, 4.0], ddof=1))
+
+
+def test_bootstrap_se_returns_nan_below_floor():
+    """Below the success floor -> NaN, never a fabricated tiny SE."""
+    from statspai.core._bootstrap import bootstrap_se
+    boot = np.array([1.0, np.nan, np.nan, np.nan])
+    with pytest.warns(RuntimeWarning, match="undefined"):
+        se = bootstrap_se(boot, 4, "myest", min_success=2)
+    assert np.isnan(se)
+
+
+def test_cb_ipw_records_failure_diagnostics():
+    """cb_ipw bridge must expose CB-path failure bookkeeping in detail."""
+    rng = np.random.default_rng(0)
+    n = 300
+    X = rng.normal(size=(n, 2))
+    D = (rng.uniform(size=n) < 0.5).astype(int)
+    Y = 2.0 * D + X @ np.array([1.0, -0.5]) + rng.normal(size=n)
+    df = pd.DataFrame({"y": Y, "d": D, "x1": X[:, 0], "x2": X[:, 1]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = sp.bridge("cb_ipw", data=df, y="y", treat="d",
+                        covariates=["x1", "x2"], n_boot=30, seed=1)
+    # Healthy run: CB path succeeds, bookkeeping present.
+    assert res.detail["cb_failed"] is False
+    assert "n_boot_cb_failed" in res.detail
