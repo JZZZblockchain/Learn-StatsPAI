@@ -38,45 +38,17 @@ from ..core.results import EconometricResults
 def _cluster_robust_variance(X: np.ndarray, residuals: np.ndarray,
                              clusters: np.ndarray) -> np.ndarray:
     """
-    Compute one-way cluster-robust variance matrix (Liang-Zeger 1986).
+    One-way cluster-robust variance matrix (Liang-Zeger 1986).
 
-    V = (G/(G-1)) * ((n-1)/(n-k)) * (X'X)^{-1} B (X'X)^{-1}
+    V = (G/(G-1)) * ((n-1)/(n-k)) * (X'X)^{-1} B (X'X)^{-1},
+    B = sum_g (u_g u_g'), u_g = sum_{i in g} X_i * e_i.
 
-    where B = sum_g (u_g u_g') and u_g = sum_{i in g} X_i * e_i.
-
-    Parameters
-    ----------
-    X : np.ndarray, shape (n, k)
-        Design matrix.
-    residuals : np.ndarray, shape (n,)
-        OLS residuals.
-    clusters : np.ndarray, shape (n,)
-        Cluster labels.
-
-    Returns
-    -------
-    np.ndarray, shape (k, k)
-        Cluster-robust variance-covariance matrix.
+    Thin wrapper over the canonical ``core._vcov.cluster_robust_vcov``
+    (CLAUDE.md §4); the Liang-Zeger correction is its ``'liang_zeger'`` factor.
+    Verified byte-identical to the prior hand-rolled implementation.
     """
-    n, k = X.shape
-    unique_clusters = np.unique(clusters)
-    G = len(unique_clusters)
-
-    XtX_inv = np.linalg.inv(X.T @ X)
-
-    # Build the meat: B = sum_g u_g u_g'
-    B = np.zeros((k, k))
-    for g in unique_clusters:
-        mask = clusters == g
-        # u_g = X_g' e_g  (k-vector)
-        u_g = X[mask].T @ residuals[mask]
-        B += np.outer(u_g, u_g)
-
-    # Finite-sample correction
-    scale = (G / (G - 1)) * ((n - 1) / (n - k))
-
-    V = scale * XtX_inv @ B @ XtX_inv
-    return V
+    from ..core._vcov import cluster_robust_vcov
+    return cluster_robust_vcov(X, residuals, clusters, correction="liang_zeger")
 
 
 def _ensure_psd(V: np.ndarray) -> np.ndarray:
