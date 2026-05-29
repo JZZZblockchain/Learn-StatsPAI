@@ -33,7 +33,82 @@ import numpy as np
 
 from ._numba_kernels import cluster_meat, sandwich_hc
 
-__all__ = ["cluster_robust_vcov", "hc_vcov", "cluster_correction_factor"]
+__all__ = [
+    "cluster_robust_vcov",
+    "hc_vcov",
+    "sandwich_vcov",
+    "cluster_correction_factor",
+]
+
+
+def sandwich_vcov(
+    bread: np.ndarray,
+    scores: np.ndarray,
+    *,
+    clusters: np.ndarray | None = None,
+    correction: str = "none",
+    n_params: int | None = None,
+    dof_adjust: float | None = None,
+) -> np.ndarray:
+    """Generic sandwich covariance ``V = c * bread @ meat @ bread``.
+
+    Covers both the OLS case (``bread = (X'X)^{-1}``, ``scores = X * resid``)
+    and the MLE case (``bread = inv(information/Hessian)``, ``scores`` = the
+    per-observation score/gradient contributions), with or without clustering.
+
+    Parameters
+    ----------
+    bread : (k, k) inverse-information / ``(X'X)^{-1}`` matrix.
+    scores : (n, k) per-observation score contributions.
+    clusters : optional (n,) cluster labels. When ``None`` the meat is the
+        heteroskedasticity-robust ``scores' scores``; otherwise it is the
+        cluster meat ``sum_g (sum_{i in g} scores_i)(.)'``.
+    correction : finite-sample factor. With ``clusters`` it accepts the named
+        cluster corrections ('none'/'cgm'/'stata'/'liang_zeger'/'stacked'/
+        'cr1'); without clusters it accepts 'none' (HC0-style) or 'hc1'
+        (n/(n-k)).
+    n_params : override for K in the correction (defaults to ``scores`` width).
+    dof_adjust : explicit float factor; overrides ``correction`` when given.
+
+    Returns
+    -------
+    (k, k) covariance matrix.
+    """
+    bread = np.asarray(bread, dtype=np.float64)
+    scores = np.asarray(scores, dtype=np.float64)
+    n, k = scores.shape
+    p = k if n_params is None else int(n_params)
+
+    if clusters is None:
+        meat = scores.T @ scores
+        if dof_adjust is not None:
+            c = float(dof_adjust)
+        elif correction.lower() in ("none", "hc0"):
+            c = 1.0
+        elif correction.lower() == "hc1":
+            c = n / max(n - p, 1)
+        else:
+            raise ValueError(
+                f"Without clusters, correction must be 'none'/'hc0'/'hc1'; "
+                f"got {correction!r}."
+            )
+        return c * (bread @ meat @ bread)
+
+    labels = _cluster_labels_array(np.asarray(clusters), n)
+    uniq = np.unique(labels)
+    G = int(uniq.shape[0])
+    # Cluster meat: sum over clusters of the summed-score outer product.
+    cluster_scores = np.zeros((G, k))
+    # np.unique returns sorted labels; map each row to its cluster index.
+    inv = np.searchsorted(uniq, labels)
+    np.add.at(cluster_scores, inv, scores)
+    meat = cluster_scores.T @ cluster_scores
+
+    if dof_adjust is not None:
+        c = float(dof_adjust)
+    else:
+        c = cluster_correction_factor(G, n, p, correction)
+    return c * (bread @ meat @ bread)
 
 
 def _cluster_labels_array(clusters: np.ndarray, n_obs: int) -> np.ndarray:
@@ -87,9 +162,14 @@ def cluster_correction_factor(n_clusters: int, n_obs: int, n_params: int,
     if corr == "stacked":
         denom = (N - K)
         return g_factor * (N / denom) if denom > 0 else g_factor
+    if corr == "cr1":
+        # Like 'liang_zeger' but with a max(.,1) guard on the dof denominator
+        # (the CR1 form used by the multiway / multinomial sandwiches). For
+        # G >= 2 and N > K this is identical to 'liang_zeger'.
+        return g_factor * ((N - 1.0) / max(N - K, 1))
     raise ValueError(
         f"Unknown cluster correction {correction!r}; expected one of "
-        "'none', 'cgm', 'stata', 'liang_zeger', 'stacked'."
+        "'none', 'cgm', 'stata', 'liang_zeger', 'stacked', 'cr1'."
     )
 
 

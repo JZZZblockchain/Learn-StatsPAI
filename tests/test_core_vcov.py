@@ -11,6 +11,7 @@ import pytest
 from statspai.core._vcov import (
     cluster_robust_vcov,
     hc_vcov,
+    sandwich_vcov,
     cluster_correction_factor,
 )
 
@@ -97,3 +98,69 @@ def test_cluster_rejects_missing_labels(ols_data):
 def test_unknown_correction_raises():
     with pytest.raises(ValueError, match="Unknown cluster correction"):
         cluster_correction_factor(10, 100, 3, "bogus")
+
+
+# --- generic sandwich_vcov (covers MLE bread + precomputed scores) ----------
+
+def test_sandwich_vcov_cluster_equals_cluster_robust_vcov(ols_data):
+    X, y, resid, clusters = ols_data
+    XtX_inv = np.linalg.inv(X.T @ X)
+    scores = X * resid[:, None]
+    got = sandwich_vcov(XtX_inv, scores, clusters=clusters,
+                        correction="liang_zeger")
+    expected = cluster_robust_vcov(X, resid, clusters, correction="liang_zeger")
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-14)
+
+
+def test_sandwich_vcov_hc_equals_hc0(ols_data):
+    X, y, resid, _ = ols_data
+    XtX_inv = np.linalg.inv(X.T @ X)
+    scores = X * resid[:, None]
+    got = sandwich_vcov(XtX_inv, scores, correction="none")
+    expected = XtX_inv @ (scores.T @ scores) @ XtX_inv
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-14)
+
+
+def test_sandwich_vcov_hc1(ols_data):
+    X, y, resid, _ = ols_data
+    n, k = X.shape
+    XtX_inv = np.linalg.inv(X.T @ X)
+    scores = X * resid[:, None]
+    got = sandwich_vcov(XtX_inv, scores, correction="hc1")
+    expected = (n / (n - k)) * XtX_inv @ (scores.T @ scores) @ XtX_inv
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-14)
+
+
+def test_sandwich_vcov_cr1_matches_cr1_formula(ols_data):
+    X, y, resid, clusters = ols_data
+    n, k = X.shape
+    XtX_inv = np.linalg.inv(X.T @ X)
+    scores = X * resid[:, None]
+    G = int(np.unique(clusters).shape[0])
+    meat = np.zeros((k, k))
+    for g in np.unique(clusters):
+        s = scores[clusters == g].sum(axis=0)
+        meat += np.outer(s, s)
+    scale = (G / max(G - 1, 1)) * ((n - 1) / max(n - k, 1))
+    expected = scale * XtX_inv @ meat @ XtX_inv
+    got = sandwich_vcov(XtX_inv, scores, clusters=clusters, correction="cr1")
+    np.testing.assert_allclose(got, expected, rtol=1e-11, atol=1e-13)
+
+
+def test_sandwich_vcov_mle_bread(ols_data):
+    # Generic bread (not (X'X)^{-1}) — e.g. inv(Hessian) in an MLE model.
+    X, y, resid, _ = ols_data
+    n, k = X.shape
+    bread = np.linalg.inv(X.T @ X + 0.3 * np.eye(k))  # arbitrary SPD bread
+    scores = X * resid[:, None]
+    got = sandwich_vcov(bread, scores, correction="none")
+    expected = bread @ (scores.T @ scores) @ bread
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-14)
+
+
+def test_sandwich_vcov_hc_rejects_cluster_correction(ols_data):
+    X, y, resid, _ = ols_data
+    XtX_inv = np.linalg.inv(X.T @ X)
+    scores = X * resid[:, None]
+    with pytest.raises(ValueError, match="Without clusters"):
+        sandwich_vcov(XtX_inv, scores, correction="stata")
