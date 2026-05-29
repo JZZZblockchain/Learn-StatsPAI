@@ -72,3 +72,17 @@ any name that fails to resolve lazily.
 
 `__init__.py` + `registry.py` maintainer (do NOT split across agents — these
 two files are tightly coupled on the eager/lazy boundary).
+
+## Addendum (2026-05-29): the scipy.stats win is blocked by `regression.ols`
+
+Empirically: `_ensure_full_registry()` is already lazy (called from
+`list_functions`/`help`, NOT at import), so deferring the heavy families
+(synth/timeseries/tmle/frontier) is feasible. BUT `regression.ols` is eager
+(core API, bound at `__init__` import) and is the **first** importer of
+`scipy.stats` — so scipy.stats loads regardless of what else is deferred.
+Deferring the heavy families therefore only saves *their own* module-exec
+time, not the ~460ms scipy.stats cost. And since virtually every estimator
+needs scipy.stats, real workflows pay it on the first call anyway. Net: the
+headline import-time win is small for realistic usage, and the change is broad
+and high-risk on the most-contended file (`__init__.py`). Recommendation: do
+this only as a deliberate, owner-driven pass, not opportunistically.
