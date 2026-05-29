@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+import pytest
+
 import statspai as sp
+
+
+# JSS Section 5 (tab:internal-parity) headline test counts. If you add or
+# remove a parity / coverage test, update BOTH this constant and the
+# manuscript in the same commit — that lockstep is the whole point of the
+# drift-guard test below.
+JSS_HEADLINE_TEST_COUNTS = {
+    "reference_parity": 114,
+    "external_parity": 50,
+    "coverage_monte_carlo": 12,
+}
 
 
 def test_validation_report_summarizes_source_tree_evidence():
@@ -67,3 +80,26 @@ def test_reproduce_jss_tables_dry_run_core_plan():
         "generate_inventory",
     ]
     assert "StatsPAI JSS Table Reproduction" in result.to_markdown()
+
+
+def test_validation_report_collected_counts_match_jss_headline():
+    """``validation_report(collect_tests=True)`` must reproduce the exact
+    pytest --collect-only counts that the JSS manuscript headlines, so the
+    paper's "headline counts are not hand-copied" claim is script-verifiable.
+
+    This fails if a parity/coverage test is added or removed without updating
+    ``JSS_HEADLINE_TEST_COUNTS`` (and the manuscript's tab:internal-parity)
+    in lockstep — i.e. it is the count-drift guard.
+    """
+    report = sp.validation_report(collect_tests=True, fmt="dict")
+    collected = report["evidence"]["pytest_inventory"].get("collected")
+    assert collected is not None
+    for key, expected in JSS_HEADLINE_TEST_COUNTS.items():
+        actual = collected.get(key)
+        if actual is None:
+            pytest.skip(f"pytest --collect-only unavailable for {key}")
+        assert actual == expected, (
+            f"{key}: collected {actual} tests but the JSS manuscript headlines "
+            f"{expected}. Update JSS_HEADLINE_TEST_COUNTS and the paper's "
+            f"tab:internal-parity in the same commit."
+        )

@@ -191,6 +191,7 @@ def validation_report(
     repo_root: Optional[Union[str, Path]] = None,
     *,
     include_files: bool = True,
+    collect_tests: bool = False,
     fmt: str = "object",
 ) -> Union[ValidationReport, Dict[str, Any], str]:
     """Summarize registry and validation evidence for the JSS narrative.
@@ -203,6 +204,13 @@ def validation_report(
         installed package's parents.
     include_files : bool, default True
         Include artifact file existence and size metadata.
+    collect_tests : bool, default False
+        Run ``pytest --collect-only`` on the reference-parity,
+        external-parity, and coverage Monte Carlo directories and record the
+        authoritative collected-test counts (the integers the JSS manuscript
+        headlines, e.g. 114 / 50 / 12). Off by default because it spawns
+        pytest collection (seconds); the cheap metadata-only path reports
+        test *file* counts instead.
     fmt : {"object", "dict", "markdown"}, default "object"
         Return a :class:`ValidationReport`, a JSON-serializable dict, or
         a Markdown string.
@@ -212,7 +220,7 @@ def validation_report(
     import statspai as sp  # local import avoids circular import at module load
 
     registry = _registry_snapshot(sp)
-    evidence = _validation_evidence(root, warnings)
+    evidence = _validation_evidence(root, warnings, collect_tests=collect_tests)
     evidence["parity_gaps"] = {
         "rows": len(parity_gap_report(root, fmt="records")) if root is not None else 0,
     }
@@ -828,6 +836,8 @@ def _strip_markdown(text: str) -> str:
 def _validation_evidence(
     root: Optional[Path],
     warnings: List[str],
+    *,
+    collect_tests: bool = False,
 ) -> Dict[str, Any]:
     if root is None:
         return {
@@ -862,6 +872,25 @@ def _validation_evidence(
             root / "tests" / "coverage_monte_carlo", "test_*.py"
         ),
     }
+    if collect_tests:
+        # Authoritative pytest --collect-only counts (parametrize-expanded),
+        # i.e. the exact integers the JSS manuscript headlines. These make
+        # the "headline counts are not hand-copied" claim script-verifiable.
+        collected = {
+            "reference_parity": _pytest_collected_count(root, "tests/reference_parity"),
+            "external_parity": _pytest_collected_count(root, "tests/external_parity"),
+            "coverage_monte_carlo": _pytest_collected_count(
+                root, "tests/coverage_monte_carlo"
+            ),
+        }
+        pytest_inventory["collected"] = collected
+        missing = [k for k, v in collected.items() if v is None]
+        if missing:
+            warnings.append(
+                "pytest --collect-only could not be run for: "
+                + ", ".join(missing)
+                + " (pytest unavailable or directory missing)."
+            )
 
     if py_modules and len(matched) != len(py_modules):
         warnings.append(
@@ -924,6 +953,54 @@ def _count_files(root: Path, pattern: str) -> int:
     if not root.exists():
         return 0
     return sum(1 for _ in root.glob(pattern))
+
+
+_COLLECT_RE = re.compile(r"(\d+)\s*/?\s*(\d+)?\s*tests? collected")
+
+
+def _pytest_collected_count(
+    root: Path,
+    rel_dir: str,
+    *,
+    timeout: float = 180.0,
+) -> Optional[int]:
+    """Return the authoritative ``pytest --collect-only`` test count for a
+    directory, or ``None`` if pytest is unavailable / the dir is missing.
+
+    This is the count the JSS manuscript headlines (e.g. 114 reference-parity
+    and 50 external-parity tests): it expands ``@pytest.mark.parametrize``
+    cases, unlike a raw ``def test_`` grep, and includes deselected tests
+    (``--collect-only`` lists them). Coverage instrumentation and the cache
+    plugin are disabled (``-o addopts=`` clears the project's injected
+    ``--cov``) so the collection is fast and side-effect free.
+    """
+    target = root / rel_dir
+    if not target.exists():
+        return None
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable, "-m", "pytest", str(target),
+                "--collect-only", "-q", "-p", "no:cacheprovider",
+                "-o", "addopts=",
+            ],
+            cwd=str(root),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    # pytest prints either "N tests collected" or, when some are deselected,
+    # "N/M tests collected (K deselected)" where M = N + K is the TOTAL number
+    # of tests considered. We report that total: M when the slashed form is
+    # present, else N.
+    for line in reversed(proc.stdout.splitlines()):
+        m = _COLLECT_RE.search(line)
+        if m:
+            return int(m.group(2)) if m.group(2) else int(m.group(1))
+    return None
 
 
 def _read_json(path: Path) -> Any:
