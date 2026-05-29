@@ -129,15 +129,16 @@ def _sandwich_vcov(X, mu, residuals, XtX_inv_bread=None):
     else:
         XtWX_inv = XtX_inv_bread
 
-    # Meat: sum of u_i^2 * x_i x_i'  where u_i = (y_i - mu_i)
-    score_i = X * residuals[:, None]  # n x k
-    meat = score_i.T @ score_i
-    return XtWX_inv @ meat @ XtWX_inv
+    # Meat via the canonical core sandwich (CLAUDE.md §4); bread is the
+    # GLM-weighted (X'WX)^{-1}. Byte-identical to the prior HC0 sandwich.
+    from ..core._vcov import sandwich_vcov
+    return sandwich_vcov(XtWX_inv, X * residuals[:, None], correction="none")
 
 
 def _cluster_vcov(X, mu, residuals, cluster_arr):
     """Clustered sandwich variance-covariance."""
-    n, k = X.shape
+    from ..core._vcov import sandwich_vcov
+
     W = mu
     XtWX = X.T @ (X * W[:, None])
     try:
@@ -145,17 +146,9 @@ def _cluster_vcov(X, mu, residuals, cluster_arr):
     except np.linalg.LinAlgError:
         XtWX_inv = np.linalg.pinv(XtWX)
 
-    clusters = np.unique(cluster_arr)
-    n_clusters = len(clusters)
-    meat = np.zeros((k, k))
-    for c in clusters:
-        idx = cluster_arr == c
-        score_c = (X[idx] * residuals[idx, None]).sum(axis=0)
-        meat += np.outer(score_c, score_c)
-
-    # Finite-sample correction
-    correction = n_clusters / (n_clusters - 1)
-    return correction * XtWX_inv @ meat @ XtWX_inv
+    # correction='cgm' = n_clusters/(n_clusters-1). Byte-identical for G>=2.
+    return sandwich_vcov(XtWX_inv, X * residuals[:, None],
+                         clusters=cluster_arr, correction="cgm")
 
 
 def _poisson_vcov(X, mu, residuals, robust, cluster_arr):
