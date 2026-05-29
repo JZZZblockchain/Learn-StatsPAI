@@ -300,7 +300,7 @@ def granger_causality(
     V = sigma2 * np.eye(len(coefs_all))  # simplified
     mid = R @ V @ R.T
     try:
-        F_stat = (r @ np.linalg.inv(mid) @ r) / len(restrict_indices)
+        F_stat = (r @ np.linalg.solve(mid, r)) / len(restrict_indices)
     except np.linalg.LinAlgError:
         F_stat = np.nan
 

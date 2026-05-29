@@ -115,11 +115,11 @@ def liml(
     k_endog = X_endog.shape[1]
 
     # Residual maker for X_exog
-    Px_exog = X_exog @ np.linalg.inv(X_exog.T @ X_exog) @ X_exog.T
+    Px_exog = X_exog @ np.linalg.solve(X_exog.T @ X_exog, X_exog.T)
     Mx = np.eye(n) - Px_exog
 
     # Projection onto all instruments
-    Pz = Z_all @ np.linalg.inv(Z_all.T @ Z_all) @ Z_all.T
+    Pz = Z_all @ np.linalg.solve(Z_all.T @ Z_all, Z_all.T)
     Mz = np.eye(n) - Pz
 
     # Compute LIML κ via the Anderson (1951) generalized symmetric
@@ -306,7 +306,7 @@ def jive(
     Z_all = np.column_stack([X_exog, Z_excl])
 
     # Leave-one-out projection for each endogenous variable
-    Pz = Z_all @ np.linalg.inv(Z_all.T @ Z_all) @ Z_all.T
+    Pz = Z_all @ np.linalg.solve(Z_all.T @ Z_all, Z_all.T)
     h_ii = np.diag(Pz)
 
     X_endog_hat = np.zeros_like(X_endog)
@@ -454,7 +454,7 @@ def lasso_iv(
     X_exog_mat = np.column_stack([np.ones(n)] + [df[v].values for v in x_exog]) if x_exog else np.ones((n, 1))
 
     # Partial out exogenous regressors from instruments and endogenous vars
-    Px = X_exog_mat @ np.linalg.inv(X_exog_mat.T @ X_exog_mat) @ X_exog_mat.T
+    Px = X_exog_mat @ np.linalg.solve(X_exog_mat.T @ X_exog_mat, X_exog_mat.T)
     Mx = np.eye(n) - Px
 
     Z_tilde = Mx @ Z_candidates  # residualized instruments

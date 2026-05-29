@@ -325,7 +325,7 @@ def three_sls(
         instruments = list(set().union(*[set(exog) for _, (_, exog, _) in equations.items()]))
 
     Z = np.column_stack([np.ones(n), df[instruments].values.astype(float)])
-    Pz = Z @ np.linalg.inv(Z.T @ Z) @ Z.T  # projection onto instruments
+    Pz = Z @ np.linalg.solve(Z.T @ Z, Z.T)  # projection onto instruments
 
     # Stage 1: 2SLS for each equation
     Y_list, X_list, k_list, var_names_list = [], [], [], []

@@ -195,8 +195,8 @@ def _liml_kappa(
     W_full = np.column_stack([X_exog, Z])  # all instruments
 
     # Projection matrices
-    P_exog = X_exog @ np.linalg.inv(X_exog.T @ X_exog) @ X_exog.T
-    P_full = W_full @ np.linalg.inv(W_full.T @ W_full) @ W_full.T
+    P_exog = X_exog @ np.linalg.solve(X_exog.T @ X_exog, X_exog.T)
+    P_full = W_full @ np.linalg.solve(W_full.T @ W_full, W_full.T)
 
     M_exog = np.eye(n) - P_exog
     M_full = np.eye(n) - P_full

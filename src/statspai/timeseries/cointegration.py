@@ -257,7 +257,7 @@ def johansen(
 
     # Concentrate out Z from dY and Y_lag
     if Z.shape[1] > 0:
-        Pz = Z @ np.linalg.inv(Z.T @ Z) @ Z.T
+        Pz = Z @ np.linalg.solve(Z.T @ Z, Z.T)
         Mz = np.eye(T_eff) - Pz
         R0 = Mz @ dY_trim
         R1 = Mz @ Y_lag_trim
@@ -275,7 +275,7 @@ def johansen(
     # |λ S11 - S10 S00^{-1} S01| = 0
     try:
         S00_inv = np.linalg.inv(S00)
-        M = np.linalg.inv(S11) @ S10 @ S00_inv @ S01
+        M = np.linalg.solve(S11, S10 @ S00_inv @ S01)
         eigenvalues, eigenvectors = np.linalg.eig(M)
     except np.linalg.LinAlgError:
         eigenvalues = np.zeros(k)

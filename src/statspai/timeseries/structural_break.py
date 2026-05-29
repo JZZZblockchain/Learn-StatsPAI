@@ -293,7 +293,7 @@ def cusum_test(
         bt = np.linalg.lstsq(Xt, yt, rcond=None)[0]
         pred = X_data[t] @ bt
         resid = y_data[t] - pred
-        ft = 1 + X_data[t] @ np.linalg.inv(Xt.T @ Xt) @ X_data[t]
+        ft = 1 + X_data[t] @ np.linalg.solve(Xt.T @ Xt, X_data[t])
         rec_resid.append(resid / np.sqrt(max(ft, 1e-10)))
 
     rec_resid = np.array(rec_resid)

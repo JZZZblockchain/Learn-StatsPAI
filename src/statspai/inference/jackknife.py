@@ -114,7 +114,7 @@ def jackknife_se(
         X_g = X[mask]
         Y_g = Y[mask]
         try:
-            beta_loo[g_idx] = np.linalg.inv(X_g.T @ X_g) @ X_g.T @ Y_g
+            beta_loo[g_idx] = np.linalg.solve(X_g.T @ X_g, X_g.T @ Y_g)
         except np.linalg.LinAlgError:
             beta_loo[g_idx] = np.linalg.lstsq(X_g, Y_g, rcond=None)[0]
 
