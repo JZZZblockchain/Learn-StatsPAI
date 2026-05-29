@@ -65,9 +65,12 @@ dependencies = [
 dev = [
     "pytest>=6.0",
     "pytest-cov",
+    "build",
     "black",
+    "isort",
     "flake8",
     "mypy",
+    "bandit",
     "sphinx",
     "sphinx-rtd-theme",
     "matplotlib>=3.5.0",
@@ -125,7 +128,7 @@ where = ["src"]
 "" = "src"
 
 [tool.setuptools.package-data]
-"statspai" = ["py.typed", "*.pyi"]
+"statspai" = ["py.typed", "*.pyi", "CITATION.cff"]
 "statspai.datasets" = ["data/*.csv"]
 
 [tool.black]
