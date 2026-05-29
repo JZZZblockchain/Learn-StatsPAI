@@ -19,12 +19,15 @@ import statspai as sp
 | `feols(y ~ x \| firm + year, data = df)`  | `sp.feols("y ~ x \| firm + year", data=df)`                       | Two-way fixed effects                                        |
 | `fepois(y ~ x \| firm, data = df)`        | `sp.fepois("y ~ x \| firm", data=df)`                             | HDFE Poisson / PPML for gravity models                       |
 | `feglm(..., family = "binomial")`         | `sp.feglm(..., family="binomial")`                                | HDFE GLM                                                     |
-| `etable(m1, m2, m3)`                      | `sp.etable([m1, m2, m3])`                                         | Publication-quality regression tables (LaTeX / MD / HTML)    |
+| `etable(m1, m2, m3)`                      | `sp.regtable(m1, m2, m3)`                                         | Publication-quality regression tables (LaTeX / MD / HTML / Word / Excel) |
 | `vcov(m, cluster = ~firm)`                | `vcov={"CRV1": "firm"}` in `sp.feols`                             | Cluster-robust SE                                            |
 | `fixef(m)`                                | `m.fixef()` (on pyfixest result)                                  | Extract fixed-effect estimates                               |
 
 For plain OLS without HDFE, `sp.regress("y ~ x", data=df)` gives a statsmodels-
-compatible interface returning a `CausalResult`.
+compatible interface returning an `EconometricResults`. It exports the same way
+as every other result — `.to_latex()` / `.to_html()` / `.to_markdown()` /
+`.to_excel()` / `.to_word()` — see the
+[exporting regression results](exporting-regression-tables.md) guide.
 
 ---
 
