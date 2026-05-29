@@ -638,7 +638,8 @@ def _fit_principal_score(Y, D, S, X, covariates, n, alpha, n_boot, seed):
         e_always /= tot
         e_complier /= tot
         e_never /= tot
-        return e_always, e_complier, e_never, violation_frac, min_raw, n_logit_fallback
+        return (e_always, e_complier, e_never, violation_frac, min_raw,
+                n_logit_fallback)
 
     def _point(Y_, D_, S_, X_, check_monotonicity=False):
         e_a, e_c, e_n, viol_frac, min_raw, n_logit_fallback = _fit_cell_probs(
