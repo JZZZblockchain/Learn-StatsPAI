@@ -100,9 +100,26 @@ jobs:
       run: |
         python scripts/quality_gate.py mypy
 
-    - name: Test with pytest
+    # Coverage instrumentation crashes on numpy 2.0.2 (the last numpy that
+    # supports Python 3.9): under coverage's tracer numpy is imported twice,
+    # which breaks the ``np._NoValue`` sentinel identity and makes reductions
+    # raise ``int()/float() ... not '_NoValueType'``. Fixed upstream in
+    # numpy >= 2.1 (requires Python >= 3.10). So measure coverage on a single
+    # modern interpreter — ubuntu + 3.10, present in both the reduced and full
+    # matrices and the same pin used by the flake8/mypy gates — where numpy is
+    # >= 2.1 and the bug is absent. Every other matrix entry runs the full
+    # suite without ``--cov``. Root cause: docs/rfc (E1 analysis).
+    # NEEDS-CI-VERIFICATION: confirm the 3.10 coverage run is green in CI, then
+    # raise --cov-fail-under from 15 toward the measured baseline.
+    - name: Test with pytest (coverage)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       run: |
         pytest tests/ -v --cov=statspai --cov-report=xml --cov-report=term-missing --cov-fail-under=15
+
+    - name: Test with pytest (no coverage)
+      if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10') }}
+      run: |
+        pytest tests/ -v
 
     - name: Build and smoke installed wheel
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
