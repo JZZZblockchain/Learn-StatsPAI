@@ -116,6 +116,56 @@ def test_parity_json_rows_keep_the_joinable_schema():
                 assert not isinstance(value, float) or math.isfinite(value)
 
 
+def test_R_golden_json_carry_engine_provenance():
+    """Every committed _R.json must carry a `provenance` block recording the
+    R version and the package set that produced it, so the golden value is
+    self-describing for JSS reproducibility. This guards against a future
+    regeneration (or a hand edit) silently dropping provenance.
+    """
+    r_files = sorted(R_RESULTS.glob("*_R.json"))
+    assert r_files, "no _R.json golden files found"
+    missing = []
+    for path in r_files:
+        prov = _read_json(path).get("provenance")
+        if (
+            not isinstance(prov, dict)
+            or not prov.get("r_version")
+            or not isinstance(prov.get("packages"), dict)
+            or not prov["packages"]
+        ):
+            missing.append(path.name)
+    assert not missing, (
+        "These _R.json lack a complete provenance block (r_version + "
+        "non-empty packages); regenerate via tests/r_parity and re-commit: "
+        + ", ".join(missing)
+    )
+
+
+def test_Stata_golden_json_carry_engine_provenance():
+    """Every committed _Stata.json must carry a `provenance` block recording
+    the Stata engine (version + edition) that produced it. The community ado
+    versions live in tests/stata_parity/STATA_ENVIRONMENT.md (Stata has no
+    per-result packageVersion() primitive), so we assert the engine fields
+    here, not a package map.
+    """
+    stata_files = sorted(STATA_RESULTS.glob("*_Stata.json"))
+    assert stata_files, "no _Stata.json golden files found"
+    missing = []
+    for path in stata_files:
+        prov = _read_json(path).get("provenance")
+        if (
+            not isinstance(prov, dict)
+            or not prov.get("stata_version")
+            or not prov.get("edition")
+        ):
+            missing.append(path.name)
+    assert not missing, (
+        "These _Stata.json lack a complete provenance block (stata_version + "
+        "edition); regenerate via tests/stata_parity and re-commit: "
+        + ", ".join(missing)
+    )
+
+
 def test_headline_passes_are_inside_registered_r_tolerance():
     compare = _load_compare()
     r_modules = _module_stems(R_RESULTS, "_R")
