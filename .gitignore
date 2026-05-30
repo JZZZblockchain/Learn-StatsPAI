@@ -188,13 +188,14 @@ audit_report.json
 # Ad-hoc citation-audit scratch (not from the tool)
 .citation_audit/
 
-# Paper JSS and JOSS submissions 
+# Paper JSS and JOSS submissions
 Paper-JSS/
 Paper-JOSS/
-# Paper-AgentBench workspace stays out of the public repo, EXCEPT the
-# benchmark code, which is force-tracked under code/ (nested .gitignore applies).
-Paper-AgentBench/*
-!Paper-AgentBench/code/
+# CausalAgentBench is developed as its own standalone public repo
+# (github.com/brycewang-stanford/CausalAgentBench); the parent
+# StatsPAI repo ignores it entirely. Integration is via the statspai_oracle
+# adapter + a `statspai` package dependency, not filesystem nesting.
+CausalAgentBench/
 
 # Temp files
 MORNING_REPORT_2026-04-29.md
