@@ -3,7 +3,7 @@
 \scriptsize
 \setlength{\tabcolsep}{2pt}
 \begin{longtable}{@{}p{0.09\linewidth}p{0.18\linewidth}p{0.12\linewidth}r r r p{0.13\linewidth}@{}}
-\caption{Track C measured performance on Apple Silicon arm64 / 8 cores / 24~GB. Each row reports median wall-clock time, in seconds, at the largest sample size in the sweep, across 3 or 5 reps with one warmup, on identical seed-fixed DGPs. The Winner column reports the faster implementation and multiplicative gap; bold marks decisive $\ge 1.5\times$ wins.}
+\caption{Track C measured performance on Apple Silicon arm64 / 8 cores / 24~GB. Each row reports median wall-clock time, in seconds, at the largest sample size in the sweep, across 3 or 5 reps with one warmup, on identical seed-fixed DGPs. The Winner column reports the faster implementation and multiplicative gap; bold marks decisive $\ge 1.5\times$ wins. Two rows carry caveats discussed in the text and should not be read as like-for-like algorithmic wins: the DML row reflects \pkg{R6} method-dispatch wrapper overhead on the \proglang{R} side (cheap \code{lm} nuisance), and the Callaway--Sant'Anna gap is measured on a homogeneous-effect DGP, the cleanest case for the vectorised group-time loop.}
 \label{tab:track-c-perf}\\
 \toprule
 Module & Estimator & R ref. & Max. $N$ & sp & R & Winner \\

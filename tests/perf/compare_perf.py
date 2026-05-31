@@ -7,6 +7,7 @@ log-log scaling figure.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import matplotlib
@@ -16,9 +17,14 @@ import matplotlib.pyplot as plt
 
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
 RESULTS_DIR = HERE / "results"
 FIGURES_DIR = HERE / "figures"
+PAPER_TABLES_DIR = ROOT / "Paper-JSS" / "manuscript" / "tables"
+PAPER_FIGURES_DIR = ROOT / "Paper-JSS" / "manuscript" / "figures"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+PAPER_TABLES_DIR.mkdir(parents=True, exist_ok=True)
+PAPER_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 ESTIMATORS = {
@@ -121,7 +127,11 @@ def render_tex() -> str:
         "Each row reports median wall-clock time, in seconds, at the largest sample size in the sweep, "
         "across 3 or 5 reps with one warmup, on identical seed-fixed DGPs. "
         "The Winner column reports the faster implementation and multiplicative gap; "
-        "bold marks decisive $\\ge 1.5\\times$ wins.}\n"
+        "bold marks decisive $\\ge 1.5\\times$ wins. Two rows carry caveats discussed in the text "
+        "and should not be read as like-for-like algorithmic wins: the DML row reflects "
+        "\\pkg{R6} method-dispatch wrapper overhead on the \\proglang{R} side "
+        "(cheap \\code{lm} nuisance), and the Callaway--Sant'Anna gap is measured on a "
+        "homogeneous-effect DGP, the cleanest case for the vectorised group-time loop.}\n"
         "\\label{tab:track-c-perf}\\\\\n"
         "\\toprule\n"
         "Module & Estimator & R ref. & Max. $N$ & sp & R & Winner \\\\\n"
@@ -169,6 +179,8 @@ def render_figure() -> Path:
     fig.savefig(out, bbox_inches="tight")
     fig.savefig(FIGURES_DIR / "track_c_loglog.png", bbox_inches="tight", dpi=150)
     plt.close(fig)
+    shutil.copyfile(out, PAPER_FIGURES_DIR / "track_c_loglog.pdf")
+    shutil.copyfile(FIGURES_DIR / "track_c_loglog.png", PAPER_FIGURES_DIR / "track_c_loglog.png")
     return out
 
 
@@ -177,8 +189,13 @@ def main() -> None:
     tex = render_tex()
     (RESULTS_DIR / "perf_table.md").write_text(md, encoding="utf-8")
     (RESULTS_DIR / "perf_table.tex").write_text(tex, encoding="utf-8")
+    (PAPER_TABLES_DIR / "track_c_perf.tex").write_text(tex, encoding="utf-8")
     fig = render_figure()
-    print(f"OK -- wrote perf_table.{{md,tex}} and {fig.name}")
+    print(
+        "OK -- wrote perf_table.{md,tex}, "
+        "Paper-JSS/manuscript/tables/track_c_perf.tex, and "
+        f"{fig.name}"
+    )
 
 
 if __name__ == "__main__":
