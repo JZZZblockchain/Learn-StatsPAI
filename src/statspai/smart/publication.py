@@ -5,8 +5,8 @@ Journal-specific checklists for submitting empirical papers.
 Checks that all required robustness tests, tables, and diagnostics
 are present before submission.
 
-**No other package does this.** Researchers manually track requirements.
-This automates the process with venue-specific checklists.
+This registered venue-specific checklists workflow automates
+empirical-paper submission review.
 
 Usage
 -----
@@ -147,8 +147,7 @@ def pub_ready(
     """
     Publication readiness checklist.
 
-    **Unique to StatsPAI.** Generates a venue-specific checklist
-    for empirical paper submission.
+    Generate a venue-specific checklist for empirical paper submission.
 
     Parameters
     ----------

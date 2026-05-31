@@ -714,9 +714,9 @@ def check_identification(
 ) -> IdentificationReport:
     """Run design-level identification diagnostics before fitting an estimator.
 
-    Unique to StatsPAI.  This reads your dataframe + design and outputs
-    a prioritised list of pitfalls — bad controls, overlap violations,
-    underpowered designs, small cohorts, clustering ambiguity.
+    This reads your dataframe + design and outputs a prioritised list
+    of pitfalls — bad controls, overlap violations, underpowered
+    designs, small cohorts, clustering ambiguity.
 
     Parameters
     ----------

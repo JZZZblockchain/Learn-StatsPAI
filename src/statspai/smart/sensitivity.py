@@ -1,11 +1,10 @@
 """
 Multi-Dimensional Sensitivity Dashboard.
 
-One-call comprehensive sensitivity analysis across ALL dimensions:
-sample, specification, bandwidth, functional form, estimator.
-
-**No other package does this.** Existing tools test one dimension at a time.
-This tests all simultaneously and produces a publication-ready report.
+One-call sensitivity analysis across common dimensions: sample,
+specification, bandwidth, functional form, and estimator.
+This multi-axis sensitivity workflow reports selected checks without
+turning them into a blanket validation claim.
 
 Usage
 -----
@@ -72,8 +71,8 @@ def sensitivity_dashboard(
     """
     Comprehensive multi-dimensional sensitivity analysis.
 
-    **Unique to StatsPAI.** Tests sensitivity across ALL dimensions
-    simultaneously and produces an overall stability grade.
+    Test sensitivity across selected dimensions and produce an overall
+    stability grade.
 
     Parameters
     ----------

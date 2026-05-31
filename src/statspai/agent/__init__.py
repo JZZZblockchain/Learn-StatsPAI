@@ -20,7 +20,7 @@ Why this matters
 An LLM that wants to call StatsPAI programmatically needs three
 things docstrings don't provide:
 
-- A machine-readable schema of every estimator's parameters.
+- Machine-readable schemas for registered StatsPAI functions.
 - A round-trippable result representation.
 - A mapping from errors to concrete next steps.
 

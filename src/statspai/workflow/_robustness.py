@@ -19,7 +19,7 @@ can see what *would* have been reported.
 
 Findings cover:
 
-* ``result.violations()`` — every estimator's self-reported
+* ``result.violations()`` — supported estimators' self-reported
   diagnostic flags (first-stage F, propensity overlap, rhat / ESS,
   pre-trend p, McCrary, ...).
 * Estimate + CI width — universal sanity.

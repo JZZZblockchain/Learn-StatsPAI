@@ -1060,8 +1060,8 @@ def causal(
     One call that diagnoses identification, picks an estimator, fits
     it, runs the canonical robustness suite, and produces a report.
 
-    **Unique to StatsPAI** — no other Python/R/Stata package ships
-    this orchestration.
+    Orchestrate the registered StatsPAI stages while keeping each
+    stage's statistical assumptions explicit.
 
     Parameters
     ----------

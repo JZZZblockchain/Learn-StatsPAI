@@ -1,7 +1,8 @@
 """
-Smart Workflow Engine — StatsPAI's unique differentiator.
+Smart Workflow Engine.
 
-No other econometrics package offers these:
+Registered workflow helpers for planning, diagnostics, sensitivity, and
+replication support:
 
 - recommend()           — DAG + data → estimator selection
 - compare_estimators()  — run multiple methods, compare, diagnose

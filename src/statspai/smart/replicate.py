@@ -5,9 +5,8 @@ Provides classic econometric datasets and step-by-step replication
 guides for famous papers, making StatsPAI ideal for teaching
 and verification.
 
-**No other Python package bundles famous econometric datasets with
-replication instructions.** R has wooldridge/AER/Ecdat, Stata has
-webuse — Python has nothing comparable.
+The bundled recipes are intended for teaching, smoke tests, and
+version-to-version numerical drift checks.
 
 Two tracks where applicable
 ---------------------------
@@ -543,9 +542,8 @@ def replicate(
 ) -> Tuple[pd.DataFrame, str]:
     """Load a famous dataset and a step-by-step replication guide.
 
-    **Unique to StatsPAI.** No other Python econometrics package
-    bundles classic datasets with paper-faithful and modern recipes
-    side by side.
+    Load classic datasets with paper-faithful and modern recipes side
+    by side.
 
     Parameters
     ----------

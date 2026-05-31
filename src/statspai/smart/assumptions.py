@@ -4,8 +4,9 @@ Assumption Audit Engine.
 Given an estimated result, systematically tests every assumption
 of the method used and reports pass/fail with actionable guidance.
 
-**No other package does this.** Stata/R test assumptions individually.
-This tests ALL assumptions at once and tells you what to do if one fails.
+This registered workflow for checking common assumption diagnostics
+collects method checks into a single report and returns actionable
+remedies when a check fails.
 
 Usage
 -----
@@ -110,8 +111,8 @@ def assumption_audit(
     """
     Comprehensive assumption audit for any estimated model.
 
-    **Unique to StatsPAI.** Systematically tests every assumption
-    of the method used and provides actionable remedies.
+    Run the method's registered assumption checks and provide
+    actionable remedies for failed or inconclusive diagnostics.
 
     Parameters
     ----------

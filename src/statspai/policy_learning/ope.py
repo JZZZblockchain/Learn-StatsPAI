@@ -16,7 +16,7 @@ Four classical estimators are provided:
 * :func:`snips` — self-normalised IPS (bias-reduction for large weights).
 * :func:`doubly_robust` — DR combining Q-model and IPS residual.
 
-All estimators accept either pre-computed propensity scores (from
+All four OPE estimators accept either pre-computed propensity scores (from
 logging), pre-computed Q-values from a model, or will fit simple
 logistic / random-forest nuisance models on the fly.
 

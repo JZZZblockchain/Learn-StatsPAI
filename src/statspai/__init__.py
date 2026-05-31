@@ -32,7 +32,7 @@ __citation__ = citation("bibtex")
 
 from .core.results import EconometricResults, CausalResult
 
-# Agent-native exception taxonomy (load early so every estimator can raise)
+# Agent-native exception taxonomy (load early for registered estimators)
 from . import exceptions as exceptions  # noqa: F401
 from .exceptions import (
     StatsPAIError,
@@ -922,7 +922,7 @@ from .qte import (
 # (lazy) structural_a: see _LAZY_SUBMODULES / _LAZY_ATTRS
 # (lazy) structural_b: see _LAZY_SUBMODULES / _LAZY_ATTRS
 
-# === Smart Workflow Engine (unique to StatsPAI) ===
+# === Smart Workflow Engine ===
 from .smart import (
     recommend,
     RecommendationResult,
@@ -1640,7 +1640,7 @@ __all__ = [
     "wooldridge_prod",
     "markup",
     "ProductionResult",
-    # === Smart Workflow Engine (unique to StatsPAI) ===
+    # === Smart Workflow Engine ===
     "recommend",
     "RecommendationResult",
     "check_identification",

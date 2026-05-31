@@ -343,7 +343,7 @@ def auto_iv(
     instruments : str or list of str
         Instrument(s).  A scalar is promoted to a one-element list.
     exog : list of str, optional
-        Exogenous controls (included in all estimators).
+        Exogenous controls (included in all requested IV estimators).
     methods : list of str, optional
         Subset of ``{'2sls', 'liml', 'jive'}``.
     select_by : {'median', 'first_success', '2sls', 'liml', 'jive'}

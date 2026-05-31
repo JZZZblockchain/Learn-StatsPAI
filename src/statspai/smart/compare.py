@@ -1,11 +1,13 @@
 """
 Multi-Estimator Comparison Engine.
 
+Multi-method comparison with agreement diagnostics.
+
 Run multiple causal inference estimators on the same dataset,
 compare estimates, diagnose each, and assess robustness.
 
-**No other package does this.** Researchers typically run one method.
-This runs 3-5 methods, compares, and tells you which to trust.
+This registered workflow for running several estimators compares their
+estimates and surfaces agreement diagnostics for manual review.
 
 Usage
 -----
@@ -120,8 +122,8 @@ def compare_estimators(
     """
     Run multiple estimators on the same data and compare.
 
-    **Unique to StatsPAI.** No other package provides automated
-    multi-method comparison with agreement diagnostics.
+    Run selected estimators and return an agreement-diagnostics table
+    for manual robustness review.
 
     Parameters
     ----------

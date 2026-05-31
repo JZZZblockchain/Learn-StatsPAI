@@ -1,7 +1,7 @@
 """
 Inference module for StatsPAI.
 
-Provides robust inference methods that work across all estimators:
+Provides robust inference methods for supported estimator results:
 - Wild Cluster Bootstrap (Cameron, Gelbach & Miller 2008)
 - Randomization Inference (Fisher 1935; Young 2019)
 """

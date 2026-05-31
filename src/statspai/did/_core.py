@@ -116,7 +116,7 @@ def event_study_frame(
 ) -> pd.DataFrame:
     """Build a canonical event-study DataFrame for ``model_info['event_study']``.
 
-    Ensures every estimator in the family exposes the same columns so
+    Ensures each DID estimator in the family exposes the same columns so
     ``sp.did_plot`` and ``sp.cs_report`` work uniformly.
 
     Parameters

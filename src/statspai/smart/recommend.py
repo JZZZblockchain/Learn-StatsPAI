@@ -2,12 +2,9 @@
 Estimator Recommendation Engine.
 
 Given a research question, data structure, and optionally a causal DAG,
-recommends the appropriate estimator(s) with reasoning.
-
-**No other econometrics package does this.**
-
-This is the "smart advisor" that bridges the gap between knowing your
-research question and knowing which estimator to use.
+this registered workflow helper recommends estimator candidates with
+reasoning. The recommendation is planning support; users remain
+responsible for the identification argument and validation status.
 
 Usage
 -----
@@ -395,8 +392,6 @@ def recommend(
 ) -> RecommendationResult:
     """
     Recommend the appropriate estimator(s) for your research question.
-
-    **Unique to StatsPAI** — no other econometrics package does this.
 
     Given your data, outcome, treatment, and research design, this function:
     1. Profiles your data (type, structure, missing patterns)
