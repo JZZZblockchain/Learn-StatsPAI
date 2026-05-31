@@ -126,8 +126,8 @@ def feols_jax(
 ) -> FeolsResult:
     """JAX-backed OLS / WLS with high-dimensional fixed effects.
 
-    Drop-in replacement for :func:`statspai.fast.feols` — same formula
-    DSL, same ``FeolsResult`` return type. The WLS solve and HC1
+    JAX-backed companion to :func:`statspai.fast.feols`: same formula
+    DSL and ``FeolsResult`` return type. The WLS solve and HC1
     sandwich run on the default JAX device; FE residualisation and CR1
     cluster sandwich delegate to the Rust / numba paths.
 

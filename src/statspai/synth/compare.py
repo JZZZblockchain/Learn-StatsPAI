@@ -203,7 +203,7 @@ class SynthComparison:
     # ------------------------------------------------------------------ #
 
     def to_latex(self, **kwargs) -> str:
-        """Render the comparison as a manuscript-ready LaTeX table.
+        """Render the comparison as a LaTeX table.
 
         Forwards to :func:`statspai.synth.exports.synth_to_latex` with
         the side-by-side multi-method layout.

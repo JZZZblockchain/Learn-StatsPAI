@@ -963,7 +963,7 @@ def _build_registry():
         FunctionSpec(
             name="did_analysis",
             category="causal",
-            description="One-call comprehensive DID workflow: design detection, Bacon decomposition, estimation, event study, and sensitivity analysis.",
+            description="DID workflow helper: design detection, Bacon decomposition, estimation, event study, and sensitivity analysis.",
             params=[
                 ParamSpec("data", "DataFrame", True),
                 ParamSpec("y", "str", True, description="Outcome variable"),
@@ -2387,7 +2387,7 @@ def _build_registry():
             name="paper_tables",
             category="output",
             description=(
-                "Multi-panel manuscript-ready table bundle (Main / Heterogeneity / "
+                "Multi-panel paper-facing table bundle (Main / Heterogeneity / "
                 "Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel."
             ),
             params=[
@@ -4280,8 +4280,8 @@ def _build_registry():
             name="target_trial_report",
             category="target_trial",
             description=(
-                "Render a target-trial emulation result as a manuscript-"
-                "ready Methods + Results block (Markdown / LaTeX / plain "
+                "Render a target-trial emulation result as a structured "
+                "Methods + Results block (Markdown / LaTeX / plain "
                 "text), tracking the JAMA 2022 7-component spec."
             ),
             params=[

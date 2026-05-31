@@ -2,7 +2,7 @@
 Clinical diagnostic-test performance metrics.
 
 Standard clinical-epi primitives for evaluating a binary diagnostic
-test against a gold standard:
+test against reference labels:
 
 - Sensitivity (true-positive rate) and specificity (true-negative rate)
 - Positive / negative predictive values (with prevalence-adjusted forms)
@@ -12,7 +12,7 @@ test against a gold standard:
 
 All functions accept either:
   - A 2x2 confusion matrix (``tp, fn, fp, tn``), or
-  - Vectors of binary / continuous predictions + gold labels.
+  - Vectors of binary / continuous predictions plus reference labels.
 
 References
 ----------
@@ -111,7 +111,7 @@ def sensitivity_specificity(
     Parameters
     ----------
     y_true, y_pred : array-like, optional
-        Gold standard and predicted binary labels (0/1).
+        Reference and predicted binary labels (0/1).
     tp, fn, fp, tn : int, optional
         Pre-computed confusion cells.  Use instead of ``y_true``/
         ``y_pred`` when you already have counts.

@@ -68,7 +68,7 @@ class FrontierResult(EconometricResults):
     )
 
     def summary(self, alpha: float = 0.05) -> str:
-        """Publication-ready summary table (Stata-style SFA block).
+        """Formatted summary table (Stata-style SFA block).
 
         Overrides :class:`EconometricResults.summary` to hide per-observation
         diagnostic arrays and surface the SFA-specific scalars.

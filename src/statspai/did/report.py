@@ -322,7 +322,7 @@ class CSReport:
     def to_latex(self, float_format: str = "%.4f",
                  caption: Optional[str] = None,
                  label: Optional[str] = None) -> str:
-        """Render the report as a manuscript-ready LaTeX fragment.
+        """Render the report as a LaTeX fragment.
 
         Uses the ``booktabs`` package for each sub-table and wraps the
         result in a single ``table`` float.  Requires ``\\usepackage{booktabs}``

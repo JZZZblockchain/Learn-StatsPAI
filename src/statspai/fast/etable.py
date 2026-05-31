@@ -2,7 +2,7 @@
 
 Phase 8 deliverable. Produces a single DataFrame (and optional LaTeX /
 HTML / Markdown renderings) from multiple fitted models so users can
-drop a manuscript-ready table into a paper without per-model rewriting.
+drop a formatted table into a paper without per-model rewriting.
 
 Accepts any object that exposes:
 

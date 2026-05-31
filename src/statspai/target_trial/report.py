@@ -1,5 +1,5 @@
 """
-Publication-ready reporting for target trial emulation.
+Structured reporting for target trial emulation.
 
 Produces a STROBE-compatible narrative describing the seven protocol
 components and the analysis results, formatted either as Markdown
@@ -153,7 +153,7 @@ def to_paper(
     background: Optional[str] = None,
     limitations: Optional[str] = None,
 ) -> str:
-    """Render a target trial emulation result as a manuscript-ready
+    """Render a target trial emulation result as a structured
     Methods/Results block.
 
     Parameters

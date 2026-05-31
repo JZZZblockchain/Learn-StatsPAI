@@ -1,5 +1,5 @@
 """
-Publication-grade exports for Synthetic Control results.
+Formatted exports for Synthetic Control results.
 
 Three table-export formats with consistent SCM-specific structure:
 
@@ -315,7 +315,7 @@ def synth_to_latex(
     digits: int = 4,
     method_names: Optional[Sequence[str]] = None,
 ) -> str:
-    """Publication-grade LaTeX table for synthetic-control results.
+    """Formatted LaTeX table for synthetic-control results.
 
     Single-result mode produces a vertical table with ATT, SE,
     confidence interval, pre-RMSPE, fit quality, and (optionally) the

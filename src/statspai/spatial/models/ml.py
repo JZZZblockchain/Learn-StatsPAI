@@ -1,6 +1,6 @@
 """Sparse-backed ML estimation for spatial regression models (SAR / SEM / SDM).
 
-Drop-in replacement for the legacy dense implementation in :mod:`._legacy`.
+Sparse-backed companion to the legacy dense implementation in :mod:`._legacy`.
 Accepts ndarray, scipy.sparse matrix, or :class:`statspai.spatial.weights.W`.
 
 Numerics are designed to match the legacy reference implementation to within

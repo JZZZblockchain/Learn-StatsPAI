@@ -3204,7 +3204,7 @@
       "template is one of aer/qje/econometrica/restat, which fixes star thresholds, SE style, and footer notes."
     ],
     "category": "output",
-    "description": "Multi-panel manuscript-ready table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
+    "description": "Multi-panel paper-facing table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
     "example": "sp.paper_tables(main=[r1,r2,r3,r4], template=\"aer\", docx_filename=\"t1.docx\")",
     "failure_modes": [
       {
@@ -3234,7 +3234,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Multi-panel manuscript-ready table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
+      "description": "Multi-panel paper-facing table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
       "name": "paper_tables",
       "parameters": {
         "properties": {
@@ -8337,7 +8337,7 @@
       "odds_ratio"
     ],
     "assumptions": [
-      "y_true is an error-free gold standard against which y_pred is evaluated (no reference-test misclassification).",
+      "y_true is an error-free reference standard against which y_pred is evaluated (no reference-test misclassification).",
       "Sensitivity and specificity are intrinsic test properties assumed stable across the case/control spectrum.",
       "Wilson-score CIs assume independent binary classifications."
     ],
@@ -8348,13 +8348,13 @@
       {
         "alternative": "roc_curve",
         "exception": "ZeroDivisionError",
-        "remedy": "Ensure the gold standard contains both classes; report Wilson CIs which handle small counts.",
+        "remedy": "Ensure the reference labels contain both classes; report Wilson CIs which handle small counts.",
         "symptom": "No true positives (or no true negatives) makes sensitivity (or specificity) undefined."
       },
       {
         "alternative": "cohen_kappa",
         "exception": "AssumptionWarning",
-        "remedy": "Use a true gold standard or latent-class correction and report the limitation.",
+        "remedy": "Use a verified reference standard or latent-class correction and report the limitation.",
         "symptom": "Imperfect reference standard biases both metrics (verification/incorporation bias)."
       }
     ],
@@ -8418,7 +8418,7 @@
       "cohen_kappa"
     ],
     "assumptions": [
-      "y_true is a binary gold standard and scores are continuous with higher values indicating the positive class.",
+      "y_true is a binary reference label and scores are continuous with higher values indicating the positive class.",
       "Observations are independent, so the Hanley-McNeil AUC SE (based on rank statistics) is valid.",
       "Class labels are correctly specified (mislabeling inverts the curve below the diagonal)."
     ],

@@ -93,7 +93,7 @@ from .power import synth_power, synth_mde, synth_power_plot
 # Report generator
 from .report import synth_report, synth_report_to_file
 
-# Publication-grade table exports (LaTeX / Markdown / Excel)
+# Formatted table exports (LaTeX / Markdown / Excel)
 from .exports import synth_to_latex, synth_to_markdown, synth_to_excel
 
 # Sensitivity & robustness diagnostics
@@ -192,7 +192,7 @@ __all__ = [
     # Report generator
     'synth_report',
     'synth_report_to_file',
-    # Publication-grade table exports
+    # Formatted table exports
     'synth_to_latex',
     'synth_to_markdown',
     'synth_to_excel',

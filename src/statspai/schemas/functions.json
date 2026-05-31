@@ -1728,7 +1728,7 @@
     }
   },
   {
-    "description": "Multi-panel manuscript-ready table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
+    "description": "Multi-panel paper-facing table bundle (Main / Heterogeneity / Robustness / Placebo) with one-shot export to LaTeX/Markdown/Word/Excel.",
     "name": "paper_tables",
     "parameters": {
       "properties": {
@@ -4181,7 +4181,7 @@
     }
   },
   {
-    "description": "Render a target-trial emulation result as a manuscript-ready Methods + Results block (Markdown / LaTeX / plain text), tracking the JAMA 2022 7-component spec.",
+    "description": "Render a target-trial emulation result as a structured Methods + Results block (Markdown / LaTeX / plain text), tracking the JAMA 2022 7-component spec.",
     "name": "target_trial_report",
     "parameters": {
       "properties": {
@@ -12914,7 +12914,7 @@
     }
   },
   {
-    "description": "Render a :func:`did_summary` result as a manuscript-ready LaTeX",
+    "description": "Render a :func:`did_summary` result as a LaTeX",
     "name": "did_summary_to_latex",
     "parameters": {
       "properties": {
@@ -12955,7 +12955,7 @@
     }
   },
   {
-    "description": "One-call comprehensive DID report: fits all methods + exports every format.",
+    "description": "DID report bundle: fits selected methods and writes report artifacts.",
     "name": "did_report",
     "parameters": {
       "properties": {
@@ -37395,7 +37395,7 @@
     }
   },
   {
-    "description": "Publication-grade LaTeX table for synthetic-control results.",
+    "description": "Formatted LaTeX table for synthetic-control results.",
     "name": "synth_to_latex",
     "parameters": {
       "properties": {

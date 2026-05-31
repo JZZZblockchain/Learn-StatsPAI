@@ -343,7 +343,7 @@ def rd_robustness_table(
 ) -> pd.DataFrame:
     """
     Sweep over (kernel, bwselect, polynomial, donut) and return a
-    manuscript-ready robustness table.
+    robustness table for reporting.
 
     Each row is one specification.  The DataFrame contains both
     "Conventional" and "Robust" point estimates and CIs from

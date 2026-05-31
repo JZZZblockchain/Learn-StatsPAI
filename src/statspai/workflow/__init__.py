@@ -3,7 +3,7 @@
 ``sp.causal(df, y=, treatment=, ...)`` stitches the full analysis
 pipeline into one call: diagnose identification -> recommend an
 estimator -> fit it -> run the standard robustness suite -> produce
-a manuscript-ready HTML / Markdown / LaTeX report.
+an HTML / Markdown / LaTeX report.
 
 This module materialises the ``agent-native`` workflow as an API while
 keeping each stage's statistical assumptions explicit.

@@ -5108,7 +5108,7 @@
     "name": "did_plot"
   },
   {
-    "description": "One-call comprehensive DID report: fits all methods + exports every format.",
+    "description": "DID report bundle: fits selected methods and writes report artifacts.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -5301,7 +5301,7 @@
     "name": "did_summary_plot"
   },
   {
-    "description": "Render a :func:`did_summary` result as a manuscript-ready LaTeX",
+    "description": "Render a :func:`did_summary` result as a LaTeX",
     "input_schema": {
       "properties": {
         "caption": {
@@ -20398,7 +20398,7 @@
     "name": "synth_to_excel"
   },
   {
-    "description": "Publication-grade LaTeX table for synthetic-control results.",
+    "description": "Formatted LaTeX table for synthetic-control results.",
     "input_schema": {
       "properties": {
         "booktabs": {

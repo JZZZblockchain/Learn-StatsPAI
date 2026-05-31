@@ -3201,7 +3201,7 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
     },
     "roc_curve": {
         "assumptions": [
-            "y_true is a binary gold standard and scores are "
+            "y_true is a binary reference label and scores are "
             "continuous with higher values indicating the "
             "positive class.",
             "Observations are independent, so the Hanley-McNeil "
@@ -3327,7 +3327,7 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
     },
     "sensitivity_specificity": {
         "assumptions": [
-            "y_true is an error-free gold standard against which "
+            "y_true is an error-free reference standard against which "
             "y_pred is evaluated (no reference-test "
             "misclassification).",
             "Sensitivity and specificity are intrinsic test "
@@ -3347,7 +3347,7 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
                 "negatives) makes sensitivity (or "
                 "specificity) undefined.",
                 "exception": "ZeroDivisionError",
-                "remedy": "Ensure the gold standard contains "
+                "remedy": "Ensure the reference labels contain "
                 "both classes; report Wilson CIs "
                 "which handle small counts.",
                 "alternative": "roc_curve",
@@ -3357,7 +3357,7 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
                 "both metrics "
                 "(verification/incorporation bias).",
                 "exception": "AssumptionWarning",
-                "remedy": "Use a true gold standard or "
+                "remedy": "Use a verified reference standard or "
                 "latent-class correction and report "
                 "the limitation.",
                 "alternative": "cohen_kappa",

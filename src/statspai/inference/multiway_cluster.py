@@ -15,8 +15,8 @@ Also exposes:
 - :func:`multiway_cluster_vcov`: raw V computation from (X, resid, clusters).
 - :func:`cluster_robust_se`: thin wrapper returning SE only.
 - :func:`cr3_jackknife_vcov`: CR3 cluster-jackknife variance (delete-one-
-  cluster) — more conservative than CR1, often the gold standard for
-  few clusters (Bell-McCaffrey 2002, Niccodemi et al. 2020).
+  cluster) -- more conservative than CR1 and often preferred for
+  few-cluster designs (Bell-McCaffrey 2002, Niccodemi et al. 2020).
 
 References
 ----------
