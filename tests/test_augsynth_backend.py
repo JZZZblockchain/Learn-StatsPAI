@@ -9,6 +9,27 @@ import statspai as sp
 from statspai.synth.augsynth import _find_rscript
 
 
+def test_augsynth_native_matches_reference_fixture():
+    result = sp.augsynth(
+        sp.datasets.basque_terrorism(),
+        outcome="gdppc",
+        unit="region",
+        time="year",
+        treated_unit="Basque Country",
+        treatment_time=1970,
+        backend="native",
+        placebo=False,
+    )
+    assert np.isclose(result.estimate, -0.362773547553157, rtol=1e-4)
+    assert np.isclose(
+        result.model_info["pre_treatment_rmse"],
+        0.0139615454031586,
+        rtol=1e-4,
+    )
+    assert result.model_info["augmented_weights_can_be_negative"] is True
+    assert result.model_info["ridge_lambda"] > 0
+
+
 def _skip_unless_augsynth_available():
     try:
         rscript = _find_rscript()

@@ -211,6 +211,6 @@
     "n_donors": 16,
     "placebo": false,
     "tier": "T4",
-    "native_note": "Headline row uses backend='native'. The Basque donor-weight solution is not unique under outcomes-only predictors, so the native QP path can differ from Synth's nested-V optimum. Native correctness is separately certified on a uniquely identified DGP in module 52_scm_unique; backend='synth' is available when exact R Synth numbers are required."
+    "native_note": "Headline row uses backend='native'. The Basque donor-weight solution is not unique under the ADH special-predictor nested-V specification: native tracks Stata synth on the same CSV, while R Synth and Stata synth choose measurably different local optima. Native correctness is separately certified on a uniquely identified DGP in module 52_scm_unique; backend='synth' is available when exact R Synth numbers are required."
   }
 }

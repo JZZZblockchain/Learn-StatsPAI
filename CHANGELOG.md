@@ -4,18 +4,20 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
-### Added — RD density parity escape hatch
+### Correctness fix — RD density native path now ports `rddensity` defaults
 
-- **`sp.rddensity` now accepts side-specific manual bandwidths and an optional
-  R reference backend.** The native dependency-light implementation remains
-  the default, but `h=(h_left, h_right)` now records matched left/right
-  bandwidths explicitly, and `backend="r"` delegates to
-  `rddensity::rddensity` through `Rscript` when R plus the `rddensity` and
-  `jsonlite` packages are installed. This does not pretend the native
-  bandwidth selector is identical to the R package; it gives users and
-  reviewers a clear path to canonical selector/test-statistic parity when
-  that exact comparison matters. Guarded by `tests/test_rddensity_io.py`;
-  the R backend test is skipped automatically when R is unavailable.
+- **`sp.rddensity(backend="native")` now mirrors the default
+  `rddensity::rddensity` unrestricted triangular-kernel path** instead of
+  using a dependency-light Silverman-style pilot bandwidth and ECDF-slope
+  approximation. The native implementation ports `rdbwdensity` combination
+  bandwidths, mass-point ECDF handling, and jackknife CJM local-polynomial
+  density inference. On the Lee/RD Senate replica, native StatsPAI now
+  matches `rddensity` on the robust p-value at `rel = 3.3e-11` and on the
+  Stata reference at `rel = 8.9e-11`; `09_rddensity` moves from a T4
+  bandwidth-selector disclosure to a T2 native reference-parity pass.
+  Side-specific manual bandwidths remain supported, and `backend="r"` still
+  delegates to the R package for users who want direct package execution.
+  Guarded by `tests/test_rddensity_io.py` and the Track A parity harness.
 
 ### ⚠️ Correctness fix — causal-forest ATE/ATT now doubly-robust (AIPW)
 
@@ -41,9 +43,10 @@ All notable changes to StatsPAI will be documented in this file.
     the row is like-for-like AIPW versus `grf` and is graded against
     combined sampling error, not sold as deterministic machine-precision
     equality. The strictness-tier denominator is
-    `11 / 26 / 10 / 4 on the 51 R-joined modules`: the forest row shares
-    the loose/stochastic bucket with three documented native convention
-    gaps, but it is the only one of the four graded as a T3 pass.
+    `12 / 27 / 10 / 2 on the 51 R-joined modules`: the forest row shares
+    the methodological/T4 bucket with the remaining documented classical-SCM
+    non-uniqueness gap, but it is the only row in that bucket graded as a
+    T3 combined-Monte-Carlo-error pass.
   - Guards: `tests/reference_parity/test_causal_forest_aipw_recovery.py`
     (recovery against truth, no R needed) and the tightened
     `tests/reference_parity/test_grf_parity.py` (combined-SE parity vs a
@@ -57,32 +60,43 @@ All notable changes to StatsPAI will be documented in this file.
   recovers the exact weights and gap (pre-RMSE = 0) and agrees with
   `Synth::synth` to 0.7 %. For the ambiguous Basque-data row, the parity
   harness keeps the native default visible as a documented
-  donor-weight-non-uniqueness gap; users who need exact R numbers can call
-  the optional `sp.synth(method="classic", backend="synth")` bridge. The
-  release claim is therefore native-solver certification on identified
-  SCM problems plus an explicit Basque-data limitation, not a hidden
+  donor-weight-non-uniqueness/reference-disagreement gap. On the same ADH
+  special-predictor specification, native StatsPAI tracks Stata `synth`
+  at `rel = 4.2e-4` while R `Synth` and Stata differ at `rel = 2.3e-2`;
+  the methodological-gap ledger now fails if this guard disappears. Users
+  who need exact R numbers can call the optional
+  `sp.synth(method="classic", backend="synth")` bridge. The release claim
+  is therefore native-solver certification on identified SCM problems plus
+  an explicit Basque reference-disagreement limitation, not a hidden
   machine-precision victory on a non-unique original-data example.
+- **Augmented SCM native path now ports `augsynth`'s centered
+  Ridge+SCM weight convention.** The Basque `18_augsynth` row now
+  compares the native Python estimator directly with
+  `augsynth::augsynth`, not the optional R bridge: ATT relative error is
+  `7.9e-06` and pre-RMSPE relative error is `3.0e-06`.
+- **Generalized SCM native path now ports `gsynth`/`fect`'s two-way FE
+  factor convention.** The Basque `19_gsynth` row now compares the
+  native Python estimator directly with `gsynth::gsynth`, not the
+  optional R bridge: ATT and pre-RMSPE match at machine precision, moving
+  the row out of the T4 factor-convention bucket. `backend="augsynth"`
+  and `backend="gsynth"` remain reference-package migration bridges, not
+  native parity comparators.
 
 ### Changed — synthetic-DID regularisation aligned to `synthdid` convention
 
 - **`sp.sdid` native unit/time weights now use the
-  \citet{arkhangelsky2021synthetic} `synthdid` regularisation formula.**
-  The unit-weight ridge penalty is now
-  `ζ_ω = (N_tr · T_post)^{1/4} · σ̂` (it was `(N_co · T_pre)^{1/4}` with
-  no noise scale), where `σ̂` is the standard deviation of the control
-  units' pre-treatment first differences; the time-weight penalty is
-  `ζ_λ = 10^{-6}·σ̂`; and both weight fits now absorb a profiled-out
-  intercept, the level-shift invariance that distinguishes the SDID
-  weight problem from a plain SC fit. This matches `synthdid`'s
-  documented convention rather than an ad-hoc penalty. On the
-  California-99 replica the point estimate is numerically unchanged
-  (the data are ill-conditioned — `N_co = 38 > T_pre = 19` makes the
-  ridge term negligible relative to the SSE, so both the SLSQP and the
-  reference Frank–Wolfe optima sit on a near-flat ridge and the residual
-  `rel ≈ 0.082` vs `synthdid` is documented weight non-uniqueness, T4 in
-  the parity ledger). The change is a correctness refinement of the
-  regularisation scale, not a headline-number change; guarded by the 58
-  `sdid`/`synthdid` tests.
+  \citet{arkhangelsky2021synthetic} `synthdid` regularisation and
+  Frank-Wolfe weight solver.** The native path now mirrors
+  `synthdid:::collapsed.form`, `synthdid:::sc.weight.fw`, the default
+  sparsification step, `ζ_ω = (N_tr · T_post)^{1/4} · σ̂`, and
+  `ζ_λ = 10^{-6}·σ̂`, where `σ̂` is the standard deviation of the control
+  units' pre-treatment first differences. On the California-99 replica,
+  the native ATT now matches `synthdid::synthdid_estimate` on identical
+  CSV bytes at `rel = 2.6e-15`; the row moves from a T4
+  regularisation-zeta gap to a T2 native reference-parity pass. The SE
+  still uses StatsPAI's deterministic all-control placebo convention
+  while `synthdid_se` uses random placebo replications, so the SE remains
+  compared under a 5% tolerance rather than sold as bitwise equality.
 
 ### Added — MCP protocol modernization
 
@@ -141,7 +155,7 @@ All notable changes to StatsPAI will be documented in this file.
 - **Strictness-tier breakdown in the Track A parity tables
   (`tests/r_parity/compare.py`)** — each module is classified by its
   registered point-estimate tolerance into machine / iterative / moderate /
-  loose-stochastic T3/T4 tiers (11 / 26 / 10 / 4 on the 51 R-joined modules), shown
+  methodological/T4 tiers (12 / 27 / 10 / 2 on the 51 R-joined modules), shown
   in the Markdown ledger and the LaTeX appendix caption so a machine-precision
   match is not flattened together with a deliberately loose
   stochastic or documented-convention tolerance.
@@ -373,7 +387,7 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
-- Cleaned up JOSS review follow-ups: removed two uncited duplicate BibTeX
+- Cleaned up external-review follow-ups: removed two uncited duplicate BibTeX
   entries that caused editorialbot DOI suggestions, aligned the AKM
   shift-share citation key / DOI metadata, and refreshed v1.15.6 wording in
   reviewer-facing docs and README release callouts.
@@ -386,7 +400,7 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [1.15.6] — 2026-05-24
 
-### Changed — Co-authorship, JOSS submission readiness
+### Changed — Co-authorship, software-journal submission readiness
 
 - Added **Scott Rozelle** as co-author across all package metadata:
   `pyproject.toml`, `src/statspai/__init__.py` (`__author__`), `CITATION.cff`,
@@ -408,14 +422,14 @@ All notable changes to StatsPAI will be documented in this file.
   co-author; both surfaces now also carry the 1.15.6 version string.
 - `CITATION.cff` `version` / `date-released` bumped to `1.15.6` / `2026-05-24`.
 
-### Added — JOSS reviewer-facing documentation
+### Added — reviewer-facing documentation
 
-- `docs/joss_reviewer_guide.md` — install, smoke test, representative offline
+- reviewer guide — install, smoke test, representative offline
   examples, targeted tests, and build check, intended as a short reviewer
   path. All five smoke-test API calls are verified against the current
   registry (`ivreg`, `callaway_santanna` + `aggte`, `rdrobust`, `synth`,
   `describe_function` / `function_schema`).
-- `docs/joss_validation_dossier.md` — project status, registry counts,
+- validation dossier — project status, registry counts,
   validation tracks (R-parity / Stata-parity / reference-parity / Monte Carlo
   coverage / snapshot tests / citation audits), parity anchors, research-use
   statement (working-paper use; no published peer-reviewed article yet),
@@ -423,7 +437,7 @@ All notable changes to StatsPAI will be documented in this file.
   and reproducible-check commands.
 - Both pages added to the MkDocs navigation.
 
-### Changed — `paper.md` (JOSS manuscript)
+### Changed — `paper.md` (software-journal manuscript)
 
 - Repo URL casing corrected to canonical `StatsPAI`; added Zenodo archive
   reference (`@wang2026statspai`).
@@ -434,7 +448,7 @@ All notable changes to StatsPAI will be documented in this file.
   used for (code generation, refactoring, test scaffolding, documentation
   drafting, manuscript copy-editing), to note that exact model identifiers
   were not retained for all exploratory sessions, and to confirm that
-  generative AI will not be used to produce substantive responses to JOSS
+  generative AI will not be used to produce substantive responses to journal
   editors or reviewers.
 - Acknowledgements split: explicit **Author Contributions** subsection
   attributing roles to each author, and an open-core / commercial-downstream
@@ -456,8 +470,8 @@ All notable changes to StatsPAI will be documented in this file.
 - Added generated `src/statspai/_baseline_cards.py` plus
   `scripts/gen_baseline_cards.py` to fill empty Tier-B fields from docstrings
   without overwriting curated registry entries. The baseline pass lifts tags to
-  100% of the 1,018-function registry and keeps examples / references limited
-  to mechanically extracted, auditable content.
+  100% of the then-current v1.15.5 registry and keeps examples / references
+  limited to mechanically extracted, auditable content.
 - Added `FunctionSpec.inherits_from` and inherited agent-card rendering for
   canonical estimator variants. Child specs keep their own descriptions,
   examples, parameters, references, validation status, and limitations, while
@@ -469,8 +483,8 @@ All notable changes to StatsPAI will be documented in this file.
 - Expanded validation evidence seeds for tested long-tail estimators so the
   agent registry distinguishes stable APIs from functions with explicit unit,
   regression, parity, or reference-test coverage.
-- Refreshed registry count, module statistics, and agent-platform positioning:
-  1,018 registered public functions across 80 submodules.
+- Refreshed registry count, module statistics, and agent-platform positioning
+  for the then-current v1.15.5 public surface.
 - Updated DiD and agent-facing docs to mark `continuous_did(method='cgs')` and
   `did_multiplegt_dyn` as experimental MVP paths rather than fully
   paper-parity estimators.
@@ -637,7 +651,7 @@ Three independent hardening tracks land together:
 
 ### Docs
 
-- JOSS submission [`paper.md`](paper.md) is rewritten for the Scott
+- Software-journal submission [`paper.md`](paper.md) is rewritten for the Scott
   Rozelle review pass — tighter scope statement, cleaner schema
   description, explicit AI-use disclosure, 12 May 2026 submission
   date. Cited bibliography entries in [`paper.bib`](paper.bib) are
@@ -803,7 +817,7 @@ not change the negative-binomial numerical path.
   from measured CPU benchmarks under `tests/perf/`, and GPU/JAX timing
   remains an opt-in engineering benchmark until a dedicated accelerator
   run is packaged as evidence.
-- JOSS bullet 5 in `paper.md` simplified from a four-paragraph
+- Software-journal bullet 5 in `paper.md` simplified from a four-paragraph
   exposition to a single tight paragraph that cross-references the
   JSS companion paper for full architecture detail.
 - Note on version numbering: the `pyproject.toml` version moved from
@@ -820,7 +834,7 @@ not change the negative-binomial numerical path.
 Five pushes in this cycle. First, an IV-module polish to the post-2022
 reporting standard (the `sp.iv.iv_diag` bundle, see below). Second, a
 synthetic-control polish pass: supported synthetic-control estimators in
-that release now have a publication-grade table-export pipeline, the trajectory
+that release now have a publication-oriented table-export pipeline, the trajectory
 and gap plots gain prediction-interval / pre-RMSPE ribbon options
 following Cattaneo, Feng and Titiunik (2021, *JASA* 116, DOI
 10.1080/01621459.2021.1979561) and Cattaneo, Feng, Palomba and Titiunik
@@ -1096,7 +1110,7 @@ adaptive density estimator — see the dedicated section below.
 - `docs/guides/choosing_iv_estimator.md` adds §10 (`sp.iv.iv_compare`
   forest comparison), §11 (`sp.iv.iv_diag` modern reporting bundle),
   and a TL;DR pointer to the new bundle.
-- `paper.md` (JOSS) gains a self-contained IV bullet under
+- `paper.md` gains a self-contained IV bullet under
   *Methodological coverage* documenting the new bundle and recent
   methodology references.
 
@@ -1113,10 +1127,10 @@ adaptive density estimator — see the dedicated section below.
 
 ### Added — RDD polish (v1.15)
 
-RDD module polish to state-of-the-art (2018–2026 literature). Six
+RDD module polish tracking the 2018–2026 literature. Six
 additions close the gap between `sp.rd` and the canonical R/Stata
 `rdpackages` ecosystem on three fronts — *recent methodology*,
-*publication-grade reporting*, and *automatic diagnostics*:
+*publication-oriented reporting*, and *automatic diagnostics*:
 
 - **Three new estimators** corresponding to flagship 2018–2025 papers:
   - `sp.rd_flex` — flexible (machine-learning) covariate adjustment
@@ -1152,7 +1166,7 @@ additions close the gap between `sp.rd` and the canonical R/Stata
     the same data; returns a tidy `pd.DataFrame` ready for
     `sp.outreg2` / `sp.modelsummary`.
   - `sp.rd_robustness_table` — sweep over kernel × bandwidth × poly
-    × donut, returning publication-ready specifications with
+    × donut, returning manuscript-ready specifications with
     `to_latex()` / `to_excel()` for one-shot supplemental tables.
 
 - **`sp.rdrobust` polish**:
@@ -1535,7 +1549,7 @@ latent Callaway–Sant'Anna REG inference scaling bug — discovered
   ``pipeline_notes`` records what was filtered.  Pass ``True`` to
   include frontier MVPs (e.g. ``did_multiplegt_dyn``,
   ``text_treatment_effect``).  This closes a gap where an LLM agent
-  asking ``sp.causal(df, ...)`` for a publication-grade analysis could
+  asking ``sp.causal(df, ...)`` for an applied analysis could
   silently land on a frontier MVP just because the recommender
   ranked it first.  Tests in `tests/test_smart_stability_gating.py`.
 - **Stability reverse-audit script.** `scripts/stability_audit.py`
@@ -1958,7 +1972,7 @@ Citation metadata polish — no numerical or API changes to any estimator.
 - Zenodo DOI [10.5281/zenodo.19933900](https://doi.org/10.5281/zenodo.19933900)
   (concept DOI; always resolves to the latest archived release). The
   DOI now appears in `sp.citation()` output, the README citation block,
-  and a DOI badge alongside the existing JOSS-pending status badge.
+  and a DOI badge alongside the existing review-status badge.
 - `.zenodo.json` so future GitHub Releases mint version-specific DOIs
   with consistent metadata (creators, keywords, license, related
   identifiers).
@@ -3085,7 +3099,7 @@ additions are new functions or strictly additive parameters with
 - **MCP ``prompts/list`` + ``prompts/get``** — three curated
   workflow prompt templates (``audit_did_result`` /
   ``design_then_estimate`` / ``robustness_followup``) surfaced as
-  one-click buttons in MCP-compliant clients.
+  prompt buttons in MCP-compliant clients.
 
 ### Changed
 
@@ -4328,7 +4342,7 @@ optional deps.
 #### Added — `sp.gt(result)` great_tables adapter
 
 Posit's ``great_tables`` is the Python port of R's gt — the
-publication-grade table grammar (cell-level styling, spanners,
+publication-oriented table grammar (cell-level styling, spanners,
 footnote marks, themes, multi-target HTML/LaTeX/RTF output). The new
 adapter dispatches on input type:
 
@@ -4412,7 +4426,7 @@ estimator. Closes three concrete gaps between StatsPAI's export stack
 and the R / Posit publication tooling, and lays the foundation for the
 v1.7.2+ "agent-native paper" line.
 
-#### Added — `sp.replication_pack()` (journal-ready archive)
+#### Added — `sp.replication_pack()` (replication archive)
 
 One-liner that bundles an analysis into the layout AEA / AEJ data
 editors expect:
@@ -6500,7 +6514,7 @@ gaps vs. Stata / R dominance.
 - `mr_radial` — Bowden (2018) radial reparameterization + Bonferroni-
   thresholded outlier flagging.
 
-**Target trial emulation — publication-ready report**
+**Target trial emulation — manuscript-ready report**
 
 - `TargetTrialResult.to_paper(fmt=...)` / `sp.target_trial.to_paper` —
   render STROBE-compatible Methods + Results block in Markdown /
@@ -7811,14 +7825,14 @@ retrospective (`社媒文档/4.20-升级说明/StatsPAI-0.9.3之后的一周…`
     learners (quick sanity check for model dependence);
   - `.summary()` — a printable leaderboard + agreement table.
 
-  Python's first unified CATE learner race with honest held-out
-  scoring. `econml`'s multi-metalearner pipeline is not bundled into
+  A bundled CATE learner race with honest held-out scoring. `econml`'s
+  multi-metalearner pipeline is not bundled into
   a single call; `causalml`'s BaseMetaLearner comparison doesn't run
   BLP calibration per learner.
 
 - **`sp.check_identification(..., strict=True)`** raises
   `sp.IdentificationError` when the report's verdict is `'BLOCKERS'`.
-  The exception carries the full report on `.report` for post-mortem
+  The exception carries the complete report on `.report` for post-mortem
   inspection. Default remains `strict=False` (non-breaking).
 
 - **`sp.IdentificationError`** — new exception type, exported at the
@@ -8264,7 +8278,7 @@ vs. Stata, R, and existing Python packages are now first-class `sp.*` APIs
   fixed + random coefficients, normal / log-normal / triangular mixing
   distributions, diagonal or full Cholesky covariance, panel (repeated-choice)
   data, OPG-sandwich robust SEs. Benchmarked against Stata `mixlogit` and R
-  `mlogit`. Python's first feature-complete implementation.
+  `mlogit`.
 - **`sp.ivqreg` — IV Quantile Regression.** Chernozhukov-Hansen (2005, 2006,
   2008) instrumental-variable quantile regression via inverse-QR profile.
   Scalar endogenous case uses grid + Brent refinement; multi-dim uses BFGS on
@@ -8302,7 +8316,7 @@ Shipped in commit `be59260`:
   `pyproject.toml` (`authors` + `maintainers`), `src/statspai/__init__.py`
   (`__author__`), `README.md` / `README_CN.md` (team line + BibTeX),
   `docs/index.md` (BibTeX), and `mkdocs.yml` (`site_author`).
-  JOSS submission (`paper.md`) was already correct.
+  Software-journal submission (`paper.md`) was already correct.
 
 ## [0.9.2] - 2026-04-16
 
@@ -8483,7 +8497,7 @@ A 5-sprint refactor (commit 44f7529) centralized shared low-level primitives tha
 
 ### Synthetic Control — Broad SCM Toolkit
 
-Release focus: `statspai.synth`. **20 SCM methods + 6 inference strategies + full research workflow (compare / power / sensitivity / reports)**, all behind the unified `sp.synth(method=...)` dispatcher. This is an API-breadth statement; exact validation evidence is recorded by each function's validation metadata and the parity artifacts.
+Release focus: `statspai.synth`. **20 SCM methods + 6 inference strategies + analysis workflow (compare / power / sensitivity / reports)**, all behind the unified `sp.synth(method=...)` dispatcher. This is an API-breadth statement; exact validation evidence is recorded by each function's validation metadata and the parity artifacts.
 
 #### Seven new SCM estimators
 
@@ -8503,15 +8517,15 @@ Previous methods — classic, penalized, demeaned, unconstrained, augmented, SDI
 
 - `synth_compare(df, ...)` — run every method at once, tabular + graphical comparison
 - `synth_recommend(df, ...)` — auto-select best estimator by pre-fit + robustness
-- `synth_report(result, format='markdown'|'latex'|'text')` — one-click publication-ready report
+- `synth_report(result, format='markdown'|'latex'|'text')` — one-command manuscript-ready report
 - `synth_power(df, effect_sizes=[...])` — first power-analysis tool for SCM designs
 - `synth_mde(df, target_power=0.8)` — minimum detectable effect
 - `synth_sensitivity(result)` — LOO + time placebos + donor sensitivity + RMSPE filtering
 - Three canonical datasets shipped: `california_tobacco()`, `german_reunification()`, `basque_terrorism()`
 
-#### Release-blocker fixes from comprehensive module review
+#### Critical fixes from comprehensive module review
 
-Following a 5-parallel-agent code review (correctness / numerics / API / perf / docs), nine release blockers were fixed:
+Following a 5-parallel-agent code review (correctness / numerics / API / perf / docs), nine critical review findings were fixed:
 
 - **ASCM correction formula** — `augsynth` now follows Ben-Michael, Feller & Rothstein (2021) Eq. 3 per-period ridge bias `(Y1_pre − Y0'γ) @ β(T0, T1)`, replacing the scalar mean-residual placeholder. `_ridge_fit` RHS bug also fixed.
 - **Bayesian likelihood scale** — covariate rows are now z-scored to the pooled pre-outcome SD before concatenation, preventing scale mismatch from dominating the Gaussian `σ²` posterior.
@@ -8547,7 +8561,7 @@ Decomposition and Regression Discontinuity modules received significant upgrades
 
 #### Spatial Econometrics (NEW — 38 API symbols)
 
-From 3 functions / 419 LOC to **38 functions / 3,178 LOC / 69 tests**. Python's first unified spatial econometrics package.
+From 3 functions / 419 LOC to **38 functions / 3,178 LOC / 69 tests**. A unified spatial econometrics API for Python users.
 
 - **Weights (L1)**: `W` (sparse CSR), `queen_weights`, `rook_weights`, `knn_weights`, `distance_band`, `kernel_weights`, `block_weights`
 - **ESDA (L2)**: `moran` (global + local), `geary`, `getis_ord_g`, `getis_ord_local`, `join_counts`, `moran_plot`, `lisa_cluster_map`
@@ -8750,7 +8764,7 @@ release).
 - **`CSReport.to_markdown()`** — GitHub-flavoured Markdown export
   with proper integer-column rendering and a configurable
   `float_format`.
-- **`CSReport.to_latex()`** — publication-ready booktabs fragment
+- **`CSReport.to_latex()`** — manuscript-ready booktabs fragment
   wrapped in a `table` float.  Zero `jinja2` dependency (hand-rolled
   booktabs renderer); auto-escapes LaTeX special characters.
 - **`CSReport.to_excel()`** — six-sheet workbook (`Summary`,

@@ -6,8 +6,8 @@
       "module": "18_augsynth",
       "side": "py",
       "statistic": "att_augmented",
-      "estimate": -0.23945948030412856,
-      "se": 0.35714138327238,
+      "estimate": -0.36277067939657837,
+      "se": 0.37535923619410766,
       "ci_lo": null,
       "ci_hi": null,
       "n": 731,
@@ -17,7 +17,7 @@
       "module": "18_augsynth",
       "side": "py",
       "statistic": "pre_rmspe",
-      "estimate": 0.07920995207369655,
+      "estimate": 0.013961503463274363,
       "se": null,
       "ci_lo": null,
       "ci_hi": null,
@@ -29,7 +29,8 @@
     "method": "augmented",
     "backend": "native",
     "n_donors": 16,
-    "tier": "T4",
-    "native_note": "Headline row is the NATIVE Python augmented SCM (backend='native'). The residual gap vs augsynth is a documented ridge/outcome-model convention, graded T4, not a parity pass. The optional backend='augsynth' R bridge is a convenience feature, not a parity comparator."
+    "tier": "T2",
+    "reference_backend": "augsynth",
+    "native_note": "Headline row is the NATIVE Python augmented SCM (backend='native'). It ports augsynth's centered pre-outcome SCM plus ridge-augmented weight convention and matches augsynth::augsynth on the Basque fixture within iterative solver tolerance. The optional backend='augsynth' R bridge is a migration convenience, not the parity comparator."
   }
 }

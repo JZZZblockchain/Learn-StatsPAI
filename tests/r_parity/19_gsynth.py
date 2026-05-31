@@ -4,13 +4,11 @@ Runs the **native Python** generalized SCM (``sp.gsynth(backend='native')``)
 on the Basque-Country replica (Xu 2017). The companion 19_gsynth.R uses
 ``gsynth::gsynth`` on the same CSV.
 
-Tier: T4 documented identification gap.  The interactive-fixed-effects
-factor model is identified only up to a rotation, and the number of
-factors is chosen by cross-validation that can differ across
-implementations; the native Python optimum differs from gsynth's by
-rel ~ 0.59 on this replica.  The optional ``backend='gsynth'`` R bridge
-is a convenience feature, NOT used here as a parity comparator
-(comparing the bridge to R would be circular).
+Tier: T2 native parity. The Python implementation estimates the
+``gsynth``/``fect`` two-way fixed-effect factor convention on the full
+never-treated control panel, then projects the treated unit on the
+pre-treatment periods. The optional ``backend='gsynth'`` R bridge remains
+a migration convenience, NOT the parity comparator.
 """
 from __future__ import annotations
 
@@ -67,14 +65,15 @@ def main() -> None:
             "method": "gsynth (Xu 2017)",
             "backend": fit.model_info.get("backend", "native"),
             "n_donors": int(fit.model_info.get("n_donors", 0)),
-            "tier": "T4",
+            "tier": "T2",
+            "reference_backend": "gsynth",
             "native_note": (
                 "Headline row is the NATIVE Python generalized SCM "
-                "(backend='native'). The interactive-FE factor model is "
-                "identified only up to rotation and the CV factor count can "
-                "differ from gsynth's, so the residual gap is graded T4, not "
-                "a parity pass. The optional backend='gsynth' R bridge is a "
-                "convenience feature, not a parity comparator."
+                "(backend='native'). It ports gsynth/fect's two-way FE "
+                "factor convention on the full never-treated control panel "
+                "and matches gsynth::gsynth on the Basque fixture within "
+                "machine tolerance. The optional backend='gsynth' R bridge "
+                "is a migration convenience, not the parity comparator."
             ),
         },
     )

@@ -1,8 +1,9 @@
 # StatsPAI Augmented SCM parity (R side) -- Module 18.
 #
 # Reads data/18_augsynth.csv and runs augsynth::augsynth.
-# Tolerance: rel < 0.20 on the post-treatment ATT (regularisation
-# convention non-uniqueness, same family as Module 07 SCM).
+# Tolerance: rel < 1e-4 on the post-treatment ATT.  The native Python
+# row ports augsynth's centered pre-outcome Ridge+SCM weight convention;
+# remaining differences are iterative solver tolerance, not a T4 gap.
 
 .args <- commandArgs(trailingOnly = FALSE)
 .file_arg <- grep("^--file=", .args, value = TRUE)

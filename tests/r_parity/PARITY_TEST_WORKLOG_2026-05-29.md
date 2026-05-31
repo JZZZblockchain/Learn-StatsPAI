@@ -5,12 +5,13 @@ contracts, documented convention gaps, and end-to-end test verification.
 
 ## Inventory
 
-- Python parity artifacts: 51 modules.
-- Materialized R-joined modules: 50 modules.
+- Python parity artifacts: 52 Python result files.
+- Materialized R-joined modules: 51 modules.
 - Stata result artifacts: 44 modules.
-- Py-Stata-primary module: `50_xtabond`.
+- Py--Stata-only migration fixture: `50_xtabond`.
 - Modules without Stata references: `08_dml`, `13_causal_forest`,
-  `18_augsynth`, `19_gsynth`, `31_dfl`, `32_rif`, `38_drdid`.
+  `18_augsynth`, `19_gsynth`, `31_dfl`, `32_rif`, `38_drdid`,
+  `52_scm_unique`.
 - R runtime status: `Rscript` was not installed in this environment, so R
   runtime smoke tests were skipped. Existing R JSON fixtures were still
   contract-tested.
@@ -50,9 +51,9 @@ contracts, documented convention gaps, and end-to-end test verification.
   - exit 0
   - wrote `parity_table.md`, `parity_table.tex`,
     `parity_table_3way.md`, `parity_table_3way.tex`
-  - reported 50 rendered modules from 51 Python result files
-  - reported 43 of 50 rendered modules with Stata references, plus the
-    Py-Stata-only Module 50 path.
+  - reported 51 rendered R-joined modules from 52 Python result files
+  - reported 43 of 51 rendered modules with Stata references, plus the
+    Py--Stata-only Module 50 path omitted from the R-joined table.
 
 - `python -m pytest tests/test_parity_harness_contract.py tests/test_jss_validation_api.py tests/test_validation_vs_stata_r.py --no-cov -q`
   - 37 passed

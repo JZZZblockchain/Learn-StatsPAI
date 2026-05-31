@@ -31,12 +31,16 @@ tests/r_parity/
     └── parity_table_3way.tex     # LaTeX longtable for Appendix B
 ```
 
-Latest full verification record:
+Historical verification worklog (not the current source-snapshot audit):
 [`PARITY_TEST_WORKLOG_2026-05-29.md`](PARITY_TEST_WORKLOG_2026-05-29.md).
 
-## Modules (51 total: 50 materialized R matches, 1 Py-Stata-primary)
+## Modules (51 materialized StatsPAI--R rows)
 
-| # | Module | StatsPAI | R reference |
+Module `50_xtabond` is the separate Py--Stata-only migration fixture and
+is not part of this R-joined table; the 51 materialized R rows are
+modules 01--49, 51, and 52.
+
+| # | Module | StatsPAI | R / reference side |
 | --- | --- | --- | --- |
 | 01 | OLS + HC1 SE | `sp.regress` | `lm` + `sandwich::vcovHC` |
 | 02 | 2SLS + HC1 SE | `sp.ivreg` | `AER::ivreg` |
@@ -44,19 +48,19 @@ Latest full verification record:
 | 04 | CS-DiD simple ATT | `sp.callaway_santanna` | `did::att_gt` + `aggte` |
 | 05 | Sun-Abraham event study | `sp.sun_abraham` | `fixest::sunab` |
 | 06 | RD CCT bias-corrected | `sp.rdrobust` | `rdrobust::rdrobust` |
-| 07 | Classical SCM | `sp.synth(method="classic", backend="synth")` | `Synth::synth` |
+| 07 | Classical SCM | `sp.synth(method="classic", backend="native")` | `Synth::synth` |
 | 08 | DML PLR | `sp.dml("plr")` | `DoubleML::DoubleMLPLR` |
-| 09 | RD density (CJM) | `sp.rddensity(backend="r")` | `rddensity::rddensity` |
+| 09 | RD density (CJM) | `sp.rddensity(backend="native")` | `rddensity::rddensity` |
 | 10 | Honest DiD smoothness | `sp.honest_did` | `HonestDiD::createSensitivityResults` |
 | 11 | PSM 1:1 NN | `sp.psm` | `MatchIt::matchit` |
-| 12 | Synthetic DID | `sp.sdid(backend="synthdid")` | `synthdid::synthdid_estimate` |
+| 12 | Synthetic DID | `sp.sdid(backend="native")` | `synthdid::synthdid_estimate` |
 | 13 | Causal forest (AIPW) | `sp.causal_forest` | `grf::causal_forest` |
 | 14 | OLS + cluster SE | `sp.regress(cluster=)` | `lm` + `sandwich::vcovCL` |
 | 15 | HDFE + cluster SE | `sp.fast.feols(cr1)` | `fixest::feols(cluster=)` |
 | 16 | BJS imputation | `sp.did_imputation` | `didimputation::did_imputation` |
 | 17 | Wooldridge ETWFE | `sp.etwfe` + `sp.etwfe_emfx` | `etwfe::etwfe` + `emfx` |
-| 18 | Augmented SCM | `sp.augsynth(backend="augsynth")` | `augsynth::augsynth` |
-| 19 | Generalized SCM | `sp.gsynth(backend="gsynth")` | `gsynth::gsynth` |
+| 18 | Augmented SCM | `sp.augsynth(backend="native")` | `augsynth::augsynth` |
+| 19 | Generalized SCM | `sp.gsynth(backend="native")` | `gsynth::gsynth` |
 | 20 | Goodman--Bacon decomp | `sp.bacon_decomposition` | `bacondecomp::bacon` |
 | 21 | Honest DiD relative-mags | `sp.honest_did(method="relative_magnitude", backend="honestdid")` | `HonestDiD::createSensitivityResults_relativeMagnitudes` |
 | 22 | sensemakr | `sp.sensemakr` | `sensemakr::sensemakr` |
@@ -87,8 +91,8 @@ Latest full verification record:
 | 47 | PPML + 3-way HDFE | `sp.ppmlhdfe` | `fixest::fepois` |
 | 48 | Binary probit | `sp.probit` | `stats::glm(family=binomial("probit"))` |
 | 49 | Ordered probit | `sp.oprobit` | `MASS::polr(method="probit")` |
-| 50 | Arellano-Bond GMM | `sp.xtabond` | `plm::pgmm` script; Stata `xtabond` is the strict fixture |
 | 51 | Newey-West HAC OLS | `sp.regress(robust="hac")` | `sandwich::NeweyWest` |
+| 52 | Identified classical SCM DGP | `sp.synth(method="classic", backend="native")` | `Synth::synth` |
 
 ## Running
 

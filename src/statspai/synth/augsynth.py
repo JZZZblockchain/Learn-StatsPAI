@@ -1,17 +1,19 @@
 """
 Augmented Synthetic Control Method (ASCM).
 
-Combines the synthetic control estimator with an outcome model (ridge
-regression) to correct for imperfect pre-treatment fit — reducing bias
-when the standard SCM cannot perfectly match the treated unit.
+Combines synthetic-control weights with a ridge correction to reduce
+pre-treatment imbalance when a simplex SCM alone cannot perfectly match
+the treated unit.
 
 Model
 -----
-τ̂_ascm = τ̂_scm + (Y₀_post - X₀_post β̂) ⊤ γ̂
+    w_aug = w_scm + (x1 - X0' w_scm)' (X0'X0 + λI)^(-1) X0'
+    τ̂_ascm = mean(Y1_post - Y0_post' w_aug)
 
-where γ̂ are the SCM weights, β̂ is a ridge estimator on pre-treatment
-donor data, and the correction term adjusts for remaining pre-treatment
-imbalance.
+where pre-treatment outcomes are centered by the control mean before
+the SCM and ridge steps. This matches the no-covariate
+``augsynth::augsynth(..., progfunc="Ridge", scm=TRUE)`` convention used
+by the Track-A parity harness.
 
 References
 ----------
@@ -36,7 +38,6 @@ from typing import Any, List, Optional
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
-from scipy.optimize import minimize
 
 from ..core.results import CausalResult
 
@@ -58,15 +59,15 @@ def augsynth(
     """
     Augmented Synthetic Control Method (Ben-Michael, Feller & Rothstein 2021).
 
-    Fits a standard SCM then adds a ridge-outcome-model bias correction.
-    Per-period correction is
+    Fits SCM weights on control-mean-centered pre-treatment outcomes and
+    then applies the ridge-augmented weight correction used by
+    ``augsynth::augsynth``:
 
-        bias(t) = m̂_t(X1_pre) − Σ_j γ_j m̂_t(X_j,pre),
+        w_aug = w_scm + (x1 - X0' w_scm)' (X0'X0 + λI)^(-1) X0'.
 
-    where m̂_t is a ridge regression of donor post-period outcomes on
-    donor pre-period outcomes. Collapses to standard SCM when
-    ``ridge_lambda → ∞`` and to pure outcome-model imputation when
-    ``ridge_lambda → 0``.
+    The augmented weights are applied directly to the full donor
+    trajectory and may be negative. Large ``ridge_lambda`` approaches
+    centered SCM; smaller values allow more extrapolation.
 
     Parameters
     ----------
@@ -80,7 +81,8 @@ def augsynth(
         Additional predictors (currently informational; main adjustment
         comes from pre-treatment outcomes).
     ridge_lambda : float, optional
-        Ridge penalty. When ``None``, selected by leave-one-donor-out CV.
+        Ridge penalty. When ``None``, selected by time-holdout CV
+        matching ``augsynth``'s one-standard-error rule.
     placebo : bool, default True
         Run in-space placebo permutation tests for SE / p-value.
     alpha : float, default 0.05
@@ -196,31 +198,33 @@ def augsynth(
     T0 = len(pre_times)
     T1 = len(post_times)
 
-    # --- Step 1: Standard SCM weights ---
-    gamma = _scm_weights(Y1_pre, Y0_pre)
+    # --- Step 1: R-augsynth-compatible augmented weights ---
+    #
+    # ``augsynth::augsynth(..., progfunc="Ridge", scm=TRUE)`` centers
+    # pre-treatment outcomes by the control mean, solves SCM on the
+    # centered pre-period matrix, then adds a ridge correction to the
+    # weights themselves.  The final counterfactual is the full donor
+    # trajectory multiplied by these augmented weights, which may be
+    # negative.  This is deliberately different from a post-on-pre
+    # outcome-model imputation.
+    weight_fit = _fit_ridge_augmented_weights(
+        Y1_pre,
+        Y0_pre,
+        ridge_lambda=ridge_lambda,
+    )
+    gamma = weight_fit["weights"]
+    syn_weights = weight_fit["synthetic_weights"]
+    ridge_lambda = float(weight_fit["ridge_lambda"])
 
-    # --- Step 2: Ridge outcome model ---
-    # Fit ridge of donor post-outcomes on donor pre-outcomes:
-    #   Y0_post = X β + ε,  X = Y0_pre (J × T0),  β ∈ R^{T0 × T1}
-    # Closed-form:  β = (X'X + λI)^{-1} X' Y0_post.
-    if ridge_lambda is None:
-        ridge_lambda = _cv_ridge_lambda_bias(Y0_pre, Y0_post)
+    # --- Step 2: Counterfactual trajectory using augmented weights ---
+    Y1_hat_scm_pre = Y0_pre.T @ syn_weights
+    Y1_hat_scm_post = Y0_post.T @ syn_weights
+    Y1_hat_aug_pre = Y0_pre.T @ gamma
+    Y1_hat_aug_post = Y0_post.T @ gamma
 
-    beta = _ridge_post_coef(Y0_pre, Y0_post, ridge_lambda)   # (T0, T1)
-
-    # --- Step 3: Augmented estimate (Ben-Michael et al. 2021 Eq. 3) ---
-    Y1_hat_scm_pre = Y0_pre.T @ gamma    # (T0,)
-    Y1_hat_scm_post = Y0_post.T @ gamma  # (T1,)
-
-    pre_residual_scm = Y1_pre - Y1_hat_scm_pre           # (T0,)
-    pre_rmspe = float(np.sqrt(np.mean(pre_residual_scm ** 2)))
-
-    # Per-period bias correction:
-    #   bias(t) = m̂_t(X1_pre) − Σ_j γ_j m̂_t(X_j,pre)
-    #          = (Y1_pre − Y0_pre'γ) @ β_t
-    #          = pre_residual_scm @ β[:, t]
-    bias_per_period = pre_residual_scm @ beta            # (T1,)
-    Y1_hat_aug_post = Y1_hat_scm_post + bias_per_period  # (T1,)
+    pre_residual_aug = Y1_pre - Y1_hat_aug_pre
+    pre_residual_scm = Y1_pre - Y1_hat_scm_pre
+    pre_rmspe = float(np.sqrt(np.mean(pre_residual_aug ** 2)))
 
     effects = Y1_post - Y1_hat_aug_post
     att = float(np.mean(effects))
@@ -235,19 +239,14 @@ def augsynth(
             Y_others_pre = Y0_pre[other_idx]
             Y_others_post = Y0_post[other_idx]
 
-            g_plac = _scm_weights(Y_plac_pre, Y_others_pre)
-            plac_pre_hat = Y_others_pre.T @ g_plac
-            plac_post_hat = Y_others_post.T @ g_plac
-
-            beta_plac = _ridge_post_coef(
-                Y_others_pre, Y_others_post, ridge_lambda
+            plac_fit = _fit_ridge_augmented_weights(
+                Y_plac_pre,
+                Y_others_pre,
+                ridge_lambda=ridge_lambda,
             )
-            plac_residual = Y_plac_pre - plac_pre_hat
-            plac_bias = plac_residual @ beta_plac
-
-            plac_eff = float(np.mean(
-                Y_plac_post - plac_post_hat - plac_bias
-            ))
+            plac_weights = plac_fit["weights"]
+            plac_hat = Y_others_post.T @ plac_weights
+            plac_eff = float(np.mean(Y_plac_post - plac_hat))
             placebo_effects.append(plac_eff)
 
         placebo_effects = np.array(placebo_effects)
@@ -274,7 +273,7 @@ def augsynth(
     # Unified gap table (full trajectory, matches classic SCM contract)
     all_times_arr = np.array(pre_times + post_times)
     Y1_all = np.concatenate([Y1_pre, Y1_post])
-    Y1_hat_all = np.concatenate([Y1_hat_scm_pre, Y1_hat_aug_post])
+    Y1_hat_all = np.concatenate([Y1_hat_aug_pre, Y1_hat_aug_post])
     gap_all = Y1_all - Y1_hat_all
     gap_df = pd.DataFrame({
         "time": all_times_arr,
@@ -288,10 +287,12 @@ def augsynth(
 
     weight_df = (
         pd.DataFrame({"unit": donors, "weight": gamma})
-        .sort_values("weight", ascending=False)
+        .assign(abs_weight=lambda df: np.abs(df["weight"]))
+        .sort_values("abs_weight", ascending=False)
+        .drop(columns=["abs_weight"])
         .reset_index(drop=True)
     )
-    weight_df = weight_df[weight_df["weight"] > 1e-6]
+    weight_df = weight_df[np.abs(weight_df["weight"]) > 1e-6]
 
     return CausalResult(
         method="Augmented Synthetic Control (ASCM)",
@@ -308,9 +309,12 @@ def augsynth(
             "pre_rmspe": pre_rmspe,
             "pre_treatment_rmse": pre_rmspe,
             "pre_treatment_mspe": pre_rmspe ** 2,
+            "scm_pre_treatment_rmse": float(np.sqrt(np.mean(pre_residual_scm ** 2))),
             "post_rmspe": float(np.sqrt(np.mean(effects ** 2))),
             "weights": weight_df,
             "weights_dict": dict(zip(donors, gamma)),
+            "synthetic_weights": dict(zip(donors, syn_weights)),
+            "augmented_weights_can_be_negative": True,
             "n_donors": J,
             "n_pre_periods": T0,
             "n_post_periods": T1,
@@ -481,7 +485,7 @@ jsonlite::write_json(
     }
 
     return CausalResult(
-        method="Augmented Synthetic Control (R augsynth reference backend)",
+        method="Augmented Synthetic Control (R augsynth bridge backend)",
         estimand="ATT",
         estimate=float(payload["estimate"]),
         se=float("nan"),
@@ -507,68 +511,106 @@ def _scm_weights(Y1_pre: np.ndarray, Y0_pre: np.ndarray) -> np.ndarray:
     return solve_simplex_weights(Y1_pre, Y0_pre.T)
 
 
-def _ridge_post_coef(
-    Y0_pre: np.ndarray,
-    Y0_post: np.ndarray,
-    lam: float,
-) -> np.ndarray:
+def _solve_ridge_system(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Solve a ridge normal equation with a pseudo-inverse fallback."""
+    try:
+        return np.linalg.solve(a, b)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(a) @ b
+
+
+def _fit_ridge_augmented_weights(
+    target_pre: np.ndarray,
+    control_pre: np.ndarray,
+    *,
+    ridge_lambda: Optional[float] = None,
+) -> dict[str, np.ndarray | float]:
     """
-    Ridge regression coefficients for the outcome model used in the
-    Ben-Michael et al. (2021) ASCM bias correction.
+    Fit R ``augsynth``-style ridge-augmented SCM weights.
 
-    Fits β so that Y0_post ≈ Y0_pre @ β using Tikhonov-regularised OLS,
-    with X ≡ Y0_pre treated as a (J, T0) design matrix and Y ≡ Y0_post
-    treated as a (J, T1) multi-output target.
+    The installed R package centers pre-treatment outcomes by the
+    control-unit mean, obtains simplex SCM weights on the centered
+    matrix, then applies a ridge correction to the weights:
 
-    Closed-form: β = (X'X + λ I_{T0})^{-1} X' Y0_post.
+        w_aug = w_scm + (x1 - X0' w_scm)' (X0'X0 + lambda I)^(-1) X0'.
 
-    Parameters
-    ----------
-    Y0_pre : (J, T0) donor pre-treatment outcomes.
-    Y0_post : (J, T1) donor post-treatment outcomes.
-    lam : non-negative ridge penalty.
-
-    Returns
-    -------
-    beta : (T0, T1) coefficient matrix.
+    The resulting weights need not be non-negative.  They are then used
+    directly on the raw control trajectory for both pre- and post-period
+    counterfactuals.
     """
-    T0 = Y0_pre.shape[1]
-    A = Y0_pre.T @ Y0_pre + lam * np.eye(T0)
-    rhs = Y0_pre.T @ Y0_post
-    return np.linalg.solve(A, rhs)
+    target_pre = np.asarray(target_pre, dtype=np.float64).ravel()
+    control_pre = np.asarray(control_pre, dtype=np.float64)
+    control_mean = control_pre.mean(axis=0)
+    x_c = control_pre - control_mean
+    x_1 = target_pre - control_mean
+
+    syn = _scm_weights(x_1, x_c)
+    if ridge_lambda is None:
+        ridge_lambda = _cv_ridge_lambda_augsynth(x_c, x_1)
+    ridge_lambda = float(ridge_lambda)
+
+    gram = x_c.T @ x_c + ridge_lambda * np.eye(x_c.shape[1])
+    imbalance = x_1 - x_c.T @ syn
+    ridge_weights = imbalance @ _solve_ridge_system(gram, x_c.T)
+    weights = syn + ridge_weights
+    return {
+        "weights": np.asarray(weights, dtype=np.float64),
+        "synthetic_weights": np.asarray(syn, dtype=np.float64),
+        "ridge_lambda": ridge_lambda,
+    }
 
 
-def _cv_ridge_lambda_bias(
-    Y0_pre: np.ndarray,
-    Y0_post: np.ndarray,
-    lambdas: Optional[np.ndarray] = None,
+def _cv_ridge_lambda_augsynth(
+    x_c: np.ndarray,
+    x_1: np.ndarray,
+    *,
+    lambda_min_ratio: float = 1e-8,
+    n_lambda: int = 20,
+    holdout_length: int = 1,
+    min_1se: bool = True,
 ) -> float:
-    """
-    Leave-one-donor-out CV to pick the ridge penalty for the ASCM
-    outcome model m̂: Y0_pre → Y0_post.
-    """
-    if lambdas is None:
-        lambdas = np.logspace(-3, 3, 20)
+    """Time-holdout lambda CV matching ``augsynth``'s ridge path."""
+    _, singular_values, _ = np.linalg.svd(x_c, full_matrices=False)
+    if singular_values.size == 0:
+        return 1.0
+    lambda_max = float(singular_values[0] ** 2)
+    if not np.isfinite(lambda_max) or lambda_max <= 0:
+        return 1.0
+    scaler = float(lambda_min_ratio ** (1.0 / n_lambda))
+    lambdas = lambda_max * scaler ** np.arange(n_lambda + 1)
 
-    J = Y0_pre.shape[0]
-    best_lam = 1.0
-    best_mse = np.inf
+    n_periods = x_c.shape[1]
+    n_holdouts = n_periods - holdout_length
+    if n_holdouts <= 1:
+        return float(lambdas[0])
 
-    for lam in lambdas:
-        mse = 0.0
-        for j in range(J):
-            idx = [i for i in range(J) if i != j]
-            X_tr = Y0_pre[idx]
-            Y_tr = Y0_post[idx]
-            try:
-                beta = _ridge_post_coef(X_tr, Y_tr, lam)
-                pred = Y0_pre[j] @ beta      # (T1,)
-                mse += float(np.mean((Y0_post[j] - pred) ** 2))
-            except np.linalg.LinAlgError:
-                mse += 1e10
-        mse /= J
-        if mse < best_mse:
-            best_mse = mse
-            best_lam = float(lam)
+    errors = np.zeros((n_holdouts, len(lambdas)), dtype=np.float64)
+    for i in range(n_holdouts):
+        holdout = np.arange(i, i + holdout_length)
+        train_mask = np.ones(n_periods, dtype=bool)
+        train_mask[holdout] = False
+        x_0_train = x_c[:, train_mask]
+        x_1_train = x_1[train_mask]
+        x_0_val = x_c[:, holdout]
+        x_1_val = x_1[holdout]
 
-    return best_lam
+        syn = _scm_weights(x_1_train, x_0_train)
+        imbalance = x_1_train - x_0_train.T @ syn
+        base_gram = x_0_train.T @ x_0_train
+        for j, lam in enumerate(lambdas):
+            gram = base_gram + float(lam) * np.eye(x_0_train.shape[1])
+            ridge_weights = imbalance @ _solve_ridge_system(gram, x_0_train.T)
+            aug_weights = syn + ridge_weights
+            val_error = x_1_val - x_0_val.T @ aug_weights
+            errors[i, j] = float(val_error @ val_error)
+
+    lambda_errors = errors.mean(axis=0)
+    lambda_errors_se = errors.std(axis=0, ddof=1) / np.sqrt(errors.shape[0])
+    min_idx = int(np.argmin(lambda_errors))
+    if not min_1se:
+        return float(lambdas[min_idx])
+    threshold = lambda_errors[min_idx] + lambda_errors_se[min_idx]
+    candidates = lambdas[lambda_errors <= threshold]
+    if candidates.size == 0:
+        return float(lambdas[min_idx])
+    return float(np.max(candidates))

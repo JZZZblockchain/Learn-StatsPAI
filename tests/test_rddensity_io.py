@@ -49,21 +49,26 @@ class TestRDDensity:
         result = rddensity(manipulated_rd, x='x', c=0)
         assert result.pvalue < 0.1
 
-    def test_native_registered_examples_have_expected_conclusions(self):
-        """Native path remains conclusion-level, but must not be arbitrary."""
+    def test_native_registered_examples_match_reference_defaults(self):
+        """Native path ports the rddensity default selector/test."""
         import statspai as sp
 
         lee = sp.datasets.lee_2008_senate()
         lee_result = rddensity(lee, x='margin', c=0)
         assert lee_result.model_info['backend'] == 'native'
-        assert lee_result.model_info['bandwidth_source'] == 'native_pilot'
+        assert lee_result.model_info['bandwidth_source'] == 'rddensity_comb'
         assert (
             lee_result.model_info['validation_tier']
-            == 'T4_native_selector_disclosure'
+            == 'T2_native_reference_parity'
         )
         assert lee_result.model_info['reference_backend'] == 'rddensity'
+        assert abs(lee_result.model_info['density_left'] - 1.7010417652833731) < 1e-9
+        assert abs(lee_result.model_info['density_right'] - 1.7445202120700525) < 1e-9
+        assert abs(lee_result.model_info['density_diff'] - 0.043478446786679337) < 1e-9
+        assert abs(lee_result.model_info['bandwidth_left'] - 0.12670043574048026) < 1e-9
+        assert abs(lee_result.model_info['bandwidth_right'] - 0.11954302417477287) < 1e-9
+        assert abs(lee_result.pvalue - 0.85710438024631219) < 1e-9
         assert lee_result.pvalue > 0.1
-        assert abs(lee_result.model_info['density_diff']) < 0.05
 
         rng = np.random.default_rng(12345)
         base = rng.uniform(-2, 2, 5000)
@@ -72,6 +77,36 @@ class TestRDDensity:
         bunched_result = rddensity(bunched, x='x', c=0)
         assert bunched_result.pvalue < 0.001
         assert bunched_result.model_info['density_diff'] > 0.5
+
+    def test_native_deterministic_grid_matches_reference_manual_bandwidth(self):
+        """Manual bandwidth path matches rddensity on analytic-density grids."""
+        symmetric = pd.DataFrame({
+            'x': np.concatenate([
+                np.linspace(-2.0, -1e-4, 4000),
+                np.linspace(0.0, 2.0, 4000),
+            ])
+        })
+        result = rddensity(symmetric, x='x', c=0.0, h=0.5)
+        assert result.model_info['bandwidth_source'] == 'manual_scalar'
+        assert result.model_info['validation_tier'] == (
+            'T2_native_reference_parity'
+        )
+        assert abs(result.model_info['density_left'] - 0.2499812451550634) < 1e-9
+        assert abs(result.model_info['density_right'] - 0.24996874609322706) < 1e-9
+        assert abs(result.model_info['density_diff'] + 1.2499061836340752e-05) < 1e-9
+        assert result.pvalue > 0.99
+
+        bunched = pd.DataFrame({
+            'x': np.concatenate([
+                np.linspace(-2.0, -1e-4, 4000),
+                np.linspace(0.0, 2.0, 6000),
+            ])
+        })
+        bunched_result = rddensity(bunched, x='x', c=0.0, h=0.5)
+        assert abs(bunched_result.model_info['density_left'] - 0.19997999599915844) < 1e-9
+        assert abs(bunched_result.model_info['density_right'] - 0.29997999799932201) < 1e-9
+        assert abs(bunched_result.model_info['density_diff'] - 0.10000000200016357) < 1e-9
+        assert bunched_result.pvalue < 0.01
 
     def test_density_estimates(self, clean_rd):
         result = rddensity(clean_rd, x='x', c=0)
@@ -89,12 +124,10 @@ class TestRDDensity:
         assert abs(result.model_info['bandwidth_right'] - 0.55) < 1e-12
         assert result.model_info['bandwidth_source'] == 'manual_side_specific'
 
-    def test_manual_bandwidth_keeps_native_scope(self, clean_rd):
+    def test_manual_bandwidth_keeps_native_reference_scope(self, clean_rd):
         result = rddensity(clean_rd, x='x', c=0, h=(0.35, 0.55))
         assert result.model_info['backend'] == 'native'
-        assert "manual bandwidths are sensitivity controls" in result.model_info[
-            'validation_note'
-        ]
+        assert "rdbwdensity combination bandwidths" in result.model_info['validation_note']
         assert "backend='r'" in result.model_info['validation_note']
 
     def test_invalid_bandwidth(self, clean_rd):

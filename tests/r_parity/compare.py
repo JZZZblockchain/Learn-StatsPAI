@@ -144,7 +144,7 @@ TRACK_A_SNAPSHOT_ROWS: list[dict[str, Any]] = [
         "label": "avg post gap",
         "data": "Basque 2003",
         "tol": "0.05",
-        "verdict": r"T4 non-unique \(V,W\); gap",
+        "verdict": r"T4 R/Stata reference disagreement",
     },
     {
         "module": "28_frontier",
@@ -195,19 +195,19 @@ TOLERANCES: dict[str, dict[str, float]] = {
     "05_sunab":     {"rel_est": 1e-3, "rel_se": 0.25},
     "06_rd":        {"rel_est": 1.0,  "rel_se": 1.0,    # default-h gap
                      "_forced_rel_est": 1e-3},
-    "07_scm":       {"rel_est": 1.0,  "rel_se": 1.0},   # native classical SCM: T4 non-unique-V gap
+    "07_scm":       {"rel_est": 1.0,  "rel_se": 1.0},   # native classical SCM: T4 R/Stata reference-disagreement disclosure
     "08_dml":       {"rel_est": 1e-2, "rel_se": 1e-2},  # fold-split noise
-    "09_rddensity": {"rel_est": 1.0,  "rel_se": 1.0},  # native CJM: T4 bandwidth-selector gap
+    "09_rddensity": {"rel_est": 1e-6, "rel_se": 1e-6},  # native CJM/rddensity default parity
     "10_honest_did":{"abs_est": 0.05, "abs_se": 0.05},
     "11_psm":         {"rel_est": 1e-2, "rel_se": 5.0},
-    "12_sdid":        {"rel_est": 1.0,  "rel_se": 1.0},   # native SDID: T4 regularisation-zeta gap
+    "12_sdid":        {"rel_est": 1e-6, "rel_se": 5e-2},  # native FW/zeta parity; placebo-SE RNG convention
     "13_causal_forest":{"rel_est": 0.10, "rel_se": 0.50},  # clean-overlap AIPW vs grf (~3x observed MC gap)
     "14_ols_cluster": {"rel_est": 1e-3, "rel_se": 1e-3},
     "15_hdfe_cluster":{"rel_est": 1e-6, "rel_se": 5e-2},  # ssc convention
     "16_bjs":         {"rel_est": 1e-6, "rel_se": 0.25},  # SE convention
     "17_etwfe":       {"rel_est": 1e-6, "rel_se": 1e-3},   # emfx + cluster SE parity
-    "18_augsynth":    {"rel_est": 1e-6, "rel_se": 1.0},   # augsynth reference backend
-    "19_gsynth":      {"rel_est": 1e-6, "rel_se": 1.0},   # gsynth reference backend
+    "18_augsynth":    {"rel_est": 1e-4, "rel_se": 1.0},   # native centered Ridge+SCM parity
+    "19_gsynth":      {"rel_est": 1e-6, "rel_se": 1.0},   # native gsynth/fect factor convention parity
     "20_bacon":       {"rel_est": 1e-3, "rel_se": 1.0},   # TWFE-only headline
     "21_honest_relmags":{"abs_est": 1e-6, "abs_se": 1e-6},
     "22_sensemakr":   {"rel_est": 5e-2, "rel_se": 5e-2},
@@ -248,7 +248,7 @@ TOLERANCES: dict[str, dict[str, float]] = {
 
 
 # Strictness tiers. A single PASS/GAP verdict column flattens a
-# machine-precision closed-form match and a loose/stochastic T3/T4
+# machine-precision closed-form match and a methodological T3/T4
 # tolerance into the same word, which a JSS
 # reviewer is right to find dilutive. We therefore classify each module by
 # the *registered* point-estimate tolerance (the forced strict tolerance
@@ -261,14 +261,14 @@ TIER_LABEL = {
     "machine": "machine-precision ($\\le 10^{-6}$, closed form)",
     "iterative": "iterative/cross-fit ($\\le 10^{-3}$)",
     "moderate": "moderate ($\\le 5\\times10^{-2}$)",
-    "methodological": "loose/stochastic (T3/T4, not deterministic T2)",
+    "methodological": "methodological/T4 disclosure (T3/T4, not deterministic T2)",
     "unclassified": "unclassified",
 }
 TIER_LABEL_MD = {
     "machine": "machine-precision (≤1e-6, closed form)",
     "iterative": "iterative/cross-fit (≤1e-3)",
     "moderate": "moderate (≤5e-2)",
-    "methodological": "loose/stochastic (T3/T4, not deterministic T2)",
+    "methodological": "methodological/T4 disclosure (T3/T4, not deterministic T2)",
     "unclassified": "unclassified",
 }
 
@@ -598,7 +598,7 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "headline_filter": lambda d: d.statistic == "avg_post_gap",
         "metric": "rel_est",
         "verdict": "\\textit{GAP}",
-        "gap_note": "native; T4 donor-weight non-uniqueness under $V=I$; exact recovery on identified DGP \\code{52}",
+        "gap_note": "T4 reference disagreement: native tracks Stata; R Synth differs; exact recovery on identified DGP \\code{52}",
     },
     "08_dml": {
         "name": "DML PLR (LinReg learners)",
@@ -611,8 +611,8 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "name": "RD density (CJM)",
         "headline_filter": lambda d: d.statistic == "test_pvalue",
         "metric": "rel_est",
-        "verdict": "\\textit{GAP}",
-        "gap_note": "native; T4 bandwidth-selector convention gap",
+        "verdict": "\\textbf{PASS}",
+        "gap_note": "native CJM/rddensity default parity",
     },
     "10_honest_did": {
         "name": "Honest DiD bounds",
@@ -632,8 +632,8 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "name": "Synthetic DID",
         "headline_filter": lambda d: d.statistic == "att_sdid",
         "metric": "rel_est",
-        "verdict": "\\textit{GAP}",
-        "gap_note": "native; T4 regularisation-zeta convention gap",
+        "verdict": "\\textbf{PASS}",
+        "gap_note": "native Frank-Wolfe/zeta parity; placebo-SE RNG convention",
     },
     "13_causal_forest": {
         "name": "Causal forest (AIPW)",
@@ -717,14 +717,14 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "headline_filter": lambda d: d.statistic == "att_augmented",
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "augsynth reference backend",
+        "gap_note": "native centered Ridge+SCM parity; backend='augsynth' is a migration bridge",
     },
     "19_gsynth": {
         "name": "Generalized SCM (Xu 2017)",
         "headline_filter": lambda d: d.statistic == "att_gsynth",
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "gsynth reference backend",
+        "gap_note": "native gsynth/fect two-way FE factor convention parity",
     },
     "23_evalue": {
         "name": "E-value (closed form)",
@@ -1090,7 +1090,7 @@ def render_md_3way(modules: list[str]) -> str:
         "",
         "**Strictness-tier breakdown** (by registered point-estimate "
         "tolerance, so machine-precision matches are not flattened together "
-        "with loose/stochastic T3/T4 tolerances): "
+        "with methodological T3/T4 tolerances): "
         + _tier_breakdown_sentence(
             [m for m in modules if collect(m)], md=True) + ".",
         "",

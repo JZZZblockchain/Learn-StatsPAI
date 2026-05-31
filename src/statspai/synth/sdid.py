@@ -32,7 +32,7 @@ from typing import Optional, List, Any, Tuple, Literal
 
 import numpy as np
 import pandas as pd
-from scipy import stats, optimize
+from scipy import stats
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient
@@ -330,14 +330,14 @@ def sdid(
         "estimator": method,
         "estimator_label": method_labels[method],
         "backend": "native",
-        "validation_tier": "T4_native_regularisation_disclosure",
+        "validation_tier": "T2_native_reference_parity",
         "reference_backend": "synthdid",
         "validation_note": (
-            "StatsPAI native SDID is a dependency-light implementation. "
-            "The parity ledger treats the Prop. 99 row as a T4 "
-            "regularisation/zeta convention disclosure; use "
-            "backend='synthdid' when exact synthdid package numbers are "
-            "required."
+            "StatsPAI native SDID mirrors synthdid's no-covariate "
+            "collapsed-form Frank-Wolfe weight solver and zeta scaling. "
+            "The Prop. 99 Track A row is native Python reference parity; "
+            "backend='synthdid' remains available for users who want to "
+            "delegate directly to the R package."
         ),
         "n_treated": n_tr,
         "n_control": n_co,
@@ -988,40 +988,62 @@ def _compute_weights(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute unit weights (omega) and time weights (lambda).
 
-    The SDID/SC regularisation follows \\pkg{synthdid}
-    (Arkhangelsky et al. 2021): the unit-weight ridge penalty is
-    :math:`\\zeta_\\omega = (N_{tr}\\,T_{post})^{1/4}\\,\\hat\\sigma` and the
-    time-weight penalty is :math:`\\zeta_\\lambda = 10^{-6}\\,\\hat\\sigma`,
-    where :math:`\\hat\\sigma` is the noise level from control
-    first-differences.  Both fits absorb a free intercept (profiled out),
-    which makes the weights invariant to level shifts -- the property that
-    distinguishes the synthetic-DID weight problem from a plain SCM fit.
+    The SDID/SC regularisation and optimisation mirrors ``synthdid``:
+    collapse the panel to control rows plus the treated-average row, then
+    solve the two simplex problems with the Frank-Wolfe routine used by
+    ``synthdid:::sc.weight.fw``. This is intentionally not a generic SLSQP
+    least-squares fit; the R routine's scaling, intercept handling, and
+    sparsification materially affect the Prop. 99 benchmark.
     """
-
-    y_tr_pre_mean = Y_tr_pre.mean(axis=0)  # (T_pre,)
-    y_co_post_mean = Y_co_post.mean(axis=1)  # (N_co,)
     T_post = int(Y_co_post.shape[1])
 
     sigma = _sdid_noise_level(Y_co_pre)
     zeta_omega = ((max(n_tr, 1) * max(T_post, 1)) ** 0.25) * sigma
     zeta_lambda = 1e-6 * sigma
+    min_decrease = 1e-5 * sigma
+
+    collapsed = _collapsed_form(Y_co_pre, Y_co_post, Y_tr_pre)
 
     if method == "did":
-        # Uniform weights
         omega = np.ones(n_co) / n_co
         lam = np.ones(T_pre) / T_pre
     elif method == "sc":
-        # Unit weights only (no time reweighting, no intercept -- classic SC)
-        omega = _solve_unit_weights(Y_co_pre, y_tr_pre_mean, n_co,
-                                    zeta=0.0, intercept=False)
-        lam = np.ones(T_pre) / T_pre
+        # R synthdid::sc_estimate fixes pre-period lambda at zero and uses
+        # an almost-unregularised no-intercept SC unit-weight problem.
+        omega = _solve_unit_weights(
+            collapsed[:, :T_pre].T,
+            zeta=zeta_lambda,
+            intercept=False,
+            min_decrease=min_decrease,
+        )
+        lam = np.zeros(T_pre)
     else:  # sdid
-        omega = _solve_unit_weights(Y_co_pre, y_tr_pre_mean, n_co,
-                                    zeta=zeta_omega, intercept=True)
-        lam = _solve_time_weights(Y_co_pre, y_co_post_mean, T_pre,
-                                  zeta=zeta_lambda, intercept=True)
+        lam = _solve_time_weights(
+            collapsed[:n_co, :],
+            zeta=zeta_lambda,
+            intercept=True,
+            min_decrease=min_decrease,
+        )
+        omega = _solve_unit_weights(
+            collapsed[:, :T_pre].T,
+            zeta=zeta_omega,
+            intercept=True,
+            min_decrease=min_decrease,
+        )
 
     return omega, lam
+
+
+def _collapsed_form(
+    Y_co_pre: np.ndarray,
+    Y_co_post: np.ndarray,
+    Y_tr_pre: np.ndarray,
+) -> np.ndarray:
+    """Mirror ``synthdid:::collapsed.form`` for the no-covariate case."""
+    control_block = np.column_stack([Y_co_pre, Y_co_post.mean(axis=1)])
+    # The final treated-post cell is not used by either weight problem.
+    treated_row = np.r_[Y_tr_pre.mean(axis=0), np.nan]
+    return np.vstack([control_block, treated_row])
 
 
 def _estimate_tau(
@@ -1048,71 +1070,116 @@ def _estimate_tau(
 
 
 def _solve_unit_weights(
-    Y_co_pre: np.ndarray,
-    y_target: np.ndarray,
-    n_co: int,
+    collapsed_pre_transpose: np.ndarray,
     zeta: float,
-    intercept: bool = True,
+    intercept: bool,
+    min_decrease: float,
 ) -> np.ndarray:
-    r"""Solve for unit weights :math:`\omega` matching \pkg{synthdid}:
-
-    .. math::
-        \min_{\omega\ge 0,\ \sum\omega=1}\ \lVert (y - \bar y) -
-        (X'\omega - \overline{X'\omega})\rVert^2 + \zeta^2\lVert\omega\rVert^2,
-
-    where the bar denotes the profiled-out intercept (mean over pre-periods)
-    when ``intercept=True``.  With ``intercept=False`` this reduces to the
-    classic level-matching SC objective.
-    """
-    def objective(w):
-        fit = Y_co_pre.T @ w
-        resid = y_target - fit
-        if intercept:
-            resid = resid - resid.mean()
-        return float(np.sum(resid ** 2) + zeta ** 2 * np.sum(w ** 2))
-
-    constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
-    bounds = [(0, None)] * n_co
-    w0 = np.ones(n_co) / n_co
-
-    try:
-        res = optimize.minimize(
-            objective, w0, bounds=bounds, constraints=constraints,
-            method="SLSQP", options={"maxiter": 2000, "ftol": 1e-12},
-        )
-        return res.x if res.success else w0
-    except Exception:
-        return w0
+    return _solve_synthdid_simplex(
+        collapsed_pre_transpose,
+        zeta=zeta,
+        intercept=intercept,
+        min_decrease=min_decrease,
+    )
 
 
 def _solve_time_weights(
-    Y_co_pre: np.ndarray,
-    y_target: np.ndarray,
-    T_pre: int,
+    collapsed_controls: np.ndarray,
     zeta: float,
-    intercept: bool = True,
+    intercept: bool,
+    min_decrease: float,
 ) -> np.ndarray:
-    r"""Solve for time weights :math:`\lambda` matching \pkg{synthdid},
-    with a profiled-out intercept when ``intercept=True``."""
-    def objective(lam):
-        fit = Y_co_pre @ lam
-        resid = y_target - fit
-        if intercept:
-            resid = resid - resid.mean()
-        return float(np.sum(resid ** 2) + zeta ** 2 * np.sum(lam ** 2))
+    return _solve_synthdid_simplex(
+        collapsed_controls,
+        zeta=zeta,
+        intercept=intercept,
+        min_decrease=min_decrease,
+    )
 
-    constraints = {"type": "eq", "fun": lambda lam: np.sum(lam) - 1}
-    bounds = [(0, None)] * T_pre
-    lam0 = np.ones(T_pre) / T_pre
 
-    try:
-        res = optimize.minimize(
-            objective, lam0, bounds=bounds, constraints=constraints,
-            method="SLSQP", options={"maxiter": 2000, "ftol": 1e-12},
-        )
-        return res.x if res.success else lam0
-    except Exception:
-        return lam0
+def _solve_synthdid_simplex(
+    Y: np.ndarray,
+    *,
+    zeta: float,
+    intercept: bool,
+    min_decrease: float,
+    max_iter_pre_sparsify: int = 100,
+    max_iter: int = 10000,
+) -> np.ndarray:
+    """Replicate ``synthdid:::sc.weight.fw`` plus default sparsification."""
+    first = _sc_weight_fw(
+        Y,
+        zeta=zeta,
+        intercept=intercept,
+        min_decrease=min_decrease,
+        max_iter=max_iter_pre_sparsify,
+    )
+    return _sc_weight_fw(
+        Y,
+        zeta=zeta,
+        intercept=intercept,
+        weights=_sparsify_function(first),
+        min_decrease=min_decrease,
+        max_iter=max_iter,
+    )
+
+
+def _sc_weight_fw(
+    Y: np.ndarray,
+    *,
+    zeta: float,
+    intercept: bool,
+    weights: Optional[np.ndarray] = None,
+    min_decrease: float,
+    max_iter: int,
+) -> np.ndarray:
+    """Frank-Wolfe simplex solver matching ``synthdid:::sc.weight.fw``."""
+    Y_work = np.asarray(Y, dtype=float).copy()
+    n_rows, n_cols = Y_work.shape
+    n_weights = n_cols - 1
+    if weights is None:
+        weights = np.ones(n_weights) / n_weights
+    else:
+        weights = np.asarray(weights, dtype=float).copy()
+
+    if intercept:
+        Y_work = Y_work - Y_work.mean(axis=0, keepdims=True)
+
+    A = Y_work[:, :n_weights]
+    b = Y_work[:, n_weights]
+    eta = n_rows * float(zeta) ** 2
+    vals: list[float] = []
+
+    for _ in range(max_iter):
+        ax = A @ weights
+        half_grad = (ax - b) @ A + eta * weights
+        vertex = int(np.argmin(half_grad))
+        direction = -weights.copy()
+        direction[vertex] += 1.0
+        if np.all(direction == 0):
+            break
+        err_direction = A[:, vertex] - ax
+        denom = float(np.sum(err_direction ** 2) + eta * np.sum(direction ** 2))
+        step = 0.0 if denom <= 0 else -float(half_grad @ direction) / denom
+        step = min(1.0, max(0.0, step))
+        weights = weights + step * direction
+        err = Y_work @ np.r_[weights, -1.0]
+        vals.append(float(zeta ** 2 * np.sum(weights ** 2) + np.sum(err ** 2) / n_rows))
+        if len(vals) >= 2 and vals[-2] - vals[-1] <= min_decrease ** 2:
+            break
+
+    return weights
+
+
+def _sparsify_function(weights: np.ndarray) -> np.ndarray:
+    """Mirror ``synthdid:::sparsify_function``."""
+    sparse = np.asarray(weights, dtype=float).copy()
+    cutoff = float(np.max(sparse)) / 4
+    sparse[sparse <= cutoff] = 0.0
+    total = float(np.sum(sparse))
+    if total <= 0:
+        return np.ones_like(sparse) / len(sparse)
+    return sparse / total
 
 
 # ======================================================================
@@ -1130,14 +1197,17 @@ def _se_placebo(
     T_pre,
 ) -> Tuple[float, np.ndarray]:
     """
-    Placebo SE: assign treatment to each control unit in turn,
-    compute τ̂_placebo, then SE = std(τ̂_placebo).
+    Deterministic placebo SE: assign treatment to each control unit in turn.
+
+    This keeps the native default reproducible and fast. The R ``synthdid``
+    package uses random placebo replications for ``synthdid_se``; the Track A
+    comparison therefore treats the SE as a small Monte Carlo/convention
+    tolerance while holding the ATT itself to strict reference parity.
     """
     taus = []
     for i in range(n_co):
-        # Unit i is "treated", the rest are controls
-        Y_pl_tr_pre = Y_co_pre[i : i + 1, :]  # (1, T_pre)
-        Y_pl_tr_post = Y_co_post[i : i + 1, :]  # (1, T_post)
+        Y_pl_tr_pre = Y_co_pre[i : i + 1, :]
+        Y_pl_tr_post = Y_co_post[i : i + 1, :]
         idx = [j for j in range(n_co) if j != i]
         Y_pl_co_pre = Y_co_pre[idx, :]
         Y_pl_co_post = Y_co_post[idx, :]

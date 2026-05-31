@@ -4,8 +4,8 @@ Generalized Synthetic Control Method (GSynth).
 Uses an interactive fixed-effects (IFE) model — a factor model —
 to impute the treated unit's counterfactual. Unlike classic SCM
 which constructs a single weighted average, GSynth estimates latent
-factors from control units, then projects the treated unit onto
-those factors.
+factors from never-treated control units, then projects the treated
+unit onto those factors using the pre-treatment period.
 
 Model
 -----
@@ -179,35 +179,28 @@ def gsynth(
             covariates, donors, pre_times, post_times,
         )
 
-    # --- Demean (two-way fixed effects) ---
-    Y0_pre_dm, row_means, col_means, grand_mean = _twoway_demean(Y0_pre)
+    Y0_all = np.concatenate([Y0_pre, Y0_post], axis=1)
+    Y1_all = np.concatenate([Y1_pre, Y1_post])
+    n_periods = Y0_all.shape[1]
 
     # --- Select number of factors ---
+    Y0_all_dm, _, _, _ = _twoway_demean(Y0_all)
     if n_factors is None:
-        n_factors = _select_factors_cv(Y0_pre_dm, max_factors, cv_folds, rng)
-    n_factors = min(n_factors, min(J, T0) - 1)
-    n_factors = max(n_factors, 1)
+        n_factors = _select_factors_cv(Y0_all_dm, max_factors, cv_folds, rng)
+    max_rank = max(0, min(J, n_periods) - 1)
+    n_factors = max(0, min(int(n_factors), max_rank))
 
-    # --- Extract factors via SVD on demeaned control panel ---
-    U, S, Vt = np.linalg.svd(Y0_pre_dm, full_matrices=False)
-    F_pre = Vt[:n_factors].T  # (T0, r): time factors
-    L_control = U[:, :n_factors] * S[:n_factors]  # (J, r): control loadings
-
-    # --- Estimate treated unit's loadings from pre-period ---
-    # L_treated solves  (F_pre' F_pre) L_treated' = F_pre' Y1_pre_dm'
-    Y1_pre_dm = Y1_pre - grand_mean - (Y1_pre.mean() - grand_mean)
-    L_treated = np.linalg.lstsq(F_pre, Y1_pre_dm, rcond=None)[0]  # (r,)
-
-    # --- Estimate factors for post-period from control data ---
-    # F_post.T solves  (L_control' L_control) F_post.T = L_control' Y0_post_dm
-    Y0_post_dm = Y0_post - row_means[:, np.newaxis]
-    F_post = np.linalg.lstsq(L_control, Y0_post_dm, rcond=None)[0].T  # (T1, r)
-
-    # --- Counterfactual for treated unit ---
-    # Y1_hat = grand_mean + unit_FE + F_post @ L_treated
-    unit_fe = Y1_pre.mean() - grand_mean
-    Y1_hat_pre = grand_mean + unit_fe + F_pre @ L_treated
-    Y1_hat_post = grand_mean + unit_fe + F_post @ L_treated
+    # --- Fit the gsynth/fect convention on never-treated controls ---
+    fit = _fit_control_factor_model(Y0_all, Y1_pre, T0, n_factors)
+    Y1_hat_all = fit["treated_counterfactual"]
+    Y1_hat_pre = Y1_hat_all[:T0]
+    Y1_hat_post = Y1_hat_all[T0:]
+    F_all = fit["factors"]
+    F_pre = F_all[:T0]
+    F_post = F_all[T0:]
+    L_control = fit["control_loadings"]
+    L_treated = fit["treated_loadings"]
+    S = fit["singular_values"]
 
     # Treatment effects
     effects = Y1_post - Y1_hat_post
@@ -226,22 +219,14 @@ def gsynth(
             Y_ctrl_post = Y0_post[other_idx]
 
             try:
-                Y_dm, rm, cm, gm = _twoway_demean(Y_ctrl_pre)
-                U_p, S_p, Vt_p = np.linalg.svd(Y_dm, full_matrices=False)
-                F_p = Vt_p[:n_factors].T
-                L_c = U_p[:, :n_factors] * S_p[:n_factors]
-
-                Y_plac_dm = Y_plac - gm - (Y_plac.mean() - gm)
-                L_p = np.linalg.lstsq(F_p, Y_plac_dm, rcond=None)[0]
-
-                Y_ctrl_post_dm = Y_ctrl_post - rm[:, np.newaxis]
-                F_post_p = np.linalg.lstsq(
-                    L_c, Y_ctrl_post_dm, rcond=None
-                )[0].T
-
-                ue = Y_plac.mean() - gm
-                hat = gm + ue + F_post_p @ L_p
-                placebo_atts.append(float(np.mean(Y_plac_post - hat)))
+                Y_ctrl_all = np.concatenate([Y_ctrl_pre, Y_ctrl_post], axis=1)
+                max_rank_p = max(0, min(Y_ctrl_all.shape) - 1)
+                r_p = min(n_factors, max_rank_p)
+                plac_fit = _fit_control_factor_model(
+                    Y_ctrl_all, Y_plac, T0, r_p
+                )
+                hat_post = plac_fit["treated_counterfactual"][T0:]
+                placebo_atts.append(float(np.mean(Y_plac_post - hat_post)))
             except Exception:
                 continue
 
@@ -271,22 +256,29 @@ def gsynth(
     })
 
     model_info = {
+        "backend": "native",
+        "native_convention": "gsynth/fect two-way FE on full never-treated controls",
         "n_factors": n_factors,
         "n_donors": J,
         "n_pre_periods": T0,
         "n_post_periods": T1,
-        "pre_treatment_mspe": round(pre_mspe, 6),
-        "pre_treatment_rmse": round(np.sqrt(pre_mspe), 6),
+        "pre_treatment_mspe": pre_mspe,
+        "pre_treatment_rmse": float(np.sqrt(pre_mspe)),
         "treatment_time": treatment_time,
         "treated_unit": treated_unit,
+        "control_unit_fe": fit["control_unit_fe"],
+        "treated_unit_fe": fit["treated_unit_fe"],
+        "time_fe": fit["time_fe"],
+        "grand_mean": fit["grand_mean"],
         "factors_pre": F_pre,
         "factors_post": F_post,
         "loadings_treated": L_treated,
-        "singular_values": S[:n_factors],
+        "loadings_control": L_control,
+        "singular_values": S,
         "effects_by_period": effects_df,
         "trajectory": trajectory_df,
         "Y_synth": np.concatenate([Y1_hat_pre, Y1_hat_post]),
-        "Y_treated": np.concatenate([Y1_pre, Y1_post]),
+        "Y_treated": Y1_all,
         "times": all_times,
     }
 
@@ -461,7 +453,7 @@ jsonlite::write_json(
     }
 
     return CausalResult(
-        method="Generalized Synthetic Control (R gsynth reference backend)",
+        method="Generalized Synthetic Control (R gsynth bridge backend)",
         estimand="ATT",
         estimate=float(payload["estimate"]),
         se=float("nan"),
@@ -488,6 +480,68 @@ def _twoway_demean(Y: np.ndarray):
     return Y_dm, row_means, col_means, grand_mean
 
 
+def _fit_control_factor_model(
+    Y0_all: np.ndarray,
+    Y1_pre: np.ndarray,
+    n_pre_periods: int,
+    n_factors: int,
+) -> dict[str, np.ndarray | float]:
+    """Fit the ``gsynth``/``fect`` never-treated control factor convention.
+
+    For ``method='gsynth'`` with ``force='two-way'``, the R implementation
+    estimates the factor path on the complete never-treated control panel,
+    then projects the treated unit onto those full-panel factors using only
+    its pre-treatment outcomes. This helper implements that convention for
+    the balanced-panel native path.
+    """
+    Y0_all = np.asarray(Y0_all, dtype=np.float64)
+    Y1_pre = np.asarray(Y1_pre, dtype=np.float64)
+    n_periods = Y0_all.shape[1]
+    n_factors = max(0, min(int(n_factors), min(Y0_all.shape) - 1))
+
+    Y0_dm, row_means, col_means, grand_mean = _twoway_demean(Y0_all)
+    control_unit_fe = row_means - grand_mean
+    time_fe = col_means - grand_mean
+
+    if n_factors > 0:
+        U, S_full, Vt = np.linalg.svd(Y0_dm, full_matrices=False)
+        factors = Vt[:n_factors].T
+        control_loadings = U[:, :n_factors] * S_full[:n_factors]
+        singular_values = S_full[:n_factors]
+
+        design_pre = np.column_stack([
+            np.ones(n_pre_periods),
+            factors[:n_pre_periods],
+        ])
+        target_pre = Y1_pre - grand_mean - time_fe[:n_pre_periods]
+        coef = np.linalg.lstsq(design_pre, target_pre, rcond=None)[0]
+        treated_unit_fe = float(coef[0])
+        treated_loadings = np.asarray(coef[1:], dtype=np.float64)
+        low_rank = factors @ treated_loadings
+    else:
+        factors = np.empty((n_periods, 0), dtype=np.float64)
+        control_loadings = np.empty((Y0_all.shape[0], 0), dtype=np.float64)
+        singular_values = np.empty(0, dtype=np.float64)
+        target_pre = Y1_pre - grand_mean - time_fe[:n_pre_periods]
+        treated_unit_fe = float(np.mean(target_pre))
+        treated_loadings = np.empty(0, dtype=np.float64)
+        low_rank = np.zeros(n_periods, dtype=np.float64)
+
+    treated_counterfactual = grand_mean + treated_unit_fe + time_fe + low_rank
+
+    return {
+        "treated_counterfactual": treated_counterfactual,
+        "factors": factors,
+        "control_loadings": control_loadings,
+        "treated_loadings": treated_loadings,
+        "singular_values": singular_values,
+        "control_unit_fe": control_unit_fe,
+        "treated_unit_fe": treated_unit_fe,
+        "time_fe": time_fe,
+        "grand_mean": float(grand_mean),
+    }
+
+
 def _select_factors_cv(
     Y_dm: np.ndarray,
     max_factors: int,
@@ -497,18 +551,19 @@ def _select_factors_cv(
     """Select number of factors via cross-validation on the control panel."""
     J, T = Y_dm.shape
     max_factors = min(max_factors, min(J, T) - 1)
-    if max_factors < 1:
-        return 1
+    if max_factors < 0:
+        return 0
 
     # Random fold assignment for entries
     indices = list(range(J * T))
     rng.shuffle(indices)
-    fold_size = len(indices) // n_folds
+    n_folds = max(1, min(int(n_folds), len(indices)))
+    fold_size = max(1, len(indices) // n_folds)
 
-    best_r = 1
+    best_r = 0
     best_mse = np.inf
 
-    for r in range(1, max_factors + 1):
+    for r in range(0, max_factors + 1):
         mse_sum = 0.0
         for f in range(n_folds):
             start = f * fold_size
@@ -521,9 +576,13 @@ def _select_factors_cv(
                 i, j = divmod(idx, T)
                 Y_train[i, j] = 0.0
 
-            # SVD reconstruction with r factors
-            U, S, Vt = np.linalg.svd(Y_train, full_matrices=False)
-            recon = (U[:, :r] * S[:r]) @ Vt[:r]
+            # SVD reconstruction with r factors. r=0 is the two-way-FE
+            # baseline, matching gsynth's candidate grid.
+            if r == 0:
+                recon = np.zeros_like(Y_train)
+            else:
+                U, S, Vt = np.linalg.svd(Y_train, full_matrices=False)
+                recon = (U[:, :r] * S[:r]) @ Vt[:r]
 
             # MSE on held-out entries
             fold_mse = 0.0

@@ -6,10 +6,10 @@
       "module": "12_sdid",
       "side": "py",
       "statistic": "att_sdid",
-      "estimate": -17.253485687903947,
-      "se": 4.33007441791069,
-      "ci_lo": -25.74027559738714,
-      "ci_hi": -8.766695778420756,
+      "estimate": -15.94838884672096,
+      "se": 2.6040746521236526,
+      "ci_lo": -21.05228137793699,
+      "ci_hi": -10.84449631550493,
       "n": 1209,
       "extra": {}
     }
@@ -22,9 +22,9 @@
     "T_post": 12,
     "se_method": "placebo",
     "backend": "native",
-    "validation_tier": "T4_native_regularisation_disclosure",
+    "validation_tier": "T2_native_reference_parity",
     "reference_backend": "synthdid",
-    "tier": "T4",
-    "native_note": "Headline row is the NATIVE Python SDID (backend='native'). The residual gap vs synthdid is a documented regularisation (zeta) convention, graded T4, not a parity pass. The optional backend='synthdid' R bridge is a convenience feature, not a parity comparator."
+    "tier": "T2",
+    "native_note": "Headline row is the NATIVE Python SDID (backend='native'). The native solver mirrors synthdid's collapsed-form Frank-Wolfe weights and zeta scaling, so the ATT is a T2 same-byte reference-parity row. The SE uses StatsPAI's deterministic all-control placebo convention, while synthdid_se uses random placebo replications; the optional backend='synthdid' R bridge is a convenience feature, not the parity comparator."
   }
 }

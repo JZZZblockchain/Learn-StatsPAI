@@ -6,8 +6,8 @@
       "module": "19_gsynth",
       "side": "py",
       "statistic": "att_gsynth",
-      "estimate": -0.5153698158669208,
-      "se": 0.4245333845088016,
+      "estimate": -0.32417115086185483,
+      "se": 0.3763099117989745,
       "ci_lo": null,
       "ci_hi": null,
       "n": 731,
@@ -28,7 +28,7 @@
       "module": "19_gsynth",
       "side": "py",
       "statistic": "pre_rmse",
-      "estimate": 0.070911,
+      "estimate": 0.04309413938569945,
       "se": null,
       "ci_lo": null,
       "ci_hi": null,
@@ -40,7 +40,8 @@
     "method": "gsynth (Xu 2017)",
     "backend": "native",
     "n_donors": 16,
-    "tier": "T4",
-    "native_note": "Headline row is the NATIVE Python generalized SCM (backend='native'). The interactive-FE factor model is identified only up to rotation and the CV factor count can differ from gsynth's, so the residual gap is graded T4, not a parity pass. The optional backend='gsynth' R bridge is a convenience feature, not a parity comparator."
+    "tier": "T2",
+    "reference_backend": "gsynth",
+    "native_note": "Headline row is the NATIVE Python generalized SCM (backend='native'). It ports gsynth/fect's two-way FE factor convention on the full never-treated control panel and matches gsynth::gsynth on the Basque fixture within machine tolerance. The optional backend='gsynth' R bridge is a migration convenience, not the parity comparator."
   }
 }

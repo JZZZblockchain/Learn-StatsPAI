@@ -67,7 +67,7 @@ report = sp.cs_report(data, y="y", time="t", first_treat="g", group="id",
 | `rdrobust::rdrobust(y, x, c = 0)`             | `sp.rdrobust(df, y="y", x="x", c=0, bwselect="cct")` for canonical R parity |
 | `rdrobust::rdplot(y, x)`                      | `sp.rdplot(y, x)`                                      |
 | `rdrobust::rdbwselect(y, x)`                  | `bwselect="cct"` for R parity; default `mserd` is dependency-light |
-| `rddensity::rddensity(x, c = 0)`              | `sp.rddensity(df, x="x", c=0, backend="r")` for canonical R selector/test parity; native `sp.rddensity(...)` is dependency-light conclusion-level parity |
+| `rddensity::rddensity(x, c = 0)`              | `sp.rddensity(df, x="x", c=0)` for native Python parity with the default `rddensity` selector/test path; use `backend="r"` only when direct R execution is required |
 | `rdrobust::rdplotdensity(x, c = 0)`           | `sp.rdplotdensity(df, x="x", c=0)`                     |
 | `rdmulti::rdmc(...)`                          | `sp.rdmc(...)`                                         |
 | `rdmulti::rdms(...)`                          | `sp.rdms(...)`                                         |

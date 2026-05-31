@@ -3,13 +3,40 @@
 import subprocess
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import statspai as sp
 from statspai.synth.sdid import _find_rscript
 
 
-def test_native_sdid_exposes_validation_boundary():
+def _exact_synthetic_panel(tau: float = 2.5):
+    rows = []
+    times = range(1, 9)
+    offsets = [0.0, 1.0, -0.5, 2.0]
+    slopes = [0.2, -0.1, 0.4, 0.0]
+
+    def control_value(index: int, t: int) -> float:
+        return 5.0 + offsets[index] + slopes[index] * t + 0.05 * t * t
+
+    for index in range(4):
+        for t in times:
+            rows.append({
+                "unit": f"c{index + 1}",
+                "time": t,
+                "y": control_value(index, t),
+            })
+    for t in times:
+        untreated = np.mean([control_value(index, t) for index in range(4)])
+        rows.append({
+            "unit": "treated",
+            "time": t,
+            "y": untreated + 1.7 + (tau if t >= 6 else 0.0),
+        })
+    return pd.DataFrame(rows)
+
+
+def test_native_sdid_matches_synthdid_reference_fixture():
     result = sp.sdid(
         sp.datasets.california_prop99(),
         outcome="cigsale",
@@ -21,14 +48,31 @@ def test_native_sdid_exposes_validation_boundary():
         seed=42,
     )
     assert result.model_info["backend"] == "native"
-    assert (
-        result.model_info["validation_tier"]
-        == "T4_native_regularisation_disclosure"
-    )
+    assert result.model_info["validation_tier"] == "T2_native_reference_parity"
     assert result.model_info["reference_backend"] == "synthdid"
-    assert "regularisation/zeta convention disclosure" in result.model_info[
-        "validation_note"
-    ]
+    assert "Frank-Wolfe weight solver" in result.model_info["validation_note"]
+    assert np.isclose(result.estimate, -15.94838884672099)
+    assert np.isclose(result.se, 2.6040746521236526)
+
+
+def test_native_sdid_recovers_constant_effect_on_exact_synthetic_dgp():
+    """Native SDID has a non-circular known-truth guard."""
+    truth = 2.5
+    result = sp.sdid(
+        _exact_synthetic_panel(truth),
+        outcome="y",
+        unit="unit",
+        time="time",
+        treated_unit="treated",
+        treatment_time=6,
+        backend="native",
+        method="sdid",
+    )
+    assert result.model_info["backend"] == "native"
+    assert result.model_info["validation_tier"] == "T2_native_reference_parity"
+    assert abs(result.estimate - truth) < 1e-10
+    weights = result.model_info["unit_weights"].set_index("unit")["weight"]
+    assert np.allclose(weights.sort_index().to_numpy(), np.repeat(0.25, 4))
 
 
 def _skip_unless_synthdid_available():

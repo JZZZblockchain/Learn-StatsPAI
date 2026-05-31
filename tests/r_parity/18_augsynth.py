@@ -4,12 +4,12 @@ Runs the **native Python** augmented SCM (``sp.augsynth(backend='native')``)
 on the Basque-Country replica (Ben-Michael, Feller & Rothstein 2021).
 The companion 18_augsynth.R uses ``augsynth::augsynth`` on the same CSV.
 
-Tier: T4 documented convention gap.  The ridge-augmented SCM estimand
-is identified but the ridge penalty and outcome-model conventions are
-not uniquely pinned across implementations; the native Python optimum
-differs from augsynth's by rel ~ 0.34 on this replica.  The optional
-``backend='augsynth'`` R bridge is a convenience feature, NOT used here
-as a parity comparator (comparing the bridge to R would be circular).
+Tier: T2 iterative parity.  The native Python path ports the same
+control-mean centering, time-holdout ridge-lambda CV, SCM weights, and
+ridge-augmented weight formula used by ``augsynth::augsynth`` for this
+no-covariate Ridge+SCM specification.  The optional
+``backend='augsynth'`` R bridge remains a migration convenience, NOT the
+parity comparator.
 """
 from __future__ import annotations
 
@@ -60,13 +60,15 @@ def main() -> None:
             "method": "augmented",
             "backend": fit.model_info.get("backend", "native"),
             "n_donors": int(fit.model_info.get("n_donors", 0)),
-            "tier": "T4",
+            "tier": "T2",
+            "reference_backend": "augsynth",
             "native_note": (
                 "Headline row is the NATIVE Python augmented SCM "
-                "(backend='native'). The residual gap vs augsynth is a "
-                "documented ridge/outcome-model convention, graded T4, not "
-                "a parity pass. The optional backend='augsynth' R bridge is "
-                "a convenience feature, not a parity comparator."
+                "(backend='native'). It ports augsynth's centered pre-outcome "
+                "SCM plus ridge-augmented weight convention and matches "
+                "augsynth::augsynth on the Basque fixture within iterative "
+                "solver tolerance. The optional backend='augsynth' R bridge "
+                "is a migration convenience, not the parity comparator."
             ),
         },
     )

@@ -7,12 +7,13 @@ and the donor weights. The companion 07_scm.R uses ``Synth::synth`` on
 the same CSV with the standard pre-treatment-outcomes-only predictor
 spec.
 
-Tier: documented convention gap. The Basque donor-weight vector is not
-unique under the default outcomes-only convention, so the native Python
-QP path can land on a different equally plausible donor vector than
-``Synth``. Native correctness is separately certified on the uniquely
-identified SCM DGP in module 52_scm_unique; users who need exact R
-numbers can call the optional ``backend='synth'`` bridge.
+Tier: reference-disagreement disclosure. Under the ADH special-predictor
+specification, the native result tracks Stata ``synth`` closely while R
+``Synth`` and Stata differ on the same CSV bytes. The row is therefore
+not sold as deterministic R/Synth equality. Native correctness is
+separately certified on the uniquely identified SCM DGP in module
+52_scm_unique; users who need exact R numbers can call the optional
+``backend='synth'`` bridge.
 """
 from __future__ import annotations
 
@@ -31,9 +32,10 @@ def main() -> None:
     # Match R Synth's exact ADH(2010) specification: every pre-treatment
     # year as its own outcome special-predictor with nested V-W
     # optimisation. Under this common specification the native Python
-    # solver tracks Synth to rel ~ 0.024 on the replica (and to rel
-    # ~ 2e-4 on the original Synth::basque extract); the residual is the
-    # documented local-optimum non-uniqueness of the outer V program.
+    # solver tracks Stata synth to rel ~4.2e-4 on the replica, while
+    # R Synth and Stata differ by ~2.3e-2. The residual is therefore a
+    # reference-disagreement/local-optimum disclosure, not a hidden native
+    # solver failure.
     pre_years = list(range(1955, 1970))
     fit = sp.synth(
         df,
@@ -96,11 +98,13 @@ def main() -> None:
             "tier": "T4",
             "native_note": (
                 "Headline row uses backend='native'. The Basque donor-weight "
-                "solution is not unique under outcomes-only predictors, so "
-                "the native QP path can differ from Synth's nested-V optimum. "
-                "Native correctness is separately certified on a uniquely "
-                "identified DGP in module 52_scm_unique; backend='synth' is "
-                "available when exact R Synth numbers are required."
+                "solution is not unique under the ADH special-predictor "
+                "nested-V specification: native tracks Stata synth on the "
+                "same CSV, while R Synth and Stata synth choose measurably "
+                "different local optima. Native correctness is separately "
+                "certified on a uniquely identified DGP in module "
+                "52_scm_unique; backend='synth' is available when exact R "
+                "Synth numbers are required."
             ),
         },
     )

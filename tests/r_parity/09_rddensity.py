@@ -1,19 +1,17 @@
 """StatsPAI RD density manipulation parity (Python side) -- Module 09.
 
 Runs the **native Python** sp.rddensity (backend="native") on the Lee
-2008 senate replica and emits the left/right density estimates and the
-density difference at the cutoff. The companion 09_rddensity.R uses
-rddensity::rddensity with identical defaults.
+2008 senate replica and emits the left/right density estimates, default
+combination bandwidths, robust p-value, and density difference at the
+cutoff. The companion 09_rddensity.R uses rddensity::rddensity with
+identical defaults.
 
-Tier: T4 common-conclusion gap.  The native CJM local-polynomial
-density estimator uses a dependency-light bandwidth selector that
-differs from rddensity's, so the density difference at the cutoff
-differs by a small absolute amount (abs ~ 0.05 on this replica) while
-the substantive manipulation-test conclusion is identical (both fail to
-reject).  The optional backend='r' bridge shells out to rddensity for
-users who need the exact reference number; it is a convenience feature,
-NOT used here as a parity comparator (comparing the bridge to R would
-be circular).
+Tier: T2 native reference parity.  The native implementation ports the
+default rddensity unrestricted triangular-kernel path: rdbwdensity
+combination bandwidths, mass-point ECDF handling, and jackknife CJM
+local-polynomial density inference.  The optional backend='r' bridge is
+still available for users who want to delegate directly to the R package,
+but it is not used here as the comparator.
 """
 from __future__ import annotations
 
@@ -69,15 +67,15 @@ def main() -> None:
             "validation_tier": mi.get("validation_tier"),
             "reference_backend": mi.get("reference_backend"),
             "test_kind": "Cattaneo-Jansson-Ma (2020)",
-            "tier": "T4",
+            "tier": "T2",
             "native_note": (
                 "Headline row is the NATIVE Python CJM density test "
-                "(backend='native'). Its dependency-light bandwidth selector "
-                "differs from rddensity's, so the density difference differs "
-                "by a small absolute amount while the manipulation-test "
-                "conclusion is identical (both fail to reject) -- graded T4. "
-                "The optional backend='r' bridge is a convenience feature, "
-                "not a parity comparator."
+                "(backend='native'). The native path ports rddensity's "
+                "default unrestricted triangular-kernel CJM estimator, "
+                "including rdbwdensity combination bandwidths, mass-point "
+                "ECDF handling, and jackknife inference, so the Lee row is "
+                "graded T2 native reference parity. The optional backend='r' "
+                "bridge remains a convenience feature, not the comparator."
             ),
         },
     )

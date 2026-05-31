@@ -1,7 +1,9 @@
 # StatsPAI Generalized SCM parity (R side) -- Module 19.
 #
 # Reads data/19_gsynth.csv (Basque replica) and runs gsynth::gsynth
-# (Xu 2017). Tolerance: rel < 0.20 on the post-treatment ATT.
+# (Xu 2017). Tolerance: rel < 1e-6 on the post-treatment ATT; the
+# native path ports fect's two-way FE factor convention on the full
+# never-treated control panel.
 
 .args <- commandArgs(trailingOnly = FALSE)
 .file_arg <- grep("^--file=", .args, value = TRUE)

@@ -5,14 +5,14 @@ Runs the **native Python** synthetic-DID estimator
 (Arkhangelsky et al. 2021). The companion 12_sdid.R uses
 ``synthdid::synthdid_estimate`` on the same CSV.
 
-Tier: T4 documented convention gap.  The SDID estimand is identified
-but the regularisation parameter zeta and the unit/time weight optima
-are not uniquely pinned across implementations, so the native Python
-optimum differs from synthdid's by a documented regularisation
-convention (rel ~ 0.08 on this replica).  StatsPAI also ships an
-optional ``backend='synthdid'`` R bridge for users who need the exact R
-numbers; it is a convenience feature, NOT used here as a parity
-comparator (comparing the bridge to R would be circular).
+Tier: T2 native reference parity.  The native Python implementation now
+mirrors synthdid's collapsed-form Frank-Wolfe weight solver and zeta
+scaling, so the ATT matches the R reference on identical CSV bytes.  The
+standard-error comparison still uses a small tolerance because StatsPAI
+keeps a deterministic all-control placebo SE while ``synthdid_se`` uses
+random placebo replications.  StatsPAI also ships an optional
+``backend='synthdid'`` R bridge for users who want to delegate directly
+to the R package; it is not used as the parity comparator.
 """
 from __future__ import annotations
 
@@ -62,13 +62,16 @@ def main() -> None:
             "backend": fit.model_info.get("backend", "native"),
             "validation_tier": fit.model_info.get("validation_tier"),
             "reference_backend": fit.model_info.get("reference_backend"),
-            "tier": "T4",
+            "tier": "T2",
             "native_note": (
                 "Headline row is the NATIVE Python SDID (backend='native'). "
-                "The residual gap vs synthdid is a documented regularisation "
-                "(zeta) convention, graded T4, not a parity pass. The "
-                "optional backend='synthdid' R bridge is a convenience "
-                "feature, not a parity comparator."
+                "The native solver mirrors synthdid's collapsed-form "
+                "Frank-Wolfe weights and zeta scaling, so the ATT is a T2 "
+                "same-byte reference-parity row. The SE uses StatsPAI's "
+                "deterministic all-control placebo convention, while "
+                "synthdid_se uses random placebo replications; the optional "
+                "backend='synthdid' R bridge is a convenience feature, not "
+                "the parity comparator."
             ),
         },
     )
