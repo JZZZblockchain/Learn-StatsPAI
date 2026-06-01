@@ -149,8 +149,8 @@ by √n) and rebuilds `sp.xtabond` Arellano–Bond difference GMM to match Stata
 machine precision — both flagged ⚠️ **Correctness**, so re-run affected
 analyses. The Track A cross-language parity harness grows from 36 to 51
 R-aligned modules (Stata reference for 43 of them, plus one
-Py-Stata-only `xtabond` migration check), and the JSS
-reviewer-facing docs are refreshed. Full notes in
+Py-Stata-only `xtabond` migration check), and the reviewer-facing
+validation docs are refreshed. Full notes in
 [`CHANGELOG.md`](CHANGELOG.md) under `[1.16.0]`.
 
 ---
@@ -1421,7 +1421,7 @@ resolves to the latest version):
   author       = {Wang, Biaoyue and Rozelle, Scott},
   title        = {StatsPAI: Validation-Tiered Causal Inference and Econometrics Workflows for Python},
   year         = {2026},
-  version      = {1.16.0},
+  version      = {1.16.1},
   doi          = {10.5281/zenodo.19933900},
   url          = {https://doi.org/10.5281/zenodo.19933900},
   license      = {MIT},

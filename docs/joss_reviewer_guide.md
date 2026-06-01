@@ -124,9 +124,26 @@ python tools/audit_bib_duplicates.py --strict
 The full default suite is larger and can take tens of minutes on a laptop.
 Several optional-dependency tests skip unless the relevant extras are installed.
 
+The focused regression tests added in response to reviewer follow-up comments
+can be run directly:
+
+```bash
+python -m pytest \
+  tests/test_joss_reviewer_followups.py \
+  tests/test_check_identification.py::TestDAGIntegration \
+  tests/test_dag_scm.py \
+  tests/test_dag_recommend_and_tte_report.py \
+  -q --no-cov
+```
+
+`tests/test_joss_reviewer_followups.py` is kept as a compatibility path for
+the public review thread; the maintained test implementation lives in
+`tests/test_external_reviewer_followups.py`.
+
 ## Build Check
 
 ```bash
+python -m mkdocs build --strict
 python -m pip install build twine
 python -m build
 python -m twine check dist/*

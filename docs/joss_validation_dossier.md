@@ -12,7 +12,7 @@ research software. It is intentionally factual and reproducible.
 - Current release at the time of this dossier: `1.16.0`, released on
   2026-05-29.
 - Public GitHub repository creation date: 2025-07-26.
-- Public repository activity signals as of 2026-05-29: 210 stars, 37 forks,
+- Public repository activity signals as of 2026-06-01: 212 stars, 39 forks,
   23 GitHub releases, and 1 public external user issue in addition to
   maintainer-created issue/PR activity.
 
@@ -44,7 +44,7 @@ The repository includes several independent validation tracks:
 - Citation and bibliography audits under `tools/`.
 - Reviewer-facing offline examples under `examples/`.
 
-The maintained local full-suite report records:
+The archived local full-suite report records:
 
 ```text
 5200 passed, 98 skipped, 13 deselected, 1 xfailed, 2 xpassed
