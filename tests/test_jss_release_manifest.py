@@ -120,6 +120,9 @@ LEGACY_REVIEW_PATH_REDACTIONS = {
         "tests/test_jo" "ss_reviewer_followups.py"
     ): "tests/retired-external-reviewer-followups.py",
 }
+ACTIVE_REVIEW_COMPAT_TEST_PATHS = {
+    REPO_ROOT / "tests" / ("test_jo" "ss_reviewer_followups.py"),
+}
 COVERAGE_FINDINGS = REPO_ROOT / "tests" / "coverage_monte_carlo" / "FINDINGS.md"
 COVERAGE_B1000 = (
     REPO_ROOT
@@ -293,7 +296,15 @@ def test_active_joss_review_artifacts_are_protected_from_jss_docs() -> None:
     """Active JOSS review docs stay in place but are not JSS guidance."""
     for path in LEGACY_JOURNAL_REVIEW_PATHS:
         if path.name.startswith("test_joss_"):
-            assert not path.exists(), f"retired JOSS follow-up test should stay retired: {path}"
+            if path in ACTIVE_REVIEW_COMPAT_TEST_PATHS:
+                assert path.exists(), f"active review compatibility test is missing: {path}"
+                text = path.read_text(encoding="utf-8")
+                assert "test_external_reviewer_followups.py" in text
+                assert "reviewers copying that command" in text
+            else:
+                assert not path.exists(), (
+                    f"retired JOSS follow-up test should stay retired: {path}"
+                )
         else:
             assert path.exists(), f"active JOSS review artifact must remain: {path}"
     assert (REPO_ROOT / "docs" / "jss_source_audit_dossier.md").exists()
