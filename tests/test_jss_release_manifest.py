@@ -816,6 +816,7 @@ def test_submission_package_verifier_pins_page_and_claim_guards() -> None:
         "active manuscript does not state the seven-row Track B",
         "active manuscript does not report Track B nominal",
         "active manuscript contains stale Track B artifact",
+        "archive root README lacks JSS boundary note",
         "Tier-1 reviewer transcript exceeds the one-hour reviewer path",
         "Tier-1 transcript states no R/Stata headline path",
         "Tier-1 live R/Stata dependency markers",

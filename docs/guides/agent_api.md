@@ -215,7 +215,7 @@ results by reviewer-readiness.
 canonical BibTeX entry stored on the result class and reformat it.
 Bibliographic facts come **only** from the parsed BibTeX — the
 formatter never invents authors, years, journals, or publishers
-(per [CLAUDE.md §10](../../CLAUDE.md)).
+(per [CLAUDE.md §10](https://github.com/brycewang-stanford/StatsPAI/blob/main/CLAUDE.md)).
 
 ```python
 r = sp.callaway_santanna(df, ...)
@@ -362,17 +362,17 @@ need a code snippet?                       → sp.examples(name)
 
 ## See also
 
-- [`CHANGELOG.md`](../../CHANGELOG.md#190--agent-native-api-surface-12-modules-across-4-phases)
+- [`CHANGELOG.md`](https://github.com/brycewang-stanford/StatsPAI/blob/main/CHANGELOG.md#190--agent-native-api-surface-12-modules-across-4-phases)
   — full v1.9.0 release notes.
-- [`MIGRATION.md` v1.8.0 → v1.9.0](../../MIGRATION.md#v180--v190--agent-native-api-surface-no-breaking-changes)
+- [`MIGRATION.md` v1.8.0 → v1.9.0](https://github.com/brycewang-stanford/StatsPAI/blob/main/MIGRATION.md#v180--v190--agent-native-api-surface-no-breaking-changes)
   — backward-compatibility invariants pinned by the test suite.
-- [`agent/mcp_server.py`](../../src/statspai/agent/mcp_server.py)
+- [`agent/mcp_server.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/agent/mcp_server.py)
   — the JSON-RPC 2.0 stdio MCP server source.
-- [`smart/audit.py`](../../src/statspai/smart/audit.py),
-  [`smart/preflight.py`](../../src/statspai/smart/preflight.py),
-  [`smart/detect_design.py`](../../src/statspai/smart/detect_design.py),
-  [`smart/citations.py`](../../src/statspai/smart/citations.py),
-  [`smart/examples.py`](../../src/statspai/smart/examples.py),
-  [`smart/session.py`](../../src/statspai/smart/session.py),
-  [`smart/brief.py`](../../src/statspai/smart/brief.py)
+- [`smart/audit.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/audit.py),
+  [`smart/preflight.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/preflight.py),
+  [`smart/detect_design.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/detect_design.py),
+  [`smart/citations.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/citations.py),
+  [`smart/examples.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/examples.py),
+  [`smart/session.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/session.py),
+  [`smart/brief.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/src/statspai/smart/brief.py)
   — the seven new `sp.smart` modules.

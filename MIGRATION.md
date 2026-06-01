@@ -5,6 +5,40 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="sp-synth-default-classic"></a>
+
+## Unreleased — ⚠️ `sp.synth()` default method restored to `'classic'`
+
+**What changed.** A bare `sp.synth(...)` call (no `method=`) now runs
+`method='classic'` — canonical Abadie–Diamond–Hainmueller (2010) synthetic
+control with convex, non-negative, sum-to-one donor weights. The signature
+default had silently drifted to `method='augmented'` (Augmented SCM,
+Ben-Michael, Feller & Rothstein 2021), which deliberately allows negative
+donor weights by extrapolating outside the donor convex hull. That
+contradicted the documented default (`sp.synth` docstring: `method : str,
+default 'classic'`), the migration-from-R mapping (`Synth::synth` is
+classic), and the canonical Prop99 examples shipped in the docs.
+
+**Who is affected.** Anyone calling `sp.synth(...)` **without** an explicit
+`method=`. Estimated effects, donor weights, and synthetic trajectories
+revert from ASCM to classic SCM. Every call that already passes `method=`
+(including `method='augmented'` / `'ascm'`) is **unchanged**.
+
+**What to do.** To keep Augmented SCM, pass it explicitly:
+
+```python
+res = sp.synth(df, outcome=..., unit=..., time=...,
+               treated_unit=..., treatment_time=..., method='augmented')
+```
+
+Otherwise no action is needed — the default now matches the documentation and
+the R `Synth` reference implementation.
+
+Guarded by
+`tests/test_synth.py::TestSyntheticControl::test_weights_non_negative`.
+
+---
+
 <a id="sp-causal-forest-aipw-fix"></a>
 
 ## Unreleased — ⚠️ Causal-forest ATE/ATT now doubly-robust (AIPW)

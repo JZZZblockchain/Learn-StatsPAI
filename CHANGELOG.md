@@ -4,6 +4,25 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### ⚠️ Correctness fix — `sp.synth()` default restored to canonical classic SCM
+
+- **`sp.synth(...)` now defaults to `method='classic'`** (the Abadie, Diamond
+  & Hainmueller 2010 synthetic control) again, matching the documented default
+  in the `sp.synth` docstring (`method : str, default 'classic'`), the
+  `Synth::synth` → `sp.synth` mapping in the migration-from-R guide, and the
+  canonical Prop99 examples in the docs and `examples/synth_prop99.py`. The
+  signature default had silently drifted to `method='augmented'` (Augmented
+  SCM, Ben-Michael, Feller & Rothstein 2021), whose ridge correction is
+  *designed* to allow negative donor weights by extrapolating outside the
+  donor convex hull — surprising for the canonical `synth()` entry point and
+  inconsistent with the package's own documentation. **A bare `sp.synth(...)`
+  call again returns convex, non-negative, sum-to-one donor weights.**
+  Augmented SCM remains fully available via `method='augmented'` (or
+  `'ascm'`); every non-default method is unchanged. Verified against the full
+  synth test surface (170 tests) and the R `Synth` recovery parity test.
+  Guarded by
+  `tests/test_synth.py::TestSyntheticControl::test_weights_non_negative`.
+
 ### ⚠️ Correctness fix — synthetic-control weights projected back onto the simplex
 
 - **`solve_simplex_weights` (the inner W solver shared by `sp.synth` and the
@@ -604,7 +623,7 @@ Three independent hardening tracks land together:
   OLS / adjusted OLS / 1:1 NN PSM for Lalonde, local-linear CCT RD
   for Lee) **and a modern track** (DML PLR + entropy balancing,
   bias-corrected robust RD, multi-method synth-compare). Real CSVs
-  land under [`src/statspai/datasets/data/`](src/statspai/datasets/data/)
+  land under [`src/statspai/datasets/data/`](https://github.com/brycewang-stanford/StatsPAI/tree/main/src/statspai/datasets/data/)
   (`card_1995.csv`, `california_prop99.csv`, `lalonde_matchit.csv`,
   `lee_2008_senate.csv`) and `sp.datasets.nsw_lalonde` /
   `sp.datasets.lee_2008_senate` gain a `simulated=False` real-data

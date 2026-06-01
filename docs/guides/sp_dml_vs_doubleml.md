@@ -36,7 +36,7 @@ works in `sp.dml`. StatsPAI additionally accepts string shortcuts
 The fixture in `tests/reference_parity/_fixtures/dml_data.csv` is a
 seed-42 DGP with `n=1000`, `p=10`, true treatment effect `θ=0.5`. The
 external parity test
-[`tests/external_parity/test_dml_python_parity.py`](../../tests/external_parity/test_dml_python_parity.py)
+[`tests/external_parity/test_dml_python_parity.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/tests/external_parity/test_dml_python_parity.py)
 runs `sp.dml` and `doubleml-for-py` on this fixture with identical
 scikit-learn learners (`LassoCV(cv=5)` for regression,
 `LogisticRegressionCV(cv=5)` for binary propensity) under a fixed
@@ -54,7 +54,7 @@ seed.
   CV-fold partition under a fixed seed. The slight deviation from the
   R reference (~4%) reflects glmnet's penalty path differing
   fractionally from scikit-learn's `LassoCV`; the R reference is
-  pinned by [`tests/reference_parity/test_dml_parity.py`](../../tests/reference_parity/test_dml_parity.py)
+  pinned by [`tests/reference_parity/test_dml_parity.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/tests/reference_parity/test_dml_parity.py)
   to within 7% relative.
 
 - **IRM**: All three implementations land statistically at zero (the
