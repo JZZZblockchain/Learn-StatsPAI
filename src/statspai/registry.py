@@ -12364,6 +12364,12 @@ def _stringify_annotation(ann: Any) -> str:
         return "Any"
     if isinstance(ann, str):
         return ann
+    # Python 3.10+ exposes ``__name__`` on typing aliases such as
+    # ``Optional[Dict[str, Any]]``.  Check typing/generic objects before the
+    # plain-class branch so schema generation keeps the full parameter shape
+    # stable across supported Python versions.
+    if str(ann).startswith("typing.") or hasattr(ann, "__origin__"):
+        return str(ann).replace("typing.", "")
     if hasattr(ann, "__name__"):
         return ann.__name__
     return str(ann).replace("typing.", "")
