@@ -4,6 +4,23 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`parity` optional extra — opt-in DoubleML reference pin for `sp.dml`.**
+  `pip install -e ".[dev,parity]"` now installs `doubleml-for-py` (the Python
+  DoubleML reference of Bach, Chernozhukov, Kurz & Spindler, JMLR 23(53),
+  2022), so `tests/external_parity/test_dml_python_parity.py` *runs* instead
+  of silently skipping. Under identical scikit-learn learners and folds,
+  `sp.dml(model='plr')` reproduces `doubleml-for-py` to machine precision on
+  the seed-42 fixture — `|Δ coefficient| = 1.1e-16` and `|Δ standard error| =
+  1.4e-17`, i.e. one float64 unit in the last place. `doubleml` remains *not*
+  a runtime dependency. The measured numbers, software versions, and the
+  divergence discussion are recorded in a new *Double Machine Learning Parity*
+  section of `docs/joss_validation_dossier.md`, with a one-command reproduce
+  path added to `docs/joss_reviewer_guide.md`. Verified by installing the
+  extra and running both `tests/external_parity/test_dml_python_parity.py` and
+  `tests/reference_parity/test_dml_parity.py` (55 DML tests green).
+
 ### Fixed
 
 - **CI: `schemas/functions.json` no longer drifts by pandas version.** The
@@ -43,6 +60,33 @@ All notable changes to StatsPAI will be documented in this file.
   schema-bundle invariants were added (no backslash separators; no internal
   `pandas.core.` paths) so both classes are caught on any shard, not only the
   one whose regeneration diverges.
+
+- **Docs: `docs/reference/dml.md` documented four `sp.dml` patterns that
+  raised on copy-paste.** `r.coef` → `r.estimate`; `r.ci(alpha=0.05)` →
+  `r.ci` (a `(lower, upper)` tuple — the level is set via
+  `sp.dml(..., alpha=)`); `r.influence_function` (never exposed on
+  `CausalResult`) → `r.diagnostics` / `r.pvalue`; and an IRM example passing a
+  non-existent `trim=` keyword (propensity clipping is automatic at
+  `[0.01, 0.99]`, with the clip counts reported in `r.diagnostics`). Every
+  documented result attribute and all four `model=` types now run on the
+  bundled fixture. Docs only — no API or numerical change.
+
+- **Docs: corrected an unverified claim in
+  `docs/guides/sp_dml_vs_doubleml.md`.** The guide asserted that matching
+  propensity-trimming thresholds eliminates the small `sp.dml`-vs-
+  `doubleml-for-py` IRM gap; the gap (0.0076 absolute, ≈ 0.10 SE) is verified
+  *not* to move with trimming nor with `normalize_ipw`, and stems from
+  internal AIPW score construction. PLR agreement is now stated as the
+  measured machine-precision figure (`1.1e-16` / `1.4e-17`) rather than "four
+  decimal places", and an over-broad "PLR / PLIV / IIVM agree to machine
+  precision" line was narrowed to the PLR case that is actually pinned.
+
+- **Docs: refreshed live registry-stats drift.** `docs/stats.md` (per-module
+  table + the measured source/test LOC rows), `README.md`, and `README_CN.md`
+  now match `python scripts/registry_stats.py` (269,043 core LOC / 96,514 test
+  LOC; 1,020 functions across 81 submodules). This restores
+  `tests/test_jss_release_manifest.py::test_registry_stats_docs_are_live`
+  (`scripts/registry_stats.py --check` exits 0). Docs only — no API change.
 
 ## [1.16.1] — 2026-06-01
 

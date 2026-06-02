@@ -105,6 +105,16 @@ text = [
 tune = [
     "optuna>=3.0",
 ]
+parity = [
+    # Opt-in external-parity pin: the canonical Python DoubleML reference
+    # (Bach, Chernozhukov, Kurz & Spindler, JMLR 23(53), 2022). Installing
+    # it makes tests/external_parity/test_dml_python_parity.py *run* instead
+    # of silently skipping, so ``sp.dml`` is checked against doubleml-for-py
+    # to machine precision under identical learners + folds. NOT a runtime
+    # dependency of StatsPAI; the R-side parity additionally needs a local
+    # R + DoubleML install (see docs/guides/sp_dml_vs_doubleml.md).
+    "doubleml>=0.7",
+]
 rd-cct = [
     # Official Calonico-Cattaneo-Titiunik (2014) rdrobust port; opt-in
     # via ``sp.rdrobust(..., bwselect='cct')`` to get bit-equal R parity

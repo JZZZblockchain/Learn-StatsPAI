@@ -30,7 +30,10 @@ The core install declares the runtime dependencies in `pyproject.toml`:
 NumPy, SciPy, Pandas, statsmodels, scikit-learn, linearmodels, formulaic,
 numba, patsy, openpyxl, xlsxwriter, python-docx, and tabulate. Optional extras
 are named `plotting`, `fixest`, `deepiv`, `neural`, `performance`, `bayes`,
-`tune`, `rd-cct`, `text`, and `docs`.
+`tune`, `parity`, `rd-cct`, `text`, and `docs`. The `parity` extra adds the
+canonical Python DoubleML reference so the `sp.dml` machine-precision check
+runs instead of skipping (see *Double Machine Learning vs the DoubleML
+reference* below).
 
 ## Smoke Test
 
@@ -123,6 +126,25 @@ python tools/audit_bib_duplicates.py --strict
 
 The full default suite is larger and can take tens of minutes on a laptop.
 Several optional-dependency tests skip unless the relevant extras are installed.
+
+## Double Machine Learning vs the DoubleML reference
+
+`sp.dml` is pinned against both DoubleML reference implementations
+(Bach, Chernozhukov, Kurz, Spindler & Klaassen). The Python-side check
+matches `sp.dml(model='plr')` against `doubleml-for-py` to machine precision
+under identical scikit-learn learners and folds; the R-side check pins it
+against `DoubleML` R + `cv.glmnet`:
+
+```bash
+python -m pip install -e ".[dev,parity]"   # parity extra adds doubleml-for-py
+python -m pytest tests/external_parity/test_dml_python_parity.py -v   # vs doubleml-for-py (machine precision)
+python -m pytest tests/reference_parity/test_dml_parity.py -v          # vs DoubleML R (needs local R + DoubleML)
+```
+
+Without the `parity` extra the Python-side test skips cleanly rather than
+failing. The exact numbers, software versions, and the full divergence
+discussion are in `docs/joss_validation_dossier.md` (§ *Double Machine
+Learning Parity*) and `docs/guides/sp_dml_vs_doubleml.md`.
 
 The focused regression tests added in response to reviewer follow-up comments
 can be run directly:

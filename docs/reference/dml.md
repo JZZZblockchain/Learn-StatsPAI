@@ -13,9 +13,11 @@ r = sp.dml(df, y='wage', treat='training',
            ml_g='rf', ml_m='rf',         # nuisance learners
            n_folds=5, n_rep=1)
 
-# Interactive Regression Model (IRM): binary treatment with Y = g₀(D,X) + U
+# Interactive Regression Model (IRM): binary treatment, AIPW ATE.
+# Propensity scores m̂(X) are auto-clipped to [0.01, 0.99] for AIPW
+# stability; the clip counts are reported in r.diagnostics.
 r = sp.dml(df, y='y', treat='d_bin', covariates=[...],
-           model='irm', trim=0.01)
+           model='irm')
 
 # Partially Linear IV (PLIV) — new in v0.9.3
 # Y = Dθ + g(X) + U, D = m(X) + V, Z = r(X) + ε
@@ -91,10 +93,11 @@ under-cover whenever splits-randomness moves the point estimate.
 ## Result attributes
 
 ```python
-r.coef                 # θ̂ point estimate
+r.estimate             # θ̂ point estimate
 r.se                   # influence-function standard error
-r.ci(alpha=0.05)       # confidence interval
-r.influence_function   # per-observation scores
+r.ci                   # (lower, upper); level set by sp.dml(..., alpha=0.05)
+r.pvalue               # two-sided p-value against H0: θ = 0
+r.diagnostics          # cross-fitting config + overlap diagnostics (dict)
 r.summary()            # full table with reference
 r.cite()               # Chernozhukov et al. 2018 BibTeX
 ```

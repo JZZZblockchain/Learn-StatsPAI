@@ -69,6 +69,61 @@ hidden. For example, bandwidth selectors, regularisation constants, small-sample
 standard-error conventions, and fold-split randomness are recorded in the
 R-parity report where they affect exact numerical matching.
 
+## Double Machine Learning Parity
+
+`sp.dml` is StatsPAI's port of the Double/Debiased Machine Learning framework
+(Chernozhukov et al., 2018). Because the canonical reference implementations
+are the `DoubleML` packages for R and Python (Bach, Chernozhukov, Kurz,
+Spindler & Klaassen), `sp.dml` is pinned against **both** so the numerical
+claim is auditable from either ecosystem.
+
+The fixture is a fixed seed-42 DGP (`n=1000`, `p=10`, true effect `θ=0.5`) at
+`tests/reference_parity/_fixtures/dml_data.csv`. All three engines consume the
+same CSV. On the Python side, `sp.dml` and `doubleml-for-py` are given
+**identical** scikit-learn nuisance learners (`LassoCV(cv=5)` for regression,
+`LogisticRegressionCV(cv=5)` for the binary propensity) and the same fold
+partition under a fixed seed, so any divergence reflects a genuine
+implementation difference rather than learner choice or split noise.
+
+| Model | `sp.dml` (StatsPAI 1.16.1) | `doubleml-for-py` 0.11.3 | `DoubleML` R 1.0.2 (cv.glmnet) |
+| --- | --- | --- | --- |
+| **PLR** (continuous D) | +0.559022 ± 0.033103 | +0.559022 ± 0.033103 | +0.536759 ± 0.033498 |
+| **IRM** (binary D, AIPW ATE) | −0.019107 ± 0.076561 | −0.026658 ± 0.074206 | +0.006640 ± 0.074434 |
+
+- **PLR matches `doubleml-for-py` to machine precision.** Under shared learners
+  and folds the point estimate and standard error agree to within one float64
+  unit in the last place: |Δ coefficient| = 1.1 × 10⁻¹⁶ and |Δ standard error|
+  = 1.4 × 10⁻¹⁷. This is exact numerical equivalence, not a loose tolerance —
+  both implementations evaluate the same Neyman-orthogonal score on the same
+  cross-fit partition. The corresponding deviation from the R reference is
+  ~4.1% on the coefficient, attributable to `cv.glmnet`'s penalty path
+  differing fractionally from scikit-learn's `LassoCV`; the R fixture is pinned
+  to within 7% relative.
+- **IRM agrees within one-tenth of a standard error.** `sp.dml` and
+  `doubleml-for-py` differ by 0.0076 on the ATE (≈ 0.10 SE on this fixture);
+  all three implementations are statistically indistinguishable from zero, the
+  truth for this DGP. The residual difference comes from internal AIPW
+  score-construction details — it is verified *not* to be driven by propensity
+  trimming (matching the clip thresholds leaves it unchanged) nor by IPW
+  normalization (toggling `normalize_ipw` leaves it unchanged). The external
+  parity test pins this at < 0.05 absolute.
+
+Both directions are exercised by committed tests, not just asserted in prose:
+
+```bash
+python -m pip install -e ".[dev,parity]"   # the parity extra adds doubleml-for-py
+python -m pytest tests/external_parity/test_dml_python_parity.py -v   # sp.dml vs doubleml-for-py (machine precision)
+python -m pytest tests/reference_parity/test_dml_parity.py -v          # sp.dml vs DoubleML R (needs local R + DoubleML)
+```
+
+The Python-side check runs whenever `doubleml-for-py` is installed (via the
+`parity` extra) and skips cleanly otherwise; the R-side check additionally
+requires a local R installation with `DoubleML` 1.0.2 + `mlr3learners` 0.14.0.
+Environment of record for the numbers above: StatsPAI 1.16.1, `doubleml-for-py`
+0.11.3, scikit-learn 1.7.2, and `DoubleML` R 1.0.2 on R 4.5.2 with `cv_glmnet`.
+The API mapping between `sp.dml(model=...)` and the DoubleML classes, plus the
+full divergence discussion, is in `docs/guides/sp_dml_vs_doubleml.md`.
+
 ## Research Use
 
 At submission time, StatsPAI is being used in working-paper workflows connected
