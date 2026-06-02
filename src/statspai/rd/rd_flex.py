@@ -287,8 +287,9 @@ def _make_learner(name: str, random_state: Optional[int]):
             return RidgeCV(alphas=np.logspace(-3, 3, 21))
         if name == "lasso":
             from sklearn.linear_model import LassoCV
-            return LassoCV(cv=5, n_alphas=50, random_state=random_state,
-                           max_iter=10_000)
+            from ..compat.sklearn import lasso_cv_alphas_kwargs
+            return LassoCV(cv=5, random_state=random_state,
+                           max_iter=10_000, **lasso_cv_alphas_kwargs(50))
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "rd_flex requires scikit-learn. Install with: pip install scikit-learn"

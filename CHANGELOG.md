@@ -23,6 +23,22 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **CI: scikit-learn 1.9 compatibility — `LassoCV(n_alphas=...)` removal.**
+  scikit-learn 1.7 deprecated the `n_alphas` argument of the coordinate-descent
+  CV estimators (`LassoCV`/`ElasticNetCV`/…) in favour of passing an integer to
+  `alphas`, and 1.9 removed it outright — constructing `LassoCV(n_alphas=20)`
+  now raises `TypeError: LassoCV.__init__() got an unexpected keyword argument
+  'n_alphas'`. The `CI/CD Pipeline` matrix resolves to scikit-learn 1.9.0, so
+  `sp.tmle(method='hal')` (`HALRegressor`) and `sp.rd_flex(learner='lasso')`
+  both failed at construction (`tests/test_hal_tmle.py`,
+  `tests/test_estimator_provenance_round5.py::TestHalTmleProvenance`,
+  `tests/test_low_cov_battery.py::test_hal_regressor_predicts_finite`). A new
+  version-robust shim `statspai.compat.sklearn.lasso_cv_alphas_kwargs(n)` emits
+  `{"alphas": n}` on scikit-learn >= 1.7 and `{"n_alphas": n}` on older
+  releases; both call sites now route through it. The number of path alphas
+  (20 for HAL, 50 for `rd_flex`) is unchanged — no numerical effect. Verified
+  on the local scikit-learn 1.6.1 pin (8 HAL tests + 6 `rd_flex` tests green)
+  and by version-logic assertion across 1.6/1.7/1.8/1.9.
 - **CI: `schemas/functions.json` no longer drifts by pandas version.** The
   auto-registered schema export stringified parameter annotations via
   `str(typing.Optional[pandas.DataFrame])`, which pandas 3.0 renders as
