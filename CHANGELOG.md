@@ -32,6 +32,26 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **⚠️ Correctness — `sp.structural_break` sup-F p-value used the wrong null
+  distribution.** The Chow/sup-F statistic is a *supremum* of the F statistic
+  over candidate break points, so under H0 it follows the Andrews (1993)
+  sup-F law — **not** `F(k, n-2k)`. The previous code referred the maximised
+  statistic to the ordinary F CDF, which ignored the maximisation and
+  massively over-rejected: on pure Gaussian white noise at the 5% level the
+  test flagged a spurious structural break in **33–37%** of series (measured,
+  n ∈ {100, 200, 400}). The p-value is now computed from the Andrews (1993)
+  limiting null — a q-vector Brownian-bridge functional sampled by a
+  deterministic, cached simulation on a grid tied to the sample size —
+  restoring **nominal size (~0.05)** while retaining power (1.00 / 0.88 to
+  detect a one-/half-σ mean shift at n=200). The same correct threshold now
+  drives the Bai-Perron sequential `supF(l+1|l)` stopping rule (previously the
+  same naive-F over-detection), so `method='bai-perron'` no longer
+  over-segments noise. As a side benefit the Bai-Perron result now populates
+  `f_stats` / `p_values` (one sup-F statistic and Andrews p-value per detected
+  break, chronologically aligned) instead of returning `None`. Reference
+  verified via Crossref / Econometric Society / RePEc: Andrews, D.W.K. (1993),
+  *Econometrica* 61(4), 821-856, doi:10.2307/2951764. See `MIGRATION.md`.
+
 - **33 registered `example` strings were statically broken (agent-UX).** Six
   failed to parse (stray/`unmatched` parens, a positional-after-keyword
   `...` placeholder, an unclosed call) and 27 passed a keyword the function

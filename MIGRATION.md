@@ -5,6 +5,45 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="structural-break-supf-null"></a>
+
+## Unreleased — ⚠️ `sp.structural_break` sup-F p-value null distribution correctness fix
+
+**What changed.** The sup-F / Chow statistic in `sp.structural_break(...)` is a
+*supremum* of the Chow F statistic over all candidate break points. Under the
+null of no break it therefore follows the Andrews (1993) sup-F limiting law,
+**not** the ordinary `F(k, n-2k)` distribution. The previous code referred the
+maximised statistic to the F CDF (`1 - scipy.stats.f.cdf(best_f, k, n-2k)`),
+which ignored the search over break points and produced p-values that were far
+too small. Measured false-positive rate on Gaussian white noise at the 5%
+level: **33–37%** (n ∈ {100, 200, 400}) — a roughly 7× inflation. P-values are
+now drawn from the Andrews (1993) null (a q-vector Brownian-bridge functional,
+sampled by a deterministic seeded simulation cached per `(q, grid, trimming)`),
+which restores **nominal size (~5%)** with no material loss of power. The same
+correct critical value now governs the Bai-Perron sequential `supF(l+1|l)`
+stopping rule, so `method='bai-perron'` stops over-segmenting noise.
+
+**Who is affected.** Anyone who relied on the `p_values` / `break_dates` of
+`sp.structural_break` with `method` in `{'sup-f', 'chow', 'bai-perron'}`.
+Previously-reported breaks (and their tiny p-values) were anti-conservative;
+some "significant" breaks were spurious. The point estimate of the *location*
+of the most likely break (`break_dates[0]` for sup-F) is unchanged — only its
+significance and the break **count** change.
+
+**What to do.** Re-run any structural-break tests and re-check significance
+against the corrected p-values. A break that was marginal under the old
+(inflated) test may no longer reject. `method='bai-perron'` may now return
+fewer breaks. The result object additionally gained populated `f_stats` /
+`p_values` for the Bai-Perron path (one entry per detected break, sorted by
+date), where it previously returned `None`.
+
+**Reference.** Andrews, D.W.K. (1993). "Tests for Parameter Instability and
+Structural Change with Unknown Change Point." *Econometrica*, 61(4), 821-856.
+doi:10.2307/2951764 (verified via Crossref, the Econometric Society, and
+RePEc).
+
+---
+
 <a id="msm-singleperiod-iptw"></a>
 
 ## Unreleased — ⚠️ `sp.stabilized_weights` / `sp.msm` single-period IPTW correctness fix
