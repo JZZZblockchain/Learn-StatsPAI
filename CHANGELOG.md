@@ -32,6 +32,32 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **`sp.event_study` results crashed the library's own exporters, plotters and
+  pre-trend tools (canonical-column mismatch).** `sp.event_study` emitted its
+  coefficient table under the column name `estimate`, but the rest of the DID
+  family — and every downstream consumer — keys on the canonical `att` column
+  (`did._core.EVENT_STUDY_COLUMNS`). So the *canonical* event-study estimator
+  was incompatible with its own tooling: `.tidy()` (and the `.to_markdown()` /
+  `.to_excel()` / `.to_word()` exporters that delegate to it) raised
+  `TypeError: unsupported operand type(s) for /: 'NoneType' and 'float'`;
+  `.plot()` / `.event_study_plot()` / `sp.enhanced_event_study_plot` raised
+  `KeyError: 'att'`; and `sp.honest_did` / `sp.breakdown_m` raised
+  `ValueError: missing {'att'}`. The event-study table now carries the
+  canonical `att` column (with `estimate` retained as a backward-compatible
+  alias), fixing every consumer at the source. No numerical change.
+
+- **`sp.pretrends_test` / `sp.pretrends_summary` crashed (`LinAlgError:
+  Singular matrix`) on every standard `sp.event_study` result** — the same
+  reference-period defect already fixed in `pretrends_power`: the SE = 0
+  omitted period made the diagonal VCV singular. It is now dropped before
+  inversion, with a clear `ValueError` on a genuinely collinear pre-period set.
+
+- **`sp.diagnose_result` crashed (`TypeError: bad operand type for abs():
+  'str'`) on `sp.synth` results.** The donor-pool check iterated the synthetic
+  weights, but `sp.synth` stores them as a `['unit', 'weight']` DataFrame, so
+  iteration yielded column-name strings. The weights are now coerced to their
+  numeric values regardless of container (DataFrame / Series / dict / array).
+
 - **`sp.pretrends_power` crashed (`LinAlgError: Singular matrix`) on every
   standard `sp.event_study` result.** Roth's (2022) pre-trend power calculation
   inverts the pre-period variance–covariance matrix, but the omitted reference
