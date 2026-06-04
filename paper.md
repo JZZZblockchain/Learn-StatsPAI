@@ -141,7 +141,10 @@ among variants within a design family. The registry records function
 names, parameters, examples, stability tiers, limitations, citations,
 and schema information. This makes the package usable both from a
 notebook and from external systems such as a Model Context Protocol
-server.
+server. In practice this lets an assistant query the registry for the
+estimators valid for a detected design, invoke one, read back structured
+diagnostics and assumption violations, and decide the next step — all
+through typed schemas rather than free-form prompts.
 
 The central design choice is a shared result interface. Estimators
 return structured objects that store coefficients, uncertainty
