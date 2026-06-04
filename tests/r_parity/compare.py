@@ -53,6 +53,7 @@ STATA_SKIP_REASON: dict[str, str] = {
     "38_drdid":         "Stata DRDID = Ferman (different DR formula)",
     "52_scm_unique":    "no canonical Stata SCM port",
     "53_cr2":           "Stata native vce(cluster)=CR1; CR2/CR3 need community summclust",
+    "54_twoway_cluster": "Stata native vce(cluster) is one-way; two-way needs community vcemway / reghdfe",
 }
 
 TRACK_A_SNAPSHOT_ROWS: list[dict[str, Any]] = [
@@ -256,6 +257,12 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # CR3 differs ~1e-3 (documented in HEADLINE gap_note, kept out of
     # the strict CR2 headline filter).
     "53_cr2":         {"rel_est": 1e-6, "rel_se": 1e-6},
+    # Two-way cluster-robust SE (Cameron-Gelbach-Miller). sp uses the
+    # per-dimension Liang-Zeger correction = sandwich::vcovCL defaults
+    # (HC1, cadjust), so the headline two-way SE is a machine-precision
+    # match (rel_se ~1e-16). fixest's single min-G df factor differs at
+    # ~1e-3 and is NOT the convention reference here.
+    "54_twoway_cluster": {"rel_est": 1e-6, "rel_se": 1e-6},
 }
 
 
@@ -940,6 +947,15 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "metric": "rel_se",
         "verdict": "\\textbf{PASS}",
         "gap_note": "CR2 machine-precision; exact CR3 jackknife vs analytic CR3 differs $\\sim10^{-3}$",
+    },
+    "54_twoway_cluster": {
+        "name": "Two-way cluster-robust SE",
+        # Headline is the two-way SE vs sandwich::vcovCL (same per-dimension
+        # Liang-Zeger convention) -- a machine-precision match.
+        "headline_filter": lambda d: d.statistic.startswith("beta_"),
+        "metric": "rel_se",
+        "verdict": "\\textbf{PASS}",
+        "gap_note": "matches sandwich::vcovCL(HC1,cadjust); fixest min-G df convention differs $\\sim10^{-3}$",
     },
 }
 

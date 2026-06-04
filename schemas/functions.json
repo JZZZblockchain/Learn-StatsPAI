@@ -22317,7 +22317,7 @@
     }
   },
   {
-    "description": "Compute two-way cluster-robust standard errors.",
+    "description": "Compute two-way cluster-robust standard errors. Validation: certified parity evidence.",
     "name": "twoway_cluster",
     "parameters": {
       "properties": {
