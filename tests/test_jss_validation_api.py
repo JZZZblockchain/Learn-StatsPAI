@@ -16,7 +16,7 @@ JSS_HEADLINE_TEST_COUNTS = {
     "external_parity": 50,
     "coverage_monte_carlo": 12,
 }
-JSS_CERTIFIED_VALIDATED_SYMBOLS = 70
+JSS_CERTIFIED_VALIDATED_SYMBOLS = 71
 VALIDATED_GRADE_MARKERS = (
     "tests/reference_parity/",
     "tests/external_parity/",
