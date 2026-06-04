@@ -32,6 +32,17 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **`.glance()` crashed (`OverflowError: cannot convert float infinity to
+  integer`) on Cox and parametric-survival (`survreg`) results.** Those
+  estimators deliberately store `df_resid = inf` to signal a large-sample
+  (normal) reference distribution, but `glance()` cast the residual degrees of
+  freedom with `int()` unconditionally. The cast now passes non-finite degrees
+  of freedom through unchanged; finite results keep an integer `df_resid`
+  (no change). A crash-hunt across ~48 fitted results confirmed the rest of
+  the §3 unified-result export surface (`summary`/`to_latex`/`to_markdown`/
+  `to_word`/`to_excel`/`cite`/`tidy`/`for_agent`/`plot`) is otherwise clean
+  across 20+ estimator families. Covered by `tests/test_glance_survival.py`.
+
 - **`sp.event_study` results crashed the library's own exporters, plotters and
   pre-trend tools (canonical-column mismatch).** `sp.event_study` emitted its
   coefficient table under the column name `estimate`, but the rest of the DID
