@@ -137,6 +137,75 @@ def cmd_gaps(args) -> int:
     return 0
 
 
+def _covered_sets(xml_path: str, mod: str) -> dict:
+    """Map ``filename -> set(covered line numbers)`` for one module's files."""
+    out: dict = defaultdict(set)
+    for cls in _iter_classes(xml_path):
+        fn = cls.get("filename", "")
+        if _module_of(fn) != mod:
+            continue
+        short = fn.replace("\\", "/").split("statspai/", 1)[-1]
+        lines = cls.find("lines")
+        if lines is None:
+            continue
+        for ln in lines.findall("line"):
+            if int(ln.get("hits", "0")) > 0:
+                out[short].add(int(ln.get("number")))
+    return out
+
+
+def _line_totals(xml_path: str, mod: str) -> dict:
+    """Map ``filename -> set(all measured line numbers)`` for one module."""
+    out: dict = defaultdict(set)
+    for cls in _iter_classes(xml_path):
+        fn = cls.get("filename", "")
+        if _module_of(fn) != mod:
+            continue
+        short = fn.replace("\\", "/").split("statspai/", 1)[-1]
+        lines = cls.find("lines")
+        if lines is None:
+            continue
+        for ln in lines.findall("line"):
+            out[short].add(int(ln.get("number")))
+    return out
+
+
+def cmd_union(args) -> int:
+    """Post-work full-suite coverage for one module, computed *fast* as
+
+        baseline_covered ∪ (module-only-tests covered)
+
+    The baseline full-suite XML already includes every cross-module test's
+    contribution to this module, so any line the new module-scoped tests cover
+    is purely additive — the union equals the true post-work full-suite number
+    without re-running the whole ~6.5k-test suite (which takes >1h).
+    """
+    mod = args.module
+    base_cov = _covered_sets(args.baseline, mod)
+    new_cov = _covered_sets(args.tests_xml, mod)
+    totals = _line_totals(args.baseline, mod)
+
+    union_covered = 0
+    total = 0
+    gained = 0
+    for fn, all_lines in totals.items():
+        total += len(all_lines)
+        u = base_cov.get(fn, set()) | new_cov.get(fn, set())
+        u &= all_lines  # stay within measured lines
+        union_covered += len(u)
+        gained += len(u - base_cov.get(fn, set()))
+
+    pct = 100 * union_covered / total if total else 0.0
+    base_pct = 100 * sum(len(s) for s in base_cov.values()) / total if total else 0.0
+    need = max(0, int(__import__("math").ceil(TARGET / 100 * total)) - union_covered)
+    print(f"# module '{mod}'  (baseline={args.baseline}, tests={args.tests_xml})")
+    print(f"  baseline full-suite : {base_pct:.1f}%")
+    print(f"  + new module tests  : +{gained} lines newly covered")
+    print(f"  => post-work est.   : {pct:.1f}%  ({union_covered}/{total})")
+    print(f"  {'OK ✓ ≥95%' if pct >= TARGET else f'still need +{need} lines to 95%'}")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -146,6 +215,23 @@ def main() -> int:
     pr = sub.add_parser("report", help="per-module coverage for the 6 core modules")
     pr.add_argument("--xml", default=_default_xml())
     pr.set_defaults(func=cmd_report)
+
+    pu = sub.add_parser(
+        "union", help="fast post-work module coverage = baseline ∪ module-test XML"
+    )
+    pu.add_argument("module", choices=CORE_MODULES)
+    pu.add_argument(
+        "--baseline",
+        default=os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "coverage.xml"
+        ),
+    )
+    pu.add_argument(
+        "--tests-xml",
+        required=True,
+        help="coverage XML from running just this module's test files",
+    )
+    pu.set_defaults(func=cmd_union)
 
     pg = sub.add_parser("gaps", help="uncovered line ranges for one module")
     pg.add_argument("module", choices=CORE_MODULES)
