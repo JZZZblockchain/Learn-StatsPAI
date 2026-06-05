@@ -73,7 +73,7 @@ Sequencing (cheapest first, big three last): **iv → dml → panel → did → 
 
 | module | start | current | target | status |
 |---|---|---|---|---|
-| iv | 86.7 | 91.8 | 95 | 🟡 in progress — +90 lines left (defensive/error tail) |
+| iv | 86.7 | **95.5** | 95 | ✅ **DONE** (12 test files, 162 tests; 46 defensive lines pragma'd) |
 | dml | 75.7 | — | 95 | ⬜ queued |
 | panel | 54.0 | — | 95 | ⬜ queued |
 | did | 74.6 | — | 95 | ⬜ queued |
@@ -138,7 +138,24 @@ fallbacks 19, …) — see tail-handling policy decision above.
 Next: (a) maintainer picks tail-handling policy; (b) finish iv tail; (c) move to
 dml (75.7%, next cheapest).
 
+### 2026-06-05 — session 3: iv ✅ reaches 95.5% (hybrid tail policy)
 
+Maintainer picked the **hybrid** tail policy (real tests + `# pragma: no cover`
+on genuinely-defensive lines). **iv DONE at 95.5%** (union method; true
+full-suite ≥ this) — the first core module to clear the bar.
+
+- 12 iv coverage test files total, 162 tests, all green.
+- 46 defensive lines pragma'd across 12 iv source files — all `except`-fallbacks
+  (LinAlgError pinv/lstsq, bare except), unreachable validation raises, and
+  defensive nan/inf sentinels. Comments only; zero numeric change.
+- **Bug surfaced & flagged (not yet fixed):** `sp.iv(method='lasso', formula=…)`
+  raises `TypeError` — the dispatcher forwards `formula=` into `lasso_iv`, which
+  rejects it (native `x_endog`/`z` path works). Pinned by
+  `test_iv_cov_tail.py::test_dispatch_lasso_formula_is_currently_broken`.
+
+Next: **dml** (75.7%, next cheapest), same playbook.
+
+## Acceptance checklist (for the maintainer to verify all results)
 
 Run, then confirm each line:
 
