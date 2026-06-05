@@ -54,7 +54,6 @@ STATA_SKIP_REASON: dict[str, str] = {
     "52_scm_unique":    "no canonical Stata SCM port",
     "53_cr2":           "Stata native vce(cluster)=CR1; CR2/CR3 need community summclust",
     "54_twoway_cluster": "Stata native vce(cluster) is one-way; two-way needs community vcemway / reghdfe",
-    "55_hc2_hc3":        "Stata regress vce(hc2)/vce(hc3) is native but not yet materialized in the Stata harness",
     "56_multiway_cluster": "Stata native vce(cluster) is one-way; multiway needs community vcemway / reghdfe",
 }
 

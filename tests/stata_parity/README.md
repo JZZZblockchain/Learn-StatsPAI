@@ -33,7 +33,7 @@ bytes the R side reads), runs the canonical Stata reference, and
 writes one row per parity statistic to
 `results/NN_<name>_Stata.json` via the helpers in `_common.do`.
 
-## Modules covered (44 of 51)
+## Modules covered (45 of 51)
 
 | # | Method                       | StatsPAI                       | Stata reference                                              |
 | --- | --- | --- | --- |
@@ -81,6 +81,7 @@ writes one row per parity statistic to
 | 49 | Ordered probit                | `sp.oprobit`                   | `oprobit`                                                    |
 | 50 | Arellano-Bond GMM             | `sp.xtabond`                   | `xtabond`                                                    |
 | 51 | Newey-West HAC OLS            | `sp.regress(robust="hac")`     | `newey`                                                      |
+| 55 | OLS + HC2 / HC3 SE            | `sp.regress(robust="hc2"/"hc3")` | `regress, vce(hc2)` / `regress, vce(hc3)`                  |
 
 ### Modules **without** a Stata sibling
 
@@ -130,7 +131,7 @@ pytest tests/test_parity_runtime.py -m external_parity_runtime --no-cov
 ## Stata environment
 
 - **Edition tested**: Stata 18 BE (Basic Edition; matrix max = 800).
-  None of the 44 modules trip the BE matrix limit.
+  None of the 45 modules trip the BE matrix limit.
 - **`set type double`** is forced in `_common.do` so
   `import delimited` reads the CSV bytes at full IEEE-754 precision;
   without it, Stata's float default would cost 4-5 orders of
