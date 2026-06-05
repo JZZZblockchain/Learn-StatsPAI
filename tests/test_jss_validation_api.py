@@ -9,11 +9,12 @@ import pytest
 import statspai as sp
 
 
-# The two ``sp.dml`` vs doubleml-for-py pins in
-# ``tests/external_parity/test_dml_python_parity.py`` are gated by
+# The four ``sp.dml`` vs doubleml-for-py pins in
+# ``tests/external_parity/test_dml_python_parity.py`` (PLR, IRM, PLIV, IIVM —
+# one per DoubleML model class) are gated by
 # ``pytest.importorskip("doubleml")`` — doubleml is the opt-in ``parity``
-# extra, not part of ``dev``. Without it those 2 tests do not collect, so
-# the JSS external-parity headline (52) is only reachable when the extra is
+# extra, not part of ``dev``. Without it those 4 tests do not collect, so
+# the JSS external-parity headline (54) is only reachable when the extra is
 # installed (CI installs it on the canonical ubuntu+3.10 job).
 _HAS_DOUBLEML = importlib.util.find_spec("doubleml") is not None
 
@@ -24,7 +25,7 @@ _HAS_DOUBLEML = importlib.util.find_spec("doubleml") is not None
 # drift-guard test below.
 JSS_HEADLINE_TEST_COUNTS = {
     "reference_parity": 124,
-    "external_parity": 52,
+    "external_parity": 54,
     "coverage_monte_carlo": 12,
 }
 JSS_CERTIFIED_VALIDATED_SYMBOLS = 73
@@ -170,7 +171,7 @@ def test_validation_report_collected_counts_match_jss_headline():
         if actual is None:
             pytest.skip(f"pytest --collect-only unavailable for {key}")
         if key == "external_parity" and not _HAS_DOUBLEML:
-            # The manuscript's external-parity count includes the 2
+            # The manuscript's external-parity count includes the 4
             # doubleml-gated pins; without the optional `parity` extra they
             # don't collect, so verifying the headline here would be a
             # spurious drift. CI installs `.[parity]` on the canonical env to

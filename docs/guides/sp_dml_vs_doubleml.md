@@ -42,10 +42,18 @@ scikit-learn learners (`LassoCV(cv=5)` for regression,
 `LogisticRegressionCV(cv=5)` for binary propensity) under a fixed
 seed.
 
+The non-instrumented models (PLR, IRM) use `dml_data.csv`; the
+instrumented models (PLIV, IIVM) use the companion `dml_iv_data.csv`
+(n=2000, with a continuous instrument `z_c` and a binary instrument
+`z_b`; see `_generate_dml_iv_data.py`). All four DoubleML model classes
+are pinned against `doubleml-for-py`.
+
 | Model | `sp.dml` (StatsPAI 1.16.1) | `doubleml-for-py` 0.11.3 | `DoubleML` R 1.0.2 (cv.glmnet) |
 | --- | --- | --- | --- |
 | **PLR** (continuous d) | **+0.5590 ± 0.0331** | **+0.5590 ± 0.0331** | +0.5368 ± 0.0335 |
 | **IRM** (binary d, AIPW) | -0.0191 ± 0.0766 | -0.0267 ± 0.0742 | +0.0066 ± 0.0744 |
+| **PLIV** (continuous d, instrument `z_c`) | **+0.5117 ± 0.0195** | **+0.5117 ± 0.0195** | — (not pinned on R side) |
+| **IIVM** (binary d, instrument `z_b`, LATE) | +0.5495 ± 0.0924 | +0.5618 ± 0.0919 | — (not pinned on R side) |
 
 - **PLR**: `sp.dml` and `doubleml-for-py` agree to **machine precision**
   on both the point estimate and the standard error — |Δ| = 1.1 × 10⁻¹⁶
@@ -69,6 +77,19 @@ seed.
   external parity test tolerates 0.05 absolute deviation, which is
   roughly two-thirds of one SE on this fixture.
 
+- **PLIV**: Like PLR, the partially linear IV estimator residualises
+  `y`, `d`, and the instrument `z_c` on `X` and evaluates the same
+  partialling-out score on a shared `KFold` partition. `sp.dml` and
+  `doubleml-for-py` agree to **machine precision** on both the
+  coefficient (|Δ| = 0) and the standard error (|Δ| ~ 3 × 10⁻¹⁷).
+
+- **IIVM**: The interactive-IV LATE estimator behaves like IRM — its
+  AIPW-style score leaves fold-conditional construction details
+  unspecified, so `sp.dml` and `doubleml-for-py` agree to ~1.2 × 10⁻²
+  (≈ 0.13 SE) rather than to machine precision. Both land near the true
+  LATE of 0.5 (0.549 vs 0.562). The external parity test tolerates 0.05
+  absolute, matching the IRM discipline.
+
 ## When to expect divergence
 
 `sp.dml` deviates from `doubleml-for-py` only in implementation
@@ -91,12 +112,12 @@ unspecified:
 
 For audit-grade numerical equivalence, supply the same
 `sklearn`-compatible estimators to both libraries (as the external
-parity test does): PLR then agrees with `doubleml-for-py` to machine
-precision under a fixed seed (verified above). IRM agreement is up to
-the small AIPW score-construction difference noted above (≈ 0.10 SE).
-PLIV and IIVM use the analogous Neyman-orthogonal scores and are
-exercised by StatsPAI's own DML test suite, though they are not pinned
-numerically against `doubleml-for-py` here.
+parity test does): the partialling-out models (PLR, PLIV) then agree
+with `doubleml-for-py` to machine precision under a fixed seed
+(verified above), and the AIPW models (IRM, IIVM) agree up to the small
+score-construction difference noted above (≈ 0.10–0.13 SE). All four
+DoubleML model classes are pinned numerically against `doubleml-for-py`
+in `tests/external_parity/test_dml_python_parity.py`.
 
 ## Running the parity tests yourself
 
