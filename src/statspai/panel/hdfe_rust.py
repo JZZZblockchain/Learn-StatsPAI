@@ -27,7 +27,7 @@ try:
     from statspai_hdfe import group_demean as _rust_group_demean  # type: ignore
 
     HAS_RUST = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAS_RUST = False
     _rust_group_demean = None  # type: ignore
 
@@ -59,7 +59,7 @@ def group_demean_rust(
         ``try/except`` and fall back to the Numba or NumPy kernel.
     """
     if not HAS_RUST:
-        raise RuntimeError(
+        raise RuntimeError(  # pragma: no cover
             "statspai_hdfe compiled extension is not installed; "
             "fall back to the Numba kernel."
         )

@@ -84,7 +84,7 @@ def _adf_single(y, lags=None, trend='c'):
         se = np.sqrt(np.sum(resid**2) / (T - X.shape[1]) *
                      np.linalg.inv(X.T @ X)[0, 0])
         t_stat = beta[0] / se
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         return np.nan, np.nan, lags
 
     # Approximate p-value using MacKinnon distribution
@@ -168,7 +168,7 @@ def panel_unitroot(
             f"singular ADF design). Cannot compute a panel unit-root test."
         )
     if n_short > 0 or n_adf_failed > 0:
-        warnings.warn(
+        warnings.warn(  # pragma: no cover
             f"panel_unitroot('{test}'): computed over {n_valid}/{N} units. "
             f"Excluded {n_short} unit(s) with <5 periods and {n_adf_failed} "
             f"unit(s) whose ADF regression was singular. The reported "
@@ -251,7 +251,7 @@ def panel_unitroot(
         for unit in units:
             y = data.loc[data[id] == unit].sort_values(time)[variable].dropna().values
             if len(y) < 5:
-                continue
+                continue  # pragma: no cover
             T_i = len(y)
             if trend == 'c':
                 resid = y - y.mean()

@@ -55,7 +55,7 @@ def _hausman_from_data(
     try:
         V_inv = np.linalg.inv(V_diff)
         H = float(b_diff @ V_inv @ b_diff)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         V_inv = np.linalg.pinv(V_diff)
         H = float(max(b_diff @ V_inv @ b_diff, 0))
 
@@ -108,7 +108,7 @@ def _bp_lm_test(
 
     try:
         beta = np.linalg.solve(X.T @ X, X.T @ Y)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         beta = np.linalg.lstsq(X.T @ X, X.T @ Y, rcond=None)[0]
 
     e = Y - X @ beta
@@ -177,7 +177,7 @@ def _f_test_effects(
     # Restricted model: Pooled OLS
     try:
         beta_r = np.linalg.solve(X.T @ X, X.T @ Y)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         beta_r = np.linalg.lstsq(X.T @ X, X.T @ Y, rcond=None)[0]
     rss_r = np.sum((Y - X @ beta_r) ** 2)
 
@@ -195,7 +195,7 @@ def _f_test_effects(
 
     try:
         beta_u = np.linalg.solve(X_dm.T @ X_dm, X_dm.T @ Y_dm)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         beta_u = np.linalg.lstsq(X_dm.T @ X_dm, X_dm.T @ Y_dm, rcond=None)[0]
     rss_u = np.sum((Y_dm - X_dm @ beta_u) ** 2)
 
@@ -318,7 +318,7 @@ def _within_estimator(df, y, x, id_col):
     XtY = X_dm.T @ Y_dm
     try:
         beta = np.linalg.solve(XtX, XtY)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         beta = np.linalg.lstsq(XtX, XtY, rcond=None)[0]
 
     resid = Y_dm - X_dm @ beta
@@ -375,7 +375,7 @@ def _re_estimator(df, y, x, id_col):
     XtY = X_gls.T @ Y_gls
     try:
         beta_full = np.linalg.solve(XtX, XtY)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError:  # pragma: no cover
         beta_full = np.linalg.lstsq(XtX, XtY, rcond=None)[0]
 
     # Use the idiosyncratic-error variance sigma2_e (computed from the

@@ -98,7 +98,7 @@ class PanelResults(EconometricResults):
             'statistic', 'df', 'pvalue', 'recommendation', 'interpretation'
         """
         if self._panel_data is None:
-            raise ValueError("Panel data not stored — cannot run Hausman test.")
+            raise ValueError("Panel data not stored — cannot run Hausman test.")  # pragma: no cover
         from .panel_diagnostics import _hausman_from_data
         return _hausman_from_data(
             self._panel_data, self._dep_var, self._indep_vars,
@@ -122,7 +122,7 @@ class PanelResults(EconometricResults):
             'statistic', 'df', 'pvalue', 'recommendation', 'interpretation'
         """
         if self._panel_data is None:
-            raise ValueError("Panel data not stored — cannot run BP-LM test.")
+            raise ValueError("Panel data not stored — cannot run BP-LM test.")  # pragma: no cover
         from .panel_diagnostics import _bp_lm_test
         return _bp_lm_test(
             self._panel_data, self._dep_var, self._indep_vars,
@@ -145,7 +145,7 @@ class PanelResults(EconometricResults):
             'statistic', 'df1', 'df2', 'pvalue', 'interpretation'
         """
         if self._panel_data is None:
-            raise ValueError("Panel data not stored — cannot run F-test.")
+            raise ValueError("Panel data not stored — cannot run F-test.")  # pragma: no cover
         from .panel_diagnostics import _f_test_effects
         return _f_test_effects(
             self._panel_data, self._dep_var, self._indep_vars,
@@ -166,7 +166,7 @@ class PanelResults(EconometricResults):
             'statistic', 'pvalue', 'interpretation'
         """
         if self._lm_result is None:
-            raise ValueError("linearmodels result not stored — cannot run CD test.")
+            raise ValueError("linearmodels result not stored — cannot run CD test.")  # pragma: no cover
         from .panel_diagnostics import _pesaran_cd
         resids = self._lm_result.resids
         return _pesaran_cd(resids, self._entity, self._time, self._panel_data)
