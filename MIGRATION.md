@@ -140,7 +140,7 @@ get a `RuntimeWarning` instead of a silent fallback.
 
 <a id="sp-synth-default-classic"></a>
 
-## Unreleased — ⚠️ `sp.synth()` default method restored to `'classic'`
+## 1.16.1 — ⚠️ `sp.synth()` default method restored to `'classic'`
 
 **What changed.** A bare `sp.synth(...)` call (no `method=`) now runs
 `method='classic'` — canonical Abadie–Diamond–Hainmueller (2010) synthetic
@@ -174,7 +174,7 @@ Guarded by
 
 <a id="sp-causal-forest-aipw-fix"></a>
 
-## Unreleased — ⚠️ Causal-forest ATE/ATT now doubly-robust (AIPW)
+## 1.16.0+source.20260531 — ⚠️ Causal-forest ATE/ATT now doubly-robust (AIPW)
 
 **What changed.** `CausalForest.average_treatment_effect(...)` previously
 returned a plug-in average of the forest's CATE predictions. Forest
@@ -204,7 +204,7 @@ and `tests/reference_parity/test_grf_parity.py`.
 
 ---
 
-## Unreleased — ⚠️ `sp.xtabond` Arellano-Bond GMM correctness fix
+## 1.16.0 — ⚠️ `sp.xtabond` Arellano-Bond GMM correctness fix
 
 **What broke.** `sp.xtabond` (and `sp.panel(method='ab')`) used a flat,
 fixed block of lagged-level instrument columns and then dropped every
@@ -242,7 +242,7 @@ guarded by `tests/test_gmm.py::TestArellanoBond::test_parity_matches_stata_xtabo
 
 <a id="sp-qreg-se-fix"></a>
 
-## Unreleased — ⚠️ `sp.qreg` Powell sandwich SE correctness fix
+## 1.16.0 — ⚠️ `sp.qreg` Powell sandwich SE correctness fix
 
 **What broke.** The Powell (1991) kernel sandwich for quantile
 regression standard errors was implemented with an extra factor of
