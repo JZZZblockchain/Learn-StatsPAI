@@ -23,8 +23,23 @@ from statspai.dml._learners import (
     resolve_learner,
 )
 
-REGRESSOR_ALIASES = ["rf", "gbm", "lasso", "ridge", "linear", "ols", "lgbm"]
-CLASSIFIER_ALIASES = ["rf", "gbm", "lasso", "ridge", "logistic", "lgbm"]
+import importlib.util
+
+# ``lgbm`` resolves to a LightGBM learner, an *optional* dependency. When
+# lightgbm is not installed, ``resolve_learner('lgbm', ...)`` deliberately
+# raises a clear ImportError (see ``dml/_learners.py``); the alias sweep should
+# then skip rather than hard-fail, so the suite stays green on minimal installs.
+_HAS_LIGHTGBM = importlib.util.find_spec("lightgbm") is not None
+_lgbm = pytest.param(
+    "lgbm",
+    marks=pytest.mark.skipif(
+        not _HAS_LIGHTGBM,
+        reason="optional dependency 'lightgbm' not installed",
+    ),
+)
+
+REGRESSOR_ALIASES = ["rf", "gbm", "lasso", "ridge", "linear", "ols", _lgbm]
+CLASSIFIER_ALIASES = ["rf", "gbm", "lasso", "ridge", "logistic", _lgbm]
 
 
 @pytest.mark.parametrize("alias", REGRESSOR_ALIASES)
