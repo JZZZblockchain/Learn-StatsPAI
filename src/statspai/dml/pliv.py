@@ -115,7 +115,7 @@ class DoubleMLPLIV(_DoubleMLBase):
                 f"an instrument with conditional-on-X variation."
             )
         if abs(partial_corr) < self._FIRST_STAGE_CORR_FLOOR:
-            raise RuntimeError(
+            raise RuntimeError(  # pragma: no cover
                 f"Weak / degenerate PLIV first stage: |partial corr(z̃, d̃)| "
                 f"= {abs(partial_corr):.2e} below floor "
                 f"{self._FIRST_STAGE_CORR_FLOOR:.0e}. The ML-residualised "
@@ -126,7 +126,7 @@ class DoubleMLPLIV(_DoubleMLBase):
                 f"weak-IV-robust inference still has power."
             )
         if abs(denom) < 1e-12:
-            raise RuntimeError(
+            raise RuntimeError(  # pragma: no cover
                 f"{label} denominator ≈ 0; the ML-residualised instrument "
                 f"is effectively orthogonal to the ML-residualised treatment "
                 f"under the supplied weight measure."
