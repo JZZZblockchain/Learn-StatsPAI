@@ -66,6 +66,7 @@ dev = [
     "pytest>=6.0",
     "pytest-cov",
     "pytest-xdist",
+    "hypothesis>=6.100",
     "jsonschema>=4.0",
     "build",
     "black",
