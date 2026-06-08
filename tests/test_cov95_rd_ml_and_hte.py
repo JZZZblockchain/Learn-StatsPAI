@@ -109,3 +109,44 @@ def test_rdhte_lincom(rd_df):
     assert isinstance(out, dict)
     est = out.get("estimate", out.get("value"))
     assert est is not None and np.isfinite(float(est))
+
+
+def test_rdhte_continuous_moderator_and_eval_points():
+    rng = np.random.default_rng(2)
+    n = 1500
+    x = rng.uniform(-1, 1, n)
+    treat = (x >= 0).astype(float)
+    zc = rng.uniform(0, 1, n)              # continuous moderator
+    y = 0.5 * x + (2.0 + 3.0 * zc) * treat + rng.normal(0, 0.4, n)
+    df = pd.DataFrame({"y": y, "x": x, "z": zc})
+    # explicit evaluation points exercise the eval_points branch
+    r = sp.rdhte(df, y="y", x="x", z="z", c=0,
+                 eval_points=np.array([0.2, 0.5, 0.8]))
+    det = r.detail
+    assert len(det) >= 3
+    # CATE should increase with the moderator (true slope +3)
+    cate_by_z = det.sort_values("z_value")["cate"].to_numpy()
+    assert cate_by_z[-1] > cate_by_z[0]
+
+
+def test_rdhte_quadratic_and_multivariate_z():
+    rng = np.random.default_rng(4)
+    n = 2000
+    x = rng.uniform(-1, 1, n)
+    treat = (x >= 0).astype(float)
+    z1 = rng.integers(0, 2, n).astype(float)
+    z2 = rng.normal(size=n)
+    y = 0.5 * x + (2.0 + 1.5 * z1) * treat + rng.normal(0, 0.4, n)
+    df = pd.DataFrame({"y": y, "x": x, "z1": z1, "z2": z2})
+    # p=2 (quadratic) + multivariate moderator grid
+    r = sp.rdhte(df, y="y", x="x", z=["z1", "z2"], c=0, p=2, n_eval=9)
+    assert np.all(np.isfinite(r.detail["cate"].to_numpy()))
+
+
+def test_rdhte_plot(rd_df):
+    pytest.importorskip("matplotlib")
+    import matplotlib
+    matplotlib.use("Agg")
+    r = sp.rdhte(rd_df, y="y", x="x", z="z", c=0)
+    ax = r.plot()
+    assert ax is not None
