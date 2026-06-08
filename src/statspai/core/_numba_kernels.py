@@ -66,32 +66,10 @@ except ImportError:  # pragma: no cover
 # --------------------------------------------------------------------------- #
 #  Core OLS kernel
 # --------------------------------------------------------------------------- #
-
-@njit(cache=_NUMBA_CACHE)
-def _xtx(X: np.ndarray) -> np.ndarray:
-    """Compute X'X using explicit loops (cache-friendly for tall X)."""
-    n, k = X.shape
-    out = np.zeros((k, k))
-    for i in range(n):
-        for j in range(k):
-            for m in range(j, k):
-                out[j, m] += X[i, j] * X[i, m]
-    # Symmetrise
-    for j in range(k):
-        for m in range(j + 1, k):
-            out[m, j] = out[j, m]
-    return out
-
-
-@njit(cache=_NUMBA_CACHE)
-def _xty(X: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Compute X'y."""
-    n, k = X.shape
-    out = np.zeros(k)
-    for i in range(n):
-        for j in range(k):
-            out[j] += X[i, j] * y[i]
-    return out
+# NOTE: the explicit-loop ``_xtx`` / ``_xty`` normal-equation helpers were
+# removed when ``ols_fit`` moved to a QR solve (squaring cond(X) via X'X was
+# the root cause of the NIST StRD Filippelli/Wampler accuracy loss). The
+# sandwich kernels below build their own X'-weighted-X meat directly.
 
 
 def ols_fit(
