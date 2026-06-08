@@ -123,15 +123,34 @@ def test_mte_too_few_obs_per_arm_raises():
 # ─── dispatcher: lasso-with-formula, quantile IV, missing args ───────────
 
 
-def test_dispatch_lasso_formula_is_currently_broken(df):
-    # KNOWN BUG (flagged to maintainer by the coverage campaign): the dispatcher
-    # forwards ``formula=`` into ``lasso_iv``, which does not accept it, so
-    # ``sp.iv(method='lasso', formula=...)`` raises TypeError. The native
-    # x_endog/z calling convention (test_iv_cov_dispatcher_routes) works fine.
-    # This test pins the current behaviour and covers the formula-forwarding
-    # branch; update it to ``assert res is not None`` once the route is fixed.
-    with pytest.raises(TypeError):
-        sp.iv(method="lasso", formula="y ~ (d ~ z1 + z2) + x", data=df)
+def test_dispatch_lasso_formula_matches_native(df):
+    # Regression test for the dispatcher's lasso formula route (was a bug: the
+    # dispatcher forwarded ``formula=`` into ``lasso_iv``, which takes native
+    # ``x_endog``/``z`` lists, raising ``TypeError``). The fix parses the
+    # Patsy-style formula into those names, so the formula path must now
+    # return the *same* estimates as the native x_endog/z calling convention.
+    res_formula = sp.iv(method="lasso", formula="y ~ (d ~ z1 + z2) + x",
+                        data=df)
+    res_native = sp.iv(method="lasso", data=df, y="y", x_endog=["d"],
+                       z=["z1", "z2"], x_exog=["x"])
+    assert res_formula is not None and res_native is not None
+
+    def _coef(r):
+        c = getattr(r, "coefficients", None)
+        if c is None:
+            c = getattr(r, "params", None)
+        return np.asarray(c, dtype=float)
+
+    np.testing.assert_allclose(_coef(res_formula), _coef(res_native),
+                               rtol=0, atol=0)
+
+
+def test_dispatch_lasso_alias_endog_instruments(df):
+    # The canonical dispatcher aliases (endog/instruments/exog) must also route
+    # into lasso_iv's native x_endog/z/x_exog names.
+    res = sp.iv(method="lasso", data=df, y="y", endog=["d"],
+                instruments=["z1", "z2"], exog=["x"])
+    assert res is not None
 
 
 def test_dispatch_ivqreg_route(df):
