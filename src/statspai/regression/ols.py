@@ -69,8 +69,14 @@ class OLSEstimator(BaseEstimator):
         ) = _numba_kernels()
         params, fitted_values, residuals = _fast_ols(X, y)
 
+        # (X'X)^{-1} via the QR factor R (X = QR  =>  X'X = R'R), which keeps
+        # the covariance accuracy tracking cond(X) rather than cond(X)**2.
+        # Forming inv(X'X) directly squares the condition number and collapses
+        # on ill-conditioned designs (see NIST StRD Filippelli/Wampler).
         try:
-            XtX_inv = np.linalg.inv(X.T @ X)
+            _Q, R = np.linalg.qr(X)
+            R_inv = np.linalg.solve(R, np.eye(R.shape[0]))
+            XtX_inv = R_inv @ R_inv.T
         except np.linalg.LinAlgError:
             XtX_inv = np.linalg.pinv(X.T @ X)
             warnings.warn("X'X matrix is singular, using pseudo-inverse")
@@ -105,8 +111,16 @@ class OLSEstimator(BaseEstimator):
         # F-statistic (assuming constant in first column)
         if k > 1:
             r_squared_restricted = 0  # R² from constant-only model
-            f_stat = ((r_squared - r_squared_restricted) / (k - 1)) / ((1 - r_squared) / (n - k))
-            f_pvalue = 1 - stats.f.cdf(f_stat, k - 1, n - k)
+            denom = (1 - r_squared) / (n - k)
+            if denom <= 0:
+                # Exact fit (R² == 1): F diverges. NIST StRD certifies this as
+                # "Infinity" (e.g. Wampler1/2); report it without tripping a
+                # divide-by-zero warning.
+                f_stat = np.inf
+                f_pvalue = 0.0
+            else:
+                f_stat = ((r_squared - r_squared_restricted) / (k - 1)) / denom
+                f_pvalue = 1 - stats.f.cdf(f_stat, k - 1, n - k)
         else:
             f_stat = f_pvalue = np.nan
         

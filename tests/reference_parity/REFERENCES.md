@@ -31,6 +31,15 @@ errors.
 | `synth_factor_model_data` | ATT = -5.0 | 2-factor DGP, treated loadings in convex hull of donors; SCM exactly unbiased (Abadie-Diamond-Hainmueller 2010 §3). |
 | `matching_cia_data` | ATT = 2.0 | CIA with homogeneous effect; matching / IPW / CBPS / ebalance target ATT = 2.0 (Imbens-Wooldridge 2009). |
 
+## Published certified-value fixtures
+
+`test_nist_strd_ols.py` uses the NIST/ITL Statistical Reference Datasets for
+linear least squares regression. The committed `.dat` files under
+`_fixtures/nist_strd/` contain the published data, certified coefficients, and
+certified standard errors for Filip, Longley, NoInt1/2, Norris, Pontius, and
+Wampler1-5. These tests are deterministic and do not require R, Stata, or
+network access.
+
 ## What the tests verify
 
 ### Recovery tests

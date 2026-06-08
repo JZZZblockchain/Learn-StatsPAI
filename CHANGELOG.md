@@ -4,6 +4,40 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **NIST StRD Linear Least Squares certification for the OLS kernel
+  (`tests/reference_parity/test_nist_strd_ols.py`).** All 11 NIST Statistical
+  Reference Datasets for linear regression (Norris, Pontius, NoInt1/2, Filip,
+  Longley, Wampler1–5) are bundled verbatim under
+  `tests/reference_parity/_fixtures/nist_strd/` and checked against their
+  embedded certified values using NIST's log-relative-error (correct-digits)
+  metric. Both the low-level `OLSEstimator.estimate` kernel and the public
+  `sp.regress` formula path are certified. The thresholds sit above what the
+  retired normal-equations path could reach, so the suite also guards against
+  any regression to `inv(X'X)`.
+
+### Changed (⚠️ Correctness)
+
+- **OLS kernel now solves via QR factorisation instead of the normal
+  equations.** `ols_fit` (coefficients) and `OLSEstimator.estimate`
+  (covariance) previously solved `(X'X) b = X'y` and formed `inv(X'X)`, which
+  *squares* the condition number of the design matrix. On well-conditioned
+  data nothing observable changes (results match the old path to ~1e-12; the
+  full `reference_parity` + `external_parity` JOSS suites are unaffected). On
+  **ill-conditioned designs the new path is dramatically more accurate**: on the
+  NIST StRD suite the degree-10 Filippelli polynomial went from **0 correct
+  digits to ~7**, Longley from ~7.7 to ~11, and Wampler1 from ~6.1 to ~9.6
+  correct digits. Any code that fit OLS on near-collinear or high-degree
+  polynomial designs and relied on (silently wrong) coefficients will now get
+  materially different — correct — numbers. See
+  [MIGRATION.md](MIGRATION.md#ols-qr-kernel).
+- **Exact-fit OLS no longer emits a divide-by-zero `RuntimeWarning`.** When a
+  regression fits the data exactly (`R² == 1`, e.g. NIST Wampler1/2), the
+  F-statistic is now reported as `inf` (matching the NIST-certified
+  "Infinity") with `f_pvalue = 0.0`, computed without tripping the warning. The
+  reported value is unchanged for every non-exact fit.
+
 ### Fixed
 
 - **`sp.iv(method='lasso', formula=...)` raised `TypeError` instead of

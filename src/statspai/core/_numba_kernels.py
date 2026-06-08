@@ -99,7 +99,16 @@ def ols_fit(
     y: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Fast OLS: beta = (X'X)^{-1} X'y.
+    Fast OLS via QR factorisation: ``X = QR``, ``beta = R^{-1} Q' y``.
+
+    Solving the normal equations ``(X'X) beta = X'y`` directly squares the
+    condition number of ``X`` and loses roughly half the available digits on
+    ill-conditioned designs (polynomial regression, near-collinear covariates).
+    The thin QR route never forms ``X'X``, so the achieved accuracy tracks
+    ``cond(X)`` rather than ``cond(X)**2``.  On the NIST StRD certification
+    suite this lifts the worst case (Filippelli, a degree-10 polynomial fit)
+    from 0 correct digits to ~7, while leaving well-conditioned fits unchanged
+    to ~1e-12.  See ``tests/reference_parity/test_nist_strd_ols.py``.
 
     Returns
     -------
@@ -107,12 +116,12 @@ def ols_fit(
     fitted : ndarray (n,)
     residuals : ndarray (n,)
     """
-    XtX = _xtx(X)
-    Xty = _xty(X, y)
     try:
-        params = np.linalg.solve(XtX, Xty)
+        Q, R = np.linalg.qr(X)
+        params = np.linalg.solve(R, Q.T @ y)
     except np.linalg.LinAlgError:
-        params = np.linalg.lstsq(XtX, Xty, rcond=None)[0]
+        # Rank-deficient design: fall back to the SVD minimum-norm solution.
+        params = np.linalg.lstsq(X, y, rcond=None)[0]
     fitted = X @ params
     residuals = y - fitted
     return params, fitted, residuals

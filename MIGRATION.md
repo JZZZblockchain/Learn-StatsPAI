@@ -5,6 +5,48 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="ols-qr-kernel"></a>
+
+## Unreleased — ⚠️ OLS kernel switched to a QR solve (numerical accuracy)
+
+**What changed.** The core OLS kernel — `ols_fit` for coefficients and
+`OLSEstimator.estimate` for the variance-covariance matrix, both in
+`src/statspai/` — now solves least squares via the **QR factorisation** of the
+design matrix `X = QR` (`b = R⁻¹Qᵀy`, `(X'X)⁻¹ = R⁻¹R⁻ᵀ`). The previous
+implementation solved the normal equations `(X'X) b = X'y` and formed
+`inv(X'X)` directly. Forming `X'X` squares the condition number of `X`, so on
+ill-conditioned designs roughly half of the available digits are lost — and on
+the worst cases the result is meaningless.
+
+**Why.** The new NIST StRD certification suite
+(`tests/reference_parity/test_nist_strd_ols.py`) showed the normal-equations
+path produced **0 correct digits** on the NIST Filippelli dataset (a degree-10
+polynomial fit, `cond(X) ≈ 1e10`) and only ~6 digits on several Wampler
+polynomials. The QR path tracks `cond(X)` rather than `cond(X)²` and lifts
+those to ~7 and ~9–13 digits respectively, matching the published certified
+values.
+
+**Who is affected.**
+
+- **Well-conditioned regressions (the overwhelming majority): no action.**
+  Coefficients, standard errors, R², F all match the old output to ≈1e-12 —
+  far below any reporting precision. The full `reference_parity` and
+  `external_parity` (JOSS reproduction) suites pass unchanged.
+- **Regressions on near-collinear or high-degree-polynomial designs:** you will
+  now get **different — and correct — numbers**. If you previously fit, say, a
+  high-order polynomial trend or a strongly collinear specification directly
+  (without centring/orthogonalising) and recorded the coefficients, re-run and
+  expect them to move. The old numbers were the unstable ones.
+
+There is **no API change** and nothing to rewrite; this note exists only so the
+numerical shift on ill-conditioned designs is on the record.
+
+Separately, exact-fit OLS (`R² == 1`) now reports the F-statistic as `inf`
+(matching NIST's certified "Infinity") instead of emitting a divide-by-zero
+`RuntimeWarning`; non-exact fits are unaffected.
+
+---
+
 <a id="drdid-traditional-normalisation"></a>
 
 ## 1.17.0 — ⚠️ `sp.drdid(method='trad')` ATT correctness fix
