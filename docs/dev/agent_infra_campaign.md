@@ -31,7 +31,7 @@ they do not change a single estimated number.
 | 2 | `EconometricResults.to_dict(detail=)` + `.cite()` (additive) | ~none (additive, default=current) | **done** |
 | 3 | Workflow-tool dispatch contract guard (MCP layer, not registry) | none (test-only) | **done** |
 | 4 | MCP result-cache TTL + structured invalidation | none (runtime only) | **done** |
-| 5 | Docstring parsing multi-format (lazy/extras only) | none (metadata extraction) | pending |
+| 5 | Docstring parser: type-less NumPy headers (no new dep) | none (metadata extraction) | **done** |
 
 ## Item #1 — schema↔signature drift
 
@@ -135,3 +135,36 @@ vs evicted vs never-existed).
 
 All additive; the default singleton `RESULT_CACHE` behaves exactly as before
 unless a TTL is configured.
+
+## Item #5 — docstring parser: type-less NumPy headers
+
+**Course-correction.** The original plan ("add `docstring-parser` for multi-format
+support") was *unnecessary on measurement*: the parser already handles NumPy
+**and** Google styles, and a scan of all 1020 functions found **zero** Sphinx
+`:param:` docstrings — so a new dependency would buy nothing and violate
+dep-minimalism. Cancelled.
+
+**Real gap found by measurement.** The NumPy *type-less* header convention
+(`name` on its own line, description indented beneath — no `: type`) was unmatched
+by `header_re` (which requires a colon). Result: **65 parameter descriptions
+across 41 functions silently dropped**, including `feols`, `feglm`, `fepois`,
+`causal_forest`, `match`, `augsynth`, `mixed`, `lrtest`.
+
+**Fix (registry.py, no new dep).** Added a `barename_re` branch to
+`_parse_docstring_params`: a column-0 bare identifier (or comma-separated list)
+whose next non-blank line is indented is treated as a type-less header. Anchored
+at column 0 so it can never swallow an indented description line — the
+false-positive boundary is covered by a regression test
+(`tests/test_docstring_param_parser.py`, with NumPy-typed / type-less / Google /
+section-termination / not-a-header cases).
+
+Param *names* still come from the signature, so Item #1's contract is unaffected;
+only descriptions/types/enums get richer.
+
+## Schema bundle
+
+The committed `schemas/` + `src/statspai/schemas/` JSON bundle (checked by
+`scripts/dump_schemas.py --check`) was regenerated once at the end of the
+registry-affecting work — it reflects the cumulative effect of Item #1 (corrected
+param names) and Item #5 (recovered descriptions). Generated artifact; no
+hand-edits.

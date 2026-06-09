@@ -12657,6 +12657,24 @@ def _parse_docstring_params(doc: str) -> Dict[str, Dict[str, Any]]:
     google_re = re.compile(
         r"^\s*([*]{0,2}[A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\):\s*(.*)$"
     )
+    # NumPy also allows a *type-less* parameter header: the name (or
+    # comma-separated names) on its own line at the section's base indent
+    # (column 0 after ``inspect.getdoc`` dedents), with the description
+    # indented beneath — e.g. ``feols`` / ``causal_forest`` document params
+    # this way. Anchored at column 0 with no colon so it never matches an
+    # indented description line; only accepted when the next non-blank line
+    # is indented (i.e. a real description follows).
+    barename_re = re.compile(
+        r"^([*]{0,2}[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[*]{0,2}[A-Za-z_][A-Za-z0-9_]*)*)\s*$"
+    )
+
+    def _next_nonblank_is_indented(idx: int) -> bool:
+        for j in range(idx + 1, len(lines)):
+            nxt = lines[j]
+            if not nxt.strip():
+                continue
+            return nxt[:1] in (" ", "\t")
+        return False
 
     def flush() -> None:
         nonlocal current_names, current_type, current_desc
@@ -12703,6 +12721,12 @@ def _parse_docstring_params(doc: str) -> Dict[str, Dict[str, Any]]:
             current_type = g.group(2).strip()
             if g.group(3).strip():
                 current_desc.append(g.group(3).strip())
+            continue
+        b = barename_re.match(line)
+        if b and not line[:1].isspace() and _next_nonblank_is_indented(i):
+            flush()
+            current_names = [n.strip() for n in b.group(1).split(",")]
+            current_type = ""
             continue
         if current_names and (line.startswith(" ") or line.startswith("\t")):
             current_desc.append(stripped)
