@@ -16,12 +16,9 @@ The suite now validates all three faces of the inference machinery:
 - **Power** — under alternatives, does rejection rise monotonically with the
   effect size and approach 1? (`test_size_power.py`)
 
-All six core estimators named in the project spec (`did`, `iv`, `rd`,
-`synth`, `dml`, `panel`) now carry an explicit Monte Carlo coverage row.
-
 ## Headline B=1000 Coverage Audit
 
-The canonical Track B audit materializes nine known-truth DGPs at
+The canonical Track B audit materializes seven known-truth DGPs at
 `B=1000`. The 99% Wilson band around nominal 0.95 is approximately
 `[0.935, 0.967]`; rows above the band are treated as conservative
 over-coverage, not as evidence of under-calibrated standard errors.
@@ -32,23 +29,14 @@ over-coverage, not as evidence of under-calibrated standard errors.
 | `sp.regress` 2x2 DiD | 2-period homogeneous DiD | 0.955 |
 | `sp.ivreg` (HC1) | Strong binary-Z IV | 0.962 |
 | `sp.callaway_santanna` (REG, simple ATT) | Homogeneous staggered timing | 0.946 |
-| `sp.panel` two-way FE | Unit+time FE, time-varying treatment | 0.948 |
-| `sp.sdid` (placebo SE) | One treated unit, factor-model DGP | 0.939 |
 | `sp.ebalance` | CIA with 2 covariates | 1.000 |
 | `sp.causal_question(design="dml")` | Binary-treatment IRM ATE | 0.969 |
 | `sp.causal_question(design="causal_forest")` | AIPW-IF ATE DGP | 0.977 |
 
 Interpretation:
 
-- Closed-form OLS, DiD, IV, the simple Callaway-Sant'Anna ATT, and the
-  two-way FE panel rows sit inside the Wilson band.
-- `sp.sdid` (0.939) sits at the lower-inside edge of the band — note that
-  classic Abadie SCM has no analytic CI (placebo/permutation inference
-  only), so the calibrated row uses synthetic difference-in-differences
-  (Arkhangelsky et al. 2021, `arkhangelsky2021synthetic`); for a single
-  treated unit the placebo variance estimator is the recommended one
-  (jackknife is undefined with one treated unit and empirically
-  under-covers at ~0.80 on this DGP).
+- Closed-form OLS, DiD, IV, and simple Callaway-Sant'Anna rows sit inside
+  the Wilson band.
 - DML sits just above the upper edge; ebalance and causal forest are more
   visibly conservative. These are over-coverage findings, not hidden
   under-coverage.
