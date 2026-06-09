@@ -33,6 +33,12 @@ JSS_HEADLINE_TEST_COUNTS = {
     "external_parity": 54,
     "coverage_monte_carlo": 12,
 }
+# Published floor (1.16.0 manuscript), not an exact target — validation
+# *grade* is derived dynamically from test evidence (VALIDATED_GRADE_MARKERS
+# below), so adding reference-parity tests promotes more symbols to
+# certified/validated. That growth is the intended effect of new parity work,
+# never a regression; the guard asserts ``>=`` for the same reason as the
+# headline-count drift guard above.
 JSS_CERTIFIED_VALIDATED_SYMBOLS = 73
 VALIDATED_GRADE_MARKERS = (
     "tests/reference_parity/",
@@ -117,7 +123,12 @@ def test_certified_validated_symbols_have_attached_evidence_notes():
     validated = sp.list_functions(validation_status="validated")
     names = sorted(set(certified) | set(validated))
 
-    assert len(names) == JSS_CERTIFIED_VALIDATED_SYMBOLS
+    # Published floor, not exact lockstep: new reference-parity evidence only
+    # ever grows this set (e.g. panel/poisson/nbreg/qreg/tobit/zip/zinb/sdid
+    # were promoted to validated when their parity tests were added). A count
+    # that dropped BELOW the floor would mean evidence was lost — that is the
+    # regression worth failing on.
+    assert len(names) >= JSS_CERTIFIED_VALIDATED_SYMBOLS
 
     missing_notes = []
     certified_without_grade = []
