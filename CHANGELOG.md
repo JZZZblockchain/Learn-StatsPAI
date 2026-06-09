@@ -6,6 +6,30 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **R/Stata reference-parity expansion — panel, count/quantile, and SDID
+  estimators now carry frozen cross-package parity (19 new tests,
+  `tests/reference_parity/` 124 → 143).** Each ships a deterministic data
+  fixture, a `_generate_*.R` script, and a frozen `*_R.json`:
+  - `sp.panel` vs R `plm` — within (FE), Swamy-Arora RE, and between, with
+    classical and cluster-robust SEs (matches `plm::vcovHC` HC1/group);
+    coefficients and classical SEs agree to ~1e-5. Closes the gap where
+    `panel`, a core ≥95% estimator, had *no* reference parity.
+  - `sp.poisson` / `sp.nbreg` / `sp.qreg` / `sp.tobit` / `sp.zip_model` /
+    `sp.zinb` vs `glm` / `MASS::glm.nb` / `quantreg::rq` / `AER::tobit` /
+    `pscl::zeroinfl` — exact coefficient parity (Poisson/NB/Tobit also exact
+    model SEs and Tobit σ; NB `alpha == 1/theta`).
+  - `sp.sdid` vs the authors' `synthdid` R package (Arkhangelsky et al. 2021)
+    on `sp.california_prop99()` — point estimate agrees to ~1e-6
+    (−17.8985 packs/capita).
+- **NIST StRD one-way ANOVA certification for `sp.regress`
+  (`tests/numerical_accuracy/test_nist_strd_anova.py`).** All 11 NIST ANOVA
+  datasets (SiRstv, SmLs01–09, AtmWtAg) bundled verbatim; a one-way ANOVA is
+  OLS of `y ~ C(group)`, so these certify the F-statistic / R² / sum-of-squares
+  numerical accuracy. `sp.regress` reproduces the certified F to machine
+  precision through the average-difficulty family (incl. n=18009). The three
+  highest-difficulty designs (`SmLs07/08/09`, 9 constant leading digits) are
+  recorded as **documented `xfail`s** — a known precision boundary, not a silent
+  gap (see Known issues). All reference R DOIs verified via Crossref.
 - **Tier D analytic special-case test campaign — 24 reference-less estimators
   now carry known-truth tests (77 tests across 9 `tests/test_tierD_*.py`
   files).** Estimators that had *no* numerical-assertion test (only smoke calls
@@ -59,6 +83,19 @@ All notable changes to StatsPAI will be documented in this file.
   dedicated `tests/numerical_accuracy/` suite (separate from the R/Stata
   `reference_parity/` fixtures) since it certifies certified-value accuracy
   rather than cross-language parity.
+
+- **`sp.regress` F-statistic / R² lose precision under extreme constant
+  offsets.** The new NIST StRD ANOVA certification (above) shows
+  `sp.regress("y ~ C(group)")` reproduces the certified F to machine precision
+  through the average-difficulty family, but the highest-difficulty
+  `SmLs07/08/09` designs (9 constant leading digits) lose 3–4+ significant
+  digits via catastrophic cancellation in the sum-of-squares, worsening with n
+  (relative F error ≈ 4.8e-4 → 9.9e-3 → 2.3e-2). `SmLs03` at the same n=18009
+  but fewer leading digits still hits ~1e-16, so the boundary is offset
+  magnitude, not sample size — a mean-centred SS accumulation would fix it.
+  Recorded as documented `xfail`s (not auto-fixed: changing the kernel would
+  alter a core estimator's numerical output); the xfails will surface as
+  `xpass` once the kernel is stabilised.
 
 ### Changed (⚠️ Correctness)
 
