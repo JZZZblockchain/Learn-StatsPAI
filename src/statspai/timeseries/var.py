@@ -230,6 +230,9 @@ def var(
     result._k = k
     result._lags = lags
     result._trend = trend
+    # Store (X'X)^{-1} so granger_causality can form the proper coefficient
+    # covariance σ²·(X'X)^{-1} for its Wald test (not just the SE diagonal).
+    result._XtX_inv = XtX_inv
 
     return result
 
@@ -276,7 +279,6 @@ def granger_causality(
     T = var_result.n_obs
     var_names = var_result.var_names
 
-    eq_idx = var_names.index(caused)
     causing_idx = var_names.index(causing)
 
     # Identify which coefficients to test (lags of causing in caused equation)
@@ -293,11 +295,20 @@ def granger_causality(
 
     r = R @ coefs_all
     sigma2 = var_result.sigma_u.loc[caused, caused]
-    XtX_inv = np.linalg.inv(
-        np.eye(len(coefs_all)) * sigma2 / max(sigma2, 1e-10)
-    )
-    # Simplified Wald test: F = (Rβ)'(R V R')^{-1}(Rβ) / q
-    V = sigma2 * np.eye(len(coefs_all))  # simplified
+
+    # Coefficient covariance for the `caused` equation is σ²_caused·(X'X)^{-1},
+    # where X is the stacked lagged-regressor design matrix. The full matrix
+    # (not just its diagonal) is required because the restricted coefficients
+    # — the p lags of `causing` — are mutually correlated.
+    XtX_inv = getattr(var_result, "_XtX_inv", None)
+    if XtX_inv is None:
+        raise MethodIncompatibility(
+            "This VARResult predates the Granger covariance fix and does not "
+            "carry (X'X)^{-1}. Re-fit the model with sp.var(...) and retry."
+        )
+    V = sigma2 * np.asarray(XtX_inv)
+
+    # Wald test: W = (Rβ)'(R V R')^{-1}(Rβ); F = W / q ~ F(q, T - n_params).
     mid = R @ V @ R.T
     try:
         F_stat = (r @ np.linalg.solve(mid, r)) / len(restrict_indices)
