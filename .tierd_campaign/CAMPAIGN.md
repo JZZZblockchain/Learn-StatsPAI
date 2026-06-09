@@ -209,5 +209,42 @@ Remaining P1 (15): structural `blp`/`levpet`/`opreg`; rd `boundary_rd`/
 `geographic_rd`/`multi_score_rd`; diagnostics `effective_f_test`/`stepwise`;
 panel `feglm`; spatial `moran_local`; interference `peer_effects`; missing
 `mi_estimate`; `notch`; `model_averaging_dml`; `test_calibration`.
-- **Next:** P1 Batch 4 — spatial `moran_local` + diagnostics `effective_f_test`
-  (both clean closed forms).
+- **Batches 4-8 DONE** — P1 floor closed (37 more tests, all green):
+  - B4 `test_tierD_spatial_diag_analytic.py` (11): `moran_local` (LISA closed
+    form + `Σ Iᵢ = S₀·globalI` identity), `effective_f_test` (= first-stage F
+    under classic, hand-derived), `stepwise` (recovers known sparsity support).
+  - B5 `test_tierD_panel_missing_analytic.py` (7): `feglm` (Gaussian == OLS, FE
+    absorption, logit MLE recovery; needs pyfixest), `mi_estimate` (no-missing
+    ≡ complete-data exactly, fmi=0; MCAR consistency + SE inflation).
+  - B6 `test_tierD_rd_multiscore_analytic.py` (7): `boundary_rd`/`geographic_rd`
+    (half-plane recovery of 0.8 + exact dispatch to rd2d/rdms),
+    `multi_score_rd` (dispatch + linearity-in-jump). Investigated L-shape
+    attenuation → confirmed a *correct* estimand property (boundary averaging),
+    not a bug.
+  - B7 `test_tierD_structural_analytic.py` (5): `levpet`/`opreg` recover
+    Cobb-Douglas (0.60/0.35) on an *identified* DGP + exact alias dispatch.
+    **`blp` DEFERRED — real bug found** (see below).
+  - B8 `test_tierD_interference_forest_analytic.py` (7): `peer_effects`
+    (recovers endogenous γ=0.4 + 0 with no peers), `notch` (induced-bunching
+    detection), `model_averaging_dml` (DML-PLR recovers θ), `test_calibration`
+    (β₁ calibration ≈ 1 + null=(1,0)).
+- **LaLonde guard** `test_tierD_lalonde_psm_guard.py` (4): pins naive/-635,
+  adjusted/1548.2, PSM/1963.4 — the missing regression test that would have
+  caught the drift. Refreshed the stale registry pin 2012.5 → 1963.4.
+
+### ⚠️ Bug found (reported, NOT fixed — `.tierd_campaign/BUG_blp_gmm_objective_maxiter.md`)
+`sp.blp` calls `_gmm_objective(..., maxiter=...)` but the param is
+`maxiter_inner` → `TypeError` on every optimisation step; the estimator cannot
+complete. Plus a singular-weight-matrix fragility on thin DGPs. Proposed
+one-line fix logged; blp Tier D recovery test deferred until fixed.
+
+### Minor note
+`imputation/mice.py:109` emits a benign `divide by zero` RuntimeWarning when
+between-imputation variance is 0 (no-missing case); the fmi result is still
+correctly 0. `test_calibration`'s β₂ (differential_forest_prediction) is
+noisy/forest-dependent — anchored on β₁ + null structure instead.
+
+## P1 STATUS: floor CLOSED — 24/25 estimators have analytic tests (77 tests),
+1 (`blp`) blocked by the reported bug. Classifier: P1 25 → 1.
+- **Next:** P2 — 222 weak-assert estimators needing known-truth anchors,
+  highest-value families first (causal, decomposition, panel, regression).
