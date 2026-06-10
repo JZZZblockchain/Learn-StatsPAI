@@ -67,7 +67,7 @@ benchmarks, including:
   public-health / epidemiology parity anchor, on **real** public-domain
   data (`sp.datasets.nhefs()`). StatsPAI reproduces the textbook's
   published g-methods estimates for the effect of quitting smoking on
-  10-year weight change and mortality — IP weighting (Ch12, 3.47 vs book
+  10-year weight change and mortality — IP weighting (Ch12, 3.44 vs book
   3.4), standardization / parametric g-formula (Ch13, 3.46 vs 3.5),
   g-estimation of a structural nested model (Ch14, 3.46 vs 3.4), outcome
   regression with effect modification (Ch15, coefficients matching the
@@ -96,7 +96,7 @@ rather than hidden:
    (3.46) matches an additive base-R/Python standardization gold to 12
    significant figures and rounds to the book's 3.5; the book's *exact*
    interaction-model standardization (3.52) is reproduced directly. The
-   IP-weighting (Hájek vs stabilized weights) and SNMM (additive
+   IP-weighting (normalized weights) and SNMM (additive
    encoding) differences are of the same documented kind.
 2. **A minor correctness gap in `sp.evalue` (CI handling) — fixed.**
    When a confidence interval already crosses the null (RR = 1), the

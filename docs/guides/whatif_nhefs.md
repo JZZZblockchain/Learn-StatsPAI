@@ -81,16 +81,17 @@ structural model.
 dd, covs = book_design(sp.datasets.nhefs(complete_case=True))
 ipw = sp.ipw(dd, y="wt82_71", treat="qsmk", covariates=covs,
              estimand="ATE", seed=42)
-print(ipw.estimate, ipw.ci)     # 3.47  (95% CI ~2.5, 4.4)
+print(ipw.estimate, ipw.ci)     # 3.44  (95% CI ~2.5, 4.4)
 ```
 
 | | StatsPAI | R gold (stabilized MSM) | Book (Program 12.4) |
 |---|---:|---:|---:|
-| IP-weighted ATE | **3.47** | 3.44 | 3.4 (95% CI 2.4–4.5) |
+| IP-weighted ATE | **3.44** | 3.44 | 3.4 (95% CI 2.4–4.5) |
 
-`sp.ipw` uses Hájek (normalized) weights; the book's saturated MSM uses
-stabilized weights. The two are asymptotically equal and here differ by
-0.03 kg — both round to the book's one-decimal figure.
+`sp.ipw` uses normalized treatment-arm weights; the book's saturated MSM
+uses stabilized weights. Under the same converged logistic propensity
+model, the two-arm point-treatment contrast is the same here and rounds
+to the book's one-decimal figure.
 
 ---
 
@@ -129,7 +130,7 @@ print(ge.estimate)              # ψ = 3.46
 |---|---:|---:|---:|
 | ψ (SNMM) | **3.46** | 3.46 | 3.4 |
 
-**Three different g-methods — IP weighting (3.47), standardization
+**Three different g-methods — IP weighting (3.44), standardization
 (3.46), and g-estimation (3.46) — agree with each other and with the
 book**, while the confounded crude estimate (2.54) understates the
 effect by a kilogram. That triangulation is the whole point of Part II.
@@ -219,9 +220,9 @@ closed-form `E = RR + √(RR(RR−1))` and R's `EValue` package to 1e-3.
 
 The closed-form quantities are exact. The IP-weighted, g-formula,
 g-estimation, and survival quantities carry small, **documented**
-convention choices (Hájek vs stabilized weights; additive encoding of
-the SNMM; pooled-logistic vs Cox hazards) that keep them within ~2% of
-both the book and the independent R reference. This is the first
+convention choices (normalized weights; additive encoding of the SNMM;
+pooled-logistic vs Cox hazards) that keep them within ~2% of both the
+book and the independent R reference. This is the first
 epidemiology-stack (as opposed to econometrics-stack) parity
 certification in StatsPAI; it upgrades the g-methods rows of the
 [public-health guide](public_health.md) from "API-stable but not yet

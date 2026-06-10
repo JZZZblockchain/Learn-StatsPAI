@@ -136,7 +136,7 @@ each statistic carries a same-bytes R gold reference (paired scripts
 | Ch | Statistic | Book value | StatsPAI | R gold | Source |
 | --- | --- | ---: | ---: | ---: | --- |
 | 12 | Crude weight-change diff (confounded) | 2.54 | 2.54 | 2.54 | §12.2 |
-| 12 | IP-weighted ATE (MSM) | 3.4 (CI 2.4–4.5) | 3.47 | 3.44 | Program 12.4 |
+| 12 | IP-weighted ATE (MSM) | 3.4 (CI 2.4–4.5) | 3.44 | 3.44 | Program 12.4 |
 | 13 | Standardization / parametric g-formula | 3.5 | 3.46 | 3.46 | Program 13.3 |
 | 14 | G-estimation of SNMM (ψ) | 3.4 | 3.46 | 3.46 | Program 14.2 |
 | 15 | Outcome-reg `qsmk` main coef | 2.56 | 2.56 | 2.56 | Program 15.1 |
@@ -158,8 +158,8 @@ to four decimals), and **StatsPAI agrees with an independent base-R /
 `survival` / `EValue` reference on the same CSV bytes** — usually to 3–4
 decimals. The Chapter 15 closed-form regressions are an exact match; the
 IP-weighted, g-formula, g-estimation, and survival quantities embed minor
-documented convention choices (Hájek vs stabilized weights; additive
-encoding) that keep them within ~2% of the book and the R gold. This is
+documented convention choices (normalized weights; additive encoding) that
+keep them within ~2% of the book and the R gold. This is
 the first epidemiology-stack (vs econometrics-stack) parity certification
 in the repository. Pinned regression tests live in
 `tests/external_parity/test_whatif_nhefs.py`.

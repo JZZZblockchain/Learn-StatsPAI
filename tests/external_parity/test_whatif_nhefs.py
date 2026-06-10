@@ -46,7 +46,7 @@ import statspai as sp
 
 # Ch12 — IP weighting / marginal structural model
 PINNED_CRUDE_WT_DIFF = 2.5406       # quitters - non-quitters, unadjusted
-PINNED_CH12_IPW_ATT = 3.4717        # sp.ipw (Hájek ATE), book design, seed=42
+PINNED_CH12_IPW_ATT = 3.4405        # sp.ipw (Hájek ATE), book design, seed=42
 
 # Published book anchors (Hernán-Robins, What If, Part II)
 BOOK_CRUDE = 2.54                   # §12.2
@@ -137,13 +137,28 @@ class TestCh12IPWeighting:
             res = sp.ipw(dd, y="wt82_71", treat="qsmk", covariates=covs,
                          estimand="ATE", seed=42, n_bootstrap=500)
         # (1) pinned — no silent drift
-        assert res.estimate == pytest.approx(PINNED_CH12_IPW_ATT, abs=0.05)
+        assert res.estimate == pytest.approx(PINNED_CH12_IPW_ATT, abs=0.01)
         # (2) neighbourhood of the published 3.4 kg
         assert res.estimate == pytest.approx(BOOK_IPW_ATT, abs=BOOK_TOL_KG)
         # (3) the 95% CI overlaps the book's (2.4, 4.5)
         lo, hi = res.ci
         assert lo < BOOK_IPW_CI[1] and hi > BOOK_IPW_CI[0]
         assert res.n_obs == 1566
+
+    def test_ipw_propensity_scores_use_converged_glm_anchor(self, df):
+        """The NHEFS design is intentionally unscaled; sklearn lbfgs can stop
+        early and drift the point estimate. Lock the converged GLM anchor
+        directly so solver regressions fail before they reach the manuscript
+        numbers.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            dd, covs = _book_design(df)
+            res = sp.ipw(dd, y="wt82_71", treat="qsmk", covariates=covs,
+                         estimand="ATE", seed=42, n_bootstrap=0)
+        assert res.estimate == pytest.approx(3.4405354296, abs=1e-6)
+        assert res.model_info["pscore_min"] == pytest.approx(0.051000764, abs=1e-6)
+        assert res.model_info["pscore_max"] == pytest.approx(0.776888702, abs=1e-6)
 
 
 # =========================================================================
@@ -260,4 +275,3 @@ class TestEValueSensitivity:
         closed = rr + np.sqrt(rr * (rr - 1.0))
         assert ev["evalue_estimate"] == pytest.approx(1.9814, abs=1e-3)
         assert ev["evalue_estimate"] == pytest.approx(closed, abs=1e-6)
-

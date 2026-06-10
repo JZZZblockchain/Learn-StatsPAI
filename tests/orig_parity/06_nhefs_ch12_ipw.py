@@ -12,8 +12,9 @@ Compares against:
       (``06_nhefs_ch12_ipw.R``).
 
 StatsPAI exposes point-treatment IP weighting as ``sp.ipw`` (Hájek /
-normalized ATE).  This is the package's IP-weighting estimator; it
-recovers the book's IP-weighted ATE to within rounding (3.48 vs 3.4 ->
+normalized ATE).  This is the package's IP-weighting estimator; it now
+uses the same converged logistic propensity score as the R side and
+recovers the book's IP-weighted ATE to within rounding (3.44 vs 3.4 ->
 both round to the book's one-decimal figure).  The R side reproduces the
 book's *exact* stabilized-weight saturated MSM (3.44) for a tight
 same-bytes anchor.

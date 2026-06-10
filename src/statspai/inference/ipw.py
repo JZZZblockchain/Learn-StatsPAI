@@ -110,6 +110,11 @@ def ipw(
 
     if not set(np.unique(T)).issubset({0, 1}):
         raise ValueError(f"Treatment variable '{treat}' must be binary (0/1)")
+    if T.sum() == 0 or T.sum() == n:
+        raise ValueError(
+            f"Treatment variable '{treat}' must contain both treated and "
+            "control observations"
+        )
 
     # --- Estimate propensity scores ---
     pscore = _estimate_propensity(X, T)
@@ -196,12 +201,34 @@ def ipw(
 
 def _estimate_propensity(X: np.ndarray, T: np.ndarray) -> np.ndarray:
     """Logistic regression propensity score."""
-    from sklearn.linear_model import LogisticRegression
-    model = LogisticRegression(
-        max_iter=1000, solver="lbfgs", C=1e6,  # large C ≈ no regularization
-    )
-    model.fit(X, T)
-    ps = model.predict_proba(X)[:, 1]
+    try:
+        import statsmodels.api as sm
+
+        X_const = sm.add_constant(X, has_constant="add")
+        model = sm.GLM(T, X_const, family=sm.families.Binomial())
+        res = model.fit(maxiter=300, disp=0)
+        if getattr(res, "converged", True) is False:
+            raise RuntimeError("statsmodels GLM did not converge")
+        ps = np.asarray(res.predict(X_const), dtype=float)
+    except Exception:
+        from sklearn.linear_model import LogisticRegression
+
+        try:
+            model = LogisticRegression(
+                max_iter=5000,
+                solver="newton-cg",
+                penalty=None,
+                tol=1e-10,
+            )
+        except TypeError:  # pragma: no cover - old scikit-learn compatibility
+            model = LogisticRegression(
+                max_iter=5000,
+                solver="newton-cg",
+                penalty="none",
+                tol=1e-10,
+            )
+        model.fit(X, T)
+        ps = model.predict_proba(X)[:, 1]
     # Safety clip to avoid division by zero
     return np.clip(ps, 1e-8, 1 - 1e-8)
 

@@ -58,7 +58,7 @@ Data source: `sp.datasets.nhefs (NHEFS / What If)` (1566 obs)
 | stat | sp | R | published | rel(sp vs R) | rel(sp vs published) | citation |
 |---|---:|---:|---:|---:|---:|---|
 | `crude_diff` | 2.541 | 2.541 | 2.54 | 1.7e-11 | 0.00023 | Hernán-Robins, What If §12.2 (crude) |
-| `ipw_att` | 3.472 | 3.441 | 3.4 | 0.009 | 0.021 | Hernán-Robins, What If Program 12.4 (IP-weighted ATE) |
+| `ipw_att` | 3.441 | 3.441 | 3.4 | 1.3e-11 | 0.012 | Hernán-Robins, What If Program 12.4 (IP-weighted ATE) |
 
 ## Module `07_nhefs_ch13_gformula`
 Data source: `sp.datasets.nhefs (NHEFS / What If)` (1566 obs)

@@ -17,8 +17,8 @@
       "module": "06_nhefs_ch12_ipw",
       "side": "py",
       "statistic": "ipw_att",
-      "estimate": 3.471669354996915,
-      "se": 0.4902926125034924,
+      "estimate": 3.4405354296461907,
+      "se": 0.4749753091900751,
       "n": 1566,
       "published": 3.4,
       "citation": "Hern\u00e1n-Robins, What If Program 12.4 (IP-weighted ATE)",
@@ -29,8 +29,8 @@
     "data_source": "sp.datasets.nhefs (NHEFS / What If)",
     "n_obs": 1566,
     "ci_ipw": [
-      2.510713492604017,
-      4.432625217389813
+      2.509600930087867,
+      4.3714699292045145
     ],
     "published_ipw_ci": [
       2.4,
