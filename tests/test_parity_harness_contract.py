@@ -93,12 +93,14 @@ def test_parity_artifact_inventory_has_explicit_contracts():
     r_modules = _module_stems(R_RESULTS, "_R")
     stata_modules = _module_stems(STATA_RESULTS, "_Stata")
 
-    assert len(py_modules) >= 51
-    assert len(py_modules & r_modules) >= 50
-    assert len(stata_modules) >= 46
+    assert len(py_modules) >= 56
+    assert len(py_modules & r_modules) >= 56
+    assert len(stata_modules) >= 53
     assert py_modules == set(compare.TOLERANCES)
     assert py_modules == set(compare.HEADLINE)
-    assert py_modules - r_modules == {"50_xtabond"}
+    # Every Track A module now carries an R reference (50_xtabond gained its
+    # plm::pgmm golden artifact, closing the last R-side gap).
+    assert py_modules - r_modules == set()
     assert set(compare.STATA_SKIP_REASON) == py_modules - stata_modules
     assert set(compare.STATA_HEADLINE_GAP_EXCEPTIONS) <= stata_modules
 
@@ -128,7 +130,7 @@ def test_strictness_tier_breakdown_matches_current_artifacts():
     ]
 
     assert compare.tier_breakdown(rendered_modules) == {
-        "machine": 49,
+        "machine": 50,
         "iterative": 4,
         "moderate": 1,
         "methodological": 1,
