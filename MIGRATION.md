@@ -41,6 +41,30 @@ numeric figure uses an HR or CI E-value.
 
 ---
 
+<a id="matching-nearest-tie-break"></a>
+
+## Unreleased — ⚠️ `sp.match` nearest-neighbor tie-breaking stabilised
+
+**What changed.** `sp.match(method='nearest')` now resolves exact equal-distance
+nearest-neighbor ties by the source DataFrame index. Previously the
+Euclidean/propensity nearest-neighbor path delegated tie selection to
+`argpartition` and incidental row order, so ties on discrete or binary
+covariates could move the ATT across environments. Lower-index control units
+are now selected first; when matching without replacement and multiple treated
+units have the same best distance, lower-index treated units are assigned first.
+
+**Who is affected.** Only users whose matching data contain exact
+equal-distance ties. Continuous covariates without exact ties are unchanged.
+For tied designs, results are now deterministic across row order and backend as
+long as the DataFrame index preserves unit identity.
+
+**Action required.** None for code. If you previously recorded a nearest-match
+estimate on tied discrete covariates, re-run it once and treat the new value as
+the stable pin. The bundled LaLonde 1:1 NN PSM guard is now pinned at `1963.43`
+instead of allowing the old cross-backend tie band.
+
+---
+
 <a id="blp-maxiter-fix"></a>
 
 ## Unreleased — ⚠️ `sp.blp` functionality fix (was non-functional)

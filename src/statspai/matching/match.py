@@ -315,6 +315,7 @@ class MatchEstimator:
         T = clean[self.treat].values.astype(int)
         Y = clean[self.y].values.astype(float)
         X = clean[self.covariates].values.astype(float)
+        row_order = self._stable_index_order(clean.index)
 
         idx_t = np.where(T == 1)[0]
         idx_c = np.where(T == 0)[0]
@@ -346,7 +347,7 @@ class MatchEstimator:
             att, se, balance, extra_info = self._fit_exact(Y, X, T, idx_t, idx_c)
             method_label = 'Matching (Exact)'
         else:
-            att, se, balance = self._fit_nearest(Y, X, T, idx_t, idx_c)
+            att, se, balance = self._fit_nearest(Y, X, T, idx_t, idx_c, row_order)
             dist_name = self.distance.capitalize()
             bc_tag = ', BC' if self.bias_correction else ''
             method_label = f'Matching ({dist_name}{bc_tag})'
@@ -398,8 +399,11 @@ class MatchEstimator:
     # Nearest-neighbor matching (propensity / mahalanobis / euclidean)
     # ==================================================================
 
-    def _fit_nearest(self, Y, X, T, idx_t, idx_c):
+    def _fit_nearest(self, Y, X, T, idx_t, idx_c, row_order=None):
         """Nearest-neighbor matching with configurable distance metric."""
+        if row_order is None:
+            row_order = np.arange(len(T), dtype=float)
+
         # For propensity distance, estimate PS once with actual treatment
         pscore = self._logit_propensity(X, T, poly=self.ps_poly) if self.distance == 'propensity' else None
 
@@ -407,14 +411,29 @@ class MatchEstimator:
         dist_mat = self._compute_distance_matrix(X, idx_t, idx_c, pscore)
 
         if self.estimand == 'ATT':
-            matches, weights = self._nn_match_from_dist(dist_mat, self.caliper)
+            matches, weights = self._nn_match_from_dist(
+                dist_mat,
+                self.caliper,
+                target_order=row_order[idx_t],
+                pool_order=row_order[idx_c],
+            )
             att = self._compute_effect(Y, idx_t, idx_c, X, matches, weights)
             se = self._ai_se(Y, X, T, idx_t, idx_c, matches, weights)
         else:
             # ATE: match both directions, reuse the same propensity scores
             dist_ct = self._compute_distance_matrix(X, idx_c, idx_t, pscore)
-            m_tc, w_tc = self._nn_match_from_dist(dist_mat, self.caliper)
-            m_ct, w_ct = self._nn_match_from_dist(dist_ct, self.caliper)
+            m_tc, w_tc = self._nn_match_from_dist(
+                dist_mat,
+                self.caliper,
+                target_order=row_order[idx_t],
+                pool_order=row_order[idx_c],
+            )
+            m_ct, w_ct = self._nn_match_from_dist(
+                dist_ct,
+                self.caliper,
+                target_order=row_order[idx_c],
+                pool_order=row_order[idx_t],
+            )
             att_part = self._compute_effect(Y, idx_t, idx_c, X, m_tc, w_tc)
             atc_part = self._compute_effect(Y, idx_c, idx_t, X, m_ct, w_ct)
             n_t, n_c = len(idx_t), len(idx_c)
@@ -426,6 +445,29 @@ class MatchEstimator:
         balance = self._balance_table(X, T, pscore)
 
         return att, se, balance
+
+    @staticmethod
+    def _stable_index_order(index):
+        """Numeric rank of DataFrame index labels for deterministic tie-breaking."""
+        labels = np.asarray(pd.Index(index))
+        n = len(labels)
+        try:
+            order = np.argsort(labels, kind='mergesort')
+        except TypeError:
+            order = np.array(
+                sorted(
+                    range(n),
+                    key=lambda i: (
+                        type(labels[i]).__name__,
+                        repr(labels[i]),
+                        i,
+                    ),
+                ),
+                dtype=int,
+            )
+        ranks = np.empty(n, dtype=float)
+        ranks[order] = np.arange(n, dtype=float)
+        return ranks
 
     def _compute_distance_matrix(self, X, idx_from, idx_to, pscore=None):
         """Compute distance matrix between two groups."""
@@ -713,7 +755,7 @@ class MatchEstimator:
     # NN matching helpers
     # ==================================================================
 
-    def _nn_match_from_dist(self, dist, caliper=None):
+    def _nn_match_from_dist(self, dist, caliper=None, target_order=None, pool_order=None):
         """
         k-NN matching from a precomputed distance matrix.
 
@@ -722,12 +764,30 @@ class MatchEstimator:
         order of their minimum distance (best match first) so the greedy
         assignment favours the closest pairs.
 
+        Equal-distance ties are resolved by the source DataFrame index:
+        lower-index pool units are selected first, and without-replacement
+        target processing falls back to target index order. This makes
+        matching deterministic across BLAS/NumPy backends and independent of
+        incidental row order when index labels preserve unit identity.
+
         References: Cunningham (2021, Ch. 5) discusses with- vs.
         without-replacement matching and the bias–variance trade-off.
         """
         n_target = dist.shape[0]
         matches = [None] * n_target
         weights = [None] * n_target
+        if target_order is None:
+            target_order = np.arange(n_target, dtype=float)
+        if pool_order is None:
+            pool_order = np.arange(dist.shape[1], dtype=float)
+
+        def _nearest_indices(d, k):
+            finite = np.isfinite(d)
+            if not np.any(finite):
+                return np.array([], dtype=int)
+            candidates = np.where(finite)[0]
+            order = np.lexsort((pool_order[candidates], d[candidates]))
+            return candidates[order[:k]]
 
         # Without replacement: process treated units greedily by best
         # minimum distance so each control is used at most once.
@@ -735,7 +795,7 @@ class MatchEstimator:
             used = set()
             # Sort treated units by their minimum distance to any control
             min_dists = np.min(dist, axis=1)
-            order = np.argsort(min_dists)
+            order = np.lexsort((target_order, min_dists))
 
             for i in order:
                 d = dist[i].copy()
@@ -751,7 +811,7 @@ class MatchEstimator:
                     weights[i] = np.array([])
                     continue
 
-                idx = np.argpartition(d, k)[:k]
+                idx = _nearest_indices(d, k)
                 matches[i] = idx
                 weights[i] = np.ones(k) / k
                 used.update(idx.tolist())
@@ -770,7 +830,7 @@ class MatchEstimator:
                 weights[i] = np.array([])
                 continue
 
-            idx = np.argpartition(d, k)[:k]
+            idx = _nearest_indices(d, k)
             matches[i] = idx
             weights[i] = np.ones(k) / k
 

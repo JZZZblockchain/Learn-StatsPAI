@@ -184,12 +184,18 @@ All notable changes to StatsPAI will be documented in this file.
     outside its own enum. (Also surfaced and corrected a latent duplicate
     `harvest_did` registration.)
 
-- **`sp.replicate('lalonde_1986')` classic-track 1:1 NN PSM golden number
-  refreshed 2012.5 → 1963.4.** The original pin was stale relative to the
-  current deterministic `sp.match(method='nearest')` output (a tie-handling
-  change on the binary covariates moved it ~2.5%); no estimator numerics
-  changed. A new regression guard (`tests/test_tierD_lalonde_psm_guard.py`)
-  pins all three classic LaLonde numbers so future drift fails loudly.
+- **⚠️ Reproducibility fix: `sp.match(method='nearest')` now resolves exact
+  nearest-neighbor ties by source DataFrame index.** The Euclidean/propensity
+  nearest-neighbor path previously relied on `argpartition` / incidental row
+  order for equal-distance controls (and target order when matching without
+  replacement), so exact ties on discrete or binary covariates could move the
+  ATT across environments. Equal-distance ties now select lower-index pool
+  units first, with lower-index target units used as the without-replacement
+  fallback. A shuffled-row regression test guards the policy, and
+  `tests/test_tierD_lalonde_psm_guard.py` is tightened from the old
+  cross-backend band to the pinned LaLonde PSM ATT (`1963.43`). Existing results
+  change only when previous data contained exact equal-distance ties. See
+  [MIGRATION.md](MIGRATION.md#matching-nearest-tie-break).
 
 ### Known issues
 

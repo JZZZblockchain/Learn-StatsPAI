@@ -172,6 +172,33 @@ class TestNearestEuclidean:
         assert abs(result.estimate - 2.0) < 1.5
 
 
+class TestNearestTieBreaking:
+    """Nearest-neighbor ties should be deterministic and index-anchored."""
+
+    def test_equal_distance_ties_use_source_index_not_row_order(self):
+        df = pd.DataFrame(
+            {
+                'unit': ['treated_0', 'control_high', 'control_low',
+                         'treated_1', 'control_1'],
+                'y': [10.0, 100.0, 0.0, 30.0, 25.0],
+                'treat': [1, 0, 0, 1, 0],
+                'x': [0.0, 0.0, 0.0, 1.0, 1.0],
+            },
+            # control_low and control_high are exact ties for treated_0.
+            # The lower source index must win regardless of row order.
+            index=[100, 20, 5, 200, 30],
+        )
+        shuffled = df.loc[[20, 100, 30, 5, 200]]
+
+        r1 = match(df, y='y', treat='treat', covariates=['x'],
+                   distance='euclidean', method='nearest')
+        r2 = match(shuffled, y='y', treat='treat', covariates=['x'],
+                   distance='euclidean', method='nearest')
+
+        assert r1.estimate == pytest.approx(7.5, abs=1e-12)
+        assert r2.estimate == pytest.approx(7.5, abs=1e-12)
+
+
 class TestExactMatching:
     """distance='exact'."""
 

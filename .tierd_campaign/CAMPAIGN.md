@@ -457,3 +457,15 @@ noisy/forest-dependent — anchored on β₁ + null structure instead.
   `proximal`): 17/17 green.
 - **P2 tally: 20 batches, 114 tests, 47 estimators.** worklist → 182
   (`scripts/tierd_classify.py` exact).
+
+### 2026-06-09 (cont.) — matching tie-break reproducibility follow-up
+- Fixed the deferred nearest-neighbor reproducibility lane: `sp.match`
+  Euclidean/propensity NN ties are now resolved by source DataFrame index
+  instead of `argpartition` / incidental row order. Lower-index pool units win
+  exact equal-distance ties; lower-index target units break
+  without-replacement assignment ties. This is a correctness/reproducibility
+  fix, not a new estimator batch.
+- Added a shuffled-row regression test for equal-distance controls and tightened
+  the LaLonde guard from the old cross-backend PSM band to the pinned
+  `1963.43` ATT. CHANGELOG/MIGRATION document that only exact-tie designs can
+  move.
