@@ -375,3 +375,30 @@ noisy/forest-dependent — anchored on β₁ + null structure instead.
   ppv/npv/LR exact from TP,FP,FN,TN; perfect classifier → all 1), `breslow_day_test`
   (homogeneous OR → stat~0, p>0.99; heterogeneous → reject). All first-try green.
 - **P2 tally: 12 batches, 80 tests, 29 estimators.**
+
+### 2026-06-09 (cont.) — P2 mendelian batch
+- `test_tierD_p2_mendelian_analytic.py` (4): `mr_f_statistic` (per-SNP
+  F=(β/se)² exact; f_max/f_min; weak-IV flag <10), `mr_steiger`
+  (r2_exposure>r2_outcome → correct_direction True; swapped → False). First-try.
+- **P2 tally: 13 batches, 84 tests, 31 estimators.**
+
+### 2026-06-09 (cont.) — P2 fairness batch
+- `test_tierD_p2_fairness_analytic.py` (4): `equalized_odds` (perfect classifier
+  gap=0/passes; unfair gap == max(TPR-gap,FPR-gap) exact, fails threshold),
+  `fairness_audit` (equalized_odds sub-result == direct call; demographic_parity
+  ~0 when pred ⟂ protected). First-try green.
+- **P2 tally: 14 batches, 88 tests, 33 estimators.** worklist → ~196.
+
+### 2026-06-09 (cont.) — P2 transport + meta-heterogeneity batch
+- `test_tierD_p2_transport_meta_analytic.py` (5): `heterogeneity_of_effect`
+  (Cochran Q=Σw(θ-θ̄)² exact; I²=max(0,(Q-(k-1))/Q) fraction; identical→0),
+  `transport_generalize` (same target dist → transported==source; under effect
+  modifier τ(x)=1+x, source ATE 1 reweighted to target ATE 2). First-try green.
+- **P2 tally: 15 batches, 93 tests, 35 estimators.** worklist → ~195.
+
+### 2026-06-09 (cont.) — P2 longitudinal g-formula batch
+- `test_tierD_p2_longitudinal_analytic.py` (4): `longitudinal_contrast` +
+  `always_treat`/`never_treat` on the Robins time-varying-confounding DGP
+  (A0 affects confounder L1 of A1). g-formula recovers static contrast
+  θ0+θ1+0.5β=3.0; regime means 3.0 (always) / 0.0 (never); no causal path → 0.
+- **P2 tally: 16 batches, 97 tests, 38 estimators.** worklist → ~193.
