@@ -491,20 +491,37 @@ class CausalForest(BaseModel):
                 if t_leaf.ndim == 1:
                     # Binary treatment
                     if np.var(t_leaf) > 1e-8:  # Check for variation
-                        # Simple ratio estimator: Cov(Y,T) / Var(T)
-                        causal_effect = np.cov(y_leaf, t_leaf)[0, 1] / np.var(t_leaf)
+                        # OLS slope on residualized treatment.  Use one
+                        # consistent denominator; mixing np.cov's ddof=1
+                        # with np.var's ddof=0 inflates small leaves.
+                        t_centered = t_leaf - np.mean(t_leaf)
+                        y_centered = y_leaf - np.mean(y_leaf)
+                        causal_effect = (
+                            np.sum(y_centered * t_centered)
+                            / np.sum(t_centered ** 2)
+                        )
                     else:
                         causal_effect = 0.0
                 else:
                     # Multi-class treatment - use first treatment effect
                     if np.var(t_leaf[:, 0]) > 1e-8:
-                        causal_effect = np.cov(y_leaf, t_leaf[:, 0])[0, 1] / np.var(t_leaf[:, 0])
+                        t_centered = t_leaf[:, 0] - np.mean(t_leaf[:, 0])
+                        y_centered = y_leaf - np.mean(y_leaf)
+                        causal_effect = (
+                            np.sum(y_centered * t_centered)
+                            / np.sum(t_centered ** 2)
+                        )
                     else:
                         causal_effect = 0.0
             else:
                 # Continuous treatment
                 if np.var(t_leaf) > 1e-8:
-                    causal_effect = np.cov(y_leaf, t_leaf)[0, 1] / np.var(t_leaf)
+                    t_centered = t_leaf - np.mean(t_leaf)
+                    y_centered = y_leaf - np.mean(y_leaf)
+                    causal_effect = (
+                        np.sum(y_centered * t_centered)
+                        / np.sum(t_centered ** 2)
+                    )
                 else:
                     causal_effect = 0.0
             
@@ -645,11 +662,17 @@ class CausalForest(BaseModel):
         T: Optional[np.ndarray] = None,
         target_sample: str = "all",
         alpha: float = 0.05,
+        clip: float = 0.01,
     ) -> Dict[str, float]:
         """GRF-style ATE/ATT/ATC/ATO aggregation of CATE predictions."""
         from .forest_inference import average_treatment_effect
         return average_treatment_effect(
-            self, X=X, T=T, target_sample=target_sample, alpha=alpha,
+            self,
+            X=X,
+            T=T,
+            target_sample=target_sample,
+            alpha=alpha,
+            clip=clip,
         )
 
     def forest_diagnostics(

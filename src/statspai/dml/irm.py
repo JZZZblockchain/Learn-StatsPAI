@@ -41,7 +41,9 @@ class DoubleMLIRM(_DoubleMLBase):
     _PSCORE_CLIP_HI = 0.99
     _SUPPORTS_SAMPLE_WEIGHT = True
 
-    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed, sample_weight=None):
+    def _fit_one_rep(
+        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
+    ):
         from sklearn.model_selection import StratifiedKFold
 
         if not set(np.unique(D)).issubset({0, 1}):

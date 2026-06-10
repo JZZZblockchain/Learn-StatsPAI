@@ -46,8 +46,19 @@ def _hausman_from_data(
     df = data[[id_col, time_col, y] + x].dropna()
     k = len(x)
 
-    beta_fe, vcov_fe = _within_estimator(df, y, x, id_col)
-    beta_re, vcov_re = _re_estimator(df, y, x, id_col)
+    from linearmodels.panel import PanelOLS, RandomEffects
+    from statsmodels.tools import add_constant
+
+    panel_df = df.set_index([id_col, time_col])
+    dep = panel_df[y]
+    exog = panel_df[x]
+    fit_fe = PanelOLS(dep, exog, entity_effects=True).fit(cov_type="unadjusted")
+    fit_re = RandomEffects(dep, add_constant(exog)).fit(cov_type="unadjusted")
+
+    beta_fe = fit_fe.params.loc[x].to_numpy(dtype=float)
+    beta_re = fit_re.params.loc[x].to_numpy(dtype=float)
+    vcov_fe = fit_fe.cov.loc[x, x].to_numpy(dtype=float)
+    vcov_re = fit_re.cov.loc[x, x].to_numpy(dtype=float)
 
     b_diff = beta_fe - beta_re
     V_diff = vcov_fe - vcov_re
@@ -61,7 +72,8 @@ def _hausman_from_data(
 
     H = max(H, 0)
     pvalue = float(1 - stats.chi2.cdf(H, k))
-    recommendation = 'FE' if pvalue < alpha else 'RE'
+    reject_re = pvalue <= alpha
+    recommendation = 'FE' if reject_re else 'RE'
 
     return {
         'statistic': H,
@@ -70,11 +82,12 @@ def _hausman_from_data(
         'recommendation': recommendation,
         'beta_fe': pd.Series(beta_fe, index=x),
         'beta_re': pd.Series(beta_re, index=x),
-        'interpretation': (
-            f"chi2({k}) = {H:.4f}, p = {pvalue:.4f}. "
-            f"{'Reject H0: use Fixed Effects.' if pvalue < alpha else 'Cannot reject H0: Random Effects is more efficient.'}"
-        ),
-    }
+            'covariance_reference': 'linearmodels/plm unadjusted FE-RE covariance',
+            'interpretation': (
+                f"chi2({k}) = {H:.4f}, p = {pvalue:.4f}. "
+                f"{'Reject H0: use Fixed Effects.' if reject_re else 'Cannot reject H0: Random Effects is more efficient.'}"
+            ),
+        }
 
 
 # ======================================================================

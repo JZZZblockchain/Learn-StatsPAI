@@ -248,21 +248,33 @@ def did(
             + (" ..." if len(data.columns) > 10 else "")
         )
 
-    # If CS-specific arguments are passed, force the method to CS rather
-    # than silently ignoring them.  This is the "do what I mean" path
-    # when a user writes
-    #   sp.did(..., aggregation='dynamic')
-    # and expects CS to run under the hood.
+    # If estimator-specific aggregation arguments are passed with auto,
+    # choose the estimator whose aggregation vocabulary was requested.
+    _sa_aggregations = {
+        'event_time',
+        'event_time_equal',
+        'equal_event_time',
+        'fixest',
+        'fixest_att',
+        'treated_cell',
+        'treated_cell_weighted',
+    }
     if aggregation is not None and method == 'auto' and id is not None:
-        method = 'callaway_santanna'
+        method = (
+            'sun_abraham'
+            if aggregation in _sa_aggregations
+            else 'callaway_santanna'
+        )
 
     # Validate that CS-only arguments were not paired with a non-CS
     # method — fail loudly rather than swallow the argument.
     _cs_methods = {'callaway_santanna', 'cs', 'auto'}
-    if aggregation is not None and method not in _cs_methods:
+    _sa_methods = {'sun_abraham', 'sa', 'sunab'}
+    if aggregation is not None and method not in (_cs_methods | _sa_methods):
         raise ValueError(
             f"`aggregation={aggregation!r}` is only supported with the "
-            f"Callaway-Sant'Anna estimator (method='cs'); got "
+            f"Callaway-Sant'Anna estimator (method='cs') or the "
+            f"Sun-Abraham estimator (method='sun_abraham'); got "
             f"method={method!r}."
         )
     if (not panel) and method not in _cs_methods:
@@ -365,6 +377,7 @@ def did(
         return sun_abraham(
             data, y=y, g=treat, t=time, i=id,
             covariates=covariates, cluster=cluster,
+            aggregation=aggregation or 'event_time',
             alpha=alpha,
         )
 

@@ -984,7 +984,7 @@ def meglm(
     offset: Optional[str] = None,
     nAGQ: int = 1,
     maxiter: int = 300,
-    tol: float = 1e-6,
+    tol: float = 1e-8,
     alpha: float = 0.05,
 ) -> MEGLMResult:
     """
@@ -1021,7 +1021,12 @@ def meglm(
         ``nAGQ=7`` to match Stata ``meglm intpoints(7)``; values
         ``> 1`` require a single scalar random effect (no random slopes).
     maxiter, tol, alpha
-        Optimisation controls / CI width.
+        Optimisation controls / CI width.  The default ``tol=1e-8`` keeps
+        the Laplace fixed-effect solution aligned with lme4/Stata reference
+        likelihood optima on the parity fixtures.  For AGHQ
+        (``nAGQ > 1``), the default optimiser budget is internally tightened
+        to ``maxiter=5000`` and ``tol=1e-12``; explicit user-supplied
+        controls are respected.
 
     Returns
     -------
@@ -1105,6 +1110,14 @@ def meglm(
         gh_nodes = nodes
         gh_log_weights = np.log(weights)
 
+    opt_maxiter = maxiter
+    opt_tol = tol
+    if nAGQ > 1:
+        if maxiter == 300:
+            opt_maxiter = 5000
+        if tol == 1e-8:
+            opt_tol = 1e-12
+
     res = minimize(
         _glmm_nll,
         theta0,
@@ -1114,7 +1127,7 @@ def meglm(
             nAGQ, gh_nodes, gh_log_weights,
         ),
         method="L-BFGS-B",
-        options={"maxiter": maxiter, "ftol": tol, "gtol": tol},
+        options={"maxiter": opt_maxiter, "ftol": opt_tol, "gtol": opt_tol},
     )
     outer_converged = bool(res.success)
 

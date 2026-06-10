@@ -123,7 +123,7 @@ def xtfrontier(
 
     Notes
     -----
-    **σ_u and σ_v conventions, and Stata parity gap.**
+    **σ_u and σ_v conventions, and Stata scale diagnostics.**
 
     ``sigma_u`` and ``sigma_v`` in ``model_info`` are the underlying
     normal standard deviations of the half-normal inefficiency and the
@@ -132,16 +132,11 @@ def xtfrontier(
     rel < 1e-4 on the production-frontier DGP in
     ``tests/r_parity/29_panel_sfa``.
 
-    Stata's ``xtfrontier ..., ti`` reports an ``e(sigma_u)`` value that
-    can be ~40 % larger than the one returned here, while ``e(sigma_v)``
-    matches at < 1 %. This is a known parity gap; in our parity DGP
-    Stata's reported σ_u corresponds to a different point on the same
-    likelihood surface (the likelihood is mildly multimodal on
-    Pitt-Lee for short panels). When porting Stata code, treat
-    σ_u parity at the < 10 % level as "structurally aligned" and
-    cross-check via ``gamma = sigma_u^2 / (sigma_u^2 + sigma_v^2)``
-    or by the mean efficiency in ``model_info['mean_efficiency_bc']``,
-    which are far less sensitive to the local-optimum gap.
+    Stata's ``xtfrontier ..., ti`` reports ``e(sigma_u)`` and the
+    intercept on its xtfrontier scale, while ``e(sigma_v)`` and the
+    slope coefficients align closely on the parity DGP. For
+    cross-language checks, compare the frontier slopes and treat the
+    intercept / variance-component rows as backend-scale diagnostics.
     """
     model = model.lower()
     dist = dist.lower().replace("_", "-")

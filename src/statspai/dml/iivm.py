@@ -56,7 +56,9 @@ class DoubleMLIIVM(_DoubleMLBase):
     _COMPLIANCE_CLIP_LO = 1e-4
     _COMPLIANCE_CLIP_HI = 1 - 1e-4
 
-    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed, sample_weight=None):
+    def _fit_one_rep(
+        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
+    ):
         from sklearn.model_selection import StratifiedKFold
 
         if not set(np.unique(Z)).issubset({0, 1}):

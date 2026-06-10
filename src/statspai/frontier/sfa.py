@@ -680,8 +680,8 @@ def frontier(
     cluster: Optional[str] = None,
     B: int = 400,
     seed: Optional[int] = None,
-    maxiter: int = 500,
-    tol: float = 1e-8,
+    maxiter: int = 2000,
+    tol: float = 1e-10,
     alpha: float = 0.05,
     start: Optional[np.ndarray] = None,
 ) -> FrontierResult:
@@ -719,8 +719,8 @@ def frontier(
     cluster : str, optional
         Cluster variable for cluster-robust SE (Liang-Zeger 1986).  When
         specified, implies ``vce='robust'`` aggregated over clusters.
-    maxiter : int, default 500
-    tol : float, default 1e-8
+    maxiter : int, default 2000
+    tol : float, default 1e-10
     alpha : float, default 0.05
     start : ndarray, optional
         User-supplied starting values for the full parameter vector.

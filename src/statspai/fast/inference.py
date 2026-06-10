@@ -3,8 +3,8 @@
 Phase 4 deliverables. Implements:
 
 * :func:`crve`     — closed-form cluster-robust variance for OLS / WLS,
-                     with CR1 (Liang-Zeger + small-sample) and CR3
-                     (jackknife-style) flavours.
+                     with CR1 (Liang-Zeger + small-sample), CR2
+                     (Bell-McCaffrey), and analytic CR3 flavours.
 * :func:`boottest` — wild cluster bootstrap for a single-coefficient
                      null hypothesis ``β_idx = β_0``. Supports
                      Rademacher and Webb-6 weight distributions.
@@ -66,9 +66,10 @@ def crve(
       matrix ``H_gg = X_g (X' W X)^{-1} X_g' diag(w_g)`` adjusts each
       cluster for the rest of the sample. Recommended for designs with
       few clusters (G < 50). No additional small-sample multiplier.
-    - ``"cr3"`` (jackknife): same outer sum as CR1, scaled by ``(G-1)/G``.
-      Closer to leave-one-cluster-out variance; reduces over-rejection in
-      few-cluster settings. ``extra_df`` is ignored for CR3.
+    - ``"cr3"`` (analytic CR3): replaces the cluster scores with
+      ``X_g' (I_{n_g} - H_gg)^{-1} u_g``. This matches
+      ``clubSandwich::vcovCR(type="CR3")`` and approximates the exact
+      delete-one-cluster jackknife. ``extra_df`` is ignored for CR3.
 
     HDFE callers must pass ``extra_df``
     -----------------------------------
@@ -153,17 +154,38 @@ def crve(
             meat += np.outer(score_g, score_g)
         return bread @ meat @ bread
 
-    # CR1 / CR3 share the unadjusted cluster-score sum
+    if type == "cr3":
+        # Analytic CR3 (clubSandwich type="CR3"):
+        #   A_g = (I - H_gg)^-1
+        #   score_g = X_g' W_g A_g u_g
+        # This is distinct from the exact delete-one-cluster jackknife
+        # exposed as sp.cr3_jackknife_vcov.
+        meat = np.zeros((k, k))
+        for g in range(G):
+            mask = cluster_codes == g
+            X_g = X[mask]
+            w_g = weights[mask]
+            u_g = residuals[mask]
+            Xb = X_g @ bread
+            H_gg = Xb @ (X_g * w_g[:, None]).T
+            n_g = X_g.shape[0]
+            M = np.eye(n_g) - 0.5 * (H_gg + H_gg.T)
+            evals, evecs = np.linalg.eigh(M)
+            evals = np.maximum(evals, 1e-12)
+            inv = (evecs * (evals ** -1.0)) @ evecs.T
+            u_adj = inv @ u_g
+            score_g = (X_g * w_g[:, None]).T @ u_adj
+            meat += np.outer(score_g, score_g)
+        return bread @ meat @ bread
+
+    # CR1 uses the unadjusted cluster-score sum.
     score = (residuals * weights)[:, None] * X      # (n, k)
     cluster_score = np.zeros((G, k))
     np.add.at(cluster_score, cluster_codes, score)
     meat = cluster_score.T @ cluster_score          # (k, k)
     V = bread @ meat @ bread
 
-    if type == "cr1":
-        c = (G / (G - 1.0)) * ((n - 1.0) / max(n - k - extra_df, 1))
-    else:  # cr3
-        c = (G - 1.0) / G
+    c = (G / (G - 1.0)) * ((n - 1.0) / max(n - k - extra_df, 1))
     return V * c
 
 

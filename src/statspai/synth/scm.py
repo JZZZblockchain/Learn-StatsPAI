@@ -721,15 +721,19 @@ def _synth_r_backend(
     unit_col = "statspai_unit"
     time_col = "statspai_time"
     outcome_col = "statspai_outcome"
-    panel_df = pd.DataFrame(
-        {
-            unit_col: data[unit],
-            time_col: data[time],
-            outcome_col: data[outcome],
-        }
-    ).sort_values([unit_col, time_col]).reset_index(drop=True)
+    panel_df = (
+        pd.DataFrame(
+            {
+                unit_col: data[unit],
+                time_col: data[time],
+                outcome_col: data[outcome],
+            }
+        )
+        .sort_values([unit_col, time_col])
+        .reset_index(drop=True)
+    )
 
-    r_script = r'''
+    r_script = r"""
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 4) {
   stop("expected 4 arguments: input output treated_unit treatment_time")
@@ -808,7 +812,7 @@ jsonlite::write_json(
   na = "null",
   digits = 16
 )
-'''
+"""
 
     rscript = _find_rscript()
     with tempfile.TemporaryDirectory(prefix="statspai_synth_") as tmp:
@@ -834,14 +838,15 @@ jsonlite::write_json(
         )
         if proc.returncode != 0:
             raise RuntimeError(
-                "R Synth backend failed. stderr:\n"
-                f"{proc.stderr.strip()}"
+                "R Synth backend failed. stderr:\n" f"{proc.stderr.strip()}"
             )
         payload = json.loads(out_path.read_text(encoding="utf-8"))
 
-    weight_df = pd.DataFrame(payload["weights"]).sort_values(
-        "weight", ascending=False
-    ).reset_index(drop=True)
+    weight_df = (
+        pd.DataFrame(payload["weights"])
+        .sort_values("weight", ascending=False)
+        .reset_index(drop=True)
+    )
     pre_rmse = float(payload["pre_rmse"])
     model_info = {
         "backend": "synth",
@@ -859,7 +864,7 @@ jsonlite::write_json(
         "n_pre_periods": int(payload["n_pre_periods"]),
         "n_post_periods": int(payload["n_post_periods"]),
         "pre_treatment_rmse": pre_rmse,
-        "pre_treatment_mspe": pre_rmse ** 2,
+        "pre_treatment_mspe": pre_rmse**2,
         "treatment_time": treatment_time,
         "treated_unit": treated_unit,
         "weights": weight_df,
@@ -1130,14 +1135,27 @@ class SyntheticControl:
         w = _inner_w_given_v(V, X1s, X0s, penalization=self.penalization)
         r_outer = Y_treated_pre - Y_donors_pre @ w
         r_inner = X1s - X0s @ w
+        loss = float(r_outer @ r_outer)
+        inner_loss = float(np.sum(V * r_inner**2))
         return {
             "w": w,
             "v": V,
-            "loss": float(r_outer @ r_outer),
-            "inner_loss": float(np.sum(V * r_inner**2)),
+            "loss": loss,
+            "inner_loss": inner_loss,
             "scale": scale,
             "n_starts": 1,
             "converged": True,
+            "best_start": "equal",
+            "start_diagnostics": [
+                {
+                    "start": "equal",
+                    "success": True,
+                    "loss": loss,
+                    "inner_loss": inner_loss,
+                    "weights": w,
+                    "v": V,
+                }
+            ],
         }
 
     # ------------------------------------------------------------------
@@ -1272,6 +1290,88 @@ class SyntheticControl:
         hhi = float(np.sum(weights**2))
         n_effective = 1.0 / hhi if hhi > 0 else 0.0
 
+        # --- Multi-start solver diagnostics ---
+        start_diagnostics = solver_out.get("start_diagnostics", [])
+        start_diag_rows = []
+        start_weight_rows = []
+        start_v_rows = []
+        finite_losses = [
+            float(item["loss"])
+            for item in start_diagnostics
+            if np.isfinite(float(item.get("loss", np.inf)))
+        ]
+        best_start_loss = min(finite_losses) if finite_losses else np.nan
+        loss_tol = max(1e-6, abs(best_start_loss) * 1e-4) if finite_losses else np.nan
+        weight_class_l1_tol = 1e-4
+        near_best_weights = []
+        for item in start_diagnostics:
+            loss = float(item.get("loss", np.inf))
+            start_name = str(item.get("start", ""))
+            start_weights = np.asarray(item.get("weights", []), dtype=float)
+            start_v = np.asarray(item.get("v", []), dtype=float)
+            near_best = bool(np.isfinite(loss) and loss <= best_start_loss + loss_tol)
+            if near_best and start_weights.size == len(self.donor_units):
+                near_best_weights.append(start_weights)
+            start_diag_rows.append(
+                {
+                    "start": start_name,
+                    "success": bool(item.get("success", False)),
+                    "loss": loss,
+                    "inner_loss": float(item.get("inner_loss", np.nan)),
+                    "near_best": near_best,
+                    "n_active_donors": (
+                        int(np.sum(start_weights > 1e-6)) if start_weights.size else 0
+                    ),
+                    "weight_hhi": (
+                        float(np.nansum(start_weights**2))
+                        if start_weights.size
+                        else np.nan
+                    ),
+                }
+            )
+            if start_weights.size == len(self.donor_units):
+                for donor, weight in zip(self.donor_units, start_weights):
+                    start_weight_rows.append(
+                        {
+                            "start": start_name,
+                            "unit": donor,
+                            "weight": float(weight),
+                            "loss": loss,
+                            "near_best": near_best,
+                        }
+                    )
+            if start_v.size == len(self._predictor_names):
+                for predictor, v_weight in zip(self._predictor_names, start_v):
+                    start_v_rows.append(
+                        {
+                            "start": start_name,
+                            "predictor": predictor,
+                            "v_weight": float(v_weight),
+                            "loss": loss,
+                            "near_best": near_best,
+                        }
+                    )
+
+        solver_start_diagnostics = pd.DataFrame(start_diag_rows)
+        solver_start_weights = pd.DataFrame(start_weight_rows)
+        solver_start_v_weights = pd.DataFrame(start_v_rows)
+        near_best_weight_l1_max = 0.0
+        weight_class_reps: list[np.ndarray] = []
+        for candidate in near_best_weights:
+            if weight_class_reps:
+                near_best_weight_l1_max = max(
+                    near_best_weight_l1_max,
+                    max(
+                        float(np.sum(np.abs(candidate - rep)))
+                        for rep in weight_class_reps
+                    ),
+                )
+            if not any(
+                float(np.sum(np.abs(candidate - rep))) <= weight_class_l1_tol
+                for rep in weight_class_reps
+            ):
+                weight_class_reps.append(candidate)
+
         # --- Model info ---
         model_info: Dict[str, Any] = {
             "backend": "native",
@@ -1302,6 +1402,19 @@ class SyntheticControl:
             "v_method": "nested" if run_nested else "equal",
             "n_starts": solver_out["n_starts"],
             "converged": solver_out["converged"],
+            "solver_best_start": solver_out.get("best_start"),
+            "solver_start_diagnostics": solver_start_diagnostics,
+            "solver_start_weights": solver_start_weights,
+            "solver_start_v_weights": solver_start_v_weights,
+            "solver_best_loss": best_start_loss,
+            "solver_near_best_loss_tol": loss_tol,
+            "solver_near_best_start_count": int(len(near_best_weights)),
+            "solver_weight_class_l1_tol": weight_class_l1_tol,
+            "solver_near_best_weight_l1_max": round(near_best_weight_l1_max, 6),
+            "solver_near_best_weight_class_count": int(len(weight_class_reps)),
+            "weight_solution_nonunique": bool(
+                len(weight_class_reps) > 1 and near_best_weight_l1_max > 1e-3
+            ),
             "n_active_donors": int(len(w_active)),
             "weight_hhi": round(hhi, 4),
             "effective_n_donors": round(n_effective, 2),

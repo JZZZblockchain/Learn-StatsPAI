@@ -30,14 +30,26 @@ class DoubleMLPLR(_DoubleMLBase):
     _ML_M_TARGET_BINARY = False  # PLR is agnostic to D type
     _SUPPORTS_SAMPLE_WEIGHT = True
 
-    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed, sample_weight=None):
+    def _fit_one_rep(
+        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
+    ):
         from sklearn.model_selection import KFold
 
-        kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=rng_seed)
+        if fold_indices is None:
+            kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=rng_seed)
+            splits = kf.split(X)
+        else:
+            splits = (
+                (
+                    np.flatnonzero(fold_indices != fold),
+                    np.flatnonzero(fold_indices == fold),
+                )
+                for fold in range(self.n_folds)
+            )
         y_resid = np.zeros(n)
         d_resid = np.zeros(n)
 
-        for train_idx, test_idx in kf.split(X):
+        for train_idx, test_idx in splits:
             w_train = (
                 sample_weight[train_idx] if sample_weight is not None else None
             )

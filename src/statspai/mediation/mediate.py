@@ -29,6 +29,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import ConvergenceFailure, DataInsufficient
 
 
 def mediate(
@@ -39,6 +40,7 @@ def mediate(
     covariates: Optional[List[str]] = None,
     n_boot: int = 1000,
     alpha: float = 0.05,
+    inference: str = 'bootstrap',
     pvalue_method: str = 'bootstrap_sign',
     seed: int = 42,
 ) -> CausalResult:
@@ -61,6 +63,11 @@ def mediate(
         Number of bootstrap replications for inference.
     alpha : float, default 0.05
         Significance level.
+    inference : {'bootstrap', 'delta'}, default 'bootstrap'
+        Standard-error convention. ``'bootstrap'`` keeps the simulation
+        path used by R ``mediation::mediate(..., boot=TRUE)``.
+        ``'delta'`` uses the closed-form Sobel/delta method for the
+        linear no-interaction model and matches Stata ``paramed``.
     pvalue_method : {'bootstrap_sign', 'wald'}, default 'bootstrap_sign'
         How each effect's p-value is computed:
 
@@ -72,9 +79,12 @@ def mediate(
           self-consistent "is the bootstrap distribution straddling
           zero?" test and is robust to skew.
         - ``'wald'``: conventional 2·(1−Φ(|θ̂/ŝe|)), using the
-          bootstrap SE. Consistent with the Wald convention used
+          reported SE. Consistent with the Wald convention used
           across the rest of the causal-inference surface
           (:func:`sp.aipw`, :func:`sp.dml`, etc.).
+
+        ``inference='delta'`` has no bootstrap distribution, so p-values
+        are reported with the Wald convention.
 
         The matching kwarg is also accepted by
         :func:`sp.mediate_interventional`; pass the same value to
@@ -98,6 +108,10 @@ def mediate(
     >>> result = mediate(df, y='wage', treat='training',
     ...                  mediator='skills', pvalue_method='wald')
     """
+    if inference not in ('bootstrap', 'delta'):
+        raise ValueError(
+            f"inference must be 'bootstrap' or 'delta'; got {inference!r}"
+        )
     if pvalue_method not in ('bootstrap_sign', 'wald'):
         raise ValueError(
             f"pvalue_method must be 'bootstrap_sign' or 'wald'; "
@@ -106,7 +120,7 @@ def mediate(
     analysis = MediationAnalysis(
         data=data, y=y, treat=treat, mediator=mediator,
         covariates=covariates, n_boot=n_boot, alpha=alpha,
-        pvalue_method=pvalue_method, seed=seed,
+        inference=inference, pvalue_method=pvalue_method, seed=seed,
     )
     _result = analysis.fit()
     try:
@@ -118,6 +132,7 @@ def mediate(
                 "y": y, "treat": treat, "mediator": mediator,
                 "covariates": list(covariates) if covariates else None,
                 "n_boot": n_boot, "alpha": alpha,
+                "inference": inference,
                 "pvalue_method": pvalue_method, "seed": seed,
             },
             data=data,
@@ -142,9 +157,14 @@ class MediationAnalysis:
         covariates: Optional[List[str]] = None,
         n_boot: int = 1000,
         alpha: float = 0.05,
+        inference: str = 'bootstrap',
         pvalue_method: str = 'bootstrap_sign',
         seed: int = 42,
     ):
+        if inference not in ('bootstrap', 'delta'):
+            raise ValueError(
+                f"inference must be 'bootstrap' or 'delta'; got {inference!r}"
+            )
         if pvalue_method not in ('bootstrap_sign', 'wald'):
             raise ValueError(
                 f"pvalue_method must be 'bootstrap_sign' or 'wald'; "
@@ -155,6 +175,7 @@ class MediationAnalysis:
         self.treat = treat
         self.mediator = mediator
         self.covariates = covariates or []
+        self.inference = inference
         self.pvalue_method = pvalue_method
         self.n_boot = n_boot
         self.alpha = alpha
@@ -186,80 +207,100 @@ class MediationAnalysis:
         acme, ade, total = self._estimate_effects(Y, T, M, X)
         prop_mediated = acme / total if abs(total) > 1e-10 else np.nan
 
-        # Bootstrap inference. We collect successful draws into lists rather
-        # than overwriting failed draws with the point estimate (which silently
-        # shrinks SE and underestimates uncertainty). Up to ``max_retries`` per
-        # failure are attempted; remaining failures are dropped, and we abort
-        # the SE/CI computation if the failure rate exceeds 10%.
-        rng = np.random.default_rng(self.seed)
-        boot_acme: List[float] = []
-        boot_ade: List[float] = []
-        boot_total: List[float] = []
-        n_failed = 0
-        max_retries = 5
-
-        for _b in range(self.n_boot):
-            success = False
-            for _retry in range(max_retries):
-                idx = rng.choice(n, size=n, replace=True)
-                Y_b, T_b, M_b = Y[idx], T[idx], M[idx]
-                X_b = X[idx] if X is not None else None
-                try:
-                    a, d, t = self._estimate_effects(Y_b, T_b, M_b, X_b)
-                    if not (np.isfinite(a) and np.isfinite(d) and np.isfinite(t)):
-                        continue
-                    boot_acme.append(a)
-                    boot_ade.append(d)
-                    boot_total.append(t)
-                    success = True
-                    break
-                except Exception:  # noqa: BLE001 — bootstrap fit failure
-                    continue
-            if not success:
-                n_failed += 1
-
-        n_kept = len(boot_acme)
-        if n_kept == 0:
-            raise RuntimeError(
-                "Mediation bootstrap: every replicate failed to fit. "
-                "Inspect data for collinearity or insufficient variation."
-            )
-        fail_rate = n_failed / self.n_boot
-        if fail_rate > 0.10:
-            warnings.warn(
-                f"Mediation bootstrap: {n_failed}/{self.n_boot} replicates "
-                f"({fail_rate:.1%}) failed after {max_retries} retries; "
-                "standard errors based on remaining draws may be unreliable.",
-                RuntimeWarning, stacklevel=3,
-            )
-
-        boot_acme_arr = np.asarray(boot_acme, dtype=float)
-        boot_ade_arr = np.asarray(boot_ade, dtype=float)
-        boot_total_arr = np.asarray(boot_total, dtype=float)
-
-        # Standard errors and CIs
-        se_acme = float(np.std(boot_acme_arr, ddof=1))
-        se_ade = float(np.std(boot_ade_arr, ddof=1))
-        se_total = float(np.std(boot_total_arr, ddof=1))
-        boot_acme = boot_acme_arr  # retain old name for downstream code
-        boot_ade = boot_ade_arr
-        boot_total = boot_total_arr
-
         lo = self.alpha / 2
         hi = 1 - self.alpha / 2
-        ci_acme = (float(np.percentile(boot_acme, lo * 100)),
-                   float(np.percentile(boot_acme, hi * 100)))
-        ci_ade = (float(np.percentile(boot_ade, lo * 100)),
-                  float(np.percentile(boot_ade, hi * 100)))
-        ci_total = (float(np.percentile(boot_total, lo * 100)),
-                    float(np.percentile(boot_total, hi * 100)))
+        if self.inference == 'delta':
+            se_acme, se_ade, se_total = self._delta_standard_errors(Y, T, M, X)
+            zcrit = float(stats.norm.ppf(1 - lo))
+            ci_acme = (float(acme - zcrit * se_acme), float(acme + zcrit * se_acme))
+            ci_ade = (float(ade - zcrit * se_ade), float(ade + zcrit * se_ade))
+            ci_total = (
+                float(total - zcrit * se_total),
+                float(total + zcrit * se_total),
+            )
+            n_kept = 0
+            n_failed = 0
+            fail_rate = 0.0
+            pvalue_method_used = 'wald'
+            pv_acme = self._wald_pvalue(acme, se_acme)
+            pv_ade = self._wald_pvalue(ade, se_ade)
+            pv_total = self._wald_pvalue(total, se_total)
+        else:
+            # Bootstrap inference. We collect successful draws into lists rather
+            # than overwriting failed draws with the point estimate (which silently
+            # shrinks SE and underestimates uncertainty). Up to ``max_retries`` per
+            # failure are attempted; remaining failures are dropped, and we abort
+            # the SE/CI computation if the failure rate exceeds 10%.
+            rng = np.random.default_rng(self.seed)
+            boot_acme: List[float] = []
+            boot_ade: List[float] = []
+            boot_total: List[float] = []
+            n_failed = 0
+            max_retries = 5
 
-        # P-values. Dispatch on the user's declared convention so a
-        # single mediate()/mediate_interventional() study can report
-        # consistent p-values regardless of which family member is used.
-        pv_acme = self._pvalue(boot_acme, acme, se_acme)
-        pv_ade = self._pvalue(boot_ade, ade, se_ade)
-        pv_total = self._pvalue(boot_total, total, se_total)
+            for _b in range(self.n_boot):
+                success = False
+                for _retry in range(max_retries):
+                    idx = rng.choice(n, size=n, replace=True)
+                    Y_b, T_b, M_b = Y[idx], T[idx], M[idx]
+                    X_b = X[idx] if X is not None else None
+                    try:
+                        a, d, t = self._estimate_effects(Y_b, T_b, M_b, X_b)
+                        if not (np.isfinite(a) and np.isfinite(d) and np.isfinite(t)):
+                            continue
+                        boot_acme.append(a)
+                        boot_ade.append(d)
+                        boot_total.append(t)
+                        success = True
+                        break
+                    except (
+                        FloatingPointError,
+                        RuntimeError,
+                        ValueError,
+                        np.linalg.LinAlgError,
+                    ):  # bootstrap fit failure
+                        continue
+                if not success:
+                    n_failed += 1
+
+            n_kept = len(boot_acme)
+            if n_kept == 0:
+                raise ConvergenceFailure(
+                    "Mediation bootstrap: every replicate failed to fit. "
+                    "Inspect data for collinearity or insufficient variation."
+                )
+            fail_rate = n_failed / self.n_boot
+            if fail_rate > 0.10:
+                warnings.warn(
+                    f"Mediation bootstrap: {n_failed}/{self.n_boot} replicates "
+                    f"({fail_rate:.1%}) failed after {max_retries} retries; "
+                    "standard errors based on remaining draws may be unreliable.",
+                    RuntimeWarning, stacklevel=3,
+                )
+
+            boot_acme = np.asarray(boot_acme, dtype=float)
+            boot_ade = np.asarray(boot_ade, dtype=float)
+            boot_total = np.asarray(boot_total, dtype=float)
+
+            # Standard errors and CIs
+            se_acme = float(np.std(boot_acme, ddof=1))
+            se_ade = float(np.std(boot_ade, ddof=1))
+            se_total = float(np.std(boot_total, ddof=1))
+
+            ci_acme = (float(np.percentile(boot_acme, lo * 100)),
+                       float(np.percentile(boot_acme, hi * 100)))
+            ci_ade = (float(np.percentile(boot_ade, lo * 100)),
+                      float(np.percentile(boot_ade, hi * 100)))
+            ci_total = (float(np.percentile(boot_total, lo * 100)),
+                        float(np.percentile(boot_total, hi * 100)))
+
+            # P-values. Dispatch on the user's declared convention so a
+            # single mediate()/mediate_interventional() study can report
+            # consistent p-values regardless of which family member is used.
+            pvalue_method_used = self.pvalue_method
+            pv_acme = self._pvalue(boot_acme, acme, se_acme)
+            pv_ade = self._pvalue(boot_ade, ade, se_ade)
+            pv_total = self._pvalue(boot_total, total, se_total)
 
         # Detail table
         detail = pd.DataFrame({
@@ -280,12 +321,14 @@ class MediationAnalysis:
             'n_boot_successful': n_kept,
             'n_boot_failed': n_failed,
             'boot_failure_rate': fail_rate,
+            'inference': self.inference,
             'se_acme': se_acme,
             'se_ade': se_ade,
+            'se_total': se_total,
             'ci_acme': ci_acme,
             'ci_ade': ci_ade,
             'ci_total': ci_total,
-            'pvalue_method': self.pvalue_method,
+            'pvalue_method': pvalue_method_used,
         }
 
         return CausalResult(
@@ -345,14 +388,62 @@ class MediationAnalysis:
 
         return float(acme), float(ade), float(total)
 
+    def _delta_standard_errors(self, Y, T, M, X):
+        """
+        Sobel/delta SEs for the linear no-interaction mediation model.
+
+        This is the convention reported by Stata ``paramed`` for the
+        linear/linear ``nointer`` specification. Cross-equation covariance
+        between the mediator-model treatment coefficient and outcome-model
+        coefficients is ignored, matching the standard product-of-coefficients
+        delta method.
+        """
+        n = len(Y)
+        if X is not None:
+            Z_med = np.column_stack([np.ones(n), T, X])
+            Z_out = np.column_stack([np.ones(n), T, M, X])
+        else:
+            Z_med = np.column_stack([np.ones(n), T])
+            Z_out = np.column_stack([np.ones(n), T, M])
+
+        a, cov_a = self._ols_with_cov(Z_med, M)
+        b, cov_b = self._ols_with_cov(Z_out, Y)
+        a1 = a[1]
+        b2 = b[2]
+
+        var_acme = b2**2 * cov_a[1, 1] + a1**2 * cov_b[2, 2]
+        var_ade = cov_b[1, 1]
+        var_total = var_acme + cov_b[1, 1] + 2 * a1 * cov_b[1, 2]
+
+        return (
+            float(np.sqrt(max(var_acme, 0.0))),
+            float(np.sqrt(max(var_ade, 0.0))),
+            float(np.sqrt(max(var_total, 0.0))),
+        )
+
+    @staticmethod
+    def _ols_with_cov(X, y):
+        beta = np.linalg.lstsq(X, y, rcond=None)[0]
+        resid = y - X @ beta
+        df_resid = len(y) - X.shape[1]
+        if df_resid <= 0:
+            raise DataInsufficient("Not enough residual degrees of freedom")
+        xtx_inv = np.linalg.pinv(X.T @ X)
+        sigma2 = float(resid @ resid / df_resid)
+        return beta, sigma2 * xtx_inv
+
     def _pvalue(self, boot_samples, point, se):
         """Per-effect p-value using the convention declared by self.pvalue_method."""
         if self.pvalue_method == 'wald':
-            if se and se > 0 and np.isfinite(point):
-                z = point / se
-                return float(2 * (1 - stats.norm.cdf(abs(z))))
-            return float('nan')
+            return self._wald_pvalue(point, se)
         return self._boot_pvalue(boot_samples)
+
+    @staticmethod
+    def _wald_pvalue(point, se):
+        if se and se > 0 and np.isfinite(point):
+            z = point / se
+            return float(2 * (1 - stats.norm.cdf(abs(z))))
+        return float('nan')
 
     @staticmethod
     def _boot_pvalue(boot_samples):

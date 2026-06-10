@@ -41,7 +41,9 @@ class DoubleMLPLIV(_DoubleMLBase):
     # AR test) at their preferred threshold.
     _FIRST_STAGE_CORR_FLOOR = 1e-3
 
-    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed, sample_weight=None):
+    def _fit_one_rep(
+        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
+    ):
         from sklearn.model_selection import KFold
 
         if sample_weight is None:

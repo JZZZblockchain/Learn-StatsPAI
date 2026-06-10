@@ -113,18 +113,18 @@ def twoway_cluster(
 
     c1 = data[cluster1].values
     c2 = data[cluster2].values
-    # Intersection cluster: unique (dim1, dim2) pairs
-    c_inter = np.array([f"{a}_{b}" for a, b in zip(c1, c2)])
 
-    # --- Three variance components ---
-    V1 = _cluster_robust_variance(X, residuals, c1)
-    V2 = _cluster_robust_variance(X, residuals, c2)
-    V_inter = _cluster_robust_variance(X, residuals, c_inter)
-
-    V_twoway = V1 + V2 - V_inter
-
-    # Ensure positive semi-definiteness
-    V_twoway = _ensure_psd(V_twoway)
+    # Reuse the N-way core so intersection keys are factorized tuple-wise
+    # instead of built from collision-prone string concatenation.
+    from .multiway_cluster import multiway_cluster_vcov
+    V_twoway = multiway_cluster_vcov(
+        X,
+        residuals,
+        [c1, c2],
+        df_adjust=True,
+        n_params=X.shape[1],
+        psd_correct=True,
+    )
 
     # --- Build new results ---
     se = pd.Series(np.sqrt(np.diag(V_twoway)), index=result.params.index)

@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..exceptions import ConvergenceFailure, DataInsufficient
+
 
 # ════════════════════════════════════════════════════════════════════════
 # Weighted OLS
@@ -235,7 +237,7 @@ def bootstrap_stat(
             n_failed += 1
             continue
     if not results:
-        raise RuntimeError("All bootstrap replications failed.")
+        raise ConvergenceFailure("All bootstrap replications failed.")
     # Warn if more than 5% of replications failed silently
     if n_failed > 0.05 * n_boot:
         warnings.warn(
@@ -321,7 +323,7 @@ def wild_bootstrap_stat(
             n_failed += 1
             continue
     if not out:
-        raise RuntimeError("All wild-bootstrap replications failed.")
+        raise ConvergenceFailure("All wild-bootstrap replications failed.")
     if n_failed > 0.05 * n_boot:
         warnings.warn(
             f"{n_failed}/{n_boot} wild-bootstrap replications failed "
@@ -401,6 +403,139 @@ def weighted_quantile(
     if np.isscalar(q):
         return float(out[0])
     return out
+
+
+def weighted_quantile_hmisc(
+    y: np.ndarray, q: Union[float, np.ndarray], w: Optional[np.ndarray] = None
+) -> Union[float, np.ndarray]:
+    """Hmisc/dineq-compatible weighted quantile.
+
+    This ports ``Hmisc::wtd.quantile(type="quantile")``. With unit
+    weights it is R's default type-7 quantile; with weights it collapses
+    duplicate values, uses ``1 + (sum(w) - 1) * p`` as the fractional
+    order, and right-continuous constant interpolation on the weighted
+    order statistic.
+    """
+    y = np.asarray(y, dtype=float).ravel()
+    if w is None:
+        w = np.ones_like(y)
+    w = np.asarray(w, dtype=float).ravel()
+    if y.shape[0] != w.shape[0]:
+        raise ValueError("y and w must have the same length")
+
+    mask = np.isfinite(y) & np.isfinite(w) & (w > 0)
+    if not np.any(mask):
+        raise DataInsufficient("at least one positive finite weight is required")
+    y = y[mask]
+    w = w[mask]
+
+    if np.any((np.asarray(q) < 0) | (np.asarray(q) > 1)):
+        raise ValueError("quantile probabilities must be between 0 and 1")
+
+    order = np.argsort(y, kind="mergesort")
+    y_s = y[order]
+    w_s = w[order]
+    uniq, inverse = np.unique(y_s, return_inverse=True)
+    w_collapsed = np.bincount(inverse, weights=w_s)
+    cum = np.cumsum(w_collapsed)
+    n = float(w_collapsed.sum())
+
+    q_arr = np.atleast_1d(q).astype(float)
+    pos = 1.0 + (n - 1.0) * q_arr
+    low = np.maximum(np.floor(pos), 1.0)
+    high = np.minimum(low + 1.0, n)
+    frac = np.mod(pos, 1.0)
+
+    xout = np.concatenate([low, high])
+    idx = np.searchsorted(cum, xout, side="left")
+    idx = np.clip(idx, 0, len(uniq) - 1)
+    vals = uniq[idx]
+    k = len(q_arr)
+    out = (1.0 - frac) * vals[:k] + frac * vals[k:]
+    if np.isscalar(q):
+        return float(out[0])
+    return out
+
+
+def _bw_nrd0(y: np.ndarray) -> float:
+    """Port of R ``stats::bw.nrd0`` for Gaussian kernel density."""
+    y = np.asarray(y, dtype=float).ravel()
+    y = y[np.isfinite(y)]
+    if len(y) < 2:
+        return 1.0
+    hi = float(np.std(y, ddof=1))
+    q75, q25 = np.quantile(y, [0.75, 0.25])
+    iqr = float(q75 - q25)
+    lo = min(hi, iqr / 1.34)
+    if not np.isfinite(lo) or lo == 0:
+        lo = hi
+    if not np.isfinite(lo) or lo == 0:
+        lo = abs(float(y[0]))
+    if not np.isfinite(lo) or lo == 0:
+        lo = 1.0
+    return float(0.9 * lo * len(y) ** (-0.2))
+
+
+def kde_at_dineq(y: np.ndarray, point: float, w: Optional[np.ndarray] = None) -> float:
+    """dineq-compatible Gaussian density at ``point``.
+
+    ``dineq::rif`` calls R ``density(..., bw="nrd0", kernel="gaussian")`` with
+    normalised weights. R's ``density.default`` does not evaluate the Gaussian
+    kernel sum directly: it bins observations on a 512-point grid, performs an
+    FFT convolution, then interpolates back to the requested point. Mirroring
+    that path removes the small but visible RIF-regression drift from using the
+    closed-form kernel average.
+    """
+    y = np.asarray(y, dtype=float).ravel()
+    if w is None:
+        w = np.ones_like(y)
+    w = np.asarray(w, dtype=float).ravel()
+    if y.shape[0] != w.shape[0]:
+        raise ValueError("y and w must have the same length")
+    mask = np.isfinite(y) & np.isfinite(w) & (w > 0)
+    if not np.any(mask):
+        raise DataInsufficient("at least one positive finite weight is required")
+    y_pos = y[mask]
+    w_pos = w[mask]
+    h = max(_bw_nrd0(y_pos), 1e-12)
+    w_norm = w_pos / w_pos.sum()
+
+    # Port of stats::density.default(..., from=point, to=point, n=1,
+    # kernel="gaussian") plus C_BinDist from R's stats package.
+    n_grid = 512
+    lo = point - 4.0 * h
+    up = point + 4.0 * h
+    xdelta = (up - lo) / (n_grid - 1)
+    bins = np.zeros(2 * n_grid, dtype=float)
+    ixmin = 0
+    ixmax = n_grid - 2
+    int_min = np.iinfo(np.int32).min
+    int_max = np.iinfo(np.int32).max
+    for xi, wi in zip(y_pos, w_norm):
+        xpos = (xi - lo) / xdelta
+        if xpos > int_max or xpos < int_min:
+            continue
+        ix = int(np.floor(xpos))
+        fx = xpos - ix
+        if ixmin <= ix <= ixmax:
+            bins[ix] += (1.0 - fx) * wi
+            bins[ix + 1] += fx * wi
+        elif ix == -1:
+            bins[0] += fx * wi
+        elif ix == ixmax + 1:
+            bins[ix] += (1.0 - fx) * wi
+
+    kords = np.linspace(
+        0.0,
+        ((2 * n_grid - 1) / (n_grid - 1)) * (up - lo),
+        2 * n_grid,
+    )
+    kords[n_grid + 1:] = -kords[n_grid - 1:0:-1]
+    kernel = np.exp(-0.5 * (kords / h) ** 2) / (h * np.sqrt(2 * np.pi))
+    conv = np.fft.ifft(np.fft.fft(bins) * np.conj(np.fft.fft(kernel))).real
+    density_grid = np.maximum(0.0, conv[:n_grid])
+    x_grid = np.linspace(lo, up, n_grid)
+    return float(np.interp(point, x_grid, density_grid))
 
 
 def weighted_ecdf(
@@ -540,6 +675,7 @@ def influence_function(
     stat: str,
     tau: float = 0.5,
     w: Optional[np.ndarray] = None,
+    quantile_convention: str = "statspai",
 ) -> np.ndarray:
     """
     Per-observation influence function (RIF kernel) of a distributional
@@ -572,13 +708,21 @@ def influence_function(
     w = np.asarray(w, dtype=float)
 
     if stat == "quantile":
-        q = float(weighted_quantile(y, tau, w=w))
-        n_eff = (w.sum() ** 2) / (w ** 2).sum()
-        sigma = np.sqrt(max(float(np.cov(y, aweights=w)), 1e-12))
-        h = max(1.06 * sigma * n_eff ** (-0.2), 1e-6)
-        kern = np.exp(-0.5 * ((y - q) / h) ** 2) / (h * np.sqrt(2 * np.pi))
-        f_q = max(float(np.average(kern, weights=w)), 1e-12)
-        return q + (tau - (y <= q).astype(float)) / f_q
+        if quantile_convention == "statspai":
+            q = float(weighted_quantile(y, tau, w=w))
+            n_eff = (w.sum() ** 2) / (w ** 2).sum()
+            sigma = np.sqrt(max(float(np.cov(y, aweights=w)), 1e-12))
+            h = max(1.06 * sigma * n_eff ** (-0.2), 1e-6)
+            kern = np.exp(-0.5 * ((y - q) / h) ** 2) / (h * np.sqrt(2 * np.pi))
+            f_q = max(float(np.average(kern, weights=w)), 1e-12)
+            return q + (tau - (y <= q).astype(float)) / f_q
+        if quantile_convention == "dineq":
+            q = float(weighted_quantile_hmisc(y, tau, w=w))
+            f_q = max(kde_at_dineq(y, q, w=w), 1e-12)
+            return q + (tau - (y < q).astype(float)) / f_q
+        raise ValueError(
+            "quantile_convention must be 'statspai' or 'dineq'"
+        )
     if stat == "mean":
         return y.copy()
     if stat == "variance":
@@ -595,8 +739,14 @@ def influence_function(
         return (ly - mu) ** 2
     if stat == "iqr":
         return (
-            influence_function(y, "quantile", tau=0.75, w=w)
-            - influence_function(y, "quantile", tau=0.25, w=w)
+            influence_function(
+                y, "quantile", tau=0.75, w=w,
+                quantile_convention=quantile_convention,
+            )
+            - influence_function(
+                y, "quantile", tau=0.25, w=w,
+                quantile_convention=quantile_convention,
+            )
         )
     if stat == "gini":
         order = np.argsort(y)

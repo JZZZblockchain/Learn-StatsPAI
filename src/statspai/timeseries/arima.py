@@ -11,6 +11,7 @@ Examples
 >>> fc = result.forecast(horizon=12)
 >>> result.plot()
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,7 +26,7 @@ class ARIMAResult:
     order: Tuple[int, int, int]
     seasonal_order: Optional[Tuple[int, int, int, int]]
     params: pd.Series
-    se: pd.Series                    # asymptotic standard errors (param index)
+    se: pd.Series  # asymptotic standard errors (param index)
     aic: float
     bic: float
     aicc: float
@@ -33,7 +34,7 @@ class ARIMAResult:
     residuals: np.ndarray
     fitted_values: np.ndarray
     n: int
-    _model: object                   # statsmodels result (opaque)
+    _model: object  # statsmodels result (opaque)
 
     # --- inference accessors -------------------------------------------------
     @property
@@ -50,6 +51,7 @@ class ARIMAResult:
     def pvalues(self) -> pd.Series:
         """Two-sided p-values from the normal reference distribution."""
         from scipy import stats
+
         z = (self.params / self.se).to_numpy()
         return pd.Series(2.0 * stats.norm.sf(np.abs(z)), index=self.params.index)
 
@@ -67,36 +69,48 @@ class ARIMAResult:
             Indexed by parameter name with ``lower`` / ``upper`` columns.
         """
         from scipy import stats
+
         z = stats.norm.ppf(1.0 - alpha / 2.0)
         lower = self.params - z * self.se
         upper = self.params + z * self.se
-        return pd.DataFrame({"lower": lower, "upper": upper},
-                            index=self.params.index)
+        return pd.DataFrame({"lower": lower, "upper": upper}, index=self.params.index)
 
     def forecast(self, horizon: int = 10, alpha: float = 0.05) -> pd.DataFrame:
         fc = self._model.get_forecast(steps=horizon)
         pred = np.asarray(fc.predicted_mean).ravel()
         ci = fc.conf_int(alpha=alpha)
         ci = np.asarray(ci)
-        return pd.DataFrame({
-            "forecast": pred,
-            "lower": ci[:, 0] if ci.ndim == 2 else ci,
-            "upper": ci[:, 1] if ci.ndim == 2 else ci,
-        })
+        return pd.DataFrame(
+            {
+                "forecast": pred,
+                "lower": ci[:, 0] if ci.ndim == 2 else ci,
+                "upper": ci[:, 1] if ci.ndim == 2 else ci,
+            }
+        )
 
     def plot(self, horizon: int = 20, alpha: float = 0.05, ax=None):
         import matplotlib.pyplot as plt
+
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 4))
         T = np.arange(self.n)
         ax.plot(T, self.fitted_values, color="C0", linewidth=0.8, label="fitted")
-        ax.plot(T, self.fitted_values + self.residuals, ".", color="grey",
-                markersize=2, alpha=0.5, label="observed")
+        ax.plot(
+            T,
+            self.fitted_values + self.residuals,
+            ".",
+            color="grey",
+            markersize=2,
+            alpha=0.5,
+            label="observed",
+        )
         fc = self.forecast(horizon, alpha)
         T_fc = np.arange(self.n, self.n + horizon)
         ax.plot(T_fc, fc["forecast"], "-", color="C3", label="forecast")
         ax.fill_between(T_fc, fc["lower"], fc["upper"], color="C3", alpha=0.2)
-        ax.legend(); ax.set_xlabel("t"); ax.set_ylabel("y")
+        ax.legend()
+        ax.set_xlabel("t")
+        ax.set_ylabel("y")
         return ax
 
     def summary(self) -> str:
@@ -117,9 +131,7 @@ class ARIMAResult:
             s = float(self.se.get(nm, np.nan))
             z = val / s if s and np.isfinite(s) else np.nan
             p = float(pvals.get(nm, np.nan))
-            lines.append(
-                f"  {nm:<15s}  {val:>10.4f}  {s:>10.4f}  {z:>8.3f}  {p:>8.3f}"
-            )
+            lines.append(f"  {nm:<15s}  {val:>10.4f}  {s:>10.4f}  {z:>8.3f}  {p:>8.3f}")
         return "\n".join(lines)
 
     def __repr__(self) -> str:
@@ -135,6 +147,7 @@ def arima(
     max_p: int = 5,
     max_q: int = 5,
     max_d: int = 2,
+    method: str = "statespace",
 ) -> ARIMAResult:
     """Fit ARIMA(p,d,q) or SARIMAX.
 
@@ -149,6 +162,13 @@ def arima(
         If True, select (p, d, q) by AICc grid search (ignores ``order``).
     max_p, max_q, max_d : int
         Bounds for the auto search.
+    method : {'statespace', 'css_ml', 'innovations_mle'}, default 'statespace'
+        Estimation convention. ``'statespace'`` keeps the default exact
+        Kalman/SARIMAX likelihood. ``'css_ml'`` is retained as a compatibility
+        alias for ``'innovations_mle'``. The innovations-MLE path uses
+        statsmodels' stationary/invertible exact-MLE parameterization, matching
+        ``stats::arima(method='ML')`` and tightly converged Stata ``arima``
+        coefficient conventions for pure ARMA models.
 
     Returns
     -------
@@ -167,6 +187,7 @@ def arima(
     """
     try:
         from statsmodels.tsa.statespace.sarimax import SARIMAX
+        from statsmodels.tsa.arima.model import ARIMA as SMARIMA
     except ImportError as e:
         raise ImportError(
             "statsmodels is required for arima(). "
@@ -175,6 +196,38 @@ def arima(
 
     y = np.asarray(y, dtype=float).ravel()
     n = len(y)
+    method_norm = method.lower().replace("-", "_")
+    if method_norm in {"kalman", "exact", "mle"}:
+        method_norm = "statespace"
+    elif method_norm in {"css", "css_ml", "conditional", "conditional_mle"}:
+        method_norm = "innovations_mle"
+    if method_norm not in {"statespace", "innovations_mle"}:
+        raise ValueError("method must be 'statespace', 'css_ml', or 'innovations_mle'")
+
+    def _fit(order_: Tuple[int, int, int], maxiter: Optional[int] = None):
+        if method_norm == "statespace":
+            model = SARIMAX(
+                y,
+                order=order_,
+                seasonal_order=seasonal_order or (0, 0, 0, 0),
+                exog=exog,
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
+            kwargs = {"disp": False}
+            if maxiter is not None:
+                kwargs["maxiter"] = maxiter
+            return model.fit(**kwargs)
+
+        model = SMARIMA(
+            y,
+            order=order_,
+            seasonal_order=seasonal_order or (0, 0, 0, 0),
+            exog=exog,
+            enforce_stationarity=True,
+            enforce_invertibility=True,
+        )
+        return model.fit(method="innovations_mle")
 
     if auto:
         best_aicc = np.inf
@@ -185,12 +238,8 @@ def arima(
                     if p == 0 and q == 0:
                         continue
                     try:
-                        m = SARIMAX(y, order=(p, d, q),
-                                    seasonal_order=seasonal_order or (0, 0, 0, 0),
-                                    exog=exog, enforce_stationarity=False,
-                                    enforce_invertibility=False)
-                        res = m.fit(disp=False, maxiter=50)
-                        k = p + q + 1 + d
+                        res = _fit((p, d, q), maxiter=50)
+                        k = len(np.asarray(res.params))
                         aicc = res.aic + 2 * k * (k + 1) / max(n - k - 1, 1)
                         if aicc < best_aicc:
                             best_aicc = aicc
@@ -199,13 +248,9 @@ def arima(
                         continue
         order = best_order
 
-    model = SARIMAX(y, order=order,
-                    seasonal_order=seasonal_order or (0, 0, 0, 0),
-                    exog=exog, enforce_stationarity=False,
-                    enforce_invertibility=False)
-    res = model.fit(disp=False)
+    res = _fit(order)
 
-    k = sum(order) + 1
+    k = len(np.asarray(res.params))
     aicc = res.aic + 2 * k * (k + 1) / max(n - k - 1, 1)
 
     _param_index = res.param_names if hasattr(res, "param_names") else None
@@ -234,6 +279,7 @@ def arima(
     )
     try:
         from ..output._lineage import attach_provenance as _attach_prov
+
         _attach_prov(
             _result,
             function="sp.timeseries.arima",
@@ -241,7 +287,10 @@ def arima(
                 "order": list(order),
                 "seasonal_order": list(seasonal_order) if seasonal_order else None,
                 "auto": auto,
-                "max_p": max_p, "max_q": max_q, "max_d": max_d,
+                "max_p": max_p,
+                "max_q": max_q,
+                "max_d": max_d,
+                "method": method,
             },
             data=None,
             overwrite=False,

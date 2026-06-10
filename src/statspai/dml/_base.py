@@ -59,6 +59,7 @@ class _DoubleMLBase:
         alpha: float = 0.05,
         random_state: int = 42,
         sample_weight: Optional[Any] = None,
+        fold_indices: Optional[Any] = None,
     ):
         self.data = data
         self.y = y
@@ -74,6 +75,32 @@ class _DoubleMLBase:
         self.n_rep = n_rep
         self.alpha = alpha
         self.random_state = int(random_state)
+        if fold_indices is not None and self._MODEL_TAG != "PLR":
+            raise NotImplementedError(
+                "Explicit fold_indices are currently supported for "
+                "model='plr' only."
+            )
+        if fold_indices is not None and n_rep != 1:
+            raise ValueError(
+                "Explicit fold_indices require n_rep=1; pass one fold "
+                "assignment for the single cross-fit repetition."
+            )
+        if fold_indices is None:
+            self._fold_indices_input: Any = None
+        elif isinstance(fold_indices, str):
+            if fold_indices not in data.columns:
+                raise ValueError(
+                    f"fold_indices column '{fold_indices}' not in data"
+                )
+            self._fold_indices_input = fold_indices
+        else:
+            arr = np.asarray(fold_indices)
+            if arr.ndim != 1 or len(arr) != len(data):
+                raise ValueError(
+                    f"fold_indices must be 1-D of length {len(data)} "
+                    f"(matching data); got shape {arr.shape}"
+                )
+            self._fold_indices_input = arr
         # Resolve sample_weight: accept Series, ndarray, or column name.
         if sample_weight is None:
             self._sample_weight_input: Any = None
@@ -193,8 +220,32 @@ class _DoubleMLBase:
     # as Y/D/X). Subclasses that opt in to weighting set
     # ``_SUPPORTS_SAMPLE_WEIGHT = True`` and use ``sample_weight`` in
     # both the nuisance fits and the moment equation.
-    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed, sample_weight=None):
+    def _fit_one_rep(
+        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
+    ):
         raise NotImplementedError  # pragma: no cover
+
+    @staticmethod
+    def _validate_fold_indices(fold_indices, n: int, n_folds: int) -> np.ndarray:
+        raw = np.asarray(fold_indices)
+        if raw.ndim != 1 or len(raw) != n:
+            raise ValueError(
+                f"fold_indices must be length {n} after dropping missing "
+                f"model rows; got shape {raw.shape}"
+            )
+        codes, _ = pd.factorize(raw, sort=True, use_na_sentinel=True)
+        if (codes < 0).any():
+            raise ValueError("fold_indices contain missing values")
+        unique = np.unique(codes)
+        if len(unique) != n_folds:
+            raise ValueError(
+                f"fold_indices define {len(unique)} folds, but n_folds="
+                f"{n_folds}"
+            )
+        counts = np.bincount(codes, minlength=n_folds)
+        if np.any(counts == 0):
+            raise ValueError("fold_indices must assign at least one row per fold")
+        return codes.astype(int)
 
     # ----- Sample-weight helpers (used by subclasses) -----------------
     @staticmethod
@@ -278,6 +329,11 @@ class _DoubleMLBase:
             work["__sw__"] = self.data[sw].astype(float).values
         elif sw is not None:
             work["__sw__"] = np.asarray(sw, dtype=float)
+        fi = self._fold_indices_input
+        if isinstance(fi, str):
+            work["__fold__"] = self.data[fi].values
+        elif fi is not None:
+            work["__fold__"] = np.asarray(fi)
         clean = work.dropna()
         Y = clean[self.y].values.astype(float)
         D = clean[self.treat].values.astype(float)
@@ -299,6 +355,14 @@ class _DoubleMLBase:
         else:
             sample_weight = None
         n = len(Y)
+        if "__fold__" in clean.columns:
+            fold_indices = self._validate_fold_indices(
+                clean["__fold__"].values, n, self.n_folds,
+            )
+            fold_source = "user"
+        else:
+            fold_indices = None
+            fold_source = "kfold"
 
         thetas: List[float] = []
         ses: List[float] = []
@@ -310,6 +374,7 @@ class _DoubleMLBase:
             theta_r, se_r = self._fit_one_rep(
                 Y, D, X, Z, n, rng_seed=self.random_state + rep,
                 sample_weight=sample_weight,
+                fold_indices=fold_indices,
             )
             thetas.append(theta_r)
             ses.append(se_r)
@@ -346,6 +411,7 @@ class _DoubleMLBase:
             'ml_g': type(self.ml_g).__name__,
             'ml_m': type(self.ml_m).__name__,
             'n_covariates': len(self.covariates),
+            'fold_source': fold_source,
         }
         if self._REQUIRES_INSTRUMENT:
             model_info['ml_r'] = type(self.ml_r).__name__

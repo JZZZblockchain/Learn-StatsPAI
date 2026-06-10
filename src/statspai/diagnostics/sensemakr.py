@@ -116,17 +116,11 @@ def sensemakr(
     partial_r2_dd = float(np.var(resid_d) * n / np.sum(resid_d ** 2))
 
     # --- Robustness Value ---
-    # RV_q: minimum confounder strength to reduce estimate to zero
-    # From Cinelli & Hazlett (2020), Theorem 1:
-    # RV_q = sqrt(f² / (1 + f²)) where f = |t| / sqrt(df)
+    # Mirrors sensemakr::robustness_value.numeric. ``rv_q`` sets alpha=1
+    # (point estimate only); ``rv_qa`` uses the caller's alpha threshold.
     df_resid = n - k_full
-    f2 = t_treat ** 2 / df_resid
-    rv_q = float(np.sqrt(f2 / (1 + f2)))
-
-    # RV_{q,alpha}: to make insignificant
-    t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
-    f2_alpha = (abs(t_treat) - t_crit) ** 2 / df_resid if abs(t_treat) > t_crit else 0
-    rv_qa = float(np.sqrt(f2_alpha / (1 + f2_alpha)))
+    rv_q = _robustness_value(t_treat, df_resid, q=1.0, alpha=1.0)
+    rv_qa = _robustness_value(t_treat, df_resid, q=1.0, alpha=alpha)
 
     # --- Benchmark table ---
     benchmark_vars = benchmark or controls
@@ -134,13 +128,17 @@ def sensemakr(
     for var in benchmark_vars:
         if var not in controls:
             continue
-        # Partial R² of this variable with Y and D
-        r2_yv = _partial_r2_of(Y, var, df, controls, treat)
-        r2_dv = _partial_r2_of(D, var, df, controls, treat)
+        # Raw partial R² of this observed covariate with Y and D. The
+        # treatment-side regression must not include D itself on the RHS.
+        r2_yv = _partial_r2_of(Y, var, df, controls, treat=treat)
+        r2_dv = _partial_r2_of(D, var, df, controls, treat=None)
+        r2dz_x, r2yz_dx = _sensemakr_bound_scale(r2_dv, r2_yv)
         bench_rows.append({
             'variable': var,
             'partial_r2_Y': round(r2_yv, 4),
             'partial_r2_D': round(r2_dv, 4),
+            'r2dz_x': float(r2dz_x),
+            'r2yz_dx': float(r2yz_dx),
         })
 
     bench_df = pd.DataFrame(bench_rows) if bench_rows else pd.DataFrame()
@@ -176,18 +174,83 @@ def _partial_r2_of(Y, var, df, controls, treat):
     """Compute partial R² of 'var' with Y controlling for everything else."""
     other = [c for c in controls if c != var]
     n = len(df)
+    base = [np.ones(n)]
+    if treat is not None:
+        base.append(df[treat].values)
 
     # Full model (with var)
-    Z_full = np.column_stack([np.ones(n), df[treat].values] +
-                             [df[c].values for c in controls])
+    Z_full = np.column_stack(base + [df[c].values for c in controls])
     rss_full = np.sum((Y - Z_full @ np.linalg.lstsq(Z_full, Y, rcond=None)[0]) ** 2)
 
     # Restricted (without var)
-    Z_restr = np.column_stack([np.ones(n), df[treat].values] +
-                              [df[c].values for c in other])
+    Z_restr = np.column_stack(base + [df[c].values for c in other])
     rss_restr = np.sum((Y - Z_restr @ np.linalg.lstsq(Z_restr, Y, rcond=None)[0]) ** 2)
 
     return max(1 - rss_full / rss_restr, 0) if rss_restr > 0 else 0
+
+
+def _sensemakr_bound_scale(
+    r2dxj_x: float,
+    r2yxj_dx: float,
+    *,
+    kd: float = 1.0,
+    ky: float = 1.0,
+) -> Tuple[float, float]:
+    """Map raw benchmark partial R² values to sensemakr's bound scale.
+
+    This mirrors ``sensemakr::ovb_partial_r2_bound`` for the default
+    ``kd = ky = 1`` used by :func:`sensemakr` benchmark covariates.
+    """
+    r2dxj_x = float(np.clip(r2dxj_x, 0.0, 1.0 - 1e-15))
+    r2yxj_dx = float(np.clip(r2yxj_dx, 0.0, 1.0 - 1e-15))
+    r2dz_x = kd * (r2dxj_x / (1.0 - r2dxj_x))
+    if r2dz_x >= 1.0:
+        r2dz_x = 1.0
+
+    denom = (1.0 - kd * r2dxj_x) * (1.0 - r2dxj_x)
+    if denom <= 0:
+        r2zxj_xd = 1.0
+    else:
+        r2zxj_xd = kd * (r2dxj_x ** 2) / denom
+    r2zxj_xd = float(np.clip(r2zxj_xd, 0.0, 1.0 - 1e-15))
+
+    r2yz_dx = (
+        ((np.sqrt(ky) + np.sqrt(r2zxj_xd)) / np.sqrt(1.0 - r2zxj_xd)) ** 2
+        * (r2yxj_dx / (1.0 - r2yxj_dx))
+    )
+    r2yz_dx = float(np.clip(r2yz_dx, 0.0, 1.0))
+    return float(r2dz_x), r2yz_dx
+
+
+def _robustness_value(
+    t_statistic: float,
+    dof: int,
+    *,
+    q: float = 1.0,
+    alpha: float = 0.05,
+    invert: bool = False,
+) -> float:
+    """Compute the Cinelli-Hazlett robustness value.
+
+    Port of ``sensemakr::robustness_value.numeric`` for the OLS case.
+    """
+    if dof <= 1:
+        return 0.0
+    fq = q * abs(float(t_statistic) / np.sqrt(dof))
+    f_crit = abs(stats.t.ppf(alpha / 2.0, df=dof - 1)) / np.sqrt(dof - 1)
+    f1, f2 = (f_crit, fq) if invert else (fq, f_crit)
+    fqa = f1 - f2
+    if fqa < 0:
+        return 0.0
+
+    rv_binding = 0.0 if fqa == 0 else 2.0 / (1.0 + np.sqrt(1.0 + 4.0 / (fqa ** 2)))
+
+    fq2 = fq ** 2
+    f_crit2 = f_crit ** 2
+    xf1, xf2 = (f_crit2, fq2) if invert else (fq2, f_crit2)
+    xrv = (xf1 - xf2) / (1.0 + xf1) if xf1 > xf2 else 0.0
+    is_xrv = f2 != 0 and fqa > 0 and f1 > 1.0 / f2
+    return float(xrv if is_xrv else rv_binding)
 
 
 # Citation

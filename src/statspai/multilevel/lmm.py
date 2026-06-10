@@ -823,14 +823,16 @@ def _fit_three_level_intercept(
         "var(Residual)": sigma2_e,
     }
 
-    # Log-likelihood ML
+    # Log-likelihood.  R lme4::logLik and Stata mixed e(ll) report the
+    # fitted criterion: REML for REML fits, ML for ML fits.  Keep a separate
+    # ML conversion only for LR diagnostics.
     nll = float(res.fun)
-    ll = -nll
+    ll_report = -nll
     if reml:
         sign, logdet = np.linalg.slogdet(XtVinvX)
         ll_ml = -(nll - 0.5 * logdet - (-0.5 * p_fixed * np.log(2 * np.pi)))
     else:
-        ll_ml = ll
+        ll_ml = ll_report
 
     total_var = sigma2_s + sigma2_c + sigma2_e
     icc_outer = sigma2_s / total_var if total_var > 0 else np.nan
@@ -861,7 +863,7 @@ def _fit_three_level_intercept(
         n_obs=n_obs,
         n_groups=len(class_blup_keys),
         icc=icc_outer,
-        log_likelihood=ll_ml,
+        log_likelihood=ll_report,
         _se_fixed=pd.Series(np.sqrt(np.diag(cov_beta)), index=fixed_names),
         _cov_fixed=cov_beta,
         # The three-level path has no single q×q random-effect matrix;
@@ -968,8 +970,8 @@ def mixed(
     x_random: "Sequence[str] | None" = None,
     cov_type: str = "unstructured",
     method: str = "reml",
-    maxiter: int = 400,
-    tol: float = 1e-7,
+    maxiter: int = 1000,
+    tol: float = 1e-9,
     alpha: float = 0.05,
 ) -> MixedResult:
     """
@@ -996,7 +998,9 @@ def mixed(
     method
         ``'reml'`` (default) or ``'ml'``.
     maxiter, tol, alpha
-        Optimiser controls and inference significance level.
+        Optimiser controls and inference significance level.  The defaults
+        use a tight likelihood tolerance so REML variance components and ICC
+        agree with R ``lme4`` / Stata ``mixed`` on parity fixtures.
 
     Returns
     -------
@@ -1144,15 +1148,18 @@ def mixed(
     # ``_fit_three_level_intercept`` earlier in the dispatcher.)
 
     # Log-likelihood --------------------------------------------------------
+    # R lme4::logLik and Stata mixed e(ll) report the fitted criterion:
+    # REML for REML fits, ML for ML fits.  Keep a separate ML conversion for
+    # the LR diagnostic below.
     nll_opt = float(res.fun)
-    ll = -nll_opt
+    ll_report = -nll_opt
     if reml:
-        # Convert REML objective to ML log-lik for reporting.  REML adds
-        # +0.5 log|XtVinvX| and -0.5 p log(2π); remove to get ML.
+        # REML adds +0.5 log|XtVinvX| and -0.5 p log(2π); remove those
+        # terms to get the ML-basis likelihood for LR diagnostics.
         sign, logdet = np.linalg.slogdet(XtVinvX)
         ll_ml = -(nll_opt - 0.5 * logdet - (-0.5 * p_fixed * np.log(2 * np.pi)))
     else:
-        ll_ml = ll
+        ll_ml = ll_report
 
     # ICC -----------------------------------------------------------------
     sigma2_u0 = float(G_hat[0, 0])
@@ -1177,7 +1184,7 @@ def mixed(
         n_obs=n_obs,
         n_groups=n_groups,
         icc=icc,
-        log_likelihood=ll_ml,
+        log_likelihood=ll_report,
         _se_fixed=se_fixed,
         _cov_fixed=cov_beta,
         _G=G_hat,

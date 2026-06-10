@@ -29,7 +29,8 @@ class VARResult:
     """Results from VAR estimation."""
 
     def __init__(self, coefs, se, residuals, sigma_u, var_names, lags,
-                 n_obs, aic, bic, hqic, det_sigma, log_likelihood):
+                 n_obs, aic, bic, hqic, det_sigma, log_likelihood,
+                 se_df="stata"):
         self.coefs = coefs  # dict: var_name -> DataFrame of coefficients
         self.se = se
         self.residuals = residuals
@@ -42,6 +43,7 @@ class VARResult:
         self.hqic = hqic
         self.det_sigma = det_sigma
         self.log_likelihood = log_likelihood
+        self.se_df = se_df
         self._companion = None
         self._B = None
         self._k = len(var_names)
@@ -126,6 +128,7 @@ def var(
     lags: int = 1,
     trend: str = "c",
     alpha: float = 0.05,
+    se_df: str = "stata",
 ) -> VARResult:
     """
     Estimate a Vector Autoregression (VAR) model.
@@ -144,6 +147,12 @@ def var(
         Trend: 'c' (constant), 'ct' (constant + trend), 'n' (none).
     alpha : float, default 0.05
         Significance level.
+    se_df : {'stata', 'ml', 'r', 'unbiased'}, default 'stata'
+        Residual-variance denominator for coefficient standard errors.
+        ``'stata'``/``'ml'`` uses ``T`` and matches Stata ``var`` default
+        conditional-MLE standard errors. ``'r'``/``'unbiased'`` uses
+        ``T - k_params`` and matches the equation-by-equation ``lm()``
+        standard errors returned inside R ``vars::VAR()``.
 
     Returns
     -------
@@ -159,6 +168,11 @@ def var(
     """
     if variables is None:
         variables = data.select_dtypes(include=[np.number]).columns.tolist()
+    se_df_key = str(se_df).lower()
+    if se_df_key not in {"stata", "ml", "r", "unbiased"}:
+        raise ValueError(
+            "se_df must be one of {'stata', 'ml', 'r', 'unbiased'}"
+        )
 
     var_data = data[variables].dropna().values.astype(float)
     var_names = list(variables)
@@ -180,15 +194,25 @@ def var(
     B = XtX_inv @ X.T @ Y  # (kp+1) x k
 
     residuals = Y - X @ B
-    sigma_u = residuals.T @ residuals / T
+    rss = residuals.T @ residuals
+    sigma_u = rss / T
 
     # Build coefficient tables
     coefs = {}
     se_dict = {}
     n_params = X.shape[1]
+    if se_df_key in {"r", "unbiased"}:
+        if T <= n_params:
+            raise ValueError(
+                "Cannot use se_df='r'/'unbiased' when T <= number of "
+                "VAR regressors"
+            )
+        coef_sigma_u = rss / (T - n_params)
+    else:
+        coef_sigma_u = sigma_u
 
     for eq_idx, var_name in enumerate(var_names):
-        eq_resid_var = sigma_u[eq_idx, eq_idx]
+        eq_resid_var = coef_sigma_u[eq_idx, eq_idx]
         eq_se = np.sqrt(eq_resid_var * np.diag(XtX_inv))
 
         # Build index names
@@ -223,6 +247,7 @@ def var(
         var_names=var_names, lags=lags, n_obs=T,
         aic=aic, bic=bic, hqic=hqic,
         det_sigma=det_sigma, log_likelihood=log_lik,
+        se_df=se_df_key,
     )
 
     # Store for IRF computation
@@ -233,6 +258,7 @@ def var(
     # Store (X'X)^{-1} so granger_causality can form the proper coefficient
     # covariance σ²·(X'X)^{-1} for its Wald test (not just the SE diagonal).
     result._XtX_inv = XtX_inv
+    result._coef_sigma_u = coef_sigma_u
 
     return result
 
@@ -294,7 +320,11 @@ def granger_causality(
         R[i, ri] = 1
 
     r = R @ coefs_all
-    sigma2 = var_result.sigma_u.loc[caused, caused]
+    coef_sigma_u = getattr(var_result, "_coef_sigma_u", var_result.sigma_u)
+    if isinstance(coef_sigma_u, pd.DataFrame):
+        sigma2 = coef_sigma_u.loc[caused, caused]
+    else:
+        sigma2 = coef_sigma_u[var_names.index(caused), var_names.index(caused)]
 
     # Coefficient covariance for the `caused` equation is σ²_caused·(X'X)^{-1},
     # where X is the stacked lagged-regressor design matrix. The full matrix

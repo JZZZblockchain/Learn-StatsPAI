@@ -243,8 +243,19 @@ def did_analysis(
     # ── Step 2: Bacon decomposition (staggered only) ───────────────── #
     if run_bacon and design == 'staggered' and id is not None:
         try:
+            bacon_data = data.copy()
+            bacon_treat = "__statspai_bacon_treat__"
+            while bacon_treat in bacon_data.columns:
+                bacon_treat += "_"
+            cohort = bacon_data[treat]
+            bacon_data[bacon_treat] = (
+                cohort.notna()
+                & np.isfinite(cohort.astype(float))
+                & (cohort.astype(float) > 0)
+                & (bacon_data[time].astype(float) >= cohort.astype(float))
+            ).astype(int)
             bacon_result = bacon_decomposition(
-                data, y=y, treat=treat, time=time, id=id, alpha=alpha,
+                bacon_data, y=y, treat=bacon_treat, time=time, id=id, alpha=alpha,
             )
             neg_wt = bacon_result.get('negative_weight_share', 0)
             steps.append(

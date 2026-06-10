@@ -8586,6 +8586,13 @@ def _build_registry():
                 ParamSpec("time", "str", True, description="Time period column"),
                 ParamSpec("covariates", "list", False, None, "Covariates X"),
                 ParamSpec(
+                    "id",
+                    "str",
+                    False,
+                    None,
+                    "Unit identifier for true two-period panel DR-DID",
+                ),
+                ParamSpec(
                     "method",
                     "str",
                     False,
@@ -11228,13 +11235,14 @@ _CERTIFIED_VARIANT_LIMITATIONS: Dict[str, Dict[str, List[str]]] = {
     },
     "did_imputation": {
         "limitations": [
-            "R parity is for the documented untreated-only TWFE and simple "
-            "ATT convention; Stata did_imputation uses a different "
-            "autosample/aggregation convention on mpdta.",
+            "R/Stata parity is for the documented untreated-only TWFE "
+            "and simple ATT aggregation convention only; event-study and SE rows "
+            "are backend-specific diagnostics.",
         ],
         "validation_notes": [
-            "BJS certification is convention-specific; parity_gap_report() "
-            "records the Stata autosample/aggregation gap.",
+            "BJS certification is convention-specific; the parity harness "
+            "keeps R's 0-for-never input and Stata's missing-Ei input "
+            "explicit."
         ],
     },
     "etwfe": {

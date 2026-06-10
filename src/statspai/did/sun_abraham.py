@@ -49,6 +49,7 @@ def sun_abraham(
     control_group: str = 'nevertreated',
     covariates: Optional[List[str]] = None,
     cluster: Optional[str] = None,
+    aggregation: str = 'event_time',
     alpha: float = 0.05,
 ) -> CausalResult:
     """
@@ -77,6 +78,13 @@ def sun_abraham(
         Additional controls (time-varying; added linearly).
     cluster : str, optional
         Cluster variable for SEs. Default: clusters on ``i``.
+    aggregation : {'event_time', 'fixest_att'}, default 'event_time'
+        Overall post-treatment summary convention. ``'event_time'`` is the
+        historical StatsPAI default: equal-weight the post-treatment
+        relative-time IW effects. ``'fixest_att'`` weights each post
+        cohort-time cell by its treated cohort size, matching
+        ``fixest::summary(..., agg='att')`` and Stata/R default ATT
+        parity on balanced staggered panels.
     alpha : float, default 0.05
         Significance level.
 
@@ -101,6 +109,21 @@ def sun_abraham(
             f"control_group must be 'nevertreated' or 'lastcohort', "
             f"got {control_group!r}"
         )
+    aggregation_aliases = {
+        'event_time': 'event_time',
+        'event_time_equal': 'event_time',
+        'equal_event_time': 'event_time',
+        'fixest': 'fixest_att',
+        'fixest_att': 'fixest_att',
+        'treated_cell': 'fixest_att',
+        'treated_cell_weighted': 'fixest_att',
+    }
+    if aggregation not in aggregation_aliases:
+        raise ValueError(
+            "aggregation must be one of 'event_time' or 'fixest_att', "
+            f"got {aggregation!r}"
+        )
+    aggregation_key = aggregation_aliases[aggregation]
 
     df[g] = df[g].fillna(0).replace([np.inf, -np.inf], 0).astype(int)
     time_periods = sorted(df[t].unique())
@@ -247,12 +270,17 @@ def sun_abraham(
 
     event_study = pd.DataFrame(es_rows)
 
-    # ----- Overall post-treatment ATT via a single linear combination -----
+    # ----- Overall post-treatment ATT via single linear combinations -----
     post = event_study[event_study['relative_time'] >= 0]
+    summary_stats = {
+        'event_time': (0.0, np.inf, np.zeros(k_int)),
+        'fixest_att': (0.0, np.inf, np.zeros(k_int)),
+    }
     if len(post) > 0:
-        # Build block weight across post-event cells.
-        W = np.zeros(k_int)
-        w_total = 0.0
+        # Historical StatsPAI summary: equal-weight each post relative-time
+        # IW coefficient after cohort-share aggregation within that event time.
+        W_event = np.zeros(k_int)
+        event_total = 0.0
         for e in post['relative_time']:
             eligible = [
                 g_val for g_val in cohorts
@@ -269,14 +297,37 @@ def sun_abraham(
                 continue
             shares = shares / shares.sum()
             for share, g_val in zip(shares, eligible):
-                W[interact_meta.index((g_val, e))] += share
-            w_total += 1.0
-        if w_total > 0:
-            W = W / w_total
-        att = float(W @ beta_int)
-        se_att = float(np.sqrt(max(W @ V_int @ W, 0.0)))
-    else:
-        att, se_att = 0.0, np.inf
+                W_event[interact_meta.index((g_val, e))] += share
+            event_total += 1.0
+        if event_total > 0:
+            W_event = W_event / event_total
+        att_event = float(W_event @ beta_int)
+        se_event = float(np.sqrt(max(W_event @ V_int @ W_event, 0.0)))
+        summary_stats['event_time'] = (att_event, se_event, W_event)
+
+        # fixest::summary(..., agg='att') convention: weight every observed
+        # post-treatment cohort-time cell by treated cohort size.
+        W_fixest = np.zeros(k_int)
+        cell_total = 0.0
+        for e in post['relative_time']:
+            eligible = [
+                g_val for g_val in cohorts
+                if (g_val, e) in set(interact_meta)
+                and (g_val + e) in time_periods
+            ]
+            for g_val in eligible:
+                count = float(cohort_counts.get(g_val, 0))
+                if count <= 0:
+                    continue
+                W_fixest[interact_meta.index((g_val, e))] += count
+                cell_total += count
+        if cell_total > 0:
+            W_fixest = W_fixest / cell_total
+        att_fixest = float(W_fixest @ beta_int)
+        se_fixest = float(np.sqrt(max(W_fixest @ V_int @ W_fixest, 0.0)))
+        summary_stats['fixest_att'] = (att_fixest, se_fixest, W_fixest)
+
+    att, se_att, _ = summary_stats[aggregation_key]
 
     z = att / se_att if se_att > 0 else 0.0
     pvalue = float(2 * (1 - stats.norm.cdf(abs(z))))
@@ -289,6 +340,11 @@ def sun_abraham(
         'n_cohorts': len(cohorts),
         'cohorts': cohorts,
         'event_study': event_study,
+        'summary_aggregation': aggregation_key,
+        'att_event_time': float(summary_stats['event_time'][0]),
+        'se_event_time': float(summary_stats['event_time'][1]),
+        'att_fixest_att': float(summary_stats['fixest_att'][0]),
+        'se_fixest_att': float(summary_stats['fixest_att'][1]),
         'se_type': f'cluster-robust on {cluster_col}',
         'n_clusters': int(n_clust),
         'n_coeffs': int(k_int),
@@ -317,7 +373,8 @@ def sun_abraham(
                 "event_window": list(event_window) if event_window else None,
                 "control_group": control_group,
                 "covariates": list(covariates) if covariates else None,
-                "cluster": cluster, "alpha": alpha,
+                "cluster": cluster, "aggregation": aggregation,
+                "alpha": alpha,
             },
             data=data,
             overwrite=False,

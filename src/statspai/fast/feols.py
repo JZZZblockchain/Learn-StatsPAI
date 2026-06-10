@@ -65,6 +65,7 @@ class FeolsResult:
     fe_cardinality: List[int]
     df_resid: int               # n_kept - p - sum(G_k - 1)
     vcov_type: str
+    ssc: str = "statspai"
     cluster_var: Optional[str] = None
     backend: str = "statspai-native"
 
@@ -135,6 +136,7 @@ def feols(
     vcov: str = "iid",
     cluster: Optional[str] = None,
     weights: Optional[str] = None,
+    ssc: str = "statspai",
     drop_singletons: bool = True,
     fe_tol: float = 1e-10,
     fe_maxiter: int = 1_000,
@@ -175,6 +177,16 @@ def feols(
     weights : str, optional
         Column name of observation weights. Each obs's contribution to
         the objective is scaled by ``w_i`` (frequency / survey weights).
+    ssc : {"statspai", "fixest"}, default "statspai"
+        Small-sample correction convention for residual degrees of
+        freedom and CR1 scaling.
+
+        - ``"statspai"`` preserves the historical native convention
+          ``fe_dof = Σ(G_k - 1)`` and charges all absorbed FEs in CR1.
+        - ``"fixest"`` mirrors R ``fixest`` / Stata ``reghdfe`` defaults
+          used by the parity harness: the IID/HC1 residual rank is
+          ``ΣG_k - 1`` for multiple FE dimensions, and one-way clustered
+          CR1 excludes FE dimensions nested in the cluster variable.
     drop_singletons : bool, default True
         Iteratively drop FE-singleton rows before fitting.
     fe_tol, fe_maxiter : float, int
@@ -195,6 +207,8 @@ def feols(
     """
     if vcov not in ("iid", "hc1", "cr1"):
         raise ValueError(f"vcov={vcov!r}; supported: 'iid', 'hc1', or 'cr1'")
+    if ssc not in ("statspai", "fixest"):
+        raise ValueError(f"ssc={ssc!r}; supported: 'statspai' or 'fixest'")
     if vcov == "cr1" and cluster is None:
         raise ValueError("vcov='cr1' requires cluster=<column name>")
     if cluster is not None and vcov in ("iid", "hc1"):
@@ -332,7 +346,7 @@ def feols(
             )
             y_dem = stacked_dem[:, 0]
             X_dem = stacked_dem[:, 1:]
-        fe_dof = sum(int(g) - 1 for g in fe_card)
+        fe_dof_statspai = _statspai_fe_dof(fe_card)
     else:
         keep_mask = np.ones(n_obs, dtype=bool)
         n_kept = n_obs
@@ -340,7 +354,7 @@ def feols(
         y_dem = y.copy()
         X_dem = X.copy()
         fe_card = []
-        fe_dof = 0
+        fe_dof_statspai = 0
 
     # Apply mask to weights / cluster (demean already returned masked X̃, ỹ)
     if w_full is not None:
@@ -353,6 +367,17 @@ def feols(
         cluster_arr_kept = None
 
     n, p = X_dem.shape
+    if ssc == "fixest":
+        fe_dof = _fixest_fe_dof(fe_card)
+        if vcov == "cr1":
+            cr1_extra_df = _fixest_cluster_fe_dof(
+                data, fe_terms, fe_card, keep_mask, cluster,
+            )
+        else:
+            cr1_extra_df = fe_dof
+    else:
+        fe_dof = fe_dof_statspai
+        cr1_extra_df = fe_dof_statspai
 
     # ---------- WLS solve ----------
     Xw = X_dem * w[:, None]                     # diag(w) X̃
@@ -402,7 +427,7 @@ def feols(
             X_dem, resid, cluster_arr_kept,
             weights=w, bread=XtWX_inv,
             type="cr1",
-            extra_df=fe_dof,
+            extra_df=cr1_extra_df,
         )
 
     return FeolsResult(
@@ -420,8 +445,50 @@ def feols(
         fe_cardinality=fe_card,
         df_resid=int(df_resid),
         vcov_type=vcov,
+        ssc=ssc,
         cluster_var=cluster,
     )
+
+
+def _statspai_fe_dof(fe_card: List[int]) -> int:
+    return int(sum(int(g) - 1 for g in fe_card))
+
+
+def _fixest_fe_dof(fe_card: List[int]) -> int:
+    if not fe_card:
+        return 0
+    if len(fe_card) == 1:
+        return int(fe_card[0]) - 1
+    return int(sum(int(g) for g in fe_card) - 1)
+
+
+def _fixest_cluster_fe_dof(
+    data: pd.DataFrame,
+    fe_terms: List[str],
+    fe_card: List[int],
+    keep_mask: np.ndarray,
+    cluster: Optional[str],
+) -> int:
+    if cluster is None or not fe_terms:
+        return _fixest_fe_dof(fe_card)
+
+    effective_cards: List[int] = []
+    cluster_values = data.loc[keep_mask, cluster].to_numpy()
+    for fe, card in zip(fe_terms, fe_card):
+        fe_values = data.loc[keep_mask, fe].to_numpy()
+        if _is_nested_in_cluster(fe_values, cluster_values):
+            continue
+        effective_cards.append(int(card))
+    return int(sum(effective_cards))
+
+
+def _is_nested_in_cluster(fe_values: np.ndarray, cluster_values: np.ndarray) -> bool:
+    mapping: dict[object, object] = {}
+    for fe_value, cluster_value in zip(fe_values, cluster_values):
+        previous = mapping.setdefault(fe_value, cluster_value)
+        if previous != cluster_value:
+            return False
+    return True
 
 
 __all__ = ["feols", "FeolsResult"]

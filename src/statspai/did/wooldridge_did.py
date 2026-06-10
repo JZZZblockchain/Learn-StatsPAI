@@ -38,7 +38,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import stats
+from scipy import optimize, stats
 
 from ..core.results import CausalResult
 
@@ -387,7 +387,7 @@ def wooldridge_did(
             _result,
             function="sp.did.wooldridge_did",
             params={
-                "y": y, "group": group, "time": time,
+                    "y": y, "group": group, "time": time, "id": id,
                 "first_treat": first_treat,
                 "controls": controls,
                 "cluster": cluster, "alpha": alpha,
@@ -1101,6 +1101,7 @@ def drdid(
     n_boot: int = 500,
     random_state: Optional[int] = None,
     seed: Optional[int] = None,
+    id: Optional[str] = None,
 ) -> CausalResult:
     """
     Doubly Robust Difference-in-Differences (Sant'Anna & Zhao 2020).
@@ -1112,7 +1113,7 @@ def drdid(
     Parameters
     ----------
     data : pd.DataFrame
-        Dataset with one row per unit-period in 2×2 design.
+        Dataset with one row per unit-period in 2x2 design.
     y : str
         Outcome variable.
     group : str
@@ -1130,6 +1131,11 @@ def drdid(
         Number of bootstrap replications for inference.
     random_state : int, optional
         Seed for bootstrap reproducibility.
+    id : str, optional
+        Unit identifier for a true two-period panel. When supplied, the
+        improved estimator uses the Sant'Anna-Zhao panel formula with
+        calibrated propensity scores and influence-function standard errors,
+        matching ``DRDID::drdid_imp_panel`` and Stata ``drdid, drimp``.
 
     Returns
     -------
@@ -1173,6 +1179,102 @@ def drdid(
         raise ValueError(f"'{group}' must be binary, got values: {g_vals}")
     if len(t_vals) != 2:
         raise ValueError(f"'{time}' must be binary, got values: {t_vals}")
+
+    if id is not None:
+        if id not in df.columns:
+            raise ValueError(f"'{id}' must be a column in data")
+        if method != "imp":
+            raise ValueError("id= panel DR-DID currently supports method='imp'")
+
+        covariates_list = covariates or []
+        needed = [id, y, group, time] + covariates_list
+        missing = [col for col in needed if col not in df.columns]
+        if missing:
+            raise ValueError(f"Missing columns for panel DR-DID: {missing}")
+        panel_df = df[needed].dropna().copy()
+        pre_df = panel_df[panel_df[time] == t_vals[0]][[id, y, group] + covariates_list]
+        post_df = panel_df[panel_df[time] == t_vals[1]][[id, y, group]]
+        if pre_df[id].duplicated().any() or post_df[id].duplicated().any():
+            raise ValueError("id/time must identify at most one row per unit-period")
+
+        wide = pre_df.merge(post_df, on=id, suffixes=("_pre", "_post"))
+        if wide.empty:
+            raise ValueError("No complete pre/post unit pairs for panel DR-DID")
+        if not np.all(wide[f"{group}_pre"].to_numpy() == wide[f"{group}_post"].to_numpy()):
+            raise ValueError(f"'{group}' must be time-invariant within id")
+
+        D_panel = (wide[f"{group}_pre"] == g_vals[1]).astype(float).to_numpy()
+        y0 = wide[f"{y}_pre"].astype(float).to_numpy()
+        y1 = wide[f"{y}_post"].astype(float).to_numpy()
+        delta_y = y1 - y0
+        if covariates_list:
+            X_panel = wide[covariates_list].astype(float).to_numpy()
+            X_panel = np.column_stack([np.ones(len(X_panel)), X_panel])
+        else:
+            X_panel = np.ones((len(wide), 1))
+
+        att_hat, att_se, ci, ps_fit, ps_flag = _drdid_imp_panel_core(
+            delta_y,
+            D_panel,
+            X_panel,
+            alpha=alpha,
+        )
+        t_stat = att_hat / att_se if att_se > 0 else np.nan
+        pvalue = float(2 * (1 - stats.norm.cdf(abs(t_stat))))
+        detail = pd.DataFrame({
+            "statistic": ["ATT", "SE (influence function)", "z-stat", "p-value",
+                           "CI lower", "CI upper", "N units"],
+            "value": [att_hat, att_se, t_stat, pvalue, ci[0], ci[1], len(wide)],
+        })
+        model_info: Dict[str, Any] = {
+            "method": "improved",
+            "panel": True,
+            "id": id,
+            "n_units": int(len(wide)),
+            "n_treated": int(D_panel.sum()),
+            "n_control": int((1 - D_panel).sum()),
+            "n_post": int((panel_df[time] == t_vals[1]).sum()),
+            "n_pre": int((panel_df[time] == t_vals[0]).sum()),
+            "ps_mean_treated": float(ps_fit[D_panel == 1].mean()),
+            "ps_mean_control": float(ps_fit[D_panel == 0].mean()),
+            "ps_flag": int(ps_flag),
+            "se_method": "influence_function",
+            "n_boot": n_boot,
+            "covariates": covariates_list,
+        }
+
+        _result = CausalResult(
+            method="Doubly Robust DID (Improved Panel, Sant'Anna & Zhao 2020)",
+            estimand="ATT",
+            estimate=att_hat,
+            se=att_se,
+            pvalue=pvalue,
+            ci=ci,
+            alpha=alpha,
+            n_obs=int(len(panel_df)),
+            detail=detail,
+            model_info=model_info,
+            _citation_key="drdid",
+        )
+        try:
+            from ..output._lineage import attach_provenance as _attach_prov
+            _attach_prov(
+                _result,
+                function="sp.did.drdid",
+                params={
+                    "y": y, "group": group, "time": time, "id": id,
+                    "covariates": covariates,
+                    "method": method,
+                    "alpha": alpha, "n_boot": n_boot,
+                    "random_state": random_state,
+                    "seed": seed,
+                },
+                data=data,
+                overwrite=False,
+            )
+        except Exception:  # pragma: no cover
+            pass
+        return _result
 
     G = (df[group] == g_vals[1]).astype(float).values
     T = (df[time] == t_vals[1]).astype(float).values
@@ -1370,8 +1472,8 @@ def drdid(
     return _result
 
 
-def _logistic_fit(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarray:
-    """Fit logistic regression via IRLS, return predicted probabilities."""
+def _logistic_coefficients(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarray:
+    """Fit logistic regression via IRLS, return coefficients."""
     n, k = X.shape
     beta = np.zeros(k)
     for _ in range(max_iter):
@@ -1390,9 +1492,102 @@ def _logistic_fit(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarra
         beta += delta
         if np.max(np.abs(delta)) < 1e-8:
             break
+    return beta
+
+
+def _logistic_fit(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarray:
+    """Fit logistic regression via IRLS, return predicted probabilities."""
+    beta = _logistic_coefficients(X, y, max_iter=max_iter)
     z = X @ beta
     z = np.clip(z, -20, 20)
     return 1.0 / (1.0 + np.exp(-z))
+
+
+def _weighted_lstsq(X: np.ndarray, y: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Weighted least-squares coefficients using the same objective as R lm."""
+    weights = np.asarray(weights, dtype=float)
+    sw = np.sqrt(np.clip(weights, 0.0, np.inf))
+    try:
+        return np.linalg.lstsq(X * sw[:, None], y * sw, rcond=None)[0]
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(X * sw[:, None]) @ (y * sw)
+
+
+def _calibrated_pscore(
+    X: np.ndarray,
+    D: np.ndarray,
+    i_weights: Optional[np.ndarray] = None,
+) -> tuple[np.ndarray, int]:
+    """DRDID::pscore.cal translation for the improved panel estimator."""
+    n = len(D)
+    if i_weights is None:
+        iw = np.ones(n)
+    else:
+        iw = np.asarray(i_weights, dtype=float)
+        if np.any(iw < 0):
+            raise ValueError("i_weights must be non-negative")
+        iw = iw / iw.mean()
+
+    init = _logistic_coefficients(X, D, max_iter=100)
+
+    def _eta(gamma: np.ndarray) -> np.ndarray:
+        return np.clip(X @ gamma, -700, 700)
+
+    def objective(gamma: np.ndarray) -> float:
+        eta = _eta(gamma)
+        return float(np.mean(iw * ((1.0 - D) * np.exp(eta) - D * eta)))
+
+    def gradient(gamma: np.ndarray) -> np.ndarray:
+        eta = _eta(gamma)
+        return (iw * ((1.0 - D) * np.exp(eta) - D)) @ X / n
+
+    opt = optimize.minimize(
+        objective,
+        init,
+        jac=gradient,
+        method="BFGS",
+        options={"gtol": 1e-10, "maxiter": 1000},
+    )
+    gamma = opt.x if opt.success else init
+    flag = 0 if opt.success else 2
+    ps = 1.0 / (1.0 + np.exp(-np.clip(X @ gamma, -700, 700)))
+    return np.minimum(ps, 1.0 - 1e-6), flag
+
+
+def _drdid_imp_panel_core(
+    delta_y: np.ndarray,
+    D: np.ndarray,
+    X: np.ndarray,
+    *,
+    alpha: float = 0.05,
+    trim_level: float = 0.995,
+) -> tuple[float, float, tuple[float, float], np.ndarray, int]:
+    """Sant'Anna-Zhao improved panel DR-DID core matching DRDID::drdid_imp_panel."""
+    n = len(D)
+    if n == 0:
+        raise ValueError("panel DR-DID requires at least one complete unit")
+    p_treat = D.mean()
+    if p_treat <= 0 or p_treat >= 1:
+        raise ValueError("panel DR-DID requires treated and control units")
+
+    ps, ps_flag = _calibrated_pscore(X, D)
+    trim_ps = np.ones(n, dtype=float)
+    trim_ps[D == 0] = (ps[D == 0] < trim_level).astype(float)
+
+    control = D == 0
+    if control.sum() < X.shape[1]:
+        raise ValueError("Not enough control units for panel DR-DID outcome regression")
+    odds = ps / (1.0 - ps)
+    beta = _weighted_lstsq(X[control], delta_y[control], odds[control])
+    out_delta = X @ beta
+
+    summand = trim_ps * (1.0 - (1.0 - D) / (1.0 - ps)) * (delta_y - out_delta)
+    att = float(np.mean(summand) / p_treat)
+    inf_func = trim_ps * (summand - D * att) / p_treat
+    se = float(np.std(inf_func, ddof=1) * np.sqrt(n - 1) / n)
+    z_crit = stats.norm.ppf(1.0 - alpha / 2.0)
+    ci = (att - z_crit * se, att + z_crit * se)
+    return att, se, (float(ci[0]), float(ci[1])), ps, ps_flag
 
 
 # ═══════════════════════════════════════════════════════════════════════

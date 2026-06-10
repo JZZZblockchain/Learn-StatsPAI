@@ -57,7 +57,8 @@ def _kernel_density_at(y: np.ndarray, point: float, bw: str = "silverman") -> fl
 
 
 def rif_values(y: np.ndarray, statistic: StatisticKind = "quantile",
-               tau: float = 0.5) -> np.ndarray:
+               tau: float = 0.5,
+               quantile_convention: Literal["statspai", "dineq"] = "statspai") -> np.ndarray:
     """Compute the RIF of each observation.
 
     Delegates to :func:`statspai.decomposition._common.influence_function`,
@@ -74,9 +75,17 @@ def rif_values(y: np.ndarray, statistic: StatisticKind = "quantile",
     statistic : str
     tau : float
         Quantile level (only used when ``statistic="quantile"``).
+    quantile_convention : {"statspai", "dineq"}, default "statspai"
+        Quantile RIF convention. ``"statspai"`` preserves the historical
+        empirical-CDF/Silverman path; ``"dineq"`` mirrors the R
+        ``dineq::rif`` convention (Hmisc type-7 quantile, R ``bw.nrd0``
+        Gaussian density, and ``I(y < q)``).
     """
     y = np.asarray(y, dtype=float).ravel()
-    return _influence_function(y, statistic, tau=tau, w=None)
+    return _influence_function(
+        y, statistic, tau=tau, w=None,
+        quantile_convention=quantile_convention,
+    )
 
 
 # --------------------------------------------------------------------- #
@@ -119,6 +128,7 @@ def rifreg(
     data: pd.DataFrame,
     statistic: StatisticKind = "quantile",
     tau: float = 0.5,
+    quantile_convention: Literal["statspai", "dineq"] = "statspai",
 ) -> RIFResult:
     """RIF regression (Firpo, Fortin & Lemieux 2009).
 
@@ -130,6 +140,8 @@ def rifreg(
     statistic : {"quantile", "variance", "gini"}
     tau : float
         Quantile level (default 0.5 = median UQPE).
+    quantile_convention : {"statspai", "dineq"}, default "statspai"
+        Quantile RIF convention for ``statistic="quantile"``.
     """
     if "~" not in formula:
         raise ValueError("formula must contain '~'")
@@ -140,7 +152,10 @@ def rifreg(
     X = np.column_stack([np.ones(len(df))] + [df[v].to_numpy(float) for v in indep])
     names = ["Intercept"] + indep
 
-    rif = rif_values(y, statistic=statistic, tau=tau)
+    rif = rif_values(
+        y, statistic=statistic, tau=tau,
+        quantile_convention=quantile_convention,
+    )
     XtX_inv = np.linalg.inv(X.T @ X)
     beta = XtX_inv @ (X.T @ rif)
     e = rif - X @ beta
@@ -200,6 +215,7 @@ def rif_decomposition(
     statistic: StatisticKind = "quantile",
     tau: float = 0.5,
     reference: int = 0,
+    quantile_convention: Literal["statspai", "dineq"] = "statspai",
 ) -> RIFDecompositionResult:
     """RIF Oaxaca-Blinder decomposition (FFL 2009, Section 5).
 
@@ -213,6 +229,9 @@ def rif_decomposition(
         Binary (0/1) group indicator column.
     reference : int, default 0
         Which group's coefficients to use as the reference (0 or 1).
+    quantile_convention : {"statspai", "dineq"}, default "statspai"
+        Quantile RIF convention for ``statistic="quantile"``. Use
+        ``"dineq"`` for R ``dineq::rif`` parity.
     """
     if "~" not in formula:
         raise ValueError("formula must contain '~'")
@@ -223,8 +242,14 @@ def rif_decomposition(
     y0 = df.loc[g == 0, dep].to_numpy(float)
     y1 = df.loc[g == 1, dep].to_numpy(float)
 
-    rif0 = rif_values(y0, statistic=statistic, tau=tau)
-    rif1 = rif_values(y1, statistic=statistic, tau=tau)
+    rif0 = rif_values(
+        y0, statistic=statistic, tau=tau,
+        quantile_convention=quantile_convention,
+    )
+    rif1 = rif_values(
+        y1, statistic=statistic, tau=tau,
+        quantile_convention=quantile_convention,
+    )
 
     X0 = np.column_stack([np.ones(len(y0))] + [df.loc[g == 0, v].to_numpy(float) for v in indep])
     X1 = np.column_stack([np.ones(len(y1))] + [df.loc[g == 1, v].to_numpy(float) for v in indep])

@@ -44,6 +44,7 @@ def honest_did(
     method: str = "smoothness",
     alpha: float = 0.05,
     backend: str = "native",
+    honestdid_method: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Rambachan & Roth (2023) sensitivity analysis for parallel trends.
@@ -79,6 +80,11 @@ def honest_did(
         ``HonestDiD::createSensitivityResults_relativeMagnitudes`` is
         required; the default native path remains available without an
         R installation.
+    honestdid_method : {'C-LF', 'Conditional', 'FLCI', 'C-F'}, optional
+        Solver method passed to the R ``HonestDiD`` backend. The default
+        preserves HonestDiD defaults: ``'C-LF'`` for
+        ``method='relative_magnitude'`` and ``'FLCI'`` for
+        ``method='smoothness'``. Ignored by ``backend='native'``.
 
     Returns
     -------
@@ -129,6 +135,7 @@ def honest_did(
             m_grid=m_grid,
             method=method,
             alpha=alpha,
+            honestdid_method=honestdid_method,
         )
     if backend_norm not in {"native", "statspai"}:
         raise ValueError("backend must be 'native', 'honestdid', or 'r'.")
@@ -213,8 +220,46 @@ def _honest_did_r_backend(
     m_grid: Optional[List[float]],
     method: str,
     alpha: float,
+    honestdid_method: Optional[str] = None,
 ) -> pd.DataFrame:
     """Run the R HonestDiD reference implementation for CI parity."""
+    method_norm = method.lower().replace("-", "_")
+    if method_norm not in {"smoothness", "relative_magnitude", "relative_magnitudes"}:
+        raise ValueError(
+            f"method must be 'smoothness' or 'relative_magnitude', got '{method}'"
+        )
+    if honestdid_method is None:
+        honestdid_method_arg = (
+            "C-LF"
+            if method_norm in {"relative_magnitude", "relative_magnitudes"}
+            else "FLCI"
+        )
+    else:
+        method_aliases = {
+            "c_lf": "C-LF",
+            "c-lf": "C-LF",
+            "clf": "C-LF",
+            "conditional": "Conditional",
+            "flci": "FLCI",
+            "c_f": "C-F",
+            "c-f": "C-F",
+            "cf": "C-F",
+        }
+        key = honestdid_method.lower().replace(" ", "_")
+        if key not in method_aliases:
+            raise ValueError(
+                "honestdid_method must be one of 'C-LF', 'Conditional', "
+                "'FLCI', or 'C-F'."
+            )
+        honestdid_method_arg = method_aliases[key]
+    if method_norm in {"relative_magnitude", "relative_magnitudes"} and (
+        honestdid_method_arg not in {"C-LF", "Conditional"}
+    ):
+        raise ValueError(
+            "honestdid_method must be 'C-LF' or 'Conditional' for "
+            "method='relative_magnitude'."
+        )
+
     rscript = _find_rscript()
     if rscript is None:
         raise ImportError(
@@ -231,12 +276,6 @@ def _honest_did_r_backend(
     if m_grid is None:
         sigma = se_hat
         m_grid = [0, 0.5 * sigma, sigma, 1.5 * sigma, 2.0 * sigma, 3.0 * sigma]
-
-    method_norm = method.lower().replace("-", "_")
-    if method_norm not in {"smoothness", "relative_magnitude", "relative_magnitudes"}:
-        raise ValueError(
-            f"method must be 'smoothness' or 'relative_magnitude', got '{method}'"
-        )
 
     pre = es[es["relative_time"] < 0].sort_values("relative_time")
     post = es[es["relative_time"] >= 0].sort_values("relative_time")
@@ -260,6 +299,7 @@ method <- args[[2]]
 alpha <- as.numeric(args[[3]])
 grid <- as.numeric(strsplit(args[[4]], ",", fixed = TRUE)[[1]])
 target_e <- as.numeric(args[[5]])
+honestdid_method <- args[[6]]
 df <- utils::read.csv(input)
 pre <- df[df$relative_time < 0, ]
 post <- df[df$relative_time >= 0, ]
@@ -287,6 +327,7 @@ if (method == "relative_magnitude") {
       numPostPeriods = nrow(post),
       l_vec = l_vec,
       Mbarvec = grid,
+      method = honestdid_method,
       alpha = alpha
     )
   )
@@ -300,7 +341,7 @@ if (method == "relative_magnitude") {
       numPostPeriods = nrow(post),
       l_vec = l_vec,
       Mvec = grid,
-      method = "FLCI",
+      method = honestdid_method,
       alpha = alpha
     )
   )
@@ -331,6 +372,7 @@ cat(jsonlite::toJSON(out, dataframe = "rows", auto_unbox = TRUE,
                 f"{alpha:.17g}",
                 grid_arg,
                 f"{float(e):.17g}",
+                honestdid_method_arg,
             ],
             check=False,
             capture_output=True,

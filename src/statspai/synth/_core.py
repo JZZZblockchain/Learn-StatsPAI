@@ -40,15 +40,17 @@ Literature* 59(2), 391-425. [@abadie2021synthetic]
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from scipy import optimize
 
+from ..exceptions import MethodIncompatibility
 
 # ---------------------------------------------------------------------------
 # Basic simplex solver (inner W problem, reused across module)
 # ---------------------------------------------------------------------------
+
 
 def solve_simplex_weights(
     y: np.ndarray,
@@ -104,7 +106,10 @@ def solve_simplex_weights(
         w0 = np.ones(J) / J
 
     result = optimize.minimize(
-        objective, w0, jac=jac, method="SLSQP",
+        objective,
+        w0,
+        jac=jac,
+        method="SLSQP",
         bounds=[(0.0, 1.0)] * J,
         constraints={"type": "eq", "fun": lambda w: np.sum(w) - 1.0},
         options={"maxiter": 1000, "ftol": 1e-12},
@@ -127,6 +132,7 @@ def solve_simplex_weights(
 # ---------------------------------------------------------------------------
 # Predictor standardisation (ADH 2010 §4)
 # ---------------------------------------------------------------------------
+
 
 def standardize_predictors(
     X1: np.ndarray,
@@ -161,8 +167,16 @@ def standardize_predictors(
     X1 = np.asarray(X1, dtype=np.float64).ravel()
     X0 = np.asarray(X0, dtype=np.float64)
     if X0.shape[0] != X1.shape[0]:
-        raise ValueError(
-            f"X1 has {X1.shape[0]} predictors but X0 has {X0.shape[0]}."
+        raise MethodIncompatibility(
+            f"X1 has {X1.shape[0]} predictors but X0 has {X0.shape[0]}.",
+            recovery_hint=(
+                "Pass a treated predictor vector and donor matrix with the "
+                "same predictor rows."
+            ),
+            diagnostics={
+                "x1_predictors": int(X1.shape[0]),
+                "x0_predictors": int(X0.shape[0]),
+            },
         )
 
     combined = np.column_stack([X1[:, None], X0])
@@ -176,6 +190,7 @@ def standardize_predictors(
 # ---------------------------------------------------------------------------
 # ADH (2010) nested V-W solver
 # ---------------------------------------------------------------------------
+
 
 def _inner_w_given_v(
     V_diag: np.ndarray,
@@ -233,7 +248,7 @@ def _regression_v_init(
     y_stack = np.concatenate([[Z1.mean()], Z0.mean(axis=0)])
     try:
         beta, *_ = np.linalg.lstsq(X_stack, y_stack, rcond=None)
-        v = beta ** 2
+        v = beta**2
         if v.sum() <= 1e-12 or not np.all(np.isfinite(v)):
             return np.ones(K)
         return K * v / v.sum()
@@ -317,12 +332,22 @@ def solve_synth_weights_adh(
     Z0 = np.asarray(Z0, dtype=np.float64)
     K, J = X0.shape
     if Z0.shape[1] != J:
-        raise ValueError(
-            f"Z0 has {Z0.shape[1]} donor columns but X0 has {J}."
+        raise MethodIncompatibility(
+            f"Z0 has {Z0.shape[1]} donor columns but X0 has {J}.",
+            recovery_hint="Use the same donor ordering and donor count in X0 and Z0.",
+            diagnostics={"z0_donors": int(Z0.shape[1]), "x0_donors": int(J)},
         )
     if Z0.shape[0] != Z1.shape[0]:
-        raise ValueError(
-            f"Z0 has {Z0.shape[0]} pre-periods but Z1 has {Z1.shape[0]}."
+        raise MethodIncompatibility(
+            f"Z0 has {Z0.shape[0]} pre-periods but Z1 has {Z1.shape[0]}.",
+            recovery_hint=(
+                "Align treated and donor pre-treatment outcome matrices to "
+                "the same periods."
+            ),
+            diagnostics={
+                "z0_pre_periods": int(Z0.shape[0]),
+                "z1_pre_periods": int(Z1.shape[0]),
+            },
         )
 
     if standardize:
@@ -338,32 +363,65 @@ def solve_synth_weights_adh(
         return float(r @ r)
 
     # Build starting-point list
-    starts = []
+    starts: list[tuple[str, np.ndarray]] = []
     if "equal" in v_inits:
-        starts.append(np.zeros(K))  # softmax(zeros) = uniform
+        starts.append(("equal", np.zeros(K)))  # softmax(zeros) = uniform
     if "regression" in v_inits:
         v_reg = _regression_v_init(X1_s, X0_s, Z1, Z0)
         # Invert softmax: log(V) up to additive constant
-        starts.append(np.log(np.maximum(v_reg, 1e-8)))
+        starts.append(("regression", np.log(np.maximum(v_reg, 1e-8))))
 
     if n_random_starts > 0:
         rng = np.random.default_rng(random_state)
-        for _ in range(n_random_starts):
+        for idx in range(n_random_starts):
             dirichlet = rng.dirichlet(np.ones(K))
-            starts.append(np.log(np.maximum(dirichlet * K, 1e-8)))
+            starts.append(
+                (f"dirichlet_{idx + 1}", np.log(np.maximum(dirichlet * K, 1e-8)))
+            )
 
     best = None
-    for v0 in starts:
+    best_start = None
+    start_diagnostics: list[dict[str, Any]] = []
+    for start_name, v0 in starts:
         try:
             res = optimize.minimize(
-                outer_loss, v0, method=optimizer,
-                options={"maxiter": max_iter, "xatol": ftol, "fatol": ftol}
-                if optimizer == "Nelder-Mead"
-                else {"maxiter": max_iter, "ftol": ftol},
+                outer_loss,
+                v0,
+                method=optimizer,
+                options=(
+                    {"maxiter": max_iter, "xatol": ftol, "fatol": ftol}
+                    if optimizer == "Nelder-Mead"
+                    else {"maxiter": max_iter, "ftol": ftol}
+                ),
+            )
+            V_start = _v_from_params(res.x, K)
+            w_start = _inner_w_given_v(V_start, X1_s, X0_s, penalization=penalization)
+            inner_r_start = X1_s - X0_s @ w_start
+            start_diagnostics.append(
+                {
+                    "start": start_name,
+                    "success": bool(res.success),
+                    "loss": float(res.fun),
+                    "inner_loss": float(np.sum(V_start * inner_r_start**2)),
+                    "weights": w_start,
+                    "v": V_start,
+                }
             )
             if best is None or res.fun < best.fun:
                 best = res
-        except Exception:
+                best_start = start_name
+        except Exception as exc:
+            start_diagnostics.append(
+                {
+                    "start": start_name,
+                    "success": False,
+                    "loss": np.inf,
+                    "inner_loss": np.inf,
+                    "weights": np.full(J, np.nan),
+                    "v": np.full(K, np.nan),
+                    "error": str(exc),
+                }
+            )
             continue
 
     if best is None:
@@ -379,6 +437,8 @@ def solve_synth_weights_adh(
             "scale": scale,
             "n_starts": 0,
             "converged": False,
+            "best_start": None,
+            "start_diagnostics": start_diagnostics,
         }
 
     V_opt = _v_from_params(best.x, K)
@@ -390,8 +450,10 @@ def solve_synth_weights_adh(
         "w": w_opt,
         "v": V_opt,
         "loss": float(r @ r),
-        "inner_loss": float(np.sum(V_opt * inner_r ** 2)),
+        "inner_loss": float(np.sum(V_opt * inner_r**2)),
         "scale": scale,
         "n_starts": len(starts),
         "converged": bool(best.success),
+        "best_start": best_start,
+        "start_diagnostics": start_diagnostics,
     }

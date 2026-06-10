@@ -52,6 +52,7 @@ def dml(
     alpha: float = 0.05,
     random_state: int = 42,
     sample_weight: Optional[Any] = None,
+    fold_indices: Optional[Any] = None,
 ) -> CausalResult:
     """
     Estimate causal effect using Double/Debiased Machine Learning.
@@ -103,6 +104,11 @@ def dml(
         either a 1-D array of length ``len(data)`` or a column name
         present in ``data``. Supported for
         ``model in {'plr', 'irm', 'pliv', 'iivm'}``.
+    fold_indices : array-like or str, optional
+        Explicit cross-fit fold labels for ``model='plr'``. Pass either
+        a 1-D array of length ``len(data)`` or a column name. When
+        provided, ``n_rep`` must be 1 and the labels must define exactly
+        ``n_folds`` non-empty folds.
 
     Returns
     -------
@@ -141,6 +147,7 @@ def dml(
         n_folds=n_folds, n_rep=n_rep, alpha=alpha,
         random_state=random_state,
         sample_weight=sample_weight,
+        fold_indices=fold_indices,
     )
     _result = estimator.fit()
     try:
@@ -157,6 +164,9 @@ def dml(
                               else None,
                 "n_folds": n_folds, "n_rep": n_rep,
                 "alpha": alpha, "random_state": int(random_state),
+                "fold_indices": (
+                    fold_indices if isinstance(fold_indices, str) else None
+                ),
                 # Learner classes are objects — capture only their type
                 # names so the provenance dict stays JSON-serialisable.
                 "ml_g": type(ml_g).__name__ if ml_g is not None else None,
@@ -196,6 +206,7 @@ class DoubleML:
         alpha: float = 0.05,
         random_state: int = 42,
         sample_weight: Optional[Any] = None,
+        fold_indices: Optional[Any] = None,
     ):
         key = str(model).lower()
         if key not in _MODEL_REGISTRY:
@@ -210,6 +221,7 @@ class DoubleML:
             n_folds=n_folds, n_rep=n_rep, alpha=alpha,
             random_state=random_state,
             sample_weight=sample_weight,
+            fold_indices=fold_indices,
         )
 
     def fit(self) -> CausalResult:
