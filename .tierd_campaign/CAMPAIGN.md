@@ -422,3 +422,38 @@ noisy/forest-dependent — anchored on β₁ + null structure instead.
   a documented cross-backend band. A proper fix (stable, index-anchored
   tie-break in `sp.match`) is §12-grade with wide blast radius (MatchIt parity)
   → its own batch, needs full matching-suite re-run + sign-off.
+
+### 2026-06-09 (cont.) — P2 target-trial batch
+- `test_tierD_p2_target_trial_analytic.py` (4): `immortal_time_check` (flags
+  exactly the subjects with treatment_start<eligibility: n_flagged=10/30 +
+  flagged_ids; clean→0), `target_trial_emulate` (randomized protocol recovers
+  ATE 2.0; eligibility filter excludes the right rows). First-try green.
+- **P2 tally: 17 batches, 101 tests, 40 estimators.** worklist → ~190.
+
+### 2026-06-09 (cont.) — P2 CATE-evaluation batch
+- `test_tierD_p2_cate_eval_analytic.py` (4): `cate_eval` (Yadlowsky RATE/AUTOC/
+  Qini): oracle CATE τ(x)=1+x → AUTOC=0.85 positive & CI excludes 0; random
+  CATE → AUTOC~0 & CI contains 0; oracle beats random on AUTOC+Qini; constant
+  effect → no prioritisation value. Removed unused pytest import.
+- **P2 tally: 18 batches, 105 tests, 41 estimators.** worklist → ~189.
+
+### 2026-06-09 (cont.) — P2 causal-discovery batch
+- `test_tierD_p2_causal_discovery_analytic.py` (4): `pc_algorithm` (collider
+  X→Z←Y: recovers skeleton X-Z,Y-Z,¬X-Y + orients the collider via cpdag; chain
+  X→Y→Z drops X-Z via X⟂Z|Y), `fci` (recovers v-structure skeleton). Note: PC
+  chain edge-removal needs adequate CI-test power (well-separated links + n≥8k);
+  underpowered DGPs keep the edge — finite-sample, not a bug.
+- **P2 tally: 19 batches, 109 tests, 43 estimators.** worklist → ~187.
+
+### 2026-06-09 (cont.) — P2 proximal frontier batch
+- `test_tierD_p2_proximal_analytic.py` (5): `pci_mtp` (linear bridge recovers
+  modified-treatment-policy shift as γ_D·δ, including negative and zero δ),
+  `fortified_pci` (known ATE 2.0 when bridge/outcome working models are
+  correctly specified), `bidirectional_pci` (same known ATE when Z-side
+  propensity is correctly specified), `select_pci_proxies` (role-specific
+  Z/W signal ranks above noise and recommends the correct proxy for each side).
+- Existing proximal smoke/frontier tests + new analytic batch: 15/15 green.
+  Recent P2 batch join (`target_trial`, `cate_eval`, `causal_discovery`,
+  `proximal`): 17/17 green.
+- **P2 tally: 20 batches, 114 tests, 47 estimators.** worklist → 182
+  (`scripts/tierd_classify.py` exact).
