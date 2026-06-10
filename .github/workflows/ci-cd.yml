@@ -90,16 +90,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
 
-    - name: Install parity extra (canonical env — runs the doubleml external-parity pins)
-      # doubleml is the opt-in `parity` extra (not in `dev`). Installing it on
-      # the canonical ubuntu+3.10 env makes tests/external_parity/
-      # test_dml_python_parity.py actually run its 2 sp.dml-vs-doubleml pins,
-      # so the JSS external-parity headline count (52) is verified rather than
-      # silently skipped. Other matrix entries skip those 2 pins and the
+    - name: Install exact-parity extras (canonical env — runs DoubleML + CCT pins)
+      # doubleml and rdrobust are opt-in extras (not in `dev`). Installing them
+      # on the canonical ubuntu+3.10 env makes tests/external_parity/
+      # test_dml_python_parity.py run its 4 sp.dml-vs-doubleml pins and makes
+      # test_published_replications.py run the bwselect='cct' RD pins instead
+      # of skipping them. Other matrix entries may skip optional pins; the
       # count-drift guard degrades gracefully (see test_jss_validation_api.py).
       # Mirrors the flake8 / mypy / coverage canonical-env gating below.
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
-      run: pip install -e ".[parity]"
+      run: pip install -e ".[parity,rd-cct]"
 
     - name: Lint with flake8 (hard syntax errors — all matrix entries)
       # E9/F63/F7/F82 are real syntax / undefined-name breakage and must be
@@ -130,11 +130,13 @@ jobs:
     # matrices and the same pin used by the flake8/mypy gates — where numpy is
     # >= 2.1 and the bug is absent. Every other matrix entry runs the full
     # suite without ``--cov``. Root cause: docs/rfc (E1 analysis).
-    # Coverage baseline: the 2026-05-28 local full-suite run (committed
-    # ``coverage.xml``, v1.16.0) measured 70.5% line coverage repo-wide
-    # (61,681 / 87,476 lines). The gate is therefore set to 60 — a 4x lift
-    # over the historical 15 placeholder, held ~10pp below the measured
-    # baseline so ordinary fold-split / platform variance cannot red a PR.
+    # Coverage baseline: the 2026-05-28 local full-suite coverage XML
+    # snapshot (v1.16.0) measured 70.5% line coverage repo-wide (61,681 /
+    # 87,476 lines). The gate is therefore set to 60 — a 4x lift over the
+    # historical 15 placeholder, held ~10pp below the measured baseline so
+    # ordinary fold-split / platform variance cannot red a PR. The current
+    # ratchet below consumes the CI-generated coverage.xml from this job; the
+    # root coverage.xml is a working artifact, not a tracked source of truth.
     # Ratchet upward (60 -> 65 -> 70) once each step is confirmed green in
     # CI on the canonical ubuntu+3.10 env; never set the gate above the last
     # CI-verified number.
@@ -146,8 +148,8 @@ jobs:
     # Per-module ratchet for the six core estimators (did iv rd synth dml panel).
     # The repo-wide --cov-fail-under above is a soft floor; this gate locks each
     # core module at the hard ≥95% the coverage campaign achieved so none can
-    # silently regress. Reuses the coverage.xml just produced. Ratchet the --min
-    # upward only after a higher number is confirmed green here.
+    # silently regress. Reuses the CI-generated coverage.xml just produced.
+    # Ratchet the --min upward only after a higher number is confirmed green here.
     - name: Core-module coverage ratchet (did/iv/rd/synth/dml/panel ≥ 95%)
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       run: |

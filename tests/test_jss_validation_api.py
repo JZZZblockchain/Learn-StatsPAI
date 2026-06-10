@@ -193,8 +193,9 @@ def test_validation_report_collected_counts_match_jss_headline():
             # The manuscript's external-parity count includes the 4
             # doubleml-gated pins; without the optional `parity` extra they
             # don't collect, so verifying the floor here would be a spurious
-            # failure. CI installs `.[parity]` on the canonical env to check
-            # the full count; skip it in minimal environments instead.
+            # failure. CI installs `.[parity,rd-cct]` on the canonical env to
+            # check the full count and to run the CCT RD pins; skip it in
+            # minimal environments instead.
             continue
         assert actual >= expected, (
             f"{key}: collected {actual} tests, which is BELOW the JSS "

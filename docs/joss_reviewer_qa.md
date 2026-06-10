@@ -32,11 +32,12 @@ mechanisms make the breadth auditable rather than assertable:
    (`test_results_full_suite.md`).
 3. **Coverage is honest and rising.** The CI line-coverage gate was lifted
    from a 15% placeholder to **60%** against a measured **70.5%** baseline
-   (committed `coverage.xml`), and a dedicated, tracked campaign
-   (`.coverage_campaign/`) is driving the six core estimator modules
+   (historical full-suite coverage XML snapshot). The current CI gate uses the
+   `coverage.xml` generated inside the same job, while `.coverage_campaign/`
+   tracks the dedicated campaign driving the six core estimator modules
    (`did iv rd synth dml panel`) to **≥95%** line coverage under the full
-   suite — test-only, with real numerical assertions, no mocking of
-   numerical paths.
+   suite — test-only, with real numerical assertions, no mocking of numerical
+   paths.
 
 The honest framing — also stated in the validation dossier — is that
 *certified* methods carry parity or analytic evidence, while *breadth*

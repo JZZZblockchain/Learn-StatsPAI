@@ -33,7 +33,9 @@ are named `plotting`, `fixest`, `deepiv`, `neural`, `performance`, `bayes`,
 `tune`, `parity`, `rd-cct`, `text`, and `docs`. The `parity` extra adds the
 canonical Python DoubleML reference so the `sp.dml` machine-precision check
 runs instead of skipping (see *Double Machine Learning vs the DoubleML
-reference* below).
+reference* below). The `rd-cct` extra adds the official `rdrobust` Python port
+used by the exact CCT RD parity pins; the canonical CI job installs both
+`.[parity,rd-cct]`.
 
 ## Smoke Test
 
