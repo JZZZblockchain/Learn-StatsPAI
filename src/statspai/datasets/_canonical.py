@@ -317,13 +317,13 @@ def nsw_lalonde(seed: int = 42, simulated: bool = True) -> pd.DataFrame:
         # StatsPAI-pinned values on this real extract.
         df.attrs['statspai_pinned_naive_ols_att'] = -635.0
         df.attrs['statspai_pinned_adj_ols_att']   = 1548.2
-        df.attrs['statspai_pinned_psm_att']       = 2012.5
+        df.attrs['statspai_pinned_psm_att']       = 1963.4
         df.attrs['published_dehejia_wahba_psm']   = 1794
         df.attrs['notes'] = (
             "Real MatchIt::lalonde extract (n=614). Naive OLS recovers "
             "-$635 because PSID-1 is truncated to 429 controls; "
             "covariate-adjusted OLS recovers $1,548 and 1:1 NN PSM "
-            "recovers ~$2,012, both close to the DW (1999) Table 4 "
+            "recovers ~$1,963, both close to the DW (1999) Table 4 "
             "experimental benchmark of $1,794."
         )
         return df
