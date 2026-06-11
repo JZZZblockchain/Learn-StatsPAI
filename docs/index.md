@@ -14,9 +14,10 @@ etc.), and manuscript/reporting output in Word / Excel / LaTeX / HTML.
 > **Current release: v1.16.0 (2026-05-29)** — correctness fixes
 > (`sp.qreg` √n standard-error fix and an `sp.xtabond` Arellano–Bond GMM
 > rebuild, both ⚠️ correctness — re-run affected analyses) plus a Track A
-> cross-language parity expansion from 36 to 51 R-aligned modules (Stata
-> reference for 43 of the R-joined rows, plus one Py-Stata-only
-> `xtabond` migration check). See the [changelog](changelog.md) for detail.
+> cross-language parity expansion from 36 to 51 R-aligned modules. The
+> current source snapshot has since expanded to 64 R-aligned modules with
+> 61 Stata references and no remaining R-side gap for `xtabond`. See the
+> [changelog](changelog.md) for detail.
 
 ```python
 import statspai as sp

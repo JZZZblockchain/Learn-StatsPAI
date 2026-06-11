@@ -509,9 +509,9 @@ def test_validation_claim_lint_covers_release_notes() -> None:
     assert "CHANGELOG.md" in payload["required_snippet_files"]
     assert "docs/agent_cards_spec.md" in payload["required_snippet_files"]
     assert "docs/guides/agent_native_workflow.md" in payload["required_snippet_files"]
-    assert payload["claim_counts"]["certified"] == 53
-    assert payload["claim_counts"]["validated"] == 28
-    assert payload["claim_counts"]["api_stable"] == 947
+    assert payload["claim_counts"]["certified"] == 61
+    assert payload["claim_counts"]["validated"] == 24
+    assert payload["claim_counts"]["api_stable"] == 943
     assert payload["claim_counts"]["experimental"] == 3
 
 
@@ -525,9 +525,9 @@ def test_validation_evidence_audit_separates_grade_from_supplemental_notes() -> 
     summary = payload["summary"]
 
     assert payload["status"] == "PASS"
-    assert summary["certified_validated_symbols"] == 81
-    assert summary["certified_symbols"] == 53
-    assert summary["validated_symbols"] == 28
+    assert summary["certified_validated_symbols"] == 85
+    assert summary["certified_symbols"] == 61
+    assert summary["validated_symbols"] == 24
     assert summary["certified_without_certified_grade_evidence"] == 0
     assert summary["validated_without_validated_grade_evidence"] == 0
     assert summary["supplemental_only_symbols"] == 0

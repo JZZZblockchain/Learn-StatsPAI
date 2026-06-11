@@ -20572,7 +20572,7 @@
     }
   },
   {
-    "description": "Logit (logistic) regression via maximum likelihood.",
+    "description": "Logit (logistic) regression via maximum likelihood. Validation: certified parity evidence.",
     "name": "logit",
     "parameters": {
       "properties": {
@@ -20897,7 +20897,7 @@
     }
   },
   {
-    "description": "Poisson regression via MLE (IRLS). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Poisson regression via MLE (IRLS). Validation: certified parity evidence.",
     "name": "poisson",
     "parameters": {
       "properties": {
@@ -30498,7 +30498,7 @@
     }
   },
   {
-    "description": "Zero-Inflated Poisson (ZIP) regression via MLE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Zero-Inflated Poisson (ZIP) regression via MLE. Validation: certified parity evidence.",
     "name": "zip_model",
     "parameters": {
       "properties": {
@@ -30558,7 +30558,7 @@
     }
   },
   {
-    "description": "Zero-Inflated Negative Binomial (ZINB) regression via MLE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Zero-Inflated Negative Binomial (ZINB) regression via MLE. Validation: certified parity evidence.",
     "name": "zinb",
     "parameters": {
       "properties": {
@@ -30676,7 +30676,7 @@
     }
   },
   {
-    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: certified parity evidence.",
     "name": "liml",
     "parameters": {
       "properties": {
@@ -33289,7 +33289,7 @@
     }
   },
   {
-    "description": "Beta regression (Ferrari & Cribari-Neto 2004).",
+    "description": "Beta regression (Ferrari & Cribari-Neto 2004). Validation: certified parity evidence.",
     "name": "betareg",
     "parameters": {
       "properties": {
@@ -34827,7 +34827,7 @@
     }
   },
   {
-    "description": "Truncated regression (MLE).",
+    "description": "Truncated regression (MLE). Validation: certified parity evidence.",
     "name": "truncreg",
     "parameters": {
       "properties": {
@@ -34884,7 +34884,7 @@
     }
   },
   {
-    "description": "Seemingly Unrelated Regression (SUR).",
+    "description": "Seemingly Unrelated Regression (SUR). Validation: certified parity evidence.",
     "name": "sureg",
     "parameters": {
       "properties": {

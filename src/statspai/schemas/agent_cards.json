@@ -29696,7 +29696,7 @@
       "Monotonicity (for LATE interpretation under heterogeneous effects)"
     ],
     "category": "regression",
-    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: certified parity evidence.",
     "example": "sp.liml(data=df, y='lwage', x_endog=['educ'], x_exog=['exper', 'expersq'], z=['nearc4'])",
     "failure_modes": [
       {
@@ -29734,7 +29734,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+      "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: certified parity evidence.",
       "name": "liml",
       "parameters": {
         "properties": {
@@ -29797,9 +29797,10 @@
     "stability": "stable",
     "typical_n_min": 100,
     "validation_notes": [
-      "tests/reference_parity/test_liml_se_parity.py"
+      "R parity module 59_liml",
+      "Stata parity module 59_liml"
     ],
-    "validation_status": "validated"
+    "validation_status": "certified"
   },
   {
     "alternatives": [

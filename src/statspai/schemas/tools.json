@@ -1364,7 +1364,7 @@
     "name": "benjamini_hochberg"
   },
   {
-    "description": "Beta regression (Ferrari & Cribari-Neto 2004).",
+    "description": "Beta regression (Ferrari & Cribari-Neto 2004). Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -10142,7 +10142,7 @@
     "name": "lee_bounds"
   },
   {
-    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Relevance: instruments predict the endogenous regressor (first-stage F >= 10 rule of thumb); Exclusion: instruments affect outcome only through the endogenous regressor; Monotonicity (for LATE interpretation under heterogeneous effects). Pre-conditions: formula includes the (endog ~ instruments) parenthesised block; at least as many instruments as endogenous regressors (order condition); instruments are not themselves endogenous in the outcome equation. Failure modes: First-stage F < 10 (Stock-Yogo 5% bias) -> Use weak-IV-robust inference (Anderson-Rubin) or LIML; Over-identification test rejects (sp.estat 'overid') -> At least one instrument is invalid; drop instruments or switch to just-identified LIML; Hausman endogeneity test fails to reject -> OLS may be consistent and more efficient; report both. Alternatives: sp.deepiv, sp.bartik, sp.proximal, sp.regress. Typical minimum N: 100.",
+    "description": "Limited Information Maximum Likelihood (LIML) estimator. Validation: certified parity evidence. Assumptions: Relevance: instruments predict the endogenous regressor (first-stage F >= 10 rule of thumb); Exclusion: instruments affect outcome only through the endogenous regressor; Monotonicity (for LATE interpretation under heterogeneous effects). Pre-conditions: formula includes the (endog ~ instruments) parenthesised block; at least as many instruments as endogenous regressors (order condition); instruments are not themselves endogenous in the outcome equation. Failure modes: First-stage F < 10 (Stock-Yogo 5% bias) -> Use weak-IV-robust inference (Anderson-Rubin) or LIML; Over-identification test rejects (sp.estat 'overid') -> At least one instrument is invalid; drop instruments or switch to just-identified LIML; Hausman endogeneity test fails to reject -> OLS may be consistent and more efficient; report both. Alternatives: sp.deepiv, sp.bartik, sp.proximal, sp.regress. Typical minimum N: 100.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -10429,7 +10429,7 @@
     "name": "local_projections"
   },
   {
-    "description": "Logit (logistic) regression via maximum likelihood.",
+    "description": "Logit (logistic) regression via maximum likelihood. Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -14110,7 +14110,7 @@
     "name": "plot_from_result"
   },
   {
-    "description": "Poisson regression via MLE (IRLS). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Poisson regression via MLE (IRLS). Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -19756,7 +19756,7 @@
     "name": "super_learner"
   },
   {
-    "description": "Seemingly Unrelated Regression (SUR).",
+    "description": "Seemingly Unrelated Regression (SUR). Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -21347,7 +21347,7 @@
     "name": "trimming"
   },
   {
-    "description": "Truncated regression (MLE).",
+    "description": "Truncated regression (MLE). Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -22252,7 +22252,7 @@
     "name": "yun_nonlinear"
   },
   {
-    "description": "Zero-Inflated Negative Binomial (ZINB) regression via MLE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Zero-Inflated Negative Binomial (ZINB) regression via MLE. Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -22308,7 +22308,7 @@
     "name": "zinb"
   },
   {
-    "description": "Zero-Inflated Poisson (ZIP) regression via MLE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Zero-Inflated Poisson (ZIP) regression via MLE. Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
         "alpha": {

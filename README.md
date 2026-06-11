@@ -161,10 +161,11 @@ generation (`sp.function_schema`) also keeps parametrised typing annotations
 StatsPAI 1.16.0 corrects the `sp.qreg` Powell sandwich standard error (was off
 by √n) and rebuilds `sp.xtabond` Arellano–Bond difference GMM to match Stata to
 machine precision — both flagged ⚠️ **Correctness**, so re-run affected
-analyses. The Track A cross-language parity harness grows from 36 to 51
-R-aligned modules (Stata reference for 43 of them, plus one
-Py-Stata-only `xtabond` migration check), and the reviewer-facing
-validation docs are refreshed. Full notes in
+analyses. The Track A cross-language parity harness grew from 36 to 51
+R-aligned modules at that release. The current source snapshot has since
+expanded to 64 R-aligned modules with 61 Stata references and no remaining
+R-side gap for `xtabond`; the reviewer-facing validation docs are refreshed.
+Full notes in
 [`CHANGELOG.md`](CHANGELOG.md) under `[1.16.0]`.
 
 ---

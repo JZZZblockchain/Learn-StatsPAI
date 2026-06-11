@@ -101,11 +101,12 @@ All notable changes to StatsPAI will be documented in this file.
   binned Gaussian estimator at the quantile, rather than a direct Gaussian
   kernel average with the same `bw.nrd0` bandwidth. The Stata/Mata bridge for
   `32_rif` implements the same binned interpolation, so Python, R, and Stata
-  agree at machine precision; Track A strictness moves to **50 machine-level /
-  4 iterative / 1 moderate / 1 methodological** modules after the multinomial
+  agree at machine precision; Track A strictness moves to **57 machine-level /
+  5 iterative / 1 moderate / 1 methodological** modules after the multinomial
   and ordered logit R references, the LMM REML reference, the AGHQ GLMM
-  reference, the cross-sectional SFA default optimizer, and the `xtabond`
-  `plm::pgmm` reference were pinned to
+  reference, the cross-sectional SFA default optimizer, the `xtabond`
+  `plm::pgmm` reference, and the newer GLM / IV / system / limited-dependent
+  variable rows were pinned to
   tight optimizer/reporting tolerances.
 
 - **⚠️ Correctness fix (pandas ≥ 3.0): `sp.horowitz_manski` bounds silently
@@ -716,7 +717,7 @@ All notable changes to StatsPAI will be documented in this file.
     the row is like-for-like AIPW versus `grf` and is graded against
     combined sampling error, not sold as deterministic machine-precision
 	    equality. The strictness-tier denominator is
-	    `50 / 4 / 1 / 1 on the 56 R-joined modules`: the forest row is now
+	    `57 / 5 / 1 / 1 on the 64 R-joined modules`: the forest row is now
     the only moderate-stochastic T3 row, and the remaining
     methodological/T4 bucket is the documented classical-SCM
     non-uniqueness/reference-disagreement gap.
@@ -830,14 +831,14 @@ All notable changes to StatsPAI will be documented in this file.
 - **Strictness-tier breakdown in the Track A parity tables
   (`tests/r_parity/compare.py`)** — each module is classified by its
   registered point-estimate tolerance into machine-level / iterative /
-	  moderate / methodological-T4 tiers (50 / 4 / 1 / 1 on the 56
+	  moderate / methodological-T4 tiers (57 / 5 / 1 / 1 on the 64
   R-joined modules), shown in the Markdown ledger and the LaTeX appendix
   caption so a machine-level point-estimate match is not flattened together with a deliberately loose
   stochastic or documented-convention tolerance.
 - **Stata leg brought to the same rigor as R (`tests/stata_parity/`)** —
   `_common.do` now writes an inline `provenance` block (engine version,
   edition, OS) onto every `*_Stata.json`; `verify_reproduce_stata.py` re-runs
-  each `.do` on the committed CSV bytes and confirms all 53 Stata modules
+  each `.do` on the committed CSV bytes and confirms all 61 Stata modules
   reproduce **bit-for-bit** (worst rel 0) under Stata 18 MP, including the
   iterative-optimiser commands (`set seed 42` + deterministic solvers);
   `_capture_stata_env.do` + `_gen_stata_env.py` pin the engine and the
@@ -1053,10 +1054,11 @@ All notable changes to StatsPAI will be documented in this file.
   `sp.nbreg`, `sp.heckman`, `sp.mlogit`, `sp.ologit`, `sp.clogit`,
   `sp.probit`, `sp.oprobit`, `sp.xtabond`, `sp.newey`, and a 3-FE PPML
   variant. The 3-way Track A table
-  (`tests/r_parity/results/parity_table_3way.md`) now covers 50
-  R-joined modules versus 36 previously, with a Stata reference for 43
-  versus 21 (`50_xtabond` is a Py-Stata-only migration check omitted
-  from the R-joined table). The expansion surfaced the qreg and newey
+  (`tests/r_parity/results/parity_table_3way.md`) covered 50
+  R-joined modules versus 36 previously at that checkpoint, with a Stata
+  reference for 43 versus 21. The current source snapshot supersedes that
+  checkpoint with 64 R-joined modules, 61 Stata references, and a materialized
+  `50_xtabond` R reference through `plm::pgmm`. The expansion surfaced the qreg and newey
   SE fixes above and further P1/P2 findings recorded in
   `tests/r_parity/PARITY_SESSION_2026-05-28.md`.
 
