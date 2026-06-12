@@ -170,6 +170,23 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **Silent numerical fallbacks now fail loudly (CLAUDE.md §3.7 sweep, 15
+  sites).** Optimizer/solver failures that previously degraded in silence
+  now emit `ConvergenceWarning`/`StatsPAIWarning` and record a diagnostics
+  flag, with the fallback documented in the docstring — numerical outputs
+  are bit-identical: `sp.ebalance` (failed dual → uniform weights, now
+  `model_info['weights_fallback']`), `sp.genmatch` (degenerate KS → p=1.0,
+  now counted in `result.detail['ks_test_failures']`), bootstrap-replicate
+  failures in `sp.horowitz_manski`/`sp.iv_bounds`/`sp.oster_delta`/
+  `sp.selection_bounds` (`model_info['n_boot_failed']`), propensity
+  fallbacks in `sp.ope` IPS/SNIPS/DR (`diagnostics['propensity_fallback']`),
+  bridge-function fallbacks in proximal `bidirectional`/`fortified`/
+  `pci_regression`/`proxy_selector`, LTMLE targeting-step failures
+  (`detail['targeting_failures']`), and balance/attrition diagnostics in
+  `experimental`. Orchestration-layer stragglers in
+  `workflow.causal_workflow`, `smart.benchmark`, and
+  `smart.identification` now route through `record_degradation` (bare-
+  swallow debt ratchet 8 → 7 in `tests/test_no_silent_degradation.py`).
 - **⚠️ Correctness — `sp.unified_sensitivity` dashboard components revived
   and corrected.** (1) The Sensemakr component was 100% dead code: it called
   `sensemakr(result, treatment=...)` against the real signature
