@@ -6,6 +6,54 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **Reference-parity anchors for the doubly-robust trio — `sp.tmle`,
+  `sp.ipw`, `sp.g_computation` (27 anchors, 44 tests,
+  `tests/reference_parity/test_{tmle,ipw,gformula}_parity.py`).** The three
+  estimators previously had smoke tests only. Anchors: saturated
+  closed-form collapses (hand-computed stratified cells; TMLE = AIPW =
+  g-formula at the nonparametric MLE), frozen base-R fixtures
+  (`stats::glm`/`lm` only — generation scripts + CSVs committed; the TMLE
+  logistic fluctuation is hand-coded in base R and psi/SE pinned at 1e-9),
+  the TMLE EIF-mean-zero targeting property, cross-estimator combined-SE
+  parity, confounded-DGP recovery with an explicit naive-bias contrast, and
+  SE-vs-Monte-Carlo-SD sanity bands. Every file passed an adversarial
+  verification round including a 2% injected-bias mutation check.
+- **Three new user guides + nav repair.** `docs/guides/panel_data.md`
+  (FE/RE/Hausman/HDFE/dynamic GMM — previously the largest no-guide gap),
+  `docs/guides/sensitivity_analysis.md` (a design→tool decision tree across
+  sensemakr / Oster / E-value / Rosenbaum / honest-DiD / weak-IV /
+  DML-sensitivity / Manski-Lee bounds), and `docs/guides/mediation.md`
+  (ACME/ADE, interventional effects, front-door, Gelbach). Every code block
+  executed against the live package before landing; all citations grep-
+  verified against `paper.bib`. Four previously orphaned guides (synth,
+  migration-from-r, mixtape_ch09_did, agent_native_workflow) are now wired
+  into the mkdocs nav, and `mkdocs build --strict` is green.
+- **R/Stata parity tolerance registry
+  (`docs/dev/r_parity_tolerances.md`, linked next to the JSS dossier).**
+  Every per-module tolerance in `tests/r_parity/compare.py` now carries an
+  A (mechanistic) / B (empirical, with recomputed observed gaps) / C
+  (honestly unjustified) grade, and 13 stale loose SE budgets were
+  tightened — none loosened — including the former `11_psm rel_se = 5.0`
+  and four `rel_se = 1.0` entries, all re-verified against the committed
+  golden artifacts (36/36 harness contract tests).
+- **Verified `Examples` blocks for 27 high-frequency public functions**
+  (mixed, absorb_ols, demean, aft, local_projections, granger_causality,
+  etable, sun_abraham, etwfe, ivreg, jive, rdplot, rd_honest, marginsplot,
+  synth, dml, xlearner, propensity_score, front_door, mediation_decompose,
+  psm, cbps, overlap_weights, love_plot, balance_diagnostics,
+  rif_decomposition, dfl_decompose). Each example executed before landing
+  and independently re-run by a verifier agent (27/27 pass). New
+  `scripts/examples_coverage.py` audits Examples coverage per category
+  (currently 370/1031 registered functions, 35.9%) for future ratcheting.
+- **Performance-regression ratchet (`scripts/benchmark_ratchet.py` +
+  scheduled `benchmarks.yml` workflow).** The released PyPI wheel and the
+  source tree are benchmarked back-to-back on the same runner twice a
+  month; any `sp_*` timing >1.5× slower than the release fails the
+  scheduled run (PRs are never blocked). A committed
+  `benchmarks/baseline.json` enables the same-machine local check.
+- **Community/supply-chain files**: `SECURITY.md` (private vulnerability
+  reporting policy with scope notes) and `.github/dependabot.yml`
+  (weekly pip + GitHub-Actions, monthly cargo update PRs).
 - **Track A cross-language parity expansion: 56 → 64 modules
   (`tests/r_parity/` 57–64, all three sides py + R + Stata).** New modules:
   binary logit (`sp.logit`), Poisson ML (`sp.poisson`), LIML k-class
