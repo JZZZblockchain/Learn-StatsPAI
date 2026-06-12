@@ -6,6 +6,32 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **Track A cross-language parity expansion: 56 → 64 modules
+  (`tests/r_parity/` 57–64, all three sides py + R + Stata).** New modules:
+  binary logit (`sp.logit`), Poisson ML (`sp.poisson`), LIML k-class
+  (`sp.liml` vs `ivmodel::LIML` / `ivregress liml, small`), SUR one-step FGLS
+  (`sp.sureg` vs `systemfit` noDfCor / `sureg`), beta regression
+  (`sp.betareg` vs `betareg` / Stata `betareg`), truncated regression
+  (`sp.truncreg` vs `truncreg` method=NR / `truncreg, ll(0)`), ZIP and ZINB
+  (`sp.zip_model` / `sp.zinb` vs `pscl::zeroinfl` / `zip` / `zinb`). Seven of
+  the eight land in the machine tier (rel ≤ 1e-6; LIML and SUR at ~1e-15
+  including SEs); ZINB registers an honest 1e-5 budget because its
+  likelihood is flat near the optimum. Strictness tiers are now
+  57 machine / 5 iterative / 1 moderate / 1 methodological-T4, with 61 of 64
+  modules carrying a Stata reference. The eight symbols are promoted to the
+  `certified` validation tier (registry: 61 certified / 24 validated).
+  Documented convention findings: Stata `ivregress liml` needs `small` for
+  the shared RSS/(n−k) divisor; `systemfit`'s default `geomean` residual
+  covariance corresponds to Stata `sureg, dfk`, not the `sureg` default;
+  R `betareg` reports expected-information SEs vs observed-information in
+  sp/Stata (≤0.7% documented gap).
+- **Parity reproducibility harness hardening.** `verify_reproduce.py` now
+  also re-runs the non-CSV modules (10/21/23), so all 64 R golden artifacts
+  are gate-verified (64/64 reproduce, 0 drift; Stata leg 61/61);
+  `_gen_renv_lock.R` adds the previously missing canonical reference
+  packages (EValue, sfaR, ddecompose, dineq, censReg, sampleSelection,
+  nnet, clubSandwich, DRDID, sensemakr + the new ivmodel, systemfit,
+  betareg, truncreg, pscl), regenerating `renv.lock` at 285 pinned packages.
 - **R/Stata reference-parity expansion — panel, count/quantile, and SDID
   estimators now carry frozen cross-package parity (19 new tests,
   `tests/reference_parity/` 124 → 143).** Each ships a deterministic data
