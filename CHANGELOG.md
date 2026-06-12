@@ -122,6 +122,29 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **⚠️ Correctness — `sp.unified_sensitivity` dashboard components revived
+  and corrected.** (1) The Sensemakr component was 100% dead code: it called
+  `sensemakr(result, treatment=...)` against the real signature
+  `sensemakr(data, y, treat, controls, ...)`, so it always raised `TypeError`
+  that was swallowed into `dash.notes`. The dashboard now accepts optional
+  `data=`, `y=`, `treat=`, `controls=` (forwarded by `result.sensitivity()`)
+  and runs the real Cinelli-Hazlett RV (`rv_q1` = `rv_q`, plus `rv_qa`);
+  without them it is skipped with an actionable note pointing to
+  `sp.sensemakr(data, y, treat, controls)`. (2) The Rosenbaum component was
+  equally dead: it imported a nonexistent module
+  (`diagnostics.rosenbaum_bounds` instead of `diagnostics.rosenbaum`) and
+  passed the result object where outcome arrays were expected. It now coerces
+  `result.matched_pairs` ((treated, control) arrays, (n, 2) array, or
+  DataFrame/dict with treated/control entries) and calls
+  `sp.rosenbaum_bounds(treated, control, alternative="two-sided")`. (3) The
+  Oster component routed `r2_treated`/`r2_controlled` into
+  `oster_bounds(r2_short=, r2_long=)` swapped relative to its documented
+  "short and long regression respectively" contract, and reported the *input*
+  proportionality `delta` (always 1.0) instead of the breakdown
+  `delta_for_zero`; both fixed, so `dash.oster["delta"]` is now the actual
+  Oster δ*. Locked by parity tests against direct `sp.sensemakr` /
+  `sp.rosenbaum_bounds` / `sp.oster_bounds` calls in
+  `tests/test_unified_sensitivity.py`.
 - **RIF/UQR parity now mirrors `dineq::rif`'s exact density convention.**
   The `quantile_convention="dineq"` path now ports R `stats::density`'s
   binned Gaussian estimator at the quantile, rather than a direct Gaussian
@@ -742,8 +765,10 @@ All notable changes to StatsPAI will be documented in this file.
     `13_causal_forest` is now a T3 combined-Monte-Carlo-error pass:
     the row is like-for-like AIPW versus `grf` and is graded against
     combined sampling error, not sold as deterministic machine-precision
-	    equality. The strictness-tier denominator is
-	    `57 / 5 / 1 / 1 on the 64 R-joined modules`: the forest row is now
+	    equality. The strictness-tier denominator at this checkpoint was
+	    `50 / 4 / 1 / 1 on the 56 R-joined modules` (the current source
+	    snapshot has since expanded to `57 / 5 / 1 / 1 on 64` — see the
+	    Unreleased Track A entry): the forest row is now
     the only moderate-stochastic T3 row, and the remaining
     methodological/T4 bucket is the documented classical-SCM
     non-uniqueness/reference-disagreement gap.
@@ -857,14 +882,16 @@ All notable changes to StatsPAI will be documented in this file.
 - **Strictness-tier breakdown in the Track A parity tables
   (`tests/r_parity/compare.py`)** — each module is classified by its
   registered point-estimate tolerance into machine-level / iterative /
-	  moderate / methodological-T4 tiers (57 / 5 / 1 / 1 on the 64
-  R-joined modules), shown in the Markdown ledger and the LaTeX appendix
+	  moderate / methodological-T4 tiers (50 / 4 / 1 / 1 on the 56
+  R-joined modules at this checkpoint; 57 / 5 / 1 / 1 on 64 in the
+  current source snapshot), shown in the Markdown ledger and the LaTeX appendix
   caption so a machine-level point-estimate match is not flattened together with a deliberately loose
   stochastic or documented-convention tolerance.
 - **Stata leg brought to the same rigor as R (`tests/stata_parity/`)** —
   `_common.do` now writes an inline `provenance` block (engine version,
   edition, OS) onto every `*_Stata.json`; `verify_reproduce_stata.py` re-runs
-  each `.do` on the committed CSV bytes and confirms all 61 Stata modules
+  each `.do` on the committed CSV bytes and confirms all 53 Stata modules
+  at this checkpoint (61 in the current source snapshot)
   reproduce **bit-for-bit** (worst rel 0) under Stata 18 MP, including the
   iterative-optimiser commands (`set seed 42` + deterministic solvers);
   `_capture_stata_env.do` + `_gen_stata_env.py` pin the engine and the

@@ -6,8 +6,11 @@ sensitivity analysis and returns a tidy report:
 
   - **E-value** (VanderWeele & Ding 2017) — always applicable
   - **Oster delta** (Oster 2019) — requires R^2 estimates
-  - **Rosenbaum Gamma** (Rosenbaum 2002) — matched / IPW-weighted designs
-  - **Sensemakr** (Cinelli & Hazlett 2020) — regression-based
+  - **Rosenbaum Gamma** (Rosenbaum 2002) — requires matched-pair
+    outcomes exposed as ``result.matched_pairs``
+  - **Sensemakr** (Cinelli & Hazlett 2020) — requires the raw
+    estimation data, passed via ``data`` / ``y`` / ``treat`` /
+    ``controls`` (result objects do not carry the data)
   - **Breakdown frontier** — how much bias flips the sign
 
 Attached as the ``sensitivity`` method of :class:`CausalResult` and
@@ -18,7 +21,7 @@ Attached as the ``sensitivity`` method of :class:`CausalResult` and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 import numpy as np
 
@@ -74,6 +77,11 @@ class SensitivityDashboard:
                 f"  Sensemakr RV(q=1)   : "
                 f"{self.sensemakr.get('rv_q1', float('nan')):.4f}"
             )
+            if "rv_qa" in self.sensemakr:
+                lines.append(
+                    f"  Sensemakr RV(q=1,a) : "
+                    f"{self.sensemakr['rv_qa']:.4f}"
+                )
         if self.breakdown is not None:
             lines.append(
                 f"  Breakdown bias     : "
@@ -149,6 +157,37 @@ def _as_risk_ratio(estimate: float, se: float, ci) -> tuple[float, tuple[float, 
     return float(rr), (float(min(ci_conv)), float(max(ci_conv)))
 
 
+def _coerce_matched_pairs(mp) -> tuple[np.ndarray, np.ndarray]:
+    """Coerce ``result.matched_pairs`` into (treated, control) outcome arrays.
+
+    Accepts a 2-tuple/list ``(treated, control)``, an ``(n, 2)`` array
+    (column 0 = treated, column 1 = control), or a DataFrame / dict with
+    ``'treated'`` and ``'control'`` entries.
+    """
+    if isinstance(mp, dict) and "treated" in mp and "control" in mp:
+        return (np.asarray(mp["treated"], dtype=float),
+                np.asarray(mp["control"], dtype=float))
+    if hasattr(mp, "columns"):  # DataFrame-like
+        cols = {str(c).lower(): c for c in mp.columns}
+        if "treated" in cols and "control" in cols:
+            return (np.asarray(mp[cols["treated"]], dtype=float),
+                    np.asarray(mp[cols["control"]], dtype=float))
+        if mp.shape[1] == 2:
+            arr = np.asarray(mp, dtype=float)
+            return arr[:, 0], arr[:, 1]
+    if isinstance(mp, (tuple, list)) and len(mp) == 2:
+        return (np.asarray(mp[0], dtype=float),
+                np.asarray(mp[1], dtype=float))
+    arr = np.asarray(mp)
+    if arr.ndim == 2 and arr.shape[1] == 2:
+        return arr[:, 0].astype(float), arr[:, 1].astype(float)
+    raise ValueError(
+        "matched_pairs must be a (treated, control) pair of outcome "
+        "arrays, an (n, 2) array, or a DataFrame/dict with 'treated' "
+        "and 'control' entries"
+    )
+
+
 # --------------------------------------------------------------------------- #
 #  Main entry
 # --------------------------------------------------------------------------- #
@@ -161,6 +200,10 @@ def unified_sensitivity(
     r2_controlled: Optional[float] = None,
     beta_uncontrolled: Optional[float] = None,
     rho_max: float = 1.0,
+    data=None,
+    y: Optional[str] = None,
+    treat: Optional[str] = None,
+    controls: Optional[Sequence[str]] = None,
     include_oster: bool = True,
     include_rosenbaum: bool = True,
     include_sensemakr: bool = True,
@@ -172,10 +215,26 @@ def unified_sensitivity(
     result : CausalResult / EconometricResults / dataclass with
         ``estimate``, ``se``, ``ci`` attributes.
     r2_treated, r2_controlled : float, optional
-        Required for Oster's delta; R^2 from the short and long
-        regression respectively.
+        Required for Oster's delta; R^2 from the short (treatment-only)
+        and long (with controls) regression respectively.
+    beta_uncontrolled : float, optional
+        Short-regression (no controls) treatment estimate; required for
+        Oster's delta together with the two R^2 values.
     rho_max : float, default 1.0
-        Oster's bound on the ratio of omitted-to-observed selection.
+        Oster's ``R_max`` — the R^2 of the hypothetical long regression
+        that additionally includes all unobservables. The default 1.0 is
+        the most conservative bound.
+    data : pd.DataFrame, optional
+        Raw estimation data. Required for the **Sensemakr** component:
+        the Cinelli-Hazlett robustness value is computed from the
+        underlying regression, which result objects do not carry. When
+        omitted, the Sensemakr component is skipped with an explanatory
+        note — call ``sp.sensemakr(data, y, treat, controls)`` directly
+        instead.
+    y, treat : str, optional
+        Outcome / treatment column names in ``data`` (Sensemakr only).
+    controls : sequence of str, optional
+        Control column names in ``data`` (Sensemakr only).
 
     Returns
     -------
@@ -228,14 +287,17 @@ def unified_sensitivity(
             od = _oster_bounds(
                 beta_short=float(beta_uncontrolled),
                 beta_long=float(estimate),
-                r2_short=float(r2_controlled),
-                r2_long=float(r2_treated),
+                r2_short=float(r2_treated),
+                r2_long=float(r2_controlled),
                 r_max=float(rho_max),
                 delta=1.0,
             )
             if isinstance(od, dict):
+                # ``delta_for_zero`` is Oster's breakdown delta (the
+                # quantity of interest); the ``delta`` key in the return
+                # dict merely echoes the *input* proportionality (1.0).
                 oster = {
-                    "delta": float(od.get("delta",
+                    "delta": float(od.get("delta_for_zero",
                                             od.get("delta_breakdown",
                                                     float("nan")))),
                     "beta_star": float(od.get("beta_star",
@@ -259,33 +321,67 @@ def unified_sensitivity(
             "beta_uncontrolled (the short-regression estimate)."
         )
 
-    # 3. Rosenbaum bounds (requires matched/weighted data; we skip if
-    #    the result doesn't expose a matching pair structure).
+    # 3. Rosenbaum bounds — requires matched-pair outcomes. Runs when the
+    #    result exposes ``matched_pairs`` (see :func:`_coerce_matched_pairs`
+    #    for accepted shapes); skipped otherwise.
     rosenbaum = None
-    if include_rosenbaum and hasattr(result, "matched_pairs") and \
-            result.matched_pairs is not None:
+    if include_rosenbaum and getattr(result, "matched_pairs", None) \
+            is not None:
         try:
-            from ..diagnostics.rosenbaum_bounds import rosenbaum_bounds as _rb
-            rb = _rb(result)
-            rosenbaum = {
-                "gamma_critical": float(getattr(rb, "gamma_critical",
-                                                 float("nan"))),
-            }
+            from ..diagnostics import rosenbaum_bounds as _rb
+            treated_y, control_y = _coerce_matched_pairs(
+                result.matched_pairs)
+            rb = _rb(treated_y, control_y, alternative="two-sided")
+            rosenbaum = {"gamma_critical": float(rb.gamma_critical)}
         except Exception as exc:
-            notes.append(f"Rosenbaum Gamma skipped: {exc}")
+            import warnings as _warnings
+            msg = (
+                f"Rosenbaum Gamma skipped: {exc}. Expose matched_pairs as "
+                "(treated, control) outcome arrays, or call "
+                "sp.rosenbaum_bounds(treated, control) directly."
+            )
+            _warnings.warn(msg, stacklevel=2)
+            notes.append(msg)
 
-    # 4. Sensemakr (regression) — best-effort if a regression is exposed.
+    # 4. Sensemakr (Cinelli & Hazlett 2020). The robustness value is
+    #    computed from the underlying regression, so it needs the raw
+    #    estimation data — result objects do not carry it. Run only when
+    #    (data, y, treat, controls) are supplied explicitly.
     sensemakr = None
-    if include_sensemakr and hasattr(result, "params") and \
-            hasattr(result, "std_errors"):
-        try:
-            from ..diagnostics.sensemakr import sensemakr as _sm
-            # pull first coefficient name from params
-            name = list(result.params.index)[0]
-            sm = _sm(result, treatment=name)
-            sensemakr = {"rv_q1": float(getattr(sm, "rv_q1", float("nan")))}
-        except Exception as exc:
-            notes.append(f"Sensemakr skipped: {exc}")
+    if include_sensemakr:
+        sm_args = {"data": data, "y": y, "treat": treat,
+                   "controls": controls}
+        if all(v is not None for v in sm_args.values()):
+            try:
+                from ..diagnostics.sensemakr import sensemakr as _sm
+                sm = _sm(data, y=y, treat=treat, controls=list(controls))
+                sensemakr = {
+                    "rv_q1": float(sm["rv_q"]),
+                    "rv_qa": float(sm["rv_qa"]),
+                }
+            except Exception as exc:
+                import warnings as _warnings
+                msg = (
+                    f"Sensemakr failed: {exc}. Check that data contains "
+                    f"numeric columns {[y, treat] + list(controls)}, or "
+                    "call sp.sensemakr(data, y, treat, controls) directly."
+                )
+                _warnings.warn(msg, stacklevel=2)
+                notes.append(msg)
+        elif any(v is not None for v in sm_args.values()):
+            missing = [k for k, v in sm_args.items() if v is None]
+            notes.append(
+                "Sensemakr skipped: missing " + ", ".join(missing) +
+                " (all of data, y, treat, controls are required)."
+            )
+        else:
+            notes.append(
+                "Sensemakr skipped: requires the raw estimation data, "
+                "which the result object does not carry. Pass data=, y=, "
+                "treat=, controls= to unified_sensitivity() / "
+                ".sensitivity(), or call "
+                "sp.sensemakr(data, y, treat, controls) directly."
+            )
 
     # 5. Breakdown frontier: the smallest additive bias that moves the
     #    CI bound closest to zero *through* zero, flipping

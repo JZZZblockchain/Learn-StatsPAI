@@ -4600,15 +4600,21 @@ def _build_registry():
             description=(
                 "Run every applicable sensitivity analysis in one shot: "
                 "E-value, Oster delta (when R^2 inputs given), Rosenbaum "
-                "Gamma (when matched structure exposed), Sensemakr "
-                "(regression models), and a breakdown-frontier bias "
-                "estimate. Also available as result.sensitivity()."
+                "Gamma (when matched_pairs outcomes exposed), Sensemakr "
+                "(when raw data supplied via data/y/treat/controls), and "
+                "a breakdown-frontier bias estimate. Also available as "
+                "result.sensitivity()."
             ),
             params=[
                 ParamSpec("result", "CausalResult | EconometricResults", True),
                 ParamSpec("r2_treated", "float", False),
                 ParamSpec("r2_controlled", "float", False),
+                ParamSpec("beta_uncontrolled", "float", False),
                 ParamSpec("rho_max", "float", False, 1.0),
+                ParamSpec("data", "pd.DataFrame", False),
+                ParamSpec("y", "str", False),
+                ParamSpec("treat", "str", False),
+                ParamSpec("controls", "List[str]", False),
                 ParamSpec("include_oster", "bool", False, True),
                 ParamSpec("include_rosenbaum", "bool", False, True),
                 ParamSpec("include_sensemakr", "bool", False, True),

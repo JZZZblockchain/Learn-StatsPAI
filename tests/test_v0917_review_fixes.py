@@ -116,8 +116,8 @@ def test_unified_sensitivity_skips_oster_without_beta_uncontrolled():
         ci: tuple
     dash = sp.unified_sensitivity(
         R(0.3, 0.1, (0.1, 0.5)),
-        r2_treated=0.40,
-        r2_controlled=0.25,
+        r2_treated=0.25,
+        r2_controlled=0.40,
     )
     assert dash.oster is None
     assert any("Oster delta skipped" in n for n in dash.notes)
@@ -133,12 +133,13 @@ def test_unified_sensitivity_runs_oster_when_all_args_supplied():
         ci: tuple
     dash = sp.unified_sensitivity(
         R(0.3, 0.1, (0.1, 0.5)),
-        r2_treated=0.40,
-        r2_controlled=0.25,
+        r2_treated=0.25,
+        r2_controlled=0.40,
         beta_uncontrolled=0.5,
     )
-    assert dash.oster is not None or \
-        any("Oster delta skipped" in n for n in dash.notes)
+    assert dash.oster is not None
+    assert np.isfinite(dash.oster["delta"])
+    assert np.isfinite(dash.oster["beta_star"])
 
 
 # ---------------------------------------------------------------------------

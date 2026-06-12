@@ -3710,10 +3710,14 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
             "Dashboard that dispatches every applicable "
             "sensitivity method (E-value, Cinelli-Hazlett RV, "
             "Oster's delta) to one fitted result.",
-            "Oster's delta and rho_max require both short- and "
+            "Oster's delta requires the short- and "
             "long-regression R-squared (r2_treated, "
-            "r2_controlled); rho_max bounds omitted-to-observed "
-            "selection.",
+            "r2_controlled) plus beta_uncontrolled; rho_max is "
+            "Oster's R_max bound (default 1.0).",
+            "The Sensemakr component needs the raw estimation "
+            "data via data/y/treat/controls; result objects do "
+            "not carry it, so it is skipped (with a note) when "
+            "those are omitted.",
             "Each component inherits its own identifying "
             "assumptions (linear OVB for RV/Oster, RR scale for "
             "E-value); the panel does not reconcile conflicting "
@@ -3744,6 +3748,17 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
                 "R-squared values to enable the Oster "
                 "component.",
                 "alternative": "oster_bounds",
+            },
+            {
+                "symptom": "Sensemakr component skipped with a "
+                "note because the raw data were not "
+                "supplied",
+                "exception": "(none — informational)",
+                "remedy": "Pass data=, y=, treat=, controls= to "
+                "unified_sensitivity / .sensitivity(), "
+                "or call sp.sensemakr(data, y, treat, "
+                "controls) directly.",
+                "alternative": "sensemakr",
             },
         ],
         "alternatives": ["evalue", "sensemakr", "oster_bounds", "diagnose_result"],
