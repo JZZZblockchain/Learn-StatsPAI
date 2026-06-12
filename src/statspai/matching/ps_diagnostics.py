@@ -66,6 +66,28 @@ def propensity_score(
     -------
     pd.Series
         Propensity scores indexed like *data*.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> ps = sp.propensity_score(df, treatment='union',
+    ...                          covariates=['education', 'experience',
+    ...                                      'tenure'])
+    >>> round(float(ps.mean()), 3)  # matches the union share of 0.177
+    0.177
+
+    GBM scores with Crump trimming — poorly overlapping observations
+    receive ``NaN``:
+
+    >>> ps_trim = sp.propensity_score(df, treatment='union',
+    ...                               covariates=['education', 'experience',
+    ...                                           'tenure'],
+    ...                               method='gbm', trimming='crump')
+
+    Typical diagnostics flow afterwards: pass the scores (or derived IPW
+    weights) to :func:`sp.overlap_plot`, :func:`sp.ps_balance`, or
+    :func:`sp.balance_diagnostics`.
     """
     D = data[treatment].values.astype(float)
     X = data[covariates].values.astype(float)
@@ -546,6 +568,28 @@ def balance_diagnostics(
         ``.table`` has one row per covariate; ``.summary_stats`` records
         max/mean SMDs, imbalance counts, effective sample size, and
         propensity-score overlap.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> # No weights given: ATE inverse-propensity weights are computed
+    >>> bal = sp.balance_diagnostics(df, treatment='union',
+    ...                              covariates=['education', 'experience',
+    ...                                          'tenure'])
+    >>> bal.table[['smd_raw', 'smd_weighted', 'balanced']]
+    >>> bal.summary_stats['n_imbalanced_weighted']
+
+    >>> # Typical post-estimation flow: audit your own weights
+    >>> import numpy as np
+    >>> ps = sp.propensity_score(df, 'union',
+    ...                          ['education', 'experience', 'tenure'])
+    >>> w = np.where(df['union'] == 1, 1 / ps, 1 / (1 - ps))
+    >>> bal = sp.balance_diagnostics(df, treatment='union',
+    ...                              covariates=['education', 'experience',
+    ...                                          'tenure'],
+    ...                              weights=w, ps=ps)
+    >>> bal.summary()
     """
     cols = [treatment] + list(covariates)
     df = data[cols].dropna().copy()
@@ -802,6 +846,22 @@ def love_plot(
     Returns
     -------
     (fig, ax) : tuple
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> fig, ax = sp.love_plot(df, treatment='union',
+    ...                        covariates=['education', 'experience',
+    ...                                    'tenure'])
+    >>> fig.savefig('love_plot.png')  # doctest: +SKIP
+
+    >>> # Tighter balance threshold and custom title
+    >>> fig, ax = sp.love_plot(df, treatment='union',
+    ...                        covariates=['education', 'experience',
+    ...                                    'tenure'],
+    ...                        threshold=0.05,
+    ...                        title='Balance: union vs non-union')
     """
     result = ps_balance(data, treatment, covariates,
                         weights=weights, method=ps_method)

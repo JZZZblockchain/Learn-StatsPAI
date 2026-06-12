@@ -108,6 +108,24 @@ def aft(
     formula : str
         ``"duration + event ~ x1 + x2"``.
     family : {"exponential", "weibull", "lognormal", "loglogistic"}
+
+    Examples
+    --------
+    Weibull AFT on simulated right-censored durations:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(7)
+    >>> n = 300
+    >>> x = rng.normal(size=n)
+    >>> t = rng.exponential(np.exp(1.0 + 0.5 * x))
+    >>> c = rng.exponential(np.exp(1.5), n)
+    >>> df = pd.DataFrame({"dur": np.minimum(t, c),
+    ...                    "event": (t <= c).astype(int), "x": x})
+    >>> res = sp.aft("dur + event ~ x", data=df, family="weibull")
+    >>> print(round(float(res.beta[1]), 2))  # 0.52 — truth 0.5 (log-time scale)
+    >>> print(res.summary())
     """
     lhs_str, covariates = _parse_formula(formula)
     lhs_parts = [s.strip() for s in lhs_str.split("+")]

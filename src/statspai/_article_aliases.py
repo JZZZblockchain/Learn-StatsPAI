@@ -128,6 +128,24 @@ def xlearner(
     Passing ``learner=...`` is rejected — callers who want a different
     meta-learner should use :func:`sp.metalearner` instead of silently
     getting an X-Learner under a misleading name.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 800
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 * d + 0.5 * d * x1 + x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> result = sp.xlearner(df, y='y', d='d', X=['x1', 'x2'])
+    >>> round(result.estimate, 2)  # ATE (true value 1.0)
+    0.84
+    >>> result.model_info['cate'].shape  # individual CATE predictions
+    (800,)
     """
     if "learner" in kwargs:
         raise TypeError(
@@ -195,6 +213,20 @@ def psm(
 
     ``method='nn'`` (the common Stata/R shorthand) is translated into the
     richer ``method='nearest'`` API of :func:`statspai.matching.match`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.psm(df, y='log_wage', d='union',
+    ...                 X=['education', 'experience', 'tenure'])
+    >>> result.summary()
+    >>> result.estimate
+
+    >>> # Propensity-score stratification instead of nearest-neighbour
+    >>> result = sp.psm(df, y='log_wage', d='union',
+    ...                 X=['education', 'experience', 'tenure'],
+    ...                 method='stratify')
     """
     from .matching.match import match as _match
 
@@ -633,12 +665,49 @@ def dml(
     (treatment / propensity nuisance). ``model=`` controls the DML
     variant: ``'plr'``, ``'irm'``, ``'pliv'``, ``'iivm'``.
 
+    Notes
+    -----
+    All four models are numerically pinned against ``doubleml-for-py``
+    (``plr`` / ``pliv`` to machine precision under shared learners and
+    folds). Declared scope boundaries — single scalar instrument for
+    ``pliv`` / ``iivm`` (use ``sp.scalar_iv_projection`` for multiple
+    instruments), one treatment per call, DML2 procedure only,
+    ``fold_indices`` for ``'plr'`` only — are detailed in the
+    :func:`statspai.dml.dml` docstring and the guide *"sp.dml and the
+    DoubleML reference implementation"*.
+
     References
     ----------
     Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C.,
     Newey, W. and Robins, J. (2018). Double/debiased machine learning for
     treatment and structural parameters. *The Econometrics Journal*.
     [@chernozhukov2018double]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> X = rng.normal(size=(n, 3))
+    >>> d = 0.5 * X[:, 0] + rng.normal(size=n)
+    >>> y = 2.0 * d + X[:, 1] + rng.normal(size=n)
+    >>> df = pd.DataFrame(X, columns=['x1', 'x2', 'x3'])
+    >>> df['d'], df['y'] = d, y
+
+    Article form — positional treatment and covariates:
+
+    >>> result = sp.dml(df, 'y', 'd', ['x1', 'x2', 'x3'])
+    >>> round(result.estimate, 2)  # true effect is 2.0
+    1.93
+
+    Library form — keyword ``treat=`` / ``covariates=``, explicit
+    ``model=`` variant and nuisance learners:
+
+    >>> result = sp.dml(df, y='y', treat='d',
+    ...                 covariates=['x1', 'x2', 'x3'],
+    ...                 model='plr', ml_g='lasso', ml_m='lasso')
     """
     from .dml import dml as _dml
 

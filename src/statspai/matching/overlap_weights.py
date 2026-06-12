@@ -81,6 +81,24 @@ def overlap_weights(
     CausalResult
         ``.estimate`` targets the named estimand; ``.model_info`` stores
         the weight summary, effective sample size, and pscore diagnostics.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.overlap_weights(df, y='log_wage', treat='union',
+    ...                             covariates=['education', 'experience',
+    ...                                         'tenure'],
+    ...                             n_bootstrap=100, seed=42)
+    >>> result.summary()
+    >>> result.model_info['effective_sample_size']
+
+    >>> # min(e, 1-e) matching weights instead of overlap weights
+    >>> result = sp.overlap_weights(df, y='log_wage', treat='union',
+    ...                             covariates=['education', 'experience',
+    ...                                         'tenure'],
+    ...                             estimand='matching',
+    ...                             n_bootstrap=100, seed=42)
     """
     estimand = estimand.upper()
     valid = {"ATO", "ATE", "ATT", "ATC", "MATCHING", "ENTROPY"}

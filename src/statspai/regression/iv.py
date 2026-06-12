@@ -1461,6 +1461,24 @@ def ivreg(
     Returns
     -------
     EconometricResults
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> z = rng.normal(size=n)
+    >>> u = rng.normal(size=n)
+    >>> x = 0.8 * z + u + rng.normal(size=n)        # endogenous regressor
+    >>> y = 1.5 * x + 2.0 * u + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'x': x, 'z': z})
+    >>> result = sp.ivreg("y ~ (x ~ z)", data=df)
+    >>> bool(abs(result.params['x'] - 1.5) < 0.2)  # 2SLS recovers the true effect
+    True
+
+    >>> # Preferred modern entry point:
+    >>> result = sp.iv("y ~ (x ~ z)", data=df, method='2sls')
     """
     kwargs.setdefault('method', '2sls')
     return iv(formula=formula, data=data,

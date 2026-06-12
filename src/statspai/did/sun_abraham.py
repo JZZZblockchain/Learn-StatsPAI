@@ -94,6 +94,22 @@ def sun_abraham(
         ``.detail`` is the event-study table (IW ATT by relative time
         with cluster-robust SE and 1−α CI).  ``.estimate`` / ``.se``
         are the simple post-treatment average and its delta-method SE.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=42)
+    >>> result = sp.sun_abraham(df, y='y', g='first_treat', t='time', i='unit')
+    >>> result.estimate > 0  # post-treatment IW average (true effect 0.5)
+    True
+    >>> list(result.detail.columns[:3])  # event-study table by relative time
+    ['relative_time', 'att', 'se']
+
+    References
+    ----------
+    Sun, L. and Abraham, S. (2021). Estimating dynamic treatment effects in
+    event studies with heterogeneous treatment effects. *Journal of
+    Econometrics*. [@sun2021estimating]
     """
     df = data.copy()
 

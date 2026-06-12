@@ -21163,7 +21163,7 @@
     "name": "three_sls"
   },
   {
-    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness. Assumptions: Unconfoundedness: Y(d) perp D | X; Overlap: 0 < P(D=1 | X) < 1 on the estimand support; Consistent estimation of at least one of Q(a, x) = E[Y|A, X] or g(x) = P(A=1|X) (double robustness). Pre-conditions: binary treatment 0/1; covariates comprise the confounding set; n >= 500 for asymptotic efficiency. Failure modes: Extreme propensity scores (ATE IF denominator ~ 0) -> Bound propensity scores away from 0/1 (e.g. 0.025 / 0.975) or trim; Super-learner cross-validated risk not improving over baseline -> Nuisances not learnable; widen the candidate library or use stronger base learners. Alternatives: sp.dml, sp.aipw, sp.metalearner, sp.ltmle. Typical minimum N: 500.",
+    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness: Y(d) perp D | X; Overlap: 0 < P(D=1 | X) < 1 on the estimand support; Consistent estimation of at least one of Q(a, x) = E[Y|A, X] or g(x) = P(A=1|X) (double robustness). Pre-conditions: binary treatment 0/1; covariates comprise the confounding set; n >= 500 for asymptotic efficiency. Failure modes: Extreme propensity scores (ATE IF denominator ~ 0) -> Bound propensity scores away from 0/1 (e.g. 0.025 / 0.975) or trim; Super-learner cross-validated risk not improving over baseline -> Nuisances not learnable; widen the candidate library or use stronger base learners. Alternatives: sp.dml, sp.aipw, sp.metalearner, sp.ltmle. Typical minimum N: 500.",
     "input_schema": {
       "properties": {
         "covariates": {
@@ -21467,9 +21467,20 @@
     "name": "twoway_cluster"
   },
   {
-    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched structure exposed), Sensemakr (regression models), and a breakdown-frontier bias estimate. Also available as result.sensitivity(). Assumptions: Dashboard that dispatches every applicable sensitivity method (E-value, Cinelli-Hazlett RV, Oster's delta) to one fitted result; Oster's delta and rho_max require both short- and long-regression R-squared (r2_treated, r2_controlled); rho_max bounds omitted-to-observed selection; Each component inherits its own identifying assumptions (linear OVB for RV/Oster, RR scale for E-value); the panel does not reconcile conflicting ones. Pre-conditions: A result with point estimate, SE, and CI attributes; r2_treated and r2_controlled for the Oster's-delta component. Failure modes: Result lacks estimate/se/ci, so no sensitivity component can be computed -> Pass a fitted result exposing estimate, se, and ci rather than a raw scalar or DataFrame; Oster's delta omitted because r2_treated / r2_controlled were not provided -> Pass the short- and long-regression R-squared values to enable the Oster component. Alternatives: sp.e...",
+    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched_pairs outcomes exposed), Sensemakr (when raw data supplied via data/y/treat/controls), and a breakdown-frontier bias estimate. Also available as result.sensitivity(). Assumptions: Dashboard that dispatches every applicable sensitivity method (E-value, Cinelli-Hazlett RV, Oster's delta) to one fitted result; Oster's delta requires the short- and long-regression R-squared (r2_treated, r2_controlled) plus beta_uncontrolled; rho_max is Oster's R_max bound (default 1.0); The Sensemakr component needs the raw estimation data via data/y/treat/controls; result objects do not carry it, so it is skipped (with a note) when those are omitted. Pre-conditions: A result with point estimate, SE, and CI attributes; r2_treated and r2_controlled for the Oster's-delta component. Failure modes: Result lacks estimate/se/ci, so no sensitivity component can be computed -> Pass a fitted result exposing estimate, se, and ci rather than a raw scalar or DataFrame; Oster's delta omitted because r2_treated / r2_controlled were not provided -> Pass the short- and long-regression R-s...",
     "input_schema": {
       "properties": {
+        "beta_uncontrolled": {
+          "description": "beta_uncontrolled parameter (float).",
+          "type": "number"
+        },
+        "controls": {
+          "description": "Control-variable column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "include_oster": {
           "default": true,
           "description": "Whether to include oster.",
@@ -21501,6 +21512,14 @@
           "default": 1.0,
           "description": "rho_max parameter (float).",
           "type": "number"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
         }
       },
       "required": [

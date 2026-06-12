@@ -114,6 +114,32 @@ def dml(
     -------
     CausalResult
 
+    Notes
+    -----
+    Numerical parity: all four models are pinned against the upstream
+    ``doubleml-for-py`` reference implementation in
+    ``tests/external_parity/test_dml_python_parity.py`` — the
+    partialling-out models (``plr``, ``pliv``) agree to machine
+    precision under shared learners and folds. See the guide
+    *"sp.dml and the DoubleML reference implementation"* in the docs
+    for the full parity table and methodology.
+
+    Declared scope boundaries (each fails loudly with a workaround in
+    the error message — see the guide's "Scope and known limitations"):
+
+    - ``pliv`` / ``iivm`` accept a **single scalar instrument**; for
+      multiple excluded instruments build a first-stage index with
+      ``sp.scalar_iv_projection`` first.
+    - One treatment column per call (no multi-treatment joint
+      inference; combine per-treatment calls with ``sp.romano_wolf``
+      for simultaneous inference).
+    - DML2 (pooled-moment) procedure only; PLR exposes the
+      partialling-out score only.
+    - ``fold_indices`` is supported for ``model='plr'`` only.
+    - Cluster-robust DML inference lives in ``sp.dml_panel``
+      (unit-clustered panel PLR), not in this cross-sectional entry
+      point.
+
     Examples
     --------
     >>> # Partially Linear Regression

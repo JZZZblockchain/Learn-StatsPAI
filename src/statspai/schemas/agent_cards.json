@@ -1550,6 +1550,12 @@
         "exception": "statspai.AssumptionWarning",
         "remedy": "Instrument too weak for LATE; fall back to Anderson-Rubin inference.",
         "symptom": "IIVM first-stage compliance rate near zero"
+      },
+      {
+        "alternative": "sp.scalar_iv_projection",
+        "exception": "ValueError",
+        "remedy": "These models accept one scalar instrument; build a first-stage index with sp.scalar_iv_projection and pass its column name as instrument=.",
+        "symptom": "List of several instruments passed to pliv/iivm"
       }
     ],
     "inherits_from": null,
@@ -1559,7 +1565,7 @@
       "data is tabular (DataFrame); covariates include all confounders conditional on which unconfoundedness holds",
       "cross-fitting folds >= 2 (default 5) -- more folds -> lower variance, higher compute",
       "for irm / iivm: treatment (and for iivm: instrument) is binary 0/1",
-      "for pliv / iivm: instrument column supplied"
+      "for pliv / iivm: a single scalar instrument column supplied (multiple instruments: project to one index first via sp.scalar_iv_projection)"
     ],
     "reference": "Chernozhukov et al. (2018) Econometrics Journal",
     "signature": {
@@ -2382,7 +2388,7 @@
       "Super-learner candidates include reasonable approximations"
     ],
     "category": "causal",
-    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness.",
+    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.tmle(df, y=\"outcome\", treat=\"treat\", covariates=[\"x1\",\"x2\",\"x3\"])",
     "failure_modes": [
       {
@@ -2408,7 +2414,7 @@
     ],
     "reference": "van der Laan & Rose (2011) Targeted Learning",
     "signature": {
-      "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness.",
+      "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "tmle",
       "parameters": {
         "properties": {
@@ -2449,10 +2455,11 @@
     "stability": "stable",
     "typical_n_min": 500,
     "validation_notes": [
+      "tests/reference_parity/test_tmle_parity.py",
       "API/unit contract evidence: tests/test_tmle.py",
       "API/unit contract evidence: tests/test_low_cov_battery.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -3848,6 +3855,7 @@
     "stability": "stable",
     "typical_n_min": 300,
     "validation_notes": [
+      "tests/reference_parity/test_ipw_parity.py",
       "tests/external_parity/test_whatif_nhefs.py",
       "API/unit contract evidence: tests/test_new_features.py"
     ],
@@ -4539,6 +4547,8 @@
     "stability": "stable",
     "typical_n_min": 300,
     "validation_notes": [
+      "tests/reference_parity/test_gformula_parity.py",
+      "tests/reference_parity/test_tmle_parity.py",
       "tests/external_parity/test_whatif_nhefs.py",
       "API/unit contract evidence: tests/test_g_computation.py"
     ],
@@ -8765,12 +8775,13 @@
     ],
     "assumptions": [
       "Dashboard that dispatches every applicable sensitivity method (E-value, Cinelli-Hazlett RV, Oster's delta) to one fitted result.",
-      "Oster's delta and rho_max require both short- and long-regression R-squared (r2_treated, r2_controlled); rho_max bounds omitted-to-observed selection.",
+      "Oster's delta requires the short- and long-regression R-squared (r2_treated, r2_controlled) plus beta_uncontrolled; rho_max is Oster's R_max bound (default 1.0).",
+      "The Sensemakr component needs the raw estimation data via data/y/treat/controls; result objects do not carry it, so it is skipped (with a note) when those are omitted.",
       "Each component inherits its own identifying assumptions (linear OVB for RV/Oster, RR scale for E-value); the panel does not reconcile conflicting ones.",
       "The result must expose estimate, se, and ci for the methods to run."
     ],
     "category": "robustness",
-    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched structure exposed), Sensemakr (regression models), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
+    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched_pairs outcomes exposed), Sensemakr (when raw data supplied via data/y/treat/controls), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
     "example": "sp.did(df, ...).sensitivity()",
     "failure_modes": [
       {
@@ -8784,6 +8795,12 @@
         "exception": "(none -- informational)",
         "remedy": "Pass the short- and long-regression R-squared values to enable the Oster component.",
         "symptom": "Oster's delta omitted because r2_treated / r2_controlled were not provided"
+      },
+      {
+        "alternative": "sensemakr",
+        "exception": "(none -- informational)",
+        "remedy": "Pass data=, y=, treat=, controls= to unified_sensitivity / .sensitivity(), or call sp.sensemakr(data, y, treat, controls) directly.",
+        "symptom": "Sensemakr component skipped with a note because the raw data were not supplied"
       }
     ],
     "inherits_from": null,
@@ -8795,10 +8812,25 @@
     ],
     "reference": "VanderWeele & Ding (2017); Oster (2019); Rosenbaum (2002); Cinelli & Hazlett (2020)",
     "signature": {
-      "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched structure exposed), Sensemakr (regression models), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
+      "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched_pairs outcomes exposed), Sensemakr (when raw data supplied via data/y/treat/controls), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
       "name": "unified_sensitivity",
       "parameters": {
         "properties": {
+          "beta_uncontrolled": {
+            "description": "beta_uncontrolled parameter (float).",
+            "type": "number"
+          },
+          "controls": {
+            "description": "Control-variable column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
           "include_oster": {
             "default": true,
             "description": "Whether to include oster.",
@@ -8830,6 +8862,14 @@
             "default": 1.0,
             "description": "rho_max parameter (float).",
             "type": "number"
+          },
+          "treat": {
+            "description": "Treatment indicator or first-treatment-period column.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
           }
         },
         "required": [
@@ -19915,7 +19955,8 @@
     "stability": "stable",
     "typical_n_min": 200,
     "validation_notes": [
-      "tests/reference_parity/test_paper_parity.py"
+      "tests/reference_parity/test_paper_parity.py",
+      "tests/reference_parity/test_tmle_parity.py"
     ],
     "validation_status": "validated"
   },

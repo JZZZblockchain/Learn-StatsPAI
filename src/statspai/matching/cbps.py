@@ -88,6 +88,21 @@ def cbps(
         ``estimate`` is the CBPS weighted treatment effect; ``model_info``
         contains the estimated coefficients, balance diagnostics and
         effective sample size.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.cbps(df, y='log_wage', treat='union',
+    ...                  covariates=['education', 'experience', 'tenure'],
+    ...                  estimand='ATT', n_bootstrap=50, seed=42)
+    >>> result.summary()
+    >>> result.model_info['std_mean_diff_after']  # balance after weighting
+
+    >>> # Just-identified CBPS (balance moments only)
+    >>> result = sp.cbps(df, y='log_wage', treat='union',
+    ...                  covariates=['education', 'experience', 'tenure'],
+    ...                  variant='exact', n_bootstrap=50, seed=42)
     """
     if estimand not in ("ATE", "ATT"):
         raise ValueError(f"estimand must be 'ATE' or 'ATT', got {estimand!r}")

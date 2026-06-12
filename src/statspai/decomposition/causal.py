@@ -389,6 +389,35 @@ def mediation_decompose(
     decomposition, but users should not treat it as independent
     information from ``nde`` unless a nonlinear or
     interaction-heterogeneous extension is added.
+
+    Examples
+    --------
+    Simulate ``A -> M -> Y`` with a direct ``A -> Y`` path (true
+    NDE = 0.5, NIE = 0.8):
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(3)
+    >>> n = 500
+    >>> a = rng.binomial(1, 0.5, size=n)            # binary exposure
+    >>> m = 0.8 * a + rng.normal(size=n)            # A -> M
+    >>> y = 0.5 * a + 1.0 * m + rng.normal(size=n)  # direct + mediated
+    >>> df = pd.DataFrame({'y': y, 'a': a, 'm': m})
+    >>> result = sp.mediation_decompose(df, y='y', treatment='a',
+    ...                                 mediator='m')
+    >>> round(result.nde, 2), round(result.nie, 2)
+    (0.39, 0.78)
+    >>> round(result.propn_mediated, 2)  # share of total effect via M
+    0.66
+
+    Bootstrap CIs for the decomposition components:
+
+    >>> result = sp.mediation_decompose(df, y='y', treatment='a',
+    ...                                 mediator='m',
+    ...                                 inference='bootstrap',
+    ...                                 n_boot=99, seed=1)
+    >>> result.ci['nie']  # (lower, upper)  # doctest: +SKIP
     """
     cov = list(covariates) if covariates else []
     cols = [y, treatment, mediator] + cov

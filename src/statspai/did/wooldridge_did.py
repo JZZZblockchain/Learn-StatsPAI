@@ -421,6 +421,17 @@ def etwfe(
     attaches a :class:`Provenance` record to the returned result so
     downstream replication_pack / Quarto appendix / table footers
     can pick up the call without each branch having to opt in.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=42)
+    >>> res = sp.etwfe(df, y='y', group='unit', time='time',
+    ...                first_treat='first_treat')
+    >>> res.estimate > 0  # cohort-size-weighted ATT (true effect 0.5)
+    True
+    >>> res.detail is not None  # cohort-specific ATTs
+    True
     """
     _result = _dispatch_etwfe_impl(
         data=data, y=y, group=group, time=time,

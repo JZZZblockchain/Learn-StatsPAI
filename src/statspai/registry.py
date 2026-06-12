@@ -1472,7 +1472,9 @@ def _build_registry():
                 "data is tabular (DataFrame); covariates include all confounders conditional on which unconfoundedness holds",
                 "cross-fitting folds ≥ 2 (default 5) — more folds → lower variance, higher compute",
                 "for irm / iivm: treatment (and for iivm: instrument) is binary 0/1",
-                "for pliv / iivm: instrument column supplied",
+                "for pliv / iivm: a single scalar instrument column supplied "
+                "(multiple instruments: project to one index first via "
+                "sp.scalar_iv_projection)",
             ],
             assumptions=[
                 "Unconfoundedness: Y(d) ⊥ D | X (conditional ignorability)",
@@ -1504,6 +1506,16 @@ def _build_registry():
                     exception="statspai.AssumptionWarning",
                     remedy="Instrument too weak for LATE; fall back to Anderson-Rubin inference.",
                     alternative="sp.anderson_rubin_ci",
+                ),
+                FailureMode(
+                    symptom="List of several instruments passed to pliv/iivm",
+                    exception="ValueError",
+                    remedy=(
+                        "These models accept one scalar instrument; build a "
+                        "first-stage index with sp.scalar_iv_projection and "
+                        "pass its column name as instrument=."
+                    ),
+                    alternative="sp.scalar_iv_projection",
                 ),
             ],
             alternatives=["metalearner", "causal_forest", "tmle", "aipw"],

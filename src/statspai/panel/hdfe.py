@@ -596,6 +596,22 @@ def demean(
 
     Convenience wrapper around :class:`Absorber`. See ``Absorber`` for
     the ``solver`` kwarg semantics.
+
+    Examples
+    --------
+    Sweep firm and year fixed effects out of a column:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> fe = pd.DataFrame({"firm": rng.integers(0, 20, n),
+    ...                    "year": rng.integers(0, 5, n)})
+    >>> x = rng.normal(size=n) + 2.0 * fe["firm"].to_numpy()
+    >>> xw, keep = sp.demean(x, fe)
+    >>> print(xw.shape, int(keep.sum()))  # (200,) 200 — no singletons dropped
+    >>> print(abs(xw.mean()) < 1e-8)      # True — FE means swept out
     """
     ab = Absorber(
         fe, weights=weights, drop_singletons=drop_singletons,
@@ -656,6 +672,25 @@ def absorb_ols(
         ``n`` (n_kept), ``df_resid``, ``dof_fe``, ``r2_within``,
         ``n_singletons_dropped``, ``converged``, ``iters``,
         ``absorber`` (if requested)
+
+    Examples
+    --------
+    Two-way (firm + year) fixed effects with firm-clustered SEs:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> firm = rng.integers(0, 30, n)
+    >>> year = rng.integers(0, 10, n)
+    >>> X = rng.normal(size=(n, 2))
+    >>> y = (X @ np.array([1.5, -0.7]) + rng.normal(size=30)[firm]
+    ...      + rng.normal(size=10)[year] + rng.normal(0, 0.5, n))
+    >>> fe = pd.DataFrame({"firm": firm, "year": year})
+    >>> out = sp.absorb_ols(y, X, fe, cluster=firm)
+    >>> print(np.round(out["coef"], 2))   # [ 1.53 -0.71] — truth [1.5, -0.7]
+    >>> print(out["n"], out["converged"])  # 500 True
     """
     y = np.asarray(y, dtype=np.float64).ravel()
     X = np.asarray(X, dtype=np.float64)

@@ -292,6 +292,23 @@ def jive(
     Returns
     -------
     EconometricResults
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> Z = rng.normal(size=(n, 5))                  # many instruments
+    >>> u = rng.normal(size=n)
+    >>> x = Z @ np.full(5, 0.4) + u + rng.normal(size=n)
+    >>> y = 1.0 * x + 1.5 * u + rng.normal(size=n)
+    >>> df = pd.DataFrame(Z, columns=[f'z{i}' for i in range(5)])
+    >>> df['y'], df['x'] = y, x
+    >>> result = sp.jive(df, y='y', x_endog=['x'],
+    ...                  z=[f'z{i}' for i in range(5)])
+    >>> bool(abs(result.params['x'] - 1.0) < 0.2)  # bias-reduced IV estimate
+    True
     """
     if x_exog is None:
         x_exog = []

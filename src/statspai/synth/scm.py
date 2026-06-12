@@ -77,6 +77,28 @@ def synth(
     Abadie, A., Diamond, A. and Hainmueller, J. (2010). Synthetic control
     methods for comparative case studies. *Journal of the American
     Statistical Association*. [@abadie2010synthetic]
+
+    Examples
+    --------
+    Classic Abadie-Diamond-Hainmueller SCM on the bundled Proposition 99
+    panel (39 states x 31 years):
+
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.synth(df, outcome='packspercapita', unit='state',
+    ...                   time='year', treated_unit='California',
+    ...                   treatment_time=1989, method='classic')
+    >>> round(result.estimate, 1)  # post-1989 ATT, packs per capita
+    -18.2
+
+    Switch estimator via ``method=`` (same call signature):
+
+    >>> result = sp.synth(df, outcome='packspercapita', unit='state',
+    ...                   time='year', treated_unit='California',
+    ...                   treatment_time=1989, method='sdid')
+
+    To fit several SCM variants at once and get a recommendation, use
+    :func:`sp.synth_compare` with the same arguments.
     """
     _result = _dispatch_synth_impl(
         data=data,

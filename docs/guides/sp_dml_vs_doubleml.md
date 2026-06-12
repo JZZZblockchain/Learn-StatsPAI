@@ -48,7 +48,7 @@ instrumented models (PLIV, IIVM) use the companion `dml_iv_data.csv`
 `z_b`; see `_generate_dml_iv_data.py`). All four DoubleML model classes
 are pinned against `doubleml-for-py`.
 
-| Model | `sp.dml` (StatsPAI 1.16.1) | `doubleml-for-py` 0.11.3 | `DoubleML` R 1.0.2 (cv.glmnet) |
+| Model | `sp.dml` (StatsPAI 1.17.0) | `doubleml-for-py` 0.11.3 | `DoubleML` R 1.0.2 (cv.glmnet) |
 | --- | --- | --- | --- |
 | **PLR** (continuous d) | **+0.5590 ± 0.0331** | **+0.5590 ± 0.0331** | +0.5368 ± 0.0335 |
 | **IRM** (binary d, AIPW) | -0.0191 ± 0.0766 | -0.0267 ± 0.0742 | +0.0066 ± 0.0744 |
@@ -89,6 +89,10 @@ are pinned against `doubleml-for-py`.
   (≈ 0.13 SE) rather than to machine precision. Both land near the true
   LATE of 0.5 (0.549 vs 0.562). The external parity test tolerates 0.05
   absolute, matching the IRM discipline.
+
+All four pins were re-verified on 2026-06-12 with StatsPAI 1.17.0
+against `doubleml-for-py` 0.11.3 / scikit-learn 1.7.2 (4/4 passing,
+PLR and PLIV at machine precision).
 
 ## When to expect divergence
 
@@ -143,6 +147,76 @@ bundling it. The scikit-learn cross-validated `LassoCV` is the
 Python-ecosystem analogue for a sparse linear nuisance, and a user who
 wants plug-in penalty selection can pass any custom estimator that
 implements the scikit-learn `fit`/`predict` API.
+
+## Scope and known limitations
+
+These are deliberate scope boundaries, declared up front so they are
+discovered here rather than at runtime. Each one fails loudly (a
+`ValueError` / `NotImplementedError` with a workaround in the message),
+never silently.
+
+1. **One scalar instrument per call (PLIV, IIVM).** The cross-fit
+   reduced form `r(X) = E[Z|X]` is a scalar learner output, so
+   `instrument=` accepts a single column. Passing a list of several
+   instruments raises a `ValueError` that points to the escape hatch:
+   `sp.scalar_iv_projection(data, treat=..., instruments=[...],
+   covariates=...)` builds an OLS first-stage scalar index column you
+   can pass as the instrument. Native vector-`Z` support (stacked
+   moment + Cragg–Donald style first-stage diagnostics) is a tracked
+   deferral — see `docs/ROADMAP.md` item 2.
+2. **One treatment column per call.** `doubleml-for-py` accepts
+   multiple `d_cols` on one `DoubleMLData` and offers multiplier-
+   bootstrap simultaneous confidence bands across them; `sp.dml`
+   estimates one treatment per call. For several treatments, call
+   `sp.dml` per treatment and adjust with `sp.romano_wolf` /
+   `sp.adjust_pvalues` if simultaneous inference is needed.
+3. **PLR exposes the partialling-out score only.** DoubleML's
+   alternative `score='IV-type'` for PLR is not exposed; `sp.dml`
+   implements the partialling-out score that both libraries default to.
+4. **DML2 only.** The pooled-moment DML2 procedure (both libraries'
+   default) is the only one implemented; per-fold DML1 is not exposed
+   (see [Estimation procedure](#estimation-procedure-and-nuisance-learners)).
+5. **`fold_indices` is PLR-only.** Explicit fold assignments (for
+   audit-grade fold reproduction) currently work for `model='plr'`;
+   other models raise `NotImplementedError`.
+6. **Cluster-robust DML standard errors are panel-only.** The four
+   cross-sectional models report the heteroskedasticity-robust sandwich
+   variance of the orthogonal score, as in Chernozhukov et al. (2018).
+   `doubleml-for-py` additionally supports clustered data via
+   `DoubleMLClusterData`; in StatsPAI, cluster-robust DML inference is
+   available through `sp.dml_panel` (unit-level Liang–Zeger SEs for
+   panel PLR with fixed effects), not through `sp.dml` itself.
+
+One earlier limitation is **resolved** and worth stating explicitly
+because older notes still mention it: `sample_weight=` (survey /
+probability weights) is supported for **all four** models
+(`plr`, `irm`, `pliv`, `iivm`), with weighted nuisance fits and a
+weighted-moment sandwich variance.
+
+## Companion tooling around the shared core
+
+Beyond the four estimator classes that mirror DoubleML one-to-one,
+`sp.dml` results plug into StatsPAI-side tooling:
+
+- **`sp.dml_sensitivity(result)`** — omitted-variable-bias bounds and
+  robustness values (`RV_q`, `RV_{q,α}`) for PLR / IRM estimates,
+  following Chernozhukov, Cinelli, Newey, Sharma & Syrgkanis
+  [@chernozhukov2022long], with a `sensemakr`-style interface
+  [@cinelli2020making] built on the DML residuals.
+- **`sp.dml_diagnostics(result)`** — a four-panel report (propensity /
+  residual overlap, orthogonal-score density, post-residualisation
+  covariate balance, orthogonality test) with a publication-ready
+  `.plot()`.
+- **`sp.dml_panel(...)`** — long-panel DML with unit (and optional
+  time) fixed effects and unit-clustered SEs, after Clarke & Polselli
+  [@clarke2025double].
+- **`sp.dml_model_averaging(...)`** — short-stacking / stacking over
+  candidate nuisance learners, after Ahrens, Hansen, Schaffer & Wiemann
+  [@ahrens2025model].
+- **Unified result object** — every `sp.dml` call returns a
+  `CausalResult`, so `.summary()`, `.to_latex()`, `.cite()` and the
+  agent-side audit chain (`sp.audit_result`) work the same as for every
+  other StatsPAI estimator.
 
 ## Running the parity tests yourself
 

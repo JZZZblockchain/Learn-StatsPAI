@@ -270,6 +270,25 @@ def local_projections(
         Endogenous variable order used only when
         ``identification='lpirfs_cholesky'``. Defaults to
         ``[outcome, shock]``.
+
+    Examples
+    --------
+    Impulse response of an AR(1) outcome to an observed shock:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(3)
+    >>> T = 200
+    >>> shock = rng.normal(size=T)
+    >>> y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     y[t] = 0.5 * y[t - 1] + 0.8 * shock[t] + rng.normal(0, 0.5)
+    >>> df = pd.DataFrame({"y": y, "shock": shock})
+    >>> res = sp.local_projections(df, outcome="y", shock="shock", horizons=8)
+    >>> print(round(float(res.irf[0]), 2))  # 0.75 — impact response, truth 0.8
+    >>> print(res.to_frame().head())        # horizon, irf, se, ci bands, n
+    >>> ax = res.plot()                     # IRF with Newey-West CI band
     """
     if controls is None:
         controls = []

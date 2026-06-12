@@ -261,6 +261,26 @@ def dfl_decompose(
     Returns
     -------
     DFLResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.dfl_decompose(df, y='log_wage', group='female',
+    ...                      x=['education', 'experience', 'tenure'],
+    ...                      stat='quantile', tau=0.5)
+    >>> r.summary()
+    >>> r.gap, r.composition, r.structure
+
+    >>> # Variance decomposition with bootstrap inference
+    >>> r = sp.dfl_decompose(df, y='log_wage', group='female',
+    ...                      x=['education', 'experience', 'tenure'],
+    ...                      stat='variance', inference='bootstrap',
+    ...                      n_boot=49, seed=12345)
+    >>> r.se['gap']
+
+    See also :func:`sp.decompose` — the unified dispatcher — via
+    ``sp.decompose('dfl', data=df, ...)``.
     """
     cols = [y, group] + list(x)
     df, w = prepare_frame(data, cols, weights=weights)

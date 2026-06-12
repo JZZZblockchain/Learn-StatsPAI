@@ -887,6 +887,24 @@ def rdplot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 1000
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.5 * x + 2.0 * (x >= 0) + rng.normal(0, 0.4, n)
+    >>> df = pd.DataFrame({'y': y, 'x': x})
+    >>> fig, ax = sp.rdplot(df, y='y', x='x', c=0, title='RD plot')
+    >>> fig.savefig('rd_plot.png')  # doctest: +SKIP
+
+    Typical flow: visualise first, then estimate with :func:`rdrobust`:
+
+    >>> result = sp.rdrobust(df, y='y', x='x', c=0)
+    >>> abs(result.estimate - 2.0) < 0.3
+    True
     """
     try:
         import matplotlib.pyplot as plt

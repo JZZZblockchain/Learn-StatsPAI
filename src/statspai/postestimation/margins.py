@@ -238,6 +238,16 @@ def marginsplot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.regress("log_wage ~ education + experience + female",
+    ...                     data=df)
+    >>> me = sp.margins(result, data=df)
+    >>> fig, ax = sp.marginsplot(me, title='AME of wage determinants')
+    >>> fig.savefig('margins.png')  # doctest: +SKIP
     """
     try:
         import matplotlib.pyplot as plt

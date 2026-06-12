@@ -278,6 +278,30 @@ def etable(
     Returns
     -------
     str or DataFrame
+
+    Examples
+    --------
+    Side-by-side comparison of nested specifications:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(1)
+    >>> n = 200
+    >>> df = pd.DataFrame({"x1": rng.normal(size=n), "x2": rng.normal(size=n),
+    ...                    "firm": rng.integers(0, 10, n)})
+    >>> df["wage"] = 1.0 + 0.5 * df["x1"] - 0.3 * df["x2"] + rng.normal(0, 0.5, n)
+    >>> r1 = sp.regress("wage ~ x1", data=df)
+    >>> r2 = sp.regress("wage ~ x1 + x2", data=df)
+    >>> tab = sp.etable(r1, r2)  # DataFrame: one coefficient column per model
+    >>> print(tab.round(2))
+
+    With ``sp.feols`` fits (requires the ``fixest`` extra), pyfixest's
+    native styled table is returned instead:
+
+    >>> f1 = sp.feols("wage ~ x1 | firm", data=df)
+    >>> f2 = sp.feols("wage ~ x1 + x2 | firm", data=df)
+    >>> tab = sp.etable(f1, f2)
     """
     pf_fits = [
         getattr(r, "_pyfixest_fit") for r in results

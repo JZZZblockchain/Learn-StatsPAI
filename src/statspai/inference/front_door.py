@@ -139,6 +139,27 @@ def front_door(
     Pearl, J. (1995). Causal diagrams for empirical research. *Biometrika*.
     Fulcher et al. (2020). Robust inference on population indirect causal
     effects: the generalized front-door criterion. *JRSS-B*. [@pearl1995causal]
+
+    Examples
+    --------
+    Simulate the front-door DAG ``U -> D -> M -> Y <- U`` with an
+    unobserved confounder ``U`` (true ATE is 0.69, the naive
+    difference-in-means is badly biased at 1.51):
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(7)
+    >>> n = 600
+    >>> u = rng.normal(size=n)                          # unobserved
+    >>> d = rng.binomial(1, 1 / (1 + np.exp(-u)))       # U -> D
+    >>> m = rng.binomial(1, 1 / (1 + np.exp(1 - 2*d)))  # D -> M
+    >>> y = 1.5 * m + u + rng.normal(size=n)            # M -> Y, U -> Y
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'm': m})
+    >>> result = sp.front_door(df, y='y', treat='d', mediator='m',
+    ...                        n_boot=50, seed=0)
+    >>> round(result.estimate, 2)  # front-door ATE, vs true 0.69
+    0.84
     """
     if integrate_by not in ('marginal', 'conditional'):
         raise ValueError(

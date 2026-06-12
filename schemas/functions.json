@@ -1283,7 +1283,7 @@
     }
   },
   {
-    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness.",
+    "description": "Targeted Maximum Likelihood Estimation for ATE/ATT with double-robustness. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "tmle",
     "parameters": {
       "properties": {
@@ -4664,10 +4664,25 @@
     }
   },
   {
-    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched structure exposed), Sensemakr (regression models), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
+    "description": "Run every applicable sensitivity analysis in one shot: E-value, Oster delta (when R^2 inputs given), Rosenbaum Gamma (when matched_pairs outcomes exposed), Sensemakr (when raw data supplied via data/y/treat/controls), and a breakdown-frontier bias estimate. Also available as result.sensitivity().",
     "name": "unified_sensitivity",
     "parameters": {
       "properties": {
+        "beta_uncontrolled": {
+          "description": "beta_uncontrolled parameter (float).",
+          "type": "number"
+        },
+        "controls": {
+          "description": "Control-variable column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
         "include_oster": {
           "default": true,
           "description": "Whether to include oster.",
@@ -4699,6 +4714,14 @@
           "default": 1.0,
           "description": "rho_max parameter (float).",
           "type": "number"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
         }
       },
       "required": [

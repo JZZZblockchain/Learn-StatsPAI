@@ -292,6 +292,30 @@ def granger_causality(
     -------
     dict
         Keys: 'F_stat', 'p_value', 'df1', 'df2', 'caused', 'causing'.
+
+    Examples
+    --------
+    ``x`` Granger-causes ``y`` by construction, but not vice versa:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(5)
+    >>> T = 200
+    >>> x = np.zeros(T)
+    >>> y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     x[t] = 0.5 * x[t - 1] + rng.normal()
+    ...     y[t] = 0.3 * y[t - 1] + 0.4 * x[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> vr = sp.var(df, variables=["y", "x"], lags=2)
+    >>> gc = sp.granger_causality(vr, caused="y", causing="x")
+    >>> print(gc["p_value"] < 0.05)  # True — x helps predict y
+
+    Or fit the VAR implicitly from data:
+
+    >>> gc2 = sp.granger_causality(data=df, caused="x", causing="y", lags=2)
+    >>> print(gc2["reject"])  # False — y does not Granger-cause x
     """
     if var_result is None:
         if data is None:

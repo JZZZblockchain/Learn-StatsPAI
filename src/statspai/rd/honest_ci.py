@@ -335,6 +335,32 @@ def rd_honest(
         - ``M``         : float – smoothness bound used
         - ``bias_bound``: float – estimated worst-case bias
         - ``bandwidth`` : float – bandwidth used
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 1000
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.5 * x + 2.0 * (x >= 0) + rng.normal(0, 0.4, n)
+    >>> df = pd.DataFrame({'y': y, 'x': x})
+    >>> result = sp.rd_honest(df, y='y', x='x', c=0)
+    >>> bool(abs(result.estimate - 2.0) < 0.3)  # true jump is 2.0
+    True
+    >>> lo, hi = result.model_info['honest_ci']
+    >>> nlo, nhi = result.model_info['naive_ci']
+    >>> bool((hi - lo) > (nhi - nlo))  # honest CI widens for worst-case bias
+    True
+
+    References
+    ----------
+    Armstrong, T. B. and Kolesár, M. (2018). Optimal Inference in a Class of
+    Regression Models. *Econometrica*. [@armstrong2018optimal]
+
+    Armstrong, T. B. and Kolesár, M. (2020). Simple and honest confidence
+    intervals in nonparametric regression. *Quantitative Economics*.
+    [@armstrong2020simple]
     """
     kernel = kernel.lower()
     if kernel not in _KERNEL_BIAS_CONSTANTS:

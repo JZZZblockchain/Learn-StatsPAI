@@ -232,6 +232,23 @@ def rif_decomposition(
     quantile_convention : {"statspai", "dineq"}, default "statspai"
         Quantile RIF convention for ``statistic="quantile"``. Use
         ``"dineq"`` for R ``dineq::rif`` parity.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.rif_decomposition(
+    ...     'log_wage ~ education + experience + tenure',
+    ...     data=df, group='female', statistic='quantile', tau=0.5,
+    ... )
+    >>> print(r.summary())
+    >>> r.total_diff, r.explained, r.unexplained
+
+    >>> # Decompose the gender gap in the Gini coefficient
+    >>> r = sp.rif_decomposition(
+    ...     'log_wage ~ education + experience + tenure',
+    ...     data=df, group='female', statistic='gini',
+    ... )
     """
     if "~" not in formula:
         raise ValueError("formula must contain '~'")
