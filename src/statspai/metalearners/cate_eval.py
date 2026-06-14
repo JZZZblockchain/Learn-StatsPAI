@@ -56,6 +56,25 @@ class CATEEvalResult:
         ``"AUTOC"`` (default) or ``"QINI"``.
     method : str
         Always ``"Yadlowsky et al. 2025 (DR-RATE, IF-SE)"``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.integers(0, 2, n)
+    >>> tau = 1.0 + X[:, 0]
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> cate = 1.0 + X[:, 0]  # priority score to evaluate
+    >>> res = sp.cate_eval(cate, Y, T, X=X, n_folds=3, q_grid=20, random_state=0)
+    >>> isinstance(res, sp.CATEEvalResult)
+    True
+    >>> res.toc_curve.columns.tolist()
+    ['q', 'toc']
+    >>> bool(res.n_obs == n)
+    True
     """
 
     autoc: float

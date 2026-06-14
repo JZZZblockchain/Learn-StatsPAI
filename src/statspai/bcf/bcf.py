@@ -126,6 +126,9 @@ class BayesianCausalForest:
     """
     Bayesian Causal Forest estimator.
 
+    Lower-level engine behind :func:`sp.bcf`; ``fit()`` returns the same
+    :class:`~statspai.core.results.CausalResult`.
+
     Parameters
     ----------
     data : pd.DataFrame
@@ -138,6 +141,30 @@ class BayesianCausalForest:
     n_folds : int
     alpha : float
     random_state : int
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> from statspai.bcf.bcf import BayesianCausalForest
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> e = 1 / (1 + np.exp(-0.5 * x1))
+    >>> treat = (rng.uniform(size=n) < e).astype(int)
+    >>> y = 1.0 + 0.5 * x1 + x2 + treat * (1.0 + x1) + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x1": x1, "x2": x2})
+    >>> est = BayesianCausalForest(
+    ...     data=df, y="y", treat="treat", covariates=["x1", "x2"],
+    ...     n_trees_mu=50, n_trees_tau=25, n_bootstrap=25, n_folds=2,
+    ...     random_state=0,
+    ... )
+    >>> result = est.fit()
+    >>> type(result).__name__
+    'CausalResult'
+    >>> result.model_info["cate"].shape
+    (120,)
     """
 
     def __init__(

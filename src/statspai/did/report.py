@@ -45,6 +45,31 @@ class CSReport:
 
     Attributes are plain pandas objects so downstream users can export
     to LaTeX, Markdown, or Excel without any custom converters.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for u in range(60):
+    ...     g = rng.choice([3, 4, 0])  # cohort: treated at t=3, t=4, or never
+    ...     ui = rng.normal(0, 1)
+    ...     for t in range(1, 7):
+    ...         post = 1 if (g != 0 and t >= g) else 0
+    ...         y = ui + 0.3 * t + 2.0 * post + rng.normal(0, 0.5)
+    ...         rows.append({"id": u, "t": t, "g": g, "y": y})
+    >>> df = pd.DataFrame(rows)
+    >>> rpt = sp.cs_report(
+    ...     df, y="y", g="g", t="t", i="id",
+    ...     n_boot=50, random_state=42, verbose=False)
+    >>> isinstance(rpt, sp.CSReport)
+    True
+    >>> isinstance(rpt.dynamic, pd.DataFrame)
+    True
+    >>> isinstance(rpt.breakdown, pd.DataFrame)
+    True
     """
 
     overall: Dict[str, float]

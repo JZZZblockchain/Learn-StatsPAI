@@ -212,6 +212,35 @@ class DoubleML:
     Legacy façade. Prefer the per-model classes directly for new code:
     :class:`DoubleMLPLR`, :class:`DoubleMLIRM`, :class:`DoubleMLPLIV`,
     :class:`DoubleMLIIVM`. Kept for backward compatibility.
+
+    For most workflows call the functional entry point :func:`dml`
+    instead; this class wraps the same dispatcher behind a ``.fit()``
+    method for code that predates the functional API.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = 0.5 * x1 + rng.normal(size=n)
+    >>> y = 1.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> est = sp.DoubleML(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                   model='plr', ml_g='linear', ml_m='linear',
+    ...                   n_folds=2)
+    >>> est.model
+    'plr'
+    >>> res = est.fit()
+    >>> isinstance(res, sp.CausalResult)
+    True
+
+    References
+    ----------
+    [@chernozhukov2018double]
     """
 
     _VALID_MODELS = tuple(_MODEL_REGISTRY.keys())

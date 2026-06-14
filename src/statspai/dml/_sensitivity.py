@@ -84,6 +84,26 @@ class DMLSensitivityResult:
     alpha : float
     method : str
         Always ``"DML-OVB (Chernozhukov-Cinelli-Newey 2022)"``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = 0.5 * x1 + rng.normal(size=n)
+    >>> y = 1.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> fit = sp.dml(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...              model='plr', ml_g='linear', ml_m='linear', n_folds=2)
+    >>> sens = sp.dml_sensitivity(fit, q=1.0, cf_y=0.05, cf_d=0.05)
+    >>> isinstance(sens, sp.DMLSensitivityResult)
+    True
+    >>> round(sens.rv_q, 2)  # confounder strength needed to zero out theta
+    0.49
     """
 
     estimate: float

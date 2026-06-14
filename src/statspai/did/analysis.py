@@ -191,20 +191,43 @@ def did_analysis(
     --------
     Classic 2×2:
 
-    >>> report = did_analysis(df, y='wage', treat='policy', time='post')
-    >>> print(report.summary())
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> post = np.tile([0, 1], n)
+    >>> policy = np.repeat(rng.integers(0, 2, size=n), 2)
+    >>> wage = 2.0 + 0.5 * post + 1.0 * (policy * post) + rng.normal(size=2 * n)
+    >>> df = pd.DataFrame({'post': post, 'policy': policy, 'wage': wage})
+    >>> report = sp.did_analysis(df, y='wage', treat='policy', time='post')
+    >>> type(report).__name__
+    'DIDAnalysis'
+    >>> print(report.summary())  # doctest: +SKIP
 
-    Staggered — full pipeline:
+    Staggered — full pipeline (design auto-detected from ``id``):
 
-    >>> report = did_analysis(df, y='earnings', treat='first_treat',
-    ...                       time='year', id='worker')
-    >>> print(report.summary())
-    >>> report.plot()
+    >>> rows = []
+    >>> cohorts = rng.choice([0, 3, 4], size=60)
+    >>> for i in range(60):
+    ...     g = cohorts[i]
+    ...     for t in range(1, 7):
+    ...         treated = 1 if (g > 0 and t >= g) else 0
+    ...         earn = 1.0 + 0.3 * t + 1.5 * treated + rng.normal()
+    ...         rows.append({'worker': i, 'year': t,
+    ...                      'first_treat': g, 'earnings': earn})
+    >>> panel = pd.DataFrame(rows)
+    >>> report = sp.did_analysis(panel, y='earnings', treat='first_treat',
+    ...                          time='year', id='worker')
+    >>> report.design
+    'staggered'
+    >>> report.plot()  # doctest: +SKIP
 
     Quick estimate only (skip diagnostics):
 
-    >>> report = did_analysis(df, y='y', treat='g', time='t', id='i',
-    ...                       run_bacon=False, run_sensitivity=False)
+    >>> report = sp.did_analysis(panel, y='earnings', treat='first_treat',
+    ...                          time='year', id='worker',
+    ...                          run_bacon=False, run_sensitivity=False)
     """
     from .did_2x2 import did_2x2
     from .callaway_santanna import callaway_santanna

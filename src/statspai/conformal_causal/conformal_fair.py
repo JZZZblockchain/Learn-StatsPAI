@@ -19,7 +19,29 @@ import pandas as pd
 
 @dataclass
 class FairConformalResult:
-    """Fairness-aware conformal ITE intervals."""
+    """Fairness-aware conformal ITE intervals.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 240
+    >>> g = rng.integers(0, 2, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 0.7 * x1 + 0.4 * x2 + 1.2 * d + 0.5 * g + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2, "grp": g})
+    >>> res = sp.conformal_fair_ite(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     protected="grp", seed=1)
+    >>> bool(res.point_estimate.shape == (240,))
+    True
+    >>> sorted(res.group_coverage_targets.keys())
+    ['0', '1']
+    """
     intervals: np.ndarray
     point_estimate: np.ndarray
     group_assignment: np.ndarray
@@ -69,6 +91,33 @@ def conformal_fair_ite(
     Returns
     -------
     FairConformalResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 240
+    >>> g = rng.integers(0, 2, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 0.7 * x1 + 0.4 * x2 + 1.2 * d + 0.5 * g + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2, "grp": g})
+    >>> res = sp.conformal_fair_ite(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     protected="grp", alpha=0.1, seed=1)
+    >>> isinstance(res, sp.FairConformalResult)
+    True
+    >>> res.intervals.shape
+    (240, 2)
+    >>> sorted(res.group_widths.keys())
+    ['0', '1']
+    >>> widths = res.intervals[:, 1] - res.intervals[:, 0]
+    >>> bool((widths > 0).all())
+    True
+    >>> print(res.summary())  # doctest: +SKIP
     """
     from sklearn.linear_model import LinearRegression
 

@@ -59,7 +59,43 @@ Regime = Union[Sequence[int], Callable[[int, Dict[str, np.ndarray]], np.ndarray]
 
 @dataclass
 class LTMLESurvivalResult:
-    """Counterfactual survival curves and contrasts."""
+    """Counterfactual survival curves and contrasts.
+
+    Produced by :func:`ltmle_survival`. Holds the treated/control
+    counterfactual survival curves, the restricted-mean survival time
+    (RMST) contrast with its standard error and confidence interval,
+    and the terminal risk difference. Use :meth:`to_frame` for a tidy
+    per-interval survival table.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n, K = 200, 3
+    >>> A = rng.integers(0, 2, size=(n, K))
+    >>> L = rng.normal(0, 1, size=(n, K))
+    >>> T = np.zeros((n, K), dtype=int)
+    >>> for k in range(K):
+    ...     haz = 1 / (1 + np.exp(-(-1.5 - 0.5 * A[:, k] + 0.3 * L[:, k])))
+    ...     T[:, k] = (rng.uniform(size=n) < haz).astype(int)
+    >>> df = pd.DataFrame({
+    ...     **{f"T{k+1}": T[:, k] for k in range(K)},
+    ...     **{f"A{k+1}": A[:, k] for k in range(K)},
+    ...     **{f"L{k+1}": L[:, k] for k in range(K)},
+    ... })
+    >>> res = sp.ltmle_survival(
+    ...     df,
+    ...     event_indicators=["T1", "T2", "T3"],
+    ...     treatments=["A1", "A2", "A3"],
+    ...     covariates_time=[["L1"], ["L2"], ["L3"]],
+    ... )
+    >>> isinstance(res, sp.LTMLESurvivalResult)
+    True
+    >>> len(res.times)
+    3
+    """
 
     times: np.ndarray
     survival_treated: np.ndarray
@@ -184,6 +220,43 @@ def ltmle_survival(
         Contains counterfactual survival curves, restricted-mean
         survival time (RMST) contrasts, and a terminal risk
         difference.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n, K = 200, 3
+    >>> A = rng.integers(0, 2, size=(n, K))
+    >>> L = rng.normal(0, 1, size=(n, K))
+    >>> T = np.zeros((n, K), dtype=int)
+    >>> for k in range(K):
+    ...     haz = 1 / (1 + np.exp(-(-1.5 - 0.5 * A[:, k] + 0.3 * L[:, k])))
+    ...     T[:, k] = (rng.uniform(size=n) < haz).astype(int)
+    >>> df = pd.DataFrame({
+    ...     **{f"T{k+1}": T[:, k] for k in range(K)},
+    ...     **{f"A{k+1}": A[:, k] for k in range(K)},
+    ...     **{f"L{k+1}": L[:, k] for k in range(K)},
+    ... })
+    >>> res = sp.ltmle_survival(
+    ...     df,
+    ...     event_indicators=["T1", "T2", "T3"],
+    ...     treatments=["A1", "A2", "A3"],
+    ...     covariates_time=[["L1"], ["L2"], ["L3"]],
+    ... )
+    >>> res.K
+    3
+    >>> res.n_obs
+    200
+    >>> bool(0.0 <= res.survival_treated[-1] <= 1.0)
+    True
+    >>> list(res.to_frame().columns)
+    ['time', 'S_treated', 'S_control', 'risk_diff']
+
+    References
+    ----------
+    [@vanderlaan2012targeted], [@stitelman2010collaborative], [@cai2020step]
 
     Notes
     -----

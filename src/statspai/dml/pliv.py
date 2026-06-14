@@ -21,7 +21,34 @@ from ._base import _DoubleMLBase
 
 
 class DoubleMLPLIV(_DoubleMLBase):
-    """Partially linear IV DML — endogenous D with continuous/binary Z."""
+    """Partially linear IV DML — endogenous D with continuous/binary Z.
+
+    Direct entry point for the partially linear IV model
+    ``Y = theta * D + g(X) + eps`` with ``E[eps | Z, X] = 0``. Usually
+    reached through the dispatcher ``sp.dml(..., model='pliv')``; an
+    instrument column must be supplied.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> z = rng.normal(size=n)
+    >>> d = 0.8 * z + 0.5 * x1 + rng.normal(size=n)
+    >>> y = 1.5 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z, "x1": x1, "x2": x2})
+    >>> est = sp.DoubleMLPLIV(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     instrument="z", n_folds=3,
+    ... )
+    >>> res = est.fit()
+    >>> bool(np.isfinite(res.estimate))
+    True
+    """
 
     _MODEL_TAG = 'PLIV'
     _ESTIMAND = 'LATE'

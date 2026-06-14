@@ -19,7 +19,27 @@ import pandas as pd
 
 @dataclass
 class DebiasedConformalResult:
-    """Debiased ML conformal counterfactual intervals."""
+    """Debiased ML conformal counterfactual intervals.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.binomial(1, 1 / (1 + np.exp(-0.5 * x1)))
+    >>> y = 1.0 + 0.8 * x1 + 0.5 * x2 + 1.5 * d + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_debiased_ml(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"], seed=1)
+    >>> res.n_test
+    200
+    >>> bool(res.point_estimate.shape == (200,))
+    True
+    """
     intervals: np.ndarray
     point_estimate: np.ndarray
     coverage_target: float
@@ -65,6 +85,31 @@ def conformal_debiased_ml(
     Returns
     -------
     DebiasedConformalResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> ps = 1 / (1 + np.exp(-0.5 * x1))
+    >>> d = rng.binomial(1, ps)
+    >>> y = 1.0 + 0.8 * x1 + 0.5 * x2 + 1.5 * d + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_debiased_ml(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     alpha=0.1, n_folds=5, seed=1)
+    >>> isinstance(res, sp.DebiasedConformalResult)
+    True
+    >>> res.intervals.shape
+    (200, 2)
+    >>> widths = res.intervals[:, 1] - res.intervals[:, 0]
+    >>> bool((widths > 0).all())
+    True
+    >>> print(res.summary())  # doctest: +SKIP
     """
     from sklearn.linear_model import LinearRegression, LogisticRegression
     from sklearn.model_selection import KFold

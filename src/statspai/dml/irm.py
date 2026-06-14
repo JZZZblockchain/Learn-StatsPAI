@@ -21,7 +21,33 @@ from ._base import _DoubleMLBase
 
 
 class DoubleMLIRM(_DoubleMLBase):
-    """Interactive regression DML — binary D, ATE via AIPW."""
+    """Interactive regression DML — binary D, ATE via AIPW.
+
+    Direct entry point for the interactive regression model with a
+    binary treatment; estimates the ATE via the cross-fitted
+    doubly-robust (AIPW) score. Usually reached through the dispatcher
+    ``sp.dml(..., model='irm')``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> ps = 1 / (1 + np.exp(-(0.5 * x1)))
+    >>> d = (rng.uniform(size=n) < ps).astype(int)
+    >>> y = 1.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> est = sp.DoubleMLIRM(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"], n_folds=3,
+    ... )
+    >>> res = est.fit()
+    >>> bool(np.isfinite(res.estimate))
+    True
+    """
 
     _MODEL_TAG = 'IRM'
     _ESTIMAND = 'ATE'

@@ -29,7 +29,34 @@ from scipy import stats
 
 @dataclass
 class ConformalDensityResult:
-    """Conditional-density conformal ITE intervals."""
+    """Conditional-density conformal ITE intervals.
+
+    Produced by :func:`conformal_density_ite`. Holds the per-test-point
+    ``intervals`` (lower/upper), the ITE ``point_estimate`` and a
+    formatted ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, n)
+    >>> y = 1.5 * d + 0.5 * x1 - 0.3 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_density_ite(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"], alpha=0.1, seed=0)
+    >>> type(res).__name__
+    'ConformalDensityResult'
+    >>> res.intervals.shape
+    (300, 2)
+    >>> bool((res.intervals[:, 0] <= res.intervals[:, 1]).all())
+    True
+    >>> isinstance(res.summary(), str)
+    True
+    """
     intervals: np.ndarray           # (n_test, 2) [lower, upper]
     point_estimate: np.ndarray      # (n_test,) median of cond density
     coverage_target: float
@@ -80,6 +107,26 @@ def conformal_density_ite(
     Returns
     -------
     ConformalDensityResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, n)
+    >>> y = 1.5 * d + 0.5 * x1 - 0.3 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_density_ite(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"], alpha=0.1, seed=0)
+    >>> res.intervals.shape
+    (300, 2)
+    >>> res.point_estimate.shape
+    (300,)
+    >>> bool((res.intervals[:, 0] <= res.intervals[:, 1]).all())
+    True
     """
     df = data[[y, treat] + list(covariates)].dropna().reset_index(drop=True)
     if df[treat].nunique() != 2:

@@ -53,6 +53,35 @@ class PolicyTreeResult(dict):
 
     The ``tree`` attribute holds the fitted :class:`PolicyTree` instance
     so :meth:`PolicyTree.predict` is reachable downstream.
+
+    Examples
+    --------
+    Produced by :func:`policy_tree`; the legacy ``dict`` API still works
+    alongside attribute access and the rich reporting methods:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> treat = rng.integers(0, 2, n)
+    >>> y = 1.0 + 2.0 * (x1 > 0) * treat + 0.5 * x2 + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x1": x1, "x2": x2})
+    >>> res = sp.policy_tree(df, y="y", treat="treat",
+    ...                      covariates=["x1", "x2"], max_depth=2,
+    ...                      min_leaf_size=30, n_folds=3, random_state=0)
+    >>> isinstance(res, sp.PolicyTreeResult)
+    True
+    >>> isinstance(res, dict)               # legacy result['policy'] still works
+    True
+    >>> res["n_obs"]
+    300
+    >>> bool(0.0 <= res.fraction_treated <= 1.0)
+    True
+    >>> "begin{table}" in res.to_latex()        # publication-ready LaTeX
+    True
     """
 
     def __init__(
@@ -410,6 +439,33 @@ class PolicyTree:
     n_folds : int
     alpha : float
     random_state : int
+
+    Examples
+    --------
+    Fit the estimator directly, then route fresh covariates through the
+    learned rule with :meth:`predict`:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> treat = rng.integers(0, 2, n)
+    >>> y = 1.0 + 2.0 * (x1 > 0) * treat + 0.5 * x2 + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x1": x1, "x2": x2})
+    >>> tree = sp.PolicyTree(data=df, y="y", treat="treat",
+    ...                      covariates=["x1", "x2"], max_depth=2,
+    ...                      min_leaf_size=30, n_folds=3, random_state=0)
+    >>> res = tree.fit()
+    >>> bool(res["value_gain"] >= 0)
+    True
+    >>> rec = tree.predict(np.array([[1.5, 0.0], [-1.5, 0.0]]))
+    >>> int(rec.shape[0])
+    2
+    >>> bool(set(int(v) for v in rec) <= {0, 1})
+    True
     """
 
     def __init__(

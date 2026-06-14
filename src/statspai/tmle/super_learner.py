@@ -109,6 +109,28 @@ class SuperLearner:
     task : str, default 'regression'
         'regression' or 'classification'.
     random_state : int, default 42
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> from sklearn.linear_model import LinearRegression, Ridge
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> y = X @ np.array([1.0, -0.5, 0.3]) + rng.normal(scale=0.5, size=n)
+    >>> sl = sp.SuperLearner(
+    ...     library=[LinearRegression(), Ridge(alpha=1.0)],
+    ...     n_folds=3,
+    ... ).fit(X, y)
+    >>> round(float(sl.weights_.sum()), 2)  # simplex weights
+    1.0
+    >>> sl.predict(X[:5]).shape
+    (5,)
+
+    References
+    ----------
+    vanderlaan2007super
     """
 
     def __init__(

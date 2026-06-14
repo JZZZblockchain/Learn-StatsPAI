@@ -99,7 +99,17 @@ _REGISTRY: Dict[str, Tuple[str, str]] = {
 
 
 def available_kinds() -> list[str]:
-    """Return the full list of registered conformal ``kind`` names."""
+    """Return the full list of registered conformal ``kind`` names.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> kinds = sp.conformal_available_kinds()
+    >>> bool("cate" in kinds)
+    True
+    >>> bool("ite" in kinds and "weighted" in kinds)
+    True
+    """
     return sorted(_REGISTRY.keys())
 
 
@@ -123,8 +133,17 @@ def conformal(kind: str = "cate", /, **kwargs: Any) -> Any:
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 1.0 + 0.5 * x1 + d * (1.0 + 0.5 * x2) + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
     >>> r = sp.conformal("cate", data=df, y="y", treat="d",
     ...                   covariates=["x1", "x2"])
+    >>> type(r).__name__
+    'CausalResult'
 
     See Also
     --------

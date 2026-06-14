@@ -192,6 +192,24 @@ class SLearner:
     ----------
     model : sklearn estimator, optional
         Outcome model mu(X, D). Default: GradientBoostingRegressor.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(size=(n, 3))
+    >>> D = (rng.random(n) < 0.5).astype(float)
+    >>> Y = X[:, 0] + (1.0 + X[:, 1]) * D + rng.normal(size=n)
+    >>> learner = sp.SLearner().fit(X, Y, D)
+    >>> cate = learner.effect(X)
+    >>> bool(cate.shape == (n,))
+    True
+
+    References
+    ----------
+    kunzel2019metalearners
     """
 
     def __init__(self, model=None):
@@ -237,6 +255,24 @@ class TLearner:
         Control outcome model. Default: GradientBoostingRegressor.
     model_1 : sklearn estimator, optional
         Treated outcome model. Default: same type as model_0.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(size=(n, 3))
+    >>> D = (rng.random(n) < 0.5).astype(float)
+    >>> Y = X[:, 0] + (1.0 + X[:, 1]) * D + rng.normal(size=n)
+    >>> learner = sp.TLearner().fit(X, Y, D)
+    >>> cate = learner.effect(X)
+    >>> bool(cate.shape == (n,))
+    True
+
+    References
+    ----------
+    kunzel2019metalearners
     """
 
     def __init__(self, model_0=None, model_1=None):
@@ -295,6 +331,25 @@ class XLearner:
         CATE model for treated-side imputed effects.
     propensity_model : sklearn estimator, optional
         Model for e(x) = P(D=1|X).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(size=(n, 3))
+    >>> e = 1 / (1 + np.exp(-X[:, 0]))
+    >>> D = (rng.random(n) < e).astype(float)
+    >>> Y = X[:, 0] + (1.0 + X[:, 1]) * D + rng.normal(size=n)
+    >>> learner = sp.XLearner().fit(X, Y, D)
+    >>> cate = learner.effect(X)
+    >>> bool(cate.shape == (n,))
+    True
+
+    References
+    ----------
+    kunzel2019metalearners
     """
 
     def __init__(
@@ -376,6 +431,25 @@ class RLearner:
         Model for tau(X). Fit on pseudo-outcome.
     n_folds : int, default 5
         Cross-fitting folds for nuisance estimation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(size=(n, 3))
+    >>> e = 1 / (1 + np.exp(-X[:, 0]))
+    >>> D = (rng.random(n) < e).astype(float)
+    >>> Y = X[:, 0] + (1.0 + X[:, 1]) * D + rng.normal(size=n)
+    >>> learner = sp.RLearner(n_folds=3).fit(X, Y, D)
+    >>> cate = learner.effect(X)
+    >>> bool(cate.shape == (n,))
+    True
+
+    References
+    ----------
+    nie2021quasi
     """
 
     def __init__(
@@ -452,6 +526,25 @@ class DRLearner:
         Final-stage model for tau(X).
     n_folds : int, default 5
         Cross-fitting folds for nuisance estimation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(size=(n, 3))
+    >>> e = 1 / (1 + np.exp(-X[:, 0]))
+    >>> D = (rng.random(n) < e).astype(float)
+    >>> Y = X[:, 0] + (1.0 + X[:, 1]) * D + rng.normal(size=n)
+    >>> learner = sp.DRLearner(n_folds=3).fit(X, Y, D)
+    >>> cate = learner.effect(X)
+    >>> bool(cate.shape == (n,))
+    True
+
+    References
+    ----------
+    kennedy2023towards
     """
 
     def __init__(
@@ -628,19 +721,24 @@ def metalearner(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.metalearner(df, y='wage', treat='training',
-    ...                         covariates=['age', 'edu', 'exp'])
-    >>> print(result.summary())
-
-    >>> # Use X-Learner with custom models
-    >>> from sklearn.ensemble import RandomForestRegressor
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 8, n)
+    >>> edu = rng.normal(13, 2, n)
+    >>> training = (rng.random(n) < 0.5).astype(int)
+    >>> wage = 0.05 * age + 0.3 * edu + (2.0 + 0.1 * edu) * training \\
+    ...        + rng.normal(size=n)
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "edu": edu})
     >>> result = sp.metalearner(df, y='wage', treat='training',
     ...                         covariates=['age', 'edu'],
-    ...                         learner='x',
-    ...                         outcome_model=RandomForestRegressor())
-
-    >>> # Access individual CATE predictions
-    >>> cate = result.model_info['cate']  # array of per-unit effects
+    ...                         learner='dr', n_folds=3)
+    >>> bool(isinstance(result.estimate, float))
+    True
+    >>> cate = result.model_info['cate']  # per-unit effects
+    >>> bool(cate.shape == (n,))
+    True
     """
     from sklearn.base import clone
     Y, D, X, n = _prepare_data(data, y, treat, covariates)

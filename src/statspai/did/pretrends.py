@@ -145,9 +145,18 @@ def pretrends_test(
 
     Examples
     --------
-    >>> import statspai as sp
-    >>> result = sp.event_study(df, y='y', treat='g', time='t', id='i')
-    >>> sp.pretrends_test(result)
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     cohort = 4 if i < 40 else 0          # 0 = never treated
+    ...     for t in range(8):
+    ...         post = cohort > 0 and t >= cohort
+    ...         y = 0.3 * t + (2.0 if post else 0.0) + (i % 5) + rng.normal()
+    ...         rows.append((i, t, cohort, y))
+    >>> df = pd.DataFrame(rows, columns=["id", "t", "cohort", "y"])
+    >>> es = sp.event_study(df, y="y", treat_time="cohort", time="t", unit="id")
+    >>> sp.pretrends_test(es)
     """
     es = _extract_event_study(result)
     time_col, est_col, se_col = _resolve_columns(es)
@@ -284,9 +293,18 @@ def pretrends_power(
 
     Examples
     --------
-    >>> import statspai as sp
-    >>> result = sp.event_study(df, y='y', treat='g', time='t', id='i')
-    >>> sp.pretrends_power(result)
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     cohort = 4 if i < 40 else 0          # 0 = never treated
+    ...     for t in range(8):
+    ...         post = cohort > 0 and t >= cohort
+    ...         y = 0.3 * t + (2.0 if post else 0.0) + (i % 5) + rng.normal()
+    ...         rows.append((i, t, cohort, y))
+    >>> df = pd.DataFrame(rows, columns=["id", "t", "cohort", "y"])
+    >>> es = sp.event_study(df, y="y", treat_time="cohort", time="t", unit="id")
+    >>> sp.pretrends_power(es)
     """
     es = _extract_event_study(result)
     time_col, est_col, se_col = _resolve_columns(es)
@@ -424,6 +442,35 @@ class SensitivityResult:
         Print a formatted summary table.
     plot()
         Matplotlib sensitivity plot (M-bar vs CI).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(60):
+    ...     g = 5 if i < 30 else 0
+    ...     for t in range(1, 9):
+    ...         post = 1 if (g and t >= 5) else 0
+    ...         y = 1.0 + 0.2 * t + i / 120 + 2.0 * post + rng.normal(0, 0.5)
+    ...         rows.append({"unit": i, "time": t, "y": y, "g": g})
+    >>> df = pd.DataFrame(rows)
+    >>> result = sp.event_study(df, y="y", treat_time="g", time="time",
+    ...                         unit="unit", window=(-3, 3))
+    >>> sens = sp.sensitivity_rr(result, Mbar=[0.0, 0.5, 1.0])
+    >>> type(sens).__name__
+    'SensitivityResult'
+    >>> bool(isinstance(sens.summary(), str))
+    True
+    >>> import matplotlib.pyplot as plt
+    >>> fig, ax = plt.subplots()
+    >>> ax = sens.plot(ax=ax)
+    >>> fig.savefig("sensitivity.png")  # doctest: +SKIP
+
+    References
+    ----------
+    Rambachan, A. & Roth, J. (2023). [@rambachan2023more]
     """
 
     mbar_grid: np.ndarray
@@ -601,11 +648,19 @@ def sensitivity_rr(
 
     Examples
     --------
-    >>> import statspai as sp
-    >>> result = sp.event_study(df, y='y', treat='g', time='t', id='i')
-    >>> sens = sp.sensitivity_rr(result, Mbar=[0, 0.01, 0.02, 0.05])
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     cohort = 4 if i < 40 else 0          # 0 = never treated
+    ...     for t in range(8):
+    ...         post = cohort > 0 and t >= cohort
+    ...         y = 0.3 * t + (2.0 if post else 0.0) + (i % 5) + rng.normal()
+    ...         rows.append((i, t, cohort, y))
+    >>> df = pd.DataFrame(rows, columns=["id", "t", "cohort", "y"])
+    >>> es = sp.event_study(df, y="y", treat_time="cohort", time="t", unit="id")
+    >>> sens = sp.sensitivity_rr(es, Mbar=[0, 0.01, 0.02, 0.05])
     >>> sens.summary()
-    >>> sens.plot()
     """
     if method != "C-LF":
         raise NotImplementedError(
@@ -717,6 +772,25 @@ def pretrends_summary(result, delta=None, alpha: float = 0.05) -> str:
     -------
     str
         Formatted report.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(60):
+    ...     g = 5 if i < 30 else 0
+    ...     for t in range(1, 9):
+    ...         post = 1 if (g and t >= 5) else 0
+    ...         y = 1.0 + 0.2 * t + i / 120 + 2.0 * post + rng.normal(0, 0.5)
+    ...         rows.append({"unit": i, "time": t, "y": y, "g": g})
+    >>> df = pd.DataFrame(rows)
+    >>> result = sp.event_study(df, y="y", treat_time="g", time="time",
+    ...                         unit="unit", window=(-3, 3))
+    >>> report = sp.pretrends_summary(result)  # also prints the report
+    >>> bool(isinstance(report, str))
+    True
     """
     test = pretrends_test(result, type="wald", alpha=alpha)
     pwr = pretrends_power(result, delta=delta, alpha=alpha)

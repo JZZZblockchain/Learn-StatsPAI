@@ -188,6 +188,24 @@ def bcf_longitudinal(
     ----------
     Prevot, Häring, Nichols, Holmes & Ganjgahi (arXiv:2508.08418, 2025). [@prevot2025hierarchical]
     Hahn, Murray, Carvalho (2020), Bayesian Analysis.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(53)
+    >>> rows = []
+    >>> for u in range(40):
+    ...     x1, x2, u_eff = rng.normal(), rng.normal(), rng.normal(0, 0.3)
+    ...     for t in range(4):
+    ...         d = int(rng.uniform() < 0.5)
+    ...         y = (0.5 * x1 + 0.3 * x2 + 1.5 * d + u_eff
+    ...              + 0.2 * t + rng.normal(0, 0.3))
+    ...         rows.append({"unit": u, "time": t, "y": y, "d": d,
+    ...                      "x1": x1, "x2": x2})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.bcf_longitudinal(df, outcome="y", treatment="d", unit="unit", time="time", covariates=["x1", "x2"], n_trees_mu=80, n_trees_tau=30, n_bootstrap=30, random_state=53)  # doctest: +SKIP
+    >>> res.per_time_ate  # doctest: +SKIP
     """
     if not isinstance(data, pd.DataFrame):
         raise TypeError("`data` must be a pandas DataFrame.")

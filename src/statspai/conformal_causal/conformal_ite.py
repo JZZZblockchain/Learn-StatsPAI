@@ -81,10 +81,24 @@ def conformal_cate(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.conformal_cate(df, y='outcome', treat='treatment',
-    ...                            covariates=['x1', 'x2'])
-    >>> cate_lower = result.model_info['cate_lower']
-    >>> cate_upper = result.model_info['cate_upper']
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(0, 1, n)
+    >>> x2 = rng.normal(0, 1, n)
+    >>> treat = rng.binomial(1, 0.5, n)
+    >>> y = (1.0 + 0.5 * x1 + treat * (1.0 + 0.5 * x2)
+    ...      + rng.normal(0, 0.5, n))
+    >>> df = pd.DataFrame({"outcome": y, "treatment": treat,
+    ...                    "x1": x1, "x2": x2})
+    >>> result = sp.conformal_cate(df, y="outcome", treat="treatment",
+    ...                            covariates=["x1", "x2"], random_state=0)
+    >>> cate_lower = result.model_info["cate_lower"]
+    >>> cate_upper = result.model_info["cate_upper"]
+    >>> len(cate_lower) == n
+    True
+    >>> bool(np.all(cate_upper >= cate_lower))
+    True
     """
     est = ConformalCATE(
         data=data, y=y, treat=treat, covariates=covariates,
@@ -131,6 +145,32 @@ class ConformalCATE:
     alpha : float
     calib_fraction : float
     random_state : int
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> from sklearn.linear_model import LinearRegression
+    >>> from statspai.conformal_causal.conformal_ite import ConformalCATE
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(0, 1, n)
+    >>> x2 = rng.normal(0, 1, n)
+    >>> treat = rng.binomial(1, 0.5, n)
+    >>> y = (1.0 + 0.5 * x1 + treat * (1.0 + 0.5 * x2)
+    ...      + rng.normal(0, 0.5, n))
+    >>> df = pd.DataFrame({"outcome": y, "treatment": treat,
+    ...                    "x1": x1, "x2": x2})
+    >>> est = ConformalCATE(df, y="outcome", treat="treatment",
+    ...                     covariates=["x1", "x2"],
+    ...                     model=LinearRegression(), random_state=0)
+    >>> res = est.fit()
+    >>> lo = res.model_info["cate_lower"]
+    >>> hi = res.model_info["cate_upper"]
+    >>> len(lo) == n
+    True
+    >>> bool(np.all(hi >= lo))
+    True
     """
 
     def __init__(

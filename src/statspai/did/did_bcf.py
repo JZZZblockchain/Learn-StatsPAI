@@ -64,6 +64,25 @@ def did_bcf(
     CausalResult
         ATT plus per-cohort CATT in ``model_info['catt_by_cohort']``.
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(30):
+    ...     g = 0 if i < 15 else 3          # cohort: never-treated vs first-treated at t=3
+    ...     for t in range(1, 6):
+    ...         post = int(g > 0 and t >= g)
+    ...         y = 1.0 + 0.2 * t + 1.5 * post + rng.normal(0, 0.5)
+    ...         rows.append({"id": i, "time": t, "g": g, "y": y})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.did_bcf(df, y="y", treat="g", time="time", id="id", seed=0)
+    >>> res.estimand
+    'ATT'
+    >>> bool(np.isfinite(res.estimate))
+    True
+
     References
     ----------
     Souto & Neto (2025). Forests for Differences: Robust Causal

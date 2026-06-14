@@ -121,6 +121,27 @@ def conformal_continuous(
     -------
     ContinuousConformalResult
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> t = rng.uniform(0, 5, n)            # continuous treatment / dose
+    >>> x = rng.normal(size=n)
+    >>> y = 2.0 + 0.7 * t + 0.5 * x + rng.normal(0, 0.5, n)
+    >>> train = pd.DataFrame({'y': y, 't': t, 'x': x})
+    >>> test = pd.DataFrame({'t': [1.0, 3.0], 'x': [0.0, 0.5]})
+    >>> res = sp.conformal_continuous(
+    ...     train, y='y', treatment='t', covariates=['x'],
+    ...     test_data=test, alpha=0.1, random_state=0,
+    ... )
+    >>> list(res.predictions.columns)
+    ['prediction', 'lo', 'hi']
+    >>> bool((res.predictions['hi'] > res.predictions['lo']).all())
+    True
+
     References
     ----------
     Schröder et al. (arXiv:2407.03094, 2024).
@@ -249,6 +270,31 @@ def conformal_interference(
     Returns
     -------
     InterferenceConformalResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []   # 12 clusters; units within a cluster interfere
+    >>> for c in range(12):
+    ...     cluster_shock = rng.normal(0, 0.5)
+    ...     for _ in range(rng.integers(5, 12)):
+    ...         treat = rng.integers(0, 2)
+    ...         x = rng.normal()
+    ...         y = (1.0 + 0.6 * treat + 0.4 * x + cluster_shock
+    ...              + rng.normal(0, 0.3))
+    ...         rows.append({'cluster': c, 'treat': treat, 'x': x, 'y': y})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.conformal_interference(
+    ...     df, y='y', treatment='treat', cluster='cluster',
+    ...     covariates=['x'], test_clusters=[0, 1], alpha=0.1, random_state=0,
+    ... )
+    >>> list(res.predictions['cluster'])
+    [0, 1]
+    >>> bool((res.predictions['hi'] > res.predictions['lo']).all())
+    True
 
     Notes
     -----

@@ -36,7 +36,34 @@ from ._base import _DoubleMLBase
 
 
 class DoubleMLIIVM(_DoubleMLBase):
-    """Interactive IV DML — binary D, binary Z, LATE via Wald."""
+    """Interactive IV DML — binary D, binary Z, LATE via Wald.
+
+    Direct entry point for the interactive IV model with a binary
+    treatment and binary instrument; estimates the LATE (complier
+    effect) via the Neyman-orthogonal ratio of two doubly-robust
+    scores. Usually reached through ``sp.dml(..., model='iivm')``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> z = rng.integers(0, 2, size=n)
+    >>> d = ((0.6 * z + 0.3 * x1 + rng.normal(size=n)) > 0.3).astype(int)
+    >>> y = 1.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z, "x1": x1, "x2": x2})
+    >>> est = sp.DoubleMLIIVM(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     instrument="z", n_folds=3,
+    ... )
+    >>> res = est.fit()
+    >>> bool(np.isfinite(res.estimate))
+    True
+    """
 
     _MODEL_TAG = 'IIVM'
     _ESTIMAND = 'LATE'

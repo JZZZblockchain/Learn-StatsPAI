@@ -168,6 +168,27 @@ class TMLE:
     alpha : float
     propensity_bounds : tuple
     random_state : int
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> ps = 1 / (1 + np.exp(-(0.5 * x1 - 0.3 * x2)))
+    >>> treat = rng.binomial(1, ps)
+    >>> y = 1.0 * treat + 0.8 * x1 - 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'treat': treat, 'x1': x1, 'x2': x2})
+    >>> est = sp.TMLE(df, y='y', treat='treat', covariates=['x1', 'x2'],
+    ...               n_folds=2, random_state=0)
+    >>> res = est.fit()
+    >>> bool(hasattr(res, 'estimate'))
+    True
+    >>> bool(res.se > 0)
+    True
     """
 
     def __init__(

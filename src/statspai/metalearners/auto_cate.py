@@ -103,6 +103,32 @@ class AutoCATEResult:
         winner.
     n_obs : int
         Sample size (after dropping NA on modelled columns).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> age = rng.normal(size=n)
+    >>> edu = rng.normal(size=n)
+    >>> training = (rng.uniform(size=n) < 0.5).astype(int)
+    >>> wage = (1.0 + 0.5 * age + edu + training * (1.0 + age)
+    ...         + rng.normal(size=n))
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "edu": edu})
+    >>> result = sp.auto_cate(
+    ...     df, y="wage", treat="training", covariates=["age", "edu"],
+    ...     learners=("t", "dr"), n_folds=2, n_bootstrap=50, random_state=0,
+    ... )
+    >>> type(result).__name__
+    'AutoCATEResult'
+    >>> result.n_obs
+    200
+    >>> sorted(result.results)
+    ['dr', 't']
+    >>> bool(result.best_learner in set(result.leaderboard["learner"]))
+    True
     """
 
     leaderboard: pd.DataFrame

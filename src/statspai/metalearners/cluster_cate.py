@@ -19,7 +19,34 @@ from scipy import stats
 
 @dataclass
 class ClusterCATEResult:
-    """Per-cluster CATE table."""
+    """Per-cluster CATE table.
+
+    Returned by :func:`cluster_cate`; holds the within-cluster CATE table
+    (one row per retained K-means cluster) plus cluster / observation counts.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> tau = 1.0 + 0.8 * x1  # heterogeneous effect
+    >>> y = 2.0 + x2 + tau * d + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.cluster_cate(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     n_clusters=3, seed=0)
+    >>> isinstance(res, sp.ClusterCATEResult)
+    True
+    >>> res.cluster_table.columns.tolist()
+    ['cluster', 'n', 'cate', 'se', 'ci_low', 'ci_high']
+    >>> bool(res.n_obs == 400)
+    True
+    """
     cluster_table: pd.DataFrame      # cols: cluster, n, cate, se, ci_low, ci_high
     n_clusters: int
     n_obs: int

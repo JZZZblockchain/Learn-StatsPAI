@@ -154,7 +154,34 @@ def _hal_basis(
 
 
 class HALRegressor(_BaseHAL):
-    """L1-penalised HAL regressor (sklearn-compatible duck-typed API)."""
+    """L1-penalised HAL regressor (sklearn-compatible duck-typed API).
+
+    Fits an L1-penalised regression on a main-effects HAL basis of
+    per-feature step functions. Exposes the ``.fit`` / ``.predict``
+    interface so it can be dropped into cross-fitting pipelines such as
+    :func:`sp.tmle` and :func:`sp.hal_tmle`.
+
+    Parameters
+    ----------
+    lambda_ : float, optional
+        L1 penalty. ``None`` selects it via cross-validation.
+    max_anchors_per_col : int, default 40
+        Cap on step-function anchor points per feature.
+    cv : int, default 5
+        Folds for the CV penalty search (used only when ``lambda_`` is None).
+    random_state : int, default 0
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.normal(size=(200, 3))
+    >>> y = X[:, 0] + 0.5 * X[:, 1] + rng.normal(size=200)
+    >>> reg = sp.HALRegressor(max_anchors_per_col=10).fit(X, y)
+    >>> reg.predict(X).shape
+    (200,)
+    """
 
     _estimator_type = "regressor"  # for sklearn.base.is_regressor compatibility
 
@@ -198,7 +225,34 @@ class HALRegressor(_BaseHAL):
 
 
 class HALClassifier(_BaseHAL):
-    """L1-penalised HAL logistic classifier (sklearn-compatible duck-typed API)."""
+    """L1-penalised HAL logistic classifier (sklearn-compatible duck-typed API).
+
+    Fits an L1-penalised logistic regression on a main-effects HAL basis of
+    per-feature step functions. Exposes ``.fit`` / ``.predict`` /
+    ``.predict_proba`` so it can serve as the propensity learner in
+    :func:`sp.tmle` and :func:`sp.hal_tmle`.
+
+    Parameters
+    ----------
+    C : float, default 1.0
+        Inverse L1 penalty (larger = less shrinkage), as in scikit-learn.
+    max_anchors_per_col : int, default 40
+        Cap on step-function anchor points per feature.
+    random_state : int, default 0
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.normal(size=(200, 3))
+    >>> y = (X[:, 0] + rng.normal(size=200) > 0).astype(int)
+    >>> clf = sp.HALClassifier(max_anchors_per_col=10).fit(X, y)
+    >>> clf.predict_proba(X).shape
+    (200, 2)
+    >>> [int(c) for c in clf.classes_]
+    [0, 1]
+    """
 
     _estimator_type = "classifier"  # for sklearn.base.is_classifier compatibility
 
@@ -298,8 +352,24 @@ def hal_tmle(
     Examples
     --------
     >>> import statspai as sp
-    >>> r = sp.hal_tmle(df, y="y", treat="d", covariates=["x1","x2","x3"])
-    >>> r.summary()
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2, x3 = (rng.normal(size=n) for _ in range(3))
+    >>> ps = 1 / (1 + np.exp(-(0.5 * x1 + 0.3 * x2)))
+    >>> d = (rng.uniform(size=n) < ps).astype(int)
+    >>> y = 1.0 + 0.8 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2, "x3": x3})
+    >>> r = sp.hal_tmle(df, y="y", treat="d", covariates=["x1", "x2", "x3"],
+    ...                 max_anchors_per_col=10)
+    >>> bool(np.isfinite(r.estimate))
+    True
+    >>> r.model_info["variant"]
+    'delta'
+
+    References
+    ----------
+    [@benkeser2016highly] [@vanderlaan2023efficient] [@li2025regularized]
     """
     if variant == "projection":
         # The projection-variant block in v1.11.x and earlier shrunk the

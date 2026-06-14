@@ -20,7 +20,37 @@ from scipy import stats
 
 @dataclass
 class MultiDPConformalResult:
-    """Multi-decision-point conformal ITE intervals."""
+    """Multi-decision-point conformal ITE intervals.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(0, 1, n)
+    >>> d1 = rng.binomial(1, 0.5, n)
+    >>> y1 = 1.0 + 0.5 * x1 + 0.8 * d1 + rng.normal(0, 0.5, n)
+    >>> x2 = 0.5 * x1 + rng.normal(0, 1, n)
+    >>> d2 = rng.binomial(1, 0.5, n)
+    >>> y2 = 0.5 + 0.3 * x2 + 0.6 * d2 + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"x1": x1, "d1": d1, "y1": y1,
+    ...                    "x2": x2, "d2": d2, "y2": y2})
+    >>> res = sp.conformal_ite_multidp(
+    ...     df,
+    ...     y_per_stage=["y1", "y2"],
+    ...     treat_per_stage=["d1", "d2"],
+    ...     history_per_stage=[["x1"], ["x1", "x2"]],
+    ...     alpha=0.1,
+    ... )
+    >>> isinstance(res, sp.MultiDPConformalResult)
+    True
+    >>> res.n_stages
+    2
+    >>> res.cumulative_interval.shape
+    (200, 2)
+    """
     intervals_per_stage: List[np.ndarray]   # K elements of (n_test, 2)
     cumulative_interval: np.ndarray         # (n_test, 2) for sum over stages
     coverage_target: float
@@ -72,6 +102,33 @@ def conformal_ite_multidp(
     Returns
     -------
     MultiDPConformalResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(0, 1, n)
+    >>> d1 = rng.binomial(1, 0.5, n)
+    >>> y1 = 1.0 + 0.5 * x1 + 0.8 * d1 + rng.normal(0, 0.5, n)
+    >>> x2 = 0.5 * x1 + rng.normal(0, 1, n)
+    >>> d2 = rng.binomial(1, 0.5, n)
+    >>> y2 = 0.5 + 0.3 * x2 + 0.6 * d2 + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"x1": x1, "d1": d1, "y1": y1,
+    ...                    "x2": x2, "d2": d2, "y2": y2})
+    >>> res = sp.conformal_ite_multidp(
+    ...     df,
+    ...     y_per_stage=["y1", "y2"],
+    ...     treat_per_stage=["d1", "d2"],
+    ...     history_per_stage=[["x1"], ["x1", "x2"]],
+    ...     alpha=0.1,
+    ... )
+    >>> res.n_stages
+    2
+    >>> len(res.intervals_per_stage)
+    2
     """
     K = len(y_per_stage)
     if K != len(treat_per_stage) or K != len(history_per_stage):

@@ -297,14 +297,29 @@ def dml_model_averaging(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> from sklearn.linear_model import LassoCV, RidgeCV
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> X = rng.normal(size=(n, 5))
+    >>> d = X[:, 0] + rng.normal(size=n)
+    >>> y = 1.0 * d + X[:, 0] + 0.5 * X[:, 1] + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d,
+    ...                    **{f"x{j}": X[:, j] for j in range(5)}})
+    >>> candidates = [(LassoCV(), LassoCV(), "lasso"),
+    ...               (RidgeCV(), RidgeCV(), "ridge")]
     >>> r = sp.dml_model_averaging(df, y="y", treat="d",
-    ...                             covariates=[f"x{j}" for j in range(10)])
-    >>> r.summary()
-    >>> r.model_info["weights_g"]   # CLS stacking weights for ℓ̂(X) = E[Y|X]
-    {"lasso": 0.42, "ridge": 0.0, "rf": 0.0, "gbm": 0.58}
-    >>> r.model_info["weights_m"]   # CLS stacking weights for m̂(X) = E[D|X]
-    {"lasso": 0.0, "ridge": 0.31, "rf": 0.0, "gbm": 0.69}
+    ...                            covariates=[f"x{j}" for j in range(5)],
+    ...                            candidates=candidates, n_folds=3)
+    >>> type(r).__name__
+    'DMLAveragingResult'
+    >>> sorted(r.model_info["weights_g"])  # CLS stacking weights for E[Y|X]
+    ['lasso', 'ridge']
+    >>> sorted(r.model_info["weights_m"])  # CLS stacking weights for E[D|X]
+    ['lasso', 'ridge']
+    >>> print(r.summary())  # doctest: +SKIP
     """
     from scipy import stats as sp_stats
 

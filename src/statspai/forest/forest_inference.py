@@ -451,6 +451,29 @@ def honest_variance(
     Returns
     -------
     dict with ``ate``, ``se``, ``ci_low``, ``ci_high`` (95 %).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.binomial(1, 0.5, size=n)
+    >>> tau = 1.0 + X[:, 0]  # heterogeneous effect
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": Y, "d": T,
+    ...     "x0": X[:, 0], "x1": X[:, 1], "x2": X[:, 2],
+    ... })
+    >>> cf = sp.causal_forest(
+    ...     data=df, formula="y ~ d | x0 + x1 + x2",
+    ...     n_estimators=50, random_state=0,
+    ... )
+    >>> hv = sp.honest_variance(cf, n_splits=25, seed=0)
+    >>> bool(hv["se"] >= 0 and hv["ci_low"] <= hv["ate"] <= hv["ci_high"])
+    True
     """
     if not forest.fitted_:
         raise ValueError("Forest must be fitted.")
@@ -513,6 +536,32 @@ def average_treatment_effect(
         Propensity scores are clipped to ``[clip, 1-clip]`` before the
         inverse-propensity term to stabilise the score under near-overlap
         violations.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.binomial(1, 0.5, size=n)
+    >>> tau = 1.0 + X[:, 0]  # heterogeneous effect
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": Y, "d": T,
+    ...     "x0": X[:, 0], "x1": X[:, 1], "x2": X[:, 2],
+    ... })
+    >>> cf = sp.causal_forest(
+    ...     data=df, formula="y ~ d | x0 + x1 + x2",
+    ...     n_estimators=50, random_state=0,
+    ... )
+    >>> ate = sp.average_treatment_effect(cf, target_sample="all")
+    >>> ate["estimand"]
+    'ATE'
+    >>> att = sp.average_treatment_effect(cf, target_sample="treated")
+    >>> att["estimand"]
+    'ATT'
     """
     if not forest.fitted_:
         raise ValueError("Forest must be fitted.")
@@ -677,7 +726,31 @@ def forest_diagnostics(
     T: Optional[np.ndarray] = None,
     propensity_bounds: Tuple[float, float] = (0.05, 0.95),
 ) -> Dict[str, object]:
-    """Return overlap and CATE-distribution diagnostics for a fitted forest."""
+    """Return overlap and CATE-distribution diagnostics for a fitted forest.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.binomial(1, 0.5, size=n)
+    >>> tau = 1.0 + X[:, 0]  # heterogeneous effect
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": Y, "d": T,
+    ...     "x0": X[:, 0], "x1": X[:, 1], "x2": X[:, 2],
+    ... })
+    >>> cf = sp.causal_forest(
+    ...     data=df, formula="y ~ d | x0 + x1 + x2",
+    ...     n_estimators=50, random_state=0,
+    ... )
+    >>> diag = sp.forest_diagnostics(cf)
+    >>> bool(diag["n_treated"] + diag["n_control"] == diag["n"])
+    True
+    """
     if not forest.fitted_:
         raise ValueError("Forest must be fitted.")
 

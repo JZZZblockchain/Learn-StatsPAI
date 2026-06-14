@@ -22,7 +22,32 @@ from ._base import _DoubleMLBase
 
 
 class DoubleMLPLR(_DoubleMLBase):
-    """Partially linear regression DML (continuous or binary D, no IV)."""
+    """Partially linear regression DML (continuous or binary D, no IV).
+
+    Direct entry point for the partially linear model
+    ``Y = theta * D + g(X) + eps``. Usually reached through the
+    dispatcher ``sp.dml(..., model='plr')``; the class is exposed for
+    callers who want to construct the estimator explicitly.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = 0.5 * x1 + rng.normal(size=n)
+    >>> y = 1.5 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> est = sp.DoubleMLPLR(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"], n_folds=3,
+    ... )
+    >>> res = est.fit()
+    >>> bool(np.isfinite(res.estimate))
+    True
+    """
 
     _MODEL_TAG = 'PLR'
     _ESTIMAND = 'ATE'

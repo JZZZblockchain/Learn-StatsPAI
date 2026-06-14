@@ -230,6 +230,24 @@ def dl_propensity_score(
     ndarray of shape (n,)
         Estimated propensity scores clipped to (0.02, 0.98).
 
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> treat = rng.binomial(1, 1 / (1 + np.exp(-(0.5 * x1 + 0.3 * x2))))
+    >>> df = pd.DataFrame({"treat": treat, "x1": x1, "x2": x2})
+    >>> e = sp.dl_propensity_score(df, treatment="treat",
+    ...                            covariates=["x1", "x2"], random_state=0)
+    >>> e.shape == (n,)
+    True
+    >>> bool(((e >= 0.02) & (e <= 0.98)).all())
+    True
+
     References
     ----------
     Peng, Li, Wu & Li (arXiv:2404.04794, 2024). [@peng2024local]
