@@ -9,7 +9,8 @@ export const meta = {
 
 const REPO = '/Users/brycewang/Documents/GitHub/StatsPAI'
 const CAMPAIGN = args && args.campaign ? args.campaign : 'campaign1'
-const BUNDLES_PATH = '/tmp/example_bundles.json'
+const BUNDLES_PATH = (args && args.bundlesPath) ? args.bundlesPath : '/tmp/example_bundles.json'
+const REMEDIATE = !!(args && args.remediate)
 
 const COMMON = `
 You are improving docstrings in StatsPAI at ${REPO} (import statspai as sp; NumPy docstring style; mkdocstrings renders docstrings into the public API site; JOSS review checklist requires example usage).
@@ -66,7 +67,8 @@ const indices = Array.from({ length: N }, (_, i) => i)
 const results = await pipeline(
   indices,
   i => agent(`${COMMON}
-
+${REMEDIATE ? `
+REMEDIATION MODE — IMPORTANT: many functions in your bundle CURRENTLY HAVE A NON-RUNNING Examples block (it references an undefined variable like df / bx / m1 / a bare unqualified function name, or was left half-written). These are FAILURES that must be repaired. For every such function you MUST REPLACE the broken Examples block with one that ACTUALLY EXECUTES: add an explicit data-setup line (a bundled dataset such as sp.cps_wage() / sp.mincer_wage_panel() / sp.nhefs() if it exists, or a tiny inline numpy default_rng(seed) DataFrame with the exact columns the call needs), call sp.<func>(...) with the real signature, and RUN the whole block (exit 0) before saving. Do not leave any '>>>' line that references an undefined name. After editing, re-extract the block and run it to PROVE it works.` : ''}
 TASK: process bundle index ${i} of campaign '${CAMPAIGN}'. First load YOUR bundle:
   python3 -c "import json;d=json.load(open('${BUNDLES_PATH}'));b=d['${CAMPAIGN}'][${i}];import sys;print(json.dumps(b))"
 It is a list of {file, funcs:[...]} — the functions in those files that lack an Examples section. Add a verified Examples block to each function's docstring per the rules. Work file-by-file. No other bundle touches your files, so there are no write conflicts. Report per-function ran_ok, the files you touched, and any honest skips with reasons.`,
