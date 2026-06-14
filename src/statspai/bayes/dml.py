@@ -124,6 +124,18 @@ def bayes_dml(
     Learning for Causal Inference." arXiv:2508.12688.
     (The underlying orthogonal-moments DML construction is due to
     Chernozhukov et al. 2018, Econometrics Journal.) [@ditraglia2025bayesian]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Conjugate mode (default) cross-fits sp.dml then applies a
+    >>> # Normal-Normal update; 'full' mode needs the `bayes` extra.
+    >>> res = sp.bayes_dml(df, y='y', treatment='d',
+    ...                    covariates=['x1', 'x2'],
+    ...                    prior_mean=0.0, prior_sd=1.0)  # doctest: +SKIP
+    >>> print(res.summary())                  # doctest: +SKIP
+    >>> res.posterior_mean, res.ci            # doctest: +SKIP
     """
     if mode not in ("conjugate", "full"):
         raise ValueError(f"mode must be 'conjugate' or 'full'; got {mode!r}.")

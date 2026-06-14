@@ -54,6 +54,20 @@ class FailureMode:
         One-sentence, actionable recovery hint.
     alternative : str, optional
         ``sp.xxx`` to try next when this failure mode triggers.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> fm = sp.FailureMode(
+    ...     symptom='weak instrument',
+    ...     exception='ValueError',
+    ...     remedy='check first-stage F',
+    ...     alternative='sp.iv',
+    ... )
+    >>> fm.exception
+    'ValueError'
+    >>> sorted(fm.to_dict())
+    ['alternative', 'exception', 'remedy', 'symptom']
     """
 
     symptom: str
@@ -13217,6 +13231,15 @@ def list_functions(
         ``"experimental"`` / ``"deprecated"``). Use
         ``validation_status='certified'`` for parity-backed tool
         catalogs.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> fns = sp.list_functions()
+    >>> len(fns) > 1000
+    True
+    >>> 'did' in fns
+    True
     """
     _ensure_full_registry()
     if stability is not None and stability not in STABILITY_TIERS:
@@ -13247,6 +13270,17 @@ def describe_function(name: str) -> Dict[str, Any]:
 
     >>> sp.describe_function('did')
     {'name': 'did', 'category': 'causal', ...}
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> d = sp.describe_function('did')
+    >>> isinstance(d, dict)
+    True
+    >>> d['name']
+    'did'
+    >>> sorted(d)[:3]
+    ['alternatives', 'assumptions', 'category']
     """
     _ensure_full_registry()
     if name not in _REGISTRY:
@@ -13283,6 +13317,16 @@ def function_schema(name: str, *, agent_native: bool = False) -> Dict[str, Any]:
     >>> rich = sp.function_schema('did', agent_native=True)
     >>> rich['x_statspai']['assumptions']  # doctest: +SKIP
     ['Parallel trends', ...]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> schema = sp.function_schema('did')
+    >>> sorted(schema)
+    ['description', 'name', 'parameters']
+    >>> rich = sp.function_schema('did', agent_native=True)
+    >>> 'x_statspai' in rich
+    True
     """
     _ensure_full_registry()
     if name not in _REGISTRY:
@@ -13302,6 +13346,15 @@ def agent_schema(name: str) -> Dict[str, Any]:
     >>> schema = sp.agent_schema('did')
     >>> set(schema) >= {'name', 'description', 'parameters', 'x_statspai'}
     True
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> schema = sp.agent_schema('did')
+    >>> set(schema) >= {'name', 'description', 'parameters', 'x_statspai'}
+    True
+    >>> schema['name']
+    'did'
     """
     return function_schema(name, agent_native=True)
 
@@ -13319,6 +13372,15 @@ def search_functions(query: str) -> List[Dict[str, str]]:
 
     >>> sp.search_functions('treatment effect')
     [{'name': 'did', ...}, {'name': 'dml', ...}, ...]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> hits = sp.search_functions('synthetic control')
+    >>> len(hits) > 0
+    True
+    >>> sorted(hits[0])[:3]
+    ['category', 'description', 'name']
     """
     _ensure_full_registry()
     words = query.lower().split()
@@ -13362,6 +13424,17 @@ def all_schemas(*, agent_native: bool = False) -> List[Dict[str, Any]]:
 
     >>> schemas = sp.all_schemas()
     >>> # Register all as tools in your LLM framework
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> schemas = sp.all_schemas()
+    >>> isinstance(schemas, list)
+    True
+    >>> len(schemas) > 1000
+    True
+    >>> sorted(schemas[0])
+    ['description', 'name', 'parameters']
     """
     _ensure_full_registry()
     if agent_native:
@@ -13382,6 +13455,15 @@ def agent_card(name: str) -> Dict[str, Any]:
     >>> card = sp.agent_card('did')
     >>> [a for a in card['assumptions']]
     ['Parallel trends', 'No anticipation', 'SUTVA', ...]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> card = sp.agent_card('did')
+    >>> isinstance(card, dict)
+    True
+    >>> 'assumptions' in card
+    True
     """
     _ensure_full_registry()
     if name not in _REGISTRY:
@@ -13415,6 +13497,15 @@ def agent_cards(
 
     >>> cards = sp.agent_cards(category='causal', stability='stable')
     >>> # Feed to an agent's tool catalog or doc generator
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> cards = sp.agent_cards(category='causal')
+    >>> isinstance(cards, list)
+    True
+    >>> len(cards) > 0
+    True
     """
     _ensure_full_registry()
     if stability is not None and stability not in STABILITY_TIERS:

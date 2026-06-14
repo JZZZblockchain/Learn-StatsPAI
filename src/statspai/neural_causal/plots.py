@@ -33,6 +33,23 @@ def neural_causal_plot(
         ``"cate"`` draws a CATE histogram, ``"effects"`` draws sorted
         unit-level CATEs, ``"propensity"`` draws DragonNet overlap, and
         ``"loss"`` draws per-epoch training/validation loss.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.tarnet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 epochs=50)  # doctest: +SKIP
+    >>> fig, ax = sp.neural_causal_plot(res, type='cate')  # doctest: +SKIP
     """
     try:
         import matplotlib.pyplot as plt

@@ -233,6 +233,19 @@ def bayes_did(
     -------
     BayesianCausalResult
         Posterior summary of the ATT.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Bayesian DiD with NUTS (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]'). draws/tune reduced here for
+    >>> # illustration; defaults are draws=2000, tune=1000, chains=4.
+    >>> res = sp.bayes_did(df, y='y', treat='treat', post='post',
+    ...                    unit='id', time='t',
+    ...                    draws=500, tune=500, chains=2)  # doctest: +SKIP
+    >>> print(res.summary())  # posterior ATT + R-hat / ESS  # doctest: +SKIP
+    >>> res.tidy()  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
 

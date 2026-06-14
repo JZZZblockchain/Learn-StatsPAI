@@ -18,7 +18,32 @@ import pandas as pd
 
 @dataclass
 class KernelIVResult:
-    """Output of kernel IV regression."""
+    """Output of kernel IV regression.
+
+    Returned by :func:`sp.kernel_iv`. Holds the treatment grid, the
+    estimated structural function ``h_hat`` on that grid, the uniform
+    confidence band (``ci_low`` / ``ci_high``), and the bandwidth.
+    Call ``.summary()`` for a formatted preview.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> z = rng.normal(size=n)
+    >>> u = rng.normal(size=n)
+    >>> d = 0.8 * z + 0.5 * u + rng.normal(size=n)
+    >>> y = np.sin(d) + u + 0.3 * rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'z': z})
+    >>> res = sp.kernel_iv(df, y='y', treat='d', instrument='z',
+    ...                    n_boot=50)
+    >>> isinstance(res, sp.KernelIVResult)
+    True
+    >>> res.h_hat.shape  # structural function on a 30-point grid
+    (30,)
+    """
     grid: np.ndarray            # (n_grid,) treatment values
     h_hat: np.ndarray           # (n_grid,) structural function estimate
     ci_low: np.ndarray

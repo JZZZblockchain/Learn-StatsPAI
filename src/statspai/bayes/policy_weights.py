@@ -29,6 +29,16 @@ def policy_weight_ate() -> Callable[[np.ndarray], np.ndarray]:
 
     Equivalent to calling ``policy_effect`` and getting back the
     ATE from the current grid; provided for API parity.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> w = sp.policy_weight_ate()
+    >>> w(np.linspace(0, 1, 5))
+    array([1., 1., 1., 1., 1.])
+    >>> # Pass to BayesianMTEResult.policy_effect to recover the ATE:
+    >>> # res.policy_effect(sp.policy_weight_ate())
     """
     def _w(u: np.ndarray) -> np.ndarray:
         return np.ones_like(u, dtype=float)
@@ -50,6 +60,16 @@ def policy_weight_subsidy(
     u_lo, u_hi : float
         Band endpoints on the propensity (``U_D``) scale. Both must
         lie in ``[0, 1]`` and ``u_lo < u_hi``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> w = sp.policy_weight_subsidy(0.2, 0.6)
+    >>> w(np.array([0.1, 0.3, 0.5, 0.7]))
+    array([0., 1., 1., 0.])
+    >>> # Use with a fitted MTE result to target the subsidy band:
+    >>> # res.policy_effect(sp.policy_weight_subsidy(0.2, 0.6))
     """
     if not (0.0 <= u_lo < u_hi <= 1.0):
         raise ValueError(
@@ -108,6 +128,17 @@ def policy_weight_prte(
     shift : float
         Size of the propensity-scale shift. Must be in ``(-1, 1)``
         and non-zero.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> # Stylised rectangle of half-width |shift|/2 around u = 0.5.
+    >>> w = sp.policy_weight_prte(0.4)
+    >>> w(np.array([0.2, 0.5, 0.8]))
+    array([0., 1., 0.])
+    >>> # For the exact CHV-2011 PRTE pass observed propensity draws to
+    >>> # policy_weight_observed_prte instead of this convenience builder.
     """
     if not (-1.0 < shift < 1.0):
         raise ValueError(
@@ -145,6 +176,17 @@ def policy_weight_marginal(
         Target propensity level, in ``[0, 1]``.
     bandwidth : float, default 0.05
         Half-width of the averaging window.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> # Narrow band around u_star = 0.5 (half-width 0.1).
+    >>> w = sp.policy_weight_marginal(0.5, bandwidth=0.1)
+    >>> w(np.array([0.3, 0.45, 0.55, 0.7]))
+    array([0., 1., 1., 0.])
+    >>> # Pass to a fitted MTE result to read off the marginal PRTE:
+    >>> # res.policy_effect(sp.policy_weight_marginal(0.5))
     """
     if not (0.0 <= u_star <= 1.0):
         raise ValueError(f"u_star must be in [0, 1]; got {u_star}")
@@ -218,6 +260,21 @@ def policy_weight_observed_prte(
     Carneiro, P., Heckman, J. J., & Vytlacil, E. J. (2011).
     Estimating marginal returns to education. *AER*, 101(6),
     2754-2781. [@carneiro2011estimating]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> propensity = rng.uniform(0.1, 0.9, size=500)
+    >>> w = sp.policy_weight_observed_prte(propensity, shift=0.1)
+    >>> weights = w(np.linspace(0.1, 0.9, 5))
+    >>> weights.shape
+    (5,)
+    >>> bool(np.all(weights >= 0))  # non-negative for a positive shift
+    True
+    >>> # Then pass to a fitted MTE result for the CHV-2011 PRTE:
+    >>> # res.policy_effect(w, label='chv_prte')
     """
     from scipy.stats import gaussian_kde
 

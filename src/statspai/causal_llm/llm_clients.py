@@ -392,14 +392,22 @@ class _EchoClient(LLMClient):
 def echo_client(response_fn: Callable[[str, str], str]) -> LLMClient:
     """Deterministic scripted-response client for testing.
 
+    This is a network-free test double: ``response_fn`` maps
+    ``(role, prompt)`` to a canned string, so multi-agent causal
+    discovery runs deterministically without any LLM SDK or API key.
+
+    Examples
+    --------
     >>> import statspai as sp
     >>> def scripted(role, prompt):
     ...     if role == 'proposer':
     ...         return 'age -> treatment\\ntreatment -> outcome'
     ...     return ''
     >>> client = sp.causal_llm.echo_client(scripted)
+    >>> type(client).__name__
+    '_EchoClient'
     >>> res = sp.causal_llm.causal_mas(
-    ...     variables=['age','treatment','outcome'], client=client,
+    ...     variables=['age', 'treatment', 'outcome'], client=client,
     ... )
     >>> ('treatment', 'outcome') in res.edges
     True

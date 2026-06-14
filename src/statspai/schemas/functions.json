@@ -18491,7 +18491,7 @@
     }
   },
   {
-    "description": "GenMatchResult(att: 'float', att_se: 'float', ci: 'tuple', pvalue: 'float', weights: 'np.ndarray', balance: 'pd.DataFrame', matches: 'np.ndarray', n_treated: 'int', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Output of :func:`sp.genmatch` (Diamond-Sekhon genetic matching).",
     "name": "GenMatchResult",
     "parameters": {
       "properties": {
@@ -43487,7 +43487,7 @@
     }
   },
   {
-    "description": "CEVAEResult(ate: 'float', ite: 'np.ndarray', loss_history: 'list[float]', backend: 'str')",
+    "description": "Container for CEVAE estimates (ATE, unit-level ITE, loss history).",
     "name": "CEVAEResult",
     "parameters": {
       "properties": {
@@ -43875,7 +43875,7 @@
     }
   },
   {
-    "description": "ICEResult(strategy: 'list', value: 'float', se: 'float', ci: 'tuple[float, float]', method: 'str' = 'parametric-g-formula-ICE', per_timepoint_means: 'list[float]' = None)",
+    "description": "Result of the iterative conditional expectation (ICE) g-formula.",
     "name": "ICEResult",
     "parameters": {
       "properties": {

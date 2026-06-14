@@ -90,6 +90,25 @@ class LLMAnnotatorResult(CausalResult):
     ``annotator_diagnostics`` (false-positive / false-negative rates,
     validation-set size, agreement rate, optional confusion matrix and
     inflation factor) on the instance.
+
+    Examples
+    --------
+    Normally returned by ``sp.llm_annotator_correct`` (which calls an
+    LLM annotator); the result object itself is a plain CausalResult
+    subclass and can be inspected directly:
+
+    >>> import statspai as sp
+    >>> res = sp.LLMAnnotatorResult(
+    ...     method='llm_annotator_correct', estimand='ATE',
+    ...     estimate=0.42, se=0.08, pvalue=0.001, ci=(0.26, 0.58),
+    ...     alpha=0.05, n_obs=500, naive_estimate=0.30, naive_se=0.06,
+    ...     correction_factor=1.4,
+    ...     annotator_diagnostics={'agreement': 0.9, 'n_validation': 100},
+    ... )
+    >>> round(float(res.estimate), 2)
+    0.42
+    >>> isinstance(res, sp.CausalResult)
+    True
     """
 
     def __init__(

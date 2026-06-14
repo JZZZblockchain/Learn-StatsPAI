@@ -71,6 +71,17 @@ class StatsPAIError(Exception):
         names, etc.) so an agent can branch on specifics.
     alternative_functions : list of str, optional
         Ranked list of ``sp.xxx`` names the caller may try next.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.StatsPAIError(
+    ...         "estimation failed", recovery_hint="check inputs"
+    ...     )
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__, "|", e.recovery_hint)
+    StatsPAIError | check inputs
     """
 
     #: Short identifier surfaced in ``to_dict()`` and agent summaries.
@@ -124,6 +135,15 @@ class AssumptionViolation(StatsPAIError, ValueError):
 
     Subclasses :class:`ValueError` for backwards compatibility with
     code that already catches ``ValueError``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.AssumptionViolation("overlap fails for treated units")
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__)
+    AssumptionViolation
     """
 
     code = "assumption_violation"
@@ -135,6 +155,15 @@ class IdentificationFailure(AssumptionViolation):
     Stronger than :class:`AssumptionViolation`: no amount of re-tuning
     within the current method will fix it — the caller must switch
     method or add structure.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.IdentificationFailure("estimand not identified")
+    ... except sp.AssumptionViolation as e:
+    ...     print(type(e).__name__, isinstance(e, sp.StatsPAIError))
+    IdentificationFailure True
     """
 
     code = "identification_failure"
@@ -149,6 +178,15 @@ class DataInsufficient(StatsPAIError, ValueError):
     * too few clusters for cluster-robust inference
     * thin support near the RD cutoff
     * too few treated units for synthetic control
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.DataInsufficient("too few clusters for cluster-robust SE")
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__)
+    DataInsufficient
     """
 
     code = "data_insufficient"
@@ -159,6 +197,15 @@ class ConvergenceFailure(StatsPAIError, RuntimeError):
 
     Covers optimizer (BFGS / IPOPT), EM, MCMC (rhat / ESS thresholds),
     iterative HDFE demeaning, and cross-fitting loops.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.ConvergenceFailure("optimizer did not converge")
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__, isinstance(e, RuntimeError))
+    ConvergenceFailure True
     """
 
     code = "convergence_failure"
@@ -169,6 +216,15 @@ class NumericalInstability(StatsPAIError, RuntimeError):
 
     Covers singular / near-singular design matrices, near-zero weight
     denominators, NaNs in sandwich variance, and similar.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.NumericalInstability("singular design matrix")
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__, isinstance(e, RuntimeError))
+    NumericalInstability True
     """
 
     code = "numerical_instability"
@@ -182,6 +238,15 @@ class MethodIncompatibility(StatsPAIError, ValueError):
     * panel method called on cross-section
     * staggered estimator called with only one treatment cohort
     * ``robust="hac"`` with no time index
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> try:
+    ...     raise sp.MethodIncompatibility("panel method on cross-section")
+    ... except sp.StatsPAIError as e:
+    ...     print(type(e).__name__)
+    MethodIncompatibility
     """
 
     code = "method_incompatibility"
@@ -199,6 +264,16 @@ class StatsPAIWarning(UserWarning):
     A warning carries the same ``recovery_hint`` / ``diagnostics`` shape
     as an error so agent code can handle both consistently via
     ``warnings.catch_warnings``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as w:
+    ...     warnings.simplefilter("always")
+    ...     warnings.warn("soft diagnostic", sp.StatsPAIWarning)
+    ...     print(issubclass(w[-1].category, Warning))
+    True
     """
 
     #: Short identifier surfaced in agent summaries.
@@ -231,14 +306,36 @@ class StatsPAIWarning(UserWarning):
 
 class ConvergenceWarning(StatsPAIWarning):
     """Soft convergence warning — fit produced output but diagnostics
-    suggest instability (e.g. rhat > 1.01, ESS < 400)."""
+    suggest instability (e.g. rhat > 1.01, ESS < 400).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as w:
+    ...     warnings.simplefilter("always")
+    ...     warnings.warn("ess below 400", sp.ConvergenceWarning)
+    ...     print(issubclass(w[-1].category, sp.StatsPAIWarning))
+    True
+    """
 
     code = "convergence_warning"
 
 
 class AssumptionWarning(StatsPAIWarning):
     """Soft assumption warning — a test flags concern but the caller
-    chose to proceed (e.g. borderline pre-trend p-value)."""
+    chose to proceed (e.g. borderline pre-trend p-value).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as w:
+    ...     warnings.simplefilter("always")
+    ...     warnings.warn("borderline pre-trend", sp.AssumptionWarning)
+    ...     print(issubclass(w[-1].category, sp.StatsPAIWarning))
+    True
+    """
 
     code = "assumption_warning"
 

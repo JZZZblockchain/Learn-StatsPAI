@@ -124,6 +124,20 @@ class IVDiagResult:
         :meth:`to_dict`). Useful for downstream agent workflows.
     raw : dict
         Internal scratchpad with arrays (residuals, fitted values).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_iv(n=300, n_instruments=2, first_stage=0.6, seed=0)
+    >>> r = sp.iv.iv_diag(df, y='y', endog='treatment',
+    ...                   instruments=['instrument_1', 'instrument_2'],
+    ...                   exog=['x1', 'x2'], n_boot=200, random_state=42)
+    >>> isinstance(r, sp.IVDiagResult)
+    True
+    >>> bool(r.effective_F > 0)        # Olea-Pflueger robust F
+    True
+    >>> r.to_frame().shape[0] > 0      # tidy diagnostic table
+    True
     """
 
     n: int

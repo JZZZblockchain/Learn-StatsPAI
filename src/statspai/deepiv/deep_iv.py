@@ -267,9 +267,10 @@ class DeepIV:
     >>> est = sp.DeepIV(df, y="y", treat="t", instruments=["z"],
     ...                 covariates=["x"], first_stage_epochs=5,
     ...                 second_stage_epochs=5, hidden_layers=(16,),
-    ...                 batch_size=64, random_state=0)
-    >>> res = est.fit()  # requires PyTorch (pip install statspai[deepiv])
-    >>> isinstance(res, sp.CausalResult)
+    ...                 batch_size=64,
+    ...                 random_state=0)  # doctest: +SKIP
+    >>> res = est.fit()  # doctest: +SKIP
+    >>> isinstance(res, sp.CausalResult)  # doctest: +SKIP
     True
 
     References

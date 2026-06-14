@@ -35,22 +35,34 @@
 | 1 | causal 头部:DML 配套 + RD 家族 + matching + DiD/SDID | 28 | ✅ 2026-06-12 |
 | 2 | CATE diag + forest + qte + DiD reporting + policy | 32 | ✅ 2026-06-12 |
 | 3 | inference/mht + diagnostics + RD 余量 + synth exports | 40 | ✅ 2026-06-12 |
-| 4 | panel(GLMM/feglm/fepois)+ survey + mediation/gformula | ~30 | pending |
-| 5 | output + postestimation + smart/agent | ~35 | pending |
-| 6 | decomposition + spatial | ~40 | pending |
-| 7 | mendelian + epi + dag + timeseries | ~45 | pending |
-| 8 | 其余长尾(conformal/neural/interference/…) | ~60 | pending |
-| 9 | class-style deferred tier 复盘(决定哪些值得加) | — | pending |
-| 10 | CI ratchet 收紧至最终值 + docs 同步 | — | pending |
+| 4-N | 余下全部(panel/output/decomp/spatial/mendelian/epi/dag/ts/…) | 大批 | ✅ 并行会话 Workflow 扫完 |
+| 残余 | agent/core/bayes/neural/result-class/validation 79 个 | 79 | ✅ 2026-06-14 本会话 6 agent |
+| 收尾 | runnability 门修复 + ratchet 收紧至 4/0 | — | ✅ 2026-06-14 |
 
 每批交付定义:示例运行验证 → `worklist.md` 勾选 → ratchet 预算下调 →
 单独 commit(`docs(examples): batch N — <范围>`)。
 
+## 最终状态(2026-06-14)
+
+- **覆盖率 1027/1031 = 99.6%**(presence gate `missing=4`)。
+- **runnability gate `ran_ok=1014 failed=0`**(每个非 `+SKIP` 示例实跑通过)。
+- 两道 CI 闸门预算:`examples_coverage --max-missing 4` +
+  `check_example_execution --max-failures 0`。
+- **残余 4 个**:`anthropic_client` / `echo_client` / `openai_client`
+  (causal_llm)+ `particle_filter`(assimilation)。这 4 个 docstring
+  **已带 Examples**,但它们 registered-在-registry 却**未在顶层暴露**
+  (`sp.echo_client` 抛 AttributeError),scanner 的 `getattr(sp, name)`
+  够不到其 docstring。这是 registry/export 不一致(应暴露还是应
+  de-register),属公开 API 决策——审稿期间不擅自改,留待用户拍板;
+  解决后预算可进一步降到 0。
+
 ## CI ratchet
 
-`parity-guards.yml` 的 registry-drift job 挂
-`scripts/examples_coverage.py --check --max-missing <budget>`。预算只
-降不升;新注册函数若不带 Examples 会撞预算失败。当前预算:**561**。
+`parity-guards.yml` 的 registry-drift job 挂两道:
+`scripts/examples_coverage.py --check --max-missing 4`(presence)+
+`scripts/check_example_execution.py --max-failures 0`(runnability)。
+预算只降不升;新注册函数若不带可运行 Examples 会撞门失败。当前预算:
+**presence 4 / runnability 0**。
 
 ## Log
 
@@ -105,3 +117,15 @@
   已知(非本批):`diagnostics/tests.py` 的 `diagnose` 有一个早已存在
   的失败 doctest(缺 import),按 additions-only 原则未动,留待后续
   专门修复。
+- **2026-06-14 残余收尾**(本会话,并行会话已扫完中段):用 6 个并行
+  agent(按模块分桶、零写竞争)补齐最后 79 个——agent 自省 API
+  (registry/help/_agent_docs,真可运行)、core 异常+结果类(try/except
+  保证不抛)、bayes 17 个(policy_weights 真可运行,估计器/结果类
+  `# doctest: +SKIP` 因 PyMC 不在 env/CI)、neural_causal 13 个(torch
+  不在 → 全 +SKIP)、11 个 causal 结果类(从父函数已有示例复制 DGP,真
+  可运行)、validation/llm/assimilation/gformula 杂项。**修复运行门 4 个
+  真失败**:`sp.tarnet`/`sp.cfrnet`/`sp.dragonnet`(函数版)+ `sp.DeepIV`
+  的 `.fit()` 调用先前未加 `+SKIP`,在无 torch 的 `[dev]` CI 里会
+  ImportError——已逐行 +SKIP 修复(数据构造行仍真跑)。补 `LLMAnnotatorResult`
+  示例(直接构造结果对象,真可运行)。收 14 行 bayes 超 79 字符。
+  presence 79 → 4,runnability failed → 0;ratchet 收紧 4/0。

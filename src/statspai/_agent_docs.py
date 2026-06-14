@@ -77,6 +77,17 @@ def render_agent_block(name: str, *, header: bool = True) -> str:
     ------
     KeyError
         If ``name`` is not a registered function.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> md = sp.render_agent_block('did')
+    >>> isinstance(md, str)
+    True
+    >>> 'For Agents' in md
+    True
+    >>> 'For Agents' in sp.render_agent_block('did', header=False)
+    False
     """
     from .registry import agent_card as _card
 
@@ -154,6 +165,17 @@ def render_agent_blocks(
     -------
     str
         Markdown; empty if nothing to render.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> md = sp.render_agent_blocks(names=['did'])
+    >>> isinstance(md, str)
+    True
+    >>> 'For Agents' in md
+    True
+    >>> '### `sp.did`' in md
+    True
     """
     from .registry import agent_cards as _cards
 

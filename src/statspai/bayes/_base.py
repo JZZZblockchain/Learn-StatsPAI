@@ -106,6 +106,19 @@ class BayesianCausalResult:
         Full posterior trace for downstream plotting / diagnostics.
     model_info : dict
         Misc. fit metadata (draws, tune, chains, priors, ...).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # Returned by every scalar-estimand Bayesian estimator, e.g.
+    >>> # bayes_rd / bayes_iv (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]').
+    >>> res = sp.bayes_rd(df, y='y', running='x', cutoff=0.0)  # doctest: +SKIP
+    >>> isinstance(res, sp.BayesianCausalResult)  # doctest: +SKIP
+    >>> res.posterior_mean, res.hdi_lower, res.hdi_upper  # doctest: +SKIP
+    >>> res.prob_positive   # posterior P(estimand > 0)  # doctest: +SKIP
+    >>> res.rhat, res.ess   # convergence diagnostics  # doctest: +SKIP
+    >>> res.tidy()  # doctest: +SKIP
     """
 
     method: str
@@ -383,6 +396,18 @@ class BayesianDIDResult(BayesianCausalResult):
     The ``cohort_labels`` field preserves the user's original cohort
     values in the order the model sampled them; iteration order is
     deterministic and matches the posterior variable axis.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # Returned by bayes_did (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]'). Pass cohort=... to populate
+    >>> # the per-cohort posteriors.
+    >>> res = sp.bayes_did(df, y='y', treat='treat', post='post',
+    ...                    cohort='first_treat')  # doctest: +SKIP
+    >>> res.tidy()                       # pooled ATT row  # doctest: +SKIP
+    >>> res.tidy(terms='per_cohort')     # one row per cohort  # doctest: +SKIP
+    >>> res.cohort_summaries  # doctest: +SKIP
     """
 
     cohort_summaries: Dict[str, Dict[str, float]] = field(default_factory=dict)
@@ -470,6 +495,19 @@ class BayesianIVResult(BayesianCausalResult):
     populated by :func:`bayes_iv` when called with
     ``per_instrument=True``. When the dict is empty (default),
     behaviour matches v0.9.15 exactly.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # Returned by bayes_iv (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]'). Pass per_instrument=True with
+    >>> # multiple instruments to populate the per-Z posteriors.
+    >>> res = sp.bayes_iv(df, y='y', treat='d',
+    ...                   instrument=['z1', 'z2'],
+    ...                   per_instrument=True)  # doctest: +SKIP
+    >>> res.tidy()                          # pooled LATE row  # doctest: +SKIP
+    >>> res.tidy(terms='per_instrument')  # doctest: +SKIP
+    >>> res.instrument_summaries  # doctest: +SKIP
     """
 
     instrument_summaries: Dict[str, Dict[str, float]] = field(default_factory=dict)
@@ -549,6 +587,17 @@ class BayesianHTEIVResult(BayesianCausalResult):
 
     Carries the average LATE (inherited) *plus* a table of CATE-slope
     posteriors — one row per effect modifier.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # Returned by bayes_hte_iv (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]').
+    >>> res = sp.bayes_hte_iv(df, y='y', treat='d', instrument='z',
+    ...                       effect_modifiers=['age'])  # doctest: +SKIP
+    >>> res.posterior_mean  # doctest: +SKIP
+    >>> res.cate_slopes  # doctest: +SKIP
+    >>> res.predict_cate({'age': 40})  # doctest: +SKIP
     """
 
     cate_slopes: pd.DataFrame = field(default_factory=pd.DataFrame)
@@ -609,6 +658,19 @@ class BayesianMTEResult(BayesianCausalResult):
     full posterior over the MTE curve ``tau(u)`` on a user-specified
     grid, plus integrated summaries over the treated / untreated /
     average populations (ATT, ATU, ATE).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # Returned by bayes_mte (requires the `bayes` extra:
+    >>> #   pip install 'statspai[bayes]').
+    >>> res = sp.bayes_mte(df, y='y', treat='d',
+    ...                    instrument='z')  # doctest: +SKIP
+    >>> res.ate, res.att, res.atu  # doctest: +SKIP
+    >>> res.mte_curve  # doctest: +SKIP
+    >>> res.tidy(terms=['ate', 'att', 'atu'])  # doctest: +SKIP
+    >>> # Policy-relevant effect with a ready-made weight builder:
+    >>> res.policy_effect(sp.policy_weight_ate())  # doctest: +SKIP
     """
 
     mte_curve: pd.DataFrame = field(default_factory=pd.DataFrame)

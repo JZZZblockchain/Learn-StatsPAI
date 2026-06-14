@@ -216,6 +216,17 @@ class HelpResult:
 
     Returned by :func:`help` unless ``format='dict'`` is requested,
     in which case the underlying mapping is returned directly.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> hr = sp.HelpResult("overview text", data={'kind': 'demo'})
+    >>> str(hr)
+    'overview text'
+    >>> hr.data['kind']
+    'demo'
+    >>> type(sp.help('did')).__name__
+    'HelpResult'
     """
 
     __slots__ = ("text", "data")
@@ -607,6 +618,18 @@ def help(  # noqa: A001 (shadow builtin by design; sp.help is our public API)
     Returns
     -------
     HelpResult | dict | None
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> r = sp.help('did')
+    >>> type(r).__name__
+    'HelpResult'
+    >>> isinstance(r.text, str)
+    True
+    >>> d = sp.help('did', format='dict')
+    >>> isinstance(d, dict)
+    True
     """
     if format not in ("text", "dict"):
         raise ValueError(f"format must be 'text' or 'dict', got {format!r}")

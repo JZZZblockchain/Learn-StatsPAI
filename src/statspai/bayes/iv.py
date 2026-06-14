@@ -144,6 +144,22 @@ def bayes_iv(
     -------
     BayesianCausalResult
         Posterior summary on the LATE coefficient.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Bayesian IV jointly modelling first stage + structural eq.
+    >>> # (requires the `bayes` extra: pip install 'statspai[bayes]').
+    >>> res = sp.bayes_iv(df, y='y', treat='d', instrument='z',
+    ...                   covariates=['x1'],
+    ...                   draws=500, tune=500, chains=2)  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    >>> # Multiple instruments with one LATE row per instrument:
+    >>> res2 = sp.bayes_iv(df, y='y', treat='d',
+    ...                    instrument=['z1', 'z2'],
+    ...                    per_instrument=True)  # doctest: +SKIP
+    >>> res2.tidy(terms='per_instrument')  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
 

@@ -96,6 +96,31 @@ class DMLPanelResult:
     diagnostics : dict
         Populated with ``{'y_resid_std', 'd_resid_std', 'corr_yd_resid',
         'within_r2', 'omega_cluster'}``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(50):
+    ...     alpha_i = rng.normal()
+    ...     for t in range(5):
+    ...         x1, x2 = rng.normal(), rng.normal()
+    ...         union = 0.4 * x1 + alpha_i + rng.normal()
+    ...         lw = (0.8 * union + x1 + 0.5 * x2 + alpha_i
+    ...               + 0.1 * t + rng.normal())
+    ...         rows.append({'pid': i, 'year': t, 'log_wage': lw,
+    ...                      'union': union, 'exper': x1, 'educ': x2})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.dml_panel(df, y='log_wage', treat='union',
+    ...                    covariates=['exper', 'educ'], unit='pid',
+    ...                    time='year', include_time_fe=True, n_folds=3)
+    >>> isinstance(res, sp.DMLPanelResult)
+    True
+    >>> res.method
+    'dml_panel'
     """
     estimate: float
     se: float

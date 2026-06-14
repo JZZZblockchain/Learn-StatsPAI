@@ -107,6 +107,29 @@ class DMLAveragingResult(CausalResult):
     * ``weights_g`` / ``weights_m`` — separate stacking weights per
       nuisance under ``weight_rule="short_stacking"``.
     * ``weight_rule`` — how the weights were computed.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> from sklearn.linear_model import LassoCV, RidgeCV
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> X = rng.normal(size=(n, 5))
+    >>> d = X[:, 0] + rng.normal(size=n)
+    >>> y = 1.0 * d + X[:, 0] + 0.5 * X[:, 1] + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d,
+    ...                    **{f"x{j}": X[:, j] for j in range(5)}})
+    >>> candidates = [(LassoCV(), LassoCV(), "lasso"),
+    ...               (RidgeCV(), RidgeCV(), "ridge")]
+    >>> r = sp.dml_model_averaging(df, y="y", treat="d",
+    ...                            covariates=[f"x{j}" for j in range(5)],
+    ...                            candidates=candidates, n_folds=3)
+    >>> isinstance(r, sp.DMLAveragingResult)
+    True
+    >>> sorted(r.model_info["weights_m"])  # CLS stacking weights
+    ['lasso', 'ridge']
     """
 
 

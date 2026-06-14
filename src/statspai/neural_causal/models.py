@@ -142,10 +142,11 @@ def tarnet(
     ...                    'x1': x1, 'x2': x2, 'x3': x3})
     >>> result = sp.tarnet(df, y='outcome', treat='treatment',
     ...                    covariates=['x1', 'x2', 'x3'],
-    ...                    epochs=30, n_bootstrap=20, random_state=0)
+    ...                    epochs=30, n_bootstrap=20,
+    ...                    random_state=0)  # doctest: +SKIP
     >>> # Access per-unit CATE predictions
-    >>> cate = result.model_info['cate']
-    >>> bool(len(cate) == n)
+    >>> cate = result.model_info['cate']  # doctest: +SKIP
+    >>> bool(len(cate) == n)  # doctest: +SKIP
     True
     """
     est = TARNet(
@@ -254,8 +255,9 @@ def cfrnet(
     >>> result = sp.cfrnet(df, y='outcome', treat='treatment',
     ...                    covariates=['x1', 'x2', 'x3'],
     ...                    ipm_weight=0.5,
-    ...                    epochs=30, n_bootstrap=20, random_state=0)
-    >>> bool(result.estimate is not None)
+    ...                    epochs=30, n_bootstrap=20,
+    ...                    random_state=0)  # doctest: +SKIP
+    >>> bool(result.estimate is not None)  # doctest: +SKIP
     True
     """
     est = CFRNet(
@@ -371,14 +373,16 @@ def dragonnet(
     ...                    'x1': x1, 'x2': x2, 'x3': x3})
     >>> result = sp.dragonnet(df, y='outcome', treat='treatment',
     ...                       covariates=['x1', 'x2', 'x3'],
-    ...                       epochs=30, n_bootstrap=20, random_state=0)
-    >>> bool(result.estimate is not None)
+    ...                       epochs=30, n_bootstrap=20,
+    ...                       random_state=0)  # doctest: +SKIP
+    >>> bool(result.estimate is not None)  # doctest: +SKIP
     True
     >>> # DragonNet without targeted regularisation
     >>> result = sp.dragonnet(df, y='outcome', treat='treatment',
     ...                       covariates=['x1', 'x2'],
     ...                       targeted_reg_weight=0.0,
-    ...                       epochs=30, n_bootstrap=20, random_state=0)
+    ...                       epochs=30, n_bootstrap=20,
+    ...                       random_state=0)  # doctest: +SKIP
     """
     est = DragonNet(
         data=data, y=y, treat=treat, covariates=covariates,
@@ -589,6 +593,24 @@ class TARNet:
     patience : int
     min_delta : float
     verbose : bool
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Neural causal estimators require the `neural` extra
+    >>> # (pip install statspai[neural]); illustrative usage:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> est = sp.TARNet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 epochs=50)  # doctest: +SKIP
+    >>> result = est.fit()  # doctest: +SKIP
+    >>> result.summary()  # doctest: +SKIP
     """
 
     def __init__(
@@ -893,6 +915,24 @@ class CFRNet:
     patience : int
     min_delta : float
     verbose : bool
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Neural causal estimators require the `neural` extra
+    >>> # (pip install statspai[neural]); illustrative usage:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> est = sp.CFRNet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 ipm_weight=0.5, epochs=50)  # doctest: +SKIP
+    >>> result = est.fit()  # doctest: +SKIP
+    >>> result.summary()  # doctest: +SKIP
     """
 
     def __init__(
@@ -1213,6 +1253,24 @@ class DragonNet:
     patience : int
     min_delta : float
     verbose : bool
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Neural causal estimators require the `neural` extra
+    >>> # (pip install statspai[neural]); illustrative usage:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> est = sp.DragonNet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                    epochs=50)  # doctest: +SKIP
+    >>> result = est.fit()  # doctest: +SKIP
+    >>> result.model_info['propensity'][:3]  # doctest: +SKIP
     """
 
     def __init__(

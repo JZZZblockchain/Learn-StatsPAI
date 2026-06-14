@@ -32,7 +32,32 @@ from ..core.results import CausalResult
 
 @dataclass
 class DIDAnalysis:
-    """Bundled results from a full DID analysis workflow."""
+    """Bundled results from a full DID analysis workflow.
+
+    Returned by :func:`sp.did_analysis`; bundles the detected design, the
+    main ATT estimate, optional event study / Bacon decomposition /
+    honest-DID sensitivity, and a step-by-step log. Use ``.summary()``
+    for a human-readable report and ``.plot()`` for the event study.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> post = np.tile([0, 1], n)
+    >>> policy = np.repeat(rng.integers(0, 2, size=n), 2)
+    >>> wage = (2.0 + 0.5 * post + 1.0 * (policy * post)
+    ...         + rng.normal(size=2 * n))
+    >>> df = pd.DataFrame({'post': post, 'policy': policy, 'wage': wage})
+    >>> report = sp.did_analysis(df, y='wage', treat='policy',
+    ...                          time='post', run_sensitivity=False)
+    >>> isinstance(report, sp.DIDAnalysis)
+    True
+    >>> report.design
+    '2x2'
+    """
 
     design: str
     method_used: str

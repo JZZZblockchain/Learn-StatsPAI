@@ -395,6 +395,24 @@ class PSBalanceResult:
         smd_raw, smd_weighted, variance_ratio, ks_stat.
     ps : Series
         Estimated propensity scores.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> p = 1.0 / (1.0 + np.exp(-(0.5 * x1 - 0.5 * x2 - 0.5)))
+    >>> d = rng.binomial(1, p)
+    >>> df = pd.DataFrame({'d': d, 'x1': x1, 'x2': x2})
+    >>> bal = sp.ps_balance(df, treatment='d', covariates=['x1', 'x2'])
+    >>> isinstance(bal, sp.PSBalanceResult)
+    True
+    >>> bal.table['smd_weighted'].round(2).tolist()
+    [0.02, -0.06]
     """
 
     def __init__(self, table: pd.DataFrame, ps: pd.Series):
@@ -437,7 +455,25 @@ class PSBalanceResult:
 
 
 class BalanceDiagnosticsResult:
-    """Container for raw/weighted matching balance diagnostics."""
+    """Container for raw/weighted matching balance diagnostics.
+
+    Returned by :func:`sp.balance_diagnostics`. Holds a per-covariate
+    ``table`` (raw vs. weighted SMDs, variance ratios, KS stats) and a
+    ``summary_stats`` dict (max/mean SMDs, imbalance counts, effective
+    sample size, propensity overlap). Call ``.summary()`` for a report.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> bal = sp.balance_diagnostics(
+    ...     df, treatment='union',
+    ...     covariates=['education', 'experience', 'tenure'])
+    >>> isinstance(bal, sp.BalanceDiagnosticsResult)
+    True
+    >>> bal.summary_stats['n_obs']
+    3000
+    """
 
     def __init__(
         self,

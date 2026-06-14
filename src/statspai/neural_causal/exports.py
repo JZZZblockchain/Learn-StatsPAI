@@ -41,6 +41,23 @@ def neural_effects_frame(result, *, sort_by: Optional[str] = None) -> pd.DataFra
         Result returned by ``sp.tarnet``, ``sp.cfrnet``, or ``sp.dragonnet``.
     sort_by : {"cate", "propensity", None}, optional
         Sort rows by a diagnostic column.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.tarnet(df, y='y', treat='d',
+    ...                 covariates=['x1', 'x2'], epochs=50)  # doctest: +SKIP
+    >>> sp.neural_effects_frame(res, sort_by='cate').head()  # doctest: +SKIP
     """
     _require_neural_result(result)
     mi = result.model_info
@@ -76,7 +93,26 @@ def neural_effects_frame(result, *, sort_by: Optional[str] = None) -> pd.DataFra
 
 
 def neural_summary_frame(result) -> pd.DataFrame:
-    """Return a one-row summary table for a neural causal result."""
+    """Return a one-row summary table for a neural causal result.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.dragonnet(df, y='y', treat='d',
+    ...                    covariates=['x1', 'x2'],
+    ...                    epochs=50)  # doctest: +SKIP
+    >>> sp.neural_summary_frame(res)  # doctest: +SKIP
+    """
     _require_neural_result(result)
     mi = result.model_info
     keys = [
@@ -122,7 +158,25 @@ def neural_summary_frame(result) -> pd.DataFrame:
 
 
 def neural_training_frame(result) -> pd.DataFrame:
-    """Return per-epoch training diagnostics if recorded."""
+    """Return per-epoch training diagnostics if recorded.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.tarnet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 epochs=50)  # doctest: +SKIP
+    >>> sp.neural_training_frame(res).tail()  # doctest: +SKIP
+    """
     _require_neural_result(result)
     history = result.model_info.get("training_history")
     if isinstance(history, pd.DataFrame):
@@ -137,7 +191,25 @@ def neural_causal_to_markdown(
     effects_head: int = 20,
     digits: int = 4,
 ) -> str:
-    """Render a neural causal result to GitHub-flavoured Markdown."""
+    """Render a neural causal result to GitHub-flavoured Markdown.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.tarnet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 epochs=50)  # doctest: +SKIP
+    >>> md = sp.neural_causal_to_markdown(res)  # doctest: +SKIP
+    """
     summary = neural_summary_frame(result).round(digits)
     effects = neural_effects_frame(result).head(effects_head).round(digits)
     training = neural_training_frame(result).round(digits)
@@ -165,7 +237,25 @@ def neural_causal_to_html(
     effects_head: int = 50,
     digits: int = 4,
 ) -> str:
-    """Render a neural causal result to a compact HTML report."""
+    """Render a neural causal result to a compact HTML report.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.cfrnet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                 epochs=50)  # doctest: +SKIP
+    >>> html = sp.neural_causal_to_html(res)  # doctest: +SKIP
+    """
     summary = neural_summary_frame(result).round(digits)
     effects = neural_effects_frame(result).head(effects_head).round(digits)
     training = neural_training_frame(result).round(digits)
@@ -192,7 +282,25 @@ def neural_causal_to_excel(
     *,
     digits: int = 6,
 ) -> str:
-    """Write a multi-sheet Excel workbook for a neural causal result."""
+    """Write a multi-sheet Excel workbook for a neural causal result.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> # Operates on a fitted neural result; the `neural` extra
+    >>> # (pip install statspai[neural]) is needed to produce one:
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 2.0 * d + x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.dragonnet(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                    epochs=50)  # doctest: +SKIP
+    >>> sp.neural_causal_to_excel(res, 'neural.xlsx')  # doctest: +SKIP
+    """
     summary = neural_summary_frame(result).round(digits)
     effects = neural_effects_frame(result).round(digits)
     training = neural_training_frame(result).round(digits)

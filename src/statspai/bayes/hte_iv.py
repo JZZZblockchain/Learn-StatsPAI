@@ -140,6 +140,19 @@ def bayes_hte_iv(
     BayesianHTEIVResult
         `BayesianCausalResult` with a `cate_slopes` DataFrame and
         `predict_cate(values)` method.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Bayesian IV with LATE that varies linearly in 'age'
+    >>> # (requires the `bayes` extra: pip install 'statspai[bayes]').
+    >>> res = sp.bayes_hte_iv(df, y='y', treat='d', instrument='z',
+    ...                       effect_modifiers=['age'],
+    ...                       draws=500, tune=500, chains=2)  # doctest: +SKIP
+    >>> res.cate_slopes        # one row per effect modifier  # doctest: +SKIP
+    >>> # Posterior CATE at a specific modifier value:
+    >>> res.predict_cate({'age': 40})  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
     prep = _prepare_hte_iv_frame(

@@ -28,7 +28,23 @@ _REPO_ENV = "STATSPAI_REPO_ROOT"
 
 @dataclass
 class ValidationReport:
-    """Structured validation evidence for the current StatsPAI checkout."""
+    """Structured validation evidence for the current StatsPAI checkout.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> report = sp.ValidationReport(
+    ...     generated_at="2026-01-01T00:00:00+00:00",
+    ...     version="1.16.1",
+    ...     repo_root=None,
+    ...     registry={"total_functions": 0, "total_categories": 0},
+    ...     evidence={},
+    ... )
+    >>> report.version
+    '1.16.1'
+    >>> isinstance(report.to_dict(), dict)
+    True
+    """
 
     generated_at: str
     version: str
@@ -119,7 +135,23 @@ class ValidationReport:
 
 @dataclass
 class ReproductionStep:
-    """One command or file-copy step in a JSS table reproduction run."""
+    """One command or file-copy step in a JSS table reproduction run.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> step = sp.ReproductionStep(
+    ...     name="generate_inventory",
+    ...     action="command",
+    ...     command=["python", "generate_inventory.py"],
+    ...     cwd=".",
+    ...     returncode=0,
+    ... )
+    >>> step.ok
+    True
+    >>> step.name
+    'generate_inventory'
+    """
 
     name: str
     action: str
@@ -141,7 +173,32 @@ class ReproductionStep:
 
 @dataclass
 class ReproductionResult:
-    """Structured result returned by :func:`reproduce_jss_tables`."""
+    """Structured result returned by :func:`reproduce_jss_tables`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> step = sp.ReproductionStep(
+    ...     name="generate_inventory",
+    ...     action="command",
+    ...     command=["python", "generate_inventory.py"],
+    ...     cwd=".",
+    ...     returncode=0,
+    ... )
+    >>> result = sp.ReproductionResult(
+    ...     generated_at="2026-01-01T00:00:00+00:00",
+    ...     repo_root=".",
+    ...     targets=["inventory"],
+    ...     dry_run=True,
+    ...     success=True,
+    ...     steps=[step],
+    ...     artifacts={},
+    ... )
+    >>> result.success
+    True
+    >>> result.failed_steps()
+    []
+    """
 
     generated_at: str
     repo_root: str
@@ -214,6 +271,17 @@ def validation_report(
     fmt : {"object", "dict", "markdown"}, default "object"
         Return a :class:`ValidationReport`, a JSON-serializable dict, or
         a Markdown string.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> report = sp.validation_report(collect_tests=False)
+    >>> isinstance(report, sp.ValidationReport)
+    True
+    >>> isinstance(report.registry["total_functions"], int)
+    True
+    >>> report.summary().startswith("StatsPAI")
+    True
     """
     root, warnings = _coerce_repo_root(repo_root)
 
@@ -272,6 +340,18 @@ def reproduce_jss_tables(
         Python executable used for scripts. Defaults to ``sys.executable``.
     timeout : float, optional
         Per-command timeout in seconds. ``None`` disables the timeout.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # dry_run plans the steps without running R/Stata/LaTeX or
+    >>> # copying files (needs the StatsPAI source tree).
+    >>> plan = sp.reproduce_jss_tables(targets="inventory", dry_run=True)
+    >>> plan.dry_run
+    True
+    >>> all(step.skipped for step in plan.steps)
+    True
+    >>> result = sp.reproduce_jss_tables(targets="all")  # doctest: +SKIP
     """
     root, warnings = _coerce_repo_root(repo_root)
     if root is None:
@@ -328,6 +408,17 @@ def coverage_matrix(
         the 36-module Track A matrix parsed from ``tests/r_parity/README.md``.
     fmt : {"dataframe", "records", "markdown"}, default "dataframe"
         Output format.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rows = sp.coverage_matrix(level="category", fmt="records")
+    >>> isinstance(rows, list) and len(rows) > 0
+    True
+    >>> "category" in rows[0]
+    True
+    >>> "registered_functions" in rows[0]
+    True
     """
     root, _warnings = _coerce_repo_root(repo_root)
 
@@ -362,6 +453,16 @@ def parity_gap_report(
     The report is metadata-only: it parses already-generated
     ``tests/r_parity/results/parity_table_3way.md`` plus the R/Stata
     coverage matrix. It does not run Python/R/Stata.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> gaps = sp.parity_gap_report(fmt="records")
+    >>> isinstance(gaps, list)
+    True
+    >>> # Each gap row, when present, names its module and next action.
+    >>> all("module_id" in row and "next_action" in row for row in gaps)
+    True
     """
     root, _warnings = _coerce_repo_root(repo_root)
     rows: List[Dict[str, Any]] = []

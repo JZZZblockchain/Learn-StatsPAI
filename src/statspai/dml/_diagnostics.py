@@ -43,7 +43,34 @@ from scipy import stats
 
 @dataclass
 class DMLDiagnostics:
-    """Bundled DML diagnostics returned by :func:`dml_diagnostics`."""
+    """Bundled DML diagnostics returned by :func:`dml_diagnostics`.
+
+    Holds the overlap table, residual-balance table, score-density
+    moments, and the orthogonality test for a fitted DML estimator.
+    Use ``.summary()`` for the text report and ``.plot()`` for the 2x2
+    diagnostic panel.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = 0.5 * x1 + rng.normal(size=n)
+    >>> y = 1.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> fit = sp.dml(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...              model='plr', ml_g='linear', ml_m='linear',
+    ...              n_folds=2)
+    >>> diag = sp.dml_diagnostics(fit)
+    >>> isinstance(diag, sp.DMLDiagnostics)
+    True
+    >>> diag.method
+    'PLR'
+    """
 
     n_obs: int
     method: str  # PLR / IRM / PLIV / IIVM

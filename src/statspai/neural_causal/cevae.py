@@ -29,6 +29,24 @@ import pandas as pd
 
 @dataclass
 class CEVAEResult:
+    """Container for CEVAE estimates (ATE, unit-level ITE, loss history).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> # CEVAE requires the `neural` extra (pip install statspai[neural]);
+    >>> # the result object is produced by fitting and then inspected:
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.normal(size=(120, 3))
+    >>> t = rng.binomial(1, 0.5, size=120)
+    >>> y = 2.0 * t + X[:, 0] + rng.normal(scale=0.5, size=120)
+    >>> res = sp.cevae(X, t, y, n_epochs=50)  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    >>> res.tidy()  # one-row ATE table  # doctest: +SKIP
+    >>> res.effects_frame().head()  # unit-level ITE  # doctest: +SKIP
+    """
+
     ate: float
     ite: np.ndarray
     loss_history: list[float]
@@ -154,6 +172,20 @@ class CEVAEResult:
 class CEVAE:
     """Minimal CEVAE. Uses PyTorch if available, else a light numpy
     linear variational approximation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> # CEVAE requires the `neural` extra (pip install statspai[neural]);
+    >>> # illustrative object-oriented usage:
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.normal(size=(120, 3))
+    >>> t = rng.binomial(1, 0.5, size=120)
+    >>> y = 2.0 * t + X[:, 0] + rng.normal(scale=0.5, size=120)
+    >>> est = sp.CEVAE(z_dim=4, hidden=32, n_epochs=50, seed=0)
+    >>> res = est.fit(X, t, y)  # doctest: +SKIP
+    >>> float(res.ate)  # doctest: +SKIP
     """
 
     def __init__(
@@ -313,7 +345,21 @@ def cevae(
     outcome: np.ndarray,
     **kw,
 ) -> CEVAEResult:
-    """Functional CEVAE wrapper."""
+    """Functional CEVAE wrapper.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> # CEVAE requires the `neural` extra (pip install statspai[neural]);
+    >>> # X/treatment/outcome are plain numpy arrays:
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.normal(size=(120, 3))
+    >>> t = rng.binomial(1, 0.5, size=120)
+    >>> y = 2.0 * t + X[:, 0] + rng.normal(scale=0.5, size=120)
+    >>> res = sp.cevae(X, t, y, n_epochs=50, seed=0)  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    """
     return CEVAE(**kw).fit(X, treatment, outcome)
 
 

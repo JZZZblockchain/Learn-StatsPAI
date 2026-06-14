@@ -38,6 +38,33 @@ from scipy import stats
 
 @dataclass
 class GenMatchResult:
+    """Output of :func:`sp.genmatch` (Diamond-Sekhon genetic matching).
+
+    Holds the ATT estimate and bootstrap SE, the optimal covariate
+    weight vector, the matched control indices, and a pre/post balance
+    table. Call ``.summary()`` for a formatted report.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> p = 1.0 / (1.0 + np.exp(-(0.5 * x1 - 0.5 * x2 - 0.5)))
+    >>> d = rng.binomial(1, p)
+    >>> y = 1.0 + 2.0 * d + x1 + x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({'y': y, 'd': d, 'x1': x1, 'x2': x2})
+    >>> res = sp.genmatch(df, y='y', treat='d', covariates=['x1', 'x2'],
+    ...                   population_size=10, generations=5)
+    >>> isinstance(res, sp.GenMatchResult)
+    True
+    >>> res.n_treated
+    111
+    """
+
     att: float
     att_se: float
     ci: tuple

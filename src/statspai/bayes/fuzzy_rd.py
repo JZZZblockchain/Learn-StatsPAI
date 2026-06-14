@@ -111,6 +111,19 @@ def bayes_fuzzy_rd(
     -------
     BayesianCausalResult
         Posterior over the LATE.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Fuzzy RD LATE = ITT_Y / ITT_D at the cutoff via NUTS
+    >>> # (requires the `bayes` extra: pip install 'statspai[bayes]').
+    >>> res = sp.bayes_fuzzy_rd(df, y='y', treat='d', running='x',
+    ...                         cutoff=0.0, poly=1, draws=500,
+    ...                         tune=500, chains=2)  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    >>> # First-stage strength diagnostics live in model_info:
+    >>> res.model_info['first_stage_mean']  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
 

@@ -99,6 +99,18 @@ def bayes_rd(
     BayesianCausalResult
         Posterior summary of the local average treatment effect
         (LATE) at the cutoff.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Sharp RD jump at the cutoff via NUTS (requires the `bayes`
+    >>> # extra: pip install 'statspai[bayes]'). draws/tune reduced for
+    >>> # illustration; defaults are draws=2000, tune=1000, chains=4.
+    >>> res = sp.bayes_rd(df, y='y', running='x', cutoff=0.0, poly=1,
+    ...                   draws=500, tune=500, chains=2)  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    >>> res.posterior_mean, (res.hdi_lower, res.hdi_upper)  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
 

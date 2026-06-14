@@ -113,8 +113,22 @@ class EconometricResults:
     
     This class provides a consistent interface for accessing results
     from different econometric estimators, similar to R's broom package.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> x = rng.normal(size=50)
+    >>> df = pd.DataFrame({"y": 2.0 * x + rng.normal(size=50), "x": x})
+    >>> res = sp.regress("y ~ x", data=df)
+    >>> type(res).__name__
+    'EconometricResults'
+    >>> round(float(res.params["x"]), 1)
+    1.9
     """
-    
+
     def __init__(
         self,
         params: pd.Series,
@@ -1132,6 +1146,23 @@ class CausalResult:
         Influence function matrix (n_units, n_estimates) for joint inference.
     _citation_key : str, optional
         Key into the citation registry.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> ids = np.repeat(np.arange(20), 2)
+    >>> time = np.tile([0, 1], 20)
+    >>> treat = (ids >= 10).astype(int)
+    >>> y = 1.0 + 2.0 * treat * time + rng.normal(size=len(ids))
+    >>> df = pd.DataFrame({"id": ids, "time": time, "treat": treat, "y": y})
+    >>> res = sp.did(df, y="y", treat="treat", time="time", id="id")
+    >>> isinstance(res, sp.CausalResult)
+    True
+    >>> type(res).__name__
+    'CausalResult'
     """
 
     _CITATIONS: Dict[str, str] = {

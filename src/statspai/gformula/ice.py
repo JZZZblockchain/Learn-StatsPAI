@@ -26,6 +26,38 @@ import pandas as pd
 
 @dataclass
 class ICEResult:
+    """Result of the iterative conditional expectation (ICE) g-formula.
+
+    Returned by :func:`sp.gformula_ice_fn`. Holds the estimated mean
+    outcome under the intervention ``strategy`` together with its
+    standard error and confidence interval.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> l0 = rng.normal(size=n)
+    >>> a0 = rng.binomial(1, 0.5, size=n)
+    >>> l1 = 0.5 * l0 + 0.3 * a0 + rng.normal(size=n)
+    >>> a1 = rng.binomial(1, 0.5, size=n)
+    >>> y = (1.0 + 0.8 * a0 + 1.2 * a1 + 0.5 * l0 + 0.4 * l1
+    ...      + rng.normal(size=n))
+    >>> df = pd.DataFrame({"id": range(n), "L0": l0, "A0": a0,
+    ...                    "L1": l1, "A1": a1, "Y": y})
+    >>> res = sp.gformula_ice_fn(
+    ...     df, id_col="id", time_col="id",
+    ...     treatment_cols=["A0", "A1"],
+    ...     confounder_cols=[["L0"], ["L1"]],
+    ...     outcome_col="Y", treatment_strategy=[1, 1])
+    >>> isinstance(res, sp.ICEResult)
+    True
+    >>> res.strategy
+    [1, 1]
+    """
+
     strategy: list
     value: float
     se: float

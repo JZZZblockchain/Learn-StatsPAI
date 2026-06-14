@@ -82,21 +82,27 @@ jobs:
         # Ratchet, not target: the budget is the current number of
         # registered symbols whose docstring lacks an ``Examples``
         # section. The 2026-06 examples campaign drove this from 661
-        # (2026-06-12 baseline, 370/1031 covered) down to 79 (952/1031,
-        # 92.3%). The residual 79 are heavy-optional / infra categories
-        # (bayes, neural_causal, causal_llm, agent, core, validation).
-        # The budget must NEVER be raised: a new public function that
-        # ships without a docstring Examples section fails this gate
-        # (CLAUDE.md §4 requires Parameters/Returns/Examples/References).
+        # (2026-06-12 baseline, 370/1031 covered) down to 4 (1027/1031,
+        # 99.6%). The residual 4 — anthropic_client, echo_client,
+        # openai_client, particle_filter — DO carry Examples in their
+        # docstrings, but are registered in the registry yet not exposed
+        # at the top level (``sp.echo_client`` raises AttributeError), so
+        # the scanner's ``getattr(sp, name)`` cannot reach the docstring.
+        # That registry-vs-export inconsistency is an API-exposure
+        # decision (expose vs de-register) deferred past JOSS review; the
+        # budget can only drop further once it is resolved. The budget
+        # must NEVER be raised: a new public function that ships without a
+        # docstring Examples section fails this gate (CLAUDE.md §4 requires
+        # Parameters/Returns/Examples/References).
         run: |
-          python scripts/examples_coverage.py --check --max-missing 79
+          python scripts/examples_coverage.py --check --max-missing 4
       - name: check_example_execution (docstring Examples runnability)
         # Presence is necessary but not sufficient: an ``Examples`` block
         # that references an undefined ``df`` or a bare ``did(...)`` call
         # is documentation theatre. This gate extracts every example's
         # ``>>>`` source (dropping ``# doctest: +SKIP`` lines for
         # heavy-dep / external-data blocks) and executes it. The whole
-        # campaign was verified to 939 runnable / 0 failing; the ratchet
+        # campaign was verified to 1014 runnable / 0 failing; the ratchet
         # holds that line. A new example that does not run fails here.
         run: |
           python scripts/check_example_execution.py --quiet --max-failures 0

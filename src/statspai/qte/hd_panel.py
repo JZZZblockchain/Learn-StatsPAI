@@ -19,7 +19,38 @@ from scipy import stats
 
 @dataclass
 class HDPanelQTEResult:
-    """QTE at multiple quantiles with high-dim control selection."""
+    """QTE at multiple quantiles with high-dim control selection.
+
+    Returned by :func:`sp.qte_hd_panel`. Holds the evaluated
+    ``quantiles`` with their QTE estimates, SEs, and CIs, plus the list
+    of LASSO-selected controls. Call ``.summary()`` for a table.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> rows = []
+    >>> for u in range(60):
+    ...     ui = rng.normal(0, 0.5)
+    ...     treated = u >= 30
+    ...     for t in range(6):
+    ...         d = 1.0 if (treated and t >= 3) else 0.0
+    ...         x1, x2, x3 = rng.normal(0, 1, 3)
+    ...         y = 1.0 + 1.2 * d + 0.5 * x1 + ui + rng.normal(0, 1)
+    ...         rows.append((u, t, y, d, x1, x2, x3))
+    >>> df = pd.DataFrame(
+    ...     rows, columns=["unit", "time", "y", "d", "x1", "x2", "x3"])
+    >>> res = sp.qte_hd_panel(
+    ...     df, y="y", treat="d", unit="unit", time="time",
+    ...     covariates=["x1", "x2", "x3"],
+    ...     quantiles=np.array([0.25, 0.5, 0.75]))
+    >>> isinstance(res, sp.HDPanelQTEResult)
+    True
+    >>> res.n_obs
+    360
+    """
     quantiles: np.ndarray
     qte: np.ndarray
     se: np.ndarray

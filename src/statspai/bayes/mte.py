@@ -212,6 +212,20 @@ def bayes_mte(
         `.atu`, and `.plot_mte()`. The inherited
         :class:`BayesianCausalResult` summary fields carry the
         integrated average MTE (ATE).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Bayesian MTE curve over a propensity grid via NUTS
+    >>> # (requires the `bayes` extra: pip install 'statspai[bayes]').
+    >>> res = sp.bayes_mte(df, y='y', treat='d', instrument='z',
+    ...                    poly_u=2,
+    ...                    draws=500, tune=500, chains=2)  # doctest: +SKIP
+    >>> res.ate, res.att, res.atu      # integrated summaries  # doctest: +SKIP
+    >>> res.mte_curve  # doctest: +SKIP
+    >>> # Policy-relevant effect with a ready-made weight builder:
+    >>> res.policy_effect(sp.policy_weight_subsidy(0.3, 0.7))  # doctest: +SKIP
     """
     pm, _ = _require_pymc()
 
