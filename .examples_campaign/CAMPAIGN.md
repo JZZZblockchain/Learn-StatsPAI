@@ -34,8 +34,8 @@
 | --- | --- | --- | --- |
 | 1 | causal 头部:DML 配套 + RD 家族 + matching + DiD/SDID | 28 | ✅ 2026-06-12 |
 | 2 | CATE diag + forest + qte + DiD reporting + policy | 32 | ✅ 2026-06-12 |
-| 3 | causal 收尾 + bayes(整类 0%) | ~30 | pending |
-| 4 | inference + panel + survey + mediation/gformula | ~30 | pending |
+| 3 | inference/mht + diagnostics + RD 余量 + synth exports | 40 | ✅ 2026-06-12 |
+| 4 | panel(GLMM/feglm/fepois)+ survey + mediation/gformula | ~30 | pending |
 | 5 | output + postestimation + smart/agent | ~35 | pending |
 | 6 | decomposition + spatial | ~40 | pending |
 | 7 | mendelian + epi + dag + timeseries | ~45 | pending |
@@ -50,7 +50,7 @@
 
 `parity-guards.yml` 的 registry-drift job 挂
 `scripts/examples_coverage.py --check --max-missing <budget>`。预算只
-降不升;新注册函数若不带 Examples 会撞预算失败。当前预算:**601**。
+降不升;新注册函数若不带 Examples 会撞预算失败。当前预算:**561**。
 
 ## Log
 
@@ -87,3 +87,21 @@
   缺口 633 → 601;ratchet 预算同步下调至 601;覆盖率 35.9% → 41.7%。
   `auto_cate_tuned` 的交互示例行用 `# doctest: +SKIP`(依赖可选
   optuna extra),Examples 段头存在、门通过。
+- **2026-06-12 batch 3**(本会话):40 个函数 Examples 落地——多重检验
+  (benjamini_hochberg/bonferroni/holm)+ 聚类/wild SE(cr2_se/
+  cluster_robust_se/cr3_jackknife_vcov/multiway_cluster_vcov/
+  subcluster_wild_bootstrap/wild_cluster_ci_inv)+ 诊断/后估计
+  (diagnose_result/estat/evalue_from_result/het_test/reset_test/vif/
+  postestimation_contract/margins_at_plot)+ RD 余量(multi_cutoff_rd/
+  multi_score_rd/rd_compare/rd_robustness_table/rdbwsensitivity/rdbwhte/
+  rdrandinf/rdrbounds/rdwinselect/rd2d/rd2d_bw/rd2d_plot/rd_boost/
+  rd_cate_summary/rd_forest/rd_lasso)+ synth 导出/SDID 绘图(synth_to_excel/
+  synth_to_markdown/sc_estimate/synthdid_plot/synthdid_rmse_plot/
+  synthdid_units_plot/sequential_sdid)。缺口 601 → 561(本会话口径;
+  另有并行会话以 `.examples_campaign_wf.js` Workflow 同向推进其它文件,
+  ratchet 单调下降、谁低取谁);ratchet 下调至 561;本会话口径覆盖率
+  41.7% → 45.6%。wild bootstrap / 置换检验类只展示结构性
+  输出(shape/keys),回避跨版本漂移的精确 p 值。
+  已知(非本批):`diagnostics/tests.py` 的 `diagnose` 有一个早已存在
+  的失败 doctest(缺 import),按 additions-only 原则未动,留待后续
+  专门修复。

@@ -52,6 +52,27 @@ def postestimation_contract(
     dict
         Machine-readable contract with ``available``, ``missing``,
         ``recommended_next``, and optional ``diagnostics`` keys.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> df["y"] = (1.0 + 0.5 * df["x1"] - 0.3 * df["x2"]
+    ...            + rng.normal(size=200))
+    >>> res = sp.regress("y ~ x1 + x2", data=df)
+    >>> con = sp.postestimation_contract(res, data=df)
+    >>> con["result_type"]
+    'EconometricResults'
+    >>> "margins" in con["available"]   # data supplied -> ready
+    True
+    >>> con["has_data"]
+    True
     """
     if result is None:
         raise ValueError("postestimation_contract requires a fitted result object")

@@ -359,6 +359,29 @@ def evalue_from_result(
     -------
     dict
         Same structure as :func:`evalue`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> rows = []
+    >>> for u in range(100):
+    ...     treated = int(u < 50)
+    ...     fe = rng.normal()
+    ...     for post in (0, 1):
+    ...         y = (1.0 + fe + 0.5 * post
+    ...              + 0.8 * treated * post + rng.normal())
+    ...         rows.append({"unit": u, "y": y,
+    ...                      "treated": treated, "post": post})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.did(df, y="y", treat="treated", time="post")
+    >>> ev = sp.evalue_from_result(res, measure="SMD")
+    >>> ev["measure"]
+    'SMD'
+    >>> ev["evalue_estimate"] > 1.0
+    True
     """
     if not hasattr(result, "estimate"):
         raise TypeError(

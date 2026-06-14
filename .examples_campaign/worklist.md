@@ -1,8 +1,13 @@
 # Examples campaign worklist — function-style gaps
 
-Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ parallel-session batch 60a0268): 601 (361 fn / 240 class). Covered now: 430/1031.
+Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After this
+session's batch 1-3 (84 functions): 561 missing — ratchet budget 561.
+A concurrent session is independently lowering the count further via the
+`.examples_campaign_wf.js` Workflow on other source files; the live tree
+may therefore already show fewer gaps than 561. The gap lists below are
+a snapshot and self-correct as both sessions land work.
 
-## batch 1 — done 2026-06-12 (DML companions + RD + matching + DiD/SDID)
+## batch 1 — DML/RD/matching/DiD-SDID (done 2026-06-12)
 
 - [x] `anderson_rubin_ci`
 - [x] `cardinality_match`
@@ -33,7 +38,7 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [x] `synthdid_placebo`
 - [x] `trimming`
 
-## batch 2 — done 2026-06-12 (CATE diag + forest + qte + DiD reporting + policy)
+## batch 2 — CATE/forest/qte/DiD-report/policy (done 2026-06-12)
 
 - [x] `auto_cate_tuned`
 - [x] `beyond_average_late`
@@ -68,7 +73,50 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [x] `super_learner`
 - [x] `test_calibration`
 
-## causal (72)
+## batch 3 — inference/diagnostics/RD-rest/synth-exports (done 2026-06-12)
+
+- [x] `benjamini_hochberg`
+- [x] `bonferroni`
+- [x] `cluster_robust_se`
+- [x] `cr2_se`
+- [x] `cr3_jackknife_vcov`
+- [x] `diagnose_result`
+- [x] `estat`
+- [x] `evalue_from_result`
+- [x] `het_test`
+- [x] `holm`
+- [x] `margins_at_plot`
+- [x] `multi_cutoff_rd`
+- [x] `multi_score_rd`
+- [x] `multiway_cluster_vcov`
+- [x] `postestimation_contract`
+- [x] `rd2d`
+- [x] `rd2d_bw`
+- [x] `rd2d_plot`
+- [x] `rd_boost`
+- [x] `rd_cate_summary`
+- [x] `rd_compare`
+- [x] `rd_forest`
+- [x] `rd_lasso`
+- [x] `rd_robustness_table`
+- [x] `rdbwhte`
+- [x] `rdbwsensitivity`
+- [x] `rdrandinf`
+- [x] `rdrbounds`
+- [x] `rdwinselect`
+- [x] `reset_test`
+- [x] `sc_estimate`
+- [x] `sequential_sdid`
+- [x] `subcluster_wild_bootstrap`
+- [x] `synth_to_excel`
+- [x] `synth_to_markdown`
+- [x] `synthdid_plot`
+- [x] `synthdid_rmse_plot`
+- [x] `synthdid_units_plot`
+- [x] `vif`
+- [x] `wild_cluster_ci_inv`
+
+## causal (49)
 
 - [ ] `average_treatment_effect`
 - [ ] `balanceplot`
@@ -103,8 +151,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [ ] `matrix_completion`
 - [ ] `mediate_interventional`
 - [ ] `mediation`
-- [ ] `multi_cutoff_rd`
-- [ ] `multi_score_rd`
 - [ ] `network_exposure`
 - [ ] `nonlinear_icp`
 - [ ] `offline_safe_policy`
@@ -112,35 +158,14 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [ ] `pci_mtp`
 - [ ] `pretrends_summary`
 - [ ] `principal_strat`
-- [ ] `rd2d`
-- [ ] `rd2d_bw`
-- [ ] `rd2d_plot`
 - [ ] `rd_bayes_hte`
-- [ ] `rd_boost`
-- [ ] `rd_cate_summary`
-- [ ] `rd_compare`
 - [ ] `rd_dashboard`
 - [ ] `rd_distribution`
 - [ ] `rd_distributional_design`
-- [ ] `rd_forest`
 - [ ] `rd_interference`
-- [ ] `rd_lasso`
 - [ ] `rd_multi_score`
-- [ ] `rd_robustness_table`
-- [ ] `rdbwhte`
-- [ ] `rdbwsensitivity`
-- [ ] `rdrandinf`
-- [ ] `rdrbounds`
-- [ ] `rdwinselect`
-- [ ] `sc_estimate`
 - [ ] `select_pci_proxies`
-- [ ] `sequential_sdid`
 - [ ] `survivor_average_causal_effect`
-- [ ] `synth_to_excel`
-- [ ] `synth_to_markdown`
-- [ ] `synthdid_plot`
-- [ ] `synthdid_rmse_plot`
-- [ ] `synthdid_units_plot`
 - [ ] `tF_adjustment`
 
 ## output (23)
@@ -326,18 +351,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [ ] `rowsd`
 - [ ] `rowtotal`
 
-## inference (9)
-
-- [ ] `benjamini_hochberg`
-- [ ] `bonferroni`
-- [ ] `cluster_robust_se`
-- [ ] `cr2_se`
-- [ ] `cr3_jackknife_vcov`
-- [ ] `holm`
-- [ ] `multiway_cluster_vcov`
-- [ ] `subcluster_wild_bootstrap`
-- [ ] `wild_cluster_ci_inv`
-
 ## conformal_causal (9)
 
 - [ ] `conformal_available_kinds`
@@ -372,16 +385,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [ ] `neural_effects_frame`
 - [ ] `neural_summary_frame`
 - [ ] `neural_training_frame`
-
-## diagnostics (7)
-
-- [ ] `bias_factor`
-- [ ] `diagnose_result`
-- [ ] `estat`
-- [ ] `evalue_from_result`
-- [ ] `het_test`
-- [ ] `reset_test`
-- [ ] `vif`
 
 ## interference (7)
 
@@ -513,12 +516,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 - [ ] `proximal_surrogate_index`
 - [ ] `surrogate_index`
 
-## postestimation (3)
-
-- [ ] `margins_at_plot`
-- [ ] `postestimation_contract`
-- [ ] `postestimation_report`
-
 ## ope (2)
 
 - [ ] `causal_policy_forest`
@@ -537,6 +534,10 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ p
 ## experimental (1)
 
 - [ ] `attrition_bounds`
+
+## diagnostics (1)
+
+- [ ] `bias_factor`
 
 ## plots (1)
 

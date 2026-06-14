@@ -147,6 +147,20 @@ def multiway_cluster_vcov(
     -------
     ndarray, shape (k, k)
         Multiway-cluster-robust variance-covariance matrix.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> firm = rng.integers(0, 10, size=n)
+    >>> year = rng.integers(0, 8, size=n)
+    >>> X = np.column_stack([np.ones(n), rng.normal(size=n)])
+    >>> resid = rng.normal(size=n)
+    >>> V = sp.multiway_cluster_vcov(X, resid, [firm, year])
+    >>> V.shape
+    (2, 2)
     """
     X = np.asarray(X, dtype=np.float64)
     resid = np.asarray(resid, dtype=np.float64).ravel()
@@ -184,7 +198,22 @@ def cluster_robust_se(
     clusters: Union[np.ndarray, List[np.ndarray]],
     **kwargs,
 ) -> np.ndarray:
-    """Return cluster-robust standard errors (diagonal sqrt of vcov)."""
+    """Return cluster-robust standard errors (diagonal sqrt of vcov).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> firm = rng.integers(0, 10, size=n)
+    >>> year = rng.integers(0, 8, size=n)
+    >>> X = np.column_stack([np.ones(n), rng.normal(size=n)])
+    >>> resid = rng.normal(size=n)
+    >>> se = sp.cluster_robust_se(X, resid, [firm, year])
+    >>> se.round(3).tolist()
+    [0.061, 0.011]
+    """
     V = multiway_cluster_vcov(X, resid, clusters, **kwargs)
     return np.sqrt(np.maximum(np.diag(V), 0.0))
 
@@ -217,6 +246,19 @@ def cr3_jackknife_vcov(
     Returns
     -------
     ndarray, shape (k, k)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> firm = rng.integers(0, 10, size=n)
+    >>> X = np.column_stack([np.ones(n), rng.normal(size=n)])
+    >>> y = X @ np.array([1.0, 0.5]) + rng.normal(size=n)
+    >>> V = sp.cr3_jackknife_vcov(X, y, firm)
+    >>> V.shape
+    (2, 2)
     """
     X = np.asarray(X, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64).ravel()

@@ -121,6 +121,24 @@ def het_test(
     References
     ----------
     Breusch, T.S. and Pagan, A.R. (1979). *Econometrica*, 47(5), 1287-1294. [@breusch1979simple]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> df["y"] = (1.0 + 0.5 * df["x1"] - 0.3 * df["x2"]
+    ...            + rng.normal(size=200))
+    >>> ht = sp.het_test(df, y="y", x=["x1", "x2"])
+    >>> int(ht["df"])
+    2
+    >>> ht["pvalue"] < 0.05   # homoskedastic data: do not reject H0
+    False
     """
     df = data[[y] + x].dropna()
     Y = df[y].values
@@ -160,6 +178,24 @@ def reset_test(
     References
     ----------
     Ramsey, J.B. (1969). *JRSS-B*, 31(2), 350-371. [@ramsey1969tests]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> df["y"] = (1.0 + 0.5 * df["x1"] - 0.3 * df["x2"]
+    ...            + rng.normal(size=200))
+    >>> rt = sp.reset_test(df, y="y", x=["x1", "x2"])
+    >>> rt["df1"], rt["df2"]
+    (2, 195)
+    >>> rt["pvalue"] > 0.05   # linear form is correct: do not reject
+    True
     """
     df = data[[y] + x].dropna()
     Y = df[y].values
@@ -197,6 +233,22 @@ def vif(
     -----
     VIF_j = 1 / (1 - R²_j) where R²_j is from regressing x_j on
     all other x variables.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> v = sp.vif(df, x=["x1", "x2"])
+    >>> list(v.columns)
+    ['variable', 'VIF', '1/VIF']
+    >>> bool((v["VIF"] < 5).all())   # near-orthogonal: low VIFs
+    True
     """
     return _vif(data, x)
 

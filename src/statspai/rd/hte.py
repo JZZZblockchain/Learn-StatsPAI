@@ -380,6 +380,22 @@ def rdbwhte(
     -------
     float
         MSE-optimal bandwidth.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> z = rng.integers(0, 2, n)
+    >>> y = (0.8 * (x >= 0) + 0.3 * z * (x >= 0) + 0.5 * x
+    ...      + rng.normal(0, 0.3, n))
+    >>> df = pd.DataFrame({"x": x, "y": y, "z": z})
+    >>> h = sp.rdbwhte(df, y="y", x="x", z="z", c=0.0)
+    >>> round(float(h), 3)
+    0.174
     """
     z_cols = [z] if isinstance(z, str) else list(z)
     dz = len(z_cols)

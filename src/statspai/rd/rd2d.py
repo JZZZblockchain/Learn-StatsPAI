@@ -114,6 +114,22 @@ def rd2d(
         Treatment effect estimate with standard errors, confidence
         intervals, and optional detail table with point-by-point
         estimates along the boundary.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x1 = rng.uniform(-1, 1, n)
+    >>> x2 = rng.uniform(-1, 1, n)
+    >>> treat = (x1 >= 0).astype(int)
+    >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
+    >>> res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="treat")
+    >>> round(float(res.estimate), 2)
+    1.45
     """
     if approach not in ('distance', 'location'):
         raise ValueError(
@@ -199,6 +215,22 @@ def rd2d_bw(
     -------
     float
         MSE-optimal bandwidth.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x1 = rng.uniform(-1, 1, n)
+    >>> x2 = rng.uniform(-1, 1, n)
+    >>> treat = (x1 >= 0).astype(int)
+    >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
+    >>> h = sp.rd2d_bw(df, y="y", x1="x1", x2="x2", treatment="treat")
+    >>> round(float(h), 3)
+    0.338
     """
     for col in [y, x1, x2, treatment]:
         if col not in data.columns:
@@ -267,6 +299,23 @@ def rd2d_plot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x1 = rng.uniform(-1, 1, n)
+    >>> x2 = rng.uniform(-1, 1, n)
+    >>> treat = (x1 >= 0).astype(int)
+    >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
+    >>> res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="treat")
+    >>> fig, ax = sp.rd2d_plot(
+    ...     df, y="y", x1="x1", x2="x2", treatment="treat", result=res
+    ... )
     """
     try:
         import matplotlib.pyplot as plt

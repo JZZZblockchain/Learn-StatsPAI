@@ -297,6 +297,23 @@ def rdrandinf(
     Cattaneo, M.D., Titiunik, R. and Vazquez-Bare, G. (2016).
     "Inference in Regression Discontinuity Designs under Local
     Randomization." *The Stata Journal*, 16(2), 331-367. [@cattaneo2016inference]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> res = sp.rdrandinf(df, y="y", x="x", c=0.0, wl=-0.3,
+    ...                    wr=0.3, n_perms=500, seed=42)
+    >>> round(float(res.estimate), 3)
+    0.926
+    >>> res.pvalue is not None
+    True
     """
     rng = np.random.default_rng(seed)
 
@@ -547,6 +564,25 @@ def rdwinselect(
     pd.DataFrame
         Columns: window_left, window_right, n_left, n_right, p_value,
         balanced. Rows sorted by window width.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> z1 = 0.2 * x + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"x": x, "z1": z1})
+    >>> tab = sp.rdwinselect(df, x="x", c=0.0, covs=["z1"],
+    ...                      nwindows=5)
+    >>> tab.shape
+    (5, 6)
+    >>> list(tab.columns)
+    ['window_left', 'window_right', 'n_left', 'n_right', 'p_value', 'balanced']
+    >>> tab["n_left"].tolist()
+    [26, 74, 129, 193, 249]
     """
     rng = np.random.default_rng(seed)
     xv = data[x].values.astype(float)
@@ -887,6 +923,26 @@ def rdrbounds(
     instead of the uniform 1/2 under pure randomization. The bounds on the
     p-value are obtained by computing the worst-case assignment
     probabilities at each gamma level.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> tab = sp.rdrbounds(df, y="y", x="x", c=0.0, wl=-0.3,
+    ...                    wr=0.3, gamma_list=[1.0, 1.5, 2.0],
+    ...                    n_perms=500, seed=42)
+    >>> tab.shape
+    (3, 3)
+    >>> list(tab.columns)
+    ['gamma', 'pvalue_upper', 'pvalue_lower']
+    >>> tab["gamma"].tolist()
+    [1.0, 1.5, 2.0]
     """
     rng = np.random.default_rng(seed)
 

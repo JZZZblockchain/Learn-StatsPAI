@@ -133,6 +133,32 @@ def sequential_sdid(
     ----------
     Arkhangelsky, D. & Samkov, A. (arXiv:2404.00164, 2024).
     Arkhangelsky, Athey, Hirshberg, Imbens & Wager (2021). AER 111(12). [@arkhangelsky2024sequential]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> periods = np.arange(1, 11)
+    >>> rows = []
+    >>> for u in range(16):
+    ...     g = 5 if u < 2 else (8 if u < 4 else 0)
+    ...     for t in periods:
+    ...         treated = g != 0 and t >= g
+    ...         val = (u * 0.3 + t * 0.2 + 2.0 * treated
+    ...                + rng.normal(0, 0.2))
+    ...         rows.append({"y": val, "unit": u, "time": t,
+    ...                      "cohort": g})
+    >>> panel = pd.DataFrame(rows)
+    >>> res = sp.sequential_sdid(
+    ...     panel, outcome="y", unit="unit", time="time",
+    ...     cohort="cohort", seed=42,
+    ... )
+    >>> res.model_info["n_cohorts"]  # two adoption waves
+    2
+    >>> round(res.estimate, 1)  # true effect = 2.0
+    1.7
     """
     if not isinstance(data, pd.DataFrame):
         raise TypeError("`data` must be a pandas DataFrame.")

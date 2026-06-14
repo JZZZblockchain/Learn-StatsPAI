@@ -442,6 +442,27 @@ def margins_at_plot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "experience": rng.integers(0, 20, size=200).astype(float),
+    ...     "female": rng.integers(0, 2, size=200).astype(float),
+    ... })
+    >>> df["wage"] = (10.0 + 0.5 * df["experience"]
+    ...               - 1.0 * df["female"] + rng.normal(size=200))
+    >>> res = sp.regress(
+    ...     "wage ~ experience + female + experience:female", data=df
+    ... )
+    >>> m = sp.margins_at(
+    ...     res, data=df, at={"experience": [1, 5, 10, 15, 20]}
+    ... )
+    >>> fig, ax = sp.margins_at_plot(m, x="experience")
+    >>> fig.savefig("margins_at.png")  # doctest: +SKIP
     """
     try:
         import matplotlib.pyplot as plt

@@ -76,6 +76,24 @@ def rdbwsensitivity(
     -------
     pd.DataFrame
         Columns: bandwidth, estimate, se, ci_lower, ci_upper, pvalue.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> tab = sp.rdbwsensitivity(df, y="y", x="x", c=0.0, n_grid=5)
+    >>> tab.shape
+    (5, 6)
+    >>> list(tab.columns)
+    ['bandwidth', 'estimate', 'se', 'ci_lower', 'ci_upper', 'pvalue']
+    >>> [round(v, 3) for v in tab["estimate"].tolist()]
+    [0.834, 0.816, 0.797, 0.789, 0.785]
     """
     from .rdrobust import rdrobust
 

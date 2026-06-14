@@ -64,6 +64,12 @@ def bonferroni(pvalues: Sequence[float]) -> np.ndarray:
     -------
     np.ndarray
         Bonferroni-adjusted p-values.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> sp.bonferroni([0.001, 0.01, 0.03, 0.2]).round(3).tolist()
+    [0.004, 0.04, 0.12, 0.8]
     """
     p = np.asarray(pvalues, dtype=float)
     return np.minimum(p * len(p), 1.0)
@@ -85,6 +91,12 @@ def holm(pvalues: Sequence[float]) -> np.ndarray:
     -------
     np.ndarray
         Holm-adjusted p-values (in original order).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> sp.holm([0.001, 0.01, 0.03, 0.2]).round(3).tolist()
+    [0.004, 0.03, 0.06, 0.2]
     """
     p = np.asarray(pvalues, dtype=float)
     S = len(p)
@@ -120,6 +132,12 @@ def benjamini_hochberg(pvalues: Sequence[float]) -> np.ndarray:
     -------
     np.ndarray
         BH-adjusted p-values (in original order).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> sp.benjamini_hochberg([0.001, 0.01, 0.03, 0.2]).round(3).tolist()
+    [0.004, 0.02, 0.04, 0.2]
     """
     p = np.asarray(pvalues, dtype=float)
     S = len(p)

@@ -25,6 +25,26 @@ def multi_cutoff_rd(*args, **kwargs):
     """User-friendly alias for :func:`sp.rdmc` (multi-cutoff RD).
 
     See :func:`statspai.rd.rdmulti.rdmc` for full documentation.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> res = sp.multi_cutoff_rd(
+    ...     df, y="y", x="x", cutoffs=[-0.4, 0.0, 0.4]
+    ... )
+    >>> res.n_cutoffs
+    3
+    >>> len(res.cutoff_results)
+    3
+    >>> round(float(res.pooled_estimate), 3)
+    0.258
     """
     return rdmc(*args, **kwargs)
 
@@ -54,5 +74,26 @@ def multi_score_rd(*args, **kwargs):
     Multi-score RD when eligibility depends on more than one discontinuous
     rule (e.g. income AND age thresholds).  Separate from boundary RDD in
     that the rules are axis-aligned.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x1 = rng.uniform(-1, 1, n)
+    >>> x2 = rng.uniform(-1, 1, n)
+    >>> treat = (x1 >= 0) & (x2 >= 0)
+    >>> y = (0.8 * treat + 0.5 * x1 + 0.3 * x2
+    ...      + rng.normal(0, 0.3, n))
+    >>> df = pd.DataFrame({"x1": x1, "x2": x2, "y": y})
+    >>> res = sp.multi_score_rd(
+    ...     df, y="y", running_vars=["x1", "x2"], cutoffs=[0.0, 0.0]
+    ... )
+    >>> res.n_obs
+    800
+    >>> round(float(res.boundary_effect), 3)
+    0.137
     """
     return rd_multi_score(*args, **kwargs)

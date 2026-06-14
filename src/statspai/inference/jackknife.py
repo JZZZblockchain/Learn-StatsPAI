@@ -223,6 +223,22 @@ def cr2_se(
     conventional cluster-robust variance estimator.
 
     See Bell & McCaffrey (2002) and Pustejovsky & Tipton (2018).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> state = rng.integers(0, 10, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 + rng.normal(size=n) + rng.normal(size=10)[state]
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "state": state})
+    >>> res = sp.regress("y ~ x1", data=df, cluster="state")
+    >>> cr2 = sp.cr2_se(res, data=df, cluster="state")
+    >>> cr2.model_info["se_type"]
+    'CR2 (Bell-McCaffrey)'
     """
     y_var, x_vars = _parse_formula(result.model_info.get('formula', ''), result)
 

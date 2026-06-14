@@ -77,6 +77,25 @@ def subcluster_wild_bootstrap(
     -------
     dict with ``p_boot``, ``ci_boot``, ``beta_hat``, ``t_stat``,
     ``se_cluster``, ``n_sub``, ``recommendation``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> cl = rng.integers(0, 10, size=n)
+    >>> treat = (cl < 3).astype(float)
+    >>> x1 = rng.normal(size=n)
+    >>> y = 1.0 + 0.4 * treat + 0.5 * x1 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x1": x1, "cl": cl})
+    >>> out = sp.subcluster_wild_bootstrap(
+    ...     df, y="y", x=["treat", "x1"], cluster="cl",
+    ...     test_var="treat", n_boot=199, weight_type="webb", seed=0,
+    ... )
+    >>> 0.0 <= out["p_boot"] <= 1.0
+    True
     """
     if test_var is None:
         test_var = x[-1]
@@ -210,6 +229,27 @@ def wild_cluster_ci_inv(
     -------
     dict with ``ci``, ``p_grid`` (grid_size,), ``h0_grid``, ``beta_hat``,
     ``se_cluster``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> cl = rng.integers(0, 10, size=n)
+    >>> treat = (cl < 3).astype(float)
+    >>> x1 = rng.normal(size=n)
+    >>> y = 1.0 + 0.4 * treat + 0.5 * x1 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x1": x1, "cl": cl})
+    >>> out = sp.wild_cluster_ci_inv(
+    ...     df, y="y", x=["treat", "x1"], cluster="cl",
+    ...     test_var="treat", n_boot=199, grid_size=21, seed=0,
+    ... )
+    >>> out["p_grid"].shape
+    (21,)
+    >>> len(out["ci"])
+    2
     """
     # Use the lightweight wild_cluster_bootstrap for point + SE, then grid.
     from .wild_bootstrap import wild_cluster_bootstrap

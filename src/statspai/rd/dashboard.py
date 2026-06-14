@@ -287,6 +287,25 @@ def rd_compare(
     pd.DataFrame
         Columns: ``method``, ``estimate``, ``se``, ``pvalue``,
         ``ci_lower``, ``ci_upper``, ``n_obs``, ``status``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> tab = sp.rd_compare(df, y="y", x="x", c=0.0,
+    ...                     methods=["rdrobust"])
+    >>> tab.shape
+    (1, 8)
+    >>> tab.loc[0, "method"], tab.loc[0, "status"]
+    ('rdrobust', 'ok')
+    >>> round(float(tab.loc[0, "estimate"]), 3)
+    0.813
     """
     method_kwargs = method_kwargs or {}
     rows = []
@@ -368,6 +387,28 @@ def rd_robustness_table(
         estimate_conv, se_conv, ci_conv_lo, ci_conv_hi, pvalue_conv,
         estimate_rbc,  se_rbc,  ci_rbc_lo,  ci_rbc_hi,  pvalue_rbc,
         n_left, n_right, status
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.8 * (x >= 0) + 0.5 * x + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({"x": x, "y": y})
+    >>> tab = sp.rd_robustness_table(
+    ...     df, y="y", x="x", c=0.0,
+    ...     kernels=["triangular", "uniform"],
+    ...     bwselects=["mserd"], polynomials=[1],
+    ... )
+    >>> tab.shape
+    (2, 19)
+    >>> tab["kernel"].tolist()
+    ['triangular', 'uniform']
+    >>> round(float(tab.loc[0, "estimate_conv"]), 3)
+    0.765
     """
     from .rdrobust import rdrobust
 

@@ -49,6 +49,29 @@ def diagnose_result(
     dict
         Keys depend on the method. Always includes ``'method_type'`` and
         ``'checks'`` (list of individual test result dicts).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> rows = []
+    >>> for u in range(100):
+    ...     treated = int(u < 50)
+    ...     fe = rng.normal()
+    ...     for post in (0, 1):
+    ...         y = (1.0 + fe + 0.5 * post
+    ...              + 0.8 * treated * post + rng.normal())
+    ...         rows.append({"unit": u, "y": y,
+    ...                      "treated": treated, "post": post})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.did(df, y="y", treat="treated", time="post")
+    >>> out = sp.diagnose_result(res, print_results=False)
+    >>> out["method_type"]
+    'did'
+    >>> sorted(out.keys())
+    ['checks', 'method_type', 'next_steps', 'violations']
     """
     method_type = _detect_method(result)
     dispatch = {

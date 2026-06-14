@@ -229,6 +229,28 @@ def rd_forest(
     CausalResult
         estimate = average CATE; detail = DataFrame with per-obs CATE
         and SE; model_info includes variable importance.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x = rng.uniform(-1, 1, n)
+    >>> z1 = rng.normal(size=n)
+    >>> z2 = rng.normal(size=n)
+    >>> treat = (x >= 0).astype(float)
+    >>> y = (1.0 + 0.8 * z1) * treat + 0.5 * x + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x": x, "z1": z1, "z2": z2})
+    >>> res = sp.rd_forest(
+    ...     df, y="y", x="x", c=0, covs=["z1", "z2"],
+    ...     n_trees=50, seed=42,
+    ... )
+    >>> round(float(res.estimate), 2)
+    1.2
+    >>> list(res.model_info["variable_importance"].keys())[0]
+    'z1'
     """
     try:
         from sklearn.ensemble import RandomForestRegressor
@@ -446,6 +468,26 @@ def rd_boost(
     -------
     CausalResult
         estimate = average CATE; detail = per-obs CATE and bootstrap SE.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> x = rng.uniform(-1, 1, n)
+    >>> z1 = rng.normal(size=n)
+    >>> z2 = rng.normal(size=n)
+    >>> treat = (x >= 0).astype(float)
+    >>> y = (1.0 + 0.8 * z1) * treat + 0.5 * x + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x": x, "z1": z1, "z2": z2})
+    >>> res = sp.rd_boost(
+    ...     df, y="y", x="x", c=0, covs=["z1", "z2"],
+    ...     n_estimators=50, seed=42,
+    ... )
+    >>> round(float(res.estimate), 2)
+    1.17
     """
     try:
         from sklearn.ensemble import GradientBoostingRegressor
@@ -636,6 +678,28 @@ def rd_lasso(
     CausalResult
         estimate = RD treatment effect with LASSO-selected covariates;
         model_info includes selected_covariates and LASSO paths.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 800
+    >>> x = rng.uniform(-1, 1, n)
+    >>> treat = (x >= 0).astype(float)
+    >>> Z = rng.normal(size=(n, 8))
+    >>> y = (1.0 * treat + 0.5 * x + 0.7 * Z[:, 0]
+    ...      + rng.normal(0, 0.5, n))
+    >>> covs = [f"z{i}" for i in range(8)]
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> for i, name in enumerate(covs):
+    ...     df[name] = Z[:, i]
+    >>> res = sp.rd_lasso(df, y="y", x="x", c=0, covs=covs)
+    >>> round(float(res.estimate), 2)
+    1.16
+    >>> res.model_info["n_selected"]
+    1
     """
     try:
         from sklearn.linear_model import LassoCV
@@ -833,6 +897,26 @@ def rd_cate_summary(
         Additional key ``'comparison'`` = pd.DataFrame summarising ATEs.
         Additional key ``'heterogeneity_drivers'`` = top variable
         importances from the forest (if run).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> x = rng.uniform(-1, 1, n)
+    >>> z1 = rng.normal(size=n)
+    >>> z2 = rng.normal(size=n)
+    >>> treat = (x >= 0).astype(float)
+    >>> y = (1.0 + 0.8 * z1) * treat + 0.5 * x + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"y": y, "x": x, "z1": z1, "z2": z2})
+    >>> out = sp.rd_cate_summary(
+    ...     df, y="y", x="x", c=0, covs=["z1", "z2"],
+    ...     methods=["forest", "lasso"], seed=42,
+    ... )
+    >>> round(float(out["forest"].estimate), 2)
+    1.16
     """
     valid_methods = {'forest', 'boost', 'lasso'}
     if methods is None:

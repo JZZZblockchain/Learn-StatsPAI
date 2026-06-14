@@ -92,6 +92,25 @@ def estat(
         Test result(s).  Each dict has keys ``'test'``, ``'statistic'``
         (or equivalent), ``'pvalue'`` (when applicable), and
         ``'interpretation'``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> df["y"] = (1.0 + 0.5 * df["x1"] - 0.3 * df["x2"]
+    ...            + rng.normal(size=200))
+    >>> res = sp.regress("y ~ x1 + x2", data=df)
+    >>> out = sp.estat(res, "hettest", print_results=False)
+    >>> out["statistic_label"]
+    'chi2(2)'
+    >>> out["pvalue"] < 0.05   # homoskedastic: do not reject H0
+    False
     """
     test = test.strip().lower()
 
