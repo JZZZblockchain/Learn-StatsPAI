@@ -80,10 +80,22 @@ def liml(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> z1, z2 = rng.normal(size=n), rng.normal(size=n)   # excluded instruments
+    >>> exper = rng.normal(size=n)                        # exogenous control
+    >>> u = rng.normal(size=n)                            # endogeneity
+    >>> educ = 0.6 * z1 + 0.5 * z2 + 0.3 * exper + u + rng.normal(size=n)
+    >>> lwage = 1.0 + 0.8 * educ + 0.2 * exper + 1.5 * u + rng.normal(size=n)
+    >>> df = pd.DataFrame({'lwage': lwage, 'educ': educ, 'exper': exper,
+    ...                    'z1': z1, 'z2': z2})
     >>> result = sp.liml(data=df, y='lwage', x_endog=['educ'],
-    ...                  x_exog=['exper', 'expersq'], z=['nearc4'])
-    >>> print(result.summary())
+    ...                  x_exog=['exper'], z=['z1', 'z2'])
+    >>> bool(abs(result.params['educ'] - 0.8) < 0.2)
+    True
     """
     if formula is not None:
         # Parse IV formula
@@ -456,10 +468,22 @@ def lasso_iv(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
-    >>> # Many candidate instruments (e.g., quarter of birth dummies)
+    >>> rng = np.random.default_rng(7)
+    >>> n = 400
+    >>> # 20 candidate instruments, only the first 5 are relevant
+    >>> Z = rng.normal(size=(n, 20))
+    >>> u = rng.normal(size=n)                            # endogeneity
+    >>> educ = Z[:, :5] @ np.full(5, 0.5) + u + rng.normal(size=n)
+    >>> lwage = 1.0 + 0.7 * educ + 1.2 * u + rng.normal(size=n)
+    >>> df = pd.DataFrame(Z, columns=[f'z{i}' for i in range(20)])
+    >>> df['lwage'], df['educ'] = lwage, educ
     >>> result = sp.lasso_iv(df, y='lwage', x_endog=['educ'],
-    ...                       x_exog=['exper'], z=[f'qob_{i}' for i in range(40)])
+    ...                      z=[f'z{i}' for i in range(20)])
+    >>> bool(abs(result.params['educ'] - 0.7) < 0.2)
+    True
     """
     if x_exog is None:
         x_exog = []

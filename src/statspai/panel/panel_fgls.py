@@ -76,10 +76,20 @@ def panel_fgls(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n_id, n_t = 8, 20
+    >>> ids = np.repeat(np.arange(n_id), n_t)
+    >>> years = np.tile(np.arange(2000, 2000 + n_t), n_id)
+    >>> investment = rng.normal(5, 1, n_id * n_t)
+    >>> trade = rng.normal(3, 1, n_id * n_t)
+    >>> gdp = 1.0 + 0.4 * investment + 0.3 * trade + rng.normal(0, 0.5, n_id * n_t)
+    >>> df = pd.DataFrame({'country': ids, 'year': years, 'gdp': gdp,
+    ...                    'investment': investment, 'trade': trade})
     >>> result = sp.panel_fgls(df, y='gdp', x=['investment', 'trade'],
     ...                        id='country', time='year',
     ...                        panels='heteroskedastic', corr='ar1')
-    >>> print(result.summary())
+    >>> print(result.summary())  # doctest: +SKIP
     """
     df = data.sort_values([id, time]).copy()
     units = df[id].unique()

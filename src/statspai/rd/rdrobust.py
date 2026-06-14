@@ -157,23 +157,28 @@ def rdrobust(
     --------
     Sharp RD:
 
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 2000
     >>> X = rng.uniform(-1, 1, n)
     >>> Y = 0.5 * X + 3.0 * (X >= 0) + rng.normal(0, 0.3, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X})
-    >>> result = rdrobust(df, y='y', x='x', c=0)
-    >>> abs(result.estimate - 3.0) < 0.5
+    >>> result = sp.rdrobust(df, y='y', x='x', c=0)
+    >>> bool(abs(result.estimate - 3.0) < 0.5)
     True
 
     Donut-hole RD (exclude observations within 0.05 of cutoff):
 
-    >>> result = rdrobust(df, y='y', x='x', c=0, donut=0.05)
+    >>> result = sp.rdrobust(df, y='y', x='x', c=0, donut=0.05)
+    >>> bool(np.isfinite(result.estimate))
+    True
 
     Regression Kink Design (estimate change in slope):
 
-    >>> result = rdrobust(df, y='y', x='x', c=0, deriv=1)
+    >>> result = sp.rdrobust(df, y='y', x='x', c=0, deriv=1)
+    >>> bool(np.isfinite(result.estimate))
+    True
 
     References
     ----------

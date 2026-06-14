@@ -28163,16 +28163,16 @@
         "properties": {
           "cv": {
             "default": 5,
-            "description": "cv parameter (int).",
+            "description": "Folds for the CV penalty search (used only when ``lambda_`` is None).",
             "type": "integer"
           },
           "lambda_": {
-            "description": "lambda_ parameter (Optional[float]).",
+            "description": "L1 penalty. ``None`` selects it via cross-validation.",
             "type": "number"
           },
           "max_anchors_per_col": {
             "default": 40,
-            "description": "Column name for max anchors per.",
+            "description": "Cap on step-function anchor points per feature.",
             "type": "integer"
           },
           "random_state": {
@@ -28227,12 +28227,12 @@
         "properties": {
           "C": {
             "default": 1.0,
-            "description": "C parameter (float).",
+            "description": "Inverse L1 penalty (larger = less shrinkage), as in scikit-learn.",
             "type": "number"
           },
           "max_anchors_per_col": {
             "default": 40,
-            "description": "Column name for max anchors per.",
+            "description": "Cap on step-function anchor points per feature.",
             "type": "integer"
           },
           "random_state": {

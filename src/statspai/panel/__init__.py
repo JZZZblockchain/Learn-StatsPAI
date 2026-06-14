@@ -142,10 +142,23 @@ def panel(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n_id, n_t = 80, 8
+    >>> ids = np.repeat(np.arange(n_id), n_t)
+    >>> years = np.tile(np.arange(2000, 2000 + n_t), n_id)
+    >>> exp = rng.normal(10, 3, n_id * n_t)
+    >>> edu = rng.normal(12, 2, n_id * n_t)
+    >>> alpha_i = np.repeat(rng.normal(0, 1, n_id), n_t)
+    >>> wage = 1.0 + 0.05 * exp + 0.08 * edu + alpha_i + rng.normal(0, 0.5, n_id * n_t)
+    >>> df = pd.DataFrame({'id': ids, 'year': years, 'wage': wage,
+    ...                    'exp': exp, 'edu': edu})
+
     >>> # Default: within (FE) estimator
     >>> r = sp.panel(df, "wage ~ exp + edu", entity='id', time='year')
 
-    >>> # Random effects with Hausman test
+    >>> # Random effects
     >>> r = sp.panel(df, "wage ~ exp + edu", entity='id', time='year',
     ...              method='re')
 
@@ -154,6 +167,7 @@ def panel(
     ...              method='Fixed')
 
     >>> # Arellano-Bond dynamic panel
+    >>> df['wage_lag'] = df.groupby('id')['wage'].shift(1)
     >>> r = sp.panel(df, "wage ~ wage_lag + edu", entity='id', time='year',
     ...              method='gmm', lags=1)
 

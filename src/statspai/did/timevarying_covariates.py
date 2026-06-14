@@ -88,10 +88,26 @@ def did_timevarying_covariates(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(40):
+    ...     g = int(rng.choice([3, 5, 0]))  # cohort; never_value=0 = never treated
+    ...     for year in range(1, 8):
+    ...         on = 1 if (g != 0 and year >= g) else 0
+    ...         age = 25 + year + rng.normal(0, 1)
+    ...         wage_prev = 10 + 0.3 * age + rng.normal(0, 1)
+    ...         rows.append({'i': i, 'year': year, 'g': g, 'age': age,
+    ...                      'wage_prev': wage_prev,
+    ...                      'earnings': 5 + 0.2 * age + 2.0 * on
+    ...                                  + rng.normal(0, 0.5)})
+    >>> df = pd.DataFrame(rows)
     >>> r = sp.did_timevarying_covariates(
     ...     df, y='earnings', unit='i', time='year', cohort='g',
-    ...     covariates=['age', 'wage_prev'],
+    ...     covariates=['age', 'wage_prev'], n_boot=50, seed=0,
     ... )
+    >>> bool(np.isfinite(r.estimate))
+    True
     """
     df = data.copy()
     for col in [y, unit, time, cohort] + list(covariates):

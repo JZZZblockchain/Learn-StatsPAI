@@ -82,9 +82,14 @@ def conformal_synth(
 
     Examples
     --------
-    >>> result = sp.conformal_synth(df, outcome='gdp', unit='state',
-    ...     time='year', treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()  # state, year, packspercapita, treated
+    >>> result = sp.conformal_synth(df, outcome='packspercapita',
+    ...     unit='state', time='year', treated_unit='California',
+    ...     treatment_time=1989)
+    >>> bool(result.ci[0] <= result.estimate <= result.ci[1])
+    True
+    >>> print(result.summary())  # doctest: +SKIP
     """
     # --- Build panel ---
     pivot = data.pivot_table(index=time, columns=unit, values=outcome)

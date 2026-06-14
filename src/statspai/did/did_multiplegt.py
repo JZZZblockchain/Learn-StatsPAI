@@ -121,13 +121,26 @@ def did_multiplegt(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for county in range(12):
+    ...     state = county % 3
+    ...     g = int(rng.choice([4, 6, 0]))  # cohort; 0 = never treated
+    ...     for year in range(1, 9):
+    ...         on = 1 if (g != 0 and year >= g) else 0
+    ...         rows.append({'county': county, 'state': state, 'year': year,
+    ...                      'treated': on,
+    ...                      'wage': county + 0.2 * year + 1.5 * on
+    ...                              + rng.normal(0, 0.5)})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.did_multiplegt(
     ...     data=df, y="wage", group="county", time="year",
-    ...     treatment="treated", placebo=2, dynamic=3,
-    ...     cluster="state", n_boot=200, seed=42,
+    ...     treatment="treated", placebo=1, dynamic=2,
+    ...     cluster="state", n_boot=50, seed=42,
     ... )
-    >>> result.summary()
-    >>> result.plot()
+    >>> bool(np.isfinite(result.estimate))
+    True
 
     Notes
     -----

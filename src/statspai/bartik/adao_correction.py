@@ -87,16 +87,27 @@ def ssaggregate(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n, K = 80, 5
+    >>> shares = rng.dirichlet(np.ones(K), size=n)  # exposure shares, rows sum to 1
+    >>> g = rng.normal(0.0, 1.0, K)                 # industry-level shocks
+    >>> bartik = shares @ g                          # shift-share instrument
+    >>> emp = 0.7 * bartik + rng.normal(0, 0.5, n)   # endogenous regressor
+    >>> wage = 1.5 * emp + rng.normal(0, 0.5, n)     # outcome
+    >>> df = pd.DataFrame({"wage": wage, "emp": emp})
+    >>> df_shocks = pd.DataFrame({"industry_growth": g})
     >>> result = sp.ssaggregate(
     ...     data=df,
-    ...     y="employment_growth",
-    ...     x="bartik_instrument",
-    ...     shares=shares_matrix,
+    ...     y="wage",
+    ...     x="emp",
+    ...     shares=shares,
     ...     shocks="industry_growth",
     ...     shock_data=df_shocks,
-    ...     controls=["population", "density"],
     ... )
-    >>> print(result.summary())
+    >>> bool(result.params.shape[0] >= 1)
+    True
     """
     n = len(data)
     Y = data[y].values.astype(float)
@@ -356,10 +367,22 @@ def shift_share_se(
 
     Examples
     --------
-    >>> iv_res = sp.bartik(df, y='wage', endog='emp',
-    ...                    shares=S, shocks=g)
-    >>> corrected = sp.shift_share_se(iv_res, shares=S)
-    >>> print(corrected.summary())
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n, K = 80, 5
+    >>> S = pd.DataFrame(rng.dirichlet(np.ones(K), size=n),
+    ...                  columns=[f"ind{k}" for k in range(K)])
+    >>> g = pd.Series(rng.normal(0, 1, K), index=S.columns)
+    >>> bartik = S.values @ g.values
+    >>> emp = 0.7 * bartik + rng.normal(0, 0.5, n)
+    >>> wage = 1.5 * emp + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({"wage": wage, "emp": emp})
+    >>> iv_res = sp.bartik(df, y='wage', endog='emp', shares=S, shocks=g,
+    ...                    leave_one_out=False)
+    >>> corrected = sp.shift_share_se(iv_res, shares=S.values)
+    >>> bool("SE (AKM)" in corrected.diagnostics)
+    True
     """
     if isinstance(shares, pd.DataFrame):
         S = shares.values.astype(float)

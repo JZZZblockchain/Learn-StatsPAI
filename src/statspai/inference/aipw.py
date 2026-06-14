@@ -77,9 +77,25 @@ def aipw(
 
     Examples
     --------
-    >>> result = aipw(df, y='outcome', treat='treatment',
-    ...              covariates=['age', 'income', 'education'])
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> age = rng.normal(40, 10, n)
+    >>> income = rng.normal(50, 15, n)
+    >>> education = rng.integers(10, 18, n).astype(float)
+    >>> ps = 1 / (1 + np.exp(-(0.03 * (age - 40) + 0.02 * (income - 50))))
+    >>> treatment = rng.binomial(1, ps)
+    >>> outcome = (2.0 * treatment + 0.05 * age + 0.03 * income
+    ...            + 0.1 * education + rng.normal(0, 1, n))
+    >>> df = pd.DataFrame({'outcome': outcome, 'treatment': treatment,
+    ...                    'age': age, 'income': income,
+    ...                    'education': education})
+    >>> result = sp.aipw(df, y='outcome', treat='treatment',
+    ...                  covariates=['age', 'income', 'education'], seed=0)
+    >>> bool(result.estimate > 0)
+    True
 
     Notes
     -----

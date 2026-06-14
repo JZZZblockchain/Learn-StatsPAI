@@ -60,8 +60,16 @@ def sumstats(
 
     Examples
     --------
-    >>> sp.sumstats(df, vars=['wage', 'edu', 'exp'], by='female')
-    >>> sp.sumstats(df, output='table1.docx')
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> tab = sp.sumstats(
+    ...     df, vars=['log_wage', 'education', 'experience'],
+    ...     by='female', output='dataframe',
+    ... )
+    >>> import pandas as pd
+    >>> bool(isinstance(tab, pd.DataFrame))
+    True
+    >>> sp.sumstats(df, output='table1.docx')  # doctest: +SKIP
     """
     # Select variables
     if vars is None:
@@ -168,9 +176,18 @@ def balance_table(
 
     Examples
     --------
-    >>> sp.balance_table(df, treat='treated',
-    ...                  covariates=['age', 'edu', 'income'],
-    ...                  output='balance.docx')
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> bal = sp.balance_table(
+    ...     df, treat='union',
+    ...     covariates=['education', 'experience', 'tenure'],
+    ...     output='dataframe',
+    ... )
+    >>> import pandas as pd
+    >>> bool(isinstance(bal, pd.DataFrame))
+    True
+    >>> cov = ['education', 'experience', 'tenure']
+    >>> sp.balance_table(df, treat='union', covariates=cov, output='balance.docx')  # doctest: +SKIP
     """
     from scipy import stats as sp_stats
 

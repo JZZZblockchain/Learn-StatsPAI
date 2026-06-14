@@ -75,12 +75,27 @@ def did_imputation(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for unit in range(40):
+    ...     first = [4, 7, 0][unit % 3]  # cohorts 4, 7, never-treated (0)
+    ...     for year in range(1, 9):
+    ...         treated = first != 0 and year >= first
+    ...         te = 2.0 * (year - first + 1) if treated else 0.0
+    ...         rows.append({'county': unit, 'year': year,
+    ...                      'wage': unit * 0.1 + year + te + rng.normal(),
+    ...                      'first_treat': first})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.did_imputation(
     ...     data=df, y='wage', group='county', time='year',
     ...     first_treat='first_treat', horizon=list(range(-5, 6)),
     ... )
-    >>> result.summary()
-    >>> result.event_study_plot()
+    >>> bool(result.estimate > 0)
+    True
+    >>> fig, ax = result.event_study_plot()
 
     Notes
     -----

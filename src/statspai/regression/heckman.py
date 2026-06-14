@@ -62,9 +62,29 @@ def heckman(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> education = rng.normal(12, 3, n)
+    >>> experience = rng.uniform(0, 30, n)
+    >>> children = rng.integers(0, 4, n)
+    >>> spouse_income = rng.normal(30, 10, n)
+    >>> u = rng.normal(size=n)
+    >>> e = 0.7 * u + rng.normal(size=n)  # correlated errors -> selection bias
+    >>> employed = (-0.5 + 0.1 * education - 0.4 * children
+    ...             - 0.02 * spouse_income + e > 0).astype(int)
+    >>> wage = 5 + 1.2 * education + 0.3 * experience + 2.0 * u
+    >>> wage = np.where(employed == 1, wage, np.nan)  # observed only if employed
+    >>> df = pd.DataFrame({'wage': wage, 'education': education,
+    ...                    'experience': experience, 'employed': employed,
+    ...                    'children': children, 'spouse_income': spouse_income})
     >>> result = sp.heckman(df, y='wage', x=['education', 'experience'],
-    ...                     select='employed', z=['education', 'children', 'spouse_income'])
-    >>> print(result.summary())
+    ...                     select='employed',
+    ...                     z=['education', 'children', 'spouse_income'])
+    >>> bool(result.estimate is not None)
+    True
 
     Notes
     -----

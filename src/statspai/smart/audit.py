@@ -516,10 +516,23 @@ def audit(result: Any) -> Dict[str, Any]:
 
     Examples
     --------
-    >>> r = sp.did(df, y='wage', treat='treated', time='post')
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(5)
+    >>> rows = []
+    >>> for i in range(200):
+    ...     tr = 1 if i < 100 else 0
+    ...     for t in (0, 1):
+    ...         y = (1.0 + 0.3 * t + 0.5 * tr + 2.0 * tr * t
+    ...              + rng.normal(scale=0.5))
+    ...         rows.append({'i': i, 't': t, 'treated': tr,
+    ...                      'post': t, 'wage': y})
+    >>> df = pd.DataFrame(rows)
+    >>> r = sp.did(df, y='wage', treat='treated', time='t', post='post')
     >>> audit_card = sp.audit(r)
     >>> for c in audit_card['checks']:
-    ...     if c['status'] == 'missing' and c['severity'] == 'high':
+    ...     if c['status'] == 'missing' and c['importance'] == 'high':
     ...         print(c['suggest_function'])
     sp.pretrends_test
 

@@ -73,8 +73,20 @@ def fracreg(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> income = rng.normal(0, 1, n)
+    >>> age = rng.normal(0, 1, n)
+    >>> mu = 1 / (1 + np.exp(-(0.5 + 0.8 * income - 0.3 * age)))
+    >>> df = pd.DataFrame({
+    ...     'participation_rate': np.clip(mu + rng.normal(0, 0.05, n), 0.01, 0.99),
+    ...     'income': income,
+    ...     'age': age,
+    ... })
     >>> result = sp.fracreg(df, y='participation_rate', x=['income', 'age'])
-    >>> print(result.summary())
+    >>> bool(isinstance(result.summary(), str))
+    True
     """
     df = data.dropna(subset=[y] + x)
     n = len(df)
@@ -228,8 +240,20 @@ def betareg(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> price = rng.normal(0, 1, n)
+    >>> quality = rng.normal(0, 1, n)
+    >>> mu = 1 / (1 + np.exp(-(0.3 + 0.6 * price - 0.4 * quality)))
+    >>> df = pd.DataFrame({
+    ...     'share': np.clip(mu + rng.normal(0, 0.05, n), 0.01, 0.99),
+    ...     'price': price,
+    ...     'quality': quality,
+    ... })
     >>> result = sp.betareg(df, y='share', x=['price', 'quality'])
-    >>> print(result.summary())
+    >>> bool(isinstance(result.summary(), str))
+    True
     """
     df = data.dropna(subset=[y] + x + (z or []))
     n = len(df)

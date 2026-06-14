@@ -269,9 +269,21 @@ def zip_model(
 
     Examples
     --------
-    >>> result = sp.zip_model(data=df, y='doctor_visits', x=['age', 'income'],
-    ...                       inflate=['age', 'chronic'])
-    >>> print(result.summary())
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(0, 1, n)
+    >>> chronic = rng.integers(0, 2, n)
+    >>> visits = rng.poisson(np.exp(0.5 + 0.3 * age))
+    >>> visits[rng.random(n) < 0.3] = 0  # excess structural zeros
+    >>> df = pd.DataFrame({'visits': visits, 'age': age, 'chronic': chronic})
+    >>> result = sp.zip_model(data=df, y='visits', x=['age'],
+    ...                       inflate=['chronic'])
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(result.model_info['model_type'] == 'zip')
+    True
 
     Notes
     -----
@@ -545,9 +557,21 @@ def zinb(
 
     Examples
     --------
-    >>> result = sp.zinb(data=df, y='doctor_visits', x=['age', 'income'],
-    ...                  inflate=['age', 'chronic'])
-    >>> print(result.summary())
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(0, 1, n)
+    >>> chronic = rng.integers(0, 2, n)
+    >>> visits = rng.poisson(np.exp(0.5 + 0.3 * age))
+    >>> visits[rng.random(n) < 0.3] = 0  # excess structural zeros
+    >>> df = pd.DataFrame({'visits': visits, 'age': age, 'chronic': chronic})
+    >>> result = sp.zinb(data=df, y='visits', x=['age'],
+    ...                  inflate=['chronic'])
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(result.model_info['model_type'] == 'zinb')
+    True
 
     Notes
     -----
@@ -778,9 +802,20 @@ def hurdle(
 
     Examples
     --------
-    >>> result = sp.hurdle(data=df, y='doctor_visits', x=['age', 'income'],
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(0, 1, n)
+    >>> visits = rng.poisson(np.exp(0.5 + 0.3 * age))
+    >>> visits[rng.random(n) < 0.3] = 0  # excess zeros below the hurdle
+    >>> df = pd.DataFrame({'visits': visits, 'age': age})
+    >>> result = sp.hurdle(data=df, y='visits', x=['age'],
     ...                    count_model='negbin')
-    >>> print(result.summary())
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(result.model_info['model_type'] == 'hurdle')
+    True
 
     Notes
     -----

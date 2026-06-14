@@ -121,12 +121,21 @@ def rd_flex(
     Examples
     --------
     >>> import statspai as sp
-    >>> from statspai.datasets import load_lee2008
-    >>> df = load_lee2008()
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(7)
+    >>> n = 600
+    >>> margin = rng.uniform(-1, 1, n)
+    >>> lagvote = 0.5 + 0.3 * margin + rng.normal(0, 0.1, n)
+    >>> demvoteshare = 0.4 + 0.2 * margin + rng.normal(0, 0.1, n)
+    >>> vote = (0.3 * margin + 0.05 * (margin >= 0) + 0.4 * lagvote
+    ...         + rng.normal(0, 0.1, n))
+    >>> df = pd.DataFrame({'vote': vote, 'margin': margin,
+    ...                    'lagvote': lagvote, 'demvoteshare': demvoteshare})
     >>> r = sp.rd_flex(df, y='vote', x='margin', c=0.0,
     ...                W=['lagvote', 'demvoteshare'],
-    ...                learner='boost', n_folds=5)
-    >>> r.summary()
+    ...                learner='ridge', n_folds=5, random_state=0)
+    >>> bool(np.isfinite(r.estimate))
+    True
     """
     if W is None or len(W) == 0:
         warnings.warn(

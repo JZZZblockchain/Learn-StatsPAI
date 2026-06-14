@@ -98,6 +98,7 @@ def callaway_santanna(
 
     Examples
     --------
+    >>> import statspai as sp
     >>> import pandas as pd, numpy as np
     >>> # Create staggered panel data
     >>> rng = np.random.default_rng(42)
@@ -109,8 +110,8 @@ def callaway_santanna(
     ...         rows.append({'i': unit, 't': period, 'y': te + rng.normal(),
     ...                      'g': g_val})
     >>> df = pd.DataFrame(rows)
-    >>> result = callaway_santanna(df, y='y', g='g', t='t', i='i')
-    >>> result.estimate > 0
+    >>> result = sp.callaway_santanna(df, y='y', g='g', t='t', i='i')
+    >>> bool(result.estimate > 0)
     True
 
     References

@@ -118,8 +118,9 @@ def rdhte(
     >>> tau_z = 2.0 + 1.5 * Z  # CATE varies with Z
     >>> Y = 0.5 * X + tau_z * (X >= 0) + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X, 'z': Z})
-    >>> result = rdhte(df, y='y', x='x', z='z', c=0)
-    >>> abs(result.estimate - 2.0) < 1.0  # average CATE near 2
+    >>> import statspai as sp
+    >>> result = sp.rdhte(df, y='y', x='x', z='z', c=0)
+    >>> bool(abs(result.estimate - 2.0) < 1.0)  # average CATE near 2
     True
     """
     # --- Validate inputs ---
@@ -504,13 +505,23 @@ def rdhte_lincom(
 
     Examples
     --------
-    Compute the average CATE for the first and second halves of Z:
+    Compute the average CATE for the first half of the Z grid:
 
-    >>> result = rdhte(df, y='y', x='x', z='z')
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 2000
+    >>> X = rng.uniform(-1, 1, n)
+    >>> Z = rng.normal(0, 1, n)
+    >>> Y = 0.5 * X + (2.0 + 1.5 * Z) * (X >= 0) + rng.normal(0, 0.5, n)
+    >>> df = pd.DataFrame({'y': Y, 'x': X, 'z': Z})
+    >>> result = sp.rdhte(df, y='y', x='x', z='z', c=0)
     >>> n_pts = len(result.detail)
     >>> w1 = np.zeros(n_pts)
-    >>> w1[:n_pts//2] = 1.0 / (n_pts//2)  # first half
-    >>> lincom1 = rdhte_lincom(result, w1)
+    >>> w1[:n_pts // 2] = 1.0 / (n_pts // 2)  # first half of the Z grid
+    >>> lincom1 = sp.rdhte_lincom(result, w1)
+    >>> bool('estimate' in lincom1)
+    True
     """
     weights = np.asarray(weights, dtype=float)
     detail = result.detail

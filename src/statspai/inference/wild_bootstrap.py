@@ -100,11 +100,24 @@ def wild_cluster_bootstrap(
 
     Examples
     --------
-    >>> result = wild_cluster_bootstrap(
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> education = rng.integers(8, 18, n)
+    >>> experience = rng.integers(0, 30, n)
+    >>> wage = (2.0 + 0.4 * education + 0.1 * experience
+    ...         + rng.normal(0, 2, n))
+    >>> df = pd.DataFrame({'wage': wage, 'education': education,
+    ...                    'experience': experience,
+    ...                    'state': rng.integers(0, 12, n)})
+    >>> result = sp.wild_cluster_bootstrap(
     ...     df, y='wage', x=['education', 'experience'],
-    ...     cluster='state', test_var='education')
-    >>> print(f"Bootstrap p = {result['p_boot']:.4f}")
-    >>> print(f"Bootstrap CI = {result['ci_boot']}")
+    ...     cluster='state', test_var='education', n_boot=199, seed=0)
+    >>> print(f"Bootstrap p = {result['p_boot']:.4f}")  # doctest: +SKIP
+    >>> bool(result['ci_boot'][0] < result['ci_boot'][1])
+    True
 
     Notes
     -----

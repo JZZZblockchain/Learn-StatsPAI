@@ -110,11 +110,16 @@ def aggte(
 
     Examples
     --------
-    >>> from statspai.did import callaway_santanna, aggte
-    >>> cs  = callaway_santanna(df, y='y', g='g', t='t', i='id')
-    >>> es  = aggte(cs, type='dynamic', cband=True, random_state=42)
-    >>> grp = aggte(cs, type='group')
-    >>> cal = aggte(cs, type='calendar')
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=200, n_periods=8, staggered=True, seed=42)
+    >>> df['first_treat'] = df['first_treat'].fillna(0)  # 0 = never-treated
+    >>> cs = sp.callaway_santanna(df, y='y', g='first_treat', t='time', i='unit')
+    >>> es = sp.aggte(cs, type='dynamic', cband=True, n_boot=200, random_state=42)
+    >>> es.estimand
+    'ATT'
+    >>> grp = sp.aggte(cs, type='group', n_boot=200, random_state=42)
+    >>> bool('group' in grp.detail.columns)  # one row per cohort
+    True
     """
     if type not in ('simple', 'dynamic', 'group', 'calendar'):
         raise ValueError(

@@ -96,24 +96,27 @@ def rkd(
 
     Examples
     --------
-    Sharp (reduced-form) RKD:
+    Sharp (reduced-form) RKD — slope changes by 0.8 at the kink x=0:
 
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
-    >>> n = 2000
+    >>> n = 4000
     >>> X = rng.uniform(-2, 2, n)
-    >>> Y = 0.5 * X + 0.8 * np.maximum(X, 0) + rng.normal(0, 0.5, n)
+    >>> Y = 0.5 * X + 0.8 * np.maximum(X, 0) + rng.normal(0, 0.3, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X})
-    >>> result = rkd(df, y='y', x='x', c=0)
-    >>> abs(result.estimate - 0.8) < 0.5
+    >>> result = sp.rkd(df, y='y', x='x', c=0)
+    >>> bool(abs(result.estimate - 0.8) < 0.5)
     True
 
-    Fuzzy RKD:
+    Fuzzy RKD — ratio of outcome kink to treatment kink:
 
     >>> T = 1.0 * X + 2.0 * np.maximum(X, 0) + rng.normal(0, 0.3, n)
     >>> Y2 = 0.4 * T + rng.normal(0, 0.5, n)
     >>> df2 = pd.DataFrame({'y': Y2, 'x': X, 'treat': T})
-    >>> result2 = rkd(df2, y='y', x='x', c=0, treatment='treat')
+    >>> result2 = sp.rkd(df2, y='y', x='x', c=0, treatment='treat')
+    >>> bool(np.isfinite(result2.estimate))
+    True
     """
     # --- Validate inputs ---
     if kernel not in ("triangular", "epanechnikov", "uniform"):

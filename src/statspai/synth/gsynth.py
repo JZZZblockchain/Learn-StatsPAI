@@ -100,9 +100,13 @@ def gsynth(
 
     Examples
     --------
-    >>> result = sp.gsynth(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.gsynth(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989, placebo=False, seed=0)
+    >>> bool(result.estimate is not None)
+    True
     """
     backend_norm = backend.lower().replace("-", "_")
     if backend_norm in {"gsynth", "r", "gsynth_r"}:

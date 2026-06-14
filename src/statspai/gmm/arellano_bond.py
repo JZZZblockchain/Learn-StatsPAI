@@ -147,10 +147,27 @@ def xtabond(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for firm in range(40):  # build a dynamic panel
+    ...     alpha = rng.normal(0, 1)
+    ...     y_prev = rng.normal(0, 1)
+    ...     for t in range(8):
+    ...         capital = rng.normal(0, 1)
+    ...         labor = rng.normal(0, 1)
+    ...         y = (0.5 * y_prev + 0.3 * capital + 0.2 * labor
+    ...              + alpha + rng.normal(0, 1))
+    ...         rows.append({'firm': firm, 'year': 2000 + t, 'output': y,
+    ...                      'capital': capital, 'labor': labor})
+    ...         y_prev = y
+    >>> df = pd.DataFrame(rows)
     >>> # Arellano-Bond (difference GMM)
     >>> result = sp.xtabond(df, y='output', x=['capital', 'labor'],
     ...                     id='firm', time='year')
-    >>> print(result.summary())
+    >>> print(result.summary())  # doctest: +SKIP
 
     >>> # Two-step with Windmeijer-corrected SEs
     >>> result = sp.xtabond(df, y='output', x=['capital', 'labor'],

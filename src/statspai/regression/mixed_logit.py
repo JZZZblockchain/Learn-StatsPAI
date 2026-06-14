@@ -188,13 +188,30 @@ def mixlogit(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> N, T, J = 120, 3, 3      # individuals, choice occasions, alternatives
+    >>> beta_q = rng.normal(1.2, 0.6, size=N)   # individual quality taste
+    >>> rows = []
+    >>> for n in range(N):
+    ...     for t in range(T):
+    ...         price = rng.uniform(0.5, 2.0, J)
+    ...         quality = rng.uniform(0, 3, J)
+    ...         u = -1.0 * price + beta_q[n] * quality + rng.gumbel(0, 1, J)
+    ...         chosen = int(np.argmax(u))
+    ...         for j in range(J):
+    ...             rows.append({'person_id': n, 'obs_id': n * T + t,
+    ...                          'alt_id': j, 'price': price[j],
+    ...                          'quality': quality[j],
+    ...                          'chosen': 1.0 if j == chosen else 0.0})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.mixlogit(
     ...     df, y='chosen', alt='alt_id', chid='obs_id',
-    ...     x_fixed=['price'], x_random=['quality', 'time'],
-    ...     panel_id='person_id', n_draws=1000,
+    ...     x_fixed=['price'], x_random=['quality'],
+    ...     panel_id='person_id', n_draws=200, maxiter=60,
     ... )
-    >>> print(result.summary())
+    >>> summary_text = result.summary()
     """
     fit = _MixedLogitFitter(
         data=data, y=y, alt=alt, chid=chid,

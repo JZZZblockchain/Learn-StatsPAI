@@ -110,12 +110,32 @@ def continuous_did(
     Examples
     --------
     >>> import statspai as sp
-    >>> # Estimate effect of varying training hours on wages
+    >>> import numpy as np, pandas as pd
+    >>> # Two-period panel: half the workers get zero training (control
+    >>> # arm), the rest receive a positive, continuously varying dose.
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> dose = np.where(np.arange(n) < n // 2, 0.0,
+    ...                 rng.uniform(1, 10, size=n))
+    >>> rows = []
+    >>> for i in range(n):
+    ...     for year in (2019, 2020):
+    ...         post = 1 if year == 2020 else 0
+    ...         wage = 20 + 0.3 * dose[i] * post + rng.normal(0, 1)
+    ...         rows.append({'worker_id': i, 'year': year,
+    ...                      'training_hours': dose[i], 'wage': wage})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.continuous_did(
     ...     df, y='wage', dose='training_hours',
     ...     time='year', id='worker_id', t_pre=2019, t_post=2020,
+    ...     n_boot=200, seed=0,
     ... )
-    >>> print(result.summary())
+    >>> bool(np.isfinite(result.estimate))
+    True
+
+    References
+    ----------
+    callaway2024difference, dechaisemartin2018fuzzy
     """
     rng = np.random.default_rng(seed)
     df = data.copy()

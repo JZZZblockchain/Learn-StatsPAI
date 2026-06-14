@@ -83,11 +83,22 @@ def lee_bounds(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(1)
+    >>> n = 600
+    >>> training = rng.integers(0, 2, size=n)
+    >>> # employment (selection) is higher among the treated -> differential attrition
+    >>> employed = (rng.uniform(size=n)
+    ...             < np.where(training == 1, 0.8, 0.6)).astype(int)
+    >>> wage = 10.0 + 2.0 * training + rng.normal(size=n)
+    >>> wage = np.where(employed == 1, wage, np.nan)   # wage missing if not employed
+    >>> df = pd.DataFrame({'wage': wage, 'training': training, 'employed': employed})
     >>> result = sp.lee_bounds(df, y='wage', treat='training',
-    ...                        selection='employed')
-    >>> print(f"Bounds: [{result.model_info['lower_bound']:.3f}, "
-    ...       f"{result.model_info['upper_bound']:.3f}]")
+    ...                        selection='employed', n_bootstrap=100)
+    >>> bool(result.model_info['lower_bound'] <= result.model_info['upper_bound'])
+    True
     """
     cols = [treat, selection]
     missing = [c for c in cols if c not in data.columns]
@@ -285,11 +296,19 @@ def manski_bounds(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(2)
+    >>> n = 600
+    >>> training = rng.integers(0, 2, size=n)
+    >>> employed = (rng.uniform(size=n)
+    ...            < np.where(training == 1, 0.7, 0.5)).astype(int)
+    >>> df = pd.DataFrame({'employed': employed, 'training': training})
     >>> result = sp.manski_bounds(df, y='employed', treat='training',
-    ...                           y_lower=0, y_upper=1)
-    >>> print(f"Bounds: [{result.model_info['lower_bound']:.3f}, "
-    ...       f"{result.model_info['upper_bound']:.3f}]")
+    ...                           y_lower=0, y_upper=1, n_bootstrap=100)
+    >>> bool(result.model_info['lower_bound'] <= result.model_info['upper_bound'])
+    True
     """
     cols = [y, treat]
     missing = [c for c in cols if c not in data.columns]

@@ -382,15 +382,27 @@ def mendelian_randomization(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n_snps = 25
+    >>> bx = rng.uniform(0.05, 0.25, n_snps)          # SNP-exposure effects
+    >>> by = 0.4 * bx + rng.normal(0, 0.01, n_snps)   # causal effect ~ 0.4
+    >>> snp_stats = pd.DataFrame({
+    ...     'beta_x': bx, 'beta_y': by,
+    ...     'se_x': rng.uniform(0.01, 0.03, n_snps),
+    ...     'se_y': rng.uniform(0.01, 0.03, n_snps),
+    ... })
     >>> result = sp.mendelian_randomization(
     ...     data=snp_stats,
     ...     beta_exposure='beta_x', beta_outcome='beta_y',
     ...     se_exposure='se_x', se_outcome='se_y',
     ...     exposure_name='BMI', outcome_name='T2D',
     ... )
-    >>> print(result.summary())
-    >>> result.plot()
+    >>> bool(result.n_snps == 25)
+    True
+    >>> summary_text = result.summary()
+    >>> ax = result.plot()
     """
     if methods is None:
         methods = ['ivw', 'egger', 'weighted_median']

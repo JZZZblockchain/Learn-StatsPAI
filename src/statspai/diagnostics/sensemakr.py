@@ -63,10 +63,14 @@ def sensemakr(
 
     Examples
     --------
-    >>> result = sp.sensemakr(df, y='wage', treat='education',
-    ...                       controls=['age', 'experience', 'female'])
-    >>> print(f"RV_q = {result['rv_q']:.1%}")
-    >>> print(result['interpretation'])
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.sensemakr(df, y='log_wage', treat='education',
+    ...                       controls=['experience', 'female'])
+    >>> bool(0.0 <= result['rv_q'] <= 1.0)  # Robustness Value is a partial R^2
+    True
+    >>> isinstance(result['interpretation'], str)
+    True
 
     Notes
     -----

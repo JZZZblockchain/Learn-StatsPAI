@@ -132,19 +132,23 @@ def sdid(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> result = sp.sdid(df, y='packspercapita', unit='state',
     ...                  time='year', treat_unit='California',
     ...                  treat_time=1989)
-    >>> print(result.summary())
-    >>> result.plot()       # synthdid-style trajectory plot
+    >>> bool(result.estimate < 0)  # Prop. 99 reduced cigarette sales
+    True
+    >>> fig, ax = sp.synthdid_plot(result)  # synthdid-style trajectory plot
+    >>> type(ax).__name__
+    'Axes'
 
-    Compare all three methods:
+    Compare all three methods (``method='sc'`` and ``'did'``):
 
-    >>> for m in ['sdid', 'sc', 'did']:
-    ...     r = sp.sdid(df, y='packspercapita', unit='state',
-    ...                 time='year', treat_unit='California',
-    ...                 treat_time=1989, method=m)
-    ...     print(f"{m:4s}: ATT = {r.estimate:.3f} (SE = {r.se:.3f})")
+    >>> for m in ['sdid', 'sc', 'did']:  # doctest: +SKIP
+    ...     r = sp.sdid(df, y='packspercapita', unit='state',  # doctest: +SKIP
+    ...                 time='year', treat_unit='California',  # doctest: +SKIP
+    ...                 treat_time=1989, method=m)  # doctest: +SKIP
+    ...     print(f"{m:4s}: ATT = {r.estimate:.3f} (SE = {r.se:.3f})")  # doctest: +SKIP
 
     References
     ----------
@@ -1027,10 +1031,15 @@ def california_prop99() -> pd.DataFrame:
 
     Examples
     --------
-    >>> df = sp.synth.california_prop99()
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> list(df.columns)
+    ['state', 'year', 'packspercapita', 'treated']
     >>> result = sp.sdid(df, y='packspercapita', unit='state',
     ...                  time='year', treat_unit='California',
     ...                  treat_time=1989)
+    >>> bool(result.estimand == 'ATT')
+    True
     """
     # Simulated data matching the structure of the R dataset.
     # 39 states × 31 years (1970-2000). California treated in 1989.

@@ -108,11 +108,26 @@ def lp_did(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(40):
+    ...     g = 6 if i % 2 == 0 else 10**9   # half treated at t=6, half never
+    ...     fe = rng.normal()
+    ...     for t in range(12):
+    ...         d = 1 if t >= g else 0
+    ...         te = 2.0 * (t - g + 1) if d else 0.0
+    ...         y = fe + 0.3 * t + te + rng.normal(0, 0.5)
+    ...         rows.append({"i": i, "t": t, "y": y, "d": d})
+    >>> df = pd.DataFrame(rows)
     >>> r = sp.lp_did(df, y='y', unit='i', time='t', treatment='d',
     ...               horizons=(-3, 5))
-    >>> r.model_info['event_study']   # DataFrame of per-horizon β_h
-    >>> sp.honest_did(r, max_M=0.5)   # Rambachan-Roth on the paths
+    >>> es = r.model_info['event_study']   # DataFrame of per-horizon beta_h
+    >>> isinstance(es, pd.DataFrame)
+    True
+    >>> h = sp.honest_did(r, m_grid=[0.5])   # Rambachan-Roth on the paths
 
     Notes
     -----

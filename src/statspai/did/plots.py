@@ -109,8 +109,12 @@ def parallel_trends_plot(
 
     Examples
     --------
-    >>> parallel_trends_plot(df, y='wage', time='year', treat='treated',
-    ...                      treat_time=2010)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> fig, ax = sp.parallel_trends_plot(df, y='y', time='time',
+    ...                                   treat='treated', treat_time=3)
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, _ = _ensure_mpl()
     colors = colors or ('#E74C3C', '#2C3E50')
@@ -217,9 +221,17 @@ def bacon_plot(
 
     Examples
     --------
-    >>> bacon = sp.bacon_decomposition(df, y='y', treat='d',
-    ...                                 time='t', id='i')
-    >>> bacon_plot(bacon)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> bacon = sp.bacon_decomposition(df, y='y', treat='treated',
+    ...                                time='time', id='unit')
+    >>> fig, ax = sp.bacon_plot(bacon)
+    >>> type(fig).__name__
+    'Figure'
+
+    References
+    ----------
+    goodmanbacon2021difference
     """
     plt, _ = _ensure_mpl()
 
@@ -317,9 +329,18 @@ def group_time_plot(
 
     Examples
     --------
-    >>> result = sp.did(df, y='y', treat='g', time='t', id='i', method='cs')
-    >>> group_time_plot(result)
-    >>> group_time_plot(result, plot_type='heatmap')
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> result = sp.did(df, y='y', treat='first_treat', time='time',
+    ...                 id='unit', method='cs')
+    >>> fig, ax = sp.group_time_plot(result)
+    >>> fig2, ax2 = sp.group_time_plot(result, plot_type='heatmap')
+    >>> type(fig).__name__
+    'Figure'
+
+    References
+    ----------
+    callaway2021difference
     """
     plt, mpl = _ensure_mpl()
 
@@ -483,8 +504,12 @@ def did_plot(
 
     Examples
     --------
-    >>> did_plot(df, y='wage', time='year', treat='treated',
-    ...          treat_time=2010)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=False, seed=1)
+    >>> fig, ax = sp.did_plot(df, y='y', time='time', treat='treated',
+    ...                       treat_time=5)
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, _ = _ensure_mpl()
     colors = colors or ('#E74C3C', '#2C3E50', '#E74C3C')
@@ -662,8 +687,13 @@ def event_study_plot(
 
     Examples
     --------
-    >>> result = sp.did(df, y='y', treat='g', time='t', id='i')
-    >>> event_study_plot(result, shade_pre=True)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> result = sp.did(df, y='y', treat='first_treat', time='time',
+    ...                 id='unit', method='cs')
+    >>> fig, ax = sp.enhanced_event_study_plot(result, shade_pre=True)
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, _ = _ensure_mpl()
 
@@ -830,7 +860,12 @@ def treatment_rollout_plot(
 
     Examples
     --------
-    >>> treatment_rollout_plot(df, time='year', treat='first_treat', id='state')
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> fig, ax = sp.treatment_rollout_plot(df, time='time',
+    ...                                     treat='first_treat', id='unit')
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, mpl = _ensure_mpl()
     from matplotlib.colors import ListedColormap
@@ -999,9 +1034,19 @@ def sensitivity_plot(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> result = sp.did(df, y='y', treat='first_treat', time='time',
+    ...                 id='unit', method='cs')
     >>> sens = sp.honest_did(result, e=0)
-    >>> sensitivity_plot(sens, original_estimate=result.estimate,
-    ...                  original_ci=result.ci)
+    >>> fig, ax = sp.sensitivity_plot(sens, original_estimate=result.estimate,
+    ...                               original_ci=result.ci)
+    >>> type(fig).__name__
+    'Figure'
+
+    References
+    ----------
+    rambachan2023more
     """
     plt, _ = _ensure_mpl()
 
@@ -1126,8 +1171,17 @@ def cohort_event_study_plot(
 
     Examples
     --------
-    >>> result = sp.did(df, y='y', treat='g', time='t', id='i', method='cs')
-    >>> cohort_event_study_plot(result)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
+    >>> result = sp.did(df, y='y', treat='first_treat', time='time',
+    ...                 id='unit', method='cs')
+    >>> fig, ax = sp.cohort_event_study_plot(result)
+    >>> type(fig).__name__
+    'Figure'
+
+    References
+    ----------
+    callaway2021difference
     """
     plt, _ = _ensure_mpl()
 
@@ -1433,9 +1487,13 @@ def did_summary_plot(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
     >>> out = sp.did_summary(df, y='y', time='time',
     ...                      first_treat='first_treat', group='unit')
     >>> fig, ax = sp.did_summary_plot(out)
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, _mpl = _ensure_mpl()
 

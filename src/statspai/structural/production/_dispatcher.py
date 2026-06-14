@@ -110,13 +110,29 @@ def prod_fn(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for fid in range(60):
+    ...     omega = rng.normal(0.0, 0.28)
+    ...     k = rng.normal(0.0, 0.5)
+    ...     for t in range(8):
+    ...         omega = 0.7 * omega + rng.normal(0.0, 0.20)
+    ...         l = 0.5 * omega + 0.3 * k + rng.normal(0.0, 0.10)
+    ...         m = 0.8 * omega + 0.5 * k + rng.normal(0.0, 0.05)
+    ...         y = 0.60 * l + 0.35 * k + omega + rng.normal(0.0, 0.10)
+    ...         rows.append({"id": fid, "year": t, "y": y, "l": l, "k": k, "m": m})
+    ...         k = 0.9 * k + 0.1 * rng.normal(0.5, 0.1)
+    >>> df = pd.DataFrame(rows)
     >>> res = sp.prod_fn(df, output="y", free="l", state="k", proxy="m",
-    ...                   panel_id="id", time="year",
-    ...                   method="acf", boot_reps=200, seed=0)
-    >>> res.coef
-    {"l": 0.62, "k": 0.32}
-    >>> mu = sp.markup(res, revenue="log_rev", input_cost="log_mat",
-    ...                 flexible_input="m")
+    ...                   panel_id="id", time="year", method="acf", seed=0)
+    >>> sorted(res.coef)  # output elasticities for free + state inputs
+    ['k', 'l']
+    >>> # De Loecker-Warzynski markup needs the flexible input among the
+    >>> # production-function coefficients, so refit with materials as free:
+    >>> res_m = sp.prod_fn(df, output="y", free=["l", "m"], state="k",
+    ...                    proxy="m", panel_id="id", time="year", method="acf")
+    >>> mu = sp.markup(res_m, revenue="y", input_cost="m", flexible_input="m")  # doctest: +SKIP
 
     See Also
     --------

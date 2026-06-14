@@ -113,10 +113,11 @@ def augsynth(
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.synth.california_tobacco()
+    >>> df = sp.california_tobacco()
     >>> result = sp.augsynth(df, outcome='cigsale', unit='state', time='year',
     ...                       treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    >>> bool(result.estimate < 0)  # Prop 99 lowered cigarette sales
+    True
     """
     backend_norm = backend.lower().replace("-", "_")
     if backend_norm in {"augsynth", "r", "augsynth_r"}:

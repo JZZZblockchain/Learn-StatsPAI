@@ -120,9 +120,20 @@ def rd_bias_aware_fuzzy(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 600
+    >>> age = rng.uniform(60, 70, n)
+    >>> # Take-up jumps sharply at the cutoff -> strong first stage:
+    >>> p = 0.05 + 0.9 * (age >= 65)
+    >>> retired = (rng.uniform(size=n) < np.clip(p, 0, 1)).astype(float)
+    >>> earnings = 20 - 4.0 * retired + 0.1 * (age - 65) + rng.normal(0, 1.0, n)
+    >>> df = pd.DataFrame({'age': age, 'earnings': earnings, 'retired': retired})
     >>> r = sp.rd_bias_aware_fuzzy(df, y='earnings', x='age', fuzzy='retired',
-    ...                            c=65.0)
-    >>> print(r.model_info['bias_aware']['bias_aware_ci'])
+    ...                            c=65.0, n_grid=101)
+    >>> lo, hi = r.model_info['bias_aware']['bias_aware_ci']
+    >>> bool(lo < hi)
+    True
     """
     # --- Parse data ---------------------------------------------------
     needed = [y, x, fuzzy]

@@ -110,17 +110,29 @@ def ivqreg(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
-    >>> res = sp.ivqreg(df, y='earnings', endog='schooling',
-    ...                 instruments='quarter_of_birth',
-    ...                 exog=['age', 'race'], tau=0.5,
-    ...                 bootstrap=400)
+    >>> rng = np.random.default_rng(0)
+    >>> n = 150
+    >>> qob1, qob2 = rng.normal(size=n), rng.normal(size=n)
+    >>> age = rng.normal(40, 5, n)
+    >>> race = rng.binomial(1, 0.3, n)
+    >>> u = rng.normal(size=n)
+    >>> education = 0.6 * qob1 + 0.4 * qob2 + 0.2 * (age - 40) + u + rng.normal(size=n)
+    >>> wage = 1.0 + 0.5 * education + 0.1 * (age - 40) - 0.3 * race + u + rng.normal(size=n)
+    >>> df = pd.DataFrame({"wage": wage, "education": education,
+    ...                    "qob1": qob1, "qob2": qob2, "age": age, "race": race})
+    >>> res = sp.ivqreg(df, y='wage', endog='education',
+    ...                 instruments=['qob1', 'qob2'],
+    ...                 exog=['age', 'race'], tau=0.5)
 
-    >>> # Multiple quantiles:
+    >>> # Multiple quantiles return a DataFrame (one row per tau):
     >>> out = sp.ivqreg(df, y='wage', endog='education',
-    ...                 instruments=['qob1','qob2'],
-    ...                 tau=[0.1, 0.25, 0.5, 0.75, 0.9],
-    ...                 bootstrap=200)
+    ...                 instruments=['qob1', 'qob2'],
+    ...                 tau=[0.25, 0.5, 0.75])
+    >>> isinstance(out, pd.DataFrame)
+    True
     """
     # Normalize arguments
     taus = [tau] if isinstance(tau, (int, float)) else list(tau)

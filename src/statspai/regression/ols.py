@@ -612,11 +612,16 @@ def regress(
 
     Examples
     --------
-    >>> results = regress("wage ~ education + experience", data=df)
-    >>> print(results.summary())
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> results = sp.regress("log_wage ~ education + experience", data=df)
+    >>> bool(results.params["education"] > 0)
+    True
 
-    >>> results = regress("wage ~ education + experience", data=df,
-    ...                   robust='hc1', cluster='firm_id')
+    >>> results = sp.regress("log_wage ~ education + experience", data=df,
+    ...                      robust='hc1', cluster='union')
+    >>> "education" in results.params.index
+    True
     """
     # --- Input validation (Stata-quality error messages) ---
     if not isinstance(data, pd.DataFrame):

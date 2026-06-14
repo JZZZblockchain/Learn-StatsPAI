@@ -94,10 +94,24 @@ def honest_did(
 
     Examples
     --------
-    >>> r = sp.did(df, y='y', treat='g', time='t', id='unit')
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []  # staggered panel: half treated at t=5, half never
+    >>> for i in range(30):
+    ...     g = 5 if i < 15 else 0
+    ...     ui = rng.normal(0, 1)
+    ...     for t in range(1, 9):
+    ...         post = 1 if (g != 0 and t >= g) else 0
+    ...         y = ui + 0.3 * t + 2.0 * post + rng.normal(0, 0.5)
+    ...         rows.append({"unit": i, "time": t, "y": y, "g": g})
+    >>> df = pd.DataFrame(rows)
+    >>> r = sp.sun_abraham(df, y='y', g='g', t='time', i='unit')
     >>> sensitivity = sp.honest_did(r, e=0)
-    >>> print(sensitivity)
-    >>> # If rejects_zero=True even at M=1σ, result is robust
+    >>> list(sensitivity.columns)
+    ['M', 'ci_lower', 'ci_upper', 'rejects_zero']
+    >>> # If rejects_zero=True even at M=1 sigma, the result is robust
 
     Notes
     -----
@@ -445,10 +459,23 @@ def breakdown_m(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []  # staggered panel: half treated at t=5, half never
+    >>> for i in range(30):
+    ...     g = 5 if i < 15 else 0
+    ...     ui = rng.normal(0, 1)
+    ...     for t in range(1, 9):
+    ...         post = 1 if (g != 0 and t >= g) else 0
+    ...         y = ui + 0.3 * t + 2.0 * post + rng.normal(0, 0.5)
+    ...         rows.append({"unit": i, "time": t, "y": y, "g": g})
+    >>> df = pd.DataFrame(rows)
+    >>> r = sp.sun_abraham(df, y='y', g='g', t='time', i='unit')
     >>> m_star = sp.breakdown_m(r, e=0)
-    >>> print(f"Breakdown M* = {m_star:.4f}")
-    >>> # Interpretation: parallel trends can deviate by up to M* per period
-    >>> # and the result remains significant
+    >>> bool(m_star >= 0)  # parallel trends can deviate by up to M* per period
+    True
 
     Notes
     -----

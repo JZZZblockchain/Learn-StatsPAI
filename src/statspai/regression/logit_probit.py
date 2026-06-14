@@ -802,16 +802,20 @@ def logit(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.logit("admit ~ gre + gpa + rank", data=df)
-    >>> print(result.summary())
+    >>> df = sp.cps_wage()  # binary `union` outcome
+    >>> result = sp.logit("union ~ education + experience", data=df)
+    >>> print(result.summary())  # doctest: +SKIP
 
     >>> # With odds ratios and robust SE
-    >>> result = sp.logit("admit ~ gre + gpa", data=df,
+    >>> result = sp.logit("union ~ education + experience", data=df,
     ...                   robust='hc1', odds_ratio=True)
 
     >>> # Marginal effects at the mean
-    >>> result = sp.logit("y ~ x1 + x2", data=df, marginal_effects='mean')
-    >>> print(result.model_info['marginal_effects'])
+    >>> result = sp.logit("union ~ education + experience", data=df,
+    ...                   marginal_effects='mean')
+    >>> me = result.model_info['marginal_effects']
+    >>> bool('dy/dx' in me.columns)
+    True
     """
     return _fit_binary(
         formula=formula,
@@ -885,12 +889,16 @@ def probit(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.probit("admit ~ gre + gpa + rank", data=df)
-    >>> print(result.summary())
+    >>> df = sp.cps_wage()  # binary `union` outcome
+    >>> result = sp.probit("union ~ education + experience", data=df)
+    >>> print(result.summary())  # doctest: +SKIP
 
-    >>> # Average marginal effects with clustered SE
-    >>> result = sp.probit("y ~ x1 + x2", data=df,
-    ...                    cluster='state', marginal_effects='average')
+    >>> # Average marginal effects with robust SE
+    >>> result = sp.probit("union ~ education + experience", data=df,
+    ...                    robust='hc1', marginal_effects='average')
+    >>> me = result.model_info['marginal_effects']
+    >>> bool('dy/dx' in me.columns)
+    True
     """
     return _fit_binary(
         formula=formula,
@@ -967,8 +975,11 @@ def cloglog(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.cloglog("default ~ income + balance", data=df)
-    >>> print(result.summary())
+    >>> df = sp.cps_wage()  # binary `union` outcome
+    >>> result = sp.cloglog("union ~ education + experience", data=df)
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(result.model_info['link'] == 'cloglog')
+    True
     """
     return _fit_binary(
         formula=formula,

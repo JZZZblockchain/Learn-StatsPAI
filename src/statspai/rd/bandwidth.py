@@ -800,26 +800,35 @@ def rdbwselect(
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 2000
-    >>> X = rng.uniform(-1, 1, n)
-    >>> Y = 0.5 * X + 3.0 * (X >= 0) + rng.normal(0, 0.3, n)
-    >>> df = pd.DataFrame({'y': Y, 'x': X})
-    >>> bw = sp.rdbwselect(df, y='outcome', x='score', c=0)
-    >>> print(bw)  # DataFrame with bandwidth info
+    >>> x = rng.uniform(-1, 1, n)
+    >>> y = 0.5 * x + 3.0 * (x >= 0) + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame({'y': y, 'x': x})
+    >>> bw = sp.rdbwselect(df, y='y', x='x', c=0)
+    >>> bool('h_left' in bw.columns)  # DataFrame with bandwidth info
+    True
 
     Compare all eight bandwidth methods:
 
-    >>> bw_all = sp.rdbwselect(df, y='outcome', x='score', c=0, all=True)
-    >>> print(bw_all)  # All 8 bandwidth methods compared
+    >>> bw_all = sp.rdbwselect(df, y='y', x='x', c=0, all=True)
+    >>> bool(len(bw_all) >= 1)
+    True
 
     CER-optimal bandwidth for better coverage:
 
-    >>> bw_cer = sp.rdbwselect(df, y='outcome', x='score', c=0,
-    ...                         bwselect='cerrd')
+    >>> bw_cer = sp.rdbwselect(df, y='y', x='x', c=0, bwselect='cerrd')
+    >>> bool(bw_cer is not None)
+    True
 
     Fuzzy RD with covariates:
 
-    >>> bw_fuzzy = sp.rdbwselect(df, y='outcome', x='score', c=0,
-    ...                           fuzzy='treated', covs=['age', 'gender'])
+    >>> treated = ((x >= 0) & (rng.uniform(0, 1, n) < 0.85)).astype(float)
+    >>> df['treated'] = treated
+    >>> df['age'] = rng.normal(40, 10, n)
+    >>> df['gender'] = rng.integers(0, 2, n).astype(float)
+    >>> bw_fuzzy = sp.rdbwselect(df, y='y', x='x', c=0,
+    ...                          fuzzy='treated', covs=['age', 'gender'])
+    >>> bool(bw_fuzzy is not None)
+    True
     """
     # --- Validate inputs ---
     if kernel not in ('triangular', 'uniform', 'epanechnikov'):

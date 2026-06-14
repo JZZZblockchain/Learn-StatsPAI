@@ -90,17 +90,35 @@ def ddd(
 
     Examples
     --------
-    Minimum wage example — treatment: NJ vs PA; time: pre vs post;
-    subgroup: low-wage (affected) vs high-wage (unaffected):
+    Minimum-wage style example — treatment: NJ vs control states;
+    time: pre vs post; subgroup: low-wage (affected) vs high-wage
+    (unaffected). The triple interaction recovers the planted effect.
 
-    >>> result = ddd(df, y='employment', treat='nj', time='post',
-    ...             subgroup='low_wage')
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> nj = rng.integers(0, 2, n)
+    >>> post = rng.integers(0, 2, n)
+    >>> low_wage = rng.integers(0, 2, n)
+    >>> employment = (50 + 3 * nj - 1 * post + 2 * low_wage
+    ...               - 2 * (nj * post * low_wage) + rng.normal(0, 3, n))
+    >>> state = np.where(nj == 1, rng.choice(['NJ', 'NY', 'CT'], n),
+    ...                  rng.choice(['PA', 'OH', 'MD'], n))
+    >>> df = pd.DataFrame({'employment': employment, 'nj': nj,
+    ...                    'post': post, 'low_wage': low_wage,
+    ...                    'state': state})
+    >>> result = sp.ddd(df, y='employment', treat='nj', time='post',
+    ...                 subgroup='low_wage')
+    >>> bool(np.isfinite(result.estimate))
+    True
 
-    With clustering by state:
+    With cluster-robust standard errors by state:
 
-    >>> result = ddd(df, y='employment', treat='nj', time='post',
-    ...             subgroup='low_wage', cluster='state')
+    >>> result = sp.ddd(df, y='employment', treat='nj', time='post',
+    ...                 subgroup='low_wage', cluster='state')
+    >>> bool(np.isfinite(result.se))
+    True
     """
     df = data.copy()
 

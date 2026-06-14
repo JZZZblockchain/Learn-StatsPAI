@@ -605,11 +605,14 @@ def preflight(data: pd.DataFrame, method: str,
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import pandas as pd
     >>> df = pd.DataFrame({'y': [1, 2, 3, 4],
     ...                    'treated': [0, 1, 0, 1],
     ...                    't': [0, 0, 1, 1]})
+    >>> # n=4 is below the typical-minimum threshold, so preflight warns:
     >>> sp.preflight(df, 'did', y='y', treat='treated', time='t')['verdict']
-    'WARN'  # n=4 is below the typical-minimum threshold of 50
+    'WARN'
 
     See Also
     --------

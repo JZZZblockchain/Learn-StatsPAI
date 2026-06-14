@@ -59,12 +59,27 @@ def margins(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ...     "female": rng.integers(0, 2, size=200).astype(float),
+    ... })
+    >>> df["y"] = (1.0 + 0.5 * df["x1"] - 0.3 * df["x2"]
+    ...            + 0.2 * df["x1"] * df["x2"] + rng.normal(size=200))
     >>> result = sp.regress("y ~ x1 + x2 + x1:x2", data=df)
     >>> me = sp.margins(result, data=df)
-    >>> print(me)
+    >>> me.columns.tolist()
+    ['variable', 'dy/dx', 'se', 'z', 'pvalue', 'ci_lower', 'ci_upper']
 
-    >>> # Conditional margins: marginal effect of x1 at female=1
-    >>> me = sp.margins(result, data=df, variables=['x1'], at={'female': 1})
+    Conditional margins: marginal effect of x1 with female fixed at 1.
+
+    >>> me_at = sp.margins(result, data=df, variables=['x1'], at={'female': 1})
+    >>> me_at['variable'].tolist()
+    ['x1']
     """
     params = result.params
     var_cov = _get_vcov(result)
@@ -330,9 +345,24 @@ def margins_at(
 
     Examples
     --------
-    >>> result = sp.regress("wage ~ experience + female + experience:female", data=df)
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> df = pd.DataFrame({
+    ...     "experience": rng.integers(0, 20, size=200).astype(float),
+    ...     "female": rng.integers(0, 2, size=200).astype(float),
+    ... })
+    >>> df["wage"] = (10.0 + 0.5 * df["experience"]
+    ...               - 1.0 * df["female"] + rng.normal(size=200))
+    >>> result = sp.regress(
+    ...     "wage ~ experience + female + experience:female", data=df
+    ... )
     >>> m = sp.margins_at(result, data=df, at={"experience": [1, 5, 10, 15, 20]})
-    >>> sp.margins_at_plot(m)
+    >>> m.shape[0]
+    5
+    >>> m.columns.tolist()
+    ['experience', 'margin', 'se', 'ci_lower', 'ci_upper']
     """
     params = result.params
     vcov = _get_vcov(result)
@@ -565,8 +595,23 @@ def contrast(
 
     Examples
     --------
-    >>> result = sp.regress("wage ~ C(education) + experience", data=df)
-    >>> sp.contrast(result, data=df, variable="education", method="r", reference=0)
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(1)
+    >>> n = 300
+    >>> group = rng.integers(0, 3, size=n).astype(float)
+    >>> df = pd.DataFrame({
+    ...     "group": group,
+    ...     "experience": rng.normal(10, 3, size=n),
+    ... })
+    >>> df["wage"] = (10 + 2.0 * df["group"]
+    ...               + 0.3 * df["experience"] + rng.normal(size=n))
+    >>> result = sp.regress("wage ~ group + experience", data=df)
+    >>> c = sp.contrast(result, data=df, variable="group",
+    ...                 method="r", reference=0)
+    >>> c["contrast_label"].tolist()
+    ['1.0 vs 0', '2.0 vs 0']
     """
     params = result.params
     vcov = _get_vcov(result)
@@ -701,8 +746,23 @@ def pwcompare(
 
     Examples
     --------
-    >>> result = sp.regress("wage ~ C(group) + experience", data=df)
-    >>> sp.pwcompare(result, data=df, variable="group", adjust="bonferroni")
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(1)
+    >>> n = 300
+    >>> group = rng.integers(0, 3, size=n).astype(float)
+    >>> df = pd.DataFrame({
+    ...     "group": group,
+    ...     "experience": rng.normal(10, 3, size=n),
+    ... })
+    >>> df["wage"] = (10 + 2.0 * df["group"]
+    ...               + 0.3 * df["experience"] + rng.normal(size=n))
+    >>> result = sp.regress("wage ~ group + experience", data=df)
+    >>> pw = sp.pwcompare(result, data=df, variable="group",
+    ...                   adjust="bonferroni")
+    >>> bool((pw["pvalue_adj"] >= pw["pvalue"]).all())
+    True
     """
     params = result.params
     vcov = _get_vcov(result)
@@ -933,9 +993,22 @@ def event_study_table(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(7)
+    >>> rows = []
+    >>> for u in range(60):
+    ...     tt = rng.choice([3, 4, 5, 100])  # 100 marks never-treated
+    ...     for t in range(8):
+    ...         post = 1.0 if (tt < 100 and t >= tt) else 0.0
+    ...         y = 0.3 * u / 60 + 0.1 * t + 1.5 * post + rng.normal(scale=0.5)
+    ...         rows.append({"unit": u, "time": t, "treat_time": tt, "y": y})
+    >>> panel = pd.DataFrame(rows)
     >>> r = sp.event_study(panel, y="y", treat_time="treat_time",
     ...                    time="time", unit="unit", window=(-3, 3))
-    >>> sp.regtable(sp.event_study_table(r), title="Event study")
+    >>> tbl = sp.event_study_table(r)
+    >>> _ = sp.regtable(tbl, title="Event study", output="text")
     """
     mi = getattr(result, "model_info", {}) or {}
     es_df = mi.get("event_study") if isinstance(mi, dict) else None
@@ -1052,10 +1125,23 @@ def margins_table(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x = rng.normal(size=n)
+    >>> z = rng.normal(size=n)
+    >>> p = 1 / (1 + np.exp(-(0.5 * x - 0.4 * z)))
+    >>> df = pd.DataFrame({
+    ...     "y": (rng.uniform(size=n) < p).astype(int),
+    ...     "x": x,
+    ...     "z": z,
+    ... })
     >>> m = sp.logit("y ~ x + z", data=df)
     >>> mt = sp.margins_table(m)
-    >>> sp.regtable(mt, output="latex", filename="margins.tex")
+    >>> _ = sp.regtable(mt, output="text")
+    >>> sp.regtable(mt, output="latex", filename="margins.tex")  # doctest: +SKIP
     """
     df = margins(
         result, data=data, variables=variables, at=at,

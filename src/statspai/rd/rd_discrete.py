@@ -107,8 +107,18 @@ def rd_discrete(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> age = rng.integers(10, 26, size=400)
+    >>> outcome = 0.2 * age + 2.0 * (age >= 18) + rng.normal(0, 1.0, size=age.shape)
+    >>> df = pd.DataFrame({'age_in_years': age, 'outcome': outcome})
     >>> r = sp.rd_discrete(df, y='outcome', x='age_in_years', c=18, method='bsd')
-    >>> r.summary()
+    >>> bool(r.estimate == r.estimate)  # finite estimate produced
+    True
+
+    References
+    ----------
+    [@kolesar2018inference]
     """
     if y not in data.columns or x not in data.columns:
         raise ValueError(f"Columns '{y}' or '{x}' not found in data.")

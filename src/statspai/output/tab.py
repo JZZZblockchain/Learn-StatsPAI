@@ -49,9 +49,22 @@ def tab(
 
     Examples
     --------
-    >>> sp.tab(df, 'treatment', 'outcome')
-    >>> sp.tab(df, 'treatment', 'outcome', output='crosstab.docx')
-    >>> sp.tab(df, 'treatment')  # one-way frequency
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     'treatment': rng.integers(0, 2, size=200),
+    ...     'outcome': rng.integers(0, 2, size=200),
+    ... })
+    >>> txt = sp.tab(df, 'treatment', 'outcome')
+    >>> isinstance(txt, str)
+    True
+    >>> ct = sp.tab(df, 'treatment', 'outcome', output='dataframe')
+    >>> isinstance(ct, pd.DataFrame)
+    True
+    >>> _ = sp.tab(df, 'treatment')  # one-way frequency
+    >>> sp.tab(df, 'treatment', 'outcome', output='crosstab.docx')  # doctest: +SKIP
     """
     if col is None:
         return _one_way_tab(data, row, output, title)

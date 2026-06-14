@@ -79,9 +79,15 @@ def staggered_synth(
 
     Examples
     --------
-    >>> result = sp.staggered_synth(df, outcome='gdp', unit='state',
-    ...     time='year', treatment='treated')
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=30, n_periods=10, staggered=True, seed=0)
+    >>> result = sp.staggered_synth(
+    ...     df, outcome='y', unit='unit', time='time',
+    ...     treatment='treated', placebo=False,
+    ... )
+    >>> bool(result.estimate is not None)
+    True
+    >>> _ = result.summary()
     """
     # --- Identify treated units and their adoption times ---
     panel = data.pivot_table(index=unit, columns=time, values=treatment, aggfunc="first")

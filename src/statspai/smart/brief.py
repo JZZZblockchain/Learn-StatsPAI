@@ -122,9 +122,21 @@ def brief(result: Any) -> str:
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> unit = np.repeat(np.arange(n // 2), 2)
+    >>> t = np.tile([0, 1], n // 2)
+    >>> treated = np.where(unit < (n // 4), 1, 0)
+    >>> post = (t == 1).astype(int)
+    >>> y = 1.0 + 0.8 * post + 1.5 * treated * post + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "treated": treated, "t": t, "unit": unit})
     >>> r = sp.did(df, y='y', treat='treated', time='t')
-    >>> sp.brief(r)
-    "[did_2x2]   estimand=ATT  est=0.412 (se=0.087)  95% CI [0.241, 0.583]  ***  N=2,000"
+    >>> line = sp.brief(r)
+    >>> isinstance(line, str) and "estimand=ATT" in line
+    True
 
     See Also
     --------

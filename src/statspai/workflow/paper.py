@@ -1228,11 +1228,23 @@ def paper(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n_id, n_t = 40, 4
+    >>> ids = np.repeat(np.arange(n_id), n_t)
+    >>> years = np.tile(np.arange(2000, 2000 + n_t), n_id)
+    >>> trained = ((ids % 2 == 0) & (years >= 2002)).astype(int)
+    >>> wage = (10 + 0.5 * years + 2.0 * trained
+    ...         + np.repeat(rng.normal(0, 1, n_id), n_t)
+    ...         + rng.normal(0, 0.5, n_id * n_t))
+    >>> df = pd.DataFrame({'worker_id': ids, 'year': years,
+    ...                    'wage': wage, 'trained': trained})
     >>> draft = sp.paper(df, "effect of training on wages", design='did',
     ...                  treatment='trained', y='wage', time='year',
     ...                  id='worker_id')
-    >>> print(draft.to_markdown()[:500])
-    >>> draft.write('analysis.tex')
+    >>> isinstance(draft.to_markdown(), str)
+    True
+    >>> draft.write('analysis.tex')  # doctest: +SKIP
 
     Notes
     -----

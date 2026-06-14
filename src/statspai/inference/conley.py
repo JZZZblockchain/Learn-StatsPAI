@@ -111,10 +111,22 @@ def conley(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 - 0.3 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": y, "x1": x1, "x2": x2,
+    ...     "latitude": rng.uniform(30, 45, size=n),
+    ...     "longitude": rng.uniform(-120, -100, size=n),
+    ... })
     >>> result = sp.regress("y ~ x1 + x2", data=df)
     >>> c = sp.conley(result, data=df, lat="latitude", lon="longitude",
     ...               dist_cutoff=100)
-    >>> print(c.summary())
+    >>> print(c.summary())  # doctest: +SKIP
     """
     if kernel not in ("uniform", "bartlett"):
         raise ValueError(f"kernel must be 'uniform' or 'bartlett', got '{kernel}'")

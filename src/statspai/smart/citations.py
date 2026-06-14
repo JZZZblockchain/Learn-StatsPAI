@@ -398,6 +398,18 @@ def bib_for(result: Any) -> Dict[str, Any]:
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(5)
+    >>> rows = []
+    >>> for i in range(200):
+    ...     tr = 1 if i < 100 else 0
+    ...     for t in (0, 1):
+    ...         y = (1.0 + 0.3 * t + 0.5 * tr + 2.0 * tr * t
+    ...              + rng.normal(scale=0.5))
+    ...         rows.append({'i': i, 't': t, 'treated': tr, 'post': t, 'y': y})
+    >>> df = pd.DataFrame(rows)
     >>> r = sp.did(df, y='y', treat='treated', time='t', post='post')
     >>> sp.bib_for(r)['key']
     'angrist2009mostly'

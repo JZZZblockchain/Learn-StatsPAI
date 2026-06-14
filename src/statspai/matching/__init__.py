@@ -158,22 +158,24 @@ def match(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
     >>> # Default: nearest-neighbour propensity-score matching
-    >>> r = sp.match(df, y='wage', treat='train',
-    ...              covariates=['age', 'edu', 'exp'])
+    >>> r = sp.match(df, y='log_wage', treat='union',
+    ...              covariates=['education', 'experience', 'tenure'])
 
     >>> # Entropy balancing
-    >>> r = sp.match(df, y='wage', treat='train',
-    ...              covariates=['age', 'edu'], method='ebalance')
+    >>> r = sp.match(df, y='log_wage', treat='union',
+    ...              covariates=['education', 'experience'], method='ebalance')
 
-    >>> # Genetic matching
-    >>> r = sp.match(df, y='wage', treat='train',
-    ...              covariates=['age', 'edu'], method='genmatch',
-    ...              population_size=200)
+    >>> # Genetic matching (small donor pool / population for speed)
+    >>> r = sp.match(df.head(300), y='log_wage', treat='union',
+    ...              covariates=['education', 'experience'], method='genmatch',
+    ...              population_size=20)
 
     >>> # Cardinality matching
-    >>> r = sp.match(df, y='wage', treat='train',
-    ...              covariates=['age', 'edu'], method='cardinality',
+    >>> r = sp.match(df.head(300), y='log_wage', treat='union',
+    ...              covariates=['education', 'experience'], method='cardinality',
     ...              smd_tolerance=0.1)
     """
     if not isinstance(method, str):

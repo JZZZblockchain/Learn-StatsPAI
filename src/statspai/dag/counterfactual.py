@@ -28,11 +28,17 @@ class SCM:
     - ``noise``: callable() -> float  (a draw from the exogenous noise
       distribution; defaults to standard normal)
 
-    Example
-    -------
-    >>> scm = SCM()
-    >>> scm.add("X", [], lambda pa, u: u, lambda rng: rng.normal())
-    >>> scm.add("Y", ["X"], lambda pa, u: 2*pa["X"] + u)
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> scm = sp.SCM()
+    >>> scm.add("X", [], lambda pa, u: u, lambda rng: rng.normal())  # doctest: +ELLIPSIS
+    SCM(...)
+    >>> scm.add("Y", ["X"], lambda pa, u: 2 * pa["X"] + u)  # doctest: +ELLIPSIS
+    SCM(...)
+    >>> sim = scm.simulate(n=100, seed=0)
+    >>> bool(sim["Y"].shape == (100,))
+    True
     """
 
     equations: dict = field(default_factory=dict)

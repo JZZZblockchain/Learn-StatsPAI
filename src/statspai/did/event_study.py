@@ -97,14 +97,19 @@ def event_study(
 
     Examples
     --------
-    >>> result = sp.event_study(df, y='wage', treat_time='first_treat',
-    ...                         time='year', unit='worker_id')
-    >>> result.event_study_plot()
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=80, n_periods=8, staggered=True, seed=0)
+    >>> result = sp.event_study(df, y='y', treat_time='first_treat',
+    ...                         time='time', unit='unit')
+    >>> bool('relative_time' in result.model_info['event_study'].columns)
+    True
+    >>> fig, ax = result.event_study_plot()
 
-    >>> # Wider window with controls
-    >>> result = sp.event_study(df, y='revenue', treat_time='policy_year',
-    ...                         time='year', unit='firm_id',
-    ...                         window=(-6, 6), covariates=['size', 'age'])
+    >>> # Narrower relative-time window
+    >>> result = sp.event_study(df, y='y', treat_time='first_treat',
+    ...                         time='time', unit='unit', window=(-3, 3))
+    >>> bool(result.model_info['pretrend_test']['pvalue'] >= 0)
+    True
     """
     df = data.copy()
     min_lag, max_lag = window

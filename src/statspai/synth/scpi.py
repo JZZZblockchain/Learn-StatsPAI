@@ -81,9 +81,11 @@ def scdata(
 
     Examples
     --------
-    >>> prepared = sp.scdata(df, outcome='gdp', unit='state',
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()  # cols: state, year, packspercapita
+    >>> prepared = sp.scdata(df, outcome='packspercapita', unit='state',
     ...     time='year', treated_unit='California', treatment_time=1989)
-    >>> prepared['Y_pre'].shape
+    >>> prepared['Y_pre'].shape  # 19 pre-treatment years (1970-1988)
     (19,)
     """
     pivot = data.pivot_table(index=time, columns=unit, values=outcome)
@@ -193,10 +195,14 @@ def scest(
 
     Examples
     --------
-    >>> est = sp.scest(df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989)
-    >>> est['pre_rmspe']
-    0.0213
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()  # cols: state, year, packspercapita
+    >>> est = sp.scest(df, outcome='packspercapita', unit='state',
+    ...     time='year', treated_unit='California', treatment_time=1989)
+    >>> bool(est['pre_rmspe'] >= 0)  # pre-treatment fit RMSPE
+    True
+    >>> est['Y_synth_post'].shape  # 12 post-treatment years (1989-2000)
+    (12,)
     """
     sc = scdata(data, outcome, unit, time, treated_unit, treatment_time)
     Y_pre = sc["Y_pre"]
@@ -318,19 +324,29 @@ def scpi(
 
     Examples
     --------
-    >>> result = sp.scpi(df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()  # cols: state, year, packspercapita
+    >>> # Subset donors to keep the subsampling step fast for this example
+    >>> states = ['California', 'Alabama', 'Arkansas', 'Colorado',
+    ...     'Connecticut', 'Delaware', 'Georgia', 'Illinois', 'Indiana']
+    >>> df = df[df['state'].isin(states)]
+    >>> result = sp.scpi(df, outcome='packspercapita', unit='state',
+    ...     time='year', treated_unit='California', treatment_time=1989,
+    ...     seed=42)
+    >>> result.estimand
+    'ATT'
+    >>> bool(result.ci[0] <= result.estimate <= result.ci[1])
+    True
 
-    >>> # In-sample only
-    >>> result_in = sp.scpi(df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
-    ...     pi_type='in_sample')
+    >>> # In-sample (weight-estimation) uncertainty only
+    >>> result_in = sp.scpi(df, outcome='packspercapita', unit='state',  # doctest: +SKIP
+    ...     time='year', treated_unit='California', treatment_time=1989,
+    ...     pi_type='in_sample', seed=42)
 
-    >>> # Quantile-regression based out-of-sample
-    >>> result_qr = sp.scpi(df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
-    ...     e_method='qreg')
+    >>> # Quantile-regression based out-of-sample component
+    >>> result_qr = sp.scpi(df, outcome='packspercapita', unit='state',  # doctest: +SKIP
+    ...     time='year', treated_unit='California', treatment_time=1989,
+    ...     e_method='qreg', seed=42)
     """
     if pi_type not in ("in_sample", "out_of_sample", "both"):
         raise ValueError(

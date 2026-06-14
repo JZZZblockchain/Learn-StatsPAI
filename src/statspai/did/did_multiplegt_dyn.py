@@ -127,12 +127,24 @@ def did_multiplegt_dyn(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(20):
+    ...     g = int(rng.choice([5, 8, 0]))  # cohort; 0 = never treated
+    ...     for t in range(1, 13):
+    ...         d = 1 if (g != 0 and t >= g) else 0
+    ...         rows.append({'i': i, 't': t, 'd': d,
+    ...                      'y': i + 0.1 * t + 1.0 * d + rng.normal(0, 0.4)})
+    >>> df = pd.DataFrame(rows)
     >>> r = sp.did_multiplegt_dyn(
     ...     df, y='y', group='i', time='t', treatment='d',
-    ...     placebo=2, dynamic=4,
+    ...     placebo=2, dynamic=4, n_boot=50, seed=0,
     ... )
-    >>> r.model_info['event_study']
-    >>> sp.honest_did(r, max_M=0.5)
+    >>> es = r.model_info['event_study']  # horizon-level event study
+    >>> bool(len(es) > 0)
+    True
+    >>> sens = sp.honest_did(r, m_grid=[0.5])  # Rambachan-Roth sensitivity
     """
     if control not in {"not_yet_treated", "never_treated"}:
         raise ValueError(

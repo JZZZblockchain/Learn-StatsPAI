@@ -224,3 +224,6 @@ tests/orig_parity/data/*_nhefs_*.csv
 .tierd_campaign/*
 !.tierd_campaign/CAMPAIGN.md
 !.tierd_campaign/worklist.md
+
+# scratch workflow scripts
+.examples_*_wf.js

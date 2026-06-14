@@ -76,10 +76,25 @@ def interactive_fe(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> N, T = 30, 10
+    >>> f = rng.normal(size=(T, 2))           # 2 common factors
+    >>> lam = rng.normal(size=(N, 2))         # unit loadings
+    >>> rows = []
+    >>> for i in range(N):
+    ...     for t in range(T):
+    ...         inv, trade = rng.normal(), rng.normal()
+    ...         gdp = 0.5 * inv + 0.3 * trade + lam[i] @ f[t] + rng.normal(0, 0.3)
+    ...         rows.append({"country": i, "year": t, "gdp": gdp,
+    ...                      "investment": inv, "trade": trade})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.interactive_fe(df, y='gdp', x=['investment', 'trade'],
     ...                            id='country', time='year', n_factors=2)
-    >>> print(result.summary())
+    >>> bool(result.params['investment'] > 0)
+    True
 
     References
     ----------

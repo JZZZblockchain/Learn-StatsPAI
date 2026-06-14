@@ -170,9 +170,12 @@ def synth_loo(
 
     Examples
     --------
-    >>> loo = sp.synth_loo(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> loo.sort_values('att')
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> loo = sp.synth_loo(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989)
+    >>> loo.sort_values('att')  # doctest: +SKIP
     """
     all_units = data[unit].unique()
     donors = [u for u in all_units if u != treated_unit]
@@ -254,8 +257,12 @@ def synth_time_placebo(
 
     Examples
     --------
-    >>> tp = sp.synth_time_placebo(df, outcome='gdp', unit='state',
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> tp = sp.synth_time_placebo(df, outcome='packspercapita', unit='state',
     ...     time='year', treated_unit='California', treatment_time=1989)
+    >>> tp.columns.tolist()
+    ['placebo_time', 'att', 'se', 'pvalue']
     """
     # Only use pre-treatment data for the placebo exercise
     pre_data = data[data[time] < treatment_time].copy()
@@ -346,10 +353,12 @@ def synth_donor_sensitivity(
 
     Examples
     --------
-    >>> ds = sp.synth_donor_sensitivity(df, outcome='gdp', unit='state',
-    ...     time='year', treated_unit='California', treatment_time=1989,
-    ...     n_samples=200, seed=42)
-    >>> ds['att'].describe()
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> ds = sp.synth_donor_sensitivity(df, outcome='packspercapita',
+    ...     unit='state', time='year', treated_unit='California',
+    ...     treatment_time=1989, n_samples=50, seed=42)
+    >>> ds['att'].describe()  # doctest: +SKIP
     """
     rng = np.random.default_rng(seed)
 
@@ -431,8 +440,12 @@ def synth_rmspe_filter(
 
     Examples
     --------
-    >>> rp = sp.synth_rmspe_filter(df, outcome='gdp', unit='state',
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> rp = sp.synth_rmspe_filter(df, outcome='packspercapita', unit='state',
     ...     time='year', treated_unit='California', treatment_time=1989)
+    >>> rp.columns.tolist()
+    ['threshold', 'n_placebos', 'pvalue', 'treated_pre_rmspe']
     """
     if thresholds is None:
         thresholds = [1.0, 2.0, 5.0, 10.0, 20.0, np.inf]
@@ -560,11 +573,14 @@ def synth_sensitivity(
 
     Examples
     --------
-    >>> sens = sp.synth_sensitivity(df, outcome='gdp', unit='state',
-    ...     time='year', treated_unit='California', treatment_time=1989,
-    ...     n_donor_samples=200, seed=42)
-    >>> print(sens['summary'])
-    >>> sens['loo']
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> sens = sp.synth_sensitivity(df, outcome='packspercapita',
+    ...     unit='state', time='year', treated_unit='California',
+    ...     treatment_time=1989, n_donor_samples=50, seed=42)
+    >>> sorted(sens.keys())
+    ['donor_sensitivity', 'loo', 'rmspe_filter', 'summary', 'time_placebo']
+    >>> print(sens['summary'])  # doctest: +SKIP
     """
     # --- Leave-one-out ---
     loo_df = synth_loo(
@@ -697,10 +713,13 @@ def synth_sensitivity_plot(
 
     Examples
     --------
-    >>> sens = sp.synth_sensitivity(df, outcome='gdp', unit='state',
-    ...     time='year', treated_unit='California', treatment_time=1989)
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> sens = sp.synth_sensitivity(df, outcome='packspercapita',
+    ...     unit='state', time='year', treated_unit='California',
+    ...     treatment_time=1989, n_donor_samples=50, seed=42)
     >>> fig = sp.synth_sensitivity_plot(sens)
-    >>> fig.savefig('synth_sensitivity.png', dpi=150)
+    >>> fig.savefig('synth_sensitivity.png', dpi=150)  # doctest: +SKIP
     """
     import matplotlib.pyplot as plt
 

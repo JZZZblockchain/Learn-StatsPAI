@@ -91,9 +91,13 @@ def robust_synth(
 
     Examples
     --------
-    >>> result = sp.robust_synth(df, outcome='gdp', unit='state',
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.robust_synth(df, outcome='packspercapita', unit='state',
     ...     time='year', treated_unit='California', treatment_time=1989,
     ...     variant='unconstrained')
+    >>> bool(result.estimate < 0)  # Prop 99 reduced cigarette sales
+    True
     """
     # --- Build panel ---
     pivot = data.pivot_table(index=time, columns=unit, values=outcome)

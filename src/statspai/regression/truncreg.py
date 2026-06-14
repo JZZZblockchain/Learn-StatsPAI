@@ -66,10 +66,21 @@ def truncreg(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
-    >>> # Wages observed only if > 0 (truncated at 0)
-    >>> result = sp.truncreg(df, y='wage', x=['education', 'experience'], ll=0)
-    >>> print(result.summary())
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> education = rng.integers(8, 18, n)
+    >>> experience = rng.integers(0, 30, n)
+    >>> wage = (2.0 + 0.4 * education + 0.1 * experience
+    ...         + rng.normal(0, 2, n))
+    >>> df = pd.DataFrame({'wage': wage, 'education': education,
+    ...                    'experience': experience})
+    >>> df = df[df['wage'] > 0]  # observed only if wage > 0 (truncated)
+    >>> result = sp.truncreg(df, y='wage',
+    ...                      x=['education', 'experience'], ll=0)
+    >>> print(result.summary())  # doctest: +SKIP
     """
     if ll is not None and ul is not None and ll >= ul:
         raise ValueError(f"Lower limit ({ll}) must be < upper limit ({ul})")

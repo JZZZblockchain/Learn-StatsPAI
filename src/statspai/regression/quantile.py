@@ -63,13 +63,16 @@ def qreg(
 
     Examples
     --------
-    >>> # Median regression
-    >>> result = sp.qreg(df, y='wage', x=['education', 'experience'],
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> # Median (0.5) regression of log wage on education and experience
+    >>> result = sp.qreg(df, y='log_wage', x=['education', 'experience'],
     ...                  quantile=0.5)
-
     >>> # 90th percentile
-    >>> result = sp.qreg(df, y='wage', x=['education', 'experience'],
+    >>> result = sp.qreg(df, y='log_wage', x=['education', 'experience'],
     ...                  quantile=0.9)
+    >>> bool(0 < result.estimate < 1)
+    True
 
     Notes
     -----
@@ -179,8 +182,11 @@ def sqreg(
 
     Examples
     --------
-    >>> table = sp.sqreg(df, y='wage', x=['education', 'experience'])
-    >>> print(table)
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> table = sp.sqreg(df, y='log_wage', x=['education', 'experience'])
+    >>> bool('Q(0.5)' in table.columns)
+    True
     """
     if quantiles is None:
         quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]

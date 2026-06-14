@@ -330,20 +330,23 @@ def detect_design(data: pd.DataFrame,
 
     Examples
     --------
-    Panel data:
+    Panel data — a balanced firm × year layout is recognised as a panel:
 
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
     >>> df = pd.DataFrame({
     ...     'firm_id': np.repeat(range(50), 10),
     ...     'year': np.tile(range(2010, 2020), 50),
-    ...     'sales': np.random.randn(500),
+    ...     'sales': rng.standard_normal(500),
     ... })
     >>> sp.detect_design(df)['design']
     'panel'
 
-    Cross-section:
+    Cross-section — no (unit, time) structure to exploit:
 
-    >>> df = pd.DataFrame({'x': np.random.randn(200),
-    ...                    'y': np.random.randn(200)})
+    >>> df = pd.DataFrame({'x': rng.standard_normal(200),
+    ...                    'y': rng.standard_normal(200)})
     >>> sp.detect_design(df)['design']
     'cross_section'
 

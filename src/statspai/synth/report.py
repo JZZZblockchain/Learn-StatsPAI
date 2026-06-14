@@ -8,17 +8,14 @@ output (plain text, Markdown, or LaTeX).
 Usage
 -----
 >>> import statspai as sp
+>>> df = sp.california_prop99()
 >>> report = sp.synth_report(
-...     df, outcome='cigsale', unit='state', time='year',
+...     df, outcome='packspercapita', unit='state', time='year',
 ...     treated_unit='California', treatment_time=1989,
+...     sensitivity=False,
 ... )
->>> print(report)
-
->>> sp.synth_report_to_file(
-...     df, outcome='cigsale', unit='state', time='year',
-...     treated_unit='California', treatment_time=1989,
-...     filename='scm_report.md', output='markdown',
-... )
+>>> bool(isinstance(report, str))
+True
 """
 
 from __future__ import annotations
@@ -1005,17 +1002,22 @@ def synth_report(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> report = sp.synth_report(
-    ...     df, outcome='cigsale', unit='state', time='year',
+    ...     df, outcome='packspercapita', unit='state', time='year',
     ...     treated_unit='California', treatment_time=1989,
+    ...     sensitivity=False,
     ... )
-    >>> print(report)
+    >>> bool(isinstance(report, str))
+    True
 
     >>> md = sp.synth_report(
-    ...     df, outcome='cigsale', unit='state', time='year',
+    ...     df, outcome='packspercapita', unit='state', time='year',
     ...     treated_unit='California', treatment_time=1989,
-    ...     output='markdown',
+    ...     output='markdown', sensitivity=False,
     ... )
+    >>> bool(md.startswith('# Synthetic'))
+    True
     """
     if output not in ("text", "markdown", "latex"):
         raise ValueError(
@@ -1122,12 +1124,17 @@ def synth_report_to_file(
 
     Examples
     --------
+    >>> import os, tempfile
     >>> import statspai as sp
-    >>> sp.synth_report_to_file(
-    ...     df, outcome='cigsale', unit='state', time='year',
+    >>> df = sp.california_prop99()
+    >>> path = os.path.join(tempfile.gettempdir(), 'california_scm.md')
+    >>> report = sp.synth_report_to_file(
+    ...     df, outcome='packspercapita', unit='state', time='year',
     ...     treated_unit='California', treatment_time=1989,
-    ...     filename='california_scm.md',
+    ...     filename=path, sensitivity=False,
     ... )
+    >>> bool(os.path.exists(path))
+    True
     """
     report = synth_report(
         data=data,

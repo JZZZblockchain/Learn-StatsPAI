@@ -254,11 +254,16 @@ def ml_bounds(
 
     Examples
     --------
-    >>> res = sp.ml_bounds(df, y='wage', treat='training',
-    ...                    covariates=['age', 'educ', 'exper'])
-    >>> res.center_shift()   # midpoint shift vs the classical
-    ...                      # Manski interval (ML centres better;
-    ...                      # width is invariant by construction).
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.ml_bounds(df, y='log_wage', treat='union',
+    ...                    covariates=['education', 'experience', 'tenure'],
+    ...                    n_bootstrap=50, random_state=0)
+    >>> # midpoint shift vs the classical Manski interval (ML centres
+    >>> # better; the interval width is invariant by construction)
+    >>> shift = res.center_shift()
+    >>> bool(res.lower <= res.upper)
+    True
 
     See also
     --------

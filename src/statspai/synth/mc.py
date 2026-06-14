@@ -113,9 +113,10 @@ def mc_synth(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.mc_synth(df, outcome='gdp', unit='state', time='year',
-    ...                      treated_unit='California',
-    ...                      treatment_time=1989)
+    >>> df = sp.california_prop99()
+    >>> result = sp.mc_synth(df, outcome='packspercapita', unit='state',
+    ...                      time='year', treated_unit='California',
+    ...                      treatment_time=1989, placebo=False, seed=0)
     >>> print(result.summary())
     """
     rng = np.random.default_rng(seed)

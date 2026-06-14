@@ -15656,28 +15656,28 @@
           "type": "number"
         },
         "covariates": {
-          "description": "Covariate matrix, DataFrame, or column names.",
+          "description": "Variables to match on.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "data": {
-          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "description": "Input data.",
           "type": "string"
         },
         "distance": {
-          "description": "distance parameter (Optional[str]).",
+          "description": "``'propensity'``, ``'mahalanobis'``, ``'euclidean'`` or ``'exact'``.",
           "type": "string"
         },
         "estimand": {
           "default": "ATT",
-          "description": "estimand parameter (str).",
+          "description": "``'ATT'`` or ``'ATE'``.",
           "type": "string"
         },
         "method": {
           "default": "nearest",
-          "description": "Estimator or algorithm variant to use.",
+          "description": "``'nearest'``, ``'stratify'`` or ``'cem'`` (legacy ``'psm'`` / ``'mahalanobis'`` are also accepted).",
           "type": "string"
         },
         "n_bins": {
@@ -15705,11 +15705,11 @@
           "type": "boolean"
         },
         "treat": {
-          "description": "Treatment indicator or first-treatment-period column.",
+          "description": "Binary (0/1) treatment column.",
           "type": "string"
         },
         "y": {
-          "description": "Outcome variable column name or outcome array.",
+          "description": "Outcome column.",
           "type": "string"
         }
       },
@@ -17437,40 +17437,40 @@
     }
   },
   {
-    "description": "Causal Impact estimator using structural time-series model.",
+    "description": "Causal Impact estimator using a structural time-series model.",
     "name": "CausalImpactEstimator",
     "parameters": {
       "properties": {
         "alpha": {
           "default": 0.05,
-          "description": "Significance level for confidence intervals and tests.",
+          "description": "Significance level for the credible intervals.",
           "type": "number"
         },
         "covariates": {
-          "description": "Covariate matrix, DataFrame, or column names.",
+          "description": "Control series unaffected by the intervention.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "data": {
-          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "description": "Time-series data, one row per period.",
           "type": "string"
         },
         "intervention_time": {
-          "description": "intervention_time parameter.",
+          "description": "First post-intervention period (inclusive).",
           "type": "string"
         },
         "n_seasons": {
-          "description": "Number of seasons.",
+          "description": "Seasonal period, if any.",
           "type": "integer"
         },
         "time": {
-          "description": "Time period column.",
+          "description": "Time column used for ordering.",
           "type": "string"
         },
         "y": {
-          "description": "Outcome variable column name or outcome array.",
+          "description": "Outcome (intervened) series.",
           "type": "string"
         }
       },
@@ -23675,7 +23675,7 @@
     }
   },
   {
-    "description": "SpatialIVResult(rho: 'float', rho_se: 'float', coefficients: 'pd.DataFrame', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Container for :func:`spatial_iv` Kelejian-Prucha S2SLS estimates.",
     "name": "SpatialIVResult",
     "parameters": {
       "properties": {
@@ -26037,16 +26037,16 @@
       "properties": {
         "cv": {
           "default": 5,
-          "description": "cv parameter (int).",
+          "description": "Folds for the CV penalty search (used only when ``lambda_`` is None).",
           "type": "integer"
         },
         "lambda_": {
-          "description": "lambda_ parameter (Optional[float]).",
+          "description": "L1 penalty. ``None`` selects it via cross-validation.",
           "type": "number"
         },
         "max_anchors_per_col": {
           "default": 40,
-          "description": "Column name for max anchors per.",
+          "description": "Cap on step-function anchor points per feature.",
           "type": "integer"
         },
         "random_state": {
@@ -26066,12 +26066,12 @@
       "properties": {
         "C": {
           "default": 1.0,
-          "description": "C parameter (float).",
+          "description": "Inverse L1 penalty (larger = less shrinkage), as in scikit-learn.",
           "type": "number"
         },
         "max_anchors_per_col": {
           "default": 40,
-          "description": "Column name for max anchors per.",
+          "description": "Cap on step-function anchor points per feature.",
           "type": "integer"
         },
         "random_state": {
@@ -40825,7 +40825,7 @@
         },
         "index": {
           "default": "theil_t",
-          "description": "index parameter (str).",
+          "description": "atkinson, gini, cv2",
           "type": "string"
         },
         "weights": {
@@ -41232,7 +41232,7 @@
     }
   },
   {
-    "description": "LocalProjectionsResult(horizons: 'np.ndarray', irf: 'np.ndarray', se: 'np.ndarray', ci_lower: 'np.ndarray', ci_upper: 'np.ndarray', alpha: 'float', shock_name: 'str', outcome_name: 'str', n_obs_per_horizon: 'np.ndarray')",
+    "description": "Impulse-response container returned by :func:`local_projections`.",
     "name": "LocalProjectionsResult",
     "parameters": {
       "properties": {
@@ -41327,7 +41327,7 @@
     }
   },
   {
-    "description": "CardinalityMatchResult(treated_matched: 'np.ndarray', control_matched: 'np.ndarray', ate: 'float', se: 'float', n_matched_pairs: 'int', balance: 'pd.DataFrame')",
+    "description": "Result of :func:`cardinality_match` (Zubizarreta cardinality matching).",
     "name": "CardinalityMatchResult",
     "parameters": {
       "properties": {
@@ -41411,7 +41411,7 @@
     }
   },
   {
-    "description": "OptimalMatchResult(pairs: 'pd.DataFrame', distances: 'np.ndarray', ate: 'float', se: 'float', n_treated: 'int', n_matched: 'int')",
+    "description": "Result of :func:`optimal_match` (optimal 1:1 Hungarian matching).",
     "name": "OptimalMatchResult",
     "parameters": {
       "properties": {
@@ -41606,7 +41606,7 @@
     }
   },
   {
-    "description": "LiNGAMResult(order: 'List[int]', adjacency: 'np.ndarray', names: 'List[str]', residuals: 'np.ndarray')",
+    "description": "Result of a :func:`lingam` (DirectLiNGAM) fit.",
     "name": "LiNGAMResult",
     "parameters": {
       "properties": {
@@ -41661,7 +41661,7 @@
     }
   },
   {
-    "description": "GESResult(adjacency: 'np.ndarray', names: 'List[str]', bic: 'float')",
+    "description": "Result of :func:`ges` -- a CPDAG (Markov equivalence class).",
     "name": "GESResult",
     "parameters": {
       "properties": {
@@ -41727,7 +41727,7 @@
     }
   },
   {
-    "description": "FCIResult(variables: 'List[str]', skeleton: 'pd.DataFrame', pag_left: 'pd.DataFrame', pag_right: 'pd.DataFrame', edges: 'List[Tuple[str, str, str]]', separating_sets: 'Dict[Tuple[str, str], Set[str]]', n_obs: 'int', alpha: 'float', ci_test: 'str')",
+    "description": "Partial Ancestral Graph (PAG) learned by :func:`fci`.",
     "name": "FCIResult",
     "parameters": {
       "properties": {
@@ -41855,7 +41855,7 @@
     }
   },
   {
-    "description": "ARIMAResult(order: 'Tuple[int, int, int]', seasonal_order: 'Optional[Tuple[int, int, int, int]]', params: 'pd.Series', se: 'pd.Series', aic: 'float', bic: 'float', aicc: 'float', log_likelihood: 'float', residuals: 'np.ndarray', fitted_values: 'np.ndarray', n: 'int', _model: 'object')",
+    "description": "Fitted ARIMA(p,d,q) / SARIMAX model returned by :func:`statspai.arima`.",
     "name": "ARIMAResult",
     "parameters": {
       "properties": {
@@ -41957,7 +41957,7 @@
     }
   },
   {
-    "description": "BVARResult(coef: 'np.ndarray', sigma: 'np.ndarray', fitted: 'np.ndarray', residuals: 'np.ndarray', var_names: 'list', lags: 'int', n: 'int', lambda1: 'float', lambda2: 'float')",
+    "description": "Posterior summary of a Bayesian VAR with Minnesota prior.",
     "name": "BVARResult",
     "parameters": {
       "properties": {
@@ -42047,7 +42047,7 @@
     }
   },
   {
-    "description": "GARCHResult(omega: 'float', alpha: 'np.ndarray', beta: 'np.ndarray', mu: 'float', sigma2: 'np.ndarray', residuals: 'np.ndarray', std_residuals: 'np.ndarray', log_likelihood: 'float', aic: 'float', bic: 'float', n: 'int', p: 'int', q: 'int')",
+    "description": "Fitted GARCH(p,q) model returned by :func:`garch`.",
     "name": "GARCHResult",
     "parameters": {
       "properties": {
@@ -43153,7 +43153,7 @@
     }
   },
   {
-    "description": "ICPResult(parents: 'set[str]', accepted_subsets: 'list[frozenset]', rejection_reason: 'dict[frozenset, str]', alpha: 'float', coefficients: 'dict[str, tuple[float, float]]', method: 'str')",
+    "description": "Result of an Invariant Causal Prediction run (:func:`icp`).",
     "name": "ICPResult",
     "parameters": {
       "properties": {
@@ -43385,7 +43385,7 @@
     }
   },
   {
-    "description": "RuleCheck(applicable: 'bool', rule: 'int', reason: 'str', transformed: 'str')",
+    "description": "Result of checking one do-calculus rule on a DAG.",
     "name": "RuleCheck",
     "parameters": {
       "properties": {
@@ -43647,7 +43647,7 @@
     }
   },
   {
-    "description": "CloneCensorWeightResult(cloned_data: 'pd.DataFrame', strategies: 'list[str]', n_originals: 'int', n_clones: 'int', weights_summary: 'dict')",
+    "description": "Cloned, censored and IP-of-censoring-weighted target-trial data.",
     "name": "CloneCensorWeightResult",
     "parameters": {
       "properties": {
@@ -43761,7 +43761,7 @@
     }
   },
   {
-    "description": "TransportWeightResult(weights: 'np.ndarray', ess: 'float', max_weight: 'float', effect_source: 'float', effect_transported: 'float', se_transported: 'float')",
+    "description": "Result of density-ratio (inverse-odds-of-sampling) transport weighting.",
     "name": "TransportWeightResult",
     "parameters": {
       "properties": {
@@ -43802,7 +43802,7 @@
     }
   },
   {
-    "description": "TransportIdentificationResult(transportable: 'bool', formula: 'str', admissible_set: 'frozenset', reason: 'str')",
+    "description": "Result of a Pearl-Bareinboim transportability identification check.",
     "name": "TransportIdentificationResult",
     "parameters": {
       "properties": {
@@ -44134,7 +44134,7 @@
     }
   },
   {
-    "description": "DiagnosticTestResult(sensitivity: 'float', sensitivity_ci: 'tuple[float, float]', specificity: 'float', specificity_ci: 'tuple[float, float]', ppv: 'float', npv: 'float', lr_pos: 'float', lr_neg: 'float', prevalence: 'float', tp: 'int', fp: 'int', fn: 'int', tn: 'int')",
+    "description": "Container for binary diagnostic-test performance metrics.",
     "name": "DiagnosticTestResult",
     "parameters": {
       "properties": {
@@ -44210,7 +44210,7 @@
     }
   },
   {
-    "description": "ROCResult(thresholds: 'np.ndarray', tpr: 'np.ndarray', fpr: 'np.ndarray', auc: 'float', auc_se: 'float', auc_ci: 'tuple[float, float]')",
+    "description": "Container for ROC-curve coordinates and AUC inference.",
     "name": "ROCResult",
     "parameters": {
       "properties": {
@@ -44251,7 +44251,7 @@
     }
   },
   {
-    "description": "KappaResult(kappa: 'float', se: 'float', ci: 'tuple[float, float]', observed_agreement: 'float', expected_agreement: 'float', n_categories: 'int', weights: 'str', z: 'float', p_value: 'float')",
+    "description": "Container for Cohen's kappa inter-rater agreement.",
     "name": "KappaResult",
     "parameters": {
       "properties": {
@@ -44307,7 +44307,7 @@
     }
   },
   {
-    "description": "HeterogeneityResult(Q: 'float', Q_df: 'int', Q_p: 'float', I2: 'float', method: 'str')",
+    "description": "Container for Cochran's Q / Rucker's Q' heterogeneity diagnostics.",
     "name": "HeterogeneityResult",
     "parameters": {
       "properties": {
@@ -44343,7 +44343,7 @@
     }
   },
   {
-    "description": "PleiotropyResult(intercept: 'float', se: 'float', p_value: 'float')",
+    "description": "Container for the MR-Egger intercept (directional-pleiotropy) test.",
     "name": "PleiotropyResult",
     "parameters": {
       "properties": {
@@ -44369,7 +44369,7 @@
     }
   },
   {
-    "description": "LeaveOneOutResult(table: 'pd.DataFrame')",
+    "description": "Container for leave-one-out IVW estimates.",
     "name": "LeaveOneOutResult",
     "parameters": {
       "properties": {
@@ -44385,7 +44385,7 @@
     }
   },
   {
-    "description": "SteigerResult(correct_direction: 'bool', steiger_pvalue: 'float', r2_exposure: 'float', r2_outcome: 'float', sample_size_exposure: 'int', sample_size_outcome: 'int')",
+    "description": "Container for the Steiger directionality test.",
     "name": "SteigerResult",
     "parameters": {
       "properties": {
@@ -44426,7 +44426,7 @@
     }
   },
   {
-    "description": "MRPressoResult(raw_estimate: 'float', raw_se: 'float', raw_p: 'float', outlier_corrected_estimate: 'Optional[float]', outlier_corrected_se: 'Optional[float]', outlier_corrected_p: 'Optional[float]', outliers: 'List[int]' = <factory>, global_test_rss_obs: 'float' = 0.0, global_test_pvalue: 'float' = 1.0, distortion_p: 'Optional[float]' = None)",
+    "description": "Container for MR-PRESSO global test and outlier-corrected estimates.",
     "name": "MRPressoResult",
     "parameters": {
       "properties": {
@@ -44486,7 +44486,7 @@
     }
   },
   {
-    "description": "RadialResult(table: 'pd.DataFrame', total_Q: 'float', Q_pvalue: 'float', outliers: 'list[int]')",
+    "description": "Container for radial-MR diagnostics.",
     "name": "RadialResult",
     "parameters": {
       "properties": {
@@ -44589,7 +44589,7 @@
     }
   },
   {
-    "description": "ModeBasedResult(estimate: 'float', se: 'float', ci: 'tuple[float, float]', p_value: 'float', n_snps: 'int', bandwidth: 'float', method: 'str' = 'weighted-mode')",
+    "description": "Result container returned by :func:`mr_mode`.",
     "name": "ModeBasedResult",
     "parameters": {
       "properties": {
@@ -44635,7 +44635,7 @@
     }
   },
   {
-    "description": "FStatisticResult(f_mean: 'float', f_min: 'float', f_max: 'float', weak_instrument_risk: 'bool', r2_mean: 'float', per_snp_F: 'np.ndarray')",
+    "description": "Result container returned by :func:`mr_f_statistic`.",
     "name": "FStatisticResult",
     "parameters": {
       "properties": {
@@ -45847,7 +45847,7 @@
     }
   },
   {
-    "description": "Multi-score RDD effect on the boundary.",
+    "description": "Multi-score RDD effect on the eligibility boundary.",
     "name": "MultiScoreRDResult",
     "parameters": {
       "properties": {
@@ -47637,7 +47637,7 @@
     }
   },
   {
-    "description": "Output of confounding-robust Q-learning.",
+    "description": "Output of confounding-robust Q-learning (:func:`causal_dqn`).",
     "name": "CausalDQNResult",
     "parameters": {
       "properties": {
@@ -48987,7 +48987,7 @@
     }
   },
   {
-    "description": "NetworkExposureResult(estimates: 'pd.DataFrame', contrasts: 'pd.DataFrame', exposure_levels: 'List[str]', n_obs: 'int', p_treat: 'float', design: 'str', mapping: 'str', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Container for :func:`network_exposure` Horvitz-Thompson estimates.",
     "name": "NetworkExposureResult",
     "parameters": {
       "properties": {
@@ -49085,7 +49085,7 @@
     }
   },
   {
-    "description": "PeerEffectsResult(endogenous_peer: 'float', contextual_peer: 'Dict[str, float]', direct: 'Dict[str, float]', se: 'Dict[str, float]', ci: 'Dict[str, tuple]', n_obs: 'int', coefficients: 'pd.DataFrame', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Container for :func:`peer_effects` linear-in-means estimates.",
     "name": "PeerEffectsResult",
     "parameters": {
       "properties": {

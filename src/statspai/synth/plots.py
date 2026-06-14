@@ -117,20 +117,39 @@ def synthplot(
 
     Examples
     --------
-    >>> result = sp.synth(df, ..., method='demeaned')
-    >>> sp.synthplot(result)                    # trajectory
-    >>> sp.synthplot(result, type='gap')        # gap plot
-    >>> sp.synthplot(result, type='both')       # two-panel
-    >>> sp.synthplot(result, type='weights')    # donor weights
-    >>> sp.synthplot(result, type='placebo')    # placebo distribution
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> units, periods = 12, 10
+    >>> unit = np.repeat(np.arange(units), periods)
+    >>> time = np.tile(np.arange(1, periods + 1), units)
+    >>> d = (unit == 0) & (time >= 7)
+    >>> y = (unit * 0.4 + time * 0.2 + 3.0 * d
+    ...      + rng.normal(0, 0.3, unit.size))
+    >>> df = pd.DataFrame({"y": y, "unit": unit, "time": time})
+    >>> result = sp.synth(
+    ...     df, outcome="y", unit="unit", time="time",
+    ...     treated_unit=0, treatment_time=7, method="classic",
+    ...     placebo=True,
+    ... )
+    >>> fig, ax = sp.synthplot(result)                  # trajectory
+    >>> fig, ax = sp.synthplot(result, type='gap')      # gap plot
+    >>> fig, axes = sp.synthplot(result, type='both')   # two-panel
+    >>> fig, ax = sp.synthplot(result, type='weights')  # donor weights
+    >>> fig, ax = sp.synthplot(result, type='placebo')  # placebo dist
 
     Compare methods:
 
-    >>> r1 = sp.synth(df, ..., method='classic')
-    >>> r2 = sp.synth(df, ..., method='demeaned')
-    >>> r3 = sp.synth(df, ..., method='sdid')
-    >>> sp.synthplot([r1, r2, r3], type='compare',
-    ...             labels=['Classic', 'De-meaned', 'SDID'])
+    >>> r2 = sp.synth(
+    ...     df, outcome="y", unit="unit", time="time",
+    ...     treated_unit=0, treatment_time=7, method="demeaned",
+    ...     placebo=False,
+    ... )
+    >>> fig, ax = sp.synthplot(
+    ...     [result, r2], type='compare',
+    ...     labels=['Classic', 'De-meaned'],
+    ... )
     """
     _ensure_matplotlib()
 

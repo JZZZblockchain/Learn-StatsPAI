@@ -251,21 +251,17 @@ def synth_power(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> power_df = sp.synth_power(
-    ...     df, outcome='gdp', unit='state', time='year',
+    ...     df, outcome='packspercapita', unit='state', time='year',
     ...     treated_unit='California', treatment_time=1989,
-    ...     n_simulations=500, seed=42,
+    ...     n_simulations=200, seed=42,
     ... )
-    >>> power_df
-       effect_size  power  n_rejections  n_simulations  mde_flag
-    0     0.000000   0.04            20            500     False
-    1     1.234567   0.23           115            500     False
-    ...
-    8     9.876543   0.82           410            500      True
-    9    11.111111   0.95           475            500     False
-
+    >>> list(power_df.columns)
+    ['effect_size', 'power', 'n_rejections', 'n_simulations', 'mde_flag']
+    >>> bool((power_df['power'] >= 0).all())
+    True
     >>> mde_row = power_df[power_df['mde_flag']]
-    >>> print(f"MDE = {mde_row['effect_size'].values[0]:.2f}")
 
     See Also
     --------
@@ -399,12 +395,14 @@ def synth_mde(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> mde = sp.synth_mde(
-    ...     df, outcome='gdp', unit='state', time='year',
+    ...     df, outcome='packspercapita', unit='state', time='year',
     ...     treated_unit='California', treatment_time=1989,
     ...     seed=42,
     ... )
-    >>> print(f"MDE at 80%% power: {mde:.2f}")
+    >>> bool(mde >= 0)
+    True
 
     See Also
     --------
@@ -465,11 +463,15 @@ def synth_power_plot(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> power_df = sp.synth_power(
-    ...     df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989, seed=42,
+    ...     df, outcome='packspercapita', unit='state', time='year',
+    ...     treated_unit='California', treatment_time=1989,
+    ...     n_simulations=50, seed=42,
     ... )
-    >>> sp.synth_power_plot(power_df)
+    >>> ax = sp.synth_power_plot(power_df)
+    >>> bool(ax is not None)
+    True
 
     See Also
     --------

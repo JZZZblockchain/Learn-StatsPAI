@@ -191,10 +191,21 @@ def rdit(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(11)
+    >>> dates = pd.date_range('2013-01-01', '2016-12-01', freq='MS')
+    >>> t = np.arange(len(dates))
+    >>> post = (dates >= pd.Timestamp('2015-01-01')).astype(float)
+    >>> season = 5.0 * np.sin(2 * np.pi * dates.month / 12)
+    >>> electricity = (100 + 0.3 * t + 8.0 * post + season
+    ...                + rng.normal(0, 2.0, len(dates)))
+    >>> df = pd.DataFrame({'date': dates, 'electricity': electricity})
     >>> result = sp.rdit(df, y="electricity", time="date",
     ...                  cutoff="2015-01-01", seasonality="month")
-    >>> result.summary()
-    >>> result.plot()
+    >>> bool(np.isfinite(result.estimate))
+    True
+    >>> fig, ax = result.plot()
+    >>> fig.savefig('rdit.png')  # doctest: +SKIP
 
     Notes
     -----

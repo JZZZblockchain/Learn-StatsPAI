@@ -62,11 +62,26 @@ def ebalance(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> income = rng.normal(50, 15, n)
+    >>> education = rng.integers(8, 20, n).astype(float)
+    >>> ps = 1 / (1 + np.exp(-(0.03 * (age - 40) + 0.02 * (income - 50))))
+    >>> treated = (rng.uniform(size=n) < ps).astype(int)
+    >>> outcome = (2.0 * treated + 0.1 * age + 0.05 * income
+    ...            + 0.2 * education + rng.normal(0, 1, n))
+    >>> df = pd.DataFrame({'outcome': outcome, 'treated': treated,
+    ...                    'age': age, 'income': income,
+    ...                    'education': education})
     >>> result = sp.ebalance(df, y='outcome', treat='treated',
-    ...                       covariates=['age', 'income', 'education'])
-    >>> print(result.summary())
-    >>> # Check balance improvement
-    >>> print(result.model_info['balance'])
+    ...                      covariates=['age', 'income', 'education'])
+    >>> bool(np.isfinite(result.estimate))
+    True
+    >>> 'balance' in result.model_info  # post-weighting balance table
+    True
 
     Notes
     -----

@@ -47,13 +47,14 @@ def read_data(
 
     Examples
     --------
-    >>> df = sp.read_data('survey.dta')
-    >>> sp.describe(df)  # shows variable labels from Stata
-    >>> sp.get_label(df, 'wage')
+    >>> import statspai as sp
+    >>> df = sp.read_data('survey.dta')  # doctest: +SKIP
+    >>> sp.describe(df)  # shows variable labels from Stata  # doctest: +SKIP
+    >>> sp.get_label(df, 'wage')  # doctest: +SKIP
     'Monthly wage in CNY'
 
-    >>> df = sp.read_data('data.csv')  # CSV has no labels
-    >>> sp.label_vars(df, {'wage': 'Monthly wage', 'edu': 'Education'})
+    >>> df = sp.read_data('data.csv')  # CSV has no labels  # doctest: +SKIP
+    >>> sp.label_vars(df, {'wage': 'Monthly wage', 'edu': 'Education'})  # doctest: +SKIP
     """
     p = Path(path)
     ext = p.suffix.lower()

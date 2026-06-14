@@ -86,14 +86,31 @@ def ipw(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> education = rng.normal(13, 3, n)
+    >>> experience = rng.normal(15, 7, n)
+    >>> p = 1 / (1 + np.exp(-(-2 + 0.03 * (age - 40) + 0.15 * (education - 13))))
+    >>> training = (rng.uniform(size=n) < p).astype(int)
+    >>> wage = 20 + 2.5 * training + 0.1 * age + 0.5 * education + rng.normal(0, 2, n)
+    >>> df = pd.DataFrame({"wage": wage, "training": training, "age": age,
+    ...                    "education": education, "experience": experience})
     >>> result = sp.ipw(df, y='wage', treat='training',
-    ...                 covariates=['age', 'education', 'experience'])
-    >>> print(result.summary())
+    ...                 covariates=['age', 'education', 'experience'],
+    ...                 n_bootstrap=100, seed=0)
+    >>> result.estimand
+    'ATE'
 
     >>> # ATT with trimming
     >>> result = sp.ipw(df, y='wage', treat='training',
     ...                 covariates=['age', 'education'],
-    ...                 estimand='ATT', trim=0.05)
+    ...                 estimand='ATT', trim=0.05, n_bootstrap=100, seed=0)
+    >>> result.estimand
+    'ATT'
     """
     estimand = estimand.upper()
     if estimand not in ("ATE", "ATT", "ATC"):

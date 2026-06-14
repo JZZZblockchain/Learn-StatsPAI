@@ -356,13 +356,36 @@ def synth_to_latex(
 
     Examples
     --------
-    >>> result = sp.synth(df, ..., method='augmented')
-    >>> print(sp.synth_to_latex(result, show_weights=True))
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> units, periods = 12, 10
+    >>> unit = np.repeat(np.arange(units), periods)
+    >>> time = np.tile(np.arange(1, periods + 1), units)
+    >>> d = (unit == 0) & (time >= 7)
+    >>> y = (unit * 0.4 + time * 0.2 + 3.0 * d
+    ...      + rng.normal(0, 0.3, unit.size))
+    >>> df = pd.DataFrame({"y": y, "unit": unit, "time": time})
+    >>> res = sp.synth(
+    ...     df, outcome="y", unit="unit", time="time",
+    ...     treated_unit=0, treatment_time=7, method="classic",
+    ...     placebo=False,
+    ... )
+    >>> tex = sp.synth_to_latex(res, show_weights=True)
+    >>> isinstance(tex, str)
+    True
 
     Multi-method comparison:
 
-    >>> comp = sp.synth_compare(df, ..., methods=['classic', 'sdid', 'mc'])
-    >>> print(sp.synth_to_latex(comp, caption='SCM benchmark'))
+    >>> comp = sp.synth_compare(
+    ...     df, outcome="y", unit="unit", time="time",
+    ...     treated_unit=0, treatment_time=7,
+    ...     methods=['classic', 'sdid'], placebo=False,
+    ... )
+    >>> tex = sp.synth_to_latex(comp, caption='SCM benchmark')
+    >>> isinstance(tex, str)
+    True
     """
     results, names = _normalise(obj, method_names)
     multi = len(results) > 1

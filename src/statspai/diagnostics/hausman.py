@@ -60,11 +60,13 @@ def hausman_test(
 
     Examples
     --------
-    >>> result = sp.hausman_test(df, y='wage', x=['education', 'experience'],
-    ...                         id='worker', time='year')
-    >>> print(f"chi2({result['df']}) = {result['statistic']:.2f}, "
-    ...       f"p = {result['pvalue']:.4f}")
-    >>> print(f"Recommendation: {result['recommendation']}")
+    >>> import statspai as sp
+    >>> df = sp.dgp_panel(n_units=40, n_periods=8, seed=0)
+    >>> result = sp.hausman_test(df, y='y', x=['x'], id='unit', time='time')
+    >>> bool(result['recommendation'] in ('FE', 'RE'))
+    True
+    >>> bool(0.0 <= result['pvalue'] <= 1.0)
+    True
 
     Notes
     -----

@@ -66,6 +66,7 @@ def did_2x2(
 
     Examples
     --------
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 400
@@ -73,8 +74,8 @@ def did_2x2(
     >>> t = rng.integers(0, 2, n)
     >>> y_val = 1 + 2*d + 3*t + 5*d*t + rng.normal(0, 1, n)
     >>> df = pd.DataFrame({'y': y_val, 'd': d, 't': t})
-    >>> result = did_2x2(df, y='y', treat='d', time='t')
-    >>> abs(result.estimate - 5.0) < 1.0
+    >>> result = sp.did_2x2(df, y='y', treat='d', time='t')
+    >>> bool(abs(result.estimate - 5.0) < 1.0)
     True
     """
     df = data.copy()

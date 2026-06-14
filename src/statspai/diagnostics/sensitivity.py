@@ -103,15 +103,27 @@ def oster_bounds(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
     >>> # From data
-    >>> result = oster_bounds(df, y='wage', treat='training',
-    ...                       controls=['age', 'education', 'experience'])
-    >>> print(f"δ* = {result['delta_for_zero']:.2f}")
-    >>> print(f"Robust: {result['robust']}")
+    >>> rng = np.random.default_rng(1)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> education = rng.normal(13, 3, n)
+    >>> training = (rng.normal(size=n) + 0.3 * (education - 13) > 0).astype(float)
+    >>> wage = 20 + 2.0 * training + 0.1 * age + 0.5 * education + rng.normal(size=n)
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "education": education})
+    >>> result = sp.oster_bounds(df, y='wage', treat='training',
+    ...                          controls=['age', 'education'])
+    >>> bool('delta_for_zero' in result)
+    True
 
     >>> # From statistics (e.g., read from a paper)
-    >>> result = oster_bounds(beta_short=2.5, r2_short=0.15,
-    ...                       beta_long=2.0, r2_long=0.45)
+    >>> result = sp.oster_bounds(beta_short=2.5, r2_short=0.15,
+    ...                          beta_long=2.0, r2_long=0.45)
+    >>> round(result['delta_for_zero'], 1)
+    1.8
     """
     # --- Obtain β and R² ---
     if data is not None and y is not None and treat is not None:
@@ -274,8 +286,14 @@ def mccrary_test(
 
     Examples
     --------
-    >>> result = mccrary_test(df, x='score', c=0)
-    >>> print(f"θ̂ = {result.estimate:.3f}, p = {result.pvalue:.4f}")
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> # Smooth running variable (no manipulation at the cutoff)
+    >>> df = pd.DataFrame({"score": rng.normal(0, 1, size=500)})
+    >>> result = sp.mccrary_test(df, x='score', c=0)
+    >>> bool(result.pvalue > 0.05)   # no manipulation -> fail to reject
+    True
     """
     X = data[x].values.astype(float)
     X = X[np.isfinite(X)]

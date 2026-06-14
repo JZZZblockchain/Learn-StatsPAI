@@ -92,19 +92,40 @@ def g_computation(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> edu = rng.normal(12, 3, n)
+    >>> trained = (rng.random(n) < 0.5).astype(int)
+    >>> wage = 20 + 2.0 * trained + 0.3 * age + 0.5 * edu + rng.normal(0, 3, n)
+    >>> df = pd.DataFrame({'wage': wage, 'trained': trained,
+    ...                    'age': age, 'edu': edu})
+
     >>> # Binary treatment ATE
-    >>> sp.g_computation(df, y='wage', treat='trained',
-    ...                  covariates=['age', 'edu', 'exp'])
+    >>> res = sp.g_computation(df, y='wage', treat='trained',
+    ...                        covariates=['age', 'edu'], n_boot=100, seed=0)
+    >>> bool(res.estimate is not None)
+    True
 
     >>> # ATT
-    >>> sp.g_computation(df, y='wage', treat='trained',
-    ...                  covariates=['age', 'edu'], estimand='ATT')
+    >>> res_att = sp.g_computation(df, y='wage', treat='trained',
+    ...                            covariates=['age', 'edu'], estimand='ATT',
+    ...                            n_boot=100, seed=0)
+    >>> bool(res_att.estimate is not None)
+    True
 
-    >>> # Dose-response at specified doses
-    >>> sp.g_computation(df, y='bp', treat='dose',
-    ...                  covariates=['age', 'bmi'],
-    ...                  estimand='dose_response',
-    ...                  treat_values=[0, 10, 20, 30])
+    >>> # Dose-response over a continuous dose
+    >>> dose = rng.uniform(0, 30, n)
+    >>> bp = 120 - 0.4 * dose + 0.2 * age + rng.normal(0, 5, n)
+    >>> ddf = pd.DataFrame({'bp': bp, 'dose': dose, 'age': age})
+    >>> curve = sp.g_computation(ddf, y='bp', treat='dose', covariates=['age'],
+    ...                          estimand='dose_response',
+    ...                          treat_values=[0, 10, 20, 30], n_boot=100, seed=0)
+    >>> bool('curve' in curve.model_info)
+    True
 
     Notes
     -----

@@ -80,9 +80,22 @@ def demeaned_synth(
 
     Examples
     --------
-    >>> result = sp.demeaned_synth(df, outcome='gdp', unit='state',
-    ...     time='year', treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    De-meaned synthetic control on the Proposition 99 tobacco panel,
+    with California treated from 1989:
+
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> df = sp.california_prop99()
+    >>> result = sp.demeaned_synth(
+    ...     df, outcome='packspercapita', unit='state', time='year',
+    ...     treated_unit='California', treatment_time=1989,
+    ... )
+    >>> bool(np.isfinite(result.estimate))
+    True
+
+    References
+    ----------
+    ferman2021synthetic, doudchenko2016balancing
     """
     # --- Build panel matrix ---
     pivot = data.pivot_table(index=time, columns=unit, values=outcome)

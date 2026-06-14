@@ -71,12 +71,32 @@ def markup(
 
     Examples
     --------
-    >>> res = sp.acf(df, output="y", free="l", state="k", proxy="m",
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for fid in range(120):
+    ...     omega, k = rng.normal(0.0, 0.28), rng.normal(0.0, 0.5)
+    ...     for t in range(8):
+    ...         omega = 0.7 * omega + rng.normal(0.0, 0.20)
+    ...         l = 0.5 * omega + 0.3 * k + rng.normal(0.0, 0.10)
+    ...         m = 0.8 * omega + 0.5 * k + rng.normal(0.0, 0.05)
+    ...         y = 0.6 * l + 0.35 * k + omega + rng.normal(0.0, 0.10)
+    ...         rows.append({"id": fid, "year": t, "y": y, "l": l, "k": k, "m": m})
+    >>> df = pd.DataFrame(rows)
+    >>> df["log_revenue"] = df["y"] + np.log(1.20) + rng.normal(0, 0.05, len(df))
+    >>> df["log_mat_cost"] = df["m"] + np.log(0.80) + rng.normal(0, 0.05, len(df))
+    >>> # The flexible input must be a production-function coefficient, so fit
+    >>> # ACF with materials ``m`` as a free input to expose its elasticity.
+    >>> res = sp.acf(df, output="y", free=["l", "m"], state="k", proxy="m",
     ...              panel_id="id", time="year")
+    >>> res.sample["log_revenue"] = df.loc[res.sample.index, "log_revenue"].to_numpy()
+    >>> res.sample["log_mat_cost"] = df.loc[res.sample.index, "log_mat_cost"].to_numpy()
     >>> mu = sp.markup(res, revenue="log_revenue", input_cost="log_mat_cost",
     ...                flexible_input="m")
-    >>> mu.median()
-    1.18
+    >>> bool((mu > 0).all())
+    True
 
     Notes
     -----

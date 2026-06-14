@@ -76,11 +76,25 @@ def bacon_decomposition(
 
     Examples
     --------
-    >>> result = bacon_decomposition(df, y='outcome', treat='treated',
-    ...                              time='year', id='unit')
-    >>> print(result['decomposition'])
-    >>> print(f"TWFE = {result['beta_twfe']:.4f}")
-    >>> print(f"Negative weight share = {result['negative_weight_share']:.1%}")
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> cohorts = {1: 4, 2: 4, 3: 7, 4: 7, 5: 99, 6: 99}  # 99 = never treated
+    >>> rows = []
+    >>> for unit, g in cohorts.items():
+    ...     for year in range(1, 11):
+    ...         treated = int(year >= g)
+    ...         y = unit + 0.3 * year + 2.0 * treated + rng.normal(0, 0.5)
+    ...         rows.append({'unit': unit, 'year': year,
+    ...                      'outcome': y, 'treated': treated})
+    >>> df = pd.DataFrame(rows)
+    >>> result = sp.bacon_decomposition(df, y='outcome', treat='treated',
+    ...                                 time='year', id='unit')
+    >>> sorted(result['decomposition']['type'].unique())
+    ['Earlier vs Later Treated', 'Later vs Earlier Treated', 'Treated vs Untreated']
+    >>> bool(abs(result['weighted_sum'] - result['beta_twfe']) < 1e-8)
+    True
 
     Notes
     -----

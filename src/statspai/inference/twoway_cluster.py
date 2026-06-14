@@ -102,10 +102,23 @@ def twoway_cluster(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     'x1': rng.normal(size=n),
+    ...     'x2': rng.normal(size=n),
+    ...     'firm': rng.integers(0, 15, n),
+    ...     'year': rng.integers(2000, 2010, n),
+    ... })
+    >>> df['y'] = (1.0 + 0.5 * df['x1'] - 0.3 * df['x2']
+    ...            + rng.normal(size=n))
     >>> result = sp.regress("y ~ x1 + x2", data=df)
-    >>> tw = sp.twoway_cluster(result, data=df, cluster1="firm", cluster2="year")
-    >>> print(tw.summary())
+    >>> tw = sp.twoway_cluster(result, data=df,
+    ...                        cluster1="firm", cluster2="year")
+    >>> print(tw.summary())  # doctest: +SKIP
     """
     # --- Extract estimation objects ---
     X = np.asarray(result.data_info['X'])

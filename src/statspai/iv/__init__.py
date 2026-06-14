@@ -47,11 +47,20 @@ up in the ``method=`` table.
 
 Examples
 --------
+>>> import numpy as np
+>>> import pandas as pd
 >>> import statspai as sp
+>>> rng = np.random.default_rng(0)
+>>> n = 200
+>>> z1, z2, x1, u = (rng.normal(size=n), rng.normal(size=n),
+...                  rng.normal(size=n), rng.normal(size=n))
+>>> d = 0.7 * z1 + 0.5 * z2 + 0.3 * x1 + u + rng.normal(size=n)
+>>> y = 1.0 + 1.5 * d + 0.4 * x1 + u + rng.normal(size=n)
+>>> df = pd.DataFrame({"y": y, "d": d, "z1": z1, "z2": z2, "x1": x1})
 >>> # Standard 2SLS with a rich diagnostic panel
 >>> res = sp.iv("y ~ (d ~ z1 + z2) + x1", data=df)
->>> print(res.summary())
->>> print(res.diagnostics)  # MOP F, KP rk, SW, AR CI
+>>> bool(res.params["d"] > 0)
+True
 
 >>> # Sensitivity to exclusion-restriction violations
 >>> chr = sp.iv(
@@ -60,9 +69,13 @@ Examples
 ...     gamma_mean=0.0, gamma_var=0.01, data=df,
 ... )
 
->>> # Marginal treatment effects
+>>> # Marginal treatment effects (binary endogenous treatment)
+>>> prop = 1 / (1 + np.exp(-(0.8 * z1 + 0.3 * x1 + u)))
+>>> dbin = (rng.uniform(size=n) < prop).astype(float)
+>>> ybin = 1.0 + 1.5 * dbin + 0.4 * x1 + u + rng.normal(size=n)
+>>> df_mte = pd.DataFrame({"y": ybin, "d": dbin, "z": z1, "x": x1})
 >>> m = sp.iv(method="mte",
-...          y="y", endog="d", instruments=["z"], exog=["x"], data=df)
+...          y="y", endog="d", instruments=["z"], exog=["x"], data=df_mte)
 """
 
 from __future__ import annotations

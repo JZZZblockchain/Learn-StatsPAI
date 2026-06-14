@@ -176,9 +176,23 @@ def mlogit(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> price = rng.normal(0, 1, n)
+    >>> income = rng.normal(0, 1, n)
+    >>> eta1 = 0.5 * price - 0.3 * income
+    >>> eta2 = -0.4 * price + 0.6 * income
+    >>> exps = np.column_stack([np.ones(n), np.exp(eta1), np.exp(eta2)])
+    >>> P = exps / exps.sum(axis=1, keepdims=True)
+    >>> choice = np.array([rng.choice(3, p=P[i]) for i in range(n)])
+    >>> df = pd.DataFrame({'choice': choice, 'price': price, 'income': income})
     >>> result = sp.mlogit('choice ~ price + income', data=df, base=0)
-    >>> print(result.summary())
-    >>> result = sp.mlogit(data=df, y='choice', x=['price','income'], rrr=True)
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> rrr = sp.mlogit(data=df, y='choice', x=['price', 'income'], rrr=True)
+    >>> bool(rrr.params is not None)
+    True
 
     Notes
     -----
@@ -190,6 +204,10 @@ def mlogit(
         \\quad \\beta_{\\text{base}} = 0.
 
     McFadden pseudo-R^2 = 1 - LL / LL_0.
+
+    References
+    ----------
+    mcfadden1974conditional
     """
     # --- Parse inputs ---
     y_name, x_names = _parse_inputs(formula, data, y, x)
@@ -859,9 +877,20 @@ def ologit(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(1)
+    >>> n = 300
+    >>> income = rng.normal(0, 1, n)
+    >>> age = rng.normal(0, 1, n)
+    >>> latent = 0.8 * income + 0.4 * age + rng.logistic(0, 1, n)
+    >>> satisfaction = np.digitize(latent, [-0.5, 0.8])  # ordered {0, 1, 2}
+    >>> df = pd.DataFrame({'satisfaction': satisfaction,
+    ...                    'income': income, 'age': age})
     >>> result = sp.ologit('satisfaction ~ income + age', data=df)
-    >>> print(result.summary())
-    >>> result.brant_test  # parallel regression assumption
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool('_omnibus' in result.brant_test)  # parallel-regression test
+    True
 
     Notes
     -----
@@ -871,6 +900,10 @@ def ologit(
     where :math:`\\Lambda` is the logistic CDF. The parallel regression
     (proportional odds) assumption requires that :math:`\\beta` is the
     same for each cumulative split.
+
+    References
+    ----------
+    mckelvey1975statistical
     """
     return _ordered_model(
         formula=formula, data=data, y=y, x=x, link='logit',
@@ -915,9 +948,19 @@ def oprobit(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(2)
+    >>> n = 300
+    >>> quality = rng.normal(0, 1, n)
+    >>> price = rng.normal(0, 1, n)
+    >>> latent = 0.7 * quality - 0.5 * price + rng.normal(0, 1, n)
+    >>> rating = np.digitize(latent, [-0.4, 0.6])  # ordered {0, 1, 2}
+    >>> df = pd.DataFrame({'rating': rating, 'quality': quality, 'price': price})
     >>> result = sp.oprobit(data=df, y='rating', x=['quality', 'price'])
-    >>> print(result.summary())
-    >>> result.marginal_effects
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(len(result.marginal_effects) > 0)
+    True
 
     Notes
     -----
@@ -925,6 +968,10 @@ def oprobit(
         P(Y \\le j | X) = \\Phi(\\kappa_j - X'\\beta)
 
     where :math:`\\Phi` is the standard normal CDF.
+
+    References
+    ----------
+    mckelvey1975statistical
     """
     return _ordered_model(
         formula=formula, data=data, y=y, x=x, link='probit',
@@ -981,8 +1028,23 @@ def clogit(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(2)
+    >>> rows = []
+    >>> for case in range(150):
+    ...     price = rng.normal(0, 1, 3)
+    ...     quality = rng.normal(0, 1, 3)
+    ...     util = -0.8 * price + 0.9 * quality + rng.gumbel(0, 1, 3)
+    ...     chosen_alt = int(np.argmax(util))
+    ...     for a in range(3):
+    ...         rows.append({'case_id': case, 'chosen': int(a == chosen_alt),
+    ...                      'price': price[a], 'quality': quality[a]})
+    >>> df = pd.DataFrame(rows)
     >>> result = sp.clogit('chosen ~ price + quality', data=df, group='case_id')
-    >>> print(result.summary())
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> bool(result.params is not None)
+    True
 
     Notes
     -----
@@ -994,6 +1056,10 @@ def clogit(
 
     Only alternative-specific variation identifies beta; the group
     fixed effect is conditioned out (no constant estimated).
+
+    References
+    ----------
+    mcfadden1974conditional
     """
     if group is None:
         raise ValueError("'group' must be specified for conditional logit.")

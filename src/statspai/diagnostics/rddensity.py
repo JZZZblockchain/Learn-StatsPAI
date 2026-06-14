@@ -78,10 +78,14 @@ def rddensity(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(3)
+    >>> df = pd.DataFrame({'score': rng.normal(0, 1, 2000)})
     >>> result = sp.rddensity(df, x='score', c=0)
-    >>> print(f"T = {result.estimate:.3f}, p = {result.pvalue:.4f}")
-    >>> if result.pvalue < 0.05:
-    ...     print("Evidence of manipulation!")
+    >>> bool(0.0 <= result.pvalue <= 1.0)
+    True
+    >>> manipulated = result.pvalue < 0.05  # True => evidence of sorting
 
     Notes
     -----

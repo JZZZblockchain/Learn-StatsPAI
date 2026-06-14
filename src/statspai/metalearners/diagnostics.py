@@ -572,10 +572,23 @@ def compare_metalearners(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> age = rng.normal(size=n)
+    >>> edu = rng.normal(size=n)
+    >>> training = rng.integers(0, 2, size=n)
+    >>> wage = 0.5 * age + 0.3 * edu + (1.0 + age) * training + rng.normal(size=n)
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "edu": edu})
     >>> comp = sp.compare_metalearners(df, y='wage', treat='training',
     ...                                 covariates=['age', 'edu'])
-    >>> print(comp)
+    >>> "ate" in comp.columns
+    True
+    >>> int(comp.shape[0])
+    5
     """
     from .metalearners import metalearner as _metalearner
 

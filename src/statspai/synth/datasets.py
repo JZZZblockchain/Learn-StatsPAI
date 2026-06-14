@@ -45,10 +45,12 @@ def german_reunification() -> pd.DataFrame:
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.synth.german_reunification()
-    >>> result = sp.synth.synth(df, y='gdppc', unit='country',
-    ...                         time='year', treat_unit='West Germany',
-    ...                         treat_time=1990)
+    >>> df = sp.german_reunification()
+    >>> result = sp.synth(df, outcome='gdppc', unit='country',
+    ...                   time='year', treated_unit='West Germany',
+    ...                   treatment_time=1990)
+    >>> bool(result.estimate is not None)
+    True
     """
     rng = np.random.default_rng(1990)
 
@@ -138,10 +140,12 @@ def basque_terrorism() -> pd.DataFrame:
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.synth.basque_terrorism()
-    >>> result = sp.synth.synth(df, y='gdppc', unit='region',
-    ...                         time='year', treat_unit='Basque Country',
-    ...                         treat_time=1970)
+    >>> df = sp.basque_terrorism()
+    >>> result = sp.synth(df, outcome='gdppc', unit='region',
+    ...                   time='year', treated_unit='Basque Country',
+    ...                   treatment_time=1970)
+    >>> bool(result.estimate is not None)
+    True
     """
     rng = np.random.default_rng(1970)
 
@@ -245,10 +249,12 @@ def california_tobacco() -> pd.DataFrame:
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.synth.california_tobacco()
-    >>> result = sp.synth.synth(df, y='cigsale', unit='state',
-    ...                         time='year', treat_unit='California',
-    ...                         treat_time=1989)
+    >>> df = sp.california_tobacco()
+    >>> result = sp.synth(df, outcome='cigsale', unit='state',
+    ...                   time='year', treated_unit='California',
+    ...                   treatment_time=1989)
+    >>> bool(result.estimate is not None)
+    True
     """
     rng = np.random.default_rng(1989)
 

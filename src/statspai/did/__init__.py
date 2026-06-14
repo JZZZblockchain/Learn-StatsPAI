@@ -200,25 +200,44 @@ def did(
 
     Examples
     --------
-    Classic 2×2 DID:
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
 
-    >>> result = did(df, y='wage', treat='treated', time='post')
+    Classic 2x2 DID (one binary treatment, two periods):
 
-    Triple Differences:
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     'treated': np.repeat(rng.integers(0, 2, n), 2),
+    ...     'post': np.tile([0, 1], n),
+    ... })
+    >>> df['wage'] = (1.0 + 2.0 * df['treated'] + 1.5 * df['post']
+    ...               + 3.0 * df['treated'] * df['post']
+    ...               + rng.normal(0, 1, len(df)))
+    >>> result = sp.did(df, y='wage', treat='treated', time='post')
+    >>> bool(result.estimate > 0)
+    True
 
-    >>> result = did(df, y='emp', treat='nj', time='post',
-    ...             method='ddd', subgroup='low_wage')
+    Triple Differences (a third dimension via ``subgroup``):
 
-    Staggered DID (Callaway & Sant'Anna):
+    >>> df['low_wage'] = np.repeat(rng.integers(0, 2, n), 2)
+    >>> ddd = sp.did(df, y='wage', treat='treated', time='post',
+    ...              method='ddd', subgroup='low_wage')
 
-    >>> result = did(df, y='earnings', treat='first_treat',
-    ...             time='year', id='worker_id')
+    Staggered DID (cohort column gives first-treatment time; 0 = never):
 
-    Synthetic DID:
-
-    >>> result = did(df, y='gdp', treat='first_treat', time='year',
-    ...             id='state', method='sdid',
-    ...             treat_unit='CA', treat_time=2000)
+    >>> rows = []
+    >>> for u in range(30):
+    ...     first = int(rng.choice([2003, 2005, 0]))
+    ...     for yr in range(2000, 2008):
+    ...         on = 1 if (first != 0 and yr >= first) else 0
+    ...         rows.append({'unit': u, 'year': yr, 'first_treat': first,
+    ...                      'y': 5 + 2.0 * on + rng.normal(0, 1)})
+    >>> panel = pd.DataFrame(rows)
+    >>> staggered = sp.did(panel, y='y', treat='first_treat',
+    ...                    time='year', id='unit')
+    >>> bool(staggered.estimate == staggered.estimate)  # finite
+    True
     """
     # --- Input validation (Stata-quality error messages) ---
     if not isinstance(data, pd.DataFrame):

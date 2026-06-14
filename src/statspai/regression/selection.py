@@ -70,10 +70,23 @@ def biprobit(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 40
+    >>> age = rng.normal(40, 10, n)
+    >>> education = rng.normal(13, 3, n)
+    >>> e1 = rng.normal(0, 1, n)
+    >>> e2 = 0.5 * e1 + rng.normal(0, 1, n)  # correlated errors
+    >>> employed = ((-1.0 + 0.03 * age + 0.1 * education + e1) > 0).astype(int)
+    >>> married = ((-0.5 + 0.02 * age + e2) > 0).astype(int)
+    >>> df = pd.DataFrame({"employed": employed, "married": married,
+    ...                    "age": age, "education": education})
     >>> result = sp.biprobit(df, y1='employed', y2='married',
-    ...                      x1=['age', 'education'], x2=['age', 'children'])
-    >>> print(result.summary())
+    ...                      x1=['age', 'education'])
+    >>> bool('rho' in result.model_info)  # error correlation reported
+    True
     """
     if x2 is None:
         x2 = x1
@@ -257,9 +270,26 @@ def etregress(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> experience = rng.normal(15, 7, n)
+    >>> education = rng.normal(13, 3, n)
+    >>> father_union = rng.integers(0, 2, n)
+    >>> region = rng.integers(0, 4, n)
+    >>> u = rng.normal(0, 1, n)  # selection error, correlated with wage
+    >>> union = ((-0.5 + 0.4 * father_union + 0.1 * region + u) > 0).astype(int)
+    >>> wage = (8.0 + 0.3 * experience + 0.5 * education + 2.0 * union
+    ...         + 1.5 * u + rng.normal(0, 2, n))
+    >>> df = pd.DataFrame({"wage": wage, "experience": experience,
+    ...                    "education": education, "union": union,
+    ...                    "father_union": father_union, "region": region})
     >>> result = sp.etregress(df, y='wage', x=['experience', 'education'],
     ...                       treatment='union', z=['father_union', 'region'])
+    >>> bool('ate' in result.diagnostics)  # endogenous treatment effect
+    True
     """
     df = data.dropna(subset=[y, treatment] + x + z)
     n = len(df)

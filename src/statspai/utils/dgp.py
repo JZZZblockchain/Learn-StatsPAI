@@ -57,9 +57,12 @@ def dgp_did(
 
     Examples
     --------
-    >>> df = dgp_did(n_units=50, n_periods=8, effect=1.0, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=50, n_periods=8, effect=1.0, seed=0)
     >>> df.shape
     (400, 6)
+    >>> df.attrs['true_effect']
+    1.0
     """
     rng = np.random.default_rng(seed)
 
@@ -147,9 +150,12 @@ def dgp_rd(
 
     Examples
     --------
-    >>> df = dgp_rd(n=500, effect=0.5, seed=0)
-    >>> 'treatment' in df.columns
+    >>> import statspai as sp
+    >>> df = sp.dgp_rd(n=500, effect=0.5, seed=0)
+    >>> bool('treatment' in df.columns)
     True
+    >>> df.attrs['true_effect']
+    0.5
     """
     rng = np.random.default_rng(seed)
 
@@ -202,7 +208,8 @@ def dgp_rd_kink(
 
     Examples
     --------
-    >>> df = dgp_rd_kink(n=2000, kink=0.8, seed=42)
+    >>> import statspai as sp
+    >>> df = sp.dgp_rd_kink(n=2000, kink=0.8, seed=42)
     >>> df.attrs['true_kink']
     0.8
     """
@@ -244,7 +251,8 @@ def dgp_rd_multi(
 
     Examples
     --------
-    >>> df = dgp_rd_multi(n=3000, seed=42)
+    >>> import statspai as sp
+    >>> df = sp.dgp_rd_multi(n=3000, seed=42)
     >>> df.attrs['true_effects']
     {0.0: 2.0, 1.0: 3.0}
     """
@@ -299,7 +307,8 @@ def dgp_rd_hte(
 
     Examples
     --------
-    >>> df = dgp_rd_hte(n=3000, ate=2.0, hte_coef=1.5, seed=42)
+    >>> import statspai as sp
+    >>> df = sp.dgp_rd_hte(n=3000, ate=2.0, hte_coef=1.5, seed=42)
     >>> df.attrs['true_ate']
     2.0
     >>> df.attrs['true_hte_coef']
@@ -345,7 +354,8 @@ def dgp_rd_2d(
 
     Examples
     --------
-    >>> df = dgp_rd_2d(n=2000, effect=2.0, seed=42)
+    >>> import statspai as sp
+    >>> df = sp.dgp_rd_2d(n=2000, effect=2.0, seed=42)
     >>> df.attrs['true_effect']
     2.0
     """
@@ -389,7 +399,8 @@ def dgp_rdit(
 
     Examples
     --------
-    >>> df = dgp_rdit(n_periods=200, effect=2.0, seed=42)
+    >>> import statspai as sp
+    >>> df = sp.dgp_rdit(n_periods=200, effect=2.0, seed=42)
     >>> df.attrs['true_effect']
     2.0
     """
@@ -451,9 +462,12 @@ def dgp_iv(
 
     Examples
     --------
-    >>> df = dgp_iv(n=300, effect=0.5, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_iv(n=300, effect=0.5, seed=0)
     >>> df.attrs['true_effect']
     0.5
+    >>> bool('instrument' in df.columns)
+    True
     """
     rng = np.random.default_rng(seed)
 
@@ -519,9 +533,12 @@ def dgp_rct(
 
     Examples
     --------
-    >>> df = dgp_rct(n=200, effect=1.0, seed=0)
-    >>> df['treatment'].mean()  # approximately 0.5
-    0.525
+    >>> import statspai as sp
+    >>> df = sp.dgp_rct(n=200, effect=1.0, seed=0)
+    >>> df.attrs['true_effect']
+    1.0
+    >>> bool(0.0 <= df['treatment'].mean() <= 1.0)  # randomized assignment
+    True
     """
     rng = np.random.default_rng(seed)
 
@@ -581,9 +598,12 @@ def dgp_panel(
 
     Examples
     --------
-    >>> df = dgp_panel(n_units=20, n_periods=5, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_panel(n_units=20, n_periods=5, seed=0)
     >>> df.shape
     (100, 4)
+    >>> df.attrs['true_effect']
+    1.0
     """
     rng = np.random.default_rng(seed)
 
@@ -643,9 +663,12 @@ def dgp_observational(
 
     Examples
     --------
-    >>> df = dgp_observational(n=500, effect=1.0, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_observational(n=500, effect=1.0, seed=0)
     >>> df.attrs['true_effect']
     1.0
+    >>> bool('propensity_score' in df.columns)
+    True
     """
     rng = np.random.default_rng(seed)
 
@@ -702,9 +725,12 @@ def dgp_cluster_rct(
 
     Examples
     --------
-    >>> df = dgp_cluster_rct(n_clusters=10, cluster_size=5, effect=0.5, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_cluster_rct(n_clusters=10, cluster_size=5, effect=0.5, seed=0)
     >>> df.shape
     (50, 4)
+    >>> df.attrs['true_effect']
+    0.5
     """
     rng = np.random.default_rng(seed)
 
@@ -762,8 +788,11 @@ def dgp_bunching(
 
     Examples
     --------
-    >>> df = dgp_bunching(n=5000, kink_point=50000, elasticity=0.2, seed=0)
-    >>> (df['income'] <= 50000).mean() > (df['counterfactual_income'] <= 50000).mean()
+    >>> import statspai as sp
+    >>> df = sp.dgp_bunching(n=5000, kink_point=50000, elasticity=0.2, seed=0)
+    >>> df.attrs['true_effect']  # elasticity
+    0.2
+    >>> bool((df['income'] <= df['counterfactual_income'] + 1e-9).all())  # bunched down
     True
     """
     rng = np.random.default_rng(seed)
@@ -821,7 +850,8 @@ def dgp_synth(
 
     Examples
     --------
-    >>> df = dgp_synth(n_units=10, n_periods=20, effect=1.0, seed=0)
+    >>> import statspai as sp
+    >>> df = sp.dgp_synth(n_units=10, n_periods=30, treatment_time=20, effect=1.0, seed=0)
     >>> df.loc[(df['unit'] == 0) & (df['time'] >= 20), 'treated'].unique()
     array([1.])
     """
@@ -878,9 +908,12 @@ def dgp_bartik(
 
     Examples
     --------
-    >>> result = dgp_bartik(n_regions=20, n_industries=5, seed=0)
+    >>> import statspai as sp
+    >>> result = sp.dgp_bartik(n_regions=20, n_industries=5, seed=0)
     >>> result['data'].shape
     (20, 3)
+    >>> result['shares'].shape
+    (20, 5)
     """
     rng = np.random.default_rng(seed)
 

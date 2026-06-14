@@ -9040,7 +9040,7 @@
         },
         "index": {
           "default": "theil_t",
-          "description": "index parameter (str).",
+          "description": "atkinson, gini, cv2",
           "type": "string"
         },
         "weights": {

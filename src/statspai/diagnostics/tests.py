@@ -72,7 +72,19 @@ def diagnose(
 
     Examples
     --------
-    >>> diag = sp.diagnose(df, y='wage', x=['education', 'experience'])
+    Run the full diagnostic suite on a Mincer-style wage regression:
+
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> diag = sp.diagnose(df, y='log_wage',
+    ...                    x=['education', 'experience'],
+    ...                    print_results=False)
+    >>> sorted(diag.keys())
+    ['het_test', 'reset_test', 'vif']
+
+    References
+    ----------
+    breusch1979simple, ramsey1969tests, white1980heteroskedasticity
     """
     results = {}
 

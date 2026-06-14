@@ -155,10 +155,13 @@ def wooldridge_did(
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.dgp_did(n_units=200, n_periods=10, staggered=True)
+    >>> df = sp.dgp_did(n_units=200, n_periods=10, staggered=True, seed=42)
     >>> result = sp.wooldridge_did(df, y='y', group='unit',
-    ...                           time='period', first_treat='first_treat')
-    >>> result.summary()
+    ...                            time='time', first_treat='first_treat')
+    >>> result.estimand
+    'ATT'
+    >>> bool(result.detail is not None)  # cohort-specific ATTs
+    True
     """
     df = data.copy()
 
@@ -1646,11 +1649,12 @@ def twfe_decomposition(
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.dgp_did(n_units=200, n_periods=8, staggered=True)
+    >>> df = sp.dgp_did(n_units=200, n_periods=8, staggered=True, seed=0)
     >>> result = sp.twfe_decomposition(df, y='y', group='unit',
-    ...                                time='period',
+    ...                                time='time',
     ...                                first_treat='first_treat')
-    >>> result.summary()
+    >>> bool('weight' in result.detail.columns)  # 2x2 decomposition weights
+    True
     """
     df = data.copy()
 

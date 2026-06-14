@@ -64,9 +64,20 @@ def jackknife_se(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> state = rng.integers(0, 8, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 - 0.3 * x2 + rng.normal(size=n) + rng.normal(size=8)[state]
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "state": state})
     >>> result = sp.regress("y ~ x1 + x2", data=df, cluster="state")
     >>> jk = sp.jackknife_se(result, data=df, cluster="state")
-    >>> print(jk.summary())
+    >>> jk.model_info["se_type"]
+    'cluster jackknife'
 
     Notes
     -----
@@ -390,11 +401,21 @@ def wild_cluster_boot(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> state = rng.integers(0, 8, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 - 0.3 * x2 + rng.normal(size=n) + rng.normal(size=8)[state]
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "state": state})
     >>> result = sp.regress("y ~ x1 + x2", data=df, cluster="state")
     >>> boot = sp.wild_cluster_boot(result, data=df, cluster="state",
-    ...                              variable="x1", n_boot=999)
-    >>> print(f"Bootstrap p = {boot['p_boot']:.4f}")
-    >>> print(f"Bootstrap CI = {boot['ci_boot']}")
+    ...                             variable="x1", n_boot=199, seed=0)
+    >>> bool(0.0 <= boot["p_boot"] <= 1.0)
+    True
 
     Notes
     -----

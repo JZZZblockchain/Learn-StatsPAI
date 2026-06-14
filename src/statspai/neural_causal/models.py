@@ -131,13 +131,22 @@ def tarnet(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2, x3 = rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'outcome': y, 'treatment': d,
+    ...                    'x1': x1, 'x2': x2, 'x3': x3})
     >>> result = sp.tarnet(df, y='outcome', treat='treatment',
-    ...                    covariates=['x1', 'x2', 'x3'])
-    >>> print(result.summary())
-
-    >>> # Access individual CATE predictions
+    ...                    covariates=['x1', 'x2', 'x3'],
+    ...                    epochs=30, n_bootstrap=20, random_state=0)
+    >>> # Access per-unit CATE predictions
     >>> cate = result.model_info['cate']
+    >>> bool(len(cate) == n)
+    True
     """
     est = TARNet(
         data=data, y=y, treat=treat, covariates=covariates,
@@ -233,11 +242,21 @@ def cfrnet(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2, x3 = rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'outcome': y, 'treatment': d,
+    ...                    'x1': x1, 'x2': x2, 'x3': x3})
     >>> result = sp.cfrnet(df, y='outcome', treat='treatment',
     ...                    covariates=['x1', 'x2', 'x3'],
-    ...                    ipm_weight=0.5)
-    >>> print(result.summary())
+    ...                    ipm_weight=0.5,
+    ...                    epochs=30, n_bootstrap=20, random_state=0)
+    >>> bool(result.estimate is not None)
+    True
     """
     est = CFRNet(
         data=data, y=y, treat=treat, covariates=covariates,
@@ -341,15 +360,25 @@ def dragonnet(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2, x3 = rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({'outcome': y, 'treatment': d,
+    ...                    'x1': x1, 'x2': x2, 'x3': x3})
     >>> result = sp.dragonnet(df, y='outcome', treat='treatment',
-    ...                       covariates=['x1', 'x2', 'x3'])
-    >>> print(result.summary())
-
+    ...                       covariates=['x1', 'x2', 'x3'],
+    ...                       epochs=30, n_bootstrap=20, random_state=0)
+    >>> bool(result.estimate is not None)
+    True
     >>> # DragonNet without targeted regularisation
     >>> result = sp.dragonnet(df, y='outcome', treat='treatment',
     ...                       covariates=['x1', 'x2'],
-    ...                       targeted_reg_weight=0.0)
+    ...                       targeted_reg_weight=0.0,
+    ...                       epochs=30, n_bootstrap=20, random_state=0)
     """
     est = DragonNet(
         data=data, y=y, treat=treat, covariates=covariates,

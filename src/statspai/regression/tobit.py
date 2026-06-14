@@ -62,10 +62,23 @@ def tobit(
 
     Examples
     --------
-    >>> # Hours worked (censored at 0)
-    >>> result = sp.tobit(df, y='hours', x=['wage', 'education', 'children'],
-    ...                   ll=0)
-    >>> print(result.summary())
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> wage = rng.uniform(5, 25, n)
+    >>> education = rng.integers(8, 18, n)
+    >>> children = rng.integers(0, 4, n)
+    >>> latent = (-20 + 1.5 * wage + 2.0 * education
+    ...           - 5.0 * children + rng.normal(0, 8, n))
+    >>> df = pd.DataFrame({
+    ...     'hours': np.maximum(latent, 0),  # weekly hours, censored at 0
+    ...     'wage': wage, 'education': education, 'children': children,
+    ... })
+    >>> result = sp.tobit(df, y='hours',
+    ...                   x=['wage', 'education', 'children'], ll=0)
+    >>> print(result.summary())  # doctest: +SKIP
 
     Notes
     -----

@@ -77,12 +77,16 @@ def stacked_did(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=0)
     >>> result = sp.stacked_did(
-    ...     data=df, y='wage', group='county', time='year',
-    ...     first_treat='first_treat', window=(-5, 5),
+    ...     data=df, y='y', group='unit', time='time',
+    ...     first_treat='first_treat', window=(-3, 3),
     ... )
-    >>> result.summary()
-    >>> result.plot()
+    >>> bool(result.estimate is not None)
+    True
+    >>> _ = result.summary()
+    >>> fig, ax = result.plot()  # event-study plot
     """
     # ── Input validation ─────────────────────────────────────────── #
     df = data.copy()

@@ -411,6 +411,7 @@ def rd_extrapolate(
 
     Examples
     --------
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 2000
@@ -419,8 +420,8 @@ def rd_extrapolate(
     >>> D = (X >= 0).astype(int)
     >>> Y = 1.0 + 2.0 * Z + 3.0 * D + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X, 'z': Z})
-    >>> result = rd_extrapolate(df, y='y', x='x', c=0, covs=['z'])
-    >>> abs(result.estimate - 3.0) < 1.0
+    >>> result = sp.rd_extrapolate(df, y='y', x='x', c=0, covs=['z'])
+    >>> bool(abs(result.estimate - 3.0) < 1.0)
     True
     """
     if covs is None or len(covs) == 0:
@@ -636,6 +637,7 @@ def rd_multi_extrapolate(
 
     Examples
     --------
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 3000
@@ -644,8 +646,8 @@ def rd_multi_extrapolate(
     >>> D = ((X >= 1) | (X >= 3)).astype(int)
     >>> Y = 0.5 * X + tau_true * D + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X})
-    >>> result = rd_multi_extrapolate(df, y='y', x='x', cutoffs=[1.0, 3.0])
-    >>> result.estimate > 0
+    >>> result = sp.rd_multi_extrapolate(df, y='y', x='x', cutoffs=[1.0, 3.0])
+    >>> bool(result.estimate > 0)
     True
     """
     if len(cutoffs) < 2:
@@ -863,6 +865,7 @@ def rd_external_validity(
 
     Examples
     --------
+    >>> import statspai as sp
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(42)
     >>> n = 2000
@@ -871,8 +874,8 @@ def rd_external_validity(
     >>> D = (X >= 0).astype(int)
     >>> Y = 1.0 + 2.0 * Z + 3.0 * D + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({'y': Y, 'x': X, 'z': Z})
-    >>> diag = rd_external_validity(df, y='y', x='x', c=0, covs=['z'])
-    >>> 'recommendation' in diag
+    >>> diag = sp.rd_external_validity(df, y='y', x='x', c=0, covs=['z'])
+    >>> bool('recommendation' in diag)
     True
     """
     df = data.dropna(subset=[y, x]).copy()

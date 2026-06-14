@@ -106,10 +106,37 @@ def ddd_heterogeneous(
 
     Examples
     --------
+    Staggered-adoption panel: two treated cohorts (2012, 2014) plus a
+    never-treated control arm. Only the affected subgroup (B=1) carries
+    the planted DDD effect of 4.0.
+
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> years = list(range(2010, 2016))
+    >>> rows = []
+    >>> for u in range(120):
+    ...     g = rng.choice([0, 2012, 2014])
+    ...     unit_fe = rng.normal(0, 1)
+    ...     for b in (0, 1):
+    ...         for yr in years:
+    ...             treated = (g != 0) and (yr >= g)
+    ...             effect = 4.0 if (treated and b == 1) else 0.0
+    ...             earn = (10 + unit_fe + 0.2 * (yr - 2010) + effect
+    ...                     + rng.normal(0, 0.5))
+    ...             rows.append({'i': f'{u}_{b}', 'year': yr,
+    ...                          'first_treat': g, 'affected': b,
+    ...                          'earnings': earn})
+    >>> df = pd.DataFrame(rows)
     >>> r = sp.ddd_heterogeneous(df, y='earnings', unit='i', time='year',
-    ...                           cohort='first_treat', subgroup='affected')
-    >>> r.summary()
+    ...                          cohort='first_treat', subgroup='affected',
+    ...                          n_boot=100, seed=0)
+    >>> bool(np.isfinite(r.estimate))
+    True
+
+    References
+    ----------
+    olden2022triple, callaway2021difference
     """
     df = data.copy()
     for col in (y, unit, time, cohort, subgroup):

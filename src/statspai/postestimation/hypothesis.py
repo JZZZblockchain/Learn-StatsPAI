@@ -40,10 +40,21 @@ def test(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2, x3 = rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 + 0.5 * x2 - 0.3 * x3 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "x3": x3})
     >>> result = sp.regress("y ~ x1 + x2 + x3", data=df)
-    >>> sp.test(result, "x1 = x2")           # beta1 = beta2?
-    >>> sp.test(result, "x1 = x2 = 0")       # joint: beta1 = beta2 = 0?
-    >>> sp.test(result, "x1 + x2 = 1")       # beta1 + beta2 = 1?
+    >>> out = sp.test(result, "x1 = x2")        # beta1 = beta2?
+    >>> sorted(out)
+    ['chi2', 'df', 'hypothesis', 'pvalue', 'statistic']
+    >>> joint = sp.test(result, "x1 = x2 = 0")  # joint: beta1 = beta2 = 0?
+    >>> bool(joint["pvalue"] < 0.05)
+    True
+    >>> restr = sp.test(result, "x1 + x2 = 1")  # beta1 + beta2 = 1?
     """
     params = result.params
     vcov = _get_vcov(result)
@@ -109,9 +120,20 @@ def lincom(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2})
     >>> result = sp.regress("y ~ x1 + x2", data=df)
-    >>> sp.lincom(result, "x1 + x2")         # beta1 + beta2
-    >>> sp.lincom(result, "x1 - x2")         # beta1 - beta2
+    >>> out = sp.lincom(result, "x1 + x2")    # beta1 + beta2
+    >>> sorted(out)
+    ['ci', 'estimate', 'expression', 'pvalue', 'se', 'z']
+    >>> diff = sp.lincom(result, "x1 - x2")   # beta1 - beta2
+    >>> bool(diff["se"] > 0)
+    True
     """
     params = result.params
     vcov = _get_vcov(result)

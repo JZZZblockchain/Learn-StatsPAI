@@ -47,11 +47,17 @@ def pwcorr(
 
     Examples
     --------
-    >>> print(sp.pwcorr(df, vars=['wage', 'education', 'experience']))
-                    wage    education  experience
-    wage           1.000
-    education     0.523***   1.000
-    experience    0.412***   0.156**     1.000
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> out = sp.pwcorr(df, vars=['log_wage', 'education', 'experience'])
+    >>> isinstance(out, str)
+    True
+    >>> bool('***' in out)   # significant pairwise correlations are starred
+    True
+    >>> # Raw correlation matrix instead of formatted text
+    >>> cm = sp.pwcorr(df, vars=['log_wage', 'education'], output='dataframe')
+    >>> round(float(cm.loc['log_wage', 'education']), 3)
+    0.335
     """
     if vars is None:
         vars = list(data.select_dtypes(include=[np.number]).columns)
@@ -183,12 +189,20 @@ def winsor(
 
     Examples
     --------
-    >>> # Winsorize at 1st and 99th percentile
-    >>> df = sp.winsor(df, vars=['wage', 'income'], cuts=(1, 99))
-    >>> # Now df has 'wage_w' and 'income_w' columns
-
-    >>> # Replace in place
-    >>> df = sp.winsor(df, vars=['wage'], replace=True)
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> # Winsorize at 1st and 99th percentile -> adds 'log_wage_w'
+    >>> out = sp.winsor(df, vars=['log_wage'], cuts=(1, 99))
+    >>> 'log_wage_w' in out.columns
+    True
+    >>> bool(out['log_wage_w'].max() <= df['log_wage'].max())  # tails clipped
+    True
+    >>> len(out) == len(df)   # winsorizing does not drop rows
+    True
+    >>> # Replace in place instead of adding a suffixed column
+    >>> repl = sp.winsor(df, vars=['log_wage'], replace=True)
+    >>> 'log_wage_w' in repl.columns
+    False
 
     Notes
     -----

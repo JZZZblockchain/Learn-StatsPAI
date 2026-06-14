@@ -125,21 +125,25 @@ def discos(
 
     Examples
     --------
-    >>> result = sp.discos(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
-
-    >>> # Quantile-level effects
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.discos(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989)
+    >>> print(result.summary())  # doctest: +SKIP
+    >>> # Quantile-level distributional effects table
     >>> qte = result.model_info['quantile_effects']
-    >>> print(qte.head())
-
-    >>> # Visualise distributional effects
-    >>> sp.discos_plot(result, type='quantile_effect')
+    >>> bool(set(['quantile', 'effect']).issubset(qte.columns))
+    True
 
     See Also
     --------
     synth : Classic (mean-matching) synthetic control.
     qqsynth : Alias for ``discos(..., method='quantile')``.
+
+    References
+    ----------
+    gunsilius2023distributional
     """
     rng = np.random.default_rng(seed)
 
@@ -386,13 +390,21 @@ def qqsynth(
 
     Examples
     --------
-    >>> result = sp.qqsynth(df, outcome='gdp', unit='state', time='year',
-    ...                     treated_unit='California', treatment_time=1989)
-    >>> print(result.summary())
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.qqsynth(df, outcome='packspercapita', unit='state',
+    ...                     time='year', treated_unit='California',
+    ...                     treatment_time=1989)
+    >>> bool(result.estimate is not None)
+    True
 
     See Also
     --------
     discos : Full distributional synthetic controls with method selection.
+
+    References
+    ----------
+    gunsilius2023distributional
     """
     return discos(
         data=data,
@@ -438,10 +450,16 @@ def discos_test(
 
     Examples
     --------
-    >>> result = sp.discos(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> sp.discos_test(result, test='ks')
-    {'test': 'Kolmogorov-Smirnov', 'statistic': 0.32, 'pvalue': 0.014, ...}
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.discos(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989)
+    >>> out = sp.discos_test(result, test='ks')
+    >>> out['test']
+    'Kolmogorov-Smirnov'
+    >>> bool('pvalue' in out)
+    True
     """
     mi = result.model_info
     Q_treated = mi["treated_quantiles"]
@@ -487,9 +505,14 @@ def stochastic_dominance(
 
     Examples
     --------
-    >>> result = sp.discos(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> sp.stochastic_dominance(result, order=1)
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.discos(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989)
+    >>> out = sp.stochastic_dominance(result, order=1)
+    >>> bool('dominates' in out)
+    True
     """
     mi = result.model_info
     Q_treated = mi["treated_quantiles"]
@@ -549,10 +572,13 @@ def discos_plot(
 
     Examples
     --------
-    >>> result = sp.discos(df, outcome='gdp', unit='state', time='year',
-    ...                    treated_unit='California', treatment_time=1989)
-    >>> sp.discos_plot(result, type='quantile_effect')
-    >>> sp.discos_plot(result, type='quantile_comparison')
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> result = sp.discos(df, outcome='packspercapita', unit='state',
+    ...                    time='year', treated_unit='California',
+    ...                    treatment_time=1989)
+    >>> fig, ax = sp.discos_plot(result, type='quantile_effect')
+    >>> fig2, ax2 = sp.discos_plot(result, type='quantile_comparison')
     """
     try:
         import matplotlib.pyplot as plt

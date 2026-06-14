@@ -126,6 +126,23 @@ def binscatter(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> education = rng.integers(8, 20, n).astype(float)
+    >>> age = rng.normal(40, 10, n)
+    >>> experience = np.clip(age - education - 6, 0, None)
+    >>> female = rng.integers(0, 2, n)
+    >>> firm_id = rng.integers(0, 10, n)
+    >>> year = rng.integers(2010, 2015, n)
+    >>> wage = (5 + 0.4 * education + 0.05 * age + 0.03 * experience
+    ...         - 0.5 * female + rng.normal(0, 1, n))
+    >>> df = pd.DataFrame({'wage': wage, 'education': education, 'age': age,
+    ...                    'experience': experience, 'female': female,
+    ...                    'firm_id': firm_id, 'year': year})
+
     Basic usage:
 
     >>> fig, ax, bins = sp.binscatter(df, y='wage', x='education')

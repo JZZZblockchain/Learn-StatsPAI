@@ -114,14 +114,32 @@ def multi_outcome_synth(
 
     Examples
     --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(123)
+    >>> n_units, n_periods, t0 = 11, 20, 11
+    >>> alphas = rng.normal(10, 2, (n_units, 3))
+    >>> betas = rng.normal(0.5, 0.1, (n_units, 3))
+    >>> records = []
+    >>> for i in range(n_units):
+    ...     for t in range(1, n_periods + 1):
+    ...         row = {'unit': f'unit_{i}', 'time': t}
+    ...         for k, name in enumerate(['gdp', 'employment', 'investment']):
+    ...             y = alphas[i, k] + betas[i, k] * t + rng.normal(0, 0.3)
+    ...             if i == 0 and t >= t0:        # unit_0 treated from t0
+    ...                 y += [5.0, 3.0, 0.0][k]
+    ...             row[name] = y
+    ...         records.append(row)
+    >>> df = pd.DataFrame(records)
     >>> result = sp.multi_outcome_synth(
     ...     df,
-    ...     outcomes=['gdp', 'employment', 'wages'],
-    ...     unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
+    ...     outcomes=['gdp', 'employment', 'investment'],
+    ...     unit='unit', time='time',
+    ...     treated_unit='unit_0', treatment_time=11,
+    ...     placebo=False,
     ... )
-    >>> print(result.summary())
-    >>> result.model_info['per_outcome_effects']
+    >>> summary_text = result.summary()
+    >>> effects = result.model_info['per_outcome_effects']
 
     Notes
     -----

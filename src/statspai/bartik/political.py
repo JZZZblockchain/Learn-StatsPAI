@@ -247,7 +247,7 @@ def shift_share_political(
     ...     rows.append({'unit': i, 'time': 0, 'y': y_first, 'x': 0.0})
     ...     rows.append({'unit': i, 'time': 1, 'y': y_last, 'x': dx})
     >>> df = pd.DataFrame(rows)
-    >>> out = sp.bartik.shift_share_political(
+    >>> out = sp.shift_share_political(
     ...     df, unit='unit', time='time',
     ...     outcome='y', endog='x',
     ...     shares=shares, shocks=shocks,

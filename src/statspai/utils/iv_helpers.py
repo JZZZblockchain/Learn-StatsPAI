@@ -58,12 +58,28 @@ def scalar_iv_projection(
 
     Examples
     --------
-    >>> # PLIV with two excluded instruments — project first
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 8, n)
+    >>> parent_edu = rng.integers(8, 16, n).astype(float)
+    >>> z1, z2 = rng.normal(0, 1, n), rng.normal(0, 1, n)
+    >>> schooling = 12 + 0.8 * z1 + 0.5 * z2 + 0.1 * (age - 40) + rng.normal(0, 1, n)
+    >>> earnings = 5000 + 800 * schooling + 50 * age + rng.normal(0, 2000, n)
+    >>> df = pd.DataFrame({
+    ...     'earnings': earnings, 'schooling': schooling,
+    ...     'quarter_of_birth': z1, 'distance_to_college': z2,
+    ...     'age': age, 'parent_edu': parent_edu,
+    ... })
+    >>> # PLIV with two excluded instruments — project onto a scalar index first
     >>> df_aug = sp.scalar_iv_projection(
     ...     df, treat='schooling',
     ...     instruments=['quarter_of_birth', 'distance_to_college'],
     ...     covariates=['age', 'parent_edu'],
     ... )
+    >>> 'schooling_iv_hat' in df_aug.columns
+    True
     >>> result = sp.dml(df_aug, y='earnings', treat='schooling',
     ...                 covariates=['age', 'parent_edu'],
     ...                 model='pliv',
