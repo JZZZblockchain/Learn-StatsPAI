@@ -143,6 +143,21 @@ def demographic_parity(
     Demographic parity is the weakest fairness criterion — it ignores
     ground-truth labels and can be trivially satisfied by a random
     classifier. Use together with :func:`equalized_odds`.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "group": rng.integers(0, 2, 200),
+    ...     "pred": rng.integers(0, 2, 200),
+    ... })
+    >>> res = sp.demographic_parity(df, predictions="pred", protected="group")
+    >>> res.metric
+    'demographic_parity'
+    >>> sorted(res.per_group)  # one positive-prediction rate per group
+    [0, 1]
     """
     yhat = _check_binary(_column(data, predictions), predictions)
     a = _column(data, protected)
@@ -209,6 +224,27 @@ def equalized_odds(
     protected : str
         Protected attribute column.
     threshold : float, default 0.1
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "group": rng.integers(0, 2, 200),
+    ...     "label": rng.integers(0, 2, 200),
+    ...     "pred": rng.integers(0, 2, 200),
+    ... })
+    >>> res = sp.equalized_odds(df, predictions="pred", labels="label",
+    ...                         protected="group")
+    >>> res.metric
+    'equalized_odds'
+    >>> isinstance(res.passes, bool)
+    True
+
+    References
+    ----------
+    hardt2016equality
     """
     yhat = _check_binary(_column(data, predictions), predictions)
     y = _check_binary(_column(data, labels), labels)
@@ -297,9 +333,31 @@ def counterfactual_fairness(
     credible as the SCM the user supplies. A DAG + structural equations
     must be specified outside this function — we just wrap the mechanics.
 
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "group": rng.integers(0, 2, 200),
+    ...     "x1": rng.normal(size=200),
+    ... })
+    >>> def predictor(d):
+    ...     return (0.5 * d["x1"] + 0.3 * d["group"]).to_numpy()
+    >>> def scm(d, a):  # intervene: set the protected attribute to `a`
+    ...     d2 = d.copy()
+    ...     d2["group"] = a
+    ...     return d2
+    >>> res = sp.counterfactual_fairness(df, predictor, protected="group",
+    ...                                  scm_intervention=scm)
+    >>> res.metric
+    'counterfactual_fairness'
+    >>> res.value >= 0.0
+    True
+
     References
     ----------
-    Kusner, Loftus, Russell, Silva (2018).
+    kusner2017counterfactual
     """
     if protected not in data.columns:
         raise ValueError(f"`protected` column {protected!r} not in data.")
@@ -391,9 +449,26 @@ def orthogonal_to_bias(
         residualized versions. Other columns (including ``protected``)
         unchanged.
 
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "group": rng.integers(0, 2, 200),
+    ...     "x1": rng.normal(size=200),
+    ...     "x2": rng.normal(size=200),
+    ... })
+    >>> ob = sp.orthogonal_to_bias(df, features=["x1", "x2"], protected="group")
+    >>> # residualized features are uncorrelated with the protected attribute
+    >>> bool(abs(np.corrcoef(ob["x1"], df["group"])[0, 1]) < 1e-8)
+    True
+    >>> ob.shape == df.shape
+    True
+
     References
     ----------
-    Chen & Zhu (arXiv:2403.17852v3, 2024).
+    chen2024counterfactual
     """
     if method != "residualize":
         raise ValueError(f"Unknown method {method!r}; only 'residualize' supported.")
@@ -455,6 +530,25 @@ def fairness_audit(
     predictor, scm_intervention, alternative_values
         If ``predictor`` and ``scm_intervention`` are both supplied, also
         runs counterfactual-fairness.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "group": rng.integers(0, 2, 200),
+    ...     "label": rng.integers(0, 2, 200),
+    ...     "pred": rng.integers(0, 2, 200),
+    ... })
+    >>> audit = sp.fairness_audit(df, predictions="pred", protected="group",
+    ...                           labels="label")
+    >>> audit.n
+    200
+    >>> audit.demographic_parity.metric
+    'demographic_parity'
+    >>> audit.equalized_odds.metric
+    'equalized_odds'
     """
     dp = demographic_parity(
         data, predictions=predictions, protected=protected, threshold=threshold,

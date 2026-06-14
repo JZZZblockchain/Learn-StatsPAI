@@ -50,7 +50,30 @@ from sklearn.linear_model import LogisticRegression
 
 @dataclass
 class ConformalCounterfactualResult:
-    """Counterfactual prediction intervals under each potential outcome."""
+    """Counterfactual prediction intervals under each potential outcome.
+
+    Returned by :func:`conformal_counterfactual`; holds per-arm
+    prediction bands for ``Y(1) | X`` and ``Y(0) | X``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> t = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * t + 0.5 * x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "t": t, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_counterfactual(
+    ...     df, y="y", treat="t", covariates=["x1", "x2"],
+    ...     alpha=0.1, random_state=0)
+    >>> isinstance(res, sp.ConformalCounterfactualResult)
+    True
+    >>> bool(np.all(res.upper_Y1 >= res.lower_Y1))
+    True
+    """
 
     X: np.ndarray
     lower_Y1: np.ndarray
@@ -91,7 +114,30 @@ class ConformalCounterfactualResult:
 
 @dataclass
 class ConformalITEResult:
-    """Prediction intervals for the individual treatment effect τ(x)."""
+    """Prediction intervals for the individual treatment effect τ(x).
+
+    Returned by :func:`conformal_ite_interval`; holds the point
+    estimate and lower/upper bound for ``τ(x) = Y(1) - Y(0)``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> t = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * t + 0.5 * x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "t": t, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_ite_interval(
+    ...     df, y="y", treat="t", covariates=["x1", "x2"],
+    ...     alpha=0.1, random_state=0)
+    >>> isinstance(res, sp.ConformalITEResult)
+    True
+    >>> list(res.to_frame().columns)
+    ['tau', 'tau_lower', 'tau_upper']
+    """
 
     X: np.ndarray
     lower: np.ndarray
@@ -166,6 +212,23 @@ def weighted_conformal_prediction(
     Returns
     -------
     (lower, upper, point) : tuple of arrays, each length ``len(X_test)``
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> X_train = rng.normal(size=(100, 2))
+    >>> y_train = X_train[:, 0] + rng.normal(scale=0.3, size=100)
+    >>> X_calib = rng.normal(size=(50, 2))
+    >>> y_calib = X_calib[:, 0] + rng.normal(scale=0.3, size=50)
+    >>> X_test = rng.normal(size=(10, 2))
+    >>> lower, upper, point = sp.weighted_conformal_prediction(
+    ...     X_train, y_train, X_calib, y_calib, X_test, alpha=0.1)
+    >>> bool(np.all(upper - lower > 0))  # every band has positive width
+    True
+    >>> len(lower)
+    10
     """
     if model is None:
         model = RandomForestRegressor(
@@ -285,6 +348,29 @@ def conformal_counterfactual(
     Returns
     -------
     ConformalCounterfactualResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> t = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * t + 0.5 * x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "t": t, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_counterfactual(
+    ...     df, y="y", treat="t", covariates=["x1", "x2"],
+    ...     alpha=0.1, random_state=0)
+    >>> list(res.to_frame().columns)
+    ['Y1_lower', 'Y1_upper', 'Y0_lower', 'Y0_upper']
+    >>> len(res.X)
+    200
+
+    References
+    ----------
+    lei2021conformal
     """
     rng = np.random.default_rng(random_state)
     df = data[[y, treat] + list(covariates)].dropna().copy()
@@ -411,6 +497,29 @@ def conformal_ite_interval(
     Returns
     -------
     ConformalITEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> t = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 2.0 * t + 0.5 * x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "t": t, "x1": x1, "x2": x2})
+    >>> res = sp.conformal_ite_interval(
+    ...     df, y="y", treat="t", covariates=["x1", "x2"],
+    ...     alpha=0.1, random_state=0)
+    >>> list(res.to_frame().columns)
+    ['tau', 'tau_lower', 'tau_upper']
+    >>> bool(np.all(res.upper >= res.lower))  # valid intervals
+    True
+
+    References
+    ----------
+    lei2021conformal
     """
     cf = conformal_counterfactual(
         data,

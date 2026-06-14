@@ -25,6 +25,30 @@ from typing import Iterable, Set
 
 @dataclass
 class RuleCheck:
+    """Result of checking one do-calculus rule on a DAG.
+
+    Attributes
+    ----------
+    applicable : bool
+        Whether the rule's d-separation condition holds (so the rewrite is licensed).
+    rule : int
+        Which rule was checked (1, 2, or 3).
+    reason : str
+        Human-readable statement of the (failed or satisfied) d-separation condition.
+    transformed : str
+        The resulting interventional expression; unchanged if not applicable.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rc = sp.RuleCheck(applicable=True, rule=1, reason="(Y ⊥ Z | X,W)",
+    ...                   transformed="P(Y | do(X))")
+    >>> bool(rc.applicable), rc.rule
+    (True, 1)
+    >>> rc.transformed
+    'P(Y | do(X))'
+    """
+
     applicable: bool
     rule: int
     reason: str
@@ -32,7 +56,21 @@ class RuleCheck:
 
 
 def rule1(dag, Y, X, Z, W=None) -> RuleCheck:
-    """Check Rule 1: can we *insert or delete observation* of Z?"""
+    """Check Rule 1: can we *insert or delete observation* of Z?
+
+    Rule 1 licenses ``P(y | do(x), z, w) = P(y | do(x), w)`` when
+    ``(Y ⊥ Z | X, W)`` holds in the graph with edges into ``X`` deleted.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> g = sp.dag('Z -> X -> Y')
+    >>> chk = sp.do_rule1(g, Y='Y', X='X', Z='Z')
+    >>> bool(chk.applicable)  # observing Z is irrelevant once we do(X)
+    True
+    >>> chk.rule
+    1
+    """
     Y, X, Z, W = _standardize(Y, X, Z, W)
     mutilated = _bar(dag, into=X)
     ok = _d_separated(mutilated, Y, Z, X | W)
@@ -49,7 +87,22 @@ def rule1(dag, Y, X, Z, W=None) -> RuleCheck:
 
 
 def rule2(dag, Y, X, Z, W=None) -> RuleCheck:
-    """Check Rule 2: can do(Z) be swapped for observing Z?"""
+    """Check Rule 2: can do(Z) be swapped for observing Z?
+
+    Rule 2 licenses ``P(y | do(x), do(z), w) = P(y | do(x), z, w)`` when
+    ``(Y ⊥ Z | X, W)`` holds in the graph with edges into ``X`` and edges
+    out of ``Z`` deleted (action/observation exchange).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> g = sp.dag('X -> Y; Z -> Y')
+    >>> chk = sp.do_rule2(g, Y='Y', X='X', Z='Z')
+    >>> bool(chk.applicable)  # no back-door from Z to Y, so do(Z) == observe Z
+    True
+    >>> chk.rule
+    2
+    """
     Y, X, Z, W = _standardize(Y, X, Z, W)
     mutilated = _bar(_underline(dag, out_of=Z), into=X)
     ok = _d_separated(mutilated, Y, Z, X | W)
@@ -66,7 +119,22 @@ def rule2(dag, Y, X, Z, W=None) -> RuleCheck:
 
 
 def rule3(dag, Y, X, Z, W=None) -> RuleCheck:
-    """Check Rule 3: can we delete do(Z)?"""
+    """Check Rule 3: can we delete do(Z)?
+
+    Rule 3 licenses ``P(y | do(x), do(z), w) = P(y | do(x), w)`` when
+    ``(Y ⊥ Z | X, W)`` holds in the graph with edges into ``X`` and into
+    ``Z(W)`` deleted (insertion/deletion of actions).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> g = sp.dag('X -> Y; Z -> W')
+    >>> chk = sp.do_rule3(g, Y='Y', X='X', Z='Z')
+    >>> bool(chk.applicable)  # Z has no effect on Y, so do(Z) drops out
+    True
+    >>> chk.rule
+    3
+    """
     Y, X, Z, W = _standardize(Y, X, Z, W)
     # Z(W) = Z \ ancestors of W in G_{bar X}
     bar_x = _bar(dag, into=X)
@@ -87,7 +155,18 @@ def rule3(dag, Y, X, Z, W=None) -> RuleCheck:
 
 
 def apply_rules(dag, Y, X, Z, W=None) -> list[RuleCheck]:
-    """Try all three rules and return every applicable simplification."""
+    """Try all three rules and return every applicable simplification.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> g = sp.dag('Z -> X -> Y')
+    >>> checks = sp.do_calculus_apply(g, Y='Y', X='X', Z='Z')
+    >>> [c.rule for c in checks]
+    [1, 2, 3]
+    >>> bool(checks[0].applicable)  # Rule 1 fires on this chain
+    True
+    """
     return [rule1(dag, Y, X, Z, W), rule2(dag, Y, X, Z, W), rule3(dag, Y, X, Z, W)]
 
 
