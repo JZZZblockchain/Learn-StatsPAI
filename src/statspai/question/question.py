@@ -46,6 +46,18 @@ class IdentificationPlan:
 
     Describes which estimator is planned, why it is identifying, and
     which assumptions the user must defend.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> q = sp.causal_question("treat", "outcome", design="rct")
+    >>> plan = q.identify()
+    >>> isinstance(plan, sp.IdentificationPlan)
+    True
+    >>> plan.estimator
+    'regress'
+    >>> bool("random assignment" in plan.assumptions)
+    True
     """
 
     estimator: str
@@ -89,6 +101,24 @@ class EstimationResult:
 
     Thin wrapper that preserves the underlying estimator's full result
     object while exposing a canonical ``estimate / se / ci`` interface.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> d = (rng.uniform(size=n) < 0.5).astype(int)
+    >>> y = 1.0 + 0.5 * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"treat": d, "outcome": y})
+    >>> q = sp.causal_question("treat", "outcome", data=df, design="rct")
+    >>> res = q.estimate()
+    >>> isinstance(res, sp.EstimationResult)
+    True
+    >>> res.estimator
+    'regress'
+    >>> bool(res.ci[0] < res.estimate < res.ci[1])
+    True
     """
 
     estimand: str
@@ -120,6 +150,21 @@ class CausalQuestion:
 
     Fields map directly onto the Target Trial Protocol (Hernán 2016)
     and the "PICOTS + identification" rubric the article describes.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> d = (rng.uniform(size=n) < 0.5).astype(int)
+    >>> y = 1.0 + 0.5 * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"treat": d, "outcome": y})
+    >>> q = sp.causal_question("treat", "outcome", data=df, design="rct")
+    >>> isinstance(q, sp.CausalQuestion)
+    True
+    >>> q.identify().estimator
+    'regress'
     """
 
     treatment: str
@@ -298,6 +343,25 @@ def causal_question(
         [vanderlaan2003unified; chernozhukov2018double].
 
     All bib keys above resolve in ``paper.bib``.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> d = (rng.uniform(size=n) < 0.5).astype(int)
+    >>> x = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * d + 0.3 * x + rng.normal(size=n)
+    >>> df = pd.DataFrame({"treat": d, "outcome": y, "x": x})
+    >>> q = sp.causal_question("treat", "outcome", data=df,
+    ...                        design="rct", covariates=["x"])
+    >>> plan = q.identify()
+    >>> plan.estimator
+    'regress'
+    >>> res = q.estimate()
+    >>> res.estimand
+    'ATE'
     """
     if estimand not in _VALID_ESTIMANDS:
         raise ValueError(

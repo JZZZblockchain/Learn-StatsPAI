@@ -53,6 +53,17 @@ class PowerResult:
         Name of the research design.
     params : dict
         All parameters passed to the power function.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_rct(n=500, effect_size=0.3)
+    >>> isinstance(res, sp.PowerResult)
+    True
+    >>> res.design
+    'rct'
+    >>> round(float(res.power), 4)
+    0.9184
     """
 
     def __init__(self, power_val, n, effect_size, design, params):
@@ -255,6 +266,13 @@ def power_rct(n, effect_size, alpha=0.05, ratio=1.0, sigma=1.0):
     Returns
     -------
     PowerResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_rct(n=500, effect_size=0.3)
+    >>> round(float(res.power), 4)
+    0.9184
     """
     n_arr = _to_array(n)
     es_arr = _to_array(effect_size)
@@ -300,6 +318,14 @@ def power_did(n, effect_size, n_periods, n_treated_periods, rho=0.5,
     Returns
     -------
     PowerResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_did(n=1000, effect_size=0.1, n_periods=10,
+    ...                    n_treated_periods=5)
+    >>> round(float(res.power), 4)
+    0.5683
     """
     n_arr = _to_array(n)
     es_arr = _to_array(effect_size)
@@ -356,6 +382,17 @@ def power_rd(n, effect_size, bandwidth=None, kernel="triangular",
     Returns
     -------
     PowerResult
+
+    References
+    ----------
+    cattaneo2019power
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_rd(n=2000, effect_size=0.25)
+    >>> round(float(res.power), 4)
+    0.9283
     """
     n_arr = _to_array(n)
     es_arr = _to_array(effect_size)
@@ -417,6 +454,17 @@ def power_iv(n, effect_size, first_stage_f=None, r2_z=None,
     Returns
     -------
     PowerResult
+
+    References
+    ----------
+    stock2005testing
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_iv(n=1000, effect_size=0.2, first_stage_f=20)
+    >>> round(float(res.power), 4)
+    0.9524
     """
     n_arr = _to_array(n)
     es_arr = _to_array(effect_size)
@@ -471,6 +519,14 @@ def power_cluster_rct(n_clusters, cluster_size, effect_size, icc,
     Returns
     -------
     PowerResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_cluster_rct(n_clusters=40, cluster_size=30,
+    ...                            effect_size=0.3, icc=0.05)
+    >>> round(float(res.power), 4)
+    0.913
     """
     nc_arr = _to_array(n_clusters)
     es_arr = _to_array(effect_size)
@@ -518,6 +574,13 @@ def power_ols(n, effect_size, n_covariates=0, r2_other=0.0,
     Returns
     -------
     PowerResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_ols(n=500, effect_size=0.2)
+    >>> round(float(res.power), 4)
+    0.9939
     """
     n_arr = _to_array(n)
     es_arr = _to_array(effect_size)

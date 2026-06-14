@@ -54,6 +54,18 @@ class AutoDIDResult:
         Raw ``CausalResult`` (or ``Exception``) for every requested method.
     selection_rule : str
         How the winner was chosen (``'median'`` / ``'first_success'`` / ...).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=40, n_periods=6, staggered=True,
+    ...                 n_groups=2, effect=0.5, seed=2026)
+    >>> res = sp.auto_did(df, y="y", g="first_treat", t="time", i="unit")
+    >>> isinstance(res, sp.AutoDIDResult)
+    True
+    >>> list(res.leaderboard.columns)
+    ['method', 'estimate', 'std_error', 'ci_lower', 'ci_upper', 'n_obs', 'notes']
+    >>> print(res.summary())  # doctest: +SKIP
     """
 
     leaderboard: pd.DataFrame
@@ -138,6 +150,21 @@ def auto_did(
         returns that specific candidate (useful for forcing a baseline).
     alpha : float
         Significance level for reported CIs.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=40, n_periods=6, staggered=True,
+    ...                 n_groups=2, effect=0.5, seed=2026)
+    >>> res = sp.auto_did(df, y="y", g="first_treat", t="time", i="unit")
+    >>> sorted(res.leaderboard["method"])
+    ['BJS', 'CS', 'SA']
+    >>> bool(any(res.winner is v for v in res.candidates.values()))
+    True
+
+    References
+    ----------
+    callaway2021difference, sun2021estimating, borusyak2024revisiting
     """
     methods = [m.lower() for m in (methods or ["cs", "sa", "bjs"])]
     valid = {"cs", "sa", "bjs"}
@@ -262,6 +289,18 @@ class AutoIVResult:
     """Leaderboard + winner from :func:`auto_iv`.
 
     Mirrors :class:`AutoDIDResult` but for IV estimators.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_iv(n=300, seed=7)
+    >>> res = sp.auto_iv(df, y="y", endog="treatment",
+    ...                  instruments="instrument", exog=["x1", "x2"])
+    >>> isinstance(res, sp.AutoIVResult)
+    True
+    >>> list(res.leaderboard.columns)
+    ['method', 'estimate', 'std_error', 'ci_lower', 'ci_upper', 'n_obs', 'notes']
+    >>> print(res.summary())  # doctest: +SKIP
     """
 
     leaderboard: pd.DataFrame
@@ -350,6 +389,21 @@ def auto_iv(
     alpha : float
     robust, cluster
         Forwarded to each estimator where supported.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_iv(n=300, seed=7)
+    >>> res = sp.auto_iv(df, y="y", endog="treatment",
+    ...                  instruments="instrument", exog=["x1", "x2"])
+    >>> sorted(res.leaderboard["method"])
+    ['2SLS', 'JIVE', 'LIML']
+    >>> bool(any(res.winner is v for v in res.candidates.values()))
+    True
+
+    References
+    ----------
+    angrist2009mostly
     """
     if isinstance(instruments, str):
         instruments_list = [instruments]
