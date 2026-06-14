@@ -147,17 +147,30 @@ def msm(
 
     Examples
     --------
-    >>> # Time-varying treatment with time-varying confounders
-    >>> sp.msm(panel, y='cd4_count', treat='hiv_therapy',
-    ...        id='pid', time='visit',
-    ...        time_varying=['cd4_lag', 'viral_load_lag'],
-    ...        baseline=['age', 'sex'])
+    Time-varying binary treatment with a time-varying confounder ``l``
+    that responds to past treatment and predicts current treatment:
 
-    >>> # Dose-response of cumulative exposure
-    >>> sp.msm(panel, y='bp', treat='drug_dose',
-    ...        id='pid', time='month',
-    ...        time_varying=['bp_lag', 'weight_lag'],
-    ...        exposure='cumulative')
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(150):
+    ...     a_prev = 0.0
+    ...     for t in range(4):
+    ...         l = rng.normal() + 0.4 * a_prev
+    ...         pr = 1.0 / (1.0 + np.exp(-(0.4 * l - 0.3)))
+    ...         a = float(rng.binomial(1, pr))
+    ...         rows.append((i, t, a, l, rng.normal()))
+    ...         a_prev = a
+    >>> panel = pd.DataFrame(rows, columns=['pid', 'visit', 'a', 'l', 'age'])
+    >>> panel['y'] = (panel.groupby('pid')['a'].transform('sum')
+    ...               + rng.normal(0, 1, len(panel)))
+    >>> result = sp.msm(panel, y='y', treat='a', id='pid', time='visit',
+    ...                 time_varying=['l'], baseline=['age'],
+    ...                 exposure='cumulative')
+    >>> isinstance(result.summary(), str)
+    True
 
     Notes
     -----
@@ -310,7 +323,41 @@ def msm(
 
 
 class MarginalStructuralModel:
-    """Class wrapper around :func:`msm` for programmatic access."""
+    """Class wrapper around :func:`msm` for programmatic access.
+
+    Construct with the same keyword arguments as :func:`msm` (minus
+    ``data``), then call :meth:`fit` with the panel to estimate the
+    stabilized-IPTW marginal structural model.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> from statspai.msm.msm import MarginalStructuralModel
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(150):
+    ...     a_prev = 0.0
+    ...     for t in range(4):
+    ...         l = rng.normal() + 0.4 * a_prev
+    ...         pr = 1.0 / (1.0 + np.exp(-(0.4 * l - 0.3)))
+    ...         a = float(rng.binomial(1, pr))
+    ...         rows.append((i, t, a, l, rng.normal()))
+    ...         a_prev = a
+    >>> panel = pd.DataFrame(rows, columns=['pid', 'visit', 'a', 'l', 'age'])
+    >>> panel['y'] = (panel.groupby('pid')['a'].transform('sum')
+    ...               + rng.normal(0, 1, len(panel)))
+    >>> model = MarginalStructuralModel(
+    ...     y='y', treat='a', id='pid', time='visit',
+    ...     time_varying=['l'], baseline=['age']).fit(panel)
+    >>> isinstance(model.summary(), str)
+    True
+
+    References
+    ----------
+    [@robins2000marginal]
+    """
 
     def __init__(self, **kwargs):
         self._kwargs = kwargs

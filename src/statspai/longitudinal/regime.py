@@ -150,6 +150,15 @@ class Regime:
     rule : Union[list, Callable]
         Static regimes store a list/sequence; dynamic regimes store a
         callable ``(history_dict, t) -> treatment_value``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> reg = sp.Regime(kind="static", name="all1", rule=[1.0, 1.0])
+    >>> reg.treatment({}, t=0)
+    1.0
+    >>> reg.kind
+    'static'
     """
 
     kind: str
@@ -198,6 +207,16 @@ def regime(
     Returns
     -------
     Regime
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> static = sp.regime([1, 1, 0])
+    >>> static.treatment({}, t=0), static.treatment({}, t=2)
+    (1.0, 0.0)
+    >>> dynamic = sp.regime("if cd4 < 200 then 1 else 0")
+    >>> dynamic.treatment({"cd4": 150}), dynamic.treatment({"cd4": 300})
+    (1, 0)
     """
     if callable(rule):
         return Regime(kind="dynamic", name=name or "dynamic", rule=rule)
@@ -273,10 +292,26 @@ def _compile_string_regime(text: str, *, name: str) -> Regime:
 
 
 def always_treat(K: int = 1) -> Regime:
-    """Convenience: the always-treat regime over K periods."""
+    """Convenience: the always-treat regime over K periods.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> r = sp.always_treat(K=3)
+    >>> r.treatment({}, t=0), r.treatment({}, t=2)
+    (1.0, 1.0)
+    """
     return Regime(kind="static", name="always_treat", rule=[1.0] * K)
 
 
 def never_treat(K: int = 1) -> Regime:
-    """Convenience: the never-treat regime over K periods."""
+    """Convenience: the never-treat regime over K periods.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> r = sp.never_treat(K=3)
+    >>> r.treatment({}, t=0), r.treatment({}, t=2)
+    (0.0, 0.0)
+    """
     return Regime(kind="static", name="never_treat", rule=[0.0] * K)

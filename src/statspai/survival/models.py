@@ -63,6 +63,28 @@ class CoxResult(EconometricResults):
 
     Extends ``EconometricResults`` with survival-specific methods:
     ``.plot()``, ``.ph_test()``, ``.baseline_hazard()``, ``.concordance``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> x = rng.normal(size=n)
+    >>> time = rng.exponential(scale=np.exp(-0.5 * x))
+    >>> event = (rng.random(n) < 0.8).astype(int)
+    >>> df = pd.DataFrame({"time": time, "status": event, "x": x})
+    >>> res = sp.cox(data=df, duration="time", event="status", x=["x"])
+    >>> type(res).__name__
+    'CoxResult'
+    >>> list(res.params.index)
+    ['x']
+    >>> bool(isinstance(float(res.concordance), float))
+    True
+    >>> list(res.baseline_hazard().columns)
+    ['time', 'baseline_cumhaz', 'baseline_survival']
+    >>> isinstance(res.summary(), str)
+    True
     """
 
     def __init__(
@@ -216,6 +238,26 @@ class KMResult:
         ``survival``, ``std_err``, ``ci_lower``, ``ci_upper``.
     median_survival : float or dict
         Median survival time (per group if groups present).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> df = pd.DataFrame({
+    ...     "time": rng.exponential(10, n).round(2),
+    ...     "status": (rng.random(n) < 0.7).astype(int),
+    ... })
+    >>> km = sp.kaplan_meier(data=df, duration="time", event="status")
+    >>> type(km).__name__
+    'KMResult'
+    >>> "survival" in km.survival_table.columns
+    True
+    >>> bool(0.0 <= km.survival_table["survival"].iloc[-1] <= 1.0)
+    True
+    >>> isinstance(km.summary(), str)
+    True
     """
 
     def __init__(self, tables: Dict[str, pd.DataFrame], alpha: float = 0.05):
@@ -389,9 +431,18 @@ def kaplan_meier(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 150
+    >>> df = pd.DataFrame({
+    ...     "time": rng.exponential(10, n).round(2),
+    ...     "status": (rng.random(n) < 0.7).astype(int),
+    ... })
     >>> km = sp.kaplan_meier(data=df, duration="time", event="status")
-    >>> km.plot()
-    >>> km.median_survival
+    >>> bool("survival" in km.survival_table.columns)
+    True
+    >>> bool(isinstance(km.median_survival, float))
+    True
     """
     data = data.dropna(subset=[duration, event])
 
@@ -447,7 +498,23 @@ def logrank_test(
 
     Examples
     --------
-    >>> sp.logrank_test(data=df, duration="time", event="status", group="treatment")
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 150
+    >>> treatment = rng.integers(0, 2, n)
+    >>> time = rng.exponential(scale=np.exp(-0.5 * treatment))
+    >>> status = (rng.random(n) < 0.8).astype(int)
+    >>> df = pd.DataFrame({"time": time, "status": status,
+    ...                    "treatment": treatment})
+    >>> res = sp.logrank_test(data=df, duration="time", event="status",
+    ...                       group="treatment")
+    >>> bool("p_value" in res and "test_statistic" in res)
+    True
+
+    References
+    ----------
+    mantel1959statistical
     """
     data = data.dropna(subset=[duration, event, group])
     groups = data[group].unique()
@@ -876,10 +943,22 @@ def cox(
     Examples
     --------
     >>> import statspai as sp
-    >>> res = sp.cox(formula="time ~ age + treatment", data=df, event="status")
-    >>> print(res.summary())
-    >>> res.ph_test()
-    >>> res.plot(kind="survival")
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 150
+    >>> age = rng.normal(50, 10, n)
+    >>> treatment = rng.integers(0, 2, n).astype(float)
+    >>> time = rng.exponential(
+    ...     scale=np.exp(-0.03 * (age - 50) - 0.5 * treatment))
+    >>> status = (rng.random(n) < 0.8).astype(int)
+    >>> df = pd.DataFrame({"time": time, "status": status,
+    ...                    "age": age, "treatment": treatment})
+    >>> res = sp.cox(formula="time ~ age + treatment", data=df,
+    ...              event="status")
+    >>> bool(list(res.params.index) == ["age", "treatment"])
+    True
+    >>> bool(isinstance(res.summary(), str))
+    True
     """
     # ---- Parse inputs -------------------------------------------------
     if formula is not None:
@@ -1143,8 +1222,21 @@ def survreg(
 
     Examples
     --------
-    >>> res = sp.survreg("time ~ age + treatment", data=df, event="status", dist="weibull")
-    >>> print(res.summary())
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 150
+    >>> age = rng.normal(50, 10, n)
+    >>> treatment = rng.integers(0, 2, n).astype(float)
+    >>> time = rng.exponential(
+    ...     scale=np.exp(0.02 * (age - 50) + 0.5 * treatment))
+    >>> status = (rng.random(n) < 0.8).astype(int)
+    >>> df = pd.DataFrame({"time": time, "status": status,
+    ...                    "age": age, "treatment": treatment})
+    >>> res = sp.survreg("time ~ age + treatment", data=df,
+    ...                  event="status", dist="weibull")
+    >>> bool("log(sigma)" in list(res.params.index))
+    True
     """
     # ---- Parse inputs -------------------------------------------------
     if formula is not None:

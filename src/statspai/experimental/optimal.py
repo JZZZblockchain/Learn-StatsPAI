@@ -17,7 +17,25 @@ from scipy import stats
 
 
 class OptimalDesignResult:
-    """Results from optimal design calculation."""
+    """Results from optimal design calculation.
+
+    Returned by :func:`optimal_design`. Carries the required total / per-arm
+    sample size, cluster counts and size (for cluster designs), the intra-
+    cluster correlation, the minimum detectable effect, and the target power.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> result = sp.optimal_design(
+    ...     design="cluster", mde=0.2, sigma=1.0, icc=0.05, cluster_size=20
+    ... )
+    >>> type(result).__name__
+    'OptimalDesignResult'
+    >>> result.design_type
+    'Cluster RCT'
+    >>> bool(result.n_total > 0 and result.n_clusters > 0)
+    True
+    """
 
     def __init__(self, n_total, n_per_arm, n_clusters, cluster_size,
                  icc, mde, power, alpha, design_type):

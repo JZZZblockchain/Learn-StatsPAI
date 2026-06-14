@@ -21,7 +21,32 @@ from ..exceptions import StatsPAIWarning
 
 
 class AttritionResult:
-    """Results from attrition analysis."""
+    """Results from attrition analysis.
+
+    Produced by :func:`attrition_test`. Exposes overall / arm-specific
+    attrition rates, the differential-attrition chi-squared test, and an
+    optional table of covariate predictors of attrition via ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> treated = rng.integers(0, 2, n)
+    >>> observed = (rng.random(n) < np.where(treated == 1, 0.9, 0.75)).astype(int)
+    >>> age = rng.normal(40, 10, n)
+    >>> df = pd.DataFrame({"treated": treated,
+    ...                    "endline_observed": observed, "age": age})
+    >>> res = sp.attrition_test(df, treatment="treated",
+    ...                         observed="endline_observed", covariates=["age"])
+    >>> type(res).__name__
+    'AttritionResult'
+    >>> res.n_total
+    400
+    >>> isinstance(res.summary(), str)
+    True
+    """
 
     def __init__(self, overall_rate, treat_rate, control_rate,
                  diff_test_stat, diff_p_value, covariate_tests,
@@ -91,9 +116,23 @@ def attrition_test(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.attrition_test(df, treatment='treated', observed='endline_observed',
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> treated = rng.integers(0, 2, n)
+    >>> # attrition slightly higher in the control arm
+    >>> p_obs = 0.9 - 0.1 * (treated == 0)
+    >>> df = pd.DataFrame({
+    ...     "treated": treated,
+    ...     "endline_observed": (rng.uniform(size=n) < p_obs).astype(int),
+    ...     "age": rng.normal(40, 10, n),
+    ...     "income": rng.normal(50, 15, n),
+    ...     "education": rng.integers(8, 18, n).astype(float),
+    ... })
+    >>> result = sp.attrition_test(df, treatment='treated',
+    ...                            observed='endline_observed',
     ...                            covariates=['age', 'income', 'education'])
-    >>> print(result.summary())
+    >>> _ = result.summary()
     """
     n = len(data)
     attrit = 1 - data[observed].values
@@ -171,6 +210,29 @@ def attrition_bounds(
     -------
     dict
         Keys: 'lower_bound', 'upper_bound', 'naive_ate', 'method', 'n_obs'.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> treated = rng.integers(0, 2, n)
+    >>> y = 1.0 * treated + rng.normal(size=n)
+    >>> observed = (rng.random(n) < np.where(treated == 1, 0.9, 0.75)).astype(int)
+    >>> y = np.where(observed == 1, y, np.nan)
+    >>> df = pd.DataFrame({"y": y, "treated": treated, "observed": observed})
+    >>> res = sp.attrition_bounds(df, y="y", treatment="treated",
+    ...                           observed="observed", method="lee")
+    >>> sorted(res.keys())  # doctest: +NORMALIZE_WHITESPACE
+    ['attrition_rate', 'lower_bound', 'method', 'n_obs', 'n_total',
+     'naive_ate', 'upper_bound']
+    >>> bool(res["lower_bound"] <= res["naive_ate"] <= res["upper_bound"])
+    True
+
+    References
+    ----------
+    [@lee2009training]
     """
     df = data.copy()
     if observed is None:

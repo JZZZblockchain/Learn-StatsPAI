@@ -88,6 +88,32 @@ def cox_frailty(
     data : pd.DataFrame
     cluster : str
         Column identifying clusters (e.g. hospital, site).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> cluster = np.repeat(np.arange(20), 15)
+    >>> n = cluster.size
+    >>> frailty = rng.gamma(5.0, 1 / 5.0, 20)[cluster]
+    >>> x = rng.normal(size=n)
+    >>> rate = frailty * np.exp(0.7 * x)
+    >>> T = rng.exponential(1.0 / rate)
+    >>> C = rng.exponential(2.0, n)
+    >>> df = pd.DataFrame({"time": np.minimum(T, C),
+    ...                    "event": (T <= C).astype(int),
+    ...                    "x": x, "hospital": cluster})
+    >>> res = sp.cox_frailty("time + event ~ x", df, cluster="hospital")
+    >>> res.var_names
+    ['x']
+    >>> bool(res.theta > 0)  # gamma frailty precision
+    True
+
+    References
+    ----------
+    [@therneau2000modeling]
     """
     lhs_str, covariates = _parse_formula(formula)
     # LHS is "duration + event" — split on "+"

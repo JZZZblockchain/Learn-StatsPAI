@@ -23,7 +23,30 @@ from ..exceptions import StatsPAIWarning
 
 
 class RandomizationResult:
-    """Results from randomization."""
+    """Results from randomization.
+
+    Produced by :func:`randomize`. Carries the assigned data frame
+    (``.data``), arm counts and an optional balance summary, with a
+    formatted ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"age": rng.normal(40, 10, n),
+    ...                    "income": rng.normal(50, 15, n),
+    ...                    "district": rng.integers(0, 4, n)})
+    >>> res = sp.randomize(df, strata="district",
+    ...                    balance_vars=["age", "income"], seed=1)
+    >>> type(res).__name__
+    'RandomizationResult'
+    >>> int(res.n_treated + res.n_control)
+    200
+    >>> isinstance(res.summary(), str)
+    True
+    """
 
     def __init__(self, data, treatment_col, n_treated, n_control,
                  strata_col, method, balance, seed):
@@ -55,7 +78,34 @@ class RandomizationResult:
 
 
 class BalanceResult:
-    """Results from balance check."""
+    """Results from balance check.
+
+    Produced by :func:`balance_check`. Exposes the per-covariate balance
+    ``.table`` (means, raw and normalized differences, t-test p-values),
+    the omnibus F-test, and ``.summary()`` / ``.plot()`` (a love plot of
+    normalized differences).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> treated = rng.integers(0, 2, n)
+    >>> df = pd.DataFrame({"treated": treated,
+    ...                    "age": rng.normal(40, 10, n),
+    ...                    "income": rng.normal(50, 15, n)})
+    >>> bal = sp.balance_check(df, treatment="treated",
+    ...                        covariates=["age", "income"])
+    >>> type(bal).__name__
+    'BalanceResult'
+    >>> bal.n_treat + bal.n_control
+    200
+    >>> list(bal.table["variable"])
+    ['age', 'income']
+    >>> isinstance(bal.summary(), str)
+    True
+    """
 
     def __init__(self, table, omnibus_f, omnibus_p, normalized_diffs,
                  n_treat, n_control):
@@ -166,8 +216,20 @@ def randomize(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.randomize(df, strata='district', balance_vars=['age', 'income'])
-    >>> print(result.summary())
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"district": rng.integers(0, 4, n),
+    ...                    "age": rng.normal(40, 10, n),
+    ...                    "income": rng.normal(50, 15, n)})
+    >>> result = sp.randomize(df, strata="district",
+    ...                       balance_vars=["age", "income"], seed=1)
+    >>> type(result).__name__
+    'RandomizationResult'
+    >>> int(result.n_treated + result.n_control)
+    200
+    >>> bool(isinstance(result.summary(), str))
+    True
     >>> df_randomized = result.data
     """
     rng = np.random.default_rng(seed)
@@ -298,9 +360,21 @@ def balance_check(
     Examples
     --------
     >>> import statspai as sp
-    >>> bal = sp.balance_check(df, treatment='treated', covariates=['age', 'income', 'education'])
-    >>> print(bal.summary())
-    >>> bal.plot()
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"treated": rng.integers(0, 2, n),
+    ...                    "age": rng.normal(40, 10, n),
+    ...                    "income": rng.normal(50, 15, n),
+    ...                    "education": rng.normal(12, 3, n)})
+    >>> bal = sp.balance_check(df, treatment="treated",
+    ...                        covariates=["age", "income", "education"])
+    >>> type(bal).__name__
+    'BalanceResult'
+    >>> list(bal.table["variable"])
+    ['age', 'income', 'education']
+    >>> bool(isinstance(bal.summary(), str))
+    True
     """
     treat = data[data[treatment] == 1]
     control = data[data[treatment] == 0]

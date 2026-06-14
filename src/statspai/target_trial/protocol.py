@@ -63,6 +63,26 @@ class TargetTrialProtocol:
         g-methods (MSM / parametric g-formula / LTMLE).
     notes : str, optional
         Free-form notes (e.g. known sources of confounding).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["initiate statin at t0", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="min(event, loss, 5 years)",
+    ...     outcome="incident MI within 5y",
+    ...     causal_contrast="ITT",
+    ...     baseline_covariates=["age", "ldl", "diabetes"],
+    ... )
+    >>> type(proto).__name__
+    'TargetTrialProtocol'
+    >>> proto.causal_contrast
+    'ITT'
+    >>> print(proto.summary().splitlines()[0])
+    Target Trial Protocol
     """
 
     eligibility: Any
@@ -135,7 +155,29 @@ def protocol(
     time_varying_covariates: list[str] | None = None,
     notes: str = "",
 ) -> TargetTrialProtocol:
-    """Create a target trial protocol. See :class:`TargetTrialProtocol`."""
+    """Create a target trial protocol. See :class:`TargetTrialProtocol`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["statin", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="5 years",
+    ...     outcome="incident MI",
+    ...     baseline_covariates=["age", "ldl"],
+    ... )
+    >>> proto.causal_contrast  # ITT by default
+    'ITT'
+    >>> proto.baseline_covariates
+    ['age', 'ldl']
+
+    References
+    ----------
+    hernan2016using
+    """
     return TargetTrialProtocol(
         eligibility=eligibility,
         treatment_strategies=list(treatment_strategies),

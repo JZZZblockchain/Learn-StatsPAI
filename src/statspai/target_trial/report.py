@@ -73,6 +73,32 @@ def target_checklist(
     result : TargetTrialResult
     fmt : {'markdown', 'text'}, default 'markdown'
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["statin", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="5 years",
+    ...     outcome="incident MI",
+    ... )
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> df = pd.DataFrame({
+    ...     "age": rng.integers(40, 70, n),
+    ...     "ldl": rng.normal(150, 20, n),
+    ...     "statin": rng.integers(0, 2, n),
+    ... })
+    >>> df["mi"] = (rng.random(n) < 0.2).astype(int)
+    >>> res = sp.target_trial_emulate(
+    ...     proto, df, outcome_col="mi", treatment_col="statin")
+    >>> chk = sp.target_trial_checklist(res)
+    >>> print(chk.splitlines()[0])
+    # TARGET Statement — 21-item Reporting Checklist
+
     References
     ----------
     Hernán et al. (JAMA 2025; BMJ 2025).
@@ -178,6 +204,32 @@ def to_paper(
     Returns
     -------
     str
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["statin", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="5 years",
+    ...     outcome="incident MI",
+    ... )
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> df = pd.DataFrame({
+    ...     "age": rng.integers(40, 70, n),
+    ...     "ldl": rng.normal(150, 20, n),
+    ...     "statin": rng.integers(0, 2, n),
+    ... })
+    >>> df["mi"] = (rng.random(n) < 0.2).astype(int)
+    >>> res = sp.target_trial_emulate(
+    ...     proto, df, outcome_col="mi", treatment_col="statin")
+    >>> report = sp.target_trial_report(res, fmt="markdown")
+    >>> bool("Methods" in report)
+    True
     """
     if fmt == "target":
         return target_checklist(result, fmt="markdown")

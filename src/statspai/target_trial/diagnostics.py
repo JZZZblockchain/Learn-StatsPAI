@@ -39,6 +39,24 @@ def immortal_time_check(
     Returns
     -------
     ImmortalTimeDiagnostic
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> data = pd.DataFrame({
+    ...     "id": [1, 2, 3, 4],
+    ...     "fu_time": [12.0, 8.0, 24.0, 6.0],
+    ...     "tx_start": [3.0, 0.0, 5.0, 1.0],
+    ...     "elig_time": [0.0, 0.0, 0.0, 2.0],  # id 4: treated before eligible
+    ... })
+    >>> diag = sp.immortal_time_check(
+    ...     data, id_col="id", time_col="fu_time",
+    ...     treatment_start_col="tx_start", eligibility_time_col="elig_time")
+    >>> diag.n_flagged
+    1
+    >>> diag.flagged_ids
+    [4]
     """
     df = data.copy()
     df["_elig"] = pd.to_numeric(df[eligibility_time_col], errors="coerce")

@@ -73,6 +73,28 @@ class CumIncResult:
         test, or ``None`` when ``group`` was not supplied.
     alpha : float
         Significance level used for the confidence bands.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> t1 = rng.exponential(scale=1.0, size=n)
+    >>> t2 = rng.exponential(scale=1.5, size=n)
+    >>> cens = rng.exponential(scale=2.0, size=n)
+    >>> time = np.minimum(np.minimum(t1, t2), cens)
+    >>> status = np.where((t1 <= t2) & (t1 <= cens), 1,
+    ...                   np.where((t2 < t1) & (t2 <= cens), 2, 0))
+    >>> df = pd.DataFrame({"time": time, "status": status})
+    >>> ci = sp.cuminc(df, duration="time", event="status")
+    >>> isinstance(ci, sp.CumIncResult)
+    True
+    >>> ci.causes
+    [1, 2]
+    >>> at1 = ci.cif_at(1.0, cause=1)  # CIF for cause 1 at time t=1
+    >>> bool((at1["cif"] >= 0).all())
+    True
     """
 
     cif_table: pd.DataFrame
@@ -169,6 +191,28 @@ class FineGrayResult:
         The cause of interest whose subdistribution was modelled.
     n_obs, n_events : int
         Sample size and number of cause-of-interest events.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x = rng.normal(size=n)
+    >>> t1 = rng.exponential(scale=np.exp(-0.5 * x))
+    >>> t2 = rng.exponential(scale=1.5)
+    >>> cens = rng.exponential(scale=2.0)
+    >>> time = np.minimum(np.minimum(t1, t2), cens)
+    >>> status = np.where((t1 <= t2) & (t1 <= cens), 1,
+    ...                   np.where((t2 < t1) & (t2 <= cens), 2, 0))
+    >>> df = pd.DataFrame({"time": time, "status": status, "x": x})
+    >>> res = sp.finegray(df, duration="time", event="status", x=["x"])
+    >>> isinstance(res, sp.FineGrayResult)
+    True
+    >>> res.covariates
+    ['x']
+    >>> res.shr.shape   # one subdistribution hazard ratio per covariate
+    (1,)
     """
 
     params: np.ndarray
@@ -472,9 +516,24 @@ def cuminc(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> arm = rng.integers(0, 2, n)
+    >>> t1 = rng.exponential(scale=1.0 + 0.5 * arm, size=n)   # cause 1
+    >>> t2 = rng.exponential(scale=1.5, size=n)               # cause 2
+    >>> cens = rng.exponential(scale=2.0, size=n)
+    >>> time = np.minimum(np.minimum(t1, t2), cens)
+    >>> status = np.where((t1 <= t2) & (t1 <= cens), 1,
+    ...                   np.where((t2 < t1) & (t2 <= cens), 2, 0))
+    >>> df = pd.DataFrame({"time": time, "status": status, "arm": arm})
     >>> ci = sp.cuminc(df, duration="time", event="status", group="arm")
-    >>> ci.summary()
-    >>> ci.plot(cause=1)
+    >>> isinstance(ci, sp.CumIncResult)
+    True
+    >>> ci.causes
+    [1, 2]
+    >>> ci.summary()        # doctest: +SKIP
+    >>> ci.plot(cause=1)    # doctest: +SKIP
     """
     cols = [duration, event] + ([group] if group else [])
     data = data.dropna(subset=cols)
@@ -588,6 +647,32 @@ def finegray(
     Breslow tie approximation. Standard errors are model-based (inverse
     information); a fully robust sandwich variance that accounts for
     estimating Ĝ is not yet implemented.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x = rng.normal(size=n)
+    >>> t1 = rng.exponential(scale=np.exp(-0.5 * x))   # cause of interest
+    >>> t2 = rng.exponential(scale=1.5)                # competing cause
+    >>> cens = rng.exponential(scale=2.0)
+    >>> time = np.minimum(np.minimum(t1, t2), cens)
+    >>> status = np.where((t1 <= t2) & (t1 <= cens), 1,
+    ...                   np.where((t2 < t1) & (t2 <= cens), 2, 0))
+    >>> df = pd.DataFrame({"time": time, "status": status, "x": x})
+    >>> res = sp.finegray(df, duration="time", event="status", x=["x"], cause=1)
+    >>> res.cause
+    1
+    >>> res.tidy()["term"].tolist()
+    ['x']
+    >>> bool(res.shr[0] > 0)  # subdistribution hazard ratio
+    True
+
+    References
+    ----------
+    fine1999proportional
     """
     cols = [duration, event] + list(x)
     data = data.dropna(subset=cols)

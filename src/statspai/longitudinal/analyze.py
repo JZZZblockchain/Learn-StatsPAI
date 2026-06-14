@@ -53,6 +53,31 @@ class LongitudinalResult:
         Weight quantiles, positivity flags, etc.
     underlying_result : Any
         Raw result object from the underlying estimator.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     base = rng.normal()
+    ...     for t in range(3):
+    ...         a = int(rng.random() < 0.5)
+    ...         y = 0.5 * a + 0.3 * base + rng.normal(0, 0.5)
+    ...         rows.append({"id": i, "time": t, "A": a, "Y": y})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.longitudinal_analyze(
+    ...     df, id="id", time="time", treatment="A", outcome="Y",
+    ...     regime="always_treat")
+    >>> isinstance(res, sp.LongitudinalResult)
+    True
+    >>> res.method
+    'ipw'
+    >>> res.n, res.n_periods
+    (80, 3)
+    >>> bool("Longitudinal analysis" in res.summary())
+    True
     """
 
     method: str
@@ -128,6 +153,29 @@ def analyze(
     Returns
     -------
     LongitudinalResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     base = rng.normal()
+    ...     for t in range(3):
+    ...         a = int(rng.random() < 0.5)
+    ...         y = 0.5 * a + 0.3 * base + rng.normal(0, 0.5)
+    ...         rows.append({"id": i, "time": t, "A": a, "Y": y})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.longitudinal_analyze(
+    ...     df, id="id", time="time", treatment="A", outcome="Y",
+    ...     regime="always_treat")
+    >>> res.method  # no time-varying confounders -> IPW
+    'ipw'
+    >>> res.regime_name
+    'always_treat'
+    >>> isinstance(res.estimate, float)
+    True
     """
     if method not in ("auto", "msm", "g-formula", "ipw"):
         raise ValueError(
@@ -464,6 +512,29 @@ def contrast(
         ``b_result``.  The ``contrast`` value is the plug-in difference
         ``a.estimate - b.estimate``; its SE uses the delta-method
         approximation ``sqrt(se_a^2 + se_b^2)``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     base = rng.normal()
+    ...     for t in range(3):
+    ...         a = int(rng.random() < 0.5)
+    ...         y = 0.5 * a + 0.3 * base + rng.normal(0, 0.5)
+    ...         rows.append({"id": i, "time": t, "A": a, "Y": y})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.longitudinal_contrast(
+    ...     df, id="id", time="time", treatment="A", outcome="Y",
+    ...     regime_a="always_treat", regime_b="never_treat")
+    >>> res["regime_a"], res["regime_b"]
+    ('always_treat', 'never_treat')
+    >>> sorted(res.keys())
+    ['a_result', 'b_result', 'ci', 'contrast', 'regime_a', 'regime_b', 'se']
+    >>> isinstance(res["contrast"], float)
+    True
     """
     a = analyze(data, id=id, time=time, treatment=treatment,
                 outcome=outcome, regime=regime_a, **kwargs)

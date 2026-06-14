@@ -71,12 +71,29 @@ def g_estimation(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> x3 = rng.normal(size=n)
+    >>> a1 = rng.integers(0, 2, size=n)
+    >>> a2 = rng.integers(0, 2, size=n)
+    >>> y = 1.0 * a1 + 0.5 * a2 + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({
+    ...     "outcome": y, "A1": a1, "A2": a2,
+    ...     "x1": x1, "x2": x2, "x3": x3,
+    ... })
     >>> result = sp.g_estimation(
     ...     df, y='outcome',
-    ...     treatments=['treatment_stage1', 'treatment_stage2'],
-    ...     covariates_by_stage=[['x1', 'x2'], ['x1', 'x2', 'x3']])
-    >>> print(result.summary())
+    ...     treatments=['A1', 'A2'],
+    ...     covariates_by_stage=[['x1', 'x2'], ['x1', 'x2', 'x3']],
+    ...     n_bootstrap=50, random_state=0,
+    ... )
+    >>> result.model_info['n_stages']
+    2
     """
     est = GEstimation(
         data=data, y=y, treatments=treatments,
@@ -102,6 +119,33 @@ class GEstimation:
     alpha : float
     n_bootstrap : int
     random_state : int
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> x3 = rng.normal(size=n)
+    >>> a1 = rng.integers(0, 2, size=n)
+    >>> a2 = rng.integers(0, 2, size=n)
+    >>> y = 1.0 * a1 + 0.5 * a2 + x1 + 0.5 * x2 + rng.normal(size=n)
+    >>> df = pd.DataFrame({
+    ...     "outcome": y, "A1": a1, "A2": a2,
+    ...     "x1": x1, "x2": x2, "x3": x3,
+    ... })
+    >>> est = sp.GEstimation(
+    ...     df, y="outcome",
+    ...     treatments=["A1", "A2"],
+    ...     covariates_by_stage=[["x1", "x2"], ["x1", "x2", "x3"]],
+    ...     n_bootstrap=50, random_state=0,
+    ... )
+    >>> res = est.fit()
+    >>> res.model_info["n_stages"]
+    2
     """
 
     def __init__(

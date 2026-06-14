@@ -32,6 +32,39 @@ import pandas as pd
 
 @dataclass
 class CloneCensorWeightResult:
+    """Cloned, censored and IP-of-censoring-weighted target-trial data.
+
+    Produced by :func:`clone_censor_weight`. ``cloned_data`` holds one row
+    per (id, time, strategy) surviving artificial censoring, with an
+    ``_ipcw`` weight column; ``weights_summary`` reports the mean / min /
+    max weight.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for sid in range(50):
+    ...     for t in range(4):
+    ...         rows.append({"id": sid, "time": t,
+    ...                      "treat": int(rng.random() < 0.6),
+    ...                      "age": 40 + rng.normal()})
+    >>> df = pd.DataFrame(rows)
+    >>> strategies = {
+    ...     "always_treat": lambda g: g["treat"].to_numpy() == 1,
+    ...     "never_treat": lambda g: g["treat"].to_numpy() == 0,
+    ... }
+    >>> res = sp.clone_censor_weight(df, id_col="id", time_col="time",
+    ...                              treatment_col="treat", strategies=strategies)
+    >>> type(res).__name__
+    'CloneCensorWeightResult'
+    >>> res.n_originals
+    50
+    >>> res.strategies
+    ['always_treat', 'never_treat']
+    """
+
     cloned_data: pd.DataFrame
     strategies: list[str]
     n_originals: int
@@ -77,6 +110,31 @@ def clone_censor_weight(
     CloneCensorWeightResult
         ``cloned_data`` holds one row per (id, time, strategy) surviving
         artificial censoring, with an ``_ipcw`` weight column.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for sid in range(50):
+    ...     for t in range(4):
+    ...         rows.append({"id": sid, "time": t,
+    ...                      "treat": int(rng.random() < 0.6),
+    ...                      "age": 40 + rng.normal()})
+    >>> df = pd.DataFrame(rows)
+    >>> strategies = {
+    ...     "always_treat": lambda g: g["treat"].to_numpy() == 1,
+    ...     "never_treat": lambda g: g["treat"].to_numpy() == 0,
+    ... }
+    >>> res = sp.clone_censor_weight(df, id_col="id", time_col="time",
+    ...                              treatment_col="treat", strategies=strategies)
+    >>> res.n_originals
+    50
+    >>> res.strategies
+    ['always_treat', 'never_treat']
+    >>> "_ipcw" in res.cloned_data.columns
+    True
     """
     from .ccw_internal import _artificial_censor, _compute_ipcw
 

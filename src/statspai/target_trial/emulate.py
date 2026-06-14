@@ -33,6 +33,35 @@ class TargetTrialResult:
         IP weights used (baseline + censoring combined).
     method : str
         Which analysis plan was executed.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["statin", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="5 years",
+    ...     outcome="incident MI",
+    ... )
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> df = pd.DataFrame({
+    ...     "age": rng.integers(40, 70, n),
+    ...     "ldl": rng.normal(150, 20, n),
+    ...     "statin": rng.integers(0, 2, n),
+    ... })
+    >>> df["mi"] = (rng.random(n) < 0.2).astype(int)
+    >>> res = sp.target_trial_emulate(
+    ...     proto, df, outcome_col="mi", treatment_col="statin")
+    >>> type(res).__name__
+    'TargetTrialResult'
+    >>> res.n_eligible
+    335
+    >>> res.n_excluded_immortal
+    65
     """
 
     protocol: TargetTrialProtocol
@@ -81,6 +110,37 @@ def emulate(
     For more complex analysis plans (pooled logistic + IPCW, g-formula,
     LTMLE), users should call those estimators directly and pass the
     protocol as documentation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> proto = sp.target_trial_protocol(
+    ...     eligibility="age >= 40 and ldl > 130",
+    ...     treatment_strategies=["statin", "no statin"],
+    ...     assignment="observational emulation",
+    ...     time_zero="first eligible visit",
+    ...     followup_end="5 years",
+    ...     outcome="incident MI",
+    ... )
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> df = pd.DataFrame({
+    ...     "age": rng.integers(40, 70, n),
+    ...     "ldl": rng.normal(150, 20, n),
+    ...     "statin": rng.integers(0, 2, n),
+    ... })
+    >>> df["mi"] = (rng.random(n) < 0.2).astype(int)
+    >>> res = sp.target_trial_emulate(
+    ...     proto, df, outcome_col="mi", treatment_col="statin")
+    >>> res.n_eligible  # eligibility filter applied at time zero
+    335
+    >>> bool(res.ci[0] <= res.estimate <= res.ci[1])
+    True
+
+    References
+    ----------
+    hernan2016using
     """
     n_total = len(data)
 

@@ -37,6 +37,30 @@ class IPCWResult:
         Basic diagnostics — mean, max, share above common thresholds.
     method : str
         Nuisance model used for the censoring hazard.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> age = rng.normal(50, 10, n)
+    >>> biomarker = rng.normal(0, 1, n)
+    >>> p = 1.0 / (1.0 + np.exp(-(0.5 - 0.5 * biomarker)))
+    >>> df = pd.DataFrame({
+    ...     "time": rng.exponential(5, n),
+    ...     "event": rng.binomial(1, p),
+    ...     "age": age,
+    ...     "biomarker": biomarker,
+    ... })
+    >>> res = sp.ipcw(df, time="time", event="event",
+    ...               censor_covariates=["age", "biomarker"])
+    >>> isinstance(res, sp.IPCWResult)
+    True
+    >>> diag = res.diagnose()        # weight diagnostics table
+    >>> list(diag.columns)
+    ['metric', 'value']
     """
 
     weights: np.ndarray
@@ -117,6 +141,28 @@ def ipcw(
     Returns
     -------
     IPCWResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> biomarker = rng.normal(0, 1, n)
+    >>> p = 1.0 / (1.0 + np.exp(-(0.5 - 0.5 * biomarker)))
+    >>> df = pd.DataFrame({
+    ...     "time": rng.exponential(5, n),
+    ...     "event": rng.binomial(1, p),
+    ...     "age": rng.normal(50, 10, n),
+    ...     "biomarker": biomarker,
+    ... })
+    >>> res = sp.ipcw(df, time="time", event="event",
+    ...               censor_covariates=["age", "biomarker"])
+    >>> bool(res.stabilized)
+    True
+    >>> sorted(res.summary_stats)
+    ['effective_sample_size', 'max', 'mean', 'min']
     """
     if time not in data.columns or event not in data.columns:
         raise KeyError("time/event columns not in data.")

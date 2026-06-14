@@ -51,7 +51,29 @@ from scipy import stats as _stats
 
 @dataclass
 class MCGFormulaResult:
-    """Result of one or two Monte-Carlo g-formula arms."""
+    """Result of one or two Monte-Carlo g-formula arms.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(6)
+    >>> L0 = rng.normal(size=300)
+    >>> A0 = (rng.uniform(size=300) < 0.5).astype(float)
+    >>> L1 = 0.5 * L0 + 0.3 * A0 + rng.normal(size=300)
+    >>> A1 = (rng.uniform(size=300) < 0.5).astype(float)
+    >>> Y = 1.0 + 0.5 * A0 + 0.5 * A1 + 0.3 * L1 + rng.normal(size=300)
+    >>> df = pd.DataFrame({"L0": L0, "A0": A0, "L1": L1, "A1": A1, "Y": Y})
+    >>> res = sp.gformula_mc(
+    ...     df, treatment_cols=["A0", "A1"],
+    ...     confounder_cols=[["L0"], ["L1"]],
+    ...     outcome_col="Y", strategy=[1, 1], control_strategy=[0, 0],
+    ...     n_simulations=500, bootstrap=20, seed=0)
+    >>> type(res).__name__
+    'MCGFormulaResult'
+    >>> bool(res.contrast_value is not None)
+    True
+    """
 
     value: float
     se: float
@@ -365,8 +387,22 @@ def gformula_mc(
 
     Examples
     --------
-    Static always-treat strategy:
+    Static always-treat vs. never-treat strategy on a wide three-period
+    panel with one time-varying confounder per period:
 
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> L0 = rng.normal(0, 1, n)
+    >>> A0 = (rng.uniform(size=n) < 1 / (1 + np.exp(-L0))).astype(float)
+    >>> L1 = 0.5 * L0 + 0.5 * A0 + rng.normal(0, 1, n)
+    >>> A1 = (rng.uniform(size=n) < 1 / (1 + np.exp(-L1))).astype(float)
+    >>> L2 = 0.5 * L1 + 0.5 * A1 + rng.normal(0, 1, n)
+    >>> A2 = (rng.uniform(size=n) < 1 / (1 + np.exp(-L2))).astype(float)
+    >>> Y = 1.0 + 0.8 * (A0 + A1 + A2) + 0.5 * L2 + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({'L0': L0, 'A0': A0, 'L1': L1, 'A1': A1,
+    ...                    'L2': L2, 'A2': A2, 'Y': Y})
     >>> res = sp.gformula_mc(
     ...     df,
     ...     treatment_cols=['A0', 'A1', 'A2'],
@@ -374,14 +410,26 @@ def gformula_mc(
     ...     outcome_col='Y',
     ...     strategy=[1, 1, 1],
     ...     control_strategy=[0, 0, 0],
+    ...     n_simulations=2000, bootstrap=50, seed=0,
     ... )
-    >>> print(res.summary())
+    >>> bool(np.isfinite(res.value))
+    True
 
-    Dynamic regime: treat only when a time-varying biomarker is high.
+    Dynamic regime: treat at each period only when the current
+    time-varying confounder is positive.
 
     >>> def dynamic(t, hist):
     ...     return (hist[f'L{t}'] > 0).astype(float)
-    >>> res = sp.gformula_mc(..., strategy=dynamic)
+    >>> res2 = sp.gformula_mc(
+    ...     df,
+    ...     treatment_cols=['A0', 'A1', 'A2'],
+    ...     confounder_cols=[['L0'], ['L1'], ['L2']],
+    ...     outcome_col='Y',
+    ...     strategy=dynamic,
+    ...     n_simulations=2000, bootstrap=0, seed=0,
+    ... )
+    >>> bool(np.isfinite(res2.value))
+    True
     """
     # ── Normalise column specs ────────────────────────────────────────
     if isinstance(confounder_cols[0], (list, tuple)):
