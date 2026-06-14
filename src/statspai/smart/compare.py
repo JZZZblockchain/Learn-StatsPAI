@@ -29,7 +29,38 @@ import warnings
 
 
 class ComparisonResult:
-    """Results from multi-estimator comparison."""
+    """Results from multi-estimator comparison.
+
+    Returned by :func:`compare_estimators`. Bundles the per-method fitted
+    results (``.results``), a tidy ``estimates_table`` DataFrame, and a
+    dict of cross-method ``agreement`` diagnostics. Use ``.summary()`` for
+    a text report and ``.plot()`` for a forest plot.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> educ = rng.normal(12, 3, n)
+    >>> ps = 1 / (1 + np.exp(-(0.05 * (age - 40) + 0.1 * (educ - 12))))
+    >>> training = rng.binomial(1, ps)
+    >>> wage = (5 + 2.0 * training + 0.1 * age + 0.3 * educ
+    ...         + rng.normal(0, 1, n))
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "education": educ})
+    >>> comp = sp.compare_estimators(
+    ...     data=df, y="wage", treatment="training",
+    ...     methods=["ols"], covariates=["age", "education"],
+    ... )
+    >>> type(comp).__name__
+    'ComparisonResult'
+    >>> comp.n_obs
+    300
+    >>> list(comp.estimates_table.columns)[:2]
+    ['method', 'estimate']
+    """
 
     def __init__(self, results, estimates_table, agreement, n_obs):
         self.results = results  # dict: method -> result object
@@ -175,13 +206,25 @@ def compare_estimators(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> age = rng.normal(40, 10, n)
+    >>> educ = rng.normal(12, 3, n)
+    >>> ps = 1 / (1 + np.exp(-(0.05 * (age - 40) + 0.1 * (educ - 12))))
+    >>> training = rng.binomial(1, ps)
+    >>> wage = (5 + 2.0 * training + 0.1 * age + 0.3 * educ
+    ...         + rng.normal(0, 1, n))
+    >>> df = pd.DataFrame({"wage": wage, "training": training,
+    ...                    "age": age, "education": educ})
     >>> comp = sp.compare_estimators(
-    ...     data=df, y='wage', treatment='training',
-    ...     methods=['ols', 'matching', 'ipw', 'dml'],
-    ...     covariates=['age', 'education'],
+    ...     data=df, y="wage", treatment="training",
+    ...     methods=["ols"], covariates=["age", "education"],
     ... )
-    >>> print(comp.summary())
-    >>> comp.plot()
+    >>> type(comp).__name__
+    'ComparisonResult'
+    >>> comp.n_obs
+    300
     """
     import statspai as sp
 

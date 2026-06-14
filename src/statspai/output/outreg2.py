@@ -112,6 +112,27 @@ class OutReg2:
         time; the rendered output matches ``regtable``'s book-tab
         style (and is no longer byte-identical to the legacy bespoke
         renderer).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=n),
+    ...     "x2": rng.normal(size=n),
+    ... })
+    >>> df["y"] = 1.0 + 0.5 * df["x1"] - 0.3 * df["x2"] + rng.normal(size=n)
+    >>> m1 = sp.regress("y ~ x1", data=df)
+    >>> m2 = sp.regress("y ~ x1 + x2", data=df)
+    >>> builder = sp.OutReg2()
+    >>> builder.add_model(m1, name="Base")
+    >>> builder.add_model(m2, name="Full")
+    >>> builder.set_title("My Results")
+    >>> latex = builder.to_latex()
+    >>> "tabular" in latex
+    True
     """
 
     def __init__(self):
@@ -293,6 +314,24 @@ def outreg2(
     -------
     str or None
         LaTeX code if ``format="latex"``, otherwise ``None``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=n),
+    ...     "x2": rng.normal(size=n),
+    ... })
+    >>> df["y"] = 1.0 + 0.5 * df["x1"] - 0.3 * df["x2"] + rng.normal(size=n)
+    >>> m1 = sp.regress("y ~ x1", data=df)
+    >>> m2 = sp.regress("y ~ x1 + x2", data=df)
+    >>> latex = sp.outreg2(  # doctest: +SKIP
+    ...     m1, m2, filename="table.tex",
+    ...     model_names=["Base", "Full"], format="latex",
+    ... )
     """
     _warn_outreg2_deprecation()
 

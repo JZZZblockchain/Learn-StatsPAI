@@ -28,7 +28,27 @@ __all__ = ["MeanComparisonResult", "mean_comparison"]
 
 
 class MeanComparisonResult:
-    """Rich result object for balance / mean comparison tables."""
+    """Rich result object for balance / mean comparison tables.
+
+    Returned by :func:`mean_comparison`. Holds per-variable group means,
+    standard deviations, the mean difference, and the test ``p``-value, and
+    renders to text, a :class:`pandas.DataFrame`, LaTeX, HTML, or Markdown.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> result = sp.mean_comparison(
+    ...     df,
+    ...     variables=["education", "experience", "log_wage"],
+    ...     group="female",
+    ... )
+    >>> type(result).__name__
+    'MeanComparisonResult'
+    >>> table = result.to_dataframe()
+    >>> bool("p-value" in table.columns)
+    True
+    """
 
     def __init__(
         self,
@@ -504,7 +524,14 @@ def mean_comparison(
     Examples
     --------
     >>> import statspai as sp
-    >>> sp.mean_comparison(df, ["age", "income", "education"], group="treated")
+    >>> df = sp.cps_wage()
+    >>> result = sp.mean_comparison(
+    ...     df, ["education", "experience", "log_wage"], group="female"
+    ... )
+    >>> type(result).__name__
+    'MeanComparisonResult'
+    >>> bool("p-value" in result.to_dataframe().columns)
+    True
     """
     if group_labels is None:
         group_labels = ("Control", "Treated")

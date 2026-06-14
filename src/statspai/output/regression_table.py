@@ -366,7 +366,26 @@ def _resolve_multi_se(
 # ═══════════════════════════════════════════════════════════════════════════
 
 class RegtableResult:
-    """Rich result object for regression tables with multi-format export."""
+    """Rich result object for regression tables with multi-format export.
+
+    Returned by :func:`regtable`. Bundles one or more fitted models into a
+    publication-style coefficient table and renders to text, LaTeX, HTML,
+    Markdown / Quarto, a :class:`pandas.DataFrame`, Excel, or Word.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r1 = sp.regress("log_wage ~ education", data=df)
+    >>> r2 = sp.regress("log_wage ~ education + experience", data=df)
+    >>> table = sp.regtable(r1, r2)
+    >>> type(table).__name__
+    'RegtableResult'
+    >>> bool("education" in table.to_text().lower())
+    True
+    >>> bool(table.to_latex().strip())
+    True
+    """
 
     def __init__(
         self,
@@ -2910,29 +2929,30 @@ def regtable(
     Examples
     --------
     >>> import statspai as sp
-    >>> m1 = sp.regress("y ~ x1", data=df)
-    >>> m2 = sp.regress("y ~ x1 + x2", data=df)
-    >>> sp.regtable(m1, m2)
-    >>> sp.regtable(m1, m2, output="latex", filename="table1.tex")
-    >>> sp.regtable([m1, m2], [m3, m4],
-    ...     panel_labels=["Panel A: OLS", "Panel B: IV"])
-    >>>
-    >>> # Logit odds ratios
-    >>> sp.regtable(sp.logit("y ~ x", data=df), eform=True)
-    >>>
-    >>> # IV three-block table with column spanners
-    >>> sp.regtable(
-    ...     ols1, ols2, iv1, iv2,
-    ...     column_spanners=[("OLS", 2), ("IV", 2)],
-    ...     stats=["N", "R2", "depvar_mean", "depvar_sd"],
-    ... )
-    >>>
-    >>> # Unified coef_map (rename + order + drop in one shot)
-    >>> sp.regtable(m1, m2, coef_map={
-    ...     "x2": "Education",
-    ...     "x1": "Experience",
-    ...     "Intercept": "Constant",
+    >>> df = sp.cps_wage()
+    >>> m1 = sp.regress("log_wage ~ education", data=df)
+    >>> m2 = sp.regress("log_wage ~ education + experience", data=df)
+    >>> table = sp.regtable(m1, m2)
+    >>> type(table).__name__
+    'RegtableResult'
+    >>> bool("education" in table.to_text().lower())
+    True
+    >>> sp.regtable(m1, m2, output="latex", filename="table1.tex")  # doctest: +SKIP
+
+    Unified ``coef_map`` (rename + reorder + drop in one shot):
+
+    >>> table2 = sp.regtable(m1, m2, coef_map={
+    ...     "experience": "Experience",
+    ...     "education": "Years of schooling",
     ... })
+    >>> bool(table2.to_latex().strip())
+    True
+
+    Odds ratios via ``eform`` for a logit model:
+
+    >>> lg = sp.logit("union ~ education", data=df)
+    >>> type(sp.regtable(lg, eform=True)).__name__
+    'RegtableResult'
     """
     if not args:
         raise ValueError("At least one model result is required.")

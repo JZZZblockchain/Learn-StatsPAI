@@ -242,6 +242,24 @@ def cite(
     -------
     str
         The formatted inline citation string.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "x": rng.normal(size=200),
+    ...     "treat": rng.integers(0, 2, size=200),
+    ... })
+    >>> df["y"] = 1.0 + 0.5 * df["x"] + 0.8 * df["treat"] + rng.normal(size=200)
+    >>> m = sp.regress("y ~ x + treat", data=df)
+    >>> s = sp.cite(m, "treat")           # estimate*** (se)
+    >>> isinstance(s, str)
+    True
+    >>> sp.cite(m, "treat", output="latex")  # doctest: +SKIP
+    '0.716^{***}~(0.143)'
     """
     if output not in _VALID_OUTPUTS:
         raise ValueError(

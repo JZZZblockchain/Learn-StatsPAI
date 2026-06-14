@@ -40,7 +40,30 @@ from scipy import stats
 
 @dataclass
 class RobustnessResult:
-    """Container for robustness report results."""
+    """Container for robustness report results.
+
+    Returned by :func:`robustness_report`. Holds one row per robustness check
+    in ``results_df`` (alternative controls, clustering, winsorising, trimming,
+    subsamples), alongside the ``baseline_estimate`` / ``baseline_se`` for the
+    key variable ``x``. Call :meth:`summary` for a stability assessment.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> report = sp.robustness_report(
+    ...     df,
+    ...     formula="log_wage ~ education + experience + tenure",
+    ...     x="education",
+    ...     winsor_levels=[0.01],
+    ... )
+    >>> type(report).__name__
+    'RobustnessResult'
+    >>> report.x
+    'education'
+    >>> bool(report.n_checks > 0 and "check" in report.results_df.columns)
+    True
+    """
 
     results_df: pd.DataFrame
     """One row per robustness check."""
@@ -351,16 +374,22 @@ def robustness_report(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.cps_wage()
     >>> report = sp.robustness_report(
-    ...     data=df,
-    ...     formula="wage ~ education + experience",
-    ...     x='education',
-    ...     cluster_var='region',
-    ...     extra_controls=['female', 'age'],
-    ...     winsor_levels=[0.01, 0.05],
+    ...     df,
+    ...     formula="log_wage ~ education + experience + tenure",
+    ...     x="education",
+    ...     cluster_var="union",
+    ...     extra_controls=["female", "married"],
+    ...     winsor_levels=[0.01],
     ... )
-    >>> report.plot()
-    >>> print(report.summary())
+    >>> type(report).__name__
+    'RobustnessResult'
+    >>> report.x
+    'education'
+    >>> bool(report.n_checks > 0 and "check" in report.results_df.columns)
+    True
+    >>> fig, ax = report.plot()  # doctest: +SKIP
     """
     # Parse formula → y, controls
     from ..core.utils import parse_formula

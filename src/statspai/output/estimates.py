@@ -37,14 +37,32 @@ _STORE: List[Tuple[str, Any]] = []  # [(name, result), ...]
 
 
 def eststo(result, *, name: Optional[str] = None) -> None:
-    """Store a model result (like Stata's ``estimates store``)."""
+    """Store a model result (like Stata's ``estimates store``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> sp.estclear()
+    >>> sp.eststo(sp.regress("log_wage ~ education", data=df), name="(1)")
+    >>> sp.eststo(sp.regress("log_wage ~ education + experience", data=df), name="(2)")
+    >>> sp.estclear()
+    """
     if name is None:
         name = f"({len(_STORE) + 1})"
     _STORE.append((name, result))
 
 
 def estclear() -> None:
-    """Clear all stored model results."""
+    """Clear all stored model results.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> sp.eststo(sp.regress("log_wage ~ education", data=df), name="(1)")
+    >>> sp.estclear()
+    """
     _STORE.clear()
 
 
@@ -436,6 +454,21 @@ def esttab(
 
     Parameters mirror the original ``esttab`` API; see the module
     docstring for the exact mapping to ``regtable``.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r1 = sp.regress("log_wage ~ education", data=df)
+    >>> r2 = sp.regress("log_wage ~ education + experience", data=df)
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore", DeprecationWarning)
+    ...     tab = sp.esttab(r1, r2, output="text")
+    >>> tab.to_dataframe().shape[1]  # one column per model
+    2
+    >>> "education" in tab.to_text()
+    True
     """
     _warn_once_esttab()
 

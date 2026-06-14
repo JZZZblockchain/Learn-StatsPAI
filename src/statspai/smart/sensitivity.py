@@ -23,7 +23,33 @@ from ..workflow._degradation import record_degradation
 
 
 class SensitivityDashboard:
-    """Multi-dimensional sensitivity analysis results."""
+    """Multi-dimensional sensitivity analysis results.
+
+    Returned by :func:`sp.sensitivity_dashboard`. Holds the ``baseline``
+    estimate, a list of per-``dimension`` summaries and an overall
+    ``A``/``B``/``C``/``D``/``F`` stability grade.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=n),
+    ...     "x2": rng.normal(size=n),
+    ... })
+    >>> df["y"] = 1.0 + 0.5 * df["x1"] - 0.3 * df["x2"] + rng.normal(size=n)
+    >>> result = sp.regress("y ~ x1 + x2", data=df)
+    >>> dash = sp.sensitivity_dashboard(result, data=df, verbose=False)
+    >>> type(dash).__name__
+    'SensitivityDashboard'
+    >>> bool(dash.overall_stability in {"A", "B", "C", "D", "F"})
+    True
+    >>> isinstance(dash.dimensions, list)
+    True
+    """
 
     def __init__(self, baseline, dimensions, overall_stability, method):
         self.baseline = baseline  # dict: estimate, se, ci
@@ -93,10 +119,22 @@ def sensitivity_dashboard(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "x1": rng.normal(size=n),
+    ...     "x2": rng.normal(size=n),
+    ... })
+    >>> df["y"] = 1.0 + 0.5 * df["x1"] - 0.3 * df["x2"] + rng.normal(size=n)
     >>> result = sp.regress("y ~ x1 + x2", data=df)
-    >>> dash = sp.sensitivity_dashboard(result, data=df)
-    >>> print(dash.summary())
+    >>> dash = sp.sensitivity_dashboard(
+    ...     result, data=df, dimensions=["sample", "outliers"], verbose=False,
+    ... )
+    >>> type(dash).__name__
+    'SensitivityDashboard'
     """
     # Extract baseline. Order: (1) CausalResult-like `.estimate` /
     # `.se`, (2) EconometricResults `.params` / `.std_errors`,

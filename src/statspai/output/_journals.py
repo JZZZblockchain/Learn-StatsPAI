@@ -160,7 +160,15 @@ JOURNALS: Dict[str, Dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 def list_templates() -> Tuple[str, ...]:
-    """Return the canonical names of every registered journal preset."""
+    """Return the canonical names of every registered journal preset.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> names = sp.list_journal_templates()
+    >>> 'aer' in names and 'qje' in names
+    True
+    """
     return tuple(JOURNALS.keys())
 
 
@@ -181,6 +189,15 @@ def get_template(name: str) -> Dict[str, Any]:
     ------
     ValueError
         If *name* is not a registered template.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> tpl = sp.get_journal_template('AER')   # case-insensitive
+    >>> tpl['label']
+    'American Economic Review'
+    >>> tpl['se_label']
+    'Standard errors'
     """
     key = (name or "").strip().lower()
     if key not in JOURNALS:

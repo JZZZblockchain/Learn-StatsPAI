@@ -59,7 +59,17 @@ __all__ = ["to_gt", "is_great_tables_available"]
 # ---------------------------------------------------------------------------
 
 def is_great_tables_available() -> bool:
-    """Return True iff ``great_tables`` can be imported in this env."""
+    """Return True iff ``great_tables`` can be imported in this env.
+
+    Use this to guard optional :func:`statspai.to_gt` calls without
+    triggering an ``ImportError`` when the package is absent.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> isinstance(sp.is_great_tables_available(), bool)
+    True
+    """
     try:
         import great_tables  # noqa: F401
         return True
@@ -221,15 +231,25 @@ def to_gt(
     Examples
     --------
     >>> import statspai as sp
-    >>> rt = sp.regtable(model, template="aer", title="Returns to Schooling")
-    >>> g = sp.gt(rt)               # ready-to-render GT
-    >>> g.as_raw_html()             # for HTML export / Quarto
-    >>> g.as_latex()                # for LaTeX export
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x = rng.normal(0, 1, n)
+    >>> data = pd.DataFrame({'y': 1.0 + 0.5 * x + rng.normal(0, 1, n), 'x': x})
+    >>> rt = sp.regtable(sp.regress('y ~ x', data=data), title='Demo')
+    >>> g = sp.gt(rt)               # ready-to-render great_tables.GT
+    >>> type(g).__name__
+    'GT'
+    >>> bool('<table' in g.as_raw_html())   # HTML export / Quarto
+    True
+    >>> g.as_latex()                # doctest: +SKIP
 
-    >>> # Plain DataFrame path:
-    >>> import pandas as pd
-    >>> df = pd.DataFrame({"var": ["x", "y"], "M1": ["0.5***", "0.3"]})
-    >>> sp.gt(df, rowname_col="var", title="Custom table")
+    Plain DataFrame path — promote a column to row labels:
+
+    >>> df = pd.DataFrame({'var': ['x', 'y'], 'M1': ['0.5***', '0.3']})
+    >>> g2 = sp.gt(df, rowname_col='var', title='Custom table')
+    >>> type(g2).__name__
+    'GT'
 
     Raises
     ------

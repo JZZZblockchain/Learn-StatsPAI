@@ -126,6 +126,20 @@ def verify_benchmark(
     When the full-data point estimate for a recommended method cannot
     be computed, ``point_estimate`` and ``bias`` are NaN for that row
     and a ``WorkflowDegradedWarning`` is emitted.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> out = sp.verify_benchmark(
+    ...     scenarios=["rct"], n_reps=1, verify_B=5,
+    ...     verify_budget_s=5.0, verbose=False,
+    ... )
+    >>> type(out).__name__
+    'DataFrame'
+    >>> "scenario" in out.columns
+    True
+    >>> bool((out["scenario"] == "rct").all())
+    True
     """
     import statspai as sp
 

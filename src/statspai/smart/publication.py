@@ -11,16 +11,38 @@ empirical-paper submission review.
 Usage
 -----
 >>> import statspai as sp
->>> check = sp.pub_ready(results=[result1, result2],
-...                      venue='top5_econ')
->>> print(check.summary())
+>>> df = sp.cps_wage()
+>>> res = sp.regress("log_wage ~ education + experience", data=df)
+>>> check = sp.pub_ready(results=[res], venue='top5_econ')
+>>> bool(0 <= check.score <= 100)
+True
 """
 
 from typing import Optional, List, Dict, Any
 
 
 class PubReadyResult:
-    """Publication readiness checklist results."""
+    """Publication readiness checklist results.
+
+    Returned by :func:`pub_ready`. Holds the venue, the resolved checklist
+    items (each flagged done / not done), a 0-100 readiness ``score``, and the
+    lists of ``missing`` and ``present`` items. Call :meth:`summary` for a
+    terminal-friendly report.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.regress("log_wage ~ education + experience", data=df)
+    >>> check = sp.pub_ready(results=[res], venue="aej_applied",
+    ...                      has_robustness=True)
+    >>> type(check).__name__
+    'PubReadyResult'
+    >>> bool(0 <= check.score <= 100)
+    True
+    >>> bool(isinstance(check.missing, list))
+    True
+    """
 
     def __init__(self, venue, checks, score, missing, present):
         self.venue = venue
@@ -179,8 +201,14 @@ def pub_ready(
     Examples
     --------
     >>> import statspai as sp
-    >>> check = sp.pub_ready(results=[r1, r2], venue='top5_econ', design='did')
-    >>> print(check.summary())
+    >>> df = sp.cps_wage()
+    >>> res = sp.regress("log_wage ~ education + experience", data=df)
+    >>> check = sp.pub_ready(results=[res], venue="aej_applied",
+    ...                      has_robustness=True)
+    >>> bool(0 <= check.score <= 100)
+    True
+    >>> bool(isinstance(check.missing, list))
+    True
     """
     if venue not in _CHECKLISTS:
         venue = 'top5_econ'

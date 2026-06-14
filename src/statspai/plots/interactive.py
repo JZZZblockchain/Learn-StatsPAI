@@ -12,11 +12,15 @@ confidence intervals, or any element that represents statistical results.
 
 Usage
 -----
+>>> import matplotlib
+>>> matplotlib.use("Agg")
+>>> import matplotlib.pyplot as plt
 >>> import statspai as sp
->>> result = sp.did(df, y='wage', treat='treated', time='post')
->>> fig, ax = result.event_study_plot()
->>> sp.interactive(fig)          # Opens editor
->>> sp.get_code(fig)             # Get reproducible code string
+>>> fig, ax = plt.subplots()        # any statspai figure works here
+>>> _ = ax.plot([0, 1, 2], [0, 1, 4])
+>>> editor = sp.interactive(fig)    # opens the editor
+>>> isinstance(sp.get_code(fig), str)  # reproducible code string
+True
 
 In Jupyter notebooks, ``sp.interactive(fig)`` shows an ipywidgets
 control panel beside the figure. In scripts, it opens a matplotlib
@@ -2082,12 +2086,16 @@ def interactive(fig, protect_data: bool = True) -> FigureEditor:
 
     Examples
     --------
+    >>> import matplotlib
+    >>> matplotlib.use("Agg")
+    >>> import matplotlib.pyplot as plt
     >>> import statspai as sp
-    >>> result = sp.did(df, y='wage', treat='treated', time='post')
-    >>> fig, ax = result.event_study_plot()
+    >>> fig, ax = plt.subplots()
+    >>> _ = ax.plot([0, 1, 2], [0, 1, 4])
     >>> editor = sp.interactive(fig)
-    >>> # ... make edits via the GUI ...
-    >>> editor.copy_code()   # prints reproducible code
+    >>> code = editor.generate_code()  # reproducible code for any edits
+    >>> isinstance(code, str)
+    True
     """
     editor = FigureEditor(fig=fig, protect_data=protect_data)
     # Store on figure so it lives and dies with the figure (no leak)
@@ -2115,6 +2123,18 @@ def get_code(fig) -> str:
     -------
     str
         Python code string.
+
+    Examples
+    --------
+    >>> import matplotlib
+    >>> matplotlib.use("Agg")
+    >>> import matplotlib.pyplot as plt
+    >>> import statspai as sp
+    >>> fig, ax = plt.subplots()
+    >>> _ = ax.plot([0, 1, 2], [0, 1, 4])
+    >>> code = sp.get_code(fig)  # reproducible code for any interactive edits
+    >>> isinstance(code, str)
+    True
     """
     editor = getattr(fig, '_statspai_editor', None)
     if editor is None:

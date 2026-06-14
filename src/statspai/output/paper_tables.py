@@ -58,6 +58,21 @@ class PaperTables:
     Each attribute is a RegtableResult (has .text, .latex, .html,
     .to_latex(), ...).  Iterate via ``.panels()`` or access by name:
     ``pt.main`` / ``pt.heterogeneity`` / ``pt.robustness`` / ``pt.placebo``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r1 = sp.regress("log_wage ~ education", data=df)
+    >>> r2 = sp.regress("log_wage ~ education + experience", data=df)
+    >>> pt = sp.paper_tables(main=[r1, r2], template="aer")
+    >>> type(pt).__name__
+    'PaperTables'
+    >>> sorted(pt.panels().keys())
+    ['main']
+    >>> latex = pt.to_latex()
+    >>> bool(latex.strip())
+    True
     """
     main: Optional[RegtableResult] = None
     heterogeneity: Optional[RegtableResult] = None

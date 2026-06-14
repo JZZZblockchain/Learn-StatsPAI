@@ -239,6 +239,20 @@ def unified_sensitivity(
     Returns
     -------
     SensitivityDashboard
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> from types import SimpleNamespace
+    >>> # Any result exposing estimate / se / ci works.
+    >>> result = SimpleNamespace(estimate=0.35, se=0.10, ci=(0.15, 0.55))
+    >>> dash = sp.unified_sensitivity(result)
+    >>> type(dash).__name__
+    'SensitivityDashboard'
+    >>> bool(dash.e_value_point >= 1.0)  # E-values are >= 1 by construction
+    True
+    >>> dash.breakdown is not None
+    True
     """
     from ..diagnostics.evalue import evalue as _evalue_fn
 

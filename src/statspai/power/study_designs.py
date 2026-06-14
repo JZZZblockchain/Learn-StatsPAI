@@ -94,6 +94,20 @@ def power_two_proportions(
     Uses the unpooled-variance normal approximation to a two-sample test of
     proportions: ``power = Phi(|p1 - p2| / se - z_alpha)`` with
     ``se = sqrt(p1(1-p1)/n1 + p2(1-p2)/n2)``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_two_proportions(n=400, p1=0.5, p2=0.65)
+    >>> isinstance(res, sp.PowerResult)
+    True
+    >>> res.design
+    'two_proportions'
+    >>> round(float(res.power), 4)
+    0.8665
+    >>> # Solve for the total sample size achieving 80% power.
+    >>> int(sp.power_two_proportions(p1=0.5, p2=0.65, power_target=0.8).n)
+    334
     """
     z_a = _z_alpha(alpha, alternative)
     delta = abs(p2 - p1)
@@ -178,6 +192,19 @@ def power_logrank(
     With allocation share ``p = ratio/(1+ratio)``, the required number of
     events is ``D = (z_alpha + z_beta)^2 / (p(1-p) (ln HR)^2)`` and the power
     for a given ``D`` is ``Phi(sqrt(D p(1-p)) |ln HR| - z_alpha)``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_logrank(n=300, hazard_ratio=0.6, prob_event=0.7)
+    >>> res.design
+    'logrank'
+    >>> round(float(res.power), 4)
+    0.9592
+    >>> # Sample size for 80% power at a hazard ratio of 0.6.
+    >>> int(sp.power_logrank(hazard_ratio=0.6, prob_event=0.7,
+    ...                      power_target=0.8).n)
+    172
     """
     if hazard_ratio <= 0 or hazard_ratio == 1:
         raise ValueError("hazard_ratio must be > 0 and != 1.")
@@ -252,6 +279,20 @@ def power_case_control(
     exposure prevalence ``p1 = (OR p0) / (1 + p0 (OR - 1))``. Power is then a
     two-proportion comparison between cases (``n_cases``) and controls
     (``ratio * n_cases``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.power_case_control(n_cases=200, odds_ratio=2.0,
+    ...                             exposure_prevalence=0.3)
+    >>> res.design
+    'case_control'
+    >>> round(float(res.power), 4)
+    0.9213
+    >>> # Number of cases for 80% power at an odds ratio of 2.0.
+    >>> int(sp.power_case_control(odds_ratio=2.0, exposure_prevalence=0.3,
+    ...                           power_target=0.8).n)
+    138
     """
     if odds_ratio <= 0 or odds_ratio == 1:
         raise ValueError("odds_ratio must be > 0 and != 1.")

@@ -45,7 +45,33 @@ class AssumptionCheck:
 
 
 class AssumptionResult:
-    """Results from comprehensive assumption audit."""
+    """Results from comprehensive assumption audit.
+
+    Returned by :func:`statspai.assumption_audit`. Bundles the per-check
+    diagnostics (``checks``), an overall letter ``overall_grade`` (A–F),
+    pass/fail/inconclusive counts, and any ``critical_failures``. Use
+    :meth:`summary` for a printable report, :meth:`failed` to list failed
+    checks with remedies, and :meth:`passed_all` for a quick gate.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> educ = rng.integers(8, 20, n)
+    >>> exper = rng.integers(0, 40, n)
+    >>> wage = 1.0 + 0.1 * educ + 0.05 * exper + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"wage": wage, "educ": educ, "exper": exper})
+    >>> result = sp.regress("wage ~ educ + exper", data=df)
+    >>> audit = sp.assumption_audit(result, data=df, verbose=False)
+    >>> type(audit).__name__
+    'AssumptionResult'
+    >>> bool(audit.overall_grade in set("ABCDF"))
+    True
+    >>> isinstance(audit.failed(), list)
+    True
+    """
 
     def __init__(self, method, checks, overall_grade, n_pass, n_fail,
                  n_inconclusive, critical_failures):
@@ -133,12 +159,21 @@ def assumption_audit(
     Examples
     --------
     >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "educ": rng.integers(8, 18, n).astype(float),
+    ...     "exper": rng.integers(0, 30, n).astype(float),
+    ... })
+    >>> df["wage"] = (5 + 0.4 * df["educ"] + 0.1 * df["exper"]
+    ...               + rng.normal(0, 1, n))
     >>> result = sp.regress("wage ~ educ + exper", data=df)
-    >>> audit = sp.assumption_audit(result)
-    >>> print(audit.summary())
+    >>> audit = sp.assumption_audit(result, data=df, verbose=False)
+    >>> _ = audit.summary()
     >>> if not audit.passed_all():
     ...     for fail in audit.failed():
-    ...         print(f"  Fix: {fail.remedy}")
+    ...         _ = fail.remedy
     """
     checks = []
 

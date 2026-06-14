@@ -345,6 +345,22 @@ class ReplicationPack:
 
     Mostly for testing / programmatic inspection; users typically just
     care about ``output_path``.
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.regress("log_wage ~ education + experience", data=df)
+    >>> out = os.path.join(tempfile.mkdtemp(), "reppack")
+    >>> pack = sp.replication_pack(res, out, env=False, bib=False,
+    ...                            include_git_sha=False)
+    >>> type(pack).__name__
+    'ReplicationPack'
+    >>> bool(os.path.exists(pack.output_path))
+    True
+    >>> bool(len(pack.manifest.get("files", [])) > 0)
+    True
     """
 
     __slots__ = ("output_path", "manifest", "warnings")
@@ -449,11 +465,17 @@ def replication_pack(
 
     Examples
     --------
+    >>> import os, tempfile
     >>> import statspai as sp
-    >>> draft = sp.paper(df, "effect of training on wages",
-    ...                  treatment="trained", y="wage")
-    >>> rp = sp.replication_pack(draft, "training-replication.zip")
-    >>> print(rp.summary())
+    >>> df = sp.cps_wage()
+    >>> res = sp.regress("log_wage ~ education + experience", data=df)
+    >>> out = os.path.join(tempfile.mkdtemp(), "reppack")
+    >>> rp = sp.replication_pack(res, out, env=False, bib=False,
+    ...                          include_git_sha=False)
+    >>> type(rp).__name__
+    'ReplicationPack'
+    >>> bool(os.path.exists(rp.output_path))
+    True
     """
     out_path = Path(output_path).expanduser().resolve()
     if out_path.exists() and not overwrite:

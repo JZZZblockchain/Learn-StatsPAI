@@ -195,6 +195,20 @@ def preregister(
     pathlib.Path
         Path written to (also contains a ``metadata`` block with
         timestamp and statspai version).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import os, tempfile
+    >>> q = sp.causal_question(
+    ...     treatment="policy", outcome="employment",
+    ...     estimand="ATT", design="did",
+    ...     covariates=["age", "education"],
+    ... )
+    >>> path = os.path.join(tempfile.mkdtemp(), "pap.yaml")
+    >>> written = sp.preregister(q, path, note="frozen before data collection")
+    >>> bool(os.path.exists(written))
+    True
     """
     path = Path(filename)
     if fmt == "auto":
@@ -234,6 +248,18 @@ def load_preregister(filename: Union[str, Path]) -> CausalQuestion:
 
     Deviations and metadata are preserved on the returned object via
     the ``.notes`` field (concatenated).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import os, tempfile
+    >>> q = sp.causal_question(treatment="policy", outcome="employment",
+    ...                        estimand="ATT", design="did")
+    >>> path = os.path.join(tempfile.mkdtemp(), "pap.yaml")
+    >>> _ = sp.preregister(q, path)
+    >>> q2 = sp.load_preregister(path)
+    >>> q2.treatment
+    'policy'
     """
     path = Path(filename)
     text = path.read_text(encoding="utf-8")

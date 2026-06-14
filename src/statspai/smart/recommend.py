@@ -24,7 +24,27 @@ import pandas as pd
 
 
 class RecommendationResult:
-    """Result from the estimator recommendation engine."""
+    """Result from the estimator recommendation engine.
+
+    Returned by :func:`recommend`. Holds a ranked list of estimator
+    ``recommendations`` (each a dict with ``method`` / ``function`` /
+    ``reason`` / ``assumptions``), the detected ``design``, the ``data_profile``
+    (outcome / treatment types, panel shape, missingness), and any ``warnings``.
+    Call :meth:`summary` for a ranked, human-readable report.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> rec = sp.recommend(df, y="log_wage", treatment="union",
+    ...                    covariates=["education", "experience"])
+    >>> type(rec).__name__
+    'RecommendationResult'
+    >>> bool(len(rec.recommendations) > 0)
+    True
+    >>> bool("method" in rec.recommendations[0])
+    True
+    """
 
     def __init__(self, recommendations, data_profile, design,
                  warnings, data, y, treatment):
@@ -477,10 +497,15 @@ def recommend(
     Examples
     --------
     >>> import statspai as sp
-    >>> rec = sp.recommend(df, y='wage', treatment='training',
-    ...                    id='worker', time='year')
-    >>> print(rec.summary())  # see recommendations
-    >>> result = rec.run()    # execute top recommendation
+    >>> df = sp.cps_wage()
+    >>> rec = sp.recommend(df, y="log_wage", treatment="union",
+    ...                    covariates=["education", "experience"])
+    >>> type(rec).__name__
+    'RecommendationResult'
+    >>> bool(len(rec.recommendations) > 0)
+    True
+    >>> bool("method" in rec.recommendations[0])
+    True
     """
     if covariates is None:
         covariates = [c for c in data.columns

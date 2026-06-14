@@ -131,6 +131,33 @@ def modelsummary(
 
     Parameters mirror R ``modelsummary``; see the module docstring for
     the exact mapping to regtable.
+
+    Examples
+    --------
+    Render a side-by-side regression table from two fitted models:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"x": rng.normal(0, 1, n), "z": rng.normal(0, 1, n)})
+    >>> df["y"] = 1.0 + 2.0 * df["x"] - 0.5 * df["z"] + rng.normal(0, 1, n)
+    >>> m1 = sp.regress("y ~ x", data=df)
+    >>> m2 = sp.regress("y ~ x + z", data=df)
+    >>> tbl = sp.modelsummary(m1, m2, model_names=["Model 1", "Model 2"])
+    >>> isinstance(tbl, str)
+    True
+    >>> "x" in tbl
+    True
+
+    Request a tidy DataFrame instead of formatted text (one column per
+    model):
+
+    >>> wide = sp.modelsummary(m1, m2, output="dataframe")
+    >>> type(wide).__name__
+    'DataFrame'
+    >>> wide.shape[1]
+    2
     """
     if len(models) == 0:
         raise ValueError("At least one model required.")
@@ -255,6 +282,23 @@ def coefplot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    Forest plot of the slope on ``x`` across two nested models:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"x": rng.normal(0, 1, n), "z": rng.normal(0, 1, n)})
+    >>> df["y"] = 1.0 + 2.0 * df["x"] - 0.5 * df["z"] + rng.normal(0, 1, n)
+    >>> m1 = sp.regress("y ~ x", data=df)
+    >>> m2 = sp.regress("y ~ x + z", data=df)
+    >>> fig, ax = sp.coefplot(m1, m2, model_names=["M1", "M2"], variables=["x"])
+    >>> ax.get_xlabel()
+    'Coefficient Estimate'
+    >>> fig.savefig("coefplot.png")  # doctest: +SKIP
     """
     try:
         import matplotlib.pyplot as plt
@@ -390,8 +434,15 @@ def coefplot_tikz(
     Examples
     --------
     >>> import statspai as sp
-    >>> m1 = sp.regress("y ~ x + z", data=df)         # doctest: +SKIP
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({"x": rng.normal(0, 1, n), "z": rng.normal(0, 1, n)})
+    >>> df["y"] = 1.0 + 2.0 * df["x"] - 0.5 * df["z"] + rng.normal(0, 1, n)
+    >>> m1 = sp.regress("y ~ x + z", data=df)
     >>> tikz = sp.coefplot_tikz(m1, coef_labels={"x": "Treatment"})
+    >>> isinstance(tikz, str)
+    True
     >>> open("coefplot.tex", "w").write(tikz)         # doctest: +SKIP
     """
     from scipy import stats as sp_stats

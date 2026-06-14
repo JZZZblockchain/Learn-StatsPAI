@@ -44,7 +44,24 @@ ItemKind = Literal["regtable", "summary", "balance", "tab", "text", "heading"]
 
 @dataclass
 class CollectionItem:
-    """One entry in a :class:`Collection`."""
+    """One entry in a :class:`Collection`.
+
+    You rarely construct this directly; the ``Collection.add_*`` methods
+    append items for you, and you read them back via ``Collection.get`` or
+    by iterating the collection.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> c = sp.collect("demo")
+    >>> _ = c.add_summary(df, vars=["log_wage"], name="desc", title="Summary")
+    >>> item = c.get("desc")
+    >>> isinstance(item, sp.CollectionItem)
+    True
+    >>> item.name, item.kind, item.title
+    ('desc', 'summary', 'Summary')
+    """
 
     name: str
     kind: ItemKind
@@ -67,6 +84,20 @@ class Collection:
     template : {'aer', 'qje', 'econometrica', 'restat'}, default 'aer'
         Forwarded to ``paper_tables`` style; also drives the default
         star levels used by ``add_regression``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> m1 = sp.regress("log_wage ~ education", data=df)
+    >>> m2 = sp.regress("log_wage ~ education + experience", data=df)
+    >>> c = sp.Collection(title="Wage analysis", template="aer")
+    >>> _ = c.add_regression(m1, m2, name="main", title="Table 1")
+    >>> _ = c.add_summary(df, vars=["log_wage", "education"], title="Table 2")
+    >>> len(c)
+    2
+    >>> "Table 1" in c.to_markdown()
+    True
     """
 
     _NAME_RE = "[a-zA-Z0-9_\\-]+"
@@ -838,12 +869,33 @@ class Collection:
 def collect(title: Optional[str] = None, *, template: str = "aer") -> Collection:
     """Construct a fresh :class:`Collection`.
 
-    Convenience factory mirroring Stata 15's ``collect`` workflow:
+    Convenience factory mirroring Stata 15's ``collect`` workflow.
 
+    Parameters
+    ----------
+    title : str, optional
+        Document title shown at the top of the rendered output.
+    template : {'aer', 'qje', 'econometrica', 'restat'}, default 'aer'
+        Book-tab styling preset forwarded to the renderers.
+
+    Returns
+    -------
+    Collection
+        An empty, ordered container; add items via its ``add_*`` methods.
+
+    Examples
+    --------
     >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> m1 = sp.regress("log_wage ~ education", data=df)
+    >>> m2 = sp.regress("log_wage ~ education + experience", data=df)
     >>> c = sp.collect("Wage analysis")
-    >>> c.add_regression(m1, m2, name="main")
-    >>> c.add_summary(df, vars=["wage", "educ"], name="desc")
-    >>> c.save("paper.docx")
+    >>> _ = c.add_regression(m1, m2, name="main", title="Table 1")
+    >>> _ = c.add_summary(df, vars=["log_wage", "education"], title="Table 2")
+    >>> len(c)
+    2
+    >>> c.list()["kind"].tolist()
+    ['regtable', 'summary']
+    >>> md = c.to_markdown()  # or c.save("paper.docx")
     """
     return Collection(title=title, template=template)

@@ -68,6 +68,20 @@ class IdentificationError(Exception):
 
     Carries the full :class:`IdentificationReport` on ``self.report`` so
     downstream code can still inspect findings without re-running.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rep = sp.IdentificationReport(
+    ...     findings=[sp.DiagnosticFinding(
+    ...         severity="blocker", category="variation",
+    ...         message="No variation in treatment.")],
+    ...     design="cross_section", n_obs=30)
+    >>> err = sp.IdentificationError(rep)
+    >>> isinstance(err, Exception)
+    True
+    >>> err.report.verdict
+    'BLOCKERS'
     """
 
     def __init__(self, report: 'IdentificationReport'):
@@ -86,7 +100,25 @@ class IdentificationError(Exception):
 
 @dataclass
 class DiagnosticFinding:
-    """A single design-level finding."""
+    """A single design-level finding.
+
+    These are the elements of :attr:`IdentificationReport.findings`;
+    each carries a ``severity`` (``'blocker'`` / ``'warning'`` / ``'info'``),
+    a ``category``, a human-readable ``message`` and an optional
+    ``suggestion``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> f = sp.DiagnosticFinding(
+    ...     severity="warning", category="power",
+    ...     message="Minimum detectable effect is large.",
+    ...     suggestion="Collect more units.")
+    >>> f.severity, f.category
+    ('warning', 'power')
+    >>> f.icon
+    '[!]'
+    """
     severity: str  # 'blocker' | 'warning' | 'info'
     category: str  # 'bad_controls' | 'overlap' | 'power' | 'variation' | 'clustering'
     message: str
@@ -101,7 +133,31 @@ class DiagnosticFinding:
 
 @dataclass
 class IdentificationReport:
-    """Report from ``check_identification``."""
+    """Report from ``check_identification``.
+
+    Aggregates a list of :class:`DiagnosticFinding` into an overall
+    :attr:`verdict` (``'OK'`` / ``'WARNINGS'`` / ``'BLOCKERS'``) and offers
+    :meth:`summary` for a printable digest and :meth:`by_category` to filter
+    findings. You usually obtain one from ``sp.check_identification`` rather
+    than constructing it directly.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rep = sp.IdentificationReport(
+    ...     findings=[
+    ...         sp.DiagnosticFinding(
+    ...             severity="warning", category="power",
+    ...             message="Minimum detectable effect is large."),
+    ...     ],
+    ...     design="cross_section", n_obs=120)
+    >>> rep.verdict
+    'WARNINGS'
+    >>> len(rep.by_category("power"))
+    1
+    >>> bool("Identification Diagnostics" in rep.summary())
+    True
+    """
     findings: List[DiagnosticFinding] = field(default_factory=list)
     design: str = ''
     n_obs: int = 0
@@ -780,14 +836,30 @@ def check_identification(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for w in range(40):
+    ...     treated, age = w < 20, rng.integers(25, 55)
+    ...     educ = rng.integers(10, 18)
+    ...     for yr in (2000, 2001):
+    ...         eff = 1.0 if (treated and yr == 2001) else 0.0
+    ...         rows.append({"worker": w, "year": yr,
+    ...                      "wage": 10 + 0.1 * age + 0.3 * educ + eff
+    ...                              + rng.normal(0, 1),
+    ...                      "training": int(treated),
+    ...                      "age": age, "education": educ})
+    >>> df = pd.DataFrame(rows)
     >>> report = sp.check_identification(
-    ...     df, y='wage', treatment='training',
-    ...     covariates=['age', 'education'],
-    ...     id='worker', time='year', design='did',
+    ...     df, y="wage", treatment="training",
+    ...     covariates=["age", "education"],
+    ...     id="worker", time="year", design="did",
     ... )
-    >>> print(report.summary())
-    >>> if report.verdict == 'BLOCKERS':
-    ...     raise RuntimeError("Design has identification blockers.")
+    >>> type(report).__name__
+    'IdentificationReport'
+    >>> bool(report.verdict in ("OK", "WARNINGS", "BLOCKERS"))
+    True
     """
     if covariates is None:
         covariates = []

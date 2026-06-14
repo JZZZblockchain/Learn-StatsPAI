@@ -33,7 +33,40 @@ from scipy import stats
 
 @dataclass
 class SubgroupResult:
-    """Container for subgroup heterogeneity analysis."""
+    """Container for subgroup heterogeneity analysis.
+
+    Returned by :func:`sp.subgroup_analysis`. Holds one row per subgroup
+    in ``results_df``, the pooled ``overall_estimate`` / ``overall_se``
+    and per-grouping interaction Wald tests in ``het_tests``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     "education": rng.normal(12, 3, size=n),
+    ...     "experience": rng.normal(10, 5, size=n),
+    ...     "female": rng.integers(0, 2, size=n),
+    ... })
+    >>> df["wage"] = (5.0 + 0.4 * df["education"] + 0.1 * df["experience"]
+    ...               + 0.3 * df["female"] * df["education"]
+    ...               + rng.normal(size=n))
+    >>> res = sp.subgroup_analysis(
+    ...     data=df,
+    ...     formula="wage ~ education + experience",
+    ...     x="education",
+    ...     by={"Gender": "female"},
+    ... )
+    >>> type(res).__name__
+    'SubgroupResult'
+    >>> res.x
+    'education'
+    >>> "Gender" in res.het_tests
+    True
+    """
 
     results_df: pd.DataFrame
     """Columns: group_var, group_val, estimate, se, ci_lower, ci_upper,
@@ -435,15 +468,30 @@ def subgroup_analysis(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     "female": rng.integers(0, 2, size=n),
+    ...     "region": rng.integers(0, 3, size=n),
+    ...     "education": rng.normal(12, 3, size=n),
+    ...     "experience": rng.normal(10, 5, size=n),
+    ... })
+    >>> df["wage"] = (
+    ...     5 + 0.4 * df["education"] + 0.1 * df["experience"]
+    ...     - 0.5 * df["female"] + rng.normal(size=n)
+    ... )
     >>> result = sp.subgroup_analysis(
     ...     data=df,
     ...     formula="wage ~ education + experience",
     ...     x='education',
     ...     by={'Gender': 'female', 'Region': 'region'},
     ... )
-    >>> result.plot()
-    >>> print(result.summary())
+    >>> fig = result.plot()  # doctest: +SKIP
+    >>> type(result).__name__
+    'SubgroupResult'
     """
     from ..core.utils import parse_formula
     parsed = parse_formula(formula)

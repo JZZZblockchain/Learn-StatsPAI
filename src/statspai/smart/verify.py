@@ -434,6 +434,26 @@ def verify_recommendation(
     -----
     The score measures resampling behavior, not identification
     validity. A biased estimator can score high. See module docstring.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> x = rng.normal(0, 1, n)
+    >>> treat = rng.integers(0, 2, n)
+    >>> y = 1.0 + 0.5 * treat + 0.3 * x + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "treat": treat, "x": x})
+    >>> rec = sp.recommend(df, y="y", treatment="treat",
+    ...                    design="cross_section")
+    >>> out = sp.verify_recommendation(
+    ...     rec.recommendations[0], df,
+    ...     B=20, K_subsample=3, n_placebo=3, budget_s=10, seed=0)
+    >>> bool(np.isfinite(out["score"]))
+    True
+    >>> sorted(out.keys())[:3]
+    ['B_used', 'base_runtime_s', 'elapsed_s']
     """
     # Independent RNG streams per component so that non-determinism in
     # bootstrap timing does not leak into placebo/subsample draws.

@@ -42,7 +42,43 @@ from scipy import stats
 
 @dataclass
 class SpecCurveResult:
-    """Holds all specification curve outputs."""
+    """Holds all specification curve outputs.
+
+    Returned by :func:`sp.spec_curve`. Carries one row per specification
+    in ``results_df`` plus summary statistics (``median_estimate``,
+    ``share_significant``, ``share_positive``) and a ``.plot()`` method
+    producing the two-panel Simonsohn-Simmons-Nelson figure.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "education": rng.normal(12, 3, size=n),
+    ...     "experience": rng.normal(10, 5, size=n),
+    ...     "female": rng.integers(0, 2, size=n),
+    ... })
+    >>> df["wage"] = (5.0 + 0.4 * df["education"] + 0.1 * df["experience"]
+    ...               - 0.5 * df["female"] + rng.normal(size=n))
+    >>> res = sp.spec_curve(
+    ...     data=df, y="wage", x="education",
+    ...     controls=[[], ["experience"], ["experience", "female"]],
+    ...     se_types=["nonrobust", "hc1"],
+    ... )
+    >>> type(res).__name__
+    'SpecCurveResult'
+    >>> res.n_specs                     # 3 control sets x 2 SE types
+    6
+    >>> res.results_df.shape[0] == res.n_specs
+    True
+
+    References
+    ----------
+    simonsohn2020specification
+    """
 
     results_df: pd.DataFrame
     """One row per specification with columns:
@@ -499,7 +535,20 @@ def spec_curve(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     "female": rng.integers(0, 2, size=n),
+    ...     "education": rng.normal(12, 3, size=n),
+    ...     "experience": rng.normal(10, 5, size=n),
+    ... })
+    >>> df["wage"] = (
+    ...     5 + 0.4 * df["education"] + 0.1 * df["experience"]
+    ...     - 0.5 * df["female"] + rng.normal(size=n)
+    ... )
     >>> result = sp.spec_curve(
     ...     data=df,
     ...     y='wage',
@@ -515,8 +564,9 @@ def spec_curve(
     ...         'Male': df['female'] == 0,
     ...     },
     ... )
-    >>> result.plot()
-    >>> print(result.summary())
+    >>> fig = result.plot()  # doctest: +SKIP
+    >>> type(result).__name__
+    'SpecCurveResult'
     """
     # ---- defaults -------------------------------------------------------
     if controls is None:
