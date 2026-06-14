@@ -372,7 +372,32 @@ def _resolve_family(name: str) -> _Family:
 @dataclass
 class MEGLMResult:
     """Container for GLMM fits (``meglm``, ``melogit``, ``mepoisson``,
-    ``megamma``, ``menbreg``, ``meologit``)."""
+    ``megamma``, ``menbreg``, ``meologit``).
+
+    Exposes the fitted ``fixed_effects`` / ``random_effects``,
+    ``variance_components``, BLUPs, and information criteria (``aic`` /
+    ``bic``). Family-specific helpers include :meth:`odds_ratios`
+    (binomial), :meth:`incidence_rate_ratios` (Poisson / NB), plus
+    :meth:`summary`, :meth:`predict`, :meth:`to_latex`, and :meth:`plot`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> p = 1.0 / (1.0 + np.exp(-(-0.3 + 0.8 * x + u)))
+    >>> y = (rng.uniform(size=240) < p).astype(float)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.melogit(df, y="y", x_fixed=["x"], group="gid")
+    >>> isinstance(res, sp.MEGLMResult)
+    True
+    >>> bool(np.isfinite(res.aic))
+    True
+    """
 
     fixed_effects: pd.Series
     random_effects: pd.DataFrame
@@ -1031,6 +1056,30 @@ def meglm(
     Returns
     -------
     MEGLMResult
+
+    References
+    ----------
+    breslow1993
+
+    Examples
+    --------
+    Random-intercept logistic GLMM on simulated grouped binary data:
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> p = 1.0 / (1.0 + np.exp(-(-0.3 + 0.8 * x + u)))
+    >>> y = (rng.uniform(size=240) < p).astype(float)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.meglm(df, y="y", x_fixed=["x"], group="gid", family="binomial")
+    >>> res.family, res.link
+    ('binomial', 'logit')
+    >>> bool(res.fixed_effects["x"] > 0)  # recovers the positive slope
+    True
     """
     fam = _resolve_family(family)
     fam_key = fam.name
@@ -1243,7 +1292,26 @@ def melogit(
     nAGQ: int = 1,
     **kw: Any,
 ) -> MEGLMResult:
-    """Random-effects logistic regression (Stata ``melogit``)."""
+    """Random-effects logistic regression (Stata ``melogit``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> p = 1.0 / (1.0 + np.exp(-(-0.3 + 0.8 * x + u)))
+    >>> y = (rng.uniform(size=240) < p).astype(float)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.melogit(df, y="y", x_fixed=["x"], group="gid")
+    >>> res.family
+    'binomial'
+    >>> bool(res.fixed_effects["x"] > 0)
+    True
+    """
     return meglm(
         data, y, x_fixed, group,
         family="binomial",
@@ -1264,7 +1332,25 @@ def mepoisson(
     nAGQ: int = 1,
     **kw: Any,
 ) -> MEGLMResult:
-    """Random-effects Poisson regression (Stata ``mepoisson``)."""
+    """Random-effects Poisson regression (Stata ``mepoisson``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> y = rng.poisson(np.exp(0.2 + 0.5 * x + u)).astype(float)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.mepoisson(df, y="y", x_fixed=["x"], group="gid")
+    >>> res.family, res.link
+    ('poisson', 'log')
+    >>> bool(res.fixed_effects["x"] > 0)
+    True
+    """
     return meglm(
         data, y, x_fixed, group,
         family="poisson",
@@ -1285,7 +1371,25 @@ def menbreg(
     nAGQ: int = 1,
     **kw: Any,
 ) -> MEGLMResult:
-    """Random-effects negative-binomial regression (Stata ``menbreg``)."""
+    """Random-effects negative-binomial regression (Stata ``menbreg``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> y = rng.poisson(np.exp(0.2 + 0.5 * x + u)).astype(float)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.menbreg(df, y="y", x_fixed=["x"], group="gid")
+    >>> res.family
+    'nbinomial'
+    >>> res.dispersion is not None  # NB-2 overdispersion alpha
+    True
+    """
     return meglm(
         data, y, x_fixed, group,
         family="nbinomial",
@@ -1306,7 +1410,25 @@ def megamma(
     nAGQ: int = 1,
     **kw: Any,
 ) -> MEGLMResult:
-    """Random-effects Gamma GLMM with log link (Stata ``meglm`` ``family(gamma)``)."""
+    """Random-effects Gamma GLMM with log link (Stata ``meglm`` ``family(gamma)``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(20), 12)
+    >>> x = rng.normal(size=240)
+    >>> u = rng.normal(0, 0.7, 20)[g]
+    >>> y = np.exp(0.3 + 0.4 * x + u) * rng.gamma(4.0, 0.25, size=240)
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.megamma(df, y="y", x_fixed=["x"], group="gid")
+    >>> res.family, res.link
+    ('gamma', 'log')
+    >>> res.dispersion is not None  # phi estimated by ML
+    True
+    """
     return meglm(
         data, y, x_fixed, group,
         family="gamma",

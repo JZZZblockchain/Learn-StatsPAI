@@ -31,32 +31,100 @@ def _select(data: pd.DataFrame, vars: Sequence[str]) -> pd.DataFrame:
 
 
 def rowmean(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise mean across ``vars``, ignoring NaN (Stata ``egen rowmean``)."""
+    """Row-wise mean across ``vars``, ignoring NaN (Stata ``egen rowmean``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd, numpy as np
+    >>> df = pd.DataFrame({"math": [80.0, 90.0, np.nan],
+    ...                    "read": [85.0, 95.0, 60.0],
+    ...                    "sci":  [78.0, 88.0, 65.0]})
+    >>> sp.rowmean(df, ["math", "read", "sci"]).tolist()
+    [81.0, 91.0, 62.5]
+    """
     return _select(data, vars).mean(axis=1, skipna=True)
 
 
 def rowtotal(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise sum across ``vars``, treating NaN as 0 (Stata ``egen rowtotal``)."""
+    """Row-wise sum across ``vars``, treating NaN as 0 (Stata ``egen rowtotal``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd, numpy as np
+    >>> df = pd.DataFrame({"math": [80.0, 90.0, np.nan],
+    ...                    "read": [85.0, 95.0, 60.0],
+    ...                    "sci":  [78.0, 88.0, 65.0]})
+    >>> sp.rowtotal(df, ["math", "read", "sci"]).tolist()
+    [243.0, 273.0, 125.0]
+    """
     return _select(data, vars).sum(axis=1, skipna=True)
 
 
 def rowmax(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise max across ``vars``, ignoring NaN."""
+    """Row-wise max across ``vars``, ignoring NaN.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd, numpy as np
+    >>> df = pd.DataFrame({"math": [80.0, 90.0, np.nan],
+    ...                    "read": [85.0, 95.0, 60.0],
+    ...                    "sci":  [78.0, 88.0, 65.0]})
+    >>> sp.rowmax(df, ["math", "read", "sci"]).tolist()
+    [85.0, 95.0, 65.0]
+    """
     return _select(data, vars).max(axis=1, skipna=True)
 
 
 def rowmin(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise min across ``vars``, ignoring NaN."""
+    """Row-wise min across ``vars``, ignoring NaN.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd, numpy as np
+    >>> df = pd.DataFrame({"math": [80.0, 90.0, np.nan],
+    ...                    "read": [85.0, 95.0, 60.0],
+    ...                    "sci":  [78.0, 88.0, 65.0]})
+    >>> sp.rowmin(df, ["math", "read", "sci"]).tolist()
+    [78.0, 88.0, 60.0]
+    """
     return _select(data, vars).min(axis=1, skipna=True)
 
 
 def rowsd(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise standard deviation across ``vars`` (Stata ``egen rowsd``)."""
+    """Row-wise standard deviation across ``vars`` (Stata ``egen rowsd``).
+
+    Uses the sample standard deviation (``ddof=1``), matching Stata.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({"q1": [2.0, 5.0],
+    ...                    "q2": [4.0, 5.0],
+    ...                    "q3": [6.0, 5.0]})
+    >>> sp.rowsd(df, ["q1", "q2", "q3"]).tolist()
+    [2.0, 0.0]
+    """
     return _select(data, vars).std(axis=1, skipna=True, ddof=1)
 
 
 def rowcount(data: pd.DataFrame, vars: Sequence[str]) -> pd.Series:
-    """Row-wise count of non-missing values (Stata ``egen rownonmiss``)."""
+    """Row-wise count of non-missing values (Stata ``egen rownonmiss``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd, numpy as np
+    >>> df = pd.DataFrame({"math": [80.0, 90.0, np.nan],
+    ...                    "read": [85.0, 95.0, 60.0],
+    ...                    "sci":  [78.0, 88.0, np.nan]})
+    >>> sp.rowcount(df, ["math", "read", "sci"]).tolist()
+    [3, 3, 1]
+    """
     return _select(data, vars).notna().sum(axis=1).astype(int)
 
 
@@ -91,6 +159,17 @@ def rank(
     Returns
     -------
     pd.Series aligned to ``data.index``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({"grp": ["a", "a", "b", "b"],
+    ...                    "score": [3.0, 1.0, 4.0, 2.0]})
+    >>> sp.rank(df, "score").tolist()
+    [3.0, 1.0, 4.0, 2.0]
+    >>> sp.rank(df, "score", by="grp").tolist()
+    [2.0, 1.0, 2.0, 1.0]
     """
     if var not in data.columns:
         raise ValueError(f"Column '{var}' not found")
@@ -135,6 +214,15 @@ def outlier_indicator(
     -------
     pd.DataFrame
         Copy of ``data`` with added ``{var}_outlier`` 0/1 columns.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({"x": [1.0, 2.0, 3.0, 4.0, 100.0]})
+    >>> out = sp.outlier_indicator(df, ["x"], cuts=(10, 90))
+    >>> out["x_outlier"].tolist()
+    [1, 0, 0, 0, 1]
     """
     df = data.copy()
     lo_pct, hi_pct = cuts

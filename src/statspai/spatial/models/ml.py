@@ -247,6 +247,27 @@ def sar(W: ArrayOrW, data: pd.DataFrame, formula: str,
     ----------
     W : ndarray, scipy.sparse matrix, or statspai.spatial.weights.W
     data, formula, row_normalize, alpha : see legacy implementation.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 30
+    >>> W = np.zeros((n, n))  # ring contiguity: each unit linked to neighbours
+    >>> for i in range(n):
+    ...     W[i, (i - 1) % n] = 1.0
+    ...     W[i, (i + 1) % n] = 1.0
+    >>> x = rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": 1.0 + 0.8 * x + rng.normal(scale=0.5, size=n),
+    ...                    "x": x})
+    >>> res = sp.sar(W, data=df, formula="y ~ x")
+    >>> list(res.params.index)
+    ['const', 'x', 'rho']
+
+    References
+    ----------
+    anselin1988spatial
     """
     y, X, dep_var, indep = _parse_formula(formula, data)
     n, k = X.shape
@@ -302,7 +323,29 @@ def sar(W: ArrayOrW, data: pd.DataFrame, formula: str,
 
 def sem(W: ArrayOrW, data: pd.DataFrame, formula: str,
         row_normalize: bool = True, alpha: float = 0.05) -> EconometricResults:
-    """Spatial Error Model: ``Y = Xβ + u, u = λWu + ε``."""
+    """Spatial Error Model: ``Y = Xβ + u, u = λWu + ε``.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 30
+    >>> W = np.zeros((n, n))
+    >>> for i in range(n):
+    ...     W[i, (i - 1) % n] = 1.0
+    ...     W[i, (i + 1) % n] = 1.0
+    >>> x = rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": 1.0 + 0.8 * x + rng.normal(scale=0.5, size=n),
+    ...                    "x": x})
+    >>> res = sp.sem(W, data=df, formula="y ~ x")
+    >>> list(res.params.index)
+    ['const', 'x', 'lambda']
+
+    References
+    ----------
+    anselin1988spatial
+    """
     y, X, dep_var, indep = _parse_formula(formula, data)
     n, k = X.shape
     M = _coerce_W(W, n_expected=n, row_normalize=row_normalize)
@@ -361,7 +404,32 @@ def sem(W: ArrayOrW, data: pd.DataFrame, formula: str,
 
 def sdm(W: ArrayOrW, data: pd.DataFrame, formula: str,
         row_normalize: bool = True, alpha: float = 0.05) -> EconometricResults:
-    """Spatial Durbin Model: ``Y = ρWY + Xβ + WXθ + ε``."""
+    """Spatial Durbin Model: ``Y = ρWY + Xβ + WXθ + ε``.
+
+    Reports LeSage & Pace direct / indirect / total effects in the
+    diagnostics when ``n`` is small enough for the dense ``(I - ρW)^{-1}``.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 30
+    >>> W = np.zeros((n, n))
+    >>> for i in range(n):
+    ...     W[i, (i - 1) % n] = 1.0
+    ...     W[i, (i + 1) % n] = 1.0
+    >>> x = rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": 1.0 + 0.8 * x + rng.normal(scale=0.5, size=n),
+    ...                    "x": x})
+    >>> res = sp.sdm(W, data=df, formula="y ~ x")
+    >>> list(res.params.index)  # own + spatially-lagged covariate + rho
+    ['const', 'x', 'W_x', 'rho']
+
+    References
+    ----------
+    lesage2009introduction
+    """
     y, X, dep_var, indep = _parse_formula(formula, data)
     n, k = X.shape
     M = _coerce_W(W, n_expected=n, row_normalize=row_normalize)
@@ -448,6 +516,27 @@ def slx(W: ArrayOrW, data: pd.DataFrame, formula: str,
     No autoregressive term. Estimated by ordinary least squares on the
     design matrix augmented with spatially-lagged covariates (skip the
     constant).
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 30
+    >>> W = np.zeros((n, n))
+    >>> for i in range(n):
+    ...     W[i, (i - 1) % n] = 1.0
+    ...     W[i, (i + 1) % n] = 1.0
+    >>> x = rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": 1.0 + 0.8 * x + rng.normal(scale=0.5, size=n),
+    ...                    "x": x})
+    >>> res = sp.slx(W, data=df, formula="y ~ x")
+    >>> list(res.params.index)
+    ['const', 'x', 'W_x']
+
+    References
+    ----------
+    anselin1988spatial
     """
     y, X, dep_var, indep = _parse_formula(formula, data)
     n, k = X.shape
@@ -490,6 +579,27 @@ def sac(W: ArrayOrW, data: pd.DataFrame, formula: str,
     Jointly estimates the autoregressive coefficient ρ (on the dependent
     variable) and the spatial-error coefficient λ by concentrated
     maximum likelihood, profiling out (β, σ²) at each (ρ, λ) candidate.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 30
+    >>> W = np.zeros((n, n))
+    >>> for i in range(n):
+    ...     W[i, (i - 1) % n] = 1.0
+    ...     W[i, (i + 1) % n] = 1.0
+    >>> x = rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": 1.0 + 0.8 * x + rng.normal(scale=0.5, size=n),
+    ...                    "x": x})
+    >>> res = sp.sac(W, data=df, formula="y ~ x")
+    >>> list(res.params.index)  # both spatial coefficients estimated jointly
+    ['const', 'x', 'rho', 'lambda']
+
+    References
+    ----------
+    anselin1988spatial
     """
     y, X, dep_var, indep = _parse_formula(formula, data)
     n, k = X.shape

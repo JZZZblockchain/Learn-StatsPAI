@@ -43,7 +43,20 @@ __all__ = [
 
 @dataclass
 class FrontierSensitivityResult:
-    """Container for frontier sensitivity analysis."""
+    """Container for frontier sensitivity analysis.
+
+    Returned by :func:`copula_sensitivity`, :func:`survival_sensitivity`,
+    and :func:`calibrate_confounding_strength`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.copula_sensitivity(0.3, 0.1)
+    >>> isinstance(res, sp.FrontierSensitivityResult)
+    True
+    >>> res.method
+    'copula_gaussian'
+    """
     method: str
     estimate: float
     se: float
@@ -104,6 +117,15 @@ def copula_sensitivity(
     Returns
     -------
     FrontierSensitivityResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.copula_sensitivity(0.3, 0.1)
+    >>> res.method
+    'copula_gaussian'
+    >>> int(len(res.curve))
+    21
 
     References
     ----------
@@ -182,6 +204,15 @@ def survival_sensitivity(
     baseline_survival_t : float, default 0.5
         Baseline S_0(t) used to report Δ survival at time t.
     alpha : float, default 0.05
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.survival_sensitivity(0.4, 0.15)
+    >>> res.method
+    'survival_gamma'
+    >>> int(len(res.curve))
+    21
 
     References
     ----------
@@ -264,6 +295,16 @@ def calibrate_confounding_strength(
     alpha : float, default 0.05
     target_estimate : float, default 0.0
         Effect value to explain away.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.calibrate_confounding_strength(
+    ...     0.3, 0.1, observed_r2_outcome=0.1, observed_r2_treatment=0.1)
+    >>> res.method
+    'calibrate_confounding_strength'
+    >>> list(res.curve.columns)[:3]
+    ['multiplier', 'r2_outcome', 'r2_treatment']
 
     References
     ----------
