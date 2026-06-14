@@ -174,6 +174,24 @@ def svymean(
     Returns
     -------
     SurveyResult
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "income": rng.normal(50, 10, n),
+    ...     "region": rng.integers(0, 4, n),   # strata
+    ...     "psu_id": rng.integers(0, 20, n),  # clusters
+    ...     "pw": rng.uniform(1.0, 3.0, n),    # sampling weights
+    ... })
+    >>> design = sp.svydesign(data=df, weights="pw", strata="region",
+    ...                       cluster="psu_id")
+    >>> res = sp.svymean("income", design)
+    >>> list(res.estimate.index)
+    ['income']
     """
     var_names, vals = _resolve_vars(variables, design.data)
     w = design.weights
@@ -227,6 +245,24 @@ def svytotal(
     Returns
     -------
     SurveyResult
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "income": rng.normal(50, 10, n),
+    ...     "region": rng.integers(0, 4, n),   # strata
+    ...     "psu_id": rng.integers(0, 20, n),  # clusters
+    ...     "pw": rng.uniform(1.0, 3.0, n),    # sampling weights
+    ... })
+    >>> design = sp.svydesign(data=df, weights="pw", strata="region",
+    ...                       cluster="psu_id")
+    >>> res = sp.svytotal("income", design)
+    >>> list(res.estimate.index)
+    ['income']
     """
     var_names, vals = _resolve_vars(variables, design.data)
     w = design.weights
@@ -283,6 +319,25 @@ def svyglm(
     Returns
     -------
     SurveyResult with regression coefficient estimates.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "income": rng.normal(50, 10, n),
+    ...     "age": rng.integers(20, 65, n),
+    ...     "region": rng.integers(0, 4, n),   # strata
+    ...     "psu_id": rng.integers(0, 20, n),  # clusters
+    ...     "pw": rng.uniform(1.0, 3.0, n),    # sampling weights
+    ... })
+    >>> design = sp.svydesign(data=df, weights="pw", strata="region",
+    ...                       cluster="psu_id")
+    >>> res = sp.svyglm("income ~ age", design)
+    >>> list(res.estimate.index)
+    ['Intercept', 'age']
     """
     from patsy import dmatrices
 

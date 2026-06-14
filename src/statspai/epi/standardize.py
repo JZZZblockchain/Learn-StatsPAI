@@ -97,6 +97,16 @@ def direct_standardize(
     -----
     SE is computed by the delta method on the weighted sum of stratum
     rates, treating events as Poisson.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> events = [30, 50, 80]          # event counts per age stratum
+    >>> population = [1000, 1000, 500]
+    >>> standard_weights = [4000, 4000, 2000]   # external standard population
+    >>> res = sp.direct_standardize(events, population, standard_weights)
+    >>> round(res.rate, 4)
+    0.064
     """
     e = np.asarray(events, dtype=float)
     p = np.asarray(population, dtype=float)
@@ -148,6 +158,20 @@ def indirect_standardize(
     SMR = observed / expected.
 
     CI uses exact Poisson (Byar's approximation / Garwood).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.indirect_standardize(
+    ...     observed=120,
+    ...     events_reference=[30, 50, 80],
+    ...     population_reference=[1000, 1000, 500],
+    ...     population_study=[800, 1200, 600],
+    ... )
+    >>> round(res.expected, 4)
+    180.0
+    >>> round(res.smr, 4)
+    0.6667
     """
     er = np.asarray(events_reference, dtype=float)
     pr = np.asarray(population_reference, dtype=float)

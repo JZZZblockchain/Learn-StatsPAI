@@ -111,6 +111,24 @@ def lrtest(
         between the two models.  REML log-likelihoods are only
         comparable across fits that share the same fixed-effect design
         matrix; always use ML for LR tests of fixed effects.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> g = np.repeat(np.arange(30), 10)
+    >>> x = rng.normal(size=300)
+    >>> y = 2.0 + 0.5 * x + rng.normal(0, 1.0, 30)[g] + rng.normal(0, 0.5, 300)
+    >>> df = pd.DataFrame({"y": y, "x": x, "school": g})
+    >>> restricted = sp.mixed(df, y="y", x_fixed=["x"], group="school",
+    ...                       method="ml")
+    >>> full = sp.mixed(df, y="y", x_fixed=["x"], group="school",
+    ...                 x_random=["x"], method="ml")
+    >>> res = sp.lrtest(restricted, full)  # test the random slope on x
+    >>> bool(0.0 <= res.p_value <= 1.0)
+    True
     """
     # --- 1. Family / response consistency -----------------------------
     fam_r = getattr(restricted, "family", None)

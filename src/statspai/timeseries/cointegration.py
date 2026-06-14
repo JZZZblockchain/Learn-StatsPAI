@@ -24,7 +24,35 @@ from scipy import stats
 
 
 class CointegrationResult:
-    """Results from cointegration test."""
+    """Results from cointegration test.
+
+    Produced by :func:`engle_granger` (and the Johansen routine). Exposes
+    the test statistic(s), critical values, estimated cointegration rank
+    and a formatted ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> T = 200
+    >>> x = np.cumsum(rng.normal(size=T))      # random walk
+    >>> y = 2.0 * x + rng.normal(size=T)       # cointegrated with x
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> res = sp.engle_granger(df, variables=["y", "x"])
+    >>> type(res).__name__
+    'CointegrationResult'
+    >>> res.test_type
+    'Engle-Granger'
+    >>> res.n_vars
+    2
+    >>> isinstance(res.summary(), str)
+    True
+
+    References
+    ----------
+    [@engle1987integration]
+    """
 
     def __init__(self, test_type, test_stats, critical_values, rank,
                  eigenvalues, eigenvectors, n_obs, n_vars, lags):
@@ -96,6 +124,29 @@ def engle_granger(
     Returns
     -------
     CointegrationResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> T = 200
+    >>> x = np.cumsum(rng.normal(size=T))      # random walk
+    >>> y = 2.0 * x + rng.normal(size=T)       # cointegrated with x
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> res = sp.engle_granger(df, variables=["y", "x"])
+    >>> res.test_type
+    'Engle-Granger'
+    >>> res.n_vars
+    2
+    >>> bool(res.rank in (0, 1))
+    True
+    >>> isinstance(res.summary(), str)
+    True
+
+    References
+    ----------
+    [@engle1987integration]
     """
     if variables is None:
         variables = data.select_dtypes(include=[np.number]).columns.tolist()
@@ -217,9 +268,22 @@ def johansen(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
-    >>> result = sp.johansen(df, variables=['gdp', 'consumption', 'investment'], lags=2)
-    >>> print(result.summary())
+    >>> rng = np.random.default_rng(0)
+    >>> trend = np.cumsum(rng.normal(size=200))  # common stochastic trend
+    >>> df = pd.DataFrame({
+    ...     'gdp': trend + rng.normal(scale=0.5, size=200),
+    ...     'consumption': 0.8 * trend + rng.normal(scale=0.5, size=200),
+    ...     'investment': 0.3 * trend + rng.normal(scale=0.5, size=200),
+    ... })
+    >>> result = sp.johansen(
+    ...     df, variables=['gdp', 'consumption', 'investment'], lags=2)
+    >>> type(result).__name__
+    'CointegrationResult'
+    >>> isinstance(result.summary(), str)
+    True
     """
     if variables is None:
         variables = data.select_dtypes(include=[np.number]).columns.tolist()

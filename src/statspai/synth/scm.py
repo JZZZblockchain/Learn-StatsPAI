@@ -947,6 +947,20 @@ class SyntheticControl:
         Ridge penalty on donor weights.
     alpha : float, default 0.05
         Significance level for confidence intervals.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> sc = sp.SyntheticControl(
+    ...     df, outcome='packspercapita', unit='state', time='year',
+    ...     treated_unit='California', treatment_time=1989,
+    ... )
+    >>> res = sc.fit(placebo=False)
+    >>> res.method
+    'Synthetic Control Method'
+    >>> bool(res.estimate < 0)  # cigarette sales fell after Prop 99
+    True
     """
 
     def __init__(

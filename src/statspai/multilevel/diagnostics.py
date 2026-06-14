@@ -66,6 +66,21 @@ def icc(
     Returns
     -------
     ICCResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> g = np.repeat(np.arange(30), 10)
+    >>> x = rng.normal(size=300)
+    >>> y = 2.0 + 0.5 * x + rng.normal(0, 1.0, 30)[g] + rng.normal(0, 0.5, 300)
+    >>> df = pd.DataFrame({"y": y, "x": x, "school": g})
+    >>> res = sp.mixed(df, y="y", x_fixed=["x"], group="school")
+    >>> rho = sp.icc(res)
+    >>> bool(0.0 <= float(rho) <= 1.0)  # share of variance at the school level
+    True
     """
     if not hasattr(result, "variance_components"):
         raise TypeError("icc() expects a MixedResult-like object")

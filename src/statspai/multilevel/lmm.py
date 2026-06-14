@@ -73,6 +73,24 @@ class MixedResult:
     The public attributes mirror Stata ``mixed`` and R ``lme4::lmer``
     output; the underscored fields carry implementation state used by
     methods like ``predict()`` and ``r_squared()``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> g = np.repeat(np.arange(30), 10)
+    >>> x = rng.normal(size=300)
+    >>> y = 2.0 + 0.5 * x + rng.normal(0, 1.0, 30)[g] + rng.normal(0, 0.5, 300)
+    >>> df = pd.DataFrame({"y": y, "x": x, "school": g})
+    >>> res = sp.mixed(df, y="y", x_fixed=["x"], group="school")
+    >>> type(res).__name__
+    'MixedResult'
+    >>> bool("x" in res.fixed_effects.index)
+    True
+    >>> bool(0.0 <= res.icc <= 1.0)  # share of variance at the school level
+    True
     """
 
     fixed_effects: pd.Series

@@ -30,6 +30,34 @@ import pandas as pd
 
 @dataclass
 class BVARResult:
+    """Posterior summary of a Bayesian VAR with Minnesota prior.
+
+    Produced by :func:`bvar`. Holds the posterior-mean coefficient matrix
+    and residual covariance, and exposes ``.forecast()``, ``.irf()`` and
+    ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> T = 120
+    >>> y1 = np.zeros(T); y2 = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     y1[t] = 0.5 * y1[t - 1] + 0.2 * y2[t - 1] + rng.normal()
+    ...     y2[t] = 0.3 * y2[t - 1] + 0.1 * y1[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"gdp": y1, "inflation": y2})
+    >>> res = sp.bvar(df, lags=2)
+    >>> type(res).__name__
+    'BVARResult'
+    >>> res.coef.shape
+    (5, 2)
+    >>> res.lags
+    2
+    >>> isinstance(res.summary(), str)
+    True
+    """
+
     coef: np.ndarray                 # (K*p + 1, K)  posterior mean B
     sigma: np.ndarray                # (K, K) posterior mean of Sigma
     fitted: np.ndarray               # (T-p, K)
@@ -118,6 +146,35 @@ def bvar(
         Overall tightness (smaller = stronger shrinkage toward RW).
     lambda2 : float, default 0.5
         Cross-variable shrinkage relative to own-lag.
+
+    Returns
+    -------
+    BVARResult
+        Object with ``.forecast()``, ``.irf()`` and ``.summary()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> T = 120
+    >>> y1 = np.zeros(T); y2 = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     y1[t] = 0.5 * y1[t - 1] + 0.2 * y2[t - 1] + rng.normal()
+    ...     y2[t] = 0.3 * y2[t - 1] + 0.1 * y1[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"gdp": y1, "inflation": y2})
+    >>> res = sp.bvar(df, lags=2)
+    >>> res.sigma.shape
+    (2, 2)
+    >>> fc = res.forecast(horizon=4)
+    >>> list(fc.columns)
+    ['gdp', 'inflation']
+    >>> fc.shape
+    (4, 2)
+
+    References
+    ----------
+    [@litterman1986forecasting]
     """
     Y_raw = data.to_numpy(dtype=float)
     var_names = list(data.columns)

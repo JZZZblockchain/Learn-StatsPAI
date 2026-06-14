@@ -46,7 +46,38 @@ __all__ = ["synth_survival", "SyntheticSurvivalResult"]
 
 @dataclass
 class SyntheticSurvivalResult:
-    """Output of :func:`synth_survival`."""
+    """Output of :func:`synth_survival`.
+
+    Exposes the fitted counterfactual survival curve (``s_synth``), the
+    observed treated curve (``s_treated``), their gap trajectory (``gap``),
+    the donor ``weights``, and a placebo-based uniform band.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> months = np.arange(0, 13)
+    >>> rows = []
+    >>> for arm in ['treated_arm', 'ctrl_1', 'ctrl_2', 'ctrl_3']:
+    ...     bump = 0.03 if arm == 'treated_arm' else 0.0
+    ...     for m in months:
+    ...         haz = 0.06 - bump * (m >= 6)
+    ...         rows.append({'arm': arm, 'month': m,
+    ...                      'km': float(np.exp(-haz * m)),
+    ...                      'is_treated': arm == 'treated_arm'})
+    >>> panel = pd.DataFrame(rows)
+    >>> r = sp.synth_survival(
+    ...     panel, unit='arm', time='month', survival='km',
+    ...     treated='is_treated', treat_time=6, n_placebos=20, seed=0,
+    ... )
+    >>> isinstance(r, sp.SyntheticSurvivalResult)
+    True
+    >>> r.treated_unit
+    'treated_arm'
+    >>> int(len(r.time_grid))
+    13
+    """
     treated_unit: str
     time_grid: np.ndarray
     s_treated: np.ndarray

@@ -26,7 +26,37 @@ from ..exceptions import MethodIncompatibility
 
 
 class VARResult:
-    """Results from VAR estimation."""
+    """Results from VAR estimation.
+
+    Returned by :func:`var`; carries coefficient tables, the residual
+    covariance, information criteria, and helper methods ``.irf()``,
+    ``.granger_test()`` and ``.plot_irf()``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(3)
+    >>> T = 200
+    >>> x = np.zeros(T); y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     x[t] = 0.5 * x[t - 1] + rng.normal()
+    ...     y[t] = 0.3 * y[t - 1] + 0.4 * x[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> vr = sp.var(df, variables=["y", "x"], lags=2)
+    >>> type(vr).__name__
+    'VARResult'
+    >>> vr.var_names
+    ['y', 'x']
+    >>> vr.lags
+    2
+    >>> print(vr.summary().splitlines()[0])
+    Vector Autoregression (VAR)
+
+    References
+    ----------
+    lutkepohl2005new
+    """
 
     def __init__(self, coefs, se, residuals, sigma_u, var_names, lags,
                  n_obs, aic, bic, hqic, det_sigma, log_likelihood,
@@ -162,9 +192,20 @@ def var(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.var(df, variables=['gdp', 'inflation', 'interest_rate'], lags=2)
-    >>> print(result.summary())
-    >>> result.plot_irf()
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(3)
+    >>> T = 200
+    >>> x = np.zeros(T); y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     x[t] = 0.5 * x[t - 1] + rng.normal()
+    ...     y[t] = 0.3 * y[t - 1] + 0.4 * x[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> result = sp.var(df, variables=["y", "x"], lags=2)
+    >>> result.var_names
+    ['y', 'x']
+    >>> result.lags
+    2
+    >>> fig = result.plot_irf()  # doctest: +SKIP
     """
     if variables is None:
         variables = data.select_dtypes(include=[np.number]).columns.tolist()
@@ -411,6 +452,32 @@ def irf(
     -------
     dict
         Keys: 'irf' (dict of arrays), 'periods'.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(3)
+    >>> T = 200
+    >>> x = np.zeros(T); y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     x[t] = 0.5 * x[t - 1] + rng.normal()
+    ...     y[t] = 0.3 * y[t - 1] + 0.4 * x[t - 1] + rng.normal()
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> vr = sp.var(df, variables=["y", "x"], lags=2)
+    >>> out = sp.irf(vr, periods=10, impulse="x", response="y")
+    >>> sorted(out.keys())
+    ['irf', 'periods']
+    >>> len(out["irf"]["x -> y"])  # s = 0, 1, ..., 10
+    11
+    >>> out["periods"][0]
+    0
+    >>> bool(np.isfinite(out["irf"]["x -> y"]).all())
+    True
+
+    References
+    ----------
+    lutkepohl2005new
     """
     k = var_result._k
     p = var_result._lags

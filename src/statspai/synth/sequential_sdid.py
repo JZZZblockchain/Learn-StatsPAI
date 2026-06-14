@@ -34,7 +34,27 @@ __all__ = ["sequential_sdid", "SequentialSDIDResult"]
 
 @dataclass
 class SequentialSDIDResult:
-    """Per-cohort and aggregated output of :func:`sequential_sdid`."""
+    """Per-cohort and aggregated output of :func:`sequential_sdid`.
+
+    Dataclass container bundling the aggregate ATT / SE / CI with a
+    ``per_cohort`` table of cohort-specific ATT(g). Exposes a formatted
+    :meth:`summary`.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> per_cohort = pd.DataFrame(
+    ...     {"cohort": [5, 8], "att": [2.10, 1.90], "se": [0.30, 0.40]}
+    ... )
+    >>> res = sp.SequentialSDIDResult(
+    ...     aggregate_att=2.0, aggregate_se=0.25,
+    ...     aggregate_ci=(1.51, 2.49), per_cohort=per_cohort,
+    ... )
+    >>> len(res.per_cohort)
+    2
+    >>> summary_text = res.summary()
+    """
 
     aggregate_att: float
     aggregate_se: float

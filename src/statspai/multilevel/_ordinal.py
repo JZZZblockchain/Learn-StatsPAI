@@ -375,6 +375,28 @@ def meologit(
     No intercept enters β — its role is taken by the K-1 thresholds.
     Returns an :class:`MEGLMResult` with ``family='ordinal'`` and
     ``thresholds`` populated.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> g = np.repeat(np.arange(25), 12)
+    >>> x = rng.normal(size=300)
+    >>> u = rng.normal(0, 0.6, 25)[g]
+    >>> latent = 0.9 * x + u + rng.logistic(size=300)
+    >>> y = np.ones(300, dtype=int)
+    >>> y[latent > -1.0] = 2
+    >>> y[latent > 1.0] = 3
+    >>> df = pd.DataFrame({"y": y, "x": x, "gid": g})
+    >>> res = sp.meologit(df, y="y", x_fixed=["x"], group="gid")
+    >>> isinstance(res, sp.MEGLMResult)
+    True
+    >>> res.family
+    'ordinal'
+    >>> bool(res.fixed_effects["x"] > 0)  # recovers the positive slope
+    True
     """
     if cov_type not in ("unstructured", "diagonal", "identity"):
         raise ValueError(f"unknown cov_type {cov_type!r}")

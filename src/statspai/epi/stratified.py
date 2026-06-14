@@ -96,6 +96,33 @@ def mantel_haenszel(
     Returns
     -------
     MantelHaenszelResult
+
+    Examples
+    --------
+    Pool the exposure-outcome odds ratio across two confounder strata, each
+    a 2x2 table ``[[exposed-case, exposed-noncase], [unexposed-case,
+    unexposed-noncase]]``:
+
+    >>> import statspai as sp
+    >>> tables = [
+    ...     [[10, 90], [5, 95]],
+    ...     [[20, 80], [12, 88]],
+    ... ]
+    >>> res = sp.mantel_haenszel(tables, measure="OR")
+    >>> type(res).__name__
+    'MantelHaenszelResult'
+    >>> res.measure
+    'OR'
+    >>> res.n_strata
+    2
+    >>> bool(res.estimate > 1.0)  # exposure raises the odds in both strata
+    True
+    >>> bool(res.ci[0] <= res.estimate <= res.ci[1])
+    True
+
+    References
+    ----------
+    mantel1959statistical
     """
     arr = _validate_strata(tables)
     K = arr.shape[0]
@@ -235,6 +262,29 @@ def breslow_day_test(
     -------
     chi2 : float
     p_value : float
+
+    Examples
+    --------
+    Test whether the odds ratio is constant across two strata.  Here the
+    per-stratum ORs are close, so the test does not reject homogeneity:
+
+    >>> import statspai as sp
+    >>> tables = [
+    ...     [[10, 90], [5, 95]],
+    ...     [[20, 80], [12, 88]],
+    ... ]
+    >>> chi2, p = sp.breslow_day_test(tables)
+    >>> bool(chi2 >= 0.0)
+    True
+    >>> bool(0.0 <= p <= 1.0)
+    True
+    >>> bool(p > 0.05)  # fail to reject OR homogeneity across strata
+    True
+
+    References
+    ----------
+    breslow1980statistical
+    tarone1985heterogeneity
     """
     arr = _validate_strata(tables)
     K = arr.shape[0]

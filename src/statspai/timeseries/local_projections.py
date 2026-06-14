@@ -55,6 +55,28 @@ def _newey_west(X: np.ndarray, e: np.ndarray, lags: int) -> np.ndarray:
 
 @dataclass
 class LocalProjectionsResult:
+    """Impulse-response container returned by :func:`local_projections`.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(3)
+    >>> T = 200
+    >>> shock = rng.normal(size=T)
+    >>> y = np.zeros(T)
+    >>> for t in range(1, T):
+    ...     y[t] = 0.5 * y[t - 1] + 0.8 * shock[t] + rng.normal(0, 0.5)
+    >>> df = pd.DataFrame({"y": y, "shock": shock})
+    >>> res = sp.local_projections(df, outcome="y", shock="shock", horizons=8)
+    >>> type(res).__name__
+    'LocalProjectionsResult'
+    >>> len(res.horizons) == 9
+    True
+    >>> bool(res.irf[0] > 0)
+    True
+    """
+
     horizons: np.ndarray              # (H+1,)
     irf: np.ndarray                   # (H+1,)
     se: np.ndarray                    # (H+1,)

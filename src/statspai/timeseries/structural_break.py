@@ -96,7 +96,31 @@ def _supf_pvalue(stat: float, q: int, n: int, trimming: float) -> float:
 
 
 class StructuralBreakResult:
-    """Results from structural break tests."""
+    """Results from structural break tests.
+
+    Returned by :func:`structural_break`. Holds the detected break
+    point(s), the sup-F statistic(s) with their Andrews (1993)
+    asymptotic p-value(s), and segment goodness-of-fit (RSS, BIC).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> # mean shift halfway through the sample
+    >>> y = np.concatenate([rng.normal(0.0, 1.0, 100),
+    ...                     rng.normal(3.0, 1.0, 100)])
+    >>> df = pd.DataFrame({"y": y})
+    >>> res = sp.structural_break(df, y="y", method="sup-f")
+    >>> isinstance(res, sp.StructuralBreakResult)
+    True
+    >>> res.test_type
+    'Sup-F'
+    >>> res.n_obs
+    200
+    >>> res.n_breaks >= 1
+    True
+    """
 
     def __init__(self, test_type, break_dates, f_stats, p_values,
                  n_breaks, rss_full, rss_segments, bic, n_obs):
@@ -203,9 +227,20 @@ def structural_break(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> inflation = rng.normal(2, 1, size=n)
+    >>> shift = np.where(np.arange(n) < 60, 0.0, 2.0)  # mean shift at t=60
+    >>> gdp_growth = (
+    ...     1.0 + 0.3 * inflation + shift + rng.normal(0, 0.5, size=n)
+    ... )
+    >>> df = pd.DataFrame({"gdp_growth": gdp_growth, "inflation": inflation})
     >>> result = sp.structural_break(df, y='gdp_growth', x=['inflation'])
-    >>> print(result.summary())
+    >>> type(result).__name__
+    'StructuralBreakResult'
     """
     if data is None:
         raise ValueError("data is required")
@@ -385,6 +420,27 @@ def cusum_test(
     -------
     dict
         Keys: 'cusum', 'critical_value', 'reject', 'n_obs'.
+
+    References
+    ----------
+    brown1975techniques
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> x = rng.normal(size=n)
+    >>> y = 1.0 + 0.5 * x + rng.normal(scale=0.5, size=n)  # stable relation
+    >>> df = pd.DataFrame({"y": y, "x": x})
+    >>> res = sp.cusum_test(df, y="y", x=["x"])
+    >>> sorted(res.keys())
+    ['critical_value', 'cusum', 'max_cusum', 'n_obs', 'reject']
+    >>> res["n_obs"]
+    120
+    >>> bool(res["reject"])
+    False
     """
     y_data = data[y].values.astype(float)
     n = len(y_data)

@@ -26,6 +26,30 @@ from scipy.optimize import minimize
 
 @dataclass
 class GARCHResult:
+    """Fitted GARCH(p,q) model returned by :func:`garch`.
+
+    Holds the conditional-variance parameters, the volatility path, and
+    standardised residuals, plus :meth:`forecast` for multi-step variance.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> T = 400
+    >>> eps = np.zeros(T)
+    >>> s2 = np.ones(T)
+    >>> omega, a1, b1 = 0.05, 0.1, 0.85
+    >>> for t in range(1, T):
+    ...     s2[t] = omega + a1 * eps[t - 1] ** 2 + b1 * s2[t - 1]
+    ...     eps[t] = np.sqrt(s2[t]) * rng.standard_normal()
+    >>> res = sp.garch(eps, p=1, q=1)
+    >>> bool(res.persistence < 1.0)   # alpha + beta < 1 => stationary
+    True
+    >>> res.forecast(horizon=3).shape
+    (3,)
+    """
+
     omega: float
     alpha: np.ndarray        # (q,)
     beta: np.ndarray         # (p,)
@@ -102,6 +126,31 @@ def garch(
         Number of ARCH (lagged ε²) terms.
     mean : bool, default True
         Estimate a constant mean μ; if False, μ = 0.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> T = 400
+    >>> eps = np.zeros(T)
+    >>> s2 = np.ones(T)
+    >>> omega, a1, b1 = 0.05, 0.1, 0.85
+    >>> for t in range(1, T):
+    ...     s2[t] = omega + a1 * eps[t - 1] ** 2 + b1 * s2[t - 1]
+    ...     eps[t] = np.sqrt(s2[t]) * rng.standard_normal()
+    >>> res = sp.garch(eps, p=1, q=1)
+    >>> isinstance(res, sp.GARCHResult)
+    True
+    >>> bool(res.persistence < 1.0)   # alpha + beta < 1 => stationary
+    True
+    >>> res.sigma2.shape
+    (400,)
+    >>> res.forecast(horizon=3).shape
+    (3,)
+    >>> bool(np.isfinite(res.aic))
+    True
+    >>> print(res.summary())  # doctest: +SKIP
     """
     y = np.asarray(y, dtype=float).ravel()
     T = len(y)

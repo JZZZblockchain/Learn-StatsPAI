@@ -67,6 +67,25 @@ def rake(
         E.g. ``{"sex": {"M": 0.49, "F": 0.51}, "age_group": {"18-34": 0.3, ...}}``.
     weight : str, optional
         Existing design weight column. If ``None``, starts with equal weights.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "sex": rng.choice(["M", "F"], size=n),
+    ...     "age_group": rng.choice(["18-34", "35-54", "55+"], size=n),
+    ... })
+    >>> margins = {
+    ...     "sex": {"M": 0.49, "F": 0.51},
+    ...     "age_group": {"18-34": 0.30, "35-54": 0.40, "55+": 0.30},
+    ... }
+    >>> res = sp.rake(df, margins=margins)
+    >>> bool(res.converged)
+    True
     """
     df = data.copy()
     n = len(df)
@@ -125,6 +144,24 @@ def linear_calibration(
         ``{column_name: population_total}`` for continuous auxiliary variables.
     weight : str, optional
         Design weight column. If ``None``, uses equal weights.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> df = pd.DataFrame({
+    ...     "income": rng.normal(50.0, 10.0, size=n),
+    ...     "age": rng.normal(40.0, 12.0, size=n),
+    ... })
+    >>> totals = {"income": df["income"].sum() * 1.05,
+    ...           "age": df["age"].sum() * 0.98}
+    >>> res = sp.linear_calibration(df, totals=totals)
+    >>> cal_total = float((res.calibrated_weights * df["income"]).sum())
+    >>> bool(abs(cal_total - totals["income"]) < 1e-4)
+    True
     """
     n = len(data)
     if weight is not None:

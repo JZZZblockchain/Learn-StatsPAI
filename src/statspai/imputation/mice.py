@@ -25,7 +25,26 @@ import warnings
 
 
 class MICEResult:
-    """Results from MICE imputation."""
+    """Results from MICE imputation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(7)
+    >>> x1 = rng.normal(size=120)
+    >>> x2 = 0.5 * x1 + rng.normal(size=120)
+    >>> y = 1.0 + x1 + x2 + rng.normal(size=120)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2})
+    >>> df.loc[rng.choice(120, size=15, replace=False), "x2"] = np.nan
+    >>> res = sp.mice(df, m=3, method="pmm", seed=0)
+    >>> type(res).__name__
+    'MICEResult'
+    >>> res.n_imputations
+    3
+    >>> bool(res.complete(0)["x2"].notna().all())
+    True
+    """
 
     def __init__(self, imputed_datasets, n_imputations, n_obs,
                  n_missing, variables_imputed, methods, convergence):
@@ -254,17 +273,29 @@ def mice(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.mice(df, m=5, method='pmm')
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(7)
+    >>> x1 = rng.normal(size=120)
+    >>> x2 = 0.5 * x1 + rng.normal(size=120)
+    >>> y = 1.0 + x1 + x2 + rng.normal(size=120)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2})
+    >>> df.loc[rng.choice(120, size=15, replace=False), "x2"] = np.nan
+    >>> result = sp.mice(df, m=3, method='pmm', seed=0)
     >>> df_complete = result.complete(0)  # first imputed dataset
-    >>> print(result.summary())
-    >>>
-    >>> # Combine estimates across imputations
+    >>> type(df_complete).__name__
+    'DataFrame'
+    >>> result.n_imputations
+    3
+    >>> # Combine estimates across imputations with Rubin's rules
     >>> estimates = []
-    >>> for i in range(5):
+    >>> for i in range(3):
     ...     df_i = result.complete(i)
     ...     r = sp.regress("y ~ x1 + x2", data=df_i)
-    ...     estimates.append({'params': r.params.values, 'var_cov': np.diag(r.std_errors.values**2)})
+    ...     estimates.append({'params': r.params.values,
+    ...                       'var_cov': np.diag(r.std_errors.values ** 2)})
     >>> combined = result.combine(estimates)
+    >>> sorted(combined)[:2]
+    ['fmi', 'n_imputations']
     """
     rng = np.random.default_rng(seed)
     df = data.copy()
@@ -413,8 +444,19 @@ def mi_estimate(
     Examples
     --------
     >>> import statspai as sp
-    >>> mice_res = sp.mice(df, m=5)
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(7)
+    >>> x1 = rng.normal(size=120)
+    >>> x2 = 0.5 * x1 + rng.normal(size=120)
+    >>> y = 1.0 + x1 + x2 + rng.normal(size=120)
+    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2})
+    >>> df.loc[rng.choice(120, size=15, replace=False), "x2"] = np.nan
+    >>> mice_res = sp.mice(df, m=3, seed=0)
     >>> combined = sp.mi_estimate(mice_res, sp.regress, formula="y ~ x1 + x2")
+    >>> combined['n_imputations']
+    3
+    >>> combined['var_names']
+    ['Intercept', 'x1', 'x2']
     """
     estimates = []
 

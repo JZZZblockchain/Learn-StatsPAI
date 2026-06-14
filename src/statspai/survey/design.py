@@ -38,6 +38,27 @@ class SurveyDesign:
         fractions; otherwise as population counts.
     nest : bool
         If True, PSU ids are nested within strata (re-label internally).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     "stratum": rng.integers(0, 3, size=n),
+    ...     "psu": rng.integers(0, 30, size=n),
+    ...     "wt": rng.uniform(0.5, 2.0, size=n),
+    ...     "income": rng.normal(50, 10, size=n),
+    ... })
+    >>> design = sp.SurveyDesign(df, weights="wt", strata="stratum",
+    ...                          cluster="psu")
+    >>> design.n
+    300
+    >>> m = design.mean("income")
+    >>> type(m).__name__
+    'SurveyResult'
     """
 
     def __init__(
@@ -151,11 +172,24 @@ def svydesign(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({
+    ...     "region": rng.integers(0, 3, size=n),
+    ...     "psu_id": rng.integers(0, 30, size=n),
+    ...     "pw": rng.uniform(0.5, 2.0, size=n),
+    ...     "income": rng.normal(50, 10, size=n),
+    ...     "age": rng.normal(40, 12, size=n),
+    ... })
     >>> design = sp.svydesign(data=df, weights='pw', strata='region',
     ...                       cluster='psu_id')
-    >>> design.mean('income')
-    >>> design.glm('income ~ age + education')
+    >>> type(design).__name__
+    'SurveyDesign'
+    >>> m = design.mean('income')
+    >>> g = design.glm('income ~ age')
     """
     return SurveyDesign(
         data=data, weights=weights, strata=strata,

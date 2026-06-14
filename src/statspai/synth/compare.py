@@ -113,6 +113,22 @@ class SynthComparison:
         Name of the recommended method.
     recommendation_reason : str
         Human-readable justification.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
+    >>> comp = sp.synth_compare(
+    ...     df, outcome='packspercapita', unit='state', time='year',
+    ...     treated_unit='California', treatment_time=1989,
+    ...     methods=['classic', 'demeaned'], placebo=False,
+    ... )
+    >>> isinstance(comp, sp.SynthComparison)
+    True
+    >>> bool(comp.recommended in comp.results)
+    True
+    >>> sorted(comp.comparison_table['method'])
+    ['classic', 'demeaned']
     """
 
     def __init__(
@@ -365,22 +381,16 @@ def synth_compare(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> comp = sp.synth_compare(
-    ...     df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
+    ...     df, outcome="packspercapita", unit="state", time="year",
+    ...     treated_unit="California", treatment_time=1989,
+    ...     methods=["classic", "demeaned"],
     ... )
     >>> print(comp.summary())
-    >>> print(comp.recommended)
+    >>> comp.recommended            # method with the best pre-period fit
     'demeaned'
-    >>> comp.plot()
-
-    Compare a subset of methods:
-
-    >>> comp = sp.synth_compare(
-    ...     df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
-    ...     methods=['classic', 'augmented', 'sdid', 'mc'],
-    ... )
 
     See Also
     --------

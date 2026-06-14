@@ -23,6 +23,32 @@ import pandas as pd
 
 @dataclass
 class ARIMAResult:
+    """Fitted ARIMA(p,d,q) / SARIMAX model returned by :func:`statspai.arima`.
+
+    Carries the estimated ``params`` / ``se`` (indexed by parameter name),
+    information criteria (``aic`` / ``bic`` / ``aicc``), the log-likelihood,
+    residuals and fitted values, plus inference accessors
+    (:attr:`tvalues`, :attr:`pvalues`, :meth:`conf_int`) and a
+    ``.summary()`` / ``.forecast()`` interface.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> y = np.zeros(n)
+    >>> for t in range(1, n):
+    ...     y[t] = 0.6 * y[t - 1] + rng.normal(0, 1)
+    >>> res = sp.arima(y, order=(1, 0, 0))
+    >>> type(res).__name__
+    'ARIMAResult'
+    >>> bool(np.isfinite(res.aic))
+    True
+    >>> len(res.params)
+    2
+    """
+
     order: Tuple[int, int, int]
     seasonal_order: Optional[Tuple[int, int, int, int]]
     params: pd.Series
@@ -180,10 +206,21 @@ def arima(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
-    >>> res = sp.arima(df["gdp"], order=(2, 0, 0))
-    >>> res.se            # standard errors, indexed by parameter name
-    >>> res.conf_int()    # 95% confidence intervals
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> e = rng.normal(size=n)
+    >>> y = np.zeros(n)
+    >>> for t in range(2, n):
+    ...     y[t] = 0.5 * y[t - 1] - 0.2 * y[t - 2] + e[t]
+    >>> gdp = pd.Series(y, name="gdp")
+    >>> res = sp.arima(gdp, order=(2, 0, 0))
+    >>> bool((res.se > 0).all())   # standard errors, indexed by parameter name
+    True
+    >>> res.conf_int().shape       # 95% confidence intervals: one row per param
+    (3, 2)
     """
     try:
         from statsmodels.tsa.statespace.sarimax import SARIMAX
