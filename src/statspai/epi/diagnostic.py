@@ -55,6 +55,25 @@ __all__ = [
 
 @dataclass
 class DiagnosticTestResult:
+    """Container for binary diagnostic-test performance metrics.
+
+    Returned by :func:`sensitivity_specificity` / :func:`diagnostic_test`.
+    Holds sensitivity and specificity (with Wilson-score CIs), predictive
+    values (``ppv``, ``npv``), likelihood ratios (``lr_pos``, ``lr_neg``),
+    ``prevalence``, and the raw confusion cells ``tp``/``fp``/``fn``/``tn``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.sensitivity_specificity(tp=90, fn=10, fp=5, tn=95)
+    >>> isinstance(res, sp.DiagnosticTestResult)
+    True
+    >>> res.sensitivity
+    0.9
+    >>> res.tp
+    90
+    """
+
     sensitivity: float
     sensitivity_ci: tuple[float, float]
     specificity: float
@@ -116,6 +135,21 @@ def sensitivity_specificity(
         Pre-computed confusion cells.  Use instead of ``y_true``/
         ``y_pred`` when you already have counts.
     alpha : float, default 0.05
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.sensitivity_specificity(tp=90, fn=10, fp=5, tn=95)
+    >>> res.sensitivity  # 90 / (90 + 10)
+    0.9
+    >>> res.specificity  # 95 / (95 + 5)
+    0.95
+    >>> res.ppv  # 90 / (90 + 5)
+    0.9473684210526315
+
+    References
+    ----------
+    [@altman1994statistics]
     """
     if y_true is not None and y_pred is not None:
         y_true = np.asarray(y_true).astype(int)
@@ -157,7 +191,17 @@ def sensitivity_specificity(
 
 
 def diagnostic_test(*args, **kwargs) -> DiagnosticTestResult:
-    """Alias for :func:`sensitivity_specificity`."""
+    """Alias for :func:`sensitivity_specificity`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.diagnostic_test(tp=90, fn=10, fp=5, tn=95)
+    >>> res.sensitivity  # 90 / (90 + 10)
+    0.9
+    >>> res.specificity  # 95 / (95 + 5)
+    0.95
+    """
     return sensitivity_specificity(*args, **kwargs)
 
 
@@ -168,6 +212,26 @@ def diagnostic_test(*args, **kwargs) -> DiagnosticTestResult:
 
 @dataclass
 class ROCResult:
+    """Container for ROC-curve coordinates and AUC inference.
+
+    Returned by :func:`roc_curve`.  Holds the sweep ``thresholds`` and the
+    corresponding true/false positive rates (``tpr``, ``fpr``), plus the
+    ``auc`` with its Hanley-McNeil standard error (``auc_se``) and CI
+    (``auc_ci``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> y = np.array([0, 0, 0, 1, 1, 1])
+    >>> s = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9])  # perfectly separable
+    >>> roc = sp.roc_curve(y, s)
+    >>> isinstance(roc, sp.ROCResult)
+    True
+    >>> roc.auc
+    1.0
+    """
+
     thresholds: np.ndarray
     tpr: np.ndarray
     fpr: np.ndarray
@@ -196,6 +260,22 @@ def roc_curve(
     ----------
     y_true : array-like of {0, 1}
     scores : array-like of continuous predictions (higher = more "positive")
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> y = np.array([0, 0, 0, 1, 1, 1])
+    >>> s = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9])  # perfectly separable
+    >>> roc = sp.roc_curve(y, s)
+    >>> roc.auc
+    1.0
+    >>> bool(roc.auc_ci[0] <= roc.auc <= roc.auc_ci[1])
+    True
+
+    References
+    ----------
+    [@hanley1982meaning]
     """
     y = np.asarray(y_true).astype(int)
     s = np.asarray(scores, dtype=float)
@@ -247,7 +327,17 @@ def roc_curve(
 
 
 def auc(y_true, scores) -> float:
-    """Shortcut: just return the AUC."""
+    """Shortcut: just return the AUC.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> y = np.array([0, 0, 0, 1, 1, 1])
+    >>> s = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9])  # perfectly separable
+    >>> sp.auc(y, s)
+    1.0
+    """
     return roc_curve(y_true, scores).auc
 
 
@@ -258,6 +348,27 @@ def auc(y_true, scores) -> float:
 
 @dataclass
 class KappaResult:
+    """Container for Cohen's kappa inter-rater agreement.
+
+    Returned by :func:`cohen_kappa`.  Holds ``kappa`` with its standard
+    error and CI, the observed and expected agreement, the number of
+    ``n_categories``, the ``weights`` scheme, and the z/p inference.  The
+    :meth:`interpretation` method maps ``kappa`` to a Landis-Koch label.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> a = [0, 1, 2, 0, 1, 2]
+    >>> b = [0, 1, 2, 0, 1, 2]  # perfect agreement
+    >>> k = sp.cohen_kappa(a, b)
+    >>> isinstance(k, sp.KappaResult)
+    True
+    >>> k.kappa
+    1.0
+    >>> k.interpretation()
+    'almost perfect agreement'
+    """
+
     kappa: float
     se: float
     ci: tuple[float, float]
@@ -312,6 +423,25 @@ def cohen_kappa(
     weights : {"unweighted", "linear", "quadratic"}
         Weighting scheme for disagreements across an ordered category
         scale.  "unweighted" recovers the classic Cohen kappa.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> a = [0, 1, 2, 0, 1, 2]
+    >>> b = [0, 1, 2, 0, 1, 2]  # perfect agreement
+    >>> k = sp.cohen_kappa(a, b)
+    >>> k.kappa
+    1.0
+    >>> k.n_categories
+    3
+    >>> c = [0, 1, 2, 0, 2, 1]  # two disagreements vs a
+    >>> kc = sp.cohen_kappa(a, c)
+    >>> bool(kc.kappa < 1.0)
+    True
+
+    References
+    ----------
+    [@cohen1960coefficient]
     """
     a = np.asarray(rater_a)
     b = np.asarray(rater_b)

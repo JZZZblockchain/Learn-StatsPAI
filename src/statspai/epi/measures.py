@@ -349,6 +349,15 @@ def relative_risk(
     """Relative risk (risk ratio) with Katz log-RR confidence interval.
 
     Uses the Haldane correction when any cell is zero.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.relative_risk(40, 60, 20, 80)
+    >>> round(res.estimate, 3)
+    2.0
+    >>> round(res.risk_exposed, 3), round(res.risk_unexposed, 3)
+    (0.4, 0.2)
     """
     a, b, c, d = _coerce_2x2(a, b, c, d)
     n1 = a + b
@@ -391,6 +400,19 @@ def prevalence_ratio(*args, **kwargs) -> RR2x2Result:
     """Prevalence ratio (cross-sectional RR); mathematically identical
     to :func:`relative_risk` when called on a 2x2 prevalence table.
     Distinguished for semantic clarity in cross-sectional studies.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.prevalence_ratio(40, 60, 20, 80)
+    >>> round(res.estimate, 3)
+    2.0
+    >>> res.method
+    'prevalence-ratio'
+
+    References
+    ----------
+    zou2004modified
     """
     result = relative_risk(*args, **kwargs)
     return RR2x2Result(
@@ -425,6 +447,15 @@ def risk_difference(
     method : {"wald", "newcombe"}
         Newcombe's hybrid score CI avoids the Wald overshoot problem
         near 0 or 1.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.risk_difference(40, 60, 20, 80)
+    >>> round(res.estimate, 3)
+    0.2
+    >>> round(res.risk_exposed, 3), round(res.risk_unexposed, 3)
+    (0.4, 0.2)
     """
     a, b, c, d = _coerce_2x2(a, b, c, d)
     if method not in ("wald", "newcombe"):
@@ -498,6 +529,15 @@ def attributable_risk(
 
     where P_e is prevalence of exposure.  CI for PAF uses the delta
     method on log(1 - PAF).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.attributable_risk(40, 60, 20, 80)
+    >>> round(res.ar_exposed, 3)
+    0.5
+    >>> round(res.paf, 4), round(res.prevalence_exposed, 3)
+    (0.3333, 0.5)
     """
     a, b, c, d = _coerce_2x2(a, b, c, d)
     rr_res = relative_risk(a, b, c, d, alpha=alpha)
@@ -558,6 +598,15 @@ def incidence_rate_ratio(
     method : {"exact", "wald"}
         "exact" uses the F-distribution-based Poisson CI (Breslow-Day);
         "wald" uses log-rate SE.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.incidence_rate_ratio(30, 1000.0, 15, 1000.0)
+    >>> round(res.estimate, 3)
+    2.0
+    >>> round(res.rate_exposed, 3), round(res.rate_unexposed, 3)
+    (0.03, 0.015)
     """
     if pt_exposed <= 0 or pt_unexposed <= 0:
         raise ValueError("Person-time must be positive.")
@@ -656,6 +705,15 @@ def number_needed_to_treat(
     Propagates the Wald CI for RD.  Interpretation convention:
     negative RD -> NNT-Benefit (treatment reduces risk);
     positive RD -> NNT-Harm.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.epi.number_needed_to_treat(20, 80, 40, 60)
+    >>> round(res.estimate, 2)
+    5.0
+    >>> round(res.risk_difference, 3)  # treated arm has lower risk
+    -0.2
     """
     rd_res = risk_difference(a, b, c, d, alpha=alpha, method="wald")
     rd = rd_res.estimate
