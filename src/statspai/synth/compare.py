@@ -390,7 +390,6 @@ def synth_compare(
     ... )
     >>> print(comp.summary())
     >>> comp.recommended            # method with the best pre-period fit
-    'demeaned'
 
     See Also
     --------
@@ -511,18 +510,15 @@ def synth_recommend(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> df = sp.california_prop99()
     >>> best = sp.synth_recommend(
-    ...     df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
+    ...     df, outcome="packspercapita", unit="state", time="year",
+    ...     treated_unit="California", treatment_time=1989,
     ... )
-    >>> best
-    'demeaned'
-
-    Then use it:
-
     >>> result = sp.synth(
-    ...     df, outcome='gdp', unit='state', time='year',
-    ...     treated_unit='California', treatment_time=1989,
+    ...     df, outcome="packspercapita", unit="state", time="year",
+    ...     treated_unit="California", treatment_time=1989,
     ...     method=best,
     ... )
 
