@@ -125,6 +125,31 @@ def sharp_ope_unobserved(
     Returns
     -------
     SharpOPEResult
+
+    Examples
+    --------
+    Bound the value of a target policy on logged data when the logging
+    propensities may be confounded up to a factor ``gamma``:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> df = pd.DataFrame({"action": rng.integers(0, 2, n)})
+    >>> df["reward"] = rng.normal(0.5, 1, n)
+    >>> df["e_hat"] = 0.5   # logged propensity for the chosen action
+    >>> df["pi"] = 0.5      # target policy probability
+    >>> res = sp.sharp_ope_unobserved(
+    ...     df, actions="action", rewards="reward",
+    ...     logging_prob="e_hat", target_prob="pi", gamma=1.5)
+    >>> type(res).__name__
+    'SharpOPEResult'
+    >>> res.gamma
+    1.5
+    >>> res.n
+    300
+    >>> bool(res.lower_bound <= res.point_estimate <= res.upper_bound)
+    True
     """
     if gamma < 1.0:
         raise ValueError(f"gamma must be >= 1; got {gamma}.")
@@ -219,6 +244,35 @@ def causal_policy_forest(
     Returns
     -------
     CausalPolicyForestResult
+
+    Examples
+    --------
+    Learn a binary treatment-assignment policy from logged bandit data,
+    where action ``1`` is best when the first covariate is positive:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> X = rng.normal(0, 1, (n, 2))
+    >>> A = rng.integers(0, 2, n)
+    >>> R = (A == (X[:, 0] > 0).astype(int)).astype(float)
+    >>> R = R + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame(
+    ...     {"x0": X[:, 0], "x1": X[:, 1], "action": A, "reward": R})
+    >>> res = sp.causal_policy_forest(
+    ...     df, actions="action", rewards="reward",
+    ...     covariates=["x0", "x1"], n_trees=10, depth=2, random_state=0)
+    >>> type(res).__name__
+    'CausalPolicyForestResult'
+    >>> res.n_trees
+    10
+    >>> sorted(res.action_counts.keys())
+    [0, 1]
+    >>> sum(res.action_counts.values())  # one assignment per unit
+    200
+    >>> bool(np.isfinite(res.policy_value))
+    True
     """
     rng = np.random.default_rng(random_state)
     missing = set([actions, rewards, *covariates]) - set(data.columns)

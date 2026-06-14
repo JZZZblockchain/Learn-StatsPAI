@@ -62,6 +62,19 @@ class MetaAnalysisResult:
         effect is expected to lie); ``None`` when fewer than 3 studies.
     weights : np.ndarray
         Per-study weights under the chosen model (normalised to sum to 1).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> effects = [0.30, 0.45, 0.20, 0.55, 0.35]
+    >>> se = [0.12, 0.18, 0.10, 0.22, 0.14]
+    >>> result = sp.meta_analysis(effects, se, method="DL")
+    >>> type(result).__name__
+    'MetaAnalysisResult'
+    >>> bool(0.0 <= result.i2 <= 100.0)  # I^2 heterogeneity is a percentage
+    True
+    >>> bool(result.estimate > 0)  # all studies show a positive effect
+    True
     """
 
     estimate: float

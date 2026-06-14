@@ -219,6 +219,29 @@ def gap_closing(
         - 0: shift Group B's to match Group A's
     trim : float — propensity trim
     inference : {'analytical', 'bootstrap', 'none'}
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 600
+    >>> g = rng.integers(0, 2, n)
+    >>> x1 = rng.normal(g * 0.6, 1.0)          # covariate differs by group
+    >>> x2 = rng.normal(0, 1.0, n)
+    >>> y = 1.0 + 0.8 * x1 + 0.5 * x2 + 0.4 * g + rng.normal(0, 1.0, n)
+    >>> df = pd.DataFrame({'y': y, 'group': g, 'x1': x1, 'x2': x2})
+    >>> res = sp.gap_closing(df, y='y', group='group', x=['x1', 'x2'],
+    ...                      method='aipw', inference='none')
+    >>> # Identity: closed gap = observed gap - counterfactual gap
+    >>> round(res.closed_gap - (res.observed_gap
+    ...                         - res.counterfactual_gap), 10)
+    0.0
+
+    References
+    ----------
+    lundberg2021gap
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)
@@ -593,6 +616,27 @@ def disparity_decompose(
     target_level : float or None
         Value at which to fix mediator for the "initial" counterfactual.
         Default: mean of M in reference group (group=0).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 600
+    >>> g = rng.integers(0, 2, n)                  # 1 = disadvantaged
+    >>> m = rng.normal(2.0 - 0.8 * g, 1.0)         # mediator (e.g. education)
+    >>> y = 50.0 + 5.0 * m + 3.0 * g + rng.normal(0, 2.0, n)
+    >>> df = pd.DataFrame({'y': y, 'group': g, 'med': m})
+    >>> res = sp.disparity_decompose(df, y='y', group='group', mediator='med')
+    >>> # Identity: total = initial + mediator-attributable
+    >>> round(res.total_disparity - (res.initial_disparity
+    ...                              + res.mediator_attributable), 8)
+    0.0
+
+    References
+    ----------
+    jackson2018decomposition
     """
     cov = list(covariates) if covariates else []
     cols = [y, group, mediator] + cov

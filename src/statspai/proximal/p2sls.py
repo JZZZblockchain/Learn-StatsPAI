@@ -117,12 +117,30 @@ def proximal(
 
     Examples
     --------
-    >>> # ATE of smoking on lung cancer, with occupation (Z) and
-    >>> # secondhand-smoke exposure (W) as proxies for unmeasured
-    >>> # health behaviour/genetics.
-    >>> sp.proximal(df, y='lung_cancer', treat='smoker',
-    ...             proxy_z=['occupation'], proxy_w=['shs_exposure'],
-    ...             covariates=['age', 'sex'])
+    ATE of smoking on lung cancer, with occupation (Z) and secondhand-smoke
+    exposure (W) as proxies for an unmeasured confounder ``u`` (health
+    behaviour / genetics):
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> u = rng.normal(size=n)                       # unmeasured confounder
+    >>> smoker = (rng.normal(0.6 * u, 1, n) > 0).astype(float)
+    >>> occupation = u + rng.normal(0, 1, n)         # proxy Z
+    >>> shs_exposure = u + rng.normal(0, 1, n)       # proxy W
+    >>> age = rng.normal(50, 8, n)
+    >>> lung_cancer = 0.4 * smoker + 0.8 * u + 0.01 * age + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({
+    ...     "lung_cancer": lung_cancer, "smoker": smoker,
+    ...     "occupation": occupation, "shs_exposure": shs_exposure, "age": age,
+    ... })
+    >>> res = sp.proximal(df, y="lung_cancer", treat="smoker",
+    ...                   proxy_z=["occupation"], proxy_w=["shs_exposure"],
+    ...                   covariates=["age"])
+    >>> res.estimand
+    'ATE'
     """
     if bridge != 'linear':
         raise NotImplementedError(
@@ -285,7 +303,34 @@ def proximal(
 
 
 class ProximalCausalInference:
-    """Class wrapper for :func:`proximal`."""
+    """Class wrapper for :func:`proximal`.
+
+    Construct with the same keyword arguments as :func:`proximal` (minus
+    ``data``), then call :meth:`fit` with a DataFrame. The fitted
+    :class:`~statspai.core.results.CausalResult` is stored on ``result_``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> u = rng.normal(size=n)
+    >>> smoker = (rng.normal(0.6 * u, 1, n) > 0).astype(float)
+    >>> df = pd.DataFrame({
+    ...     "lung_cancer": 0.4 * smoker + 0.8 * u + rng.normal(0, 1, n),
+    ...     "smoker": smoker,
+    ...     "occupation": u + rng.normal(0, 1, n),
+    ...     "shs_exposure": u + rng.normal(0, 1, n),
+    ... })
+    >>> model = sp.ProximalCausalInference(
+    ...     y="lung_cancer", treat="smoker",
+    ...     proxy_z=["occupation"], proxy_w=["shs_exposure"],
+    ... ).fit(df)
+    >>> model.result_.estimand
+    'ATE'
+    """
 
     def __init__(self, **kwargs):
         self._kwargs = kwargs

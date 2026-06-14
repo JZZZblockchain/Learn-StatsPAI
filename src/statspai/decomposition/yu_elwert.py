@@ -97,6 +97,30 @@ class YuElwertResult(DecompResultMixin):
         when applicable so the user can audit a degenerate run.
     method : str
         ``"plugin"`` or ``"efficient"``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> r = rng.integers(0, 2, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> p = 1 / (1 + np.exp(-(0.5 * r + 0.3 * x1)))
+    >>> t = (rng.uniform(size=n) < p).astype(int)
+    >>> y = (1.0 + 0.5 * x1 + 0.3 * x2 + (0.8 + 0.4 * r) * t
+    ...      + rng.normal(size=n))
+    >>> df = pd.DataFrame({"y": y, "t": t, "r": r, "x1": x1, "x2": x2})
+    >>> res = sp.yu_elwert_decompose(
+    ...     df, y="y", treatment="t", group="r", x=["x1", "x2"],
+    ...     inference="none",
+    ... )
+    >>> type(res).__name__
+    'YuElwertResult'
+    >>> res.method
+    'plugin'
     """
 
     method_name: ClassVar[str] = "Yu-Elwert (2025) Causal Decomposition"
@@ -458,12 +482,29 @@ def yu_elwert_decompose(
     Examples
     --------
     >>> import statspai as sp
-    >>> df = sp.decomposition.datasets.disparity_panel()
-    >>> r = sp.decompose(
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> r = rng.integers(0, 2, size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> p = 1 / (1 + np.exp(-(0.5 * r + 0.3 * x1)))
+    >>> t = (rng.uniform(size=n) < p).astype(int)
+    >>> y = (1.0 + 0.5 * x1 + 0.3 * x2 + (0.8 + 0.4 * r) * t
+    ...      + rng.normal(size=n))
+    >>> df = pd.DataFrame({"y": y, "t": t, "r": r, "x1": x1, "x2": x2})
+    >>> res = sp.decompose(
     ...     "yu_elwert", data=df, y="y", treatment="t", group="r",
-    ...     x=["x1", "x2"]
+    ...     x=["x1", "x2"], inference="none",
     ... )
-    >>> r.summary()
+    >>> type(res).__name__
+    'YuElwertResult'
+    >>> res.method
+    'plugin'
+
+    References
+    ----------
+    yu2025nonparametric
     """
     if method not in ("plugin", "efficient"):
         raise ValueError(f"method must be 'plugin' or 'efficient', got {method!r}")

@@ -225,6 +225,23 @@ def ffl_decompose(
     n_boot : int
     alpha : float
     seed : int or None
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.ffl_decompose(df, y='log_wage', group='female',
+    ...                      x=['education', 'experience', 'tenure'],
+    ...                      stat='quantile', tau=0.5)
+    >>> print(r.summary())  # doctest: +ELLIPSIS
+    ...Firpo-Fortin-Lemieux Two-Step Decomposition...
+    >>> bool(abs(r.gap - (r.composition + r.structure
+    ...                    + r.spec_error + r.reweight_error)) < 1e-6)
+    True
+
+    References
+    ----------
+    [@firpo2018decomposing]
     """
     cols = [y, group] + list(x)
     df, w = prepare_frame(data, cols, weights=weights)

@@ -65,7 +65,17 @@ _REGISTRY: Dict[str, tuple] = {
 
 
 def available_methods() -> list[str]:
-    """Return list of all registered decomposition method names."""
+    """Return list of all registered decomposition method names.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> methods = sp.available_methods()
+    >>> bool("oaxaca" in methods)
+    True
+    >>> bool("ffl" in methods and "rif" in methods)
+    True
+    """
     return sorted(_REGISTRY.keys())
 
 

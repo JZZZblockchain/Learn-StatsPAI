@@ -55,6 +55,26 @@ def pci_mtp(
     Returns
     -------
     CausalResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> u = rng.normal(0, 1, 300)               # unmeasured confounder
+    >>> d = 0.5 * u + rng.normal(0, 1, 300)     # continuous treatment
+    >>> z = 0.8 * u + rng.normal(0, 1, 300)     # treatment-side proxy
+    >>> w = 0.8 * u + rng.normal(0, 1, 300)     # outcome-side proxy
+    >>> y = 1.0 * d + 1.5 * u + rng.normal(0, 1, 300)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z, "w": w})
+    >>> res = sp.pci_mtp(df, y="y", treat="d", proxy_z=["z"], proxy_w=["w"],
+    ...                  delta=1.0, n_boot=100, seed=0)
+    >>> bool(np.isfinite(res.estimate))
+    True
+
+    References
+    ----------
+    olivas2025proximal
     """
     cov = list(covariates or [])
     df = data[[y, treat] + list(proxy_z) + list(proxy_w) + cov] \

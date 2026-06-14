@@ -67,11 +67,23 @@ def multi_treatment(
 
     Examples
     --------
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> age = rng.normal(50, 10, n)
+    >>> weight = rng.normal(70, 12, n)
     >>> # Treatment with 3 levels: 0 (control), 1 (low), 2 (high)
+    >>> dose = rng.integers(0, 3, n)
+    >>> y = 2.0 * dose + 0.05 * age + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({'outcome': y, 'dose_level': dose,
+    ...                    'age': age, 'weight': weight})
     >>> result = sp.multi_treatment(df, y='outcome', treat='dose_level',
-    ...                             covariates=['age', 'weight'])
-    >>> print(result.detail)  # effects vs control
+    ...                             covariates=['age', 'weight'],
+    ...                             n_bootstrap=15)
+    >>> list(result.detail['treatment'])  # effects vs control
+    [1, 2]
     """
     est = MultiTreatment(
         data=data, y=y, treat=treat, covariates=covariates,
@@ -82,7 +94,36 @@ def multi_treatment(
 
 
 class MultiTreatment:
-    """Multi-valued treatment effects estimator."""
+    """Multi-valued treatment effects estimator.
+
+    Estimates AIPW (doubly robust) contrasts of each treatment arm
+    against a reference level for a discrete treatment ``D in
+    {0, 1, ..., K}``. Construct, then call :meth:`fit`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> from statspai.multi_treatment.multi_ipw import MultiTreatment
+    >>> rng = np.random.default_rng(0)
+    >>> n = 120
+    >>> age = rng.normal(50, 10, n)
+    >>> weight = rng.normal(70, 12, n)
+    >>> dose = rng.integers(0, 3, n)
+    >>> y = 2.0 * dose + 0.05 * age + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({'outcome': y, 'dose_level': dose,
+    ...                    'age': age, 'weight': weight})
+    >>> est = MultiTreatment(data=df, y='outcome', treat='dose_level',
+    ...                      covariates=['age', 'weight'], n_bootstrap=15)
+    >>> res = est.fit()
+    >>> list(res.detail['treatment'])
+    [1, 2]
+
+    References
+    ----------
+    [@cattaneo2010efficient]
+    """
 
     def __init__(
         self,

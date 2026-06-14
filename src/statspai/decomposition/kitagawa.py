@@ -128,6 +128,31 @@ def kitagawa_decompose(
         - 'a': rate effect evaluated at A's composition
         - 'b': rate effect evaluated at B's composition
         - 'symmetric': average (default)
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for grp, base in [(0, 0.2), (1, 0.3)]:
+    ...     for age, share in [('young', 0.5), ('mid', 0.3), ('old', 0.2)]:
+    ...         n = int(400 * share) + (10 if grp == 1 else 0)
+    ...         rate = base + {'young': 0.0, 'mid': 0.05, 'old': 0.1}[age]
+    ...         for _ in range(n):
+    ...             rows.append({'group': grp, 'age': age,
+    ...                          'y': int(rng.random() < rate)})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.kitagawa_decompose(df, rate='y', group='group', by='age')
+    >>> # Gap = rate effect + composition effect + interaction (exact identity)
+    >>> float(round(res.gap - (res.rate_effect + res.composition_effect
+    ...                        + res.interaction), 10))
+    0.0
+
+    References
+    ----------
+    kitagawa1955components
     """
     by_cols = [by] if isinstance(by, str) else list(by)
     use_cols = [rate, group] + by_cols + ([weights] if weights else [])
@@ -308,6 +333,23 @@ def das_gupta(
     -----
     Assumes: rate = f_1 * f_2 * ... * f_m  (aggregate product form).
     For additive forms use `kitagawa_decompose`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # Crude birth rate = fertility x share_women (product form).
+    >>> data_a = pd.DataFrame({'fertility': [0.10], 'share_women': [0.50]})
+    >>> data_b = pd.DataFrame({'fertility': [0.08], 'share_women': [0.55]})
+    >>> res = sp.das_gupta(data_a, data_b,
+    ...                    factor_names=['fertility', 'share_women'])
+    >>> # Factor effects sum to the total gap (exact identity)
+    >>> float(round(res.gap - res.factor_effects['effect'].sum(), 12))
+    0.0
+
+    References
+    ----------
+    dasgupta1993standardization
     """
     factors = list(factor_names)
     m = len(factors)

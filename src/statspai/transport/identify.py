@@ -21,6 +21,35 @@ from typing import Iterable
 
 @dataclass
 class TransportIdentificationResult:
+    """Result of a Pearl-Bareinboim transportability identification check.
+
+    Attributes
+    ----------
+    transportable : bool
+        Whether ``P(Y | do(X))`` in the target is identifiable from
+        source distributions and target covariate margins.
+    formula : str
+        The transport formula (or ``"NOT IDENTIFIABLE"``).
+    admissible_set : frozenset
+        The s-admissible conditioning set ``Z`` found (empty if the
+        effect transports directly).
+    reason : str
+        Human-readable justification.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> g = sp.dag("X -> Y; W -> Y; W -> X; S -> W")
+    >>> res = sp.identify_transport(
+    ...     g, treatment="X", outcome="Y", selection_nodes="S")
+    >>> type(res).__name__
+    'TransportIdentificationResult'
+    >>> res.transportable
+    True
+    >>> sorted(res.admissible_set)
+    ['W']
+    """
+
     transportable: bool
     formula: str
     admissible_set: frozenset
@@ -54,6 +83,20 @@ def identify_transport(
     Returns
     -------
     TransportIdentificationResult
+
+    Examples
+    --------
+    Conditioning on ``W`` blocks the ``S -> W -> Y`` selection path, so the
+    effect transports:
+
+    >>> import statspai as sp
+    >>> g = sp.dag("X -> Y; W -> Y; W -> X; S -> W")
+    >>> res = sp.identify_transport(
+    ...     g, treatment="X", outcome="Y", selection_nodes="S")
+    >>> res.transportable
+    True
+    >>> sorted(res.admissible_set)
+    ['W']
     """
     def _ensure_set(s):
         if isinstance(s, str):

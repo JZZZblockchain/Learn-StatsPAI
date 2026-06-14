@@ -214,6 +214,24 @@ def machado_mata(
     Returns
     -------
     MachadoMataResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.machado_mata(df, y='log_wage', group='female',
+    ...                     x=['education', 'experience', 'tenure'],
+    ...                     tau_grid=[0.25, 0.5, 0.75], n_sim=100, seed=0)
+    >>> print(r.summary())  # doctest: +ELLIPSIS
+    ...Machado-Mata Quantile Decomposition...
+    >>> list(r.quantile_grid['tau'])
+    [0.25, 0.5, 0.75]
+    >>> set(['gap', 'composition', 'structure']) <= set(r.quantile_grid.columns)
+    True
+
+    References
+    ----------
+    [@machado2005counterfactual]
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)

@@ -32,7 +32,30 @@ from scipy import stats as sp_stats
 
 @dataclass
 class BootstrapResult:
-    """Container for bootstrap inference results."""
+    """Container for bootstrap inference results.
+
+    Returned by :func:`bootstrap`. Holds the point estimate, the
+    bootstrap standard error, the confidence interval, the two-sided
+    p-value, and the full bootstrap distribution.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({"y": rng.normal(1.0, 1.0, 200),
+    ...                    "x": rng.normal(0.0, 1.0, 200)})
+    >>> res = sp.bootstrap(df, lambda d: d["y"].mean() - d["x"].mean(),
+    ...                    n_boot=200, seed=0)
+    >>> type(res).__name__
+    'BootstrapResult'
+    >>> res.n_boot
+    200
+    >>> res.ci_method
+    'percentile'
+    >>> bool(res.ci_lower < res.estimate < res.ci_upper)
+    True
+    """
 
     estimate: float
     se: float
@@ -102,15 +125,19 @@ def bootstrap(
 
     Examples
     --------
-    >>> def did_effect(df):
-    ...     result = sp.did(df, y='wage', treat='treated', time='post')
-    ...     return result.estimate
-    >>> boot = sp.bootstrap(df, did_effect, n_boot=500, cluster='firm')
-    >>> print(boot)
-
-    >>> # Quick bootstrap for any custom statistic
-    >>> boot = sp.bootstrap(df, lambda d: d['y'].mean() - d['x'].mean(),
-    ...                     n_boot=2000)
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({"y": rng.normal(1.0, 1.0, 200),
+    ...                    "x": rng.normal(0.0, 1.0, 200)})
+    >>> boot = sp.bootstrap(df, lambda d: d["y"].mean() - d["x"].mean(),
+    ...                     n_boot=500, seed=0)
+    >>> type(boot).__name__
+    'BootstrapResult'
+    >>> boot.n_boot
+    500
+    >>> bool(boot.se > 0)
+    True
     """
     rng = np.random.RandomState(seed)
 

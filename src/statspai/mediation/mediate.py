@@ -99,14 +99,22 @@ def mediate(
 
     Examples
     --------
-    >>> # Job training → Skills → Wages
-    >>> result = mediate(df, y='wage', treat='training',
-    ...                  mediator='skills', covariates=['age', 'edu'])
-    >>> print(result.summary())
-
-    >>> # Wald p-values — align with sp.aipw / sp.dml convention
-    >>> result = mediate(df, y='wage', treat='training',
-    ...                  mediator='skills', pvalue_method='wald')
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> treat = rng.binomial(1, 0.5, n)
+    >>> x = rng.normal(0, 1, n)
+    >>> m = 0.4 * treat + 0.3 * x + rng.normal(0, 1, n)
+    >>> y = 0.5 * treat + 0.6 * m + 0.2 * x + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"treat": treat, "x": x, "m": m, "y": y})
+    >>> result = sp.mediate(df, y="y", treat="treat", mediator="m",
+    ...                     covariates=["x"], n_boot=100, seed=0)
+    >>> result.estimand
+    'ACME'
+    >>> result.method
+    'Causal Mediation Analysis'
     """
     if inference not in ('bootstrap', 'delta'):
         raise ValueError(
@@ -146,6 +154,26 @@ def mediate(
 class MediationAnalysis:
     """
     Causal Mediation Analysis estimator.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> treat = rng.binomial(1, 0.5, n)
+    >>> x = rng.normal(0, 1, n)
+    >>> m = 0.4 * treat + 0.3 * x + rng.normal(0, 1, n)
+    >>> y = 0.5 * treat + 0.6 * m + 0.2 * x + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"treat": treat, "x": x, "m": m, "y": y})
+    >>> ma = sp.MediationAnalysis(df, y="y", treat="treat", mediator="m",
+    ...                           covariates=["x"], n_boot=100, seed=0)
+    >>> res = ma.fit()
+    >>> res.estimand
+    'ACME'
+    >>> res.method
+    'Causal Mediation Analysis'
     """
 
     def __init__(
@@ -550,6 +578,29 @@ def mediate_interventional(
     -------
     CausalResult
         ``estimate`` is IIE; full decomposition lives in ``detail``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 300
+    >>> treat = rng.binomial(1, 0.5, n)
+    >>> x = rng.normal(0, 1, n)
+    >>> m = 0.4 * treat + 0.3 * x + rng.normal(0, 1, n)
+    >>> y = 0.5 * treat + 0.6 * m + 0.2 * x + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"treat": treat, "x": x, "m": m, "y": y})
+    >>> res = sp.mediate_interventional(
+    ...     df, y="y", treat="treat", mediator="m", covariates=["x"],
+    ...     n_mc=100, n_boot=100, seed=0,
+    ... )
+    >>> res.estimand
+    'IIE'
+    >>> res.method
+    'Interventional Mediation Analysis'
+    >>> len(res.detail["effect"])     # IIE, IDE, Total
+    3
 
     Notes
     -----

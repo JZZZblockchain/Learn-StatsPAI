@@ -198,6 +198,18 @@ def fairlie(
     reference : {0, 1} — whose coefficients to use
     n_sim : int — number of random matchings to average over
     seed : int or None
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.fairlie(df, y="union", group="female",
+    ...                  x=["education", "experience"], model="logit",
+    ...                  n_sim=50, seed=0)
+    >>> res.method
+    'Fairlie'
+    >>> list(res.detailed["variable"])
+    ['education', 'experience']
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)
@@ -307,6 +319,17 @@ def bauer_sinning(
     model : {'logit', 'probit'}
     reference : {0, 1}
     variant : {'yun'}  — reserved for future extensions
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.bauer_sinning(df, y="union", group="female",
+    ...                        x=["education", "experience"], model="logit")
+    >>> res.method
+    'Bauer-Sinning (Yun weights)'
+    >>> bool(abs((res.explained + res.unexplained) - res.gap) < 1e-8)
+    True
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)

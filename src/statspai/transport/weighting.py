@@ -20,6 +20,45 @@ import pandas as pd
 
 @dataclass
 class TransportWeightResult:
+    """Result of density-ratio (inverse-odds-of-sampling) transport weighting.
+
+    Attributes
+    ----------
+    weights : np.ndarray
+        Per-source-unit transport weights.
+    ess : float
+        Effective sample size after weighting.
+    max_weight : float
+        Largest weight (after optional truncation).
+    effect_source : float
+        Unweighted difference-in-means effect in the source population.
+    effect_transported : float
+        Weighted effect transported to the target population.
+    se_transported : float
+        Standard error of the transported effect.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> ns, nt = 500, 500
+    >>> source = pd.DataFrame({
+    ...     "x": rng.normal(0, 1, ns),
+    ...     "a": rng.integers(0, 2, ns),
+    ... })
+    >>> source["y"] = source["a"] + 0.5 * source["x"] + rng.normal(0, 1, ns)
+    >>> target = pd.DataFrame({"x": rng.normal(0.5, 1, nt)})
+    >>> res = sp.transport_weights_fn(
+    ...     source, target, features=["x"], treatment="a", outcome="y")
+    >>> type(res).__name__
+    'TransportWeightResult'
+    >>> bool(res.ess <= ns)
+    True
+    >>> bool(np.isfinite(res.effect_transported))
+    True
+    """
+
     weights: np.ndarray
     ess: float
     max_weight: float
@@ -64,6 +103,33 @@ def transport_weights(
     Returns
     -------
     TransportWeightResult
+
+    Examples
+    --------
+    Transport an effect from a source sample to a target population whose
+    covariate distribution is shifted:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> ns, nt = 500, 500
+    >>> source = pd.DataFrame({
+    ...     "x": rng.normal(0, 1, ns),
+    ...     "a": rng.integers(0, 2, ns),
+    ... })
+    >>> source["y"] = source["a"] + 0.5 * source["x"] + rng.normal(0, 1, ns)
+    >>> target = pd.DataFrame({"x": rng.normal(0.5, 1, nt)})
+    >>> res = sp.transport_weights_fn(
+    ...     source, target, features=["x"], treatment="a", outcome="y")
+    >>> bool(abs(res.effect_source - 1.0) < 0.4)  # true source ATE is 1.0
+    True
+    >>> bool(res.ess <= ns)
+    True
+
+    References
+    ----------
+    stuart2011propensity
+    dahabreh2020extending
     """
     features = list(features)
     missing = [c for c in features if c not in source.columns or c not in target.columns]

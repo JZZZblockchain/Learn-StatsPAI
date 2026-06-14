@@ -133,6 +133,24 @@ def melly_decompose(
     Returns
     -------
     MellyResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.melly_decompose(df, y='log_wage', group='female',
+    ...                        x=['education', 'experience', 'tenure'],
+    ...                        tau_grid=[0.25, 0.5, 0.75])
+    >>> print(r.summary())  # doctest: +ELLIPSIS
+    ...Melly (2005) Quantile Decomposition...
+    >>> list(r.quantile_grid['tau'])
+    [0.25, 0.5, 0.75]
+    >>> set(['gap', 'composition', 'structure']) <= set(r.quantile_grid.columns)
+    True
+
+    References
+    ----------
+    [@melly2005decomposition]
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)

@@ -156,8 +156,10 @@ def demographic_parity(
     >>> res = sp.demographic_parity(df, predictions="pred", protected="group")
     >>> res.metric
     'demographic_parity'
-    >>> sorted(res.per_group)  # one positive-prediction rate per group
+    >>> sorted(int(g) for g in res.per_group)  # group labels (keys of per_group)
     [0, 1]
+    >>> isinstance(res.passes, bool)
+    True
     """
     yhat = _check_binary(_column(data, predictions), predictions)
     a = _column(data, protected)

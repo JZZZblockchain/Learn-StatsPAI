@@ -78,6 +78,27 @@ class PrincipalStratResult:
     n_obs : int
     alpha : float
     model_info : dict
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> D = rng.integers(0, 2, n)
+    >>> S = (rng.uniform(size=n) < 0.4 + 0.3 * D).astype(int)
+    >>> Y = 1.0 + 0.5 * D + 0.8 * S + rng.normal(0, 1.0, n)
+    >>> df = pd.DataFrame({"y": Y, "treat": D, "surv": S})
+    >>> res = sp.principal_strat(
+    ...     df, y="y", treat="treat", strata="surv",
+    ...     method="monotonicity", n_boot=100, seed=0,
+    ... )
+    >>> isinstance(res, sp.PrincipalStratResult)
+    True
+    >>> res.n_obs
+    400
+    >>> bool("Principal Stratification" in res.summary())
+    True
     """
     method: str
     strata_proportions: Dict[str, float]
@@ -160,6 +181,33 @@ def principal_strat(
     Returns
     -------
     PrincipalStratResult
+
+    References
+    ----------
+    frangakis2002principal, zhang2003estimation
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> D = rng.integers(0, 2, n)                         # treatment
+    >>> S = (rng.uniform(size=n) < 0.4 + 0.3 * D).astype(int)  # survival, monotone in D
+    >>> Y = 1.0 + 0.5 * D + 0.8 * S + rng.normal(0, 1.0, n)    # outcome
+    >>> df = pd.DataFrame({"y": Y, "treat": D, "surv": S})
+    >>> res = sp.principal_strat(
+    ...     df, y="y", treat="treat", strata="surv",
+    ...     method="monotonicity", n_boot=100, seed=0,
+    ... )
+    >>> isinstance(res, sp.PrincipalStratResult)
+    True
+    >>> res.method
+    'monotonicity'
+    >>> sorted(res.strata_proportions)
+    ['always-taker / always-survivor', 'complier', 'never-taker / never-survivor']
+    >>> res.bounds is not None  # Zhang-Rubin sharp bounds on the SACE
+    True
     """
     if method not in ('monotonicity', 'principal_score'):
         raise ValueError(
@@ -813,6 +861,29 @@ def survivor_average_causal_effect(
 
     Returns a :class:`CausalResult` with ``estimate`` set to the midpoint
     of the SACE bounds and the endpoints stored in ``model_info``.
+
+    References
+    ----------
+    zhang2003estimation
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> D = rng.integers(0, 2, n)                              # treatment
+    >>> S = (rng.uniform(size=n) < 0.4 + 0.3 * D).astype(int)  # survival
+    >>> Y = 1.0 + 0.5 * D + 0.8 * S + rng.normal(0, 1.0, n)    # outcome
+    >>> df = pd.DataFrame({"y": Y, "treat": D, "surv": S})
+    >>> res = sp.survivor_average_causal_effect(
+    ...     df, y="y", treat="treat", survival="surv",
+    ...     n_boot=100, seed=0,
+    ... )
+    >>> res.estimand
+    'SACE'
+    >>> bool(res.model_info["sace_lower"] <= res.model_info["sace_upper"])
+    True
     """
     ps = principal_strat(
         data=data, y=y, treat=treat, strata=survival,

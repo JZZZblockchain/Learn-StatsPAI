@@ -62,6 +62,23 @@ class FisherResult:
         Number of observations.
     n_treated : int
         Number of treated units.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> d = rng.integers(0, 2, 80)
+    >>> y = 0.5 * d + rng.normal(size=80)
+    >>> df = pd.DataFrame({"outcome": y, "treated": d})
+    >>> res = sp.fisher_exact(data=df, y="outcome", treatment="treated",
+    ...                       statistic="ate", n_perm=2000, seed=42)
+    >>> type(res).__name__
+    'FisherResult'
+    >>> bool(0.0 <= res.p_value <= 1.0)
+    True
+    >>> res.n_obs
+    80
     """
 
     def __init__(
@@ -255,21 +272,21 @@ def fisher_exact(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> d = rng.integers(0, 2, 80)
+    >>> y = 0.5 * d + rng.normal(size=80)
+    >>> df = pd.DataFrame({"outcome": y, "treated": d})
     >>> result = sp.fisher_exact(
     ...     data=df, y="outcome", treatment="treated",
-    ...     statistic="ate", n_perm=10000, seed=42)
-    >>> result.summary()
-    >>> result.plot()
-
-    >>> # Stratified permutation
-    >>> result = sp.fisher_exact(
-    ...     data=df, y="outcome", treatment="treated",
-    ...     stratify="block", n_perm=5000)
-
-    >>> # Covariate-adjusted
-    >>> result = sp.fisher_exact(
-    ...     data=df, y="outcome", treatment="treated",
-    ...     controls=["age", "income"], n_perm=10000)
+    ...     statistic="ate", n_perm=2000, seed=42)
+    >>> type(result).__name__
+    'FisherResult'
+    >>> bool(0.0 <= result.p_value <= 1.0)
+    True
+    >>> result.n_obs
+    80
 
     Notes
     -----
@@ -431,9 +448,20 @@ def ri_test(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> d = rng.integers(0, 2, 80)
+    >>> y = 0.5 * d + rng.normal(size=80)
+    >>> df = pd.DataFrame({"outcome": y, "treatment": d})
     >>> result = sp.ri_test(df, y='outcome', treat='treatment',
-    ...                     n_perms=5000, seed=42)
-    >>> print(f"RI p-value: {result['p_value']:.4f}")
+    ...                     n_perms=2000, seed=42)
+    >>> sorted(result.keys())
+    ['n_perms', 'observed', 'p_one_sided', 'p_value', 'perm_distribution']
+    >>> bool(0.0 <= result['p_value'] <= 1.0)
+    True
+    >>> result['n_perms']
+    2000
 
     Notes
     -----

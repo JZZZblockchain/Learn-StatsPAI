@@ -151,6 +151,26 @@ def mediate_sensitivity(
     ----------
     rho_range : (lo, hi)
     n_grid : int, default 41
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> s = sp.mediate_sensitivity(df, y='log_wage', treat='union',
+    ...                            mediator='tenure',
+    ...                            covariates=['education', 'experience'],
+    ...                            n_grid=11)
+    >>> s.rho_grid.size
+    11
+    >>> bool(s.rho_grid.min() == -0.9 and s.rho_grid.max() == 0.9)
+    True
+    >>> import numpy as np
+    >>> bool(np.isfinite(s.acme_at_zero))  # baseline ACME at rho=0
+    True
+
+    References
+    ----------
+    [@imai2010general]
     """
     if covariates is None:
         covariates = []

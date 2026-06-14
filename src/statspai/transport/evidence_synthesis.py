@@ -135,6 +135,19 @@ def synthesise_evidence(
     -------
     EvidenceSynthesisResult
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.synthesise_evidence(
+    ...     rct_estimate=0.50, rct_se=0.20,
+    ...     rwd_estimate=0.42, rwd_se=0.10,
+    ...     transport_shift=-0.05, transport_shift_se=0.02,
+    ... )
+    >>> round(res.pooled_estimate, 3)
+    0.426
+    >>> round(res.weights["rwd"], 3)  # RWD is more precise, so weighted higher
+    0.802
+
     References
     ----------
     Dahabreh et al. (2020); Yang, Gamalo & Fu (arXiv:2511.19735, 2025). [@yang2025integrating]
@@ -185,6 +198,17 @@ def heterogeneity_of_effect(
     Returns
     -------
     HeterogeneityResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> het = sp.heterogeneity_of_effect(
+    ...     estimates=[0.50, 0.42, 0.55], ses=[0.20, 0.10, 0.15],
+    ... )
+    >>> round(het.i2, 3)  # no excess heterogeneity across the three studies
+    0.0
+    >>> round(het.q_stat, 4)
+    0.5541
     """
     theta = np.asarray(estimates, dtype=float)
     s = np.asarray(ses, dtype=float)
@@ -226,6 +250,17 @@ def rwd_rct_concordance(
     Returns
     -------
     ConcordanceResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> con = sp.rwd_rct_concordance(
+    ...     rct_estimate=0.50, rct_se=0.20, rwd_estimate=0.42,
+    ... )
+    >>> bool(con.rwd_inside_rct_ci)  # RWD point falls inside the RCT 95% CI
+    True
+    >>> round(con.zscore_difference, 1)
+    -0.4
     """
     if rct_se <= 0:
         raise ValueError("rct_se must be > 0.")

@@ -25,6 +25,27 @@ def generalize(
     Expects ``rct`` to contain the treatment indicator, outcome, and
     effect modifiers ``features``. ``target_population`` should
     contain the same ``features`` so the density ratio is estimable.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> ns, nt = 400, 400
+    >>> rct = pd.DataFrame({
+    ...     "x": rng.normal(0, 1, ns),
+    ...     "treat": rng.integers(0, 2, ns),
+    ... })
+    >>> rct["y"] = rct["treat"] + 0.5 * rct["x"] + rng.normal(0, 1, ns)
+    >>> target = pd.DataFrame({"x": rng.normal(0.5, 1, nt)})
+    >>> res = sp.transport_generalize(
+    ...     rct, target, features=["x"], treatment="treat", outcome="y")
+    >>> type(res).__name__
+    'TransportWeightResult'
+    >>> bool(res.ess <= ns)
+    True
+    >>> bool(np.isfinite(res.effect_transported))
+    True
     """
     return transport_weights(
         source=rct,

@@ -71,6 +71,33 @@ def fortified_pci(
     ``model_info['outcome_augmentation_fallback']`` is set to True
     together with the error type.
 
+    Examples
+    --------
+    ATE of smoking on lung cancer, with occupation (Z) and secondhand-smoke
+    exposure (W) as proxies for an unmeasured confounder ``u``:
+
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> u = rng.normal(size=n)                       # unmeasured confounder
+    >>> smoker = (rng.normal(0.6 * u, 1, n) > 0).astype(float)
+    >>> occupation = u + rng.normal(0, 1, n)         # treatment-side proxy Z
+    >>> shs_exposure = u + rng.normal(0, 1, n)       # outcome-side proxy W
+    >>> age = rng.normal(50, 8, n)
+    >>> lung_cancer = 0.4 * smoker + 0.8 * u + 0.01 * age + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({
+    ...     "lung_cancer": lung_cancer, "smoker": smoker,
+    ...     "occupation": occupation, "shs_exposure": shs_exposure, "age": age,
+    ... })
+    >>> res = sp.fortified_pci(df, y="lung_cancer", treat="smoker",
+    ...                        proxy_z=["occupation"], proxy_w=["shs_exposure"],
+    ...                        covariates=["age"], n_boot=50, seed=0)
+    >>> res.estimand
+    'ATE'
+    >>> bool(np.isfinite(res.estimate))
+    True
+
     References
     ----------
     Yu, Shi & Tchetgen Tchetgen (2025). Fortified Proximal Causal Inference

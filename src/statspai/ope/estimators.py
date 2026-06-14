@@ -36,6 +36,24 @@ class OPEResult:
     return this class (the policy_learning OPEResult subclass is a thin alias
     that adds an ``estimator`` attribute for back-compat). ``isinstance(res,
     sp.OPEResult)`` therefore holds for results from either entry point.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n, K = 500, 3
+    >>> pi_b = np.full((n, K), 1.0 / K)          # uniform behaviour policy
+    >>> pi_e = np.tile([0.6, 0.3, 0.1], (n, 1))  # evaluation policy to score
+    >>> actions = np.array([rng.choice(K, p=pi_b[i]) for i in range(n)])
+    >>> rewards = (actions == 0).astype(float) + rng.normal(0, 0.1, n)
+    >>> res = sp.ope.ips(actions, rewards, pi_b, pi_e)
+    >>> type(res).__name__
+    'OPEResult'
+    >>> res.method
+    'IPS'
+    >>> bool(isinstance(res, sp.OPEResult))
+    True
     """
 
     method: str

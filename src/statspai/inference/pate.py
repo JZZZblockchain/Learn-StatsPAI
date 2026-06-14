@@ -98,15 +98,24 @@ def pate(
 
     Examples
     --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> age = rng.normal(45, 8, 120)      # experiment skews older
+    >>> edu = rng.normal(13, 2, 120)
+    >>> treated = rng.binomial(1, 0.5, 120)
+    >>> outcome = 2.0 * treated + 0.05 * age + 0.1 * edu + rng.normal(0, 1, 120)
+    >>> df_rct = pd.DataFrame({"outcome": outcome, "treated": treated,
+    ...                        "age": age, "edu": edu})
+    >>> df_pop = pd.DataFrame({"age": rng.normal(38, 8, 200),   # younger target
+    ...                        "edu": rng.normal(14, 2, 200)})
     >>> result = sp.pate(
-    ...     data_experiment=df_rct,
-    ...     data_target=df_pop,
-    ...     y="outcome",
-    ...     treatment="treated",
-    ...     covariates=["age", "edu", "income"],
-    ...     method="aipw",
+    ...     data_experiment=df_rct, data_target=df_pop,
+    ...     y="outcome", treatment="treated", covariates=["age", "edu"],
+    ...     method="aipw", n_boot=30, seed=0,
     ... )
-    >>> result.summary()
+    >>> bool(np.isfinite(result.estimate))
+    True
     """
     estimator = PATEEstimator(
         data_experiment=data_experiment,
@@ -143,7 +152,39 @@ def pate(
 
 
 class PATEEstimator:
-    """Population Average Treatment Effect estimator."""
+    """Population Average Treatment Effect estimator.
+
+    Reweights an experimental (RCT) sample to a target population to recover
+    the PATE, correcting the SATE for external validity. The convenience
+    wrapper :func:`pate` builds this object and calls :meth:`fit`; construct
+    it directly when you want to reuse the estimator.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n_exp = 300
+    >>> x_exp = rng.normal(0.0, 1.0, n_exp)
+    >>> d = rng.integers(0, 2, n_exp)
+    >>> y = 1.0 + 0.5 * x_exp + 2.0 * d + rng.normal(0, 1.0, n_exp)
+    >>> df_rct = pd.DataFrame({"x": x_exp, "treated": d, "outcome": y})
+    >>> df_pop = pd.DataFrame({"x": rng.normal(0.5, 1.0, 400)})  # target pop
+    >>> est = sp.PATEEstimator(
+    ...     data_experiment=df_rct,
+    ...     data_target=df_pop,
+    ...     y="outcome",
+    ...     treatment="treated",
+    ...     covariates=["x"],
+    ...     method="ipw",
+    ...     n_boot=50,
+    ...     seed=0,
+    ... )
+    >>> result = est.fit()
+    >>> bool(np.isfinite(result.estimate))
+    True
+    """
 
     _METHODS = ("ipw", "aipw", "calibration")
 

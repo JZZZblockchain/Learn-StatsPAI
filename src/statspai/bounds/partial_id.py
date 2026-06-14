@@ -70,6 +70,30 @@ class BoundsResult:
         Number of observations used.
     model_info : dict
         Additional method-specific information.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> age = rng.integers(20, 60, n).astype(float)
+    >>> education = rng.integers(8, 18, n).astype(float)
+    >>> trained = rng.integers(0, 2, n)
+    >>> wage = 10 + 0.3 * age + 0.5 * education + 5 * trained + rng.normal(0, 3, n)
+    >>> df = pd.DataFrame(
+    ...     {"wage": wage, "trained": trained,
+    ...      "age": age, "education": education})
+    >>> res = sp.horowitz_manski(
+    ...     data=df, y="wage", treatment="trained",
+    ...     covariates=["age", "education"], n_boot=50, random_state=0)
+    >>> isinstance(res, sp.BoundsResult)
+    True
+    >>> bool(res.lower <= res.upper)
+    True
+    >>> bool(res.width >= 0)
+    True
     """
 
     lower: float
@@ -345,11 +369,16 @@ def horowitz_manski(
 
     Examples
     --------
-    >>> import statspai as sp
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> trained = rng.binomial(1, 0.5, n)
+    >>> wage = 50 + 10 * trained + rng.normal(0, 15, n)
+    >>> df = pd.DataFrame({"wage": wage, "trained": trained,
+    ...                    "age": rng.normal(40, 10, n)})
     >>> result = sp.horowitz_manski(
-    ...     data=df, y="wage", treatment="trained",
-    ...     covariates=["age", "education"],
-    ...     y_lower=0, y_upper=100,
+    ...     data=df, y="wage", treatment="trained", covariates=["age"],
+    ...     y_lower=float(df["wage"].min()), y_upper=float(df["wage"].max()),
     ... )
     >>> result.summary()
     """
@@ -514,9 +543,16 @@ def iv_bounds(
 
     Examples
     --------
-    >>> import statspai as sp
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> lottery = rng.binomial(1, 0.5, n)
+    >>> trained = ((lottery + rng.normal(0, 1, n)) > 0.5).astype(int)
+    >>> employed = ((0.3 * trained + rng.normal(0, 1, n)) > 0).astype(int)
+    >>> df = pd.DataFrame({"employed": employed, "trained": trained,
+    ...                    "lottery": lottery})
     >>> result = sp.iv_bounds(
-    ...     data=df, y="wage", treatment="trained",
+    ...     data=df, y="employed", treatment="trained",
     ...     instrument="lottery", assumption="monotone_iv",
     ... )
     >>> result.summary()
@@ -698,7 +734,16 @@ def oster_delta(
 
     Examples
     --------
-    >>> import statspai as sp
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> education = rng.normal(12, 3, n)
+    >>> experience = rng.normal(10, 5, n)
+    >>> tenure = rng.normal(5, 3, n)
+    >>> wage = (2 * education + 1.5 * experience + 0.8 * tenure
+    ...         + rng.normal(0, 5, n))
+    >>> df = pd.DataFrame({"wage": wage, "education": education,
+    ...                    "experience": experience, "tenure": tenure})
     >>> result = sp.oster_delta(
     ...     data=df, y="wage",
     ...     x_base=["education"],
@@ -706,7 +751,6 @@ def oster_delta(
     ...     r_max=1.3,
     ... )
     >>> result.summary()
-    >>> result.plot()
     """
     all_cols = [y] + x_base + x_controls
     _check_cols(data, all_cols)
@@ -888,11 +932,19 @@ def selection_bounds(
 
     Examples
     --------
-    >>> import statspai as sp
+    >>> import statspai as sp, numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> trained = rng.binomial(1, 0.5, n)
+    >>> employed = rng.binomial(1, 0.8, n)
+    >>> wage = 50 + 10 * trained + rng.normal(0, 10, n)
+    >>> df = pd.DataFrame({"wage": np.where(employed == 1, wage, np.nan),
+    ...                    "trained": trained, "employed": employed,
+    ...                    "age": rng.normal(40, 10, n)})
     >>> result = sp.selection_bounds(
     ...     data=df, y="wage", treatment="trained",
     ...     selection="employed",
-    ...     covariates=["age", "education"],
+    ...     covariates=["age"],
     ...     method="conditional",
     ... )
     >>> result.summary()

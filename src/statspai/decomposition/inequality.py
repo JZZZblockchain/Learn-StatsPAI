@@ -143,7 +143,32 @@ def inequality_index(
     eps: float = 1.0,
     alpha: Optional[float] = None,
 ) -> float:
-    """Compute a single inequality index."""
+    """Compute a single inequality index.
+
+    Parameters
+    ----------
+    y : np.ndarray — outcome (e.g. income)
+    index : str — one of theil_t, theil_l, mld, ge0, ge1, ge2,
+        atkinson, gini, cv2
+    weights : np.ndarray or None
+    eps : float — Atkinson inequality-aversion parameter
+    alpha : float or None — GE parameter override
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> income = np.random.default_rng(0).lognormal(10.0, 0.5, size=500)
+    >>> g = sp.inequality_index(income, index="gini")
+    >>> bool(0 < g < 1)
+    True
+    >>> bool(sp.inequality_index(income, index="theil_t") > 0)
+    True
+
+    References
+    ----------
+    [@shorrocks1984inequality]
+    """
     y = np.asarray(y, dtype=float)
     w = np.ones_like(y) if weights is None else np.asarray(weights, dtype=float)
     if alpha is not None:
@@ -234,6 +259,22 @@ def subgroup_decompose(
     weights : str, array or None
     eps : float — Atkinson parameter
     alpha : float or None — GE parameter override
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> df = sp.cps_wage(n=800, seed=1)
+    >>> df["wage"] = np.exp(df["log_wage"])
+    >>> res = sp.subgroup_decompose(df, y="wage", by="female", index="theil_t")
+    >>> bool(res.total > 0)
+    True
+    >>> bool(abs(res.between + res.within - res.total) < 1e-6)
+    True
+
+    References
+    ----------
+    [@shorrocks1984inequality], [@dagum1997approach]
     """
     df, w = prepare_frame(data, [y, by], weights=weights)
     y_vec = df[y].to_numpy(dtype=float)
@@ -471,6 +512,26 @@ def source_decompose(
         S_k · R_k · G_k  /  G_total
     where S_k is its share of total mean, R_k the Gini correlation with
     total rank, G_k its own Gini.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({
+    ...     "labor": rng.lognormal(9.5, 0.4, 400),
+    ...     "capital": rng.lognormal(8.0, 0.7, 400),
+    ... })
+    >>> res = sp.source_decompose(df, sources=["labor", "capital"])
+    >>> bool(0 < res.total_gini < 1)
+    True
+    >>> len(res.sources)
+    2
+
+    References
+    ----------
+    [@lerman1985income]
     """
     cols = list(sources)
     df, w = prepare_frame(data, cols, weights=weights)
@@ -600,10 +661,27 @@ def shapley_inequality(
     index : str
     weights : str, array or None
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> df = sp.cps_wage(n=600, seed=2)
+    >>> df["wage"] = np.exp(df["log_wage"])
+    >>> res = sp.shapley_inequality(
+    ...     df, y="wage", x=["education", "experience"], index="theil_t")
+    >>> bool(res.total > 0)
+    True
+    >>> len(res.shapley)
+    2
+
     Notes
     -----
     Combinatorial cost: O(2^|x|).  For |x| ≤ 10 this is fine; for
     larger x the function warns and uses a random permutation sampler.
+
+    References
+    ----------
+    [@shorrocks2013decomposition]
     """
     cols = [y] + list(x)
     df, w = prepare_frame(data, cols, weights=weights)

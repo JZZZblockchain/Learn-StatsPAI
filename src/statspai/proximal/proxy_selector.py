@@ -32,7 +32,32 @@ from ..exceptions import ConvergenceWarning
 
 @dataclass
 class ProxyScoreResult:
-    """Per-candidate proxy score for PCI."""
+    """Per-candidate proxy score for PCI.
+
+    Returned by :func:`select_pci_proxies`. Holds the ranked Z- and
+    W-side candidate tables plus the recommended top-``k`` proxy names
+    for each role.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> u = rng.normal(size=n)
+    >>> z = u + rng.normal(scale=0.5, size=n)
+    >>> w = u + rng.normal(scale=0.5, size=n)
+    >>> d = (z + rng.normal(size=n) > 0).astype(float)
+    >>> y = 1.0 + 0.5 * d + w + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z, "w": w})
+    >>> res = sp.select_pci_proxies(df, y="y", treat="d",
+    ...                             candidates=["z", "w"])
+    >>> isinstance(res, sp.ProxyScoreResult)
+    True
+    >>> isinstance(res.summary(), str)
+    True
+    """
     z_candidates: pd.DataFrame   # cols: name, score_z, p_indep
     w_candidates: pd.DataFrame   # cols: name, score_w, p_indep
     recommended_z: List[str]
@@ -87,6 +112,28 @@ def select_pci_proxies(
     test is uninformative for that candidate) and a
     :class:`~statspai.exceptions.ConvergenceWarning` names the candidate
     and side. Scores for unaffected candidates are unchanged.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> u = rng.normal(size=n)                 # unmeasured confounder
+    >>> z = u + rng.normal(scale=0.5, size=n)  # treatment-side proxy
+    >>> w = u + rng.normal(scale=0.5, size=n)  # outcome-side proxy
+    >>> d = (z + rng.normal(size=n) > 0).astype(float)
+    >>> y = 1.0 + 0.5 * d + w + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z, "w": w})
+    >>> res = sp.select_pci_proxies(df, y="y", treat="d",
+    ...                             candidates=["z", "w"])
+    >>> type(res).__name__
+    'ProxyScoreResult'
+    >>> sorted(res.z_candidates["name"])
+    ['w', 'z']
+    >>> bool(len(res.recommended_z) <= 2)
+    True
     """
     cov = list(covariates or [])
     df = data[[y, treat] + list(candidates) + cov].dropna()

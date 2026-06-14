@@ -57,6 +57,28 @@ def bidirectional_pci(
     :class:`~statspai.exceptions.ConvergenceWarning` is emitted and
     ``model_info['treatment_bridge_fallback']`` is set to True together
     with the error type.
+
+    References
+    ----------
+    [@min2025regression]
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> U = rng.standard_normal(n)            # unobserved confounder
+    >>> Z = U + 0.5 * rng.standard_normal(n)  # treatment-side proxy
+    >>> W = U + 0.5 * rng.standard_normal(n)  # outcome-side proxy
+    >>> X = rng.standard_normal(n)            # observed covariate
+    >>> D = (1.0 * Z + 0.5 * X + rng.standard_normal(n) > 0).astype(int)
+    >>> Y = 2.0 * D + 1.0 * U + 0.3 * X + rng.standard_normal(n)
+    >>> df = pd.DataFrame({"y": Y, "treat": D, "z": Z, "w": W, "x": X})
+    >>> res = sp.bidirectional_pci(df, y="y", treat="treat",
+    ...                            proxy_z=["z"], proxy_w=["w"],
+    ...                            covariates=["x"], n_boot=50, seed=0)
+    >>> _ = res.summary()  # ATE recovered near the true value of 2.0
     """
     cov = list(covariates or [])
     df = data[[y, treat] + list(proxy_z) + list(proxy_w) + cov] \

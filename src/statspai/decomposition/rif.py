@@ -142,6 +142,21 @@ def rifreg(
         Quantile level (default 0.5 = median UQPE).
     quantile_convention : {"statspai", "dineq"}, default "statspai"
         Quantile RIF convention for ``statistic="quantile"``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> r = sp.rifreg(
+    ...     'log_wage ~ education + experience',
+    ...     data=df, statistic='quantile', tau=0.5,
+    ... )
+    >>> type(r).__name__
+    'RIFResult'
+    >>> list(r.params.index)
+    ['Intercept', 'education', 'experience']
+    >>> r.statistic, r.tau
+    ('quantile', 0.5)
     """
     if "~" not in formula:
         raise ValueError("formula must contain '~'")

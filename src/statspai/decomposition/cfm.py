@@ -220,6 +220,18 @@ def cfm_decompose(
     Returns
     -------
     CFMResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.decomposition.datasets.cps_wage()
+    >>> r = sp.cfm_decompose(df, y="log_wage", group="female",
+    ...                      x=["education", "experience"],
+    ...                      tau_grid=[0.25, 0.5, 0.75], n_thresh=15)
+    >>> type(r).__name__
+    'CFMResult'
+    >>> sorted(r.overall)
+    ['mean_composition', 'mean_gap', 'mean_structure']
     """
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)

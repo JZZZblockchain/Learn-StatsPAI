@@ -60,6 +60,20 @@ class OaxacaResult(DecompResultMixin):
         Per-group means, coefficients, standard errors, sample sizes.
     reference : str or int
         Reference weight specification used.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.oaxaca(
+    ...     data=sp.cps_wage(), y="log_wage", group="female",
+    ...     x=["education", "experience", "tenure"], reference=0)
+    >>> isinstance(res, sp.OaxacaResult)
+    True
+    >>> bool({"gap", "explained", "unexplained"}.issubset(res.overall))
+    True
+    >>> "contribution" in res.detailed.columns
+    True
+    >>> print(res.summary())  # doctest: +SKIP
     """
 
     method_name = "Oaxaca-Blinder Decomposition"
@@ -327,6 +341,21 @@ class GelbachResult(DecompResultMixin):
         Coefficient of interest from the full (long) regression.
     base_var : str
         Name of the variable of interest.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> res = sp.gelbach(
+    ...     data=sp.cps_wage(), y="log_wage",
+    ...     base_x=["education"],
+    ...     added_x=["experience", "tenure", "union"])
+    >>> isinstance(res, sp.GelbachResult)
+    True
+    >>> res.base_var
+    'education'
+    >>> bool(abs((res.base_coef - res.full_coef) - res.total_change) < 1e-6)
+    True
+    >>> print(res.summary())  # doctest: +SKIP
     """
 
     method_name = "Gelbach Sequential Decomposition"
@@ -526,11 +555,20 @@ def oaxaca(
     --------
     >>> import statspai as sp
     >>> result = sp.oaxaca(
-    ...     data=df, y="wage", group="female",
+    ...     data=sp.cps_wage(), y="log_wage", group="female",
     ...     x=["education", "experience", "tenure"],
     ...     reference=0, detail=True,
     ... )
-    >>> result.summary()
+    >>> type(result).__name__
+    'OaxacaResult'
+    >>> bool({"gap", "explained", "unexplained"}.issubset(result.overall))
+    True
+    >>> "contribution" in result.detailed.columns
+    True
+
+    References
+    ----------
+    oaxaca1973male, blinder1973wage
     """
     # ── Validate inputs ──────────────────────────────────────────────
     data = data.copy()
@@ -756,11 +794,20 @@ def gelbach(
     --------
     >>> import statspai as sp
     >>> result = sp.gelbach(
-    ...     data=df, y="wage",
+    ...     data=sp.cps_wage(), y="log_wage",
     ...     base_x=["education"],
     ...     added_x=["experience", "tenure", "union"],
     ... )
-    >>> result.summary()
+    >>> type(result).__name__
+    'GelbachResult'
+    >>> result.base_var
+    'education'
+    >>> bool(abs((result.base_coef - result.full_coef) - result.total_change) < 1e-6)
+    True
+
+    References
+    ----------
+    gelbach2016covariates
     """
     # ── Validate ─────────────────────────────────────────────────────
     data = data.copy()

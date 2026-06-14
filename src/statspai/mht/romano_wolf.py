@@ -265,6 +265,25 @@ class RomanoWolfResult:
     n_outcomes : int
     n_boot : int
     n_obs : int
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> results = sp.romano_wolf(
+    ...     data=df,
+    ...     y=["log_wage", "tenure", "experience"],
+    ...     x="union",
+    ...     controls=["education"],
+    ...     n_boot=200,
+    ...     seed=42,
+    ... )
+    >>> type(results).__name__
+    'RomanoWolfResult'
+    >>> results.n_outcomes
+    3
+    >>> bool("p_rw" in results.table.columns)  # stepdown-adjusted p-values
+    True
     """
 
     table: pd.DataFrame
@@ -495,15 +514,21 @@ def romano_wolf(
     Examples
     --------
     >>> import statspai as sp
+    >>> df = sp.cps_wage()
     >>> results = sp.romano_wolf(
     ...     data=df,
-    ...     y=["wage", "hours", "employment", "benefits"],
-    ...     x=["treatment"],
-    ...     controls=["age", "education", "experience"],
-    ...     n_boot=1000,
+    ...     y=["log_wage", "tenure", "experience"],
+    ...     x="union",
+    ...     controls=["education"],
+    ...     n_boot=200,
     ...     seed=42,
     ... )
-    >>> results.summary()
+    >>> type(results).__name__
+    'RomanoWolfResult'
+    >>> results.n_outcomes
+    3
+    >>> bool("p_rw" in results.table.columns)  # stepdown-adjusted p-values
+    True
     """
     # ── Input normalisation ────────────────────────────────────────
     if isinstance(x, str):
