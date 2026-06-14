@@ -63,6 +63,20 @@ def cohort_anchored_event_study(
     ----------
     arXiv 2509.01829, *Cohort-Anchored Robust Inference for
     Event-Study with Staggered Adoption* (2025).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> df['first_treat'] = df['first_treat'].fillna(0).astype(int)
+    >>> res = sp.cohort_anchored_event_study(
+    ...     df, y='y', treat='first_treat', time='time', id='unit',
+    ...     leads=2, lags=2)
+    >>> round(float(res.estimate), 4)
+    0.3668
+    >>> list(res.model_info['event_study'].columns)
+    ['rel_time', 'att', 'se', 'ci_low', 'ci_high']
     """
     df = data[[y, treat, time, id] + ([cluster] if cluster else [])] \
         .dropna().reset_index(drop=True)

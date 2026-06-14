@@ -60,6 +60,21 @@ def design_robust_event_study(
     ----------
     Wright, C. S. (2026). arXiv 2601.18801. See ``design_robust_es2026``
     bibkey at the bottom of this module for the full citation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> df['first_treat'] = df['first_treat'].fillna(0).astype(int)
+    >>> res = sp.design_robust_event_study(
+    ...     df, y='y', treat='first_treat', time='time', id='unit',
+    ...     leads=2, lags=2)
+    >>> round(float(res.estimate), 4)
+    0.2886
+    >>> diag = res.model_info['diagnostics']
+    >>> diag['n_negative_weight_periods']
+    1
     """
     df = data[[y, treat, time, id] + ([cluster] if cluster else [])] \
         .dropna().reset_index(drop=True)

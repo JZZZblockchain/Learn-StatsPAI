@@ -72,6 +72,26 @@ def beyond_average_late(
     Returns
     -------
     BeyondAverageResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> z = rng.integers(0, 2, n)
+    >>> d = ((0.2 + 0.6 * z + rng.normal(0, 0.3, n)) > 0.5)
+    >>> d = d.astype(int)
+    >>> y = 1.0 + 1.0 * d + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z})
+    >>> res = sp.beyond_average_late(
+    ...     df, y="y", treat="d", instrument="z",
+    ...     quantiles=np.array([0.25, 0.5, 0.75]), n_boot=50)
+    >>> res.late_q.round(2).tolist()  # complier LATE per quantile
+    [0.98, 1.01, 1.14]
+    >>> round(res.complier_share, 2)
+    0.69
     """
     if quantiles is None:
         quantiles = np.array([0.1, 0.25, 0.5, 0.75, 0.9])

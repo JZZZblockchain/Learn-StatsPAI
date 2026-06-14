@@ -97,6 +97,33 @@ def calibration_test(
     DataFrame
         Rows ``beta_mean`` and ``beta_differential`` with ``coef``,
         ``se``, ``t``, ``p``, ``ci_low``, ``ci_high``.
+
+    Examples
+    --------
+    ``sp.test_calibration`` is an alias of this function.
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.binomial(1, 0.5, size=n)
+    >>> tau = 1.0 + X[:, 0]  # heterogeneous effect
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": Y, "d": T,
+    ...     "x0": X[:, 0], "x1": X[:, 1], "x2": X[:, 2],
+    ... })
+    >>> cf = sp.causal_forest(
+    ...     data=df, formula="y ~ d | x0 + x1 + x2",
+    ...     n_estimators=50, random_state=0,
+    ... )
+    >>> ct = sp.calibration_test(cf)
+    >>> ct.index.tolist()
+    ['mean_forest_prediction', 'differential_forest_prediction']
+    >>> sp.test_calibration is sp.calibration_test
+    True
     """
     if not forest.fitted_:
         raise ValueError("Forest must be fitted before calibration testing.")
@@ -280,6 +307,32 @@ def rate(
     Yadlowsky, S., Fleming, S., Shah, N., Brunskill, E., Wager, S.
     (2021). "Evaluating Treatment Prioritization Rules via Rank-
     Weighted Average Treatment Effects." arXiv:2111.07966.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.binomial(1, 0.5, size=n)
+    >>> tau = 1.0 + X[:, 0]  # heterogeneous effect
+    >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({
+    ...     "y": Y, "d": T,
+    ...     "x0": X[:, 0], "x1": X[:, 1], "x2": X[:, 2],
+    ... })
+    >>> cf = sp.causal_forest(
+    ...     data=df, formula="y ~ d | x0 + x1 + x2",
+    ...     n_estimators=50, random_state=0,
+    ... )
+    >>> res = sp.rate(cf, target="AUTOC")
+    >>> sorted(res.keys())
+    ['ci_high', 'ci_low', 'estimate', 'method', 'n', 'se', \
+'target', 'toc_curve']
+    >>> res["toc_curve"].shape
+    (100, 2)
     """
     if not forest.fitted_:
         raise ValueError("Forest must be fitted.")

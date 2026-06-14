@@ -301,6 +301,28 @@ def partial_identification(
     The ``assumptions`` keyword is accepted for forward compatibility but
     ignored by all current back-ends; see each underlying function for its
     native assumption interface.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> y = 1.0 + 0.5 * d + rng.normal(0, 1.0, size=n)
+    >>> y = np.clip(y, 0.0, 1.0)  # Manski bounds need a bounded outcome
+    >>> df = pd.DataFrame({"y": y, "d": d})
+
+    Worst-case (no-assumption) Manski bounds on the ATE:
+
+    >>> res = sp.partial_identification(df, "y", "d", method="manski")
+    >>> round(float(res.estimate), 2)
+    0.06
+    >>> round(float(res.model_info["lower_bound"]), 2)
+    -0.44
+    >>> round(float(res.model_info["upper_bound"]), 2)
+    0.56
     """
     from . import bounds as _bounds
 
@@ -621,6 +643,33 @@ def policy_tree(
 
     Passing conflicting names raises ``TypeError``.  Delegates to
     :func:`statspai.policy_learning.policy_tree`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    >>> x3 = rng.normal(size=n)
+    >>> d = rng.binomial(1, 0.5, size=n)
+    >>> tau = 2.0 * (x1 > 0)  # only x1 > 0 benefits from treatment
+    >>> y = 1.0 + tau * d + x2 + rng.normal(0, 0.5, size=n)
+    >>> df = pd.DataFrame(
+    ...     {"x1": x1, "x2": x2, "x3": x3, "d": d, "y": y}
+    ... )
+
+    Article form — positional treatment ``d`` and covariates ``X``:
+
+    >>> res = sp.policy_tree(df, "y", "d", ["x1", "x2", "x3"], depth=2)
+    >>> res["n_obs"]
+    400
+    >>> round(float(res["fraction_treated"]), 2)
+    0.66
+
+    ``res["rules"]`` holds the human-readable tree; the leaf splitting on
+    ``x1`` near 0 recovers the true heterogeneity boundary.
     """
     # Resolve treat / d — refuse silent loss when both given with
     # different values (reviewer flagged the old "treat wins, d ignored"

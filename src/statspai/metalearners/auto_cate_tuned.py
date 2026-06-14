@@ -228,6 +228,30 @@ def auto_cate_tuned(
         - ``'per_learner'`` / ``'both'``: ``per_learner_params``
           (dict keyed by learner short code, value = best CATE HP) +
           ``per_learner_r_loss`` (dict keyed by short code).
+
+    Examples
+    --------
+    Requires the optional ``optuna`` dependency
+    (``pip install 'statspai[tune]'``).
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> tau = 1.0 + 0.5 * x1  # heterogeneous effect
+    >>> y = 2.0 + x2 + tau * d + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.auto_cate_tuned(  # doctest: +SKIP
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     learners=("s", "t"), tune="nuisance",
+    ...     n_trials=3, n_folds=2, n_bootstrap=50, random_state=42,
+    ... )
+    >>> res.best_result.model_info["tune_mode"]  # doctest: +SKIP
+    'nuisance'
     """
     optuna = _require_optuna()
 

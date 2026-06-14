@@ -443,6 +443,20 @@ def did_summary_to_markdown(
     -------
     str
         Multi-line Markdown table, ready to paste into notebooks or PRs.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> out = sp.did_summary(df, y='y', time='time',
+    ...                      first_treat='first_treat', group='unit',
+    ...                      methods=['cs', 'bjs'])
+    >>> md = sp.did_summary_to_markdown(out)
+    >>> isinstance(md, str)
+    True
+    >>> md.splitlines()[0].startswith('| Method')
+    True
     """
     det = _ensure_did_summary(result)
 
@@ -532,6 +546,20 @@ def did_summary_to_latex(
     Notes
     -----
     Requires ``\\usepackage{booktabs}`` in the LaTeX preamble.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> out = sp.did_summary(df, y='y', time='time',
+    ...                      first_treat='first_treat', group='unit',
+    ...                      methods=['cs', 'bjs'])
+    >>> tex = sp.did_summary_to_latex(out)
+    >>> isinstance(tex, str)
+    True
+    >>> tex.splitlines()[0].startswith('\\\\begin{table}')
+    True
     """
     det = _ensure_did_summary(result)
     has_bd = include_breakdown and det["breakdown_m"].notna().any()
@@ -648,6 +676,21 @@ def did_report(
     CausalResult
         The underlying :func:`did_summary` output. All side-effect files
         are written to ``save_to`` as a bundle.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> out_dir = tempfile.mkdtemp()
+    >>> res = sp.did_report(df, y='y', time='time',
+    ...                     first_treat='first_treat', group='unit',
+    ...                     save_to=out_dir, methods=['cs', 'bjs'],
+    ...                     include_sensitivity=False)
+    >>> import os
+    >>> 'did_summary.md' in os.listdir(out_dir)
+    True
     """
     import json
     from pathlib import Path

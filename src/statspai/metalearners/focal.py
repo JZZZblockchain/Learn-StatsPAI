@@ -65,6 +65,31 @@ def focal_cate(
     Returns
     -------
     FunctionalCATEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> tau = 1.0 + 0.5 * x1  # heterogeneous effect
+    >>> y0 = 2.0 + x2 + rng.normal(scale=0.5, size=n)
+    >>> y1 = y0 + tau
+    >>> df = pd.DataFrame({
+    ...     "y_t0": np.where(d == 1, y1, y0),
+    ...     "y_t1": np.where(d == 1, y1 + 0.3, y0),
+    ...     "d": d, "x1": x1, "x2": x2,
+    ... })
+    >>> res = sp.focal_cate(
+    ...     df, y_columns=["y_t0", "y_t1"], treat="d",
+    ...     covariates=["x1", "x2"], seed=0,
+    ... )
+    >>> res.cate_grid.shape  # (n_test, n_function_points)
+    (400, 2)
     """
     from sklearn.linear_model import LinearRegression, LogisticRegression
     df = data[y_columns + [treat] + list(covariates)].dropna() \

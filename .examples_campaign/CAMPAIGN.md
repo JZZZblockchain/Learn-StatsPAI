@@ -33,7 +33,7 @@
 | # | 范围 | 数量 | 状态 |
 | --- | --- | --- | --- |
 | 1 | causal 头部:DML 配套 + RD 家族 + matching + DiD/SDID | 28 | ✅ 2026-06-12 |
-| 2 | causal 余量(qte/cate/policy/iv 配套) | ~30 | pending |
+| 2 | CATE diag + forest + qte + DiD reporting + policy | 32 | ✅ 2026-06-12 |
 | 3 | causal 收尾 + bayes(整类 0%) | ~30 | pending |
 | 4 | inference + panel + survey + mediation/gformula | ~30 | pending |
 | 5 | output + postestimation + smart/agent | ~35 | pending |
@@ -50,7 +50,7 @@
 
 `parity-guards.yml` 的 registry-drift job 挂
 `scripts/examples_coverage.py --check --max-missing <budget>`。预算只
-降不升;新注册函数若不带 Examples 会撞预算失败。当前预算:**633**。
+降不升;新注册函数若不带 Examples 会撞预算失败。当前预算:**601**。
 
 ## Log
 
@@ -74,3 +74,16 @@
   缺口 661 → 633;ratchet 预算同步下调。已知边界:cic 与 qdid 的
   `n_boot=0` 会崩(示例用 n_boot=50 规避;修复属数值行为变更,留待
   审稿后走 ⚠️ 流程)。
+- **2026-06-12 batch 2**(本会话):32 个名字(31 对象,
+  `test_calibration`=`calibration_test` 别名)Examples 落地——CATE 诊断
+  (cate_by_group/cate_group_plot/cate_plot/cate_summary/predict_cate/
+  gate_test/blp_test)+ metalearner/forest/tmle(focal_cate/cluster_cate/
+  auto_cate_tuned/rate/calibration_test/super_learner)+ qte 家族(qte/
+  qte_hd_panel/dist_iv/kan_dlate/distributional_te/beyond_average_late)+
+  DiD 报告与变体(did_report/did_summary_to_latex/did_summary_to_markdown/
+  did_misclassified/ggdid/design_robust_event_study/
+  cohort_anchored_event_study/bjs_pretrend_joint)+ policy/bounds 别名
+  (policy_tree/partial_identification/policy_value/did_estimate)。
+  缺口 633 → 601;ratchet 预算同步下调至 601;覆盖率 35.9% → 41.7%。
+  `auto_cate_tuned` 的交互示例行用 `# doctest: +SKIP`(依赖可选
+  optuna extra),Examples 段头存在、门通过。

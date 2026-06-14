@@ -391,6 +391,23 @@ def qte(
     Returns
     -------
     QTEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> d = rng.integers(0, 2, n)
+    >>> y = 1.0 + 1.5 * d + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "d": d})
+    >>> res = sp.qte(df, y="y", treatment="d",
+    ...              quantiles=[0.25, 0.5, 0.75], n_boot=50)
+    >>> round(res.ate, 2)  # true effect = 1.5
+    1.57
+    >>> res.effects.round(2).tolist()  # QTE at each quantile
+    [1.59, 1.57, 1.58]
     """
     if quantiles is None:
         quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]

@@ -67,6 +67,17 @@ def did_misclassified(
     ----------
     arXiv 2507.20415, *Staggered Adoption DiD Designs with
     Misclassification and Anticipation* (2025).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> df['first_treat'] = df['first_treat'].fillna(0).astype(int)
+    >>> res = sp.did_misclassified(df, y='y', treat='first_treat',
+    ...                            time='time', id='unit')
+    >>> round(float(res.estimate), 4)
+    0.4354
     """
     if not 0.0 <= pi_misclass < 0.5:
         raise ValueError(f"pi_misclass must be in [0, 0.5); got {pi_misclass}.")

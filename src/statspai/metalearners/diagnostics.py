@@ -31,6 +31,26 @@ def cate_summary(result: CausalResult) -> pd.DataFrame:
     pd.DataFrame
         Summary statistics: mean, sd, min, q25, median, q75, max,
         fraction positive, fraction significant (> 2*SE away from 0).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> tab = sp.cate_summary(res)
+    >>> int(tab.loc["N", "CATE"])
+    400
+    >>> round(float(tab.loc["Frac. Positive", "CATE"]), 2)
+    0.78
     """
     cate = _extract_cate(result)
 
@@ -80,6 +100,26 @@ def cate_by_group(
     -------
     pd.DataFrame
         Columns: group, n, mean_cate, se, ci_lower, ci_upper.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> groups = sp.cate_by_group(res, df, by="cate", n_groups=4)
+    >>> groups["n"].tolist()
+    [100, 100, 100, 100]
+    >>> round(float(groups["mean_cate"].iloc[-1]), 2)
+    2.7
     """
     cate = _extract_cate(result)
 
@@ -144,6 +184,22 @@ def cate_plot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> fig, ax = sp.cate_plot(res, kind="hist")
     """
     try:
         import matplotlib.pyplot as plt
@@ -205,6 +261,23 @@ def cate_group_plot(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> groups = sp.cate_by_group(res, df, by="cate", n_groups=4)
+    >>> fig, ax = sp.cate_group_plot(groups)
     """
     try:
         import matplotlib.pyplot as plt
@@ -292,6 +365,27 @@ def blp_test(
     Chernozhukov, V., Demirer, M., Duflo, E., & Fernandez-Val, I. (2018).
     Generic Machine Learning Inference on Heterogeneous Treatment Effects
     in Randomized Experiments. *Econometrica* (forthcoming as of 2018 NBER WP). [@chernozhukov2018double]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> blp = sp.blp_test(res, df, y="y", treat="d",
+    ...                   covariates=["x1", "x2"])
+    >>> blp["heterogeneity_significant"]
+    True
+    >>> blp["beta2"] > 0
+    True
     """
     import statsmodels.api as sm
     from sklearn.base import clone
@@ -382,6 +476,26 @@ def gate_test(
     dict
         Keys: 'gate_table' (DataFrame), 'omnibus_F', 'omnibus_pvalue',
         'top_vs_bottom_diff', 'top_vs_bottom_se', 'top_vs_bottom_pvalue'.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> gt = sp.gate_test(res, df, by="cate", n_groups=4)
+    >>> bool(gt["omnibus_pvalue"] < 0.05)
+    True
+    >>> round(float(gt["top_vs_bottom_diff"]), 2)
+    3.53
     """
     cate = _extract_cate(result)
     gate_df = cate_by_group(result, data, by=by, n_groups=n_groups, alpha=alpha)
@@ -518,6 +632,28 @@ def predict_cate(
     -------
     np.ndarray
         Predicted CATE for each row of new_data.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.metalearner(df, y="y", treat="d",
+    ...                      covariates=["x1", "x2"], learner="t")
+    >>> new_data = pd.DataFrame({"x1": [-1.0, 0.0, 1.0],
+    ...                          "x2": [0.0, 0.0, 0.0]})
+    >>> tau_hat = sp.predict_cate(res, new_data)
+    >>> int(tau_hat.shape[0])
+    3
+    >>> bool(tau_hat[2] > tau_hat[0])
+    True
     """
     model_info = getattr(result, "model_info", None)
     if not isinstance(model_info, dict) or '_estimator' not in model_info:

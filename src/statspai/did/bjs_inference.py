@@ -82,6 +82,23 @@ def bjs_pretrend_joint(
     ``n_boot × 0.3 s = 90 s`` for the default ``n_boot=300`` — the
     function is therefore opt-in, not run by default inside
     :func:`did_imputation`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> df['first_treat'] = df['first_treat'].fillna(0).astype(int)
+    >>> imp = sp.did_imputation(
+    ...     df, y='y', group='unit', time='time',
+    ...     first_treat='first_treat', horizon=[-3, -2, -1, 0, 1, 2])
+    >>> jt = sp.bjs_pretrend_joint(
+    ...     imp, df, y='y', group='unit', time='time',
+    ...     first_treat='first_treat', n_boot=50, seed=0)
+    >>> jt['df']
+    3
+    >>> jt['method']
+    'cluster-bootstrap'
     """
     es = result.model_info.get('event_study') if result.model_info else None
     if es is None or len(es) == 0:

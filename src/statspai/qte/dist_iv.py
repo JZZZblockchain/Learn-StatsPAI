@@ -79,6 +79,26 @@ def dist_iv(
     Returns
     -------
     DistIVResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> z = rng.integers(0, 2, n)
+    >>> d = ((0.3 + 0.5 * z + rng.normal(0, 0.3, n)) > 0.5)
+    >>> d = d.astype(int)
+    >>> y = 1.0 + 1.0 * d + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z})
+    >>> res = sp.dist_iv(df, y="y", treat="d", instrument="z",
+    ...                  quantiles=np.array([0.25, 0.5, 0.75]),
+    ...                  n_boot=50)
+    >>> res.late_q.round(2).tolist()  # LATE at each quantile
+    [0.96, 1.04, 1.24]
+    >>> res.n_obs
+    600
     """
     if quantiles is None:
         quantiles = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
@@ -184,6 +204,24 @@ def kan_dlate(
     to the kernel-smoothed Wald estimator (KAN requires a heavy
     optional dependency). Functional equivalence is preserved at
     standard quantile grids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 600
+    >>> z = rng.integers(0, 2, n)
+    >>> d = ((0.3 + 0.5 * z + rng.normal(0, 0.3, n)) > 0.5)
+    >>> d = d.astype(int)
+    >>> y = 1.0 + 1.0 * d + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "z": z})
+    >>> res = sp.kan_dlate(df, y="y", treat="d", instrument="z",
+    ...                    quantiles=np.array([0.25, 0.5, 0.75]),
+    ...                    n_boot=50)
+    >>> res.late_q.round(2).tolist()  # LATE at each quantile
+    [0.96, 1.04, 1.24]
     """
     return dist_iv(
         data=data, y=y, treat=treat, instrument=instrument,

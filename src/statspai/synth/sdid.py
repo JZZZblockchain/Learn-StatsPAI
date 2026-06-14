@@ -626,7 +626,28 @@ def sc_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
 
 
 def did_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
-    """R-style alias: ``synthdid::did_estimate``."""
+    """R-style alias: ``synthdid::did_estimate``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> units, periods = 12, 10
+    >>> unit = np.repeat(np.arange(units), periods)
+    >>> time = np.tile(np.arange(1, periods + 1), units)
+    >>> d = (unit == 0) & (time >= 7)
+    >>> y = (unit * 0.4 + time * 0.2 + 3.0 * d
+    ...      + rng.normal(0, 0.3, unit.size))
+    >>> df = pd.DataFrame({"y": y, "unit": unit, "time": time})
+    >>> res = sp.did_estimate(
+    ...     df, y="y", unit="unit", time="time",
+    ...     treat_unit=0, treat_time=7, seed=42,
+    ... )
+    >>> round(res.estimate, 2)  # true effect = 3.0
+    3.01
+    """
     return sdid(data, y, unit, time, treat_unit, treat_time, method="did", **kw)
 
 

@@ -1255,6 +1255,18 @@ def ggdid(
     Returns
     -------
     (fig, ax)
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True,
+    ...                 seed=0)
+    >>> cs = sp.callaway_santanna(df, y='y', g='first_treat',
+    ...                           t='time', i='unit')
+    >>> agg = sp.aggte(cs, type='dynamic')
+    >>> fig, ax = sp.ggdid(agg)
+    >>> type(fig).__name__
+    'Figure'
     """
     plt, _ = _ensure_mpl()
 

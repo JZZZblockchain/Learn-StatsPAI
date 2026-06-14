@@ -1,8 +1,8 @@
 # Examples campaign worklist — function-style gaps
 
-Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1 (+ parallel-session batch 60a0268): 633 (393 fn / 240 class).
+Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1+2 (+ parallel-session batch 60a0268): 601 (361 fn / 240 class). Covered now: 430/1031.
 
-## batch 1 — done 2026-06-12
+## batch 1 — done 2026-06-12 (DML companions + RD + matching + DiD/SDID)
 
 - [x] `anderson_rubin_ci`
 - [x] `cardinality_match`
@@ -33,55 +33,67 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1 (+ par
 - [x] `synthdid_placebo`
 - [x] `trimming`
 
-## causal (104)
+## batch 2 — done 2026-06-12 (CATE diag + forest + qte + DiD reporting + policy)
 
-- [ ] `auto_cate_tuned`
+- [x] `auto_cate_tuned`
+- [x] `beyond_average_late`
+- [x] `bjs_pretrend_joint`
+- [x] `blp_test`
+- [x] `calibration_test`
+- [x] `cate_by_group`
+- [x] `cate_group_plot`
+- [x] `cate_plot`
+- [x] `cate_summary`
+- [x] `cluster_cate`
+- [x] `cohort_anchored_event_study`
+- [x] `design_robust_event_study`
+- [x] `did_estimate`
+- [x] `did_misclassified`
+- [x] `did_report`
+- [x] `did_summary_to_latex`
+- [x] `did_summary_to_markdown`
+- [x] `dist_iv`
+- [x] `distributional_te`
+- [x] `focal_cate`
+- [x] `gate_test`
+- [x] `ggdid`
+- [x] `kan_dlate`
+- [x] `partial_identification`
+- [x] `policy_tree`
+- [x] `policy_value`
+- [x] `predict_cate`
+- [x] `qte`
+- [x] `qte_hd_panel`
+- [x] `rate`
+- [x] `super_learner`
+- [x] `test_calibration`
+
+## causal (72)
+
 - [ ] `average_treatment_effect`
 - [ ] `balanceplot`
 - [ ] `bcf_longitudinal`
-- [ ] `beyond_average_late`
 - [ ] `bidirectional_pci`
-- [ ] `bjs_pretrend_joint`
-- [ ] `blp_test`
 - [ ] `boundary_rd`
-- [ ] `calibration_test`
-- [ ] `cate_by_group`
-- [ ] `cate_group_plot`
-- [ ] `cate_plot`
-- [ ] `cate_summary`
 - [ ] `causal_discovery`
 - [ ] `causal_dqn`
 - [ ] `causal_rl_benchmark`
-- [ ] `cluster_cate`
 - [ ] `cluster_cross_interference`
-- [ ] `cohort_anchored_event_study`
 - [ ] `conditional_lr_ci`
 - [ ] `conformal_fair_ite`
 - [ ] `conformal_ite`
-- [ ] `design_robust_event_study`
 - [ ] `did_bcf`
-- [ ] `did_estimate`
-- [ ] `did_misclassified`
-- [ ] `did_report`
-- [ ] `did_summary_to_latex`
-- [ ] `did_summary_to_markdown`
-- [ ] `dist_iv`
-- [ ] `distributional_te`
 - [ ] `dl_propensity_score`
 - [ ] `evalue_rr`
 - [ ] `fci`
-- [ ] `focal_cate`
 - [ ] `forest_diagnostics`
 - [ ] `fortified_pci`
 - [ ] `frontdoor`
-- [ ] `gate_test`
 - [ ] `general_bunching`
 - [ ] `geographic_rd`
 - [ ] `ges`
-- [ ] `ggdid`
 - [ ] `honest_variance`
 - [ ] `impactplot`
-- [ ] `kan_dlate`
 - [ ] `kink_unified`
 - [ ] `lingam`
 - [ ] `llm_dag_propose`
@@ -97,16 +109,9 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1 (+ par
 - [ ] `nonlinear_icp`
 - [ ] `offline_safe_policy`
 - [ ] `partial_corr_pvalue`
-- [ ] `partial_identification`
 - [ ] `pci_mtp`
-- [ ] `policy_tree`
-- [ ] `policy_value`
-- [ ] `predict_cate`
 - [ ] `pretrends_summary`
 - [ ] `principal_strat`
-- [ ] `qte`
-- [ ] `qte_hd_panel`
-- [ ] `rate`
 - [ ] `rd2d`
 - [ ] `rd2d_bw`
 - [ ] `rd2d_plot`
@@ -130,7 +135,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1 (+ par
 - [ ] `sc_estimate`
 - [ ] `select_pci_proxies`
 - [ ] `sequential_sdid`
-- [ ] `super_learner`
 - [ ] `survivor_average_causal_effect`
 - [ ] `synth_to_excel`
 - [ ] `synth_to_markdown`
@@ -138,7 +142,6 @@ Baseline 2026-06-12: 661 gaps (421 fn / 240 class) of 1031. After batch 1 (+ par
 - [ ] `synthdid_rmse_plot`
 - [ ] `synthdid_units_plot`
 - [ ] `tF_adjustment`
-- [ ] `test_calibration`
 
 ## output (23)
 

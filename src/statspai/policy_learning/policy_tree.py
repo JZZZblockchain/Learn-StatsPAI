@@ -364,6 +364,23 @@ def policy_value(
     -------
     float
         Estimated expected value of the policy.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> scores = rng.normal(0.3, 1.0, size=n)  # DR gains from treating
+
+    Treat-everyone vs an oracle policy (treat only positive-gain units):
+
+    >>> policy_all = np.ones(n, dtype=int)
+    >>> policy_oracle = (scores > 0).astype(int)
+    >>> round(float(sp.policy_value(scores, policy_all)), 2)
+    0.29
+    >>> round(float(sp.policy_value(scores, policy_oracle)), 2)
+    0.54
     """
     scores = np.asarray(scores)
     policy = np.asarray(policy)

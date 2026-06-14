@@ -281,6 +281,24 @@ def distributional_te(
     Returns
     -------
     DTEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 500
+    >>> d = rng.integers(0, 2, n)
+    >>> y = 1.0 + 1.5 * d + rng.normal(0, 1, n)
+    >>> df = pd.DataFrame({"y": y, "d": d})
+    >>> res = sp.distributional_te(
+    ...     df, y="y", treatment="d", method="ipw",
+    ...     quantiles=[0.25, 0.5, 0.75], n_boot=50, seed=42)
+    >>> res.qte_effects.round(2).tolist()  # QTE at each quantile
+    [1.63, 1.51, 1.57]
+    >>> round(res.ks_stat, 3)  # Kolmogorov-Smirnov statistic
+    0.57
     """
     method = method.lower()
     if method not in ("ipw", "dr", "cic"):

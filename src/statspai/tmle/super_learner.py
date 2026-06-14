@@ -65,6 +65,26 @@ def super_learner(
     -------
     SuperLearner
         Fitted ensemble.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> from sklearn.linear_model import LinearRegression, Ridge
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> beta = np.array([1.0, -0.5, 0.3])
+    >>> y = X @ beta + rng.normal(scale=0.5, size=n)
+    >>> sl = sp.super_learner(
+    ...     X, y,
+    ...     library=[LinearRegression(), Ridge(alpha=1.0)],
+    ...     n_folds=3,
+    ... )
+    >>> round(float(sl.weights_.sum()), 2)  # simplex weights
+    1.0
+    >>> sl.predict(X[:5]).shape
+    (5,)
     """
     sl = SuperLearner(library=library, n_folds=n_folds,
                       task=task, random_state=random_state)

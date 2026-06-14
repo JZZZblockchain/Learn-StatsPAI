@@ -76,6 +76,32 @@ def qte_hd_panel(
     Returns
     -------
     HDPanelQTEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> rows = []
+    >>> for u in range(60):
+    ...     ui = rng.normal(0, 0.5)
+    ...     treated = u >= 30
+    ...     for t in range(6):
+    ...         d = 1.0 if (treated and t >= 3) else 0.0
+    ...         x1, x2, x3 = rng.normal(0, 1, 3)
+    ...         y = 1.0 + 1.2 * d + 0.5 * x1 + ui + rng.normal(0, 1)
+    ...         rows.append((u, t, y, d, x1, x2, x3))
+    >>> df = pd.DataFrame(
+    ...     rows, columns=["unit", "time", "y", "d", "x1", "x2", "x3"])
+    >>> res = sp.qte_hd_panel(
+    ...     df, y="y", treat="d", unit="unit", time="time",
+    ...     covariates=["x1", "x2", "x3"],
+    ...     quantiles=np.array([0.25, 0.5, 0.75]))
+    >>> res.qte.round(2).tolist()  # QTE at each quantile
+    [0.83, 0.85, 1.36]
+    >>> res.n_obs
+    360
     """
     if quantiles is None:
         quantiles = np.array([0.1, 0.25, 0.5, 0.75, 0.9])

@@ -61,6 +61,26 @@ def cluster_cate(
     Returns
     -------
     ClusterCATEResult
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(42)
+    >>> n = 400
+    >>> x1 = rng.normal(size=n)
+    >>> x2 = rng.normal(size=n)
+    >>> d = rng.integers(0, 2, size=n)
+    >>> tau = 1.0 + 0.8 * x1  # heterogeneous effect
+    >>> y = 2.0 + x2 + tau * d + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> res = sp.cluster_cate(
+    ...     df, y="y", treat="d", covariates=["x1", "x2"],
+    ...     n_clusters=3, seed=0,
+    ... )
+    >>> res.cluster_table.columns.tolist()
+    ['cluster', 'n', 'cate', 'se', 'ci_low', 'ci_high']
     """
     from sklearn.cluster import KMeans
 
