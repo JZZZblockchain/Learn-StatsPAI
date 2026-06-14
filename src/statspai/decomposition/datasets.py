@@ -26,6 +26,15 @@ def cps_wage(n: int = 3000, seed: Optional[int] = 42) -> pd.DataFrame:
       - union : int {0, 1}
       - married : int {0, 1}
       - log_wage : float
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> df.shape
+    (3000, 7)
+    >>> sorted(df["female"].unique().tolist())
+    [0, 1]
     """
     rng = np.random.default_rng(seed)
     female = rng.binomial(1, 0.48, n)
@@ -73,6 +82,15 @@ def chilean_households(n: int = 2500, seed: Optional[int] = 42) -> pd.DataFrame:
       - head_age : years
       - household_size : int
       - log_income : float
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.chilean_households()
+    >>> df.shape
+    (2500, 5)
+    >>> "log_income" in df.columns
+    True
     """
     rng = np.random.default_rng(seed)
     rural = rng.binomial(1, 0.38, n)
@@ -114,6 +132,15 @@ def mincer_wage_panel(n: int = 5000, seed: Optional[int] = 42) -> pd.DataFrame:
       - union : int
       - occupation_high_skill : int
       - log_wage : float
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.mincer_wage_panel()
+    >>> df.shape
+    (5000, 6)
+    >>> sorted(df["period"].unique().tolist())
+    [0, 1]
     """
     rng = np.random.default_rng(seed)
     period = rng.binomial(1, 0.5, n)
@@ -152,6 +179,15 @@ def disparity_panel(n: int = 3000, seed: Optional[int] = 42) -> pd.DataFrame:
       - parent_income : float (confounder)
       - age : years (confounder)
       - income : float (outcome)
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.disparity_panel()
+    >>> df.shape
+    (3000, 5)
+    >>> "income" in df.columns
+    True
     """
     rng = np.random.default_rng(seed)
     group = rng.binomial(1, 0.4, n)

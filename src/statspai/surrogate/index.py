@@ -223,6 +223,23 @@ def surrogate_index(
     ignorability and should be defended explicitly (e.g. with placebo
     long-term outcomes in a validation sample).
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> # Observational sample: surrogate S drives the long-term outcome Y.
+    >>> S_o = rng.normal(size=400)
+    >>> obs = pd.DataFrame({"S": S_o, "Y": 1.5 * S_o + rng.normal(scale=0.5, size=400)})
+    >>> # Experimental sample: treatment shifts S; Y is never observed here.
+    >>> T = rng.integers(0, 2, size=300)
+    >>> exp = pd.DataFrame({"T": T, "S": 0.8 * T + rng.normal(size=300)})
+    >>> res = sp.surrogate_index(
+    ...     exp, obs, treatment="T", surrogates=["S"], long_term_outcome="Y",
+    ... )
+    >>> bool(res.estimate > 0)  # positive long-term ATE recovered
+    True
+
     References
     ----------
     Athey, S., Chetty, R., Imbens, G. W., & Kang, H. (2019).
@@ -396,6 +413,28 @@ def long_term_from_short(
     Inference is bootstrap-based because the iterated delta variance is
     unwieldy in closed form.
 
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(1)
+    >>> # Two surrogate waves: S1 -> S2 -> Y in the observational sample.
+    >>> S1 = rng.normal(size=400)
+    >>> S2 = 0.9 * S1 + rng.normal(scale=0.4, size=400)
+    >>> obs = pd.DataFrame({"S1": S1, "S2": S2,
+    ...                     "Y": 1.2 * S2 + rng.normal(scale=0.4, size=400)})
+    >>> T = rng.integers(0, 2, size=300)
+    >>> S1e = 0.7 * T + rng.normal(size=300)
+    >>> exp = pd.DataFrame({"T": T, "S1": S1e,
+    ...                     "S2": 0.9 * S1e + rng.normal(scale=0.4, size=300)})
+    >>> res = sp.long_term_from_short(
+    ...     exp, obs, treatment="T",
+    ...     surrogates_waves=[["S1"], ["S2"]],
+    ...     long_term_outcome="Y", n_boot=100, random_state=0,
+    ... )
+    >>> bool(res.estimate > 0)
+    True
+
     References
     ----------
     Tran, A., Bibaut, A., & Kallus, N. (2023). "Inferring the Long-Term
@@ -543,6 +582,26 @@ def proximal_surrogate_index(
     assumptions. For nonparametric bridges, use the ``model`` hooks in
     :func:`surrogate_index` with a kernel/NN estimator and pass a custom
     2SLS wrapper.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(2)
+    >>> # Unobserved U confounds S -> Y; proxy W stands in for U.
+    >>> U = rng.normal(size=500)
+    >>> S = 0.8 * U + rng.normal(scale=0.5, size=500)
+    >>> W = 0.9 * U + rng.normal(scale=0.5, size=500)
+    >>> obs = pd.DataFrame({"S": S, "W": W,
+    ...                     "Y": 1.0 * S + 0.7 * U + rng.normal(scale=0.5, size=500)})
+    >>> T = rng.integers(0, 2, size=300)
+    >>> exp = pd.DataFrame({"T": T, "S": 0.6 * T + rng.normal(size=300)})
+    >>> res = sp.proximal_surrogate_index(
+    ...     exp, obs, treatment="T", surrogates=["S"], proxies=["W"],
+    ...     long_term_outcome="Y", n_boot=100, random_state=0,
+    ... )
+    >>> bool(res.estimate > 0)
+    True
 
     References
     ----------

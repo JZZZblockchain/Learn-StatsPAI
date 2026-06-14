@@ -49,6 +49,18 @@ class SelectionResult:
     lasso_path : dict | None
         For LASSO: ``{"lambdas": array, "coef_paths": dict}`` storing the
         regularisation path.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.stepwise(df, y="log_wage",
+    ...                   x=["female", "education", "experience"],
+    ...                   method="forward", criterion="aic", verbose=False)
+    >>> isinstance(res, sp.SelectionResult)
+    True
+    >>> sorted(res.final_model.keys())
+    ['adj_r_squared', 'aic', 'bic', 'k', 'n', 'r_squared']
     """
 
     selected: List[str]
@@ -274,6 +286,18 @@ def stepwise(
     Returns
     -------
     SelectionResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.stepwise(df, y="log_wage",
+    ...                   x=["female", "education", "experience", "tenure", "union"],
+    ...                   method="both", criterion="bic", verbose=False)
+    >>> "education" in res.selected
+    True
+    >>> bool(set(res.selected).isdisjoint(res.dropped))
+    True
     """
     df = data.dropna(subset=[y] + list(x)).reset_index(drop=True)
     y_vec = df[y].values.astype(float)
@@ -613,6 +637,18 @@ def lasso_select(
     Returns
     -------
     SelectionResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> df = sp.cps_wage()
+    >>> res = sp.lasso_select(df, y="log_wage",
+    ...                       x=["female", "education", "experience", "tenure", "union"],
+    ...                       method="bic", verbose=False)
+    >>> res.method
+    'lasso_bic'
+    >>> res.lasso_path["lambda_best"] > 0
+    True
     """
     df = data.dropna(subset=[y] + list(x)).reset_index(drop=True)
     y_raw = df[y].values.astype(float)
