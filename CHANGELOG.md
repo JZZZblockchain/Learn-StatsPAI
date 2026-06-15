@@ -6,6 +6,47 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **Analytic-anchor reference parity for 10 previously smoke-only headline
+  estimator families (`tests/reference_parity/`, +97 tests).** First real
+  numerical guarantees for `proximal` / `fortified_pci` / `bidirectional_pci`,
+  `principal_strat` / `survivor_average_causal_effect`, `qte` / `qdid`,
+  `distributional_te` / `stochastic_dominance`, `interference` / `spillover` /
+  `network_exposure`, causal discovery (`pc_algorithm` / `lingam` / `notears`),
+  `matrix_completion` / `mc_panel`, `gmm` / `xtabond`, `dose_response` /
+  `continuous_did`, and `bunching` / `general_bunching`. Every file is
+  hermetic (numpy/scipy only, no R, fixed seeds, ~40s total) and uses
+  non-tautological anchors — known-DGP recovery within a documented σ band,
+  closed-form collapses (e.g. the QTE location-shift identity to 4e-16),
+  naive-bias contrasts (the naive estimator is provably off, the method
+  recovers truth), and structure-recovery metrics (skeleton precision =
+  recall = 1). Each was adversarially verified to FAIL under a 20% injected
+  estimate bias; DGPs and tolerance rationale are logged in
+  `tests/reference_parity/REFERENCES.md`.
+
+### Changed
+
+- **R-parity SE tolerances tightened for 9 mid-tier modules** (`42_nbreg`,
+  `43_heckman`, `28_frontier`, `44_mlogit`, `41_tobit`, `14_ols_cluster`,
+  `24_coxph`, `46_clogit`, `49_oprobit`) to ≈3× the worst observed gap
+  across both reference sides (floored at the `1e-6` machine tier) — none
+  loosened; `docs/dev/r_parity_tolerances.md` carries the before/after
+  table and the harness contract test stays green.
+- **Hardened ~555 weak assertions** across 12 core-estimator test suites
+  (DiD / RD / DML / synth / panel / matching / proximal / principal-strat /
+  GMM / bounds): `is-not-None` / `se>0`-only checks replaced with
+  recovery-band pins, sign correctness, CI-bracketing, and closed-form
+  structural identities. Surfaced (documented, not regressions):
+  `sp.continuous_did` returns NaN SE/CI on a 2-period DGP (self-labeled
+  dose-bin heuristic); FE `fitted_values` exclude entity effects by design.
+
+### Fixed
+
+- Typo `boostrap` → `bootstrap` in a `structural/production/wooldridge.py`
+  comment; added `.codespellrc` (curated econ-vocabulary ignore list) so
+  `codespell` runs clean as a dev convenience. `pyproject.toml` advertises
+  `Typing :: Typed` (py.typed ships) and points `Documentation` at the
+  MkDocs site.
+
 - **Docstring `Examples` coverage campaign — 35.9% → 92.3% of the public
   surface, every example verified runnable.** Added verified `Examples`
   blocks to the registered functions that lacked them (coverage 370/1031
