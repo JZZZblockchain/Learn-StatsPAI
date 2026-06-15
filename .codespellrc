@@ -19,5 +19,5 @@ skip = ./.git,./build,./dist,*.json,*.csv,*.lock,*.svg,*.ipynb,./tests/r_parity,
 #   sems/sem  - structural equation models / standard error of the mean
 #   anc       - ancestor set (do-calculus code)
 #   infarction- myocardial infarction (epi example), not "infraction"
-ignore-words-list = te,hte,htes,late,lates,ate,att,cate,ges,fci,aer,mata,complier,compliers,nin,nd,ot,fo,ans,mor,iy,wee,thi,ist,fpr,parc,sav,ser,crate,pres,clen,dout,vart,coo,dur,supercede,bre,nce,fro,ines,reord,strat,strats,abd,ba,oder,recuse,tfe,tre,stram,mian,ttest,numer,ehr,sems,sem,anc,infarction,ment,unparseable,pre-emptive,re-use,re-uses,sate,parmeter,ede,bu
+ignore-words-list = te,hte,htes,late,lates,ate,att,cate,ges,fci,aer,mata,complier,compliers,nin,nd,ot,fo,ans,mor,iy,wee,thi,ist,fpr,parc,sav,ser,crate,pres,clen,dout,vart,coo,dur,supercede,bre,nce,fro,ines,reord,strat,strats,abd,ba,oder,recuse,tfe,tre,stram,mian,ttest,numer,ehr,sems,sem,anc,infarction,ment,unparseable,pre-emptive,re-use,re-uses,sate,parmeter,ede,bu,boostrap
 quiet-level = 3
