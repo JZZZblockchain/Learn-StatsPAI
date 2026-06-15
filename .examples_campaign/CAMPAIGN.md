@@ -44,25 +44,33 @@
 
 ## 最终状态(2026-06-14)
 
-- **覆盖率 1027/1031 = 99.6%**(presence gate `missing=4`)。
-- **runnability gate `ran_ok=1014 failed=0`**(每个非 `+SKIP` 示例实跑通过)。
-- 两道 CI 闸门预算:`examples_coverage --max-missing 4` +
+- **覆盖率 1031/1031 = 100%**(presence gate `missing=0`)。
+- **runnability gate `ran_ok=1018 failed=0`**(每个非 `+SKIP` 示例实跑通过)。
+- 两道 CI 闸门预算:`examples_coverage --max-missing 0` +
   `check_example_execution --max-failures 0`。
-- **残余 4 个**:`anthropic_client` / `echo_client` / `openai_client`
-  (causal_llm)+ `particle_filter`(assimilation)。这 4 个 docstring
-  **已带 Examples**,但它们 registered-在-registry 却**未在顶层暴露**
-  (`sp.echo_client` 抛 AttributeError),scanner 的 `getattr(sp, name)`
-  够不到其 docstring。这是 registry/export 不一致(应暴露还是应
-  de-register),属公开 API 决策——审稿期间不擅自改,留待用户拍板;
-  解决后预算可进一步降到 0。
+- 先前停在 4 的那 4 个(`anthropic_client` / `echo_client` /
+  `openai_client` / `particle_filter`)**不是 bug**:它们是**有意 submodule-
+  scoped**(README 按 `sp.causal_llm.*` / `sp.assimilation.*` 写,集成
+  测试也这么用,且 registry-vs-`__all__` 不对称已冻结进
+  `tests/test_api_surface_consistency.py` 的 baseline)。agent-native
+  契约满足(`sp.describe_function('echo_client')` 正常)。它们一直被算
+  "missing" 只是因为旧 scanner 用顶层 `getattr` 够不到 docstring。
+- **解法是改 scanner(零审稿影响,不动 API)**:新增
+  [`scripts/_resolve.py`](../scripts/_resolve.py) 的 `resolve_registered`,
+  两道门都改为按注册名的真实来源解析(顶层 → category 子模块 → 已加载
+  `statspai.*` 扫描),从而按实际 docstring 度量。这 4 个本就带 Examples
+  → presence 干净到 0;runtime 现在还会实跑 `echo_client` / `particle_filter`
+  (两者真可运行),`anthropic_client` / `openai_client` 仍 `+SKIP`。
+  未暴露任何缺示例的新符号(当前 resolved=False 的就这 4 个,且全有
+  Examples)。**未改任何公开 API、paper、README、计数、frozen baseline。**
 
 ## CI ratchet
 
 `parity-guards.yml` 的 registry-drift job 挂两道:
-`scripts/examples_coverage.py --check --max-missing 4`(presence)+
+`scripts/examples_coverage.py --check --max-missing 0`(presence)+
 `scripts/check_example_execution.py --max-failures 0`(runnability)。
 预算只降不升;新注册函数若不带可运行 Examples 会撞门失败。当前预算:
-**presence 4 / runnability 0**。
+**presence 0 / runnability 0**。
 
 ## Log
 

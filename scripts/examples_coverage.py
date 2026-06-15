@@ -9,7 +9,7 @@ is precise and the campaign that closes it can be ratcheted in CI.
 Usage
 -----
 python scripts/examples_coverage.py                  # per-category summary
-python scripts/examples_coverage.py --missing causal # gap list for one category
+python scripts/examples_coverage.py --missing causal # gaps in one category
 python scripts/examples_coverage.py --markdown PATH  # full inventory table
 python scripts/examples_coverage.py --check --max-missing N
                                                      # CI ratchet: fail if the
@@ -24,10 +24,17 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import os
 import re
 import sys
 from collections import defaultdict
 from typing import Dict, List, Optional
+
+# Resolve registered functions via their real source (not just top-level
+# getattr), so the intentionally submodule-scoped functions (e.g.
+# sp.causal_llm.echo_client) are measured against their actual docstring.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _resolve import resolve_registered  # noqa: E402
 
 _EXAMPLES_HEADER = re.compile(r"^\s*Examples?\s*\n\s*-{3,}", re.MULTILINE)
 
@@ -52,7 +59,7 @@ def collect() -> List[Dict]:
             spec = sp.describe_function(name)
         except Exception:
             spec = {}
-        obj = getattr(sp, name, None)
+        obj = resolve_registered(sp, name)
         if obj is None or not callable(obj):
             resolved, has_doc_ex = False, None
         else:
@@ -122,7 +129,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.markdown is not None:
         with open(args.markdown, "w", encoding="utf-8") as fh:
-            fh.write("| function | category | docstring Examples | registry example |\n")
+            fh.write(
+                "| function | category | docstring Examples "
+                "| registry example |\n"
+            )
             fh.write("| --- | --- | --- | --- |\n")
             for r in rows:
                 fh.write(

@@ -34,6 +34,12 @@ import sys
 import warnings
 from typing import List, Optional
 
+# Resolve registered functions via their real source (mirrors
+# examples_coverage), so submodule-scoped functions like
+# sp.causal_llm.echo_client are executed against their actual docstring.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _resolve import resolve_registered  # noqa: E402
+
 os.environ.setdefault("MPLBACKEND", "Agg")
 
 _HEADER = re.compile(r"^\s*Examples?\s*\n\s*-{3,}", re.MULTILINE)
@@ -88,7 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ran = 0
     failures: List[str] = []
     for name in sorted(sp.list_functions()):
-        obj = getattr(sp, name, None)
+        obj = resolve_registered(sp, name)
         if not callable(obj):
             continue
         oid = id(inspect.unwrap(obj))
