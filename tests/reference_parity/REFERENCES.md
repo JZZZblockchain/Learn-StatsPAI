@@ -193,6 +193,472 @@ DGP, not from any external R or Stata output.
   `@yu2025fortified` (fortified PCI), `@min2025regression`
   (bidirectional PCI).
 
+### Principal stratification family (`principal_strat`, `survivor_average_causal_effect`)
+
+- **DGPs** (`test_principal_strat_parity.py`, all seeded
+  `np.random.default_rng`): (1) *encouragement* — AIR monotonicity
+  (no-defiers) IV DGP with hand-set strata shares (always-takers 0.2,
+  never-takers 0.3, compliers 0.5), random `Z`, uptake `D` (`= Z` for
+  compliers), and outcome `Y = 1 + level(stratum) + TRUE_LATE*D + N(0,1)`
+  with exclusion (the only `D`-driven term is `TRUE_LATE = 2.0`); (2)
+  *monotone-strata* — no instrument, always-survivors 0.3 / compliers 0.4
+  / never-survivors 0.3, `S = 1[AS] or D[CO]`; (3) *perfect-compliance* —
+  `S == D` so everyone is a complier; (4) *survivor-bias* — truncation by
+  death with always-survivors 0.5 (`Y(0)~N(5,1.5)`, `Y(1)~N(6,1.5)`, so
+  `TRUE_SACE = 1.0`), a "protected" stratum 0.3 observed only under `D=1`
+  with `Y~N(5.5,1.5)` contaminating the `(D=1,S=1)` cell, and doomed 0.2.
+- **Anchor A (recovery, 4-sigma):** `principal_strat(instrument='z')`
+  recovers the Wald LATE on `Y` within 4 bootstrap SE of `TRUE_LATE=2.0`
+  (probed z~0.03), AND the first stage `P(D=1|Z=1)-P(D=1|Z=0)` recovers
+  the 0.5 complier share within 4 two-proportion sigma (hand-rolled SE,
+  probed z~0.7). A +20% bias on `tau_Y` lands ~8 sigma out.
+- **Anchor B (closed-form, tol 1e-9):** (i) the monotonicity complier
+  LATE equals the hand-computed Wald-mixture
+  `(mu_11*p11 - mu_01*p10)/(p11-p10)` of the *sample* cell means (probed
+  |diff| 0.0); (ii) perfect compliance forces `pi_complier=1`,
+  `pi_always=pi_never=0` (exact) and collapses the LATE to
+  `E[Y|D=1,S=1]=mean(Y|D=1)` (probed |diff| 0.0).
+- **Anchor C (naive-bias contrast on the SACE):** the naive survivor
+  comparison `E[Y|D=1,S=1]-E[Y|D=0,S=1]` is `>4` two-proportion sigma off
+  `TRUE_SACE=1.0` (probed z~-8) because the `(D=1,S=1)` cell mixes
+  always-survivors with the protected stratum; the Zhang-Rubin sharp
+  bounds from `survivor_average_causal_effect` strictly bracket the truth
+  (probed `[-0.15, 1.71] ∋ 1.0`). Both halves asserted.
+- **Anchor D (internal consistency):** (i) the SACE `CausalResult.estimate`
+  equals `(sace_lower+sace_upper)/2` exactly (tol 1e-12, probed 0.0) with
+  `sace_lower <= sace_upper`; (ii) the three stratum proportions sum to 1
+  exactly (telescoping identity) and the complier share recovers the
+  hand-set 0.4 within 4 two-proportion sigma (probed z~1.0).
+- **Anchor E (determinism):** the Zhang-Rubin point endpoints carry no
+  bootstrap noise (sorted q-slice), so two same-seed
+  `survivor_average_causal_effect` calls return bitwise-equal
+  `sace_lower`/`sace_upper`/`estimate` — the partial-identification
+  analogue of seed-stability.
+- **Tolerance rationale:** machine-precision (1e-9 / 1e-12) for the
+  closed-form cell-mean identities (B) and the midpoint / telescoping
+  identities (D); 4-sigma recovery bands (A, C, D-ii) per the suite
+  convention above; the bracket and determinism predicates (C, E) are
+  non-tautological — a 20% estimate bias breaks A and B.
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@frangakis2002principal`, `@zhang2003estimation` (Zhang-Rubin sharp
+  SACE bounds), `@angrist1996identification` (AIR / Wald LATE under the
+  encouragement design), `@ding2017principal`.
+
+### Distributional treatment effects (`distributional_te`, `stochastic_dominance`)
+
+- **DGP** (`test_distributional_te_parity.py`, all seeded
+  `np.random.default_rng`): a pure location shift. The DTE arm draws an
+  equal-split sample with control `Y0 ~ N(0, 1)` and treated
+  `Y1 ~ N(MU, 1)`, `MU = 1.2` hand-set; treatment is assigned
+  independently of the outcome shocks, so `distributional_te`'s
+  no-covariate IPW propensity is the constant `D.mean() = 0.5` and the
+  counterfactual CDF is exactly the control ECDF. The dominance arm
+  builds a 6-donor + 1-treated panel (donor levels 1..6, treated
+  pre-level 3.5, treatment at `t=5`) fed to `sp.discos`; the
+  post-treatment treated series is either a uniform `+3.0` shift (FOSD
+  present) or a symmetric straddle (offsets `[-1,-0.5,0,0.5,1]`,
+  mean-preserving, crossing).
+- **Anchor 1 (quantile shift, 4-sigma):** a location shift moves every
+  quantile by `MU`, so the median QTE from `distributional_te` recovers
+  `MU = 1.2` within 4 of its bootstrap SE (probed ~1.24, z ~1.0); the
+  0.25/0.5/0.75 QTEs all sit within 0.20 of `MU`.
+- **Anchor 2 (CDF closed form, abs tol 0.03):** the treated CDF at the
+  counterfactual median `y=0` estimates `F_{Y1}(0) = Phi(-MU) = 0.1151`
+  (probed |diff| ~4e-4); the counterfactual CDF at `y=0` is ~0.5
+  (control N(0,1) median), guarding against an arm swap.
+- **Anchor 3 (mean shift = area between CDFs, abs tol 0.10):** the
+  Hoeffding / layer-cake identity `E[Y1]-E[Y0] = ∫(F0 - F1) dy` recovers
+  `MU` by trapezoidal integration of the two estimated CDFs (probed
+  ~1.23; tol ~4 sigma of the mean-difference SE).
+- **Anchor 4 (stochastic dominance, two-sided):** a uniform `+3.0` shift
+  makes `Y1` first-order dominate `Y0`, so `stochastic_dominance(order=1)`
+  returns `dominates=True`, `min_gap>0`, `fraction_positive=1.0` (probed
+  min_gap ~2.99) and order-2 also dominates; the mean-preserving
+  crossing spread returns `dominates=False` with `min_gap<0<max_gap`
+  (probed -0.97, 0.94) — asserting BOTH directions is the
+  non-tautological core.
+- **Anchor 5 (DiSCo avg-QTE consistency, abs tol 0.10/0.20):** the
+  average quantile treatment effect from `sp.discos` recovers the
+  hand-set post shift (3.0 for FOSD, ~0 for the mean-preserving spread),
+  tying the dominance fixtures' point estimates back to the same truth.
+- **Tolerance rationale:** 4-sigma recovery band (anchor 1) per the
+  suite convention; absolute tolerances on anchors 2/3/5 are ~2-4x the
+  relevant ECDF / mean-difference sampling SD, so each pins the estimate
+  to a closed-form normal quantity rather than checking finiteness; the
+  dominance predicates (anchor 4) are pure sign / ordering facts. A 20%
+  estimate bias breaks anchors 1, 3 and 5 (probed: median QTE 1.49 vs
+  band, mean shift 0.91 vs 0.10 tol, DiSCo avg-QTE 3.61 vs 0.10 tol).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@chernozhukov2013inference` (counterfactual-distribution inference,
+  the framework `distributional_te` implements),
+  `@gunsilius2023distributional` (Distributional Synthetic Controls, the
+  DiSCo estimator feeding `stochastic_dominance`).
+
+### Quantile treatment effects family (`qte`, `qdid`)
+
+- **File:** `test_qte_parity.py`. First numerical anchor for the quantile
+  treatment effect estimators `sp.qte` (Firpo 2007: quantile-regression
+  and IPW-distribution variants) and `sp.qdid` (Athey & Imbens 2006
+  quantile difference-in-differences), which previously had only smoke
+  tests.
+- **DGP:** the pure location-shift potential-outcome model `Y1 = Y0 +
+  delta` with a HAND-SET constant shift. Under a constant shift every
+  quantile of the treated distribution sits exactly `delta` above the
+  matching control quantile, so the true `QTE(tau) = delta` is flat in
+  `tau` (recovery uses `DELTA = 2.0` for the cross-section and a separate
+  `DELTA_DID = 2.5` layered on a common `TREND = 1.0` for the four-cell
+  `qdid` panel).
+- **Anchor A (closed-form exact collapse, 1e-9):** when the treated
+  empirical distribution is *exactly* the control ECDF shifted by `delta`
+  (same baseline draw, duplicated and shifted), the no-covariate
+  distribution-method QTE — uniform IPW weights, so a plain
+  empirical-quantile difference — equals `delta` at every `tau` (probed
+  ~4e-16). A matching four-cell `qdid` panel whose additive common trend
+  cancels in the DID-quantile contrast recovers `delta` to ~7e-16.
+- **Anchor B (known-DGP recovery, 4-sigma):** `qte` recovers `DELTA` at
+  `tau in {.25,.5,.75}` within 4 bootstrap SE (probed z <2 at n=2000) and
+  a 25-rep Monte-Carlo mean of the median QTE lands within `4*SD/sqrt(R)`
+  of `DELTA` (probed mean 2.012, band 0.142); `qdid` recovers `DELTA_DID`
+  within 4 SE (probed z ~0.2-0.75).
+- **Anchor C (homogeneity):** a constant shift induces NO quantile
+  heterogeneity, so the across-quantile spread of estimated effects is
+  small (`<0.30`; probed <0.22) AND each effect sits within 0.30 of
+  `DELTA` — "flat at the right level", not merely flat.
+- **Anchor D (cross-method consistency, 0.10):** the two `qte` engines
+  (quantile regression vs IPW distribution) agree on the per-quantile
+  effects under a homogeneous shift (probed max gap ~0.01), since both
+  target the same `QTE(tau)`.
+- **Anchor E (orientation):** a strictly positive `delta` yields strictly
+  positive estimates from both `qte` methods and `qdid`; a strictly
+  negative `delta` flips every sign.
+- **Tolerance rationale:** machine-precision (1e-9, ~6 orders over the
+  probed ~4e-16 / ~7e-16 float slack) for the empirical-quantile
+  identities (A); 4-sigma recovery bands (B) per the suite convention;
+  the homogeneity spread / cross-method gap / sign predicates (C, D, E)
+  are non-tautological ordering facts. A 20% multiplicative estimate bias
+  breaks anchors A, B and C (probed: closed-form dev 0.60 vs 1e-9,
+  recovery z up to 7.0, homogeneity dev 0.536 vs 0.30).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@firpo2007efficient` (efficient semiparametric QTE, the
+  quantile-regression / IPW estimators `qte` implements),
+  `@athey2006identification` (nonlinear DiD / changes-in-changes, the
+  quantile-DiD contrast `qdid` implements).
+
+### Interference family (`spillover`, `network_exposure`, `interference`)
+
+- **DGPs** (`test_interference_parity.py`, all seeded
+  `np.random.default_rng`): *partial interference* — units in clusters of
+  size 6, peer `exposure` = leave-one-out share of treated cluster-mates,
+  outcome `Y = 1 + DIRECT*D + SPILL*exposure + N(0,1)` with hand-set
+  **`DIRECT = 1.5`** and **`SPILL = 2.0`**; an i.i.d. variant draws own
+  treatment Bernoulli(0.5), and a *correlated* variant lets a cluster-level
+  propensity `p ~ U(0.1,0.9)` drive both own and peers' treatment (with
+  `SPILL = 3.0`) so `D` and `exposure` are positively correlated. *Network*
+  — a degree-2 ring under a Bernoulli(0.3) design,
+  `Y = 1 + 2.0*Z + 1.0*1{>=1 treated neighbour} + N(0,1)`, so the AS4
+  contrasts target **`DIRECT_NET = 2.0`** and **`SPILL_NET = 1.0`**.
+- **Anchor A (closed-form additivity, tol 1e-12):** `spillover` reports
+  `total == direct + spillover` and `estimate == total` exactly (the
+  estimator literally sums the two scalars; probed |diff| = 0.0), and the
+  `detail` table echoes the same three numbers; `network_exposure`'s AS4
+  contrasts obey `composite(c11-c00) == direct(c10-c00) +
+  spillover_on_treated(c11-c10)` and `composite == mu(c11)-mu(c00)`
+  exactly (algebraic identity among the HT means; probed |diff| = 0.0).
+- **Anchor B (recovery, 4-sigma / MC band):** (i) `spillover`'s
+  exposure-stratified direct effect recovers `DIRECT` within 4 of its
+  bootstrap SE on a single draw (probed z ~0.5) and a 40-rep MC mean
+  within `4*SD/sqrt(40)` of 1.5 (probed 1.497); (ii) the
+  `network_exposure` AS4 direct / spillover contrasts recover
+  `DIRECT_NET` / `SPILL_NET` as 24-rep MC means within `4*SD/sqrt(24)`
+  (probed 2.10 / 1.07) — the per-draw Aronow-Samii Theorem-1 variance
+  bound is too conservative for a single-draw z, so recovery is on the MC
+  mean; this leg also exercises the `sp.interference("network_exposure",
+  ...)` dispatcher route.
+- **Anchor C (naive-bias contrast):** on the correlated DGP the
+  SUTVA-ignoring hand-rolled diff-in-means is `> 6` sigma above `DIRECT`
+  (probed ~2.03, z ~8.7) because it absorbs the `SPILL`-driven exposure
+  contamination; `spillover`'s direct effect recovers truth within 4 sigma
+  (probed z ~0.8) AND lands strictly below naive by a 0.10 margin
+  (directional de-confounding, both halves asserted).
+- **Anchor D (null spillover):** with `SPILL = 0` the spillover effect is
+  within 4 SEs of zero (probed z ~0.7), with `SPILL > 0` it is `> 4` SEs
+  from zero (probed z ~8.5), and the direct effect recovers `DIRECT`
+  under BOTH (invariant to spillover magnitude — rules out leakage into
+  the direct slot).
+- **Tolerance rationale:** machine-precision (1e-12) for the additivity /
+  partition identities (A) — exact float sums of the components, not
+  finiteness checks; 4-sigma single-draw and `4*SD/sqrt(R)` MC bands for
+  recovery (B) per the suite convention; the naive margin (C) and
+  null/non-null SE predicates (D) are non-tautological ordering facts. A
+  20% multiplicative estimate bias breaks anchors B, C and D (probed:
+  recovery z 4.7, naive-recovery z 4.4, network MC dev 0.52 vs band 0.34,
+  null-DGP direct-invariance z 4.9).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@hudgens2008toward` (partial-interference direct/spillover
+  decomposition implemented by `spillover`), `@aronow2017estimating`
+  (exposure-mapping Horvitz-Thompson estimator implemented by
+  `network_exposure`).
+
+### Causal-discovery family (`pc_algorithm`, `lingam`, `notears`)
+
+- **File:** `test_causal_discovery_parity.py`. First **structure-recovery**
+  anchor for the three discovery estimators (previously smoke-only).
+  Because these return graphs, the ground truth is the *known DAG* of a
+  hand-built linear SEM and the anchors are edge-set precision/recall,
+  orientation correctness and seed-stability — not scalar tolerances.
+- **DGPs** (all seeded `np.random.default_rng`): (i) **chain**
+  `X1 -> X2 -> X3 -> X4`, coef `CHAIN_COEF = 1.5`, low noise — true
+  skeleton `{X1-X2, X2-X3, X3-X4}`, true directed `{X1->X2, X2->X3,
+  X3->X4}`; a Gaussian variant for PC/skeleton facts and a non-Gaussian
+  (cubed-uniform disturbance) variant for LiNGAM, whose identifiability
+  needs non-Gaussianity; (ii) **pure collider** `X0 -> X2 <- X1`
+  (`X0 ⟂ X1`) — identifiable v-structure; (iii) **fork+collider**
+  `X0->X1, X0->X2, X1->X3, X2->X3` for NOTEARS.
+- **Anchor A (PC skeleton precision = recall = 1):** the recovered
+  undirected skeleton on the Gaussian chain EQUALS the true skeleton as a
+  set (probed exact on 8/8 seeds). An extra/missing edge drops a metric
+  below 1.0.
+- **Anchor B (PC naive-correlation contrast):** `|corr(X1,X4)|` ~0.92 —
+  a marginal-correlation edge detector would link X1-X4 — yet PC, by
+  conditioning on the mediator X3, leaves X1-X4 ABSENT. Both the strong
+  marginal dependence AND the dropped edge are asserted (de-confounding a
+  spurious link, not a finiteness check).
+- **Anchor C (PC v-structure orientation):** on the pure collider PC
+  orients exactly `{X0->X2, X1->X2}` (both into the collider) with no
+  spurious X0-X1 edge.
+- **Anchor D (LiNGAM directed precision = recall = 1 + coefficients):**
+  on the non-Gaussian chain LiNGAM recovers the directed edge set
+  `{X1->X2, X2->X3, X3->X4}` and the causal order `[X1,X2,X3,X4]`
+  exactly; a 40-rep MC of each `B` coefficient (`adjacency[i,j]` = direct
+  effect of j on i) sits within `4*SD/sqrt(40)` of `1.5` (probed means
+  ~1.50, SD ~0.01-0.03). A +20% coefficient bias (-> 1.8) is many bands
+  out.
+- **Anchor E (NOTEARS skeleton recovery + valid DAG):** on the
+  fork+collider NOTEARS recovers the undirected skeleton exactly
+  (precision = recall = 1) and returns `h(W) = tr(e^{W∘W}) - d ~ 0`
+  (probed 0.0, tol 1e-6) — a genuine acyclic graph. NOTEARS is
+  deliberately NOT anchored on edge *orientation* (varsortability on
+  standardised Gaussian data, Reisach et al. 2021 — out of scope here).
+- **Anchor F (seed stability):** PC skeleton, LiNGAM order and NOTEARS
+  skeleton are identical across 3 independent seeds — the recovered
+  structure is a property of the DGP, not the RNG.
+- **Tolerance rationale:** the structure-recovery anchors are exact
+  set/orientation identities (precision = recall = 1, no tolerance); the
+  coefficient anchor uses a 4-sigma MC band (suite convention); the DAG
+  anchor uses 1e-6 on `h(W)` (the augmented Lagrangian targets `h_tol=1e-8`
+  then zeroes tiny weights, so probed `h = 0`). A 20% structural/coefficient
+  bias breaks A, C, D and the order/coefficient facts (probed: spurious
+  edge -> precision 0.75; flipped order/reversed collider fail equality;
+  coef 1.8 vs band ~0.013).
+- **References:** `@spirtes2000causation` (PC) and `@zheng2018dags`
+  (NOTEARS) are grep-confirmed in `paper.bib`. DirectLiNGAM (Shimizu
+  et al., JMLR 12, 2011) has no bib key in `paper.bib`, so the method is
+  named without a fabricated citation per CLAUDE.md §10.
+
+### Matrix-completion causal panel family (`matrix_completion`, `mc_panel`)
+
+- **File:** `test_matrix_completion_parity.py`. First numerical anchor
+  for `sp.matrix_completion` (article alias, `d` -> `treat`) and
+  `sp.mc_panel`, both routing to `MCPanel.fit` (soft-imputed
+  nuclear-norm completion, Athey et al. 2021), which previously had only
+  smoke tests.
+- **DGPs:** (1) *pure completion* — a KNOWN rank-2 matrix
+  `M = a⊗b + c⊗e` (exact rank 2; singular values ~`18.6, 15.6, 0, ...`)
+  observed as `Y = M + noise`, with ~30% of cells HELD OUT by labelling
+  them `treat == 1`. Held-out cells never enter the control mask
+  `Omega` (mc_panel.py:234), so `model_info['completed_matrix']` is the
+  estimator's reconstruction of `M` on those cells. (2) *causal panel* —
+  a staggered treated/control panel whose control surface is a known
+  rank-2 trend `M = level + loading*ramp`; the last 6 units get a
+  hand-set additive `TAU = 3.0` from period `T0` on, so the true
+  counterfactual is `M` and `ATT == TAU`.
+- **Anchor A (known-rank-2 recovery, noise floor 0.05):** with
+  `max_rank=2` and a small `lambda`, the relative Frobenius error
+  `||L - M||_F / ||M||_F` on the held-out cells is below 0.05 (probed
+  ~0.017 at noise sd 0.02) — pins the reconstruction to the hand-set
+  `M`, not finiteness.
+- **Anchor B (noiseless near-exact collapse, rtol 1e-2):** with `Y = M`
+  exactly and `lambda=1e-4`, the masked relative Frobenius error
+  collapses to ~1e-5, a near-closed-form recovery (~3 orders under
+  1e-2).
+- **Anchor C (singular-value gap / rank-2 recovery):** run with `lambda`
+  ONLY (no `max_rank`), so rank must EMERGE from thresholding. At the
+  converged fixed point the data matrix's 3rd singular value is a
+  genuine nonzero (probed ~0.78; the raw zero-filled data has it at
+  ~5.1) that `lambda=1.0` drives to exactly 0, leaving
+  `effective_rank == 2` and `s[2]/s[1] == 0` (1e-12). NOT a tautology of
+  `max_rank`.
+- **Anchor D (causal ATT recovery + naive-bias contrast):** `sp.mc_panel`
+  recovers `TAU = 3.0` within 4 bootstrap SE (probed z ~0.2) AND a
+  trend-ignoring naive pre/post contrast on the treated units is biased
+  high by > 1.5 (probed ~6.7 vs 3.0); both are asserted, and mc_panel
+  lands strictly below the naive value by > 1.0 (directional
+  de-confounding). `sp.matrix_completion(d=...)` returns the same
+  estimate to 1e-12 (alias-mapping pin).
+- **Anchor E (determinism / seed-stability):** `random_state` pins the
+  bootstrap, so two identical calls return bitwise-equal `estimate` and
+  `se` (probed diff 0.0).
+- **Tolerance rationale:** noise-floor 0.05 (A, ~3x over probed 0.017)
+  and rtol 1e-2 (B, ~3 orders over probed 1e-5) for Frobenius recovery;
+  4-sigma recovery band (D) per the suite convention; the rank gap,
+  alias identity and determinism are exact (1e-12). A 20% multiplicative
+  estimate bias breaks anchors A and D (probed: rel-Fro 0.19 vs 0.05;
+  ATT z ~15 vs 4).
+- **References (bib key grep-confirmed in `paper.bib`):**
+  `@athey2021matrix` (Matrix Completion Methods for Causal Panel Data
+  Models, the estimator `mc_panel` implements).
+
+### Bunching family (`bunching`, `general_bunching`)
+
+`tests/reference_parity/test_bunching_parity.py` — first numerical
+anchor for the bunching estimators (previously smoke-only). Bunching
+bins the running variable around a policy threshold, fits a
+*counterfactual* polynomial to the density EXCLUDING a bunching region,
+and reads off the excess mass = observed - counterfactual there. Every
+anchor pins the estimate to a hand-set integer excess or a hand-set
+elasticity, never to finiteness.
+
+- **Anchor A (closed-form excess-mass integral, tol 1e-9):** the
+  histogram is built DETERMINISTICALLY (points placed at bin centres) so
+  per-bin counts follow a polynomial I control — first flat, then linear
+  `a + b*center`. With exactly `EXCESS` extra points in one in-region
+  bin, np.polyfit reproduces the counterfactual exactly and
+  `model_info['excess_mass_raw']` equals the integer I planted while
+  `counterfactual_at_threshold` equals the polynomial intercept
+  (observed |diff| = 0.0). The linear variant pins the in-region
+  counterfactual INTEGRAL (sum over the four in-region bin centres),
+  computed by hand, not merely a constant. For `general_bunching` a flat
+  density pins the elasticity to
+  `EXCESS / (n * f_at * bandwidth^2)` (observed ~5e-17).
+- **Anchor B (known-DGP recovery, rtol 0.10):** smooth uniform base +
+  `N_EXTRA=2000` planted bunchers inside the default region —
+  `excess_mass_raw` recovers `N_EXTRA` within 10% (probed max rel error
+  4.9% over 6 seeds). `general_bunching` recovers a strongly nonzero
+  corrected elasticity at |z| ~25. A reported kink `elasticity` (when
+  `dt` is given) is pinned finite and positive.
+- **Anchor C (null: smooth density, NO notch):** with no planted
+  bunchers the normalised excess / corrected elasticity is within 4 SE
+  of zero (probed |z| < 1) — the required contrast to B; a method that
+  fabricated mass would fail it.
+- **Anchor D (internal-consistency identity, tol 1e-9):** the reported
+  normalised B equals `excess_mass_raw / counterfactual_at_threshold`
+  exactly (bunching.py:242), and `general_bunching`'s naive (order-2)
+  and bias-corrected elasticities coincide on a flat counterfactual
+  where higher-order terms vanish.
+- **Tolerance rationale:** 1e-9 for the closed-form integral and the
+  normalisation identity (exact in arithmetic; observed 0.0 / ~5e-17);
+  rtol 0.10 for stochastic recovery (~2x over probed 4.9%); 4-sigma
+  band for the null. A 20% multiplicative estimate bias breaks anchors A
+  and B (probed: closed-form excess off by exactly 20%; recovery rel
+  error 0.215 vs 0.10).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@kleven2013using` (Using Notches to Uncover Optimization Frictions
+  and Structural Elasticities) and `@chetty2011adjustment` (Adjustment
+  Costs, Firm Responses, and Micro vs. Macro Labor Supply Elasticities)
+  — the kink/notch bunching framework these estimators implement.
+
+### Dynamic-panel GMM family (`xtabond`, `gmm`)
+
+`tests/reference_parity/test_gmm_dynamic_panel_parity.py` — first
+numerical anchor for the Arellano-Bond dynamic-panel GMM estimator
+`sp.xtabond` and the generic moment-condition GMM `sp.gmm` (both
+previously smoke-only). The DGP is the canonical Arellano-Bond panel
+`y_it = RHO*y_{i,t-1} + BETA*x_it + alpha_i + e_it` with HAND-SET
+`RHO = 0.5`, `BETA = 1.0`, a unit fixed effect `alpha_i` correlated with
+the lagged dependent variable, a strictly-exogenous `x_it`, and a long
+burn-in for near-stationarity (every draw seeded via `default_rng`).
+
+- **Anchor A (known-DGP recovery, 4-sigma).** Over a 20-panel
+  Monte-Carlo bank (N=250, T=7) the mean `xtabond` `rho_hat` recovers
+  `RHO = 0.5` within `4·SD/√reps` (probed MC mean 0.504, band ~0.032;
+  AB-GMM is essentially unbiased at this T); separately a single larger
+  draw (N=400, T=7) recovers `BETA = 1.0` within 4 of its reported SE
+  (probed `beta_hat` ~0.966, SE ~0.026).
+- **Anchor B (Nickell-bias contrast).** The within-group (LSDV)
+  estimator of `RHO` is biased DOWN at small T (Nickell 1981): across an
+  8-seed bank its rho is asserted strictly below truth by a 0.10 margin
+  (probed ~0.33, max 0.357). The test then asserts BOTH that AB-GMM
+  recovers `RHO` within 4 sigma AND that it lands strictly above the
+  within-group estimate on the same panel — directional de-biasing, not
+  mere execution.
+- **Anchor C (cross-method consistency: `sp.gmm` == `sp.xtabond`, rtol/atol
+  1e-5).** The Arellano-Bond first-differenced moment system (regressors
+  `[Δy_{t-1}, Δx]`, block-diagonal lagged-level instruments plus the `Δx`
+  standard instrument, one-step weight `A = (Σ_i Z_i' H Z_i)^-1` with the
+  MA(1) `_ab_H`) is rebuilt by hand and minimised through the *generic*
+  `sp.gmm` one-step path with that `W = A`. Its `(rho, beta)` must equal
+  `xtabond`'s coefficient table; probed max|diff| ~3e-7 (limited by BFGS
+  `gtol=1e-8` vs xtabond's closed-form solve), so 1e-5 gives ~30x
+  headroom while staying far tighter than any meaningful coefficient gap.
+- **Anchor D (orientation).** `RHO > 0` and `BETA > 0` ⇒ both the
+  lagged-Y and `x` coefficients come back positive.
+- **Tolerance rationale.** 4-sigma recovery band (A, B) per the suite
+  convention; `rtol/atol = 1e-5` for the GMM-vs-xtabond identity (C). A
+  +20% multiplicative estimate bias breaks anchors A (MC mean →~0.605,
+  ~3.3 band-widths out; BETA →1.2, ~8 sigma) and C (coefficients diverge
+  by exactly 20% >> 1e-5) — confirmed by an adversarial mutation run
+  (4 of 6 tests fail under injection).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@arellano1991some` (Some Tests of Specification for Panel Data — the
+  estimator `xtabond` implements), `@blundell1998initial`,
+  `@roodman2009xtabond`, and `@hansen1982large` (Large Sample Properties
+  of GMM Estimators — the framework `sp.gmm` implements). The Nickell
+  small-T bias (Nickell 1981, *Econometrica* 49(6)) is named without a
+  bib key — no entry in `paper.bib`.
+
+### Continuous-treatment dose-response family (`dose_response`, `continuous_did`)
+
+`tests/reference_parity/test_dose_response_parity.py` gives the GPS
+dose-response curve (`sp.dose_response`, Hirano-Imbens generalized
+propensity score) and continuous-treatment DiD (`sp.continuous_did`)
+their first numerical anchor — both previously had only smoke tests.
+Two DGP shapes drive everything: a linear-Gaussian cross-section
+`Y = BETA*D + g*X + noise` (population dose-response is a line of slope
+`BETA = 0.8`), and a two-period continuous-dose panel whose post-period
+gain is `TAU*D` (`TAU = 0.5`).
+
+- **Anchor A (recovery):** with the dose independent of `X`
+  (unconfounded), `sp.dose_response`'s `avg_marginal_effect` recovers
+  `BETA` within abs tol 0.10 (probed dev 0.019); the headline
+  `effect_25_to_75` recovers `BETA*(d75-d25)` within 4 sigma.
+- **Anchor B (closed-form / internal consistency):** with linear
+  treatment/outcome models the curve is a straight line, so
+  `effect_25_to_75` equals `curve_slope*(dose_75-dose_25)` read off that
+  same curve, abs tol 5e-2 (probed |diff| ~8e-3 — `np.gradient` endpoint
+  slack + the Gaussian-pdf GPS column).
+- **Anchor C (naive-bias contrast):** on the X-confounded DGP the naive
+  `Y~D` OLS slope is biased high (~1.77 vs truth 0.80) while the
+  flexible-GBM GPS marginal effect lands STRICTLY between truth and the
+  naive slope (~0.91) — directional de-confounding, both asserted.
+- **Anchor D (recovery):** `continuous_did(method='twfe')`'s `dose*post`
+  coefficient recovers `TAU` within 4 sigma (probed z ~-1.6).
+- **Anchor E (naive-bias contrast):** with a unit fixed effect
+  correlated with dose, a cross-section regression of post-period `Y` on
+  dose is ~94 sigma biased high (~3.50 vs 0.50); the DiD differences the
+  FE away and recovers `TAU` within 4 sigma (probed z ~-0.1), both
+  asserted plus the DiD slope < naive - 1.0.
+- **Anchor F (cross-method consistency):** `method='cgs'` ties the same
+  hand-set `TAU` through two estimands — the level ATT over the treated
+  support equals `TAU*E[D|D>0]` (2.72 vs 2.77, 4 sigma) and the
+  `acrt_overall` derivative recovers the slope `TAU` (0.506, SE 0.015).
+- **Anchor G (determinism / seed-stability):** both estimators pin the
+  bootstrap on an explicit seed; two identical calls return
+  bitwise-equal `estimate` and `se` (probed diff 0.0).
+- **Tolerance rationale:** abs tol 0.10 on the GPS marginal (A, ~5x over
+  probed 0.019) and 5e-2 on the curve identity (B, ~6x over probed
+  8e-3); 4-sigma recovery bands (A-iqr, D, E, F) per the suite
+  convention. A 20% multiplicative estimate bias breaks anchors A
+  (marginal dev 0.14 > 0.10), C and E (estimate exceeds the naive
+  ceiling / falls outside the band), D (twfe z ~20 vs 4) and F
+  (cgs-level z ~4.9 vs 4).
+- **References (bib keys grep-confirmed in `paper.bib`):**
+  `@hirano2004propensity` (The Propensity Score with Continuous
+  Treatments — the GPS curve `dose_response` implements),
+  `@kennedy2017parametric` (doubly-robust continuous-treatment effects),
+  `@callaway2024difference` (Difference-in-Differences with a Continuous
+  Treatment — target of `method='cgs'`) and `@dechaisemartin2018fuzzy`
+  (Fuzzy Differences-in-Differences).
+
 ## External parity (offline procedure)
 
 For true cross-package numerical parity with R/Stata, run the
