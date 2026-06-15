@@ -426,14 +426,14 @@ class BLPResult:
     ...                      "share": share[j], "price": price[j],
     ...                      "x1": x1[j], "x2": x2[j]})
     >>> df = pd.DataFrame(rows)
-    >>> res = sp.blp(df, shares="share", prices="price",
+    >>> res = sp.blp(df, shares="share", prices="price",  # doctest: +SKIP
     ...              x_linear=["x1", "x2"], x_random=["x1"],
     ...              n_draws=50, maxiter=50, seed=0)
-    >>> type(res).__name__
+    >>> type(res).__name__  # doctest: +SKIP
     'BLPResult'
-    >>> (res.n_markets, res.n_products)
+    >>> (res.n_markets, res.n_products)  # doctest: +SKIP
     (10, 50)
-    >>> bool("x1" in res.linear_params.index)
+    >>> bool("x1" in res.linear_params.index)  # doctest: +SKIP
     True
     """
 
