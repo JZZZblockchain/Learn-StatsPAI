@@ -72,13 +72,28 @@ worst across the R *and* Stata sides) is more than 5× smaller than the
 budget, to ≈3× the observed gap rounded to a clean number, floored at
 the harness-wide `1e-6` machine tier.
 
-*Scope of the 2026-06 audit round:* the 5× rule was applied to the
-legacy loose tier (budgets ≥ `1e-2`) only. Mid-tier budgets whose
-margin also exceeds 5× — `42_nbreg` (7.3×), `43_heckman` (11.6×),
-`28_frontier` (7.9×), `44_mlogit` (8.5×), `45_ologit` (5.1×), and the
-machine-adjacent `14_ols_cluster` / `24_coxph` / `35_panel` /
-`41_tobit` / `46_clogit` / `49_oprobit` — are queued for the next
-round rather than silently exempted.
+*Scope of the 2026-06 audit round:* the 5× rule was first applied to
+the legacy loose tier (budgets ≥ `1e-2`). A follow-up pass then swept
+the mid-tier modules whose margin also exceeded 5×, recomputing the
+worst observed `rel_se` across **both** reference sides from the
+committed JSONs and tightening each to ≈3× that gap (floored at the
+`1e-6` machine tier):
+
+| module | old `rel_se` | obs worst (both sides) | new `rel_se` |
+| --- | --- | --- | --- |
+| `42_nbreg` | `1e-2` | `1.4e-3` | `5e-3` |
+| `43_heckman` | `1e-3` | `8.6e-5` | `5e-4` |
+| `28_frontier` | `1e-4` | `1.3e-5` | `5e-5` |
+| `44_mlogit` | `1e-4` | `1.2e-5` | `5e-5` |
+| `41_tobit` | `1e-3` | `2.0e-6` | `1e-5` |
+| `14_ols_cluster` | `1e-3` | `6.1e-9` | `1e-6` |
+| `24_coxph` | `1e-3` | `2.6e-15` | `1e-6` |
+| `46_clogit` | `1e-3` | `2.7e-9` | `1e-6` |
+| `49_oprobit` | `1e-3` | `3.0e-7` | `1e-6` |
+
+`45_ologit` (margin 5.1×, obs `2.0e-6`) sits at the rule boundary and
+is left at `1e-5`. No value was loosened; the harness contract test
+and the offline render both pass at the new budgets.
 
 ## Reproducing the audit
 

@@ -1,5 +1,5 @@
 {
-  "aggregate_sha256": "9ff5b8bee38e464913c2e832e8c08fcd7cf00d117cca3636ee94ad3307224eb3",
+  "aggregate_sha256": "2b9361d406643b5e051ef9ec491a5a8dcea05c0075d6afd746501610d6feef90",
   "counts": {
     "files": 463,
     "input_csvs": 61,
@@ -688,9 +688,9 @@
       "sha256": "10196d9ddd4378cfa3d76cc160f6aa3c323fd5866e5d9ef83b89da6847afc585"
     },
     {
-      "bytes": 60268,
+      "bytes": 60714,
       "path": "tests/r_parity/compare.py",
-      "sha256": "2723006f8a36cc068eda6be304a88f761190fea09f4664eb58f55e0adfba5120"
+      "sha256": "fe1091e1813bc794b626aa2bae3ecfe156b04301777b185e7d8ec48a30f2cc4a"
     },
     {
       "bytes": 104713,
