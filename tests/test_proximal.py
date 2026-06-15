@@ -42,6 +42,15 @@ def test_proximal_recovers_true_ate(proximal_dgp):
     assert abs(result.estimate - 1.5) < 0.15, (
         f"Proximal estimate {result.estimate:.3f}, expected ≈ 1.5"
     )
+    # Internal consistency: SE finite/positive, CI brackets the point
+    # estimate and has lo < hi, p-value is a valid probability.
+    assert np.isfinite(result.se) and result.se > 0
+    lo, hi = result.ci
+    assert lo < result.estimate < hi
+    assert 0.0 <= result.pvalue <= 1.0
+    # Strong-signal DGP: the ATE is many SEs from zero -> significant.
+    assert result.pvalue < 0.05
+    assert result.n_obs == len(proximal_dgp)
 
 
 def test_proximal_beats_naive(proximal_dgp):
@@ -53,8 +62,12 @@ def test_proximal_beats_naive(proximal_dgp):
 
     prox = sp.proximal(df, y='y', treat='d',
                        proxy_z=['z'], proxy_w=['w']).estimate
-    # Proximal should be strictly closer to 1.5 than naive OLS
+    # Naive OLS is biased upward by U (0.7*U in Y, 0.8*U in D) -> overshoot 1.5.
+    assert np.isfinite(naive) and naive > 1.5
+    # Proximal should be strictly closer to 1.5 than naive OLS.
     assert abs(prox - 1.5) < abs(naive - 1.5)
+    # ...and not just marginally: it should recover the truth tightly.
+    assert abs(prox - 1.5) < 0.15
 
 
 def test_proximal_order_condition_check():
@@ -82,6 +95,11 @@ def test_proximal_with_covariates(proximal_dgp):
         proxy_z=['z'], proxy_w=['w'], covariates=['x'],
     )
     assert abs(result.estimate - 1.5) < 0.2
+    # The unrelated covariate is recorded but does not break consistency.
+    assert result.model_info['n_covariates'] == 1
+    lo, hi = result.ci
+    assert lo < result.estimate < hi
+    assert np.isfinite(result.se) and result.se > 0
 
 
 def test_proximal_bootstrap_se(proximal_dgp):
@@ -92,12 +110,34 @@ def test_proximal_bootstrap_se(proximal_dgp):
     )
     assert result.model_info['se_method'] == 'bootstrap'
     assert result.model_info['n_boot'] == 100
-    assert result.se > 0
+    # All replications should succeed on this well-conditioned DGP.
+    assert result.model_info['n_boot_failed'] == 0
+    assert np.isfinite(result.se) and result.se > 0
+    # Bootstrap SE should be small but not absurd given n=3000, strong proxies.
+    assert result.se < 1.0
+    # The estimate is unaffected by the SE method: still recovers γ_D ≈ 1.5.
+    assert abs(result.estimate - 1.5) < 0.15
+    # CI consistency and validity.
+    lo, hi = result.ci
+    assert lo < result.estimate < hi
+    assert 0.0 <= result.pvalue <= 1.0
+    # The true effect (1.5) lies inside the bootstrap CI; zero does not.
+    assert lo < 1.5 < hi
+    assert not (lo <= 0.0 <= hi)
 
 
 def test_proximal_first_stage_F_reported(proximal_dgp):
     result = sp.proximal(proximal_dgp, y='y', treat='d',
                          proxy_z=['z'], proxy_w=['w'])
-    assert result.model_info['first_stage_F'] is not None
-    # With strong proxies, F should be large
-    assert result.model_info['first_stage_F'] > 10
+    F = result.model_info['first_stage_F']
+    assert F is not None
+    assert np.isfinite(F)
+    # With strong proxies (Z = 0.9*U, W = 0.9*U), F should be large.
+    assert F > 10
+    # Single Z, single W in this design.
+    assert result.model_info['n_proxy_z'] == 1
+    assert result.model_info['n_proxy_w'] == 1
+    # A strong first stage should come with a credible point estimate.
+    assert abs(result.estimate - 1.5) < 0.15
+    lo, hi = result.ci
+    assert lo < result.estimate < hi

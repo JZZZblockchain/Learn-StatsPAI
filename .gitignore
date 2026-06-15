@@ -227,3 +227,6 @@ tests/orig_parity/data/*_nhefs_*.csv
 
 # scratch workflow scripts
 .examples_*_wf.js
+
+.parity_expansion*.js
+statspai-parity*.js

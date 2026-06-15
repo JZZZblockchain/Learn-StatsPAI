@@ -54,25 +54,42 @@ def stag():
 
 def test_did_2x2_weights(d2x2):
     r = sp.did_2x2(d2x2, y="y", treat="treat", time="post", weights="w")
+    # DGP planted interaction coef = 5.0 (y = 1 + 2*treat + 3*post + 5*treat*post).
     assert abs(r.estimate - 5.0) < 0.5
-    assert r.se > 0
+    assert 0 < r.se < 1
+    lo, hi = r.ci
+    assert lo < r.estimate < hi          # CI brackets the point estimate
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 def test_did_2x2_weights_cluster(d2x2):
     r = sp.did_2x2(d2x2, y="y", treat="treat", time="post",
                    weights="w", cluster="cl")
-    assert r.se > 0
+    # Same DGP -> true DID is 5.0; clustering only changes the SE, not the point.
+    assert abs(r.estimate - 5.0) < 0.5
+    assert 0 < r.se < 1
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 def test_did_2x2_weights_robust_false(d2x2):
     r = sp.did_2x2(d2x2, y="y", treat="treat", time="post",
                    weights="w", robust=False)
-    assert r.se > 0
+    assert abs(r.estimate - 5.0) < 0.5
+    assert 0 < r.se < 1
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 def test_did_2x2_cluster_no_weights(d2x2):
     r = sp.did_2x2(d2x2, y="y", treat="treat", time="post", cluster="cl")
-    assert r.se > 0
+    assert abs(r.estimate - 5.0) < 0.5
+    assert 0 < r.se < 1
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 def test_did_2x2_nonbinary_treat_raises(d2x2):
@@ -98,8 +115,12 @@ def test_did_2x2_nonbinary_time_raises(d2x2):
 def test_overlap_weighted_did(d2x2):
     r = sp.overlap_weighted_did(d2x2, y="y", treat="treat", time="post",
                                 covariates=["x1"])
-    assert np.isfinite(r.estimate)
-    assert r.se > 0
+    # x1 is pure noise -> overlap-weighted DID still targets the planted 5.0.
+    assert abs(r.estimate - 5.0) < 0.5
+    assert 0 < r.se < 1
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 # ----------------------------------------------------------------------
@@ -108,13 +129,24 @@ def test_overlap_weighted_did(d2x2):
 
 def test_sun_abraham_basic(stag):
     r = sp.sun_abraham(stag, y="y", g="g", t="time", i="unit")
+    # Planted effect te = (t-g+1) >= 1 over the post window -> positive ATT.
     assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100         # plausibly bounded, not blown up
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_sun_abraham_lastcohort_control(stag):
     r = sp.sun_abraham(stag, y="y", g="g", t="time", i="unit",
                        control_group="lastcohort")
     assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_sun_abraham_bad_control_raises(stag):
@@ -126,13 +158,24 @@ def test_sun_abraham_bad_control_raises(stag):
 def test_sun_abraham_covariates_cluster(stag):
     r = sp.sun_abraham(stag, y="y", g="g", t="time", i="unit",
                        covariates=["x1"], cluster="cl")
-    assert r.se > 0
+    # x1 is noise -> ATT stays positive; clustering only widens the SE.
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_sun_abraham_event_window(stag):
     r = sp.sun_abraham(stag, y="y", g="g", t="time", i="unit",
                        event_window=(-2, 2))
+    # Window includes positive post-period dynamics -> finite, positive ATT.
     assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 # ----------------------------------------------------------------------
@@ -145,6 +188,12 @@ def test_aggte_types(stag):
         agg = sp.aggte(cs, type=typ, bstrap=False)
         assert agg is not None
         assert np.isfinite(agg.estimate)
+        # Planted te = (t-g+1) >= 1 in post -> every aggregation is positive.
+        assert agg.estimate > 0, f"{typ} aggregation should be positive"
+        assert abs(agg.estimate) < 100
+        assert 0 < agg.se < 100
+        lo, hi = agg.ci
+        assert lo < agg.estimate < hi
 
 
 def test_aggte_bstrap(stag):
@@ -152,12 +201,21 @@ def test_aggte_bstrap(stag):
     agg = sp.aggte(cs, type="dynamic", bstrap=True, n_boot=50,
                    random_state=1)
     assert agg is not None
+    assert agg.estimate > 0
+    assert 0 < agg.se < 100
+    lo, hi = agg.ci
+    assert lo < agg.estimate < hi
 
 
 def test_aggte_min_max_e(stag):
     cs = sp.callaway_santanna(stag, y="y", g="g", t="time", i="unit")
     agg = sp.aggte(cs, type="dynamic", min_e=-2, max_e=2, bstrap=False)
     assert agg is not None
+    # Restricting the event window to [-2, 2] still yields a positive ATT.
+    assert agg.estimate > 0
+    assert 0 < agg.se < 100
+    lo, hi = agg.ci
+    assert lo < agg.estimate < hi
 
 
 # ----------------------------------------------------------------------
@@ -171,6 +229,14 @@ def test_lp_did(stag):
     r = sp.lp_did(df, y="y", unit="unit", time="time",
                   treatment="treated_now", horizons=(-2, 3))
     assert r is not None
+    # Reported estimand is ATT at event-time h=0; planted te(h=0) = 1.0.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate - 1.0) < 0.5   # generous band around planted h=0 effect
+    assert 0 < r.se < 10
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert r.n_obs == 960
 
 
 # ----------------------------------------------------------------------
@@ -181,6 +247,13 @@ def test_cohort_anchored(stag):
     r = sp.cohort_anchored_event_study(stag, y="y", treat="g", time="time",
                                        id="unit", leads=3, lags=3)
     assert r is not None
+    # Planted post-period effect is positive -> anchored ATT positive.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_cohort_anchored_cluster(stag):
@@ -188,6 +261,12 @@ def test_cohort_anchored_cluster(stag):
                                        id="unit", leads=2, lags=2,
                                        cluster="cl")
     assert r is not None
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 # ----------------------------------------------------------------------
@@ -198,12 +277,24 @@ def test_gardner_did(stag):
     r = sp.gardner_did(stag, y="y", group="unit", time="time",
                        first_treat="g")
     assert np.isfinite(r.estimate)
+    # Gardner two-stage ATT on a positive-effect DGP -> positive.
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_gardner_did_event_study(stag):
     r = sp.gardner_did(stag, y="y", group="unit", time="time",
                        first_treat="g", event_study=True, horizon=(-2, 3))
     assert r is not None
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 # ----------------------------------------------------------------------
@@ -216,6 +307,13 @@ def test_did_multiplegt_dyn(stag):
     r = sp.did_multiplegt_dyn(df, y="y", group="unit", time="time",
                               treatment="treated_now", dynamic=2)
     assert r is not None
+    # Average dynamic effect over horizons 0..2 on a positive-effect DGP.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 # ----------------------------------------------------------------------
@@ -239,6 +337,15 @@ def test_ddd_heterogeneous():
     r = sp.ddd_heterogeneous(df, y="y", unit="unit", time="time",
                              cohort="cohort", subgroup="sub", n_boot=25)
     assert r is not None
+    # Planted te = (t-cohort+1)*(1+0.5*sub) is positive in both subgroups
+    # -> aggregated DDD ATT is positive.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
+    assert 0.0 <= r.pvalue <= 1.0
 
 
 # ----------------------------------------------------------------------
@@ -250,6 +357,13 @@ def test_did_misclassified(stag):
     r = sp.did_misclassified(stag, y="y", treat="g", time="time",
                              id="unit", pi_misclass=0.05)
     assert r is not None
+    # Misclassification correction on a positive-effect DGP -> positive ATT.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi
 
 
 def test_did_misclassified_bad_pi(stag):
@@ -277,6 +391,12 @@ def test_continuous_did():
     r = sp.continuous_did(df, y="y", dose="dose", time="time", id="unit",
                           post="post", t_pre=0, t_post=1)
     assert r is not None
+    # DGP: te = 2.0 * dose with dose ~ U(0, 1) -> mean effect ~ 2.0 * 0.5 = 1.0.
+    # (This heuristic dose-bin estimator returns NaN se/ci, so only the point
+    # estimate is checkable here.)
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate - 1.0) < 0.5   # generous band around planted mean effect
 
 
 # ----------------------------------------------------------------------
@@ -287,3 +407,10 @@ def test_harvest_did(stag):
     r = sp.harvest_did(stag, unit="unit", time="time", outcome="y",
                        cohort="g")
     assert r is not None
+    # Post-treatment average ATT on a positive-effect DGP -> positive.
+    assert np.isfinite(r.estimate)
+    assert r.estimate > 0
+    assert abs(r.estimate) < 100
+    assert 0 < r.se < 100
+    lo, hi = r.ci
+    assert lo < r.estimate < hi

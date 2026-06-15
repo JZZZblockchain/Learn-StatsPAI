@@ -51,6 +51,15 @@ def test_principal_strat_monotonicity_late(air_dgp):
     # Complier LATE row
     late_row = result.effects.iloc[0]
     assert abs(late_row['estimate'] - 2.0) < 0.2
+    # Inference fields are well-formed and internally consistent.
+    assert np.isfinite(late_row['se']) and late_row['se'] > 0
+    assert np.isfinite(late_row['ci_lower']) and np.isfinite(late_row['ci_upper'])
+    assert late_row['ci_lower'] < late_row['ci_upper']
+    # Percentile CI must bracket the point estimate.
+    assert late_row['ci_lower'] <= late_row['estimate'] <= late_row['ci_upper']
+    # LATE is strongly significant in this DGP (true effect 2.0, SE ~0.08).
+    assert 0.0 <= late_row['pvalue'] <= 1.0
+    assert late_row['pvalue'] < 0.01
 
 
 def test_principal_strat_stratum_proportions(air_dgp):
@@ -63,6 +72,10 @@ def test_principal_strat_stratum_proportions(air_dgp):
     assert abs(props['complier'] - 0.6) < 0.05
     assert abs(props['always-taker / always-survivor'] - 0.2) < 0.05
     assert abs(props['never-taker / never-survivor'] - 0.2) < 0.05
+    # Each stratum share is a valid probability and they partition the sample.
+    for p in props.values():
+        assert 0.0 <= p <= 1.0
+    assert abs(sum(props.values()) - 1.0) < 1e-8
 
 
 def test_principal_strat_sace_bounds_valid(air_dgp):
@@ -73,7 +86,20 @@ def test_principal_strat_sace_bounds_valid(air_dgp):
     )
     lo = result.bounds.loc[0, 'estimate']
     hi = result.bounds.loc[1, 'estimate']
+    # Both Zhang-Rubin endpoints are finite and ordered.
+    assert np.isfinite(lo) and np.isfinite(hi)
     assert lo <= hi
+    # Bounds carry well-formed inference: positive SE, finite CIs that bracket
+    # their own endpoints (these bound the always-survivor SACE, a distinct
+    # estimand from the complier LATE, so we do NOT pin them to 2.0).
+    for row in (0, 1):
+        assert np.isfinite(result.bounds.loc[row, 'se'])
+        assert result.bounds.loc[row, 'se'] > 0
+        cl = result.bounds.loc[row, 'ci_lower']
+        cu = result.bounds.loc[row, 'ci_upper']
+        est = result.bounds.loc[row, 'estimate']
+        assert np.isfinite(cl) and np.isfinite(cu)
+        assert cl <= est <= cu
 
 
 def test_principal_score_method_with_covariates():
@@ -114,6 +140,22 @@ def test_principal_score_method_with_covariates():
     # Tolerance is loose because principal ignorability is an assumption —
     # we measure approach, not exactness.
     assert abs(complier_row['estimate'] - 2.0) < 0.5
+    # Recovered complier effect is positive (true 2.0) with well-formed CI.
+    assert complier_row['estimate'] > 0
+    assert np.isfinite(complier_row['se']) and complier_row['se'] > 0
+    assert complier_row['ci_lower'] < complier_row['ci_upper']
+    assert (
+        complier_row['ci_lower']
+        <= complier_row['estimate']
+        <= complier_row['ci_upper']
+    )
+    # All three principal-stratum PCE rows are present and finite.
+    assert set(result.effects['stratum']) == {
+        'Complier PCE', 'Always-taker PCE', 'Never-taker PCE',
+    }
+    assert np.isfinite(result.effects['estimate']).all()
+    # Stratum shares partition the sample.
+    assert abs(sum(result.strata_proportions.values()) - 1.0) < 1e-8
 
 
 def test_principal_score_requires_covariates(air_dgp):
@@ -139,7 +181,18 @@ def test_sace_helper(air_dgp):
     )
     assert 'sace_lower' in result.model_info
     assert 'sace_upper' in result.model_info
-    assert result.model_info['sace_lower'] <= result.model_info['sace_upper']
+    lo = result.model_info['sace_lower']
+    hi = result.model_info['sace_upper']
+    assert np.isfinite(lo) and np.isfinite(hi)
+    assert lo <= hi
+    # The reported bounds width is the (non-negative) gap between endpoints.
+    assert result.model_info['bounds_width'] == pytest.approx(hi - lo)
+    assert result.model_info['bounds_width'] >= 0
+    # The headline estimate / se summarize the interval as midpoint ± half-width
+    # (internal consistency: the convenience result must agree with its bounds).
+    assert np.isfinite(result.estimate)
+    assert result.estimate == pytest.approx(0.5 * (lo + hi))
+    assert result.se == pytest.approx(0.5 * (hi - lo))
 
 
 # --------------------------------------------------------------------------- #
@@ -191,6 +244,26 @@ def test_instrument_path_returns_two_wald_lates(encouragement_dgp):
     strata = list(result.effects['stratum'])
     assert any('LATE on Y' in s for s in strata)
     assert any('LATE on S' in s for s in strata)
+    # Exactly the two headline estimands, nothing more.
+    assert len(result.effects) == 2
+    # Both Wald LATEs are finite, positively signed (true τ_Y=1.5, τ_S=0.4),
+    # and land near their planted values within a generous band.
+    tau_y = result.effects.loc[
+        result.effects['stratum'].str.contains('LATE on Y'), 'estimate'
+    ].iloc[0]
+    tau_s = result.effects.loc[
+        result.effects['stratum'].str.contains('LATE on S'), 'estimate'
+    ].iloc[0]
+    assert np.isfinite(tau_y) and np.isfinite(tau_s)
+    assert tau_y > 0 and tau_s > 0
+    assert abs(tau_y - 1.5) < 0.4
+    assert abs(tau_s - 0.4) < 0.2
+    # Inference fields are well-formed for both rows.
+    for _, row in result.effects.iterrows():
+        assert np.isfinite(row['se']) and row['se'] > 0
+        assert row['ci_lower'] < row['ci_upper']
+        assert row['ci_lower'] <= row['estimate'] <= row['ci_upper']
+        assert 0.0 <= row['pvalue'] <= 1.0
 
 
 def test_instrument_path_recovers_true_complier_share(encouragement_dgp):
@@ -202,6 +275,16 @@ def test_instrument_path_recovers_true_complier_share(encouragement_dgp):
     pi_c = result.strata_proportions['complier (w.r.t. Z)']
     # Tolerance accommodates sampling noise in n=4000.
     assert 0.50 <= pi_c <= 0.70, f"complier share off: {pi_c}"
+    # Complier share is a valid probability with a positive bootstrap SE.
+    assert 0.0 <= pi_c <= 1.0
+    assert np.isfinite(result.strata_proportions['complier_se'])
+    assert result.strata_proportions['complier_se'] > 0
+    # Under monotonicity the first stage equals the complier share and is
+    # strongly positive here (true π_C = 0.6).
+    assert result.strata_proportions['first_stage (D|Z=1 - D|Z=0)'] == pytest.approx(pi_c)
+    # First stage is the gap of the two conditional uptake probabilities.
+    fs = result.strata_proportions['P(D=1 | Z=1)'] - result.strata_proportions['P(D=1 | Z=0)']
+    assert fs == pytest.approx(pi_c)
 
 
 def test_instrument_path_recovers_true_late_on_y(encouragement_dgp):
@@ -210,10 +293,18 @@ def test_instrument_path_recovers_true_late_on_y(encouragement_dgp):
         encouragement_dgp, y='y', treat='d', strata='s',
         instrument='z', n_boot=50, seed=0,
     )
-    tau_y = result.effects.loc[
-        result.effects['stratum'].str.contains('LATE on Y'), 'estimate'
+    row = result.effects.loc[
+        result.effects['stratum'].str.contains('LATE on Y')
     ].iloc[0]
+    tau_y = row['estimate']
     assert 1.0 <= tau_y <= 2.0, f"τ_Y off: {tau_y}"
+    # CI is well-formed and brackets the point estimate; effect is significant
+    # (true τ_Y = 1.5, well away from 0).
+    assert np.isfinite(row['se']) and row['se'] > 0
+    assert row['ci_lower'] < row['ci_upper']
+    assert row['ci_lower'] <= tau_y <= row['ci_upper']
+    assert 0.0 <= row['pvalue'] <= 1.0
+    assert row['pvalue'] < 0.05
 
 
 def test_instrument_path_rejects_nonbinary_z(encouragement_dgp):

@@ -48,8 +48,34 @@ def test_rd_forest_no_honesty():
     df = _rd_df()
     r = sp.rd_forest(df, y="y", x="x", c=0, covs=["cov1"], n_trees=50,
                      honesty=False)
-    assert r.se > 0
-    assert np.isfinite(np.atleast_1d(np.asarray(r.estimate, dtype=float)).ravel()[0])
+    est = float(r.estimate)
+    assert np.isfinite(est)
+    # Planted jump is positive everywhere (eff in {2.0, 5.0}); average ATE=3.5.
+    # Recovery band is generous: spans the two subgroup jumps with slack and
+    # tolerates forest boundary bias, but still pins sign + magnitude.
+    assert est > 0
+    assert JUMP_Z0 - 0.5 <= est <= JUMP_Z1 + 1.0
+    # SE finite, strictly positive, and not absurdly large for this DGP.
+    assert 0 < r.se < 10
+    # CI is a proper ordered interval that brackets the point estimate.
+    lo, hi = r.ci
+    assert lo < hi
+    assert lo <= est <= hi
+    # P-value is a probability; jump is highly significant here.
+    assert 0.0 <= r.pvalue <= 1.0
+    # Per-obs CATE detail: one row per estimation-sample obs, all finite, and
+    # every subgroup CATE lies within the planted-effect range (sanity bound).
+    detail = r.detail
+    assert len(detail) == r.model_info["n_estimation"]
+    cate = detail["cate"].to_numpy()
+    assert np.all(np.isfinite(cate))
+    assert cate.min() > 0
+    assert JUMP_Z0 - 1.0 <= cate.min() <= cate.max() <= JUMP_Z1 + 1.0
+    # ATE is the mean of the per-obs CATEs (internal consistency).
+    assert abs(est - cate.mean()) < 1e-6
+    # Per-obs CIs are ordered and bracket their own CATE.
+    assert np.all(detail["ci_lower"].to_numpy() <= cate)
+    assert np.all(cate <= detail["ci_upper"].to_numpy())
 
 
 def test_rd_forest_requires_covs():
@@ -83,7 +109,29 @@ def test_rd_cate_summary_method_subset():
                              methods=["lasso"])
     assert "lasso" in out
     assert "comparison" in out
+    # Only the requested method ran -> exactly one comparison row, no others.
     assert len(out["comparison"]) == 1
+    assert "forest" not in out and "boost" not in out
+    assert "forest_error" not in out and "boost_error" not in out
+    # The lasso result recovers the planted average jump (ATE=3.5) with a
+    # generous band, has a positive finite SE, and an ordered bracketing CI.
+    res = out["lasso"]
+    est = float(res.estimate)
+    assert np.isfinite(est)
+    assert est > 0
+    assert JUMP_Z0 - 1.0 <= est <= JUMP_Z1 + 1.0
+    assert 0 < res.se < 10
+    lo, hi = res.ci
+    assert np.isfinite(lo) and np.isfinite(hi)
+    assert lo < hi
+    assert lo <= est <= hi
+    assert 0.0 <= res.pvalue <= 1.0
+    # The comparison row mirrors the underlying CausalResult.
+    row = out["comparison"].iloc[0]
+    assert row["method"] == "LASSO RD"
+    assert abs(float(row["estimate"]) - est) < 1e-9
+    assert abs(float(row["se"]) - res.se) < 1e-9
+    assert int(row["n_obs"]) == res.n_obs
 
 
 def test_rd_cate_summary_unknown_method():
@@ -98,9 +146,16 @@ def test_rd_cate_summary_collects_errors():
     df = _rd_df(n=1500)
     out = sp.rd_cate_summary(df, y="y", x="x", c=0, covs=["cov1"], h=0.001,
                              methods=["forest"])
-    # forest should fail (too few obs in tiny bandwidth) -> forest_error key
-    assert "forest_error" in out or "forest" in out
+    # forest should fail (too few obs in tiny bandwidth) -> forest_error key,
+    # captured as a string rather than swallowed, and no successful result.
+    assert "forest_error" in out
+    assert "forest" not in out
+    assert isinstance(out["forest_error"], str) and out["forest_error"]
+    # With no method succeeding, the comparison table exists but is empty.
     assert "comparison" in out
+    assert len(out["comparison"]) == 0
+    # No forest result -> heterogeneity drivers fall back to empty dict.
+    assert out.get("heterogeneity_drivers") == {}
 
 
 def test_importance_plot_from_forest():
@@ -109,6 +164,15 @@ def test_importance_plot_from_forest():
     fig0, ax0 = plt.subplots()
     ax = _importance_plot(r, top_k=5, ax=ax0)
     assert ax is not None
+    # Plot reuses the supplied axes (no fresh one created).
+    assert ax is ax0
+    # Two covariates -> two horizontal bars; widths are the (non-negative)
+    # importances, which sum to ~1 across all features.
+    assert len(ax.patches) == 2
+    widths = [p.get_width() for p in ax.patches]
+    assert all(np.isfinite(w) and w >= 0 for w in widths)
+    assert abs(sum(widths) - 1.0) < 1e-6
+    assert ax.get_xlabel() == "Variable Importance"
     plt.close("all")
 
 
@@ -117,6 +181,13 @@ def test_importance_plot_creates_axes():
     r = sp.rd_forest(df, y="y", x="x", c=0, covs=["cov1", "z"], n_trees=50)
     ax = _importance_plot(r)
     assert ax is not None
+    # One bar per covariate, drawn from the result's variable_importance.
+    vi = r.model_info["variable_importance"]
+    assert len(ax.patches) == len(vi)
+    widths = [p.get_width() for p in ax.patches]
+    assert all(w >= 0 for w in widths)
+    assert abs(sum(widths) - sum(vi.values())) < 1e-9
+    assert ax.get_xlabel() == "Variable Importance"
     plt.close("all")
 
 

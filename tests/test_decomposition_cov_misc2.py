@@ -171,9 +171,26 @@ def test_machado_mata_bootstrap_inference():
     assert res.se is not None
     assert list(res.se.columns) == ["tau", "gap_se", "composition_se"]
     assert len(res.se) == len(res.quantile_grid)
-    # SEs are non-negative standard deviations
-    assert (res.se["gap_se"] >= 0).all()
-    assert (res.se["composition_se"] >= 0).all()
+    # tau column of se table aligns with the quantile grid
+    np.testing.assert_allclose(
+        res.se["tau"].to_numpy(), res.quantile_grid["tau"].to_numpy(), atol=1e-12
+    )
+    # point estimates obey the decomposition identity and are finite/bounded
+    gg = res.quantile_grid
+    np.testing.assert_allclose(
+        gg["gap"].to_numpy(),
+        (gg["composition"] + gg["structure"]).to_numpy(),
+        atol=1e-10,
+    )
+    assert np.all(np.isfinite(gg[["gap", "composition", "structure"]].to_numpy()))
+    assert np.all(np.abs(gg["gap"].to_numpy()) < 50.0)
+    # bootstrap with genuine cross-replicate variation → SEs strictly positive
+    # (not the all-zero degenerate case) and bounded well away from absurd.
+    assert np.all(np.isfinite(res.se[["gap_se", "composition_se"]].to_numpy()))
+    assert (res.se["gap_se"] > 0).all()
+    assert (res.se["composition_se"] > 0).all()
+    assert (res.se["gap_se"] < 50.0).all()
+    assert (res.se["composition_se"] < 50.0).all()
 
 
 def test_machado_mata_bootstrap_skips_tiny_strata():
@@ -209,6 +226,13 @@ def test_qreg_irls_singular_fallback():
     beta = mm_mod._qreg_irls(y, X, tau=0.5, max_iter=5)
     assert beta.shape == (3,)
     assert np.all(np.isfinite(beta))
+    # The lstsq fallback still recovers the planted median fit.  The design
+    # has col3 == 2*col2, so the slopes are individually unidentified but the
+    # *effective* slope on x is beta[1] + 2*beta[2]; with the true model
+    # y = 1 + x + N(0, 0.1) the median fit recovers intercept ~ 1 and
+    # effective slope ~ 1 (generous band well outside the 0.1 noise scale).
+    assert beta[0] == pytest.approx(1.0, abs=0.1)
+    assert (beta[1] + 2.0 * beta[2]) == pytest.approx(1.0, abs=0.1)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -270,6 +294,14 @@ def test_fairlie_probit_uses_probit_helpers():
     res = sp.fairlie(df, "y", "g", ["x1"], model="probit", n_sim=150, seed=4)
     assert res.model == "probit"
     assert res.gap == pytest.approx(res.explained + res.unexplained, abs=1e-10)
+    # |gap| equals the observed difference in group means (sign is convention);
+    # both are exact, model-free statistics of the data.
+    obs_gap = df.loc[df.g == 1, "y"].mean() - df.loc[df.g == 0, "y"].mean()
+    assert abs(res.gap) == pytest.approx(abs(obs_gap), abs=1e-10)
+    # detailed contributions partition the explained component
+    assert res.detailed["contribution"].sum() == pytest.approx(
+        res.explained, rel=1e-6
+    )
 
 
 def test_bauer_sinning_reference1():
@@ -319,6 +351,14 @@ def test_probit_fit_singular_hessian_fallback():
     assert vcov.shape == (3, 3)
     assert np.all(np.isfinite(beta))
     assert np.all(np.isfinite(vcov))
+    # vcov is a valid (pinv-regularised) covariance: symmetric with
+    # non-negative variances on the diagonal.
+    np.testing.assert_allclose(vcov, vcov.T, atol=1e-10)
+    assert np.all(np.diag(vcov) >= 0.0)
+    # col3 == 2*col2 so individual slopes are unidentified, but the *direction*
+    # x -> y is.  The DGP y = 1[x + noise > 0] is increasing in x, so the
+    # effective slope on x (beta[1] + 2*beta[2]) is positive.
+    assert (beta[1] + 2.0 * beta[2]) > 0.0
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -328,9 +368,17 @@ def test_probit_fit_singular_hessian_fallback():
 def test_ci_whiskers_returns_none_when_no_positive_se():
     """plots.py 47: all-zero SE array → None (no whiskers)."""
     assert plots_mod._ci_whiskers([1.0, 2.0], [0.0, 0.0]) is None
-    # positive SE → array of z*se half-widths
+    # positive SE → array of z*se half-widths (z = 1.96 for the default 95% CI)
+    from scipy import stats as _stats
+
+    z = float(_stats.norm.ppf(0.975))
     w = plots_mod._ci_whiskers([1.0, 2.0], [0.5, 0.0])
-    assert w is not None and w[0] > 0 and w[1] == 0.0
+    assert w is not None
+    assert w.shape == (2,)
+    # half-width is exactly z * se elementwise
+    np.testing.assert_allclose(w, z * np.array([0.5, 0.0]), atol=1e-12)
+    assert w[0] == pytest.approx(z * 0.5)
+    assert w[1] == 0.0
 
 
 def test_dfl_plot_quantile_name_branch():

@@ -43,6 +43,11 @@ class TestArellanoBond:
                          id='id', time='time')
         assert isinstance(result, CausalResult)
         assert 'Arellano-Bond' in result.method
+        # Point estimate (AR coef) must be finite and inside the stationary
+        # band implied by the DGP (true ρ = 0.5 < 1); SE finite and modest.
+        assert np.isfinite(result.estimate)
+        assert -1.0 < result.estimate < 1.0
+        assert np.isfinite(result.se) and 0 < result.se < 1.0
 
     def test_rho_positive(self, dynamic_panel):
         """AR coefficient should be positive (true ρ = 0.5)."""
@@ -57,11 +62,18 @@ class TestArellanoBond:
         assert abs(result.estimate - 0.5) < 0.3
 
     def test_x_coefficient(self, dynamic_panel):
-        """β_x should be positive (true = 1.0)."""
+        """β_x should be positive and recover the planted true = 1.0."""
         result = xtabond(dynamic_panel, y='y', x=['x'],
                          id='id', time='time')
-        x_coef = result.detail[result.detail['variable'] == 'x']['coefficient'].values[0]
+        row = result.detail[result.detail['variable'] == 'x']
+        x_coef = row['coefficient'].values[0]
+        x_se = row['se'].values[0]
         assert x_coef > 0
+        # Recovery band: true β_x = 1.0. xtabond is consistent here, so a
+        # generous 30% relative band comfortably covers BLAS/seed noise
+        # while still catching a sign flip or order-of-magnitude regression.
+        assert abs(x_coef - 1.0) < 0.3
+        assert np.isfinite(x_se) and x_se > 0
 
     def test_ar2_not_reject(self, dynamic_panel):
         """AR(2) test should not reject (DGP has AR(1) only)."""
@@ -70,22 +82,52 @@ class TestArellanoBond:
         assert result.model_info['ar2_p'] > 0.01
 
     def test_hansen_test(self, dynamic_panel):
-        """Hansen test should be in model_info."""
-        result = xtabond(dynamic_panel, y='y', x=['x'],
-                         id='id', time='time')
-        assert 'hansen_p' in result.model_info
+        """Hansen overid stats should be present and well-formed.
+
+        Hansen J is only a valid overid test under two-step (efficient)
+        weighting, so the one-step run reports the keys (p may be NaN) and
+        the two-step run must return a usable p-value in [0, 1] with a
+        non-negative statistic on the correct (n_instruments - k) df. The
+        AR(1)-only DGP is correctly specified, so the test should NOT reject.
+        """
+        mi = xtabond(dynamic_panel, y='y', x=['x'],
+                     id='id', time='time').model_info
+        assert 'hansen_p' in mi and 'hansen_stat' in mi and 'hansen_df' in mi
+
+        mi2 = xtabond(dynamic_panel, y='y', x=['x'],
+                      id='id', time='time', twostep=True).model_info
+        assert np.isfinite(mi2['hansen_stat']) and mi2['hansen_stat'] >= 0
+        assert 0.0 <= mi2['hansen_p'] <= 1.0
+        assert mi2['hansen_df'] == mi2['n_instruments'] - mi2['n_regressors']
+        # Correctly specified model: overid restrictions should not reject.
+        assert mi2['hansen_p'] > 0.01
 
     def test_n_instruments(self, dynamic_panel):
         result = xtabond(dynamic_panel, y='y', x=['x'],
                          id='id', time='time')
-        assert result.model_info['n_instruments'] > 0
+        mi = result.model_info
+        # 2 regressors (L1.y + x); for identification the GMM-style design
+        # must be over-identified (more instruments than parameters), and the
+        # overid df reported to the user must equal that excess count.
+        assert mi['n_regressors'] == 2
+        assert mi['n_instruments'] > mi['n_regressors']
+        assert mi['sargan_df'] == mi['n_instruments'] - mi['n_regressors']
 
     def test_twostep(self, dynamic_panel):
-        """Two-step GMM should work."""
+        """Two-step GMM should work and recover the same DGP as one-step."""
         result = xtabond(dynamic_panel, y='y', x=['x'],
                          id='id', time='time', twostep=True)
         assert isinstance(result, CausalResult)
         assert result.model_info['twostep'] is True
+        # Two-step is a re-weighting of the same moments: estimate stays in
+        # the stationary band and close to the planted ρ = 0.5; SE finite.
+        assert np.isfinite(result.estimate) and 0 < result.estimate < 1.0
+        assert abs(result.estimate - 0.5) < 0.3
+        assert np.isfinite(result.se) and result.se > 0
+        # One- and two-step point estimates should agree to within a few SEs.
+        onestep = xtabond(dynamic_panel, y='y', x=['x'],
+                          id='id', time='time', twostep=False)
+        assert abs(result.estimate - onestep.estimate) < 0.1
 
     def test_system_gmm_not_implemented(self, dynamic_panel):
         """System (Blundell-Bond) GMM is gated until it has a parity ref.
@@ -179,16 +221,37 @@ class TestArellanoBond:
             xtabond(df, y='y', x=['x'], id='id', time='time')
 
     def test_no_exogenous(self, dynamic_panel):
-        """Should work with only lagged Y (no X)."""
+        """Should work with only lagged Y (no X) and still identify ρ."""
         result = xtabond(dynamic_panel, y='y', id='id', time='time')
         assert isinstance(result, CausalResult)
+        # Only the AR(1) term is estimated: exactly one row, named L1.y.
+        assert list(result.detail['variable']) == ['L1.y']
+        assert result.model_info['n_regressors'] == 1
+        # Even without the strong exogenous regressor, ρ̂ stays in the
+        # stationary band and recovers the planted true ρ = 0.5 (wider band
+        # since dropping x inflates the SE).
+        assert np.isfinite(result.estimate) and 0 < result.estimate < 1.0
+        assert abs(result.estimate - 0.5) < 0.35
+        assert np.isfinite(result.se) and result.se > 0
 
     def test_detail_table(self, dynamic_panel):
         result = xtabond(dynamic_panel, y='y', x=['x'],
                          id='id', time='time')
-        assert 'variable' in result.detail.columns
-        assert 'coefficient' in result.detail.columns
-        assert 'se' in result.detail.columns
+        det = result.detail
+        for col in ('variable', 'coefficient', 'se', 'z', 'pvalue'):
+            assert col in det.columns
+        # One row per regressor (L1.y + x), all numeric fields finite, SE > 0,
+        # p-values are valid probabilities, and z is internally consistent
+        # with coef/se. The leading row (L1.y) must equal result.estimate.
+        assert set(det['variable']) == {'L1.y', 'x'}
+        assert len(det) == 2
+        assert np.all(np.isfinite(det['coefficient']))
+        assert np.all(det['se'] > 0)
+        assert np.all((det['pvalue'] >= 0) & (det['pvalue'] <= 1))
+        np.testing.assert_allclose(det['z'], det['coefficient'] / det['se'],
+                                   rtol=1e-6)
+        lag_row = det[det['variable'] == 'L1.y']
+        assert abs(lag_row['coefficient'].values[0] - result.estimate) < 1e-12
 
     def test_summary(self, dynamic_panel):
         result = xtabond(dynamic_panel, y='y', x=['x'],

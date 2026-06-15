@@ -100,7 +100,9 @@ class TestNearestPropensity:
             selection_bias_data, y='y', treat='treat',
             covariates=['x1', 'x2'],
         )
-        assert result.pvalue < 0.05
+        assert 0.0 <= result.pvalue < 0.05
+        # Significance must be internally consistent: 95% CI excludes 0.
+        assert result.ci[0] > 0.0
 
     def test_ci_covers_true(self, selection_bias_data):
         result = match(
@@ -155,8 +157,14 @@ class TestNearestMahalanobis:
             distance='mahalanobis', bias_correction=True,
         )
         assert isinstance(bc, CausalResult)
-        # BC should be at least as close to truth (not strictly, due to randomness)
-        assert abs(bc.estimate - 2.0) < 2.0
+        # BC recovers the planted ATT (true=2.0) and flips the flag.
+        assert bc.model_info['bias_correction'] is True
+        assert abs(bc.estimate - 2.0) < 0.5  # tight band; observed ~1.97
+        # Internal consistency: positive, finite SE, CI brackets the point estimate.
+        assert bc.se > 0 and np.isfinite(bc.se)
+        assert bc.ci[0] < bc.estimate < bc.ci[1]
+        # BC should be no worse than raw matching on this DGP.
+        assert abs(bc.estimate - 2.0) <= abs(raw.estimate - 2.0) + 0.2
 
 
 class TestNearestEuclidean:
@@ -248,6 +256,12 @@ class TestStratification:
             method='stratify', n_strata=10,
         )
         assert isinstance(result, CausalResult)
+        # Recovers the planted ATT (true=2.0) and reports a sane SE/CI.
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~1.98
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
+        assert result.model_info['n_strata'] == 10
+        assert 1 <= result.model_info['n_effective_strata'] <= 10
 
     def test_requires_propensity(self, selection_bias_data):
         with pytest.raises(ValueError, match="propensity"):
@@ -277,6 +291,13 @@ class TestCEM:
             method='cem', n_bins=10,
         )
         assert isinstance(result, CausalResult)
+        # n_bins is honoured and the planted ATT (true=2.0) is recovered.
+        assert result.model_info['n_bins'] == 10
+        assert abs(result.estimate - 2.0) < 0.6  # CEM is coarser; observed ~2.06
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
+        # Matched counts cannot exceed available units.
+        assert result.model_info['n_matched_treated'] <= result.model_info['n_treated']
 
 
 class TestBiasCorrection:
@@ -290,6 +311,10 @@ class TestBiasCorrection:
         )
         assert isinstance(result, CausalResult)
         assert result.model_info['bias_correction'] is True
+        # Recovers the planted ATT (true=2.0) with a sane CI.
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~1.99
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     def test_euclidean_bc(self, selection_bias_data):
         result = match(
@@ -298,6 +323,11 @@ class TestBiasCorrection:
             distance='euclidean', bias_correction=True,
         )
         assert isinstance(result, CausalResult)
+        assert result.model_info['bias_correction'] is True
+        # Recovers the planted ATT (true=2.0) with a sane CI.
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~1.97
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
 
 # ==================================================================
@@ -325,6 +355,10 @@ class TestLegacyAPI:
         assert isinstance(result, CausalResult)
         assert result.model_info['distance'] == 'mahalanobis'
         assert result.model_info['method'] == 'nearest'
+        # Legacy alias must produce the same recovery as the new API (true=2.0).
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~1.99
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     def test_legacy_cem(self, selection_bias_data):
         result = match(
@@ -333,6 +367,10 @@ class TestLegacyAPI:
         )
         assert isinstance(result, CausalResult)
         assert result.model_info['method'] == 'cem'
+        # Legacy CEM alias recovers the planted ATT (true=2.0).
+        assert abs(result.estimate - 2.0) < 0.6  # CEM coarser; observed ~2.12
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
 
 # ==================================================================
@@ -398,6 +436,10 @@ class TestPsPoly:
         )
         assert isinstance(result, CausalResult)
         assert result.model_info['ps_poly'] == 3
+        # Cubic PS still recovers the planted ATT (true=2.0).
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~1.99
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     def test_poly1_is_default(self, selection_bias_data):
         result = match(
@@ -518,6 +560,11 @@ class TestMatchGeneral:
             caliper=0.1,
         )
         assert isinstance(result, CausalResult)
+        assert result.model_info['caliper'] == 0.1
+        # Caliper-restricted matching still recovers the planted ATT (true=2.0).
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~2.02
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     def test_multiple_matches(self, selection_bias_data):
         result = match(
@@ -526,6 +573,11 @@ class TestMatchGeneral:
             n_matches=3,
         )
         assert isinstance(result, CausalResult)
+        assert result.model_info['n_matches'] == 3
+        # 3-NN matching still recovers the planted ATT (true=2.0).
+        assert abs(result.estimate - 2.0) < 0.5  # observed ~2.00
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     def test_without_replacement(self, selection_bias_data):
         result = match(
@@ -534,6 +586,14 @@ class TestMatchGeneral:
             replace=False,
         )
         assert isinstance(result, CausalResult)
+        assert result.model_info['replace'] is False
+        # Without replacement the estimate is biased upward on this DGP
+        # (poorer matches; observed ~2.82) — assert sign + a generous band
+        # plus internal CI consistency rather than a tight recovery.
+        assert result.estimate > 0                      # treatment effect is positive
+        assert 1.0 < result.estimate < 4.0
+        assert result.se > 0 and np.isfinite(result.se)
+        assert result.ci[0] < result.estimate < result.ci[1]
 
     # --- Error handling ---
 

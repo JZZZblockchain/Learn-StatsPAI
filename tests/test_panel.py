@@ -50,18 +50,37 @@ class TestFixedEffects:
         assert abs(result.params['x2'] - 3.0) < 0.3
 
     def test_fe_robust(self, panel_data):
-        """FE with robust SE should work."""
+        """FE with robust SE should still recover slopes ≈ 2, 3 with valid SEs."""
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time',
                        method='fe', robust='robust')
-        assert result is not None
+        assert isinstance(result, EconometricResults)
+        # robust SE only changes inference, not the point estimates
+        assert abs(result.params['x1'] - 2.0) < 0.3
+        assert abs(result.params['x2'] - 3.0) < 0.3
+        # SEs must be finite, strictly positive, and not absurd
+        for v in ['x1', 'x2']:
+            se = float(result.std_errors[v])
+            assert np.isfinite(se) and 0.0 < se < 1.0
+        # both slopes are highly significant given the planted true effect
+        assert np.all(np.asarray(result.pvalues) < 0.05)
 
     def test_fe_clustered(self, panel_data):
-        """FE with clustered SE by entity."""
+        """FE clustered by entity: same point estimates, valid finite SEs."""
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time',
                        method='fe', cluster='entity')
-        assert result is not None
+        assert isinstance(result, EconometricResults)
+        assert abs(result.params['x1'] - 2.0) < 0.3
+        assert abs(result.params['x2'] - 3.0) < 0.3
+        for v in ['x1', 'x2']:
+            se = float(result.std_errors[v])
+            assert np.isfinite(se) and 0.0 < se < 1.0
+        # CI must bracket the point estimate for each slope
+        ci = result.conf_int()
+        for v in ['x1', 'x2']:
+            lo, hi = float(ci.loc[v].iloc[0]), float(ci.loc[v].iloc[1])
+            assert lo < float(result.params[v]) < hi
 
 
 class TestRandomEffects:
@@ -79,32 +98,70 @@ class TestRandomEffects:
 class TestPooledOLS:
 
     def test_pooled_basic(self, panel_data):
-        """Pooled OLS should work."""
+        """Pooled OLS should work and recover slopes (alpha_i ~ uncorrelated w/ x)."""
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time', method='pooled')
 
         assert isinstance(result, EconometricResults)
         assert len(result.params) == 3  # const + x1 + x2
+        assert list(result.params.index) == ['const', 'x1', 'x2']
+        # alpha_i is drawn independently of x1/x2, so pooled OLS is still
+        # consistent for the slopes (wider band than FE for the extra noise).
+        assert abs(result.params['x1'] - 2.0) < 0.5
+        assert abs(result.params['x2'] - 3.0) < 0.5
+        # const ~ E[alpha_i] = 5
+        assert abs(result.params['const'] - 5.0) < 1.0
+        for v in ['const', 'x1', 'x2']:
+            se = float(result.std_errors[v])
+            assert np.isfinite(se) and se > 0.0
 
 
 class TestFirstDifference:
 
     def test_fd_basic(self, panel_data):
-        """First difference should work."""
+        """First difference also differences out alpha_i -> slopes ≈ 2, 3."""
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time', method='fd')
 
         assert isinstance(result, EconometricResults)
+        # differencing removes the entity effect, so FD is consistent here
+        assert abs(result.params['x1'] - 2.0) < 0.3
+        assert abs(result.params['x2'] - 3.0) < 0.3
+        for v in ['x1', 'x2']:
+            se = float(result.std_errors[v])
+            assert np.isfinite(se) and 0.0 < se < 1.0
+        assert np.all(np.asarray(result.pvalues) < 0.05)
 
 
 class TestBetween:
 
     def test_between_basic(self, panel_data):
-        """Between estimator should work."""
+        """Between estimator: only 50 entity means -> noisy but well-formed.
+
+        x1/x2 averaged within entity over 10 i.i.d. draws shrink toward 0,
+        so the between slopes are high-variance and NOT a reliable recovery
+        of (2, 3) here; we assert structure + finiteness + the const ~ 5
+        instead of a tight slope band (kept robust, not seed-fragile).
+        """
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time', method='be')
 
         assert isinstance(result, EconometricResults)
+        assert list(result.params.index) == ['const', 'x1', 'x2']
+        # const estimates E[alpha_i] = 5 from the 50 entity means
+        assert abs(result.params['const'] - 5.0) < 1.0
+        # slopes stay finite and within a generous plausible range
+        for v in ['const', 'x1', 'x2']:
+            assert np.isfinite(float(result.params[v]))
+            se = float(result.std_errors[v])
+            assert np.isfinite(se) and se > 0.0
+        assert abs(result.params['x1']) < 10.0
+        assert abs(result.params['x2']) < 10.0
+        # CI brackets each estimate
+        ci = result.conf_int()
+        for v in ['const', 'x1', 'x2']:
+            lo, hi = float(ci.loc[v].iloc[0]), float(ci.loc[v].iloc[1])
+            assert lo < float(result.params[v]) < hi
 
 
 class TestPanelGeneral:
@@ -120,6 +177,16 @@ class TestPanelGeneral:
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time', method='fe')
         assert 'R-squared' in result.diagnostics
+        r2 = float(result.diagnostics['R-squared'])
+        # well-specified low-noise DGP -> within R^2 should be high but valid
+        assert 0.0 <= r2 <= 1.0
+        assert r2 > 0.9
+        # entity/period counts must match the simulated panel (50 x 10)
+        assert int(result.diagnostics['N entities']) == 50
+        assert int(result.diagnostics['N time periods']) == 10
+        # F-stat for joint significance is large and positive here
+        assert float(result.diagnostics['F-statistic']) > 0.0
+        assert 0.0 <= float(result.diagnostics['F p-value']) <= 1.0
 
     def test_residuals(self, panel_data):
         result = panel(panel_data, "y ~ x1 + x2",
@@ -127,12 +194,26 @@ class TestPanelGeneral:
         resid = result.residuals()
         assert resid is not None
         assert len(resid) == len(panel_data)
+        resid = np.asarray(resid, dtype=float)
+        assert np.all(np.isfinite(resid))
+        # FE residuals are mean-zero by construction (within transform)
+        assert abs(float(np.mean(resid))) < 1e-6
+        # residual scale tracks the planted eps ~ N(0, 0.5)
+        assert 0.1 < float(np.std(resid)) < 1.0
 
     def test_fitted_values(self, panel_data):
         result = panel(panel_data, "y ~ x1 + x2",
                        entity='entity', time='time', method='fe')
         fitted = result.fitted_values()
         assert fitted is not None
+        assert len(fitted) == len(panel_data)
+        fitted = np.asarray(fitted, dtype=float)
+        assert np.all(np.isfinite(fitted))
+        # FE fitted values exclude the entity effects (within transform), so
+        # they track y's within-variation, not its full level -> corr ~ 0.88.
+        y = panel_data['y'].to_numpy(dtype=float)
+        corr = float(np.corrcoef(fitted, y)[0, 1])
+        assert corr > 0.8
 
     def test_repr(self, panel_data):
         result = panel(panel_data, "y ~ x1 + x2",
