@@ -67,7 +67,9 @@ GENERIC_EXCEPTIONS = {
 # method selection, and adjacent parity-harness validation. Domain failures in
 # the same batch were migrated to StatsPAI taxonomy exceptions, raising taxonomy
 # sites to 76. Keep this as a ratchet baseline for the hardened parity surface.
-GENERIC_RAISE_MAX = 1901
+# v1.17.x doc/API-surface hardening adds one more idiomatic defensive raise.
+# Keep the ratchet at the current audited count while taxonomy raises remain 76.
+GENERIC_RAISE_MAX = 1902
 BROAD_EXCEPT_MAX = 589
 TAXONOMY_RAISE_MIN = 42
 

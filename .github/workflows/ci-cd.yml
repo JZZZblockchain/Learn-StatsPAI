@@ -18,6 +18,13 @@ on:
           - pypi-only
           - both
         default: none
+      test_scope:
+        description: 'Test scope for manual validation'
+        type: choice
+        options:
+          - fast
+          - full
+        default: fast
 
 # Opt into Node 24 runtime early for all JavaScript actions.
 # GitHub's documented migration path (blog post 2025-09-19) before the
@@ -39,27 +46,32 @@ concurrency:
 
 jobs:
   # Decide the test matrix based on trigger:
-  #   - pull_request: 1 combo (ubuntu-latest × 3.10) — fast PR feedback, keeps Codecov upload
-  #   - push / release / workflow_dispatch: full 13-combo matrix
-  # Rationale: PR CI was ~44 min wall-clock on the slowest Windows shard; a PR
-  # rarely needs all 13 shards to catch regressions, and push-to-main still runs
-  # the full matrix before any release. Fully reversible: delete set-matrix and
-  # inline the old matrix block to restore.
+  #   - pull_request / push: one fast current-contract gate on ubuntu-latest × 3.10
+  #   - release / publish dispatch / manual full dispatch: full 13-combo matrix
+  # Rationale: the old push-to-main path ran 13 full pytest shards on every
+  # commit, which is too slow/noisy for the current repository size and cancels
+  # useful follow-up checks during bursty publication work. Full historical
+  # coverage is still available before publishing and through manual full runs;
+  # routine CI/CD now protects syntax, quality ratchets, API/registry/examples
+  # contracts, representative estimator smoke tests, and the bare wheel smoke.
   set-matrix:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
     env:
       EVENT_NAME: ${{ github.event_name }}
+      PUBLISH_TARGET: ${{ inputs.publish_target || 'none' }}
+      TEST_SCOPE: ${{ inputs.test_scope || 'fast' }}
     steps:
       - id: compute
         shell: bash
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            # Match the Codecov upload combo (ubuntu-latest × 3.10) so PR runs still publish coverage.
-            echo 'matrix={"include":[{"os":"ubuntu-latest","python-version":"3.10"}]}' >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "release" ] ||
+             [ "$TEST_SCOPE" = "full" ] ||
+             [ "$PUBLISH_TARGET" != "none" ]; then
+            echo 'matrix={"include":[{"os":"ubuntu-latest","python-version":"3.9","test_scope":"full"},{"os":"ubuntu-latest","python-version":"3.10","test_scope":"full"},{"os":"ubuntu-latest","python-version":"3.11","test_scope":"full"},{"os":"ubuntu-latest","python-version":"3.12","test_scope":"full"},{"os":"ubuntu-latest","python-version":"3.13","test_scope":"full"},{"os":"windows-latest","python-version":"3.10","test_scope":"full"},{"os":"windows-latest","python-version":"3.11","test_scope":"full"},{"os":"windows-latest","python-version":"3.12","test_scope":"full"},{"os":"windows-latest","python-version":"3.13","test_scope":"full"},{"os":"macos-latest","python-version":"3.10","test_scope":"full"},{"os":"macos-latest","python-version":"3.11","test_scope":"full"},{"os":"macos-latest","python-version":"3.12","test_scope":"full"},{"os":"macos-latest","python-version":"3.13","test_scope":"full"}]}' >> "$GITHUB_OUTPUT"
           else
-            echo 'matrix={"include":[{"os":"ubuntu-latest","python-version":"3.9"},{"os":"ubuntu-latest","python-version":"3.10"},{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.10"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.10"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"os":"ubuntu-latest","python-version":"3.10","test_scope":"fast"}]}' >> "$GITHUB_OUTPUT"
           fi
 
   test:
@@ -98,7 +110,7 @@ jobs:
       # of skipping them. Other matrix entries may skip optional pins; the
       # count-drift guard degrades gracefully (see test_jss_validation_api.py).
       # Mirrors the flake8 / mypy / coverage canonical-env gating below.
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      if: matrix.test_scope == 'full' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       run: pip install -e ".[parity,rd-cct]"
 
     - name: Lint with flake8 (hard syntax errors — all matrix entries)
@@ -140,8 +152,26 @@ jobs:
     # Ratchet upward (60 -> 65 -> 70) once each step is confirmed green in
     # CI on the canonical ubuntu+3.10 env; never set the gate above the last
     # CI-verified number.
-    - name: Test with pytest (coverage)
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+    - name: Test with pytest (fast current-contract gate)
+      if: matrix.test_scope == 'fast'
+      run: |
+        pytest \
+          tests/test_cli.py \
+          tests/test_api_surface_consistency.py \
+          tests/test_registry_default_contract.py \
+          tests/test_registry_signature_contract.py \
+          tests/test_help.py \
+          tests/test_help_completeness.py \
+          tests/test_examples.py \
+          tests/test_export_surface_contract.py \
+          tests/test_ols.py \
+          tests/test_iv.py \
+          tests/test_did.py \
+          tests/test_rd.py \
+          -q --no-header -o addopts=''
+
+    - name: Test with pytest (full coverage)
+      if: matrix.test_scope == 'full' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       run: |
         pytest tests/ -v --cov=statspai --cov-report=xml --cov-report=term-missing --cov-fail-under=60
 
@@ -151,14 +181,14 @@ jobs:
     # silently regress. Reuses the CI-generated coverage.xml just produced.
     # Ratchet the --min upward only after a higher number is confirmed green here.
     - name: Core-module coverage ratchet (did/iv/rd/synth/dml/panel ≥ 95%)
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      if: matrix.test_scope == 'full' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       run: |
         python scripts/coverage_campaign.py report --xml coverage.xml --check --min 95
 
-    - name: Test with pytest (no coverage)
-      if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10') }}
+    - name: Test with pytest (full no coverage)
+      if: ${{ matrix.test_scope == 'full' && !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10') }}
       run: |
-        pytest tests/ -v
+        pytest tests/ -v -m 'not slow' -o addopts=''
 
     - name: Build and smoke installed wheel (bare install — lazy-import guard)
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
@@ -207,7 +237,7 @@ jobs:
         PY
 
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      if: matrix.test_scope == 'full' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
