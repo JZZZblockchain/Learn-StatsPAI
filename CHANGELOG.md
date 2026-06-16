@@ -4,7 +4,73 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-06-15
+
 ### Added
+
+- **`sp.psmatch2` Abadie-Imbens (2006) heteroskedasticity-robust SE** (Stata
+  `psmatch2 , ai(J)`). `sp.psmatch2(..., ai=J)` (or `se='abadie_imbens'`)
+  estimates the within-cell outcome noise `σ²(X)` from each unit's `J`
+  nearest *same-arm* neighbours (psmatch2's `_self_y`) and forms
+  `seatt = sqrt(Σ_i (J/(J+1))(Y_i−Ȳ_self_i)²·(D_i−(1−D_i)w_i)²)/N1` —
+  reproducing Stata's `r(seatt)` **digit for digit** (machine precision, since
+  the within-arm match and `_weight` are both discrete). `sp.match` gains
+  `se_method='abadie_imbens'` + `ai_matches=J`. Pinned in
+  `tests/reference_parity/test_psmatch2_parity.py` against Stata 18 `ai(1)` /
+  `ai(2)`. (Note: psmatch2's `llr` local-linear matching is intentionally
+  **not** ported — Stata routes its default through the `lpoly` command, whose
+  bandwidth/boundary handling is not bit-reproducible; a faithful "align with
+  Stata" port is infeasible, so it is omitted rather than shipped misaligned.)
+- **`sp.psmatch2` kernel & radius matching + Stata's digit-exact analytic SE.**
+  Building on the matched-frame work below, `sp.psmatch2` now accepts
+  `method={'neighbor','kernel','radius'}` (kernel uses `kernel=` /
+  `bwidth=`; radius is a uniform kernel with bandwidth `caliper`), reproducing
+  Stata `psmatch2 , kernel` / `, radius`. Kernel/radius assemble the matched
+  frame with per-treated propensity-kernel weights (`_weight_j = Σ_i K_ij/Σ_k
+  K_ik`, summing to the on-support treated count) and the matched-control mean
+  `_y`. A new `se={'psmatch2','ai'}` selects the standard error: `'psmatch2'`
+  (now the `sp.psmatch2` default) reproduces Stata's analytic ATT SE
+  `sqrt(var1/N1 + var0·Σw²/N1²)` (var0 over *used* controls) **digit for
+  digit** — nearest-neighbour SE and radius ATT+SE match Stata 18 to machine
+  precision (≤1e-12); the smooth Epanechnikov kernel ATT matches to ~1e-8,
+  bounded only by the independent logit propensity-score estimate (the
+  matching algorithm is exact given the same score). `sp.match` gains the
+  same `method='kernel'/'radius'`, `kernel`, `bwidth`, `se_method` options;
+  its nearest-neighbour SE default is unchanged (`se_method='auto'` → AI),
+  so existing results are untouched. Algorithm and SE formula were
+  reverse-engineered from `psmatch2.ado` and pinned against Stata 18 in
+  `tests/reference_parity/test_psmatch2_parity.py` (with kernel/radius
+  fixtures and scalars).
+- **`sp.psmatch2` — Stata `psmatch2`-faithful propensity-score matching with
+  a full post-matching toolkit (`src/statspai/matching/psmatch2.py`).** Closes
+  the gap that `sp.match(method='psm')` produced only an ATT, not the
+  per-observation matched-sample variables Stata writes back. `sp.psmatch2`
+  returns a `PSMatch2Result` whose `.matched_data` carries the psmatch2
+  columns — `_id`, `_treated`, `_pscore`, `_support`, `_weight`,
+  `_n1 … _nk`, `_nn`, `_pdif`, `_y` — and exposes the three operations that
+  previously required Stata: `.balance()` (post-matching balance, the
+  `pstest` analogue: `smd_raw` before vs `_weight`-weighted `smd_weighted`
+  after), `.psplot()` (matched-sample propensity-score density with the
+  controls reweighted by `_weight`), and `.psm_did()` (frequency-weighted
+  PSM-DID — merges `_weight`/`_support` onto a panel by `id`, keeps the
+  matched sample, and fits the weighted `y ~ treat*post` DiD via `sp.feols`,
+  dropping FE-absorbed main effects automatically). `outcome=` is optional
+  (Stata-faithful: the matched frame is produced for PSM-DID even without a
+  baseline outcome). Verified **row-for-row against Stata 18 `psmatch2`** —
+  ATT exact to 6 digits, and `_pscore` / `_weight` / `_nn` / `_pdif` / `_n1`
+  (neighbour identity) / `_y` all match (`tests/reference_parity/
+  test_psmatch2_parity.py`, `tests/test_psmatch2.py`, +40 tests). New guide:
+  [`docs/guides/psm_did.md`](docs/guides/psm_did.md). Refs verified via
+  Crossref (Heckman-Ichimura-Todd 1997, DOI 10.2307/2971733) and the SSC
+  archive (Leuven & Sianesi 2003, S432001).
+- **`sp.match` / `sp.psm` now attach a `result.matched_data` frame** for the
+  nearest-neighbour path (the same psmatch2 columns above), plus a
+  `common_support={'none','minmax'}` option (default `'none'`, i.e. the
+  historical behaviour — the matched frame is pure additive bookkeeping over
+  the assignment already used for the point estimate, so the ATT/SE are
+  unchanged). `common_support='minmax'` mirrors Stata's `common`: off-support
+  treated are dropped before matching and the ATT is taken over the
+  on-support treated.
 
 - **Analytic-anchor reference parity for 10 previously smoke-only headline
   estimator families (`tests/reference_parity/`, +97 tests).** First real

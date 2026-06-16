@@ -7,7 +7,7 @@ Internal version-to-version migrations are at the top; the long-form
 
 <a id="evalue-hr-ci-parity"></a>
 
-## Unreleased — ⚠️ `sp.evalue` HR / CI E-value parity with R `EValue`
+## 1.18.0 — ⚠️ `sp.evalue` HR / CI E-value parity with R `EValue`
 
 **What changed.** Two numerical behaviours of `sp.evalue` (and
 `sp.evalue_from_result`) changed so that StatsPAI now reproduces the R
@@ -43,7 +43,7 @@ numeric figure uses an HR or CI E-value.
 
 <a id="matching-nearest-tie-break"></a>
 
-## Unreleased — ⚠️ `sp.match` nearest-neighbor tie-breaking stabilised
+## 1.18.0 — ⚠️ `sp.match` nearest-neighbor tie-breaking stabilised
 
 **What changed.** `sp.match(method='nearest')` now resolves exact equal-distance
 nearest-neighbor ties by the source DataFrame index. Previously the
@@ -73,7 +73,7 @@ macOS 26) instead of allowing the old ~$300 cross-backend tie band.
 
 <a id="blp-maxiter-fix"></a>
 
-## Unreleased — ⚠️ `sp.blp` functionality fix (was non-functional)
+## 1.18.0 — ⚠️ `sp.blp` functionality fix (was non-functional)
 
 **What changed.** `sp.blp` (BLP random-coefficients logit demand) now runs.
 Previously its GMM inner loop called `_gmm_objective(..., maxiter=1000)` while
@@ -101,7 +101,7 @@ the Tier D analytic special-case test campaign (CLAUDE.md §5).
 
 <a id="dag-dseparation-fix"></a>
 
-## Unreleased — ⚠️ d-separation corrected (forks & colliders)
+## 1.18.0 — ⚠️ d-separation corrected (forks & colliders)
 
 **What changed.** `statspai.dag`'s d-separation engine (`_d_separated`, behind
 `DAG.d_separated`, `adjustment_sets`, `backdoor_paths`, `do_rule1/2/3`,
@@ -128,7 +128,7 @@ Found by the Tier D analytic special-case campaign (CLAUDE.md §5); guard:
 
 <a id="granger-wald-variance-fix"></a>
 
-## Unreleased — ⚠️ `sp.granger_causality` test statistic corrected
+## 1.18.0 — ⚠️ `sp.granger_causality` test statistic corrected
 
 **What changed.** `sp.granger_causality` now computes the correct Wald
 statistic. The coefficient covariance used in the test was a placeholder
@@ -152,7 +152,7 @@ campaign (CLAUDE.md §5); guard: `tests/test_tierD_p2_timeseries_analytic.py`.
 
 <a id="ols-qr-kernel"></a>
 
-## Unreleased — ⚠️ OLS kernel switched to a QR solve (numerical accuracy)
+## 1.18.0 — ⚠️ OLS kernel switched to a QR solve (numerical accuracy)
 
 **What changed.** The core OLS kernel — `ols_fit` for coefficients and
 `OLSEstimator.estimate` for the variance-covariance matrix, both in
@@ -203,7 +203,7 @@ input-representation floor.
 
 <a id="regress-collinearity-guard"></a>
 
-## Unreleased — ⚠️ `sp.regress` raises on perfect collinearity; `sp.logit`/`sp.probit` warn on separation
+## 1.18.0 — ⚠️ `sp.regress` raises on perfect collinearity; `sp.logit`/`sp.probit` warn on separation
 
 **What changed.** Two silent-failure corners now fail loudly:
 

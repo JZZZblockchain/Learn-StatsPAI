@@ -55,7 +55,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `core` | 5,004 | 10 | 2 |
 | `inference` | 4,949 | 15 | 24 |
 | `panel` | 4,906 | 12 | 17 |
-| `matching` | 4,052 | 9 | 23 |
+| `matching` | 5,722 | 11 | 25 |
 | `frontier` | 4,008 | 8 | 12 |
 | `workflow` | 3,890 | 5 | 1 |
 | `bayes` | 3,834 | 10 | 17 |
@@ -120,7 +120,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `censoring` | 284 | 2 | 2 |
 | `causal` | 101 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **271,580** | **650** | **1031** |
+| **Total** | **271,580** | **652** | **1033** |
 
 ## 3 · Causal-inference coverage matrix (full)
 
