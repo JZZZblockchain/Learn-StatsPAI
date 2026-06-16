@@ -68,6 +68,16 @@ class TestSUR:
         )
         assert result is not None
         assert result.method == '3SLS'
+        np.testing.assert_allclose(
+            result.params_all,
+            [1.02564493, 0.63894079, 0.19767189, 2.02199548, 0.44828889],
+            atol=5e-8,
+        )
+        np.testing.assert_allclose(
+            result.se_all,
+            [0.06089322, 0.05995855, 0.0632106, 0.05243179, 0.05164774],
+            atol=5e-8,
+        )
 
 
 class TestPanelBinary:

@@ -76,6 +76,9 @@ class TestCointegration:
         y = 2 * x + rng.normal(0, 0.5, n)
         df = pd.DataFrame({'y': y, 'x': x})
         result = engle_granger(df, variables=['y', 'x'])
+        X_const = np.column_stack([np.ones(n), x])
+        beta_manual = np.linalg.lstsq(X_const, y, rcond=None)[0]
+        np.testing.assert_allclose(result.eigenvectors, beta_manual)
         assert result is not None
         s = result.summary()
         assert 'Engle-Granger' in s
@@ -93,6 +96,12 @@ class TestCointegration:
         x3 = np.cumsum(e2)  # independent random walk
         df = pd.DataFrame({'x1': x1, 'x2': x2, 'x3': x3})
         result = johansen(df, variables=['x1', 'x2', 'x3'], lags=2)
+        t_eff = len(df) - 1 - 2
+        trace_manual = np.array([
+            -t_eff * np.sum(np.log(1 - result.eigenvalues[r:]))
+            for r in range(result.n_vars)
+        ])
+        np.testing.assert_allclose(result.test_stats, trace_manual)
         assert result is not None
         s = result.summary()
         assert 'Johansen' in s
@@ -112,6 +121,11 @@ class TestFractionalResponse:
         result = fracreg(data=df, y='y', x=['x1', 'x2'])
         assert result is not None
         assert result.params['x1'] > 0
+        np.testing.assert_allclose(
+            [result.params['x1'], result.params['x2'], result.std_errors['x1'], result.diagnostics['aic']],
+            [0.267214, 0.142335, 0.027082, 395.43810740010014],
+            atol=5e-7,
+        )
 
     def test_betareg(self):
         from statspai.regression.fracreg import betareg
@@ -146,6 +160,17 @@ class TestSelectionModels:
         result = biprobit(df, y1='y1', y2='y2', x1=['x1'], x2=['x2'])
         assert result is not None
         assert 'rho' in result.model_info
+        np.testing.assert_allclose(
+            [
+                result.params['eq1.x1'],
+                result.params['eq2.x2'],
+                result.params['rho'],
+                result.std_errors['rho'],
+                result.model_info['rho_test_p'],
+            ],
+            [0.566665, 0.159311, 0.4576501479171041, 0.06323880948725541, 4.591882429849647e-13],
+            atol=5e-7,
+        )
 
     def test_etregress(self):
         from statspai.regression.selection import etregress
@@ -162,6 +187,17 @@ class TestSelectionModels:
         assert result is not None
         # Treatment effect should be positive
         assert result.diagnostics['ate'] > 0
+        np.testing.assert_allclose(
+            [
+                result.params['D'],
+                result.std_errors['D'],
+                result.diagnostics['ate'],
+                result.diagnostics['mills_coef'],
+                result.diagnostics['selection_corr'],
+            ],
+            [2.2733308550165674, 0.2661308581989966, 2.2733308550165674, 0.2590573684741753, 0.26750877131719186],
+            atol=1e-12,
+        )
 
 
 class TestDistributionalTE:

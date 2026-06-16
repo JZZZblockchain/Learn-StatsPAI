@@ -182,6 +182,11 @@ def test_panel_probit_cre(bin_df):
         warnings.simplefilter("ignore")
         res = panel_probit(bin_df, y="y", x=["x1"], id="id", time="time",
                            method="cre", n_quadrature=8)
+    sigma_u = float(res.model_info["sigma_u"])
+    np.testing.assert_allclose(
+        res.model_info["rho"],
+        sigma_u**2 / (sigma_u**2 + 1.0),
+    )
     assert res.model_info["method"] == "cre"
 
 

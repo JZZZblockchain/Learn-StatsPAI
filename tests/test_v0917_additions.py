@@ -120,6 +120,24 @@ class TestWeakRobust:
         assert data.get("clr_stat") is None
         assert data.get("k_stat") is None
 
+    def test_beta_2sls_matches_manual_projection_formula(self, iv_dataset):
+        import statspai as sp
+        panel = sp.weakrobust(
+            iv_dataset, y="y", endog="d", instruments=["z1", "z2"],
+            include_clr=False, include_k=False, random_state=1,
+        )
+
+        y = iv_dataset["y"].to_numpy()
+        d = iv_dataset["d"].to_numpy()
+        Z = np.column_stack([
+            np.ones(len(iv_dataset)),
+            iv_dataset[["z1", "z2"]].to_numpy(),
+        ])
+        X = np.column_stack([np.ones(len(iv_dataset)), d])
+        X_hat = Z @ np.linalg.solve(Z.T @ Z, Z.T @ X)
+        beta = np.linalg.solve(X_hat.T @ X, X_hat.T @ y)
+        np.testing.assert_allclose(panel["beta_2sls"], beta[1])
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  sp.sbw — Stable Balancing Weights

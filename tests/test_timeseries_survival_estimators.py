@@ -56,7 +56,9 @@ def test_var_innovation_covariance_is_symmetric_psd():
     assert np.allclose(sigma, sigma.T)  # symmetric
     assert np.all(np.linalg.eigvalsh(sigma) > 0)  # positive definite
     assert v.n_obs == T - 1  # one observation lost to the single lag
-    irf = v.irf(10)
+    irf = v.irf(10, orthogonal=False)
+    np.testing.assert_allclose(irf["irf"]["y1 -> y1"][0], 1.0)
+    np.testing.assert_allclose(irf["irf"]["y1 -> y2"][0], 0.0)
     assert irf is not None and len(irf) > 0
 
 

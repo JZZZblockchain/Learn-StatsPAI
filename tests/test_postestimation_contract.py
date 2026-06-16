@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 
@@ -25,6 +27,24 @@ def test_postestimation_contract_for_regression_result():
     assert "test" in contract["available"]
     assert "margins" in contract["available"]
     assert contract["has_data"] is True
+
+
+def test_postestimation_contract_preserves_scalar_diagnostics():
+    result = SimpleNamespace(
+        params=pd.Series({"Intercept": 1.0, "x": 0.5}),
+        std_errors=pd.Series({"Intercept": 0.2, "x": 0.1}),
+        model_info={"first_stage_F": 12.5, "note": "kept"},
+        tidy=lambda: pd.DataFrame(),
+        glance=lambda: pd.DataFrame(),
+    )
+    df = pd.DataFrame({"x": [0.0, 1.0], "y": [1.0, 1.5]})
+
+    contract = sp.postestimation_contract(result, data=df)
+
+    np.testing.assert_allclose(contract["diagnostics"]["first_stage_F"], 12.5)
+    assert contract["diagnostics"]["note"] == "kept"
+    assert "lincom" in contract["available"]
+    assert "margins" in contract["available"]
 
 
 def test_postestimation_contract_for_causal_result():

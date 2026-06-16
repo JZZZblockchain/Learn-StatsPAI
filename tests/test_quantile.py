@@ -75,6 +75,11 @@ class TestSqreg:
         assert 'Q(0.5)' in result.columns
         assert 'Q(0.1)' in result.columns
         assert 'Q(0.9)' in result.columns
+        np.testing.assert_allclose(
+            result.loc[result['variable'] == 'x', ['Q(0.1)', 'Q(0.5)', 'Q(0.9)']].to_numpy()[0],
+            [1.3489, 1.9408, 2.4910],
+            atol=5e-4,
+        )
 
     def test_custom_quantiles(self, qreg_data):
         result = sqreg(qreg_data, y='y', x=['x'],

@@ -216,6 +216,8 @@ def test_bradford_hill_strong_support():
         experiment=1.0,
         analogy=0.5,
     )
+    assert r.total == pytest.approx(8.0)
+    assert r.max_total == pytest.approx(9.0)
     assert r.total > 0.75 * r.max_total
     assert "STRONG" in r.verdict
 

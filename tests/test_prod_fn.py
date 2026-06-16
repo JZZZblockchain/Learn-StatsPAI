@@ -119,6 +119,7 @@ def test_olley_pakes_runs(panel):
     assert "l" in res.coef and "k" in res.coef
     assert res.diagnostics["stage1_r2"] > 0.5
     assert res.diagnostics["stage2_converged"]
+    np.testing.assert_allclose(len(res.tfp), len(res.sample))
     assert len(res.tfp) == len(res.sample)
 
 
@@ -161,6 +162,7 @@ def test_wooldridge_runs(panel):
         panel_id="id", time="year",
         polynomial_degree=2, productivity_degree=1,
     )
+    np.testing.assert_allclose(len(res.tfp), len(res.sample))
     assert res.coef["l"] > 0 and res.coef["l"] < 1.5
     assert res.coef["k"] > -0.5 and res.coef["k"] < 1.0
     assert res.method == "wrdg"
@@ -180,6 +182,7 @@ def test_prod_fn_dispatcher(panel, method):
         method=method,
         polynomial_degree=2, productivity_degree=1,
     )
+    np.testing.assert_allclose(len(res.tfp), len(res.sample))
     assert hasattr(res, "coef")
     assert hasattr(res, "tfp")
     assert len(res.tfp) > 0
@@ -253,6 +256,13 @@ def test_markup_runs(panel):
 
     mu = sp.markup(res2, revenue="log_rev", input_cost="log_mat_cost",
                    flexible_input="m")
+    theta_m = float(res2.coef["m"])
+    cost_share = np.exp(
+        res2.sample["log_mat_cost"].to_numpy(dtype=float)
+        - (res2.sample["log_rev"].to_numpy(dtype=float)
+           - res2.sample["eta"].to_numpy(dtype=float))
+    )
+    np.testing.assert_allclose(mu.to_numpy(), theta_m / cost_share)
     assert isinstance(mu, pd.Series)
     assert (mu > 0).all()
     # Median markup positive and finite

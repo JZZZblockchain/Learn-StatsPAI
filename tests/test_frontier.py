@@ -350,6 +350,8 @@ class TestHelpers:
         df = _simulate_hn_production(200, 0.2, 0.5, seed=42)
         res = frontier(df, y="y", x=["x1"], dist="half-normal")
         r = te_rank(res)
+        np.testing.assert_allclose(r["rank"].to_numpy(), np.arange(1, len(r) + 1))
+        np.testing.assert_allclose(r["efficiency"].to_numpy(), np.sort(r["efficiency"])[::-1])
         assert "rank" in r.columns and r["rank"].min() == 1
         r2 = te_rank(res, with_ci=True, B=40)
         assert {"lower", "upper"}.issubset(r2.columns)
@@ -964,6 +966,10 @@ class TestMetafrontier:
         )
         df = pd.DataFrame({"y": y, "x1": x1, "g": groups_arr})
         res = metafrontier(df, y="y", x=["x1"], group="g")
+        np.testing.assert_allclose(
+            res.beta_meta.to_numpy(),
+            res.beta_groups["A"].to_numpy(),
+        )
 
         # Verify meta frontier envelopes each group's frontier for every obs.
         X = np.column_stack([np.ones(n), df["x1"].to_numpy()])

@@ -152,9 +152,11 @@ class TestMRDispatcher:
 
     def test_available_methods_is_nonempty_sorted(self):
         methods = sp.mr_available_methods()
+        required = {"ivw", "egger", "mode"}
+        np.testing.assert_allclose(len(required & set(methods)), len(required))
         assert len(methods) > 10
         assert methods == sorted(methods)
-        assert "ivw" in methods and "egger" in methods and "mode" in methods
+        assert required <= set(methods)
 
     def test_dispatcher_in_registry(self):
         assert "mr" in sp.list_functions()
@@ -239,6 +241,7 @@ class TestConformalDispatcher:
 
     def test_available_kinds_is_sorted(self):
         kinds = sp.conformal_available_kinds()
+        np.testing.assert_allclose(len(kinds), 29)
         assert kinds == sorted(kinds)
         assert "cate" in kinds
         assert "ite" in kinds
@@ -311,10 +314,10 @@ class TestInterferenceDispatcher:
 
     def test_available_designs_is_sorted(self):
         designs = sp.interference_available_designs()
+        required = {"partial", "network_exposure", "cluster_staggered"}
+        np.testing.assert_allclose(len(required & set(designs)), len(required))
         assert designs == sorted(designs)
-        assert "partial" in designs
-        assert "network_exposure" in designs
-        assert "cluster_staggered" in designs
+        assert required <= set(designs)
 
     def test_dispatcher_in_registry(self):
         assert "interference" in sp.list_functions()

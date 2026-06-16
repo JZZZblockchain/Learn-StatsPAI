@@ -92,6 +92,8 @@ def test_mr_bma_identifies_causal_exposure():
     res = sp.mr_bma(df, exposures=["beta_x1", "beta_x2", "beta_x3"])
     # x1 should have the highest marginal inclusion
     mp = res.marginal_inclusion
+    np.testing.assert_allclose(res.model_priors.sum(), 1.0)
+    np.testing.assert_allclose(res.best_models["posterior_prob"].sum(), 1.0)
     assert mp["beta_x1"] > mp["beta_x2"], mp
     assert mp["beta_x1"] > mp["beta_x3"], mp
     assert mp["beta_x1"] > 0.5, mp

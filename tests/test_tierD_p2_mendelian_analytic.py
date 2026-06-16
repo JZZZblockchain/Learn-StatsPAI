@@ -45,12 +45,19 @@ class TestMRFStatisticAnalytic:
 # ---------------------------------------------------------------------------
 class TestMRSteigerAnalytic:
 
+    @staticmethod
+    def _manual_r2(beta, se, n):
+        t2 = (beta / se) ** 2
+        return float(np.sum(t2 / (t2 + n - 2)))
+
     def test_direction_supported_when_exposure_is_stronger(self):
         # SNPs strongly associated with the exposure, weakly with the outcome
         # -> R^2_exposure > R^2_outcome -> assumed direction is supported.
         be, see = np.array([0.40, 0.35, 0.45]), np.array([0.02, 0.02, 0.02])
         bo, seo = np.array([0.05, 0.04, 0.06]), np.array([0.03, 0.03, 0.03])
         res = sp.mr_steiger(be, see, 50000, bo, seo, 50000)
+        np.testing.assert_allclose(res.r2_exposure, self._manual_r2(be, see, 50000))
+        np.testing.assert_allclose(res.r2_outcome, self._manual_r2(bo, seo, 50000))
         assert res.r2_exposure > res.r2_outcome
         assert res.correct_direction is True
 
@@ -60,5 +67,7 @@ class TestMRSteigerAnalytic:
         be, see = np.array([0.05, 0.04, 0.06]), np.array([0.03, 0.03, 0.03])
         bo, seo = np.array([0.40, 0.35, 0.45]), np.array([0.02, 0.02, 0.02])
         res = sp.mr_steiger(be, see, 50000, bo, seo, 50000)
+        np.testing.assert_allclose(res.r2_exposure, self._manual_r2(be, see, 50000))
+        np.testing.assert_allclose(res.r2_outcome, self._manual_r2(bo, seo, 50000))
         assert res.r2_exposure < res.r2_outcome
         assert res.correct_direction is False

@@ -26,6 +26,7 @@ def test_etable_single_fepois():
     df = _poisson_data(seed=1)
     fit = sp.fast.fepois("y ~ x1 + x2 | fe", df)
     tab = sp.fast.etable(fit)
+    np.testing.assert_allclose(tab.shape, (4, 1))
     assert isinstance(tab, pd.DataFrame)
     assert "x1" in tab.index
     assert "x2" in tab.index

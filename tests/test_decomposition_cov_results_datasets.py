@@ -32,22 +32,38 @@ def test_cps_wage_schema():
     assert {"female", "education", "experience", "tenure", "log_wage"} <= set(df.columns)
     assert df["female"].isin([0, 1]).all()
     assert (df["education"] >= 0).all()
+    np.testing.assert_allclose(
+        df[["female", "education", "experience", "log_wage"]].mean(),
+        [0.462, 12.83691418, 16.55523125, 3.65799662],
+    )
 
 
 def test_chilean_households_schema():
     df = datasets.chilean_households(n=400, seed=1)
     assert len(df) == 400
     assert df.select_dtypes("number").shape[1] >= 3
+    np.testing.assert_allclose(
+        df[["rural", "head_education", "household_size", "log_income"]].mean(),
+        [0.365, 10.03281034, 3.67, 7.77325321],
+    )
 
 
 def test_mincer_wage_panel_schema():
     df = datasets.mincer_wage_panel(n=600, seed=1)
     assert len(df) == 600
+    np.testing.assert_allclose(
+        df[["period", "education", "union", "log_wage"]].mean(),
+        [0.48333333, 12.99236897, 0.16666667, 3.2799133],
+    )
 
 
 def test_disparity_panel_schema():
     df = datasets.disparity_panel(n=600, seed=1)
     assert len(df) == 600
+    np.testing.assert_allclose(
+        df[["group", "education", "parent_income", "income"]].mean(),
+        [0.39, 11.06674752, 9.88373756, 9.6867659],
+    )
 
 
 # ── DecompResultMixin shared surface ─────────────────────────────────

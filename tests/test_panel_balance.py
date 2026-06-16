@@ -6,6 +6,7 @@ deterministic, so the expected output is fully analytic.
 
 import pandas as pd
 import pytest
+import numpy as np
 
 import statspai as sp
 
@@ -20,6 +21,8 @@ def test_balance_panel_keeps_only_fully_observed_entities():
         }
     )
     out = sp.balance_panel(df, entity="id", time="t")
+    np.testing.assert_allclose(len(out), 6)
+    np.testing.assert_allclose(out["id"].nunique(), 2)
     assert sorted(out["id"].unique().tolist()) == [1, 3]
     assert len(out) == 6
     # Surviving rows are untouched (no reindexing of values).

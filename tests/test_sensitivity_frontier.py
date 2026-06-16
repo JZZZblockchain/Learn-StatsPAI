@@ -22,6 +22,14 @@ def test_copula_sensitivity_breakpoint_monotone():
 
 def test_copula_sensitivity_returns_curve():
     res = sp.copula_sensitivity(estimate=0.3, se=0.1)
+    z = 1.959963984540054
+    first = res.curve.iloc[0]
+    np.testing.assert_allclose(first["rho"], -0.5)
+    np.testing.assert_allclose(first["bias"], -0.5)
+    np.testing.assert_allclose(first["adjusted_estimate"], 0.8)
+    np.testing.assert_allclose(first["ci_low"], 0.8 - z * 0.1)
+    np.testing.assert_allclose(first["ci_high"], 0.8 + z * 0.1)
+    np.testing.assert_allclose(res.breakpoint, 0.15000000000000002)
     assert isinstance(res.curve, pd.DataFrame)
     assert set(res.curve.columns) == {
         "rho", "bias", "adjusted_estimate", "ci_low", "ci_high", "significant"
@@ -33,6 +41,14 @@ def test_copula_sensitivity_returns_curve():
 def test_survival_sensitivity_bounds_monotone():
     res = sp.survival_sensitivity(log_hr=-0.5, se_log_hr=0.2)
     c = res.curve
+    first = c.iloc[0]
+    np.testing.assert_allclose(first["gamma"], 1.0)
+    np.testing.assert_allclose(first["log_hr_worst"], -0.5)
+    np.testing.assert_allclose(first["log_hr_best"], -0.5)
+    np.testing.assert_allclose(
+        first["delta_survival_worst"],
+        0.5 ** np.exp(-0.5) - 0.5,
+    )
     # Worst case must weakly decrease as gamma grows
     assert (c["log_hr_worst"].diff().dropna() <= 1e-10).all()
     # Best case weakly increases

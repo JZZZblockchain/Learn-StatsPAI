@@ -134,6 +134,16 @@ class TestLassoIvProvenance:
         # the inner record (sp.iv) preserves. Both names are valid
         # — replication-side, what matters is the trail of params.
         assert prov.function in {"sp.iv.lasso_iv", "sp.iv"}
+        np.testing.assert_allclose(
+            [r.params["x"], r.std_errors["x"], r.conf_int_lower["x"], r.conf_int_upper["x"]],
+            [1.038257, 0.044845, 0.950095, 1.126419],
+            atol=5e-7,
+        )
+        np.testing.assert_allclose(
+            [r.model_info["n_candidate_instruments"], r.model_info["n_selected_instruments"], r.diagnostics["First-stage F (x)"]],
+            [1, 1, 463.8658661384413],
+            atol=1e-12,
+        )
 
 
 class TestBayesianIvProvenance:

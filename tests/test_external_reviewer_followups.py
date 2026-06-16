@@ -194,6 +194,12 @@ class TestAdvancedPostEstimationMargins:
         )
 
         assert set(out["comparison"]) == {"1 vs 0", "2 vs 0", "2 vs 1"}
+        expected = pd.Series(
+            {"1 vs 0": 0.5, "2 vs 0": 1.0, "2 vs 1": 0.5},
+            name="diff",
+        )
+        observed = out.set_index("comparison")["diff"].sort_index()
+        np.testing.assert_allclose(observed, expected.sort_index())
         assert (out["pvalue_adj"] >= out["pvalue"]).all()
         assert (out["ci_lower"] < out["diff"]).all()
         assert (out["diff"] < out["ci_upper"]).all()

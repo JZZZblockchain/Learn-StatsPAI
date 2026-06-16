@@ -9,6 +9,7 @@ grows.
 """
 
 import pytest
+from scipy.stats import norm
 
 import statspai as sp
 
@@ -46,6 +47,45 @@ def test_result_objects_carry_design_tag():
         n=200, effect_size=0.3, n_periods=4, n_treated_periods=2
     ).design == "did"
     assert sp.power_rd(n=1000, effect_size=0.3, bandwidth=0.5).design == "rd"
+
+
+def test_power_did_matches_closed_form_formula():
+    res = sp.power_did(
+        n=400,
+        effect_size=0.3,
+        n_periods=4,
+        n_treated_periods=2,
+        rho=0.5,
+    )
+    z_alpha = norm.ppf(0.975)
+    se = (1.0 / 400**0.5) * (
+        (1.0 + 3.0 * 0.5) / (2.0 * (1.0 - 2.0 / 4.0))
+    ) ** 0.5
+    expected = norm.cdf(0.3 / se - z_alpha)
+    assert res.power == pytest.approx(expected)
+
+
+def test_power_rd_matches_closed_form_formula():
+    res = sp.power_rd(n=1000, effect_size=0.3, bandwidth=0.5)
+    z_alpha = norm.ppf(0.975)
+    n_eff = 1000.0 * 0.5 * 1.0 * 0.75
+    n_side = n_eff / 2.0
+    se = (2.0 / n_side) ** 0.5
+    expected = norm.cdf(0.3 / se - z_alpha)
+    assert res.power == pytest.approx(expected)
+
+
+def test_power_ols_matches_closed_form_formula():
+    res = sp.power_ols(
+        n=200,
+        effect_size=0.2,
+        n_covariates=3,
+        r2_other=0.5,
+    )
+    z_alpha = norm.ppf(0.975)
+    se = (1.0 - 0.5) ** 0.5 / (200.0 - 3.0 - 1.0) ** 0.5
+    expected = norm.cdf(0.2 / se - z_alpha)
+    assert res.power == pytest.approx(expected)
 
 
 # --------------------------------------------------------------------------

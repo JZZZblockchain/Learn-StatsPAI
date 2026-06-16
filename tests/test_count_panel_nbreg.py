@@ -57,3 +57,7 @@ def test_xtnbreg_allows_formula_panel_part_without_entity_argument():
 
     assert result.model_info["entity"] == "id"
     assert result.model_info["fixed_effects"] == ["id"]
+    np.testing.assert_allclose(
+        result.model_info["n_fe_params"],
+        df["id"].nunique() - 1,
+    )

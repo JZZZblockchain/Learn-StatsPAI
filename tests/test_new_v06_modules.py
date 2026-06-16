@@ -320,6 +320,21 @@ class TestTimeSeries:
         y = 2 * x + np.concatenate([rng.normal(0, 0.5, 100), rng.normal(0, 2, 100)])
         df = pd.DataFrame({'y': y, 'x': x})
         result = cusum_test(df, y='y', x=['x'])
+        X_data = np.column_stack([np.ones(n), df[['x']].to_numpy(dtype=float)])
+        y_data = df['y'].to_numpy(dtype=float)
+        rec_resid = []
+        for t in range(X_data.shape[1], n):
+            Xt = X_data[:t]
+            yt = y_data[:t]
+            bt = np.linalg.lstsq(Xt, yt, rcond=None)[0]
+            resid = y_data[t] - X_data[t] @ bt
+            ft = 1 + X_data[t] @ np.linalg.solve(Xt.T @ Xt, X_data[t])
+            rec_resid.append(resid / np.sqrt(ft))
+        rec_resid = np.asarray(rec_resid)
+        manual_cusum = np.cumsum(rec_resid) / (
+            np.std(rec_resid, ddof=1) * np.sqrt(n - X_data.shape[1])
+        )
+        np.testing.assert_allclose(result['max_cusum'], np.max(np.abs(manual_cusum)))
         assert 'max_cusum' in result
 
 
@@ -330,14 +345,17 @@ class TestTimeSeries:
 class TestExperimental:
     def test_randomize(self):
         from statspai.experimental.design import randomize
-        rng = np.random.default_rng(42)
         df = pd.DataFrame({
-            'id': range(200),
-            'age': rng.normal(30, 5, 200),
-            'income': rng.normal(50000, 10000, 200),
-            'district': rng.choice(['A', 'B', 'C'], 200),
+            'id': range(12),
+            'age': np.linspace(20.0, 42.0, 12),
+            'income': np.linspace(40000.0, 62000.0, 12),
+            'district': np.repeat(['A', 'B', 'C'], 4),
         })
         result = randomize(df, strata='district', balance_vars=['age', 'income'], seed=42)
+        by_stratum = result.data.groupby('district')['treatment'].sum().to_numpy()
+        np.testing.assert_allclose(by_stratum, [2, 2, 2])
+        np.testing.assert_allclose(result.n_treated, 6)
+        np.testing.assert_allclose(result.n_control, 6)
         assert result is not None
         assert result.treatment_col == 'treatment'
         assert 'treatment' in result.data.columns
@@ -346,34 +364,48 @@ class TestExperimental:
 
     def test_balance_check(self):
         from statspai.experimental.design import balance_check
-        rng = np.random.default_rng(42)
         df = pd.DataFrame({
-            'treated': rng.binomial(1, 0.5, 200),
-            'age': rng.normal(30, 5, 200),
-            'income': rng.normal(50000, 10000, 200),
+            'treated': [0, 0, 1, 1],
+            'age': [20.0, 22.0, 24.0, 26.0],
+            'income': [40.0, 44.0, 48.0, 52.0],
         })
         result = balance_check(df, treatment='treated', covariates=['age', 'income'])
+        age_t = df.loc[df['treated'] == 1, 'age']
+        age_c = df.loc[df['treated'] == 0, 'age']
+        age_diff = age_t.mean() - age_c.mean()
+        age_pooled_sd = np.sqrt((age_t.std(ddof=1) ** 2 + age_c.std(ddof=1) ** 2) / 2)
+        np.testing.assert_allclose(result.normalized_diffs['age'], age_diff / age_pooled_sd)
+        np.testing.assert_allclose(result.table.loc[0, 'diff'], 4.0)
         assert result is not None
         s = result.summary()
         assert 'Balance' in s
 
     def test_attrition(self):
         from statspai.experimental.attrition import attrition_test
-        rng = np.random.default_rng(42)
         df = pd.DataFrame({
-            'treated': rng.binomial(1, 0.5, 300),
-            'observed': rng.binomial(1, 0.8, 300),
-            'age': rng.normal(30, 5, 300),
+            'treated': [0, 0, 0, 0, 1, 1, 1, 1],
+            'observed': [1, 1, 0, 0, 1, 1, 1, 0],
+            'age': [20.0, 22.0, 24.0, 26.0, 21.0, 23.0, 25.0, 27.0],
         })
         result = attrition_test(df, treatment='treated', observed='observed',
                                 covariates=['age'])
+        np.testing.assert_allclose(result.overall_rate, 3 / 8)
+        np.testing.assert_allclose(result.control_rate, 2 / 4)
+        np.testing.assert_allclose(result.treat_rate, 1 / 4)
+        np.testing.assert_allclose(result.n_attrit, 3)
         assert result is not None
         s = result.summary()
         assert 'Attrition' in s
 
     def test_optimal_design(self):
         from statspai.experimental.optimal import optimal_design
+        from scipy import stats
         result = optimal_design(design='individual', mde=0.2, sigma=1.0)
+        z_alpha = stats.norm.ppf(1 - 0.05 / 2)
+        z_beta = stats.norm.ppf(0.8)
+        expected_n_per_arm = np.ceil(((z_alpha + z_beta) ** 2) / (0.2 ** 2 * 0.5 * 0.5))
+        np.testing.assert_allclose(result.n_per_arm, expected_n_per_arm)
+        np.testing.assert_allclose(result.n_total, np.ceil(expected_n_per_arm / 0.5))
         assert result is not None
         assert result.n_total > 0
         s = result.summary()
@@ -381,6 +413,12 @@ class TestExperimental:
 
         result_cl = optimal_design(design='cluster', mde=0.2, sigma=1.0,
                                     icc=0.05, cluster_size=20)
+        deff = 1 + (20 - 1) * 0.05
+        expected_cluster_ind_per_arm = np.ceil(
+            ((z_alpha + z_beta) ** 2 * deff) / (0.2 ** 2 * 0.5 * 0.5)
+        )
+        expected_clusters = np.ceil(expected_cluster_ind_per_arm / 20) * 2
+        np.testing.assert_allclose(result_cl.n_clusters, expected_clusters)
         assert result_cl.n_clusters > 0
 
 

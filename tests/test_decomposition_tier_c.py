@@ -453,8 +453,9 @@ def test_dispatcher_unknown_method():
 
 def test_available_methods_count():
     methods = sp.available_methods()
-    # At least 25 method names (core + aliases)
-    assert len(methods) >= 25
+    np.testing.assert_allclose(len(methods), 33)
+    assert methods == sorted(methods)
+    assert len(methods) == len(set(methods))
     for name in ["oaxaca", "dfl", "ffl", "machado_mata", "melly", "cfm",
                  "fairlie", "subgroup", "kitagawa", "gap_closing",
                  "mediation", "causal_jvw"]:

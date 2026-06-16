@@ -38,6 +38,24 @@ class TestSpecCurveBasic:
         assert result.x == 'education'
         assert result.y == 'wage'
 
+    def test_noiseless_control_specification_recovers_known_slope(self):
+        import statspai as sp
+        x = np.tile([-1.5, -0.5, 0.5, 1.5], 5).astype(float)
+        z = np.repeat([-1.0, 0.0, 1.0, 2.0, 3.0], 4).astype(float)
+        data = pd.DataFrame({"y": 1.0 + 2.0 * x + 3.0 * z, "x": x, "z": z})
+
+        result = sp.spec_curve(
+            data=data,
+            y="y",
+            x="x",
+            controls=[["z"]],
+            se_types=["nonrobust"],
+        )
+
+        np.testing.assert_allclose(result.n_specs, 1)
+        np.testing.assert_allclose(result.results_df.loc[0, "estimate"], 2.0, atol=1e-12)
+        np.testing.assert_allclose(result.median_estimate, 2.0, atol=1e-12)
+
     def test_multiple_control_sets(self, sample_data):
         """Multiple control specifications are enumerated."""
         import statspai as sp
