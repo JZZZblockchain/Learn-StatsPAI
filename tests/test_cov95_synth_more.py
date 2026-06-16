@@ -56,6 +56,23 @@ def test_dataset_loaders(loader):
     assert df.shape[1] >= 3
 
 
+def test_reference_dataset_moments():
+    german = datasets.german_reunification()
+    california = datasets.california_tobacco()
+    assert german.shape == (748, 4)
+    assert california.shape == (1209, 8)
+    np.testing.assert_allclose(
+        [german['year'].sum(), german['gdppc'].sum(), german['treated'].sum()],
+        [1482162.0, 15348124.3, 14.0],
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        [california['year'].sum(), california['cigsale'].sum(), california['retprice'].sum()],
+        [2399865.0, 120916.8, 99589.1],
+        atol=1e-6,
+    )
+
+
 # ---------------- discos plot + helpers ----------------
 def _dist_panel(n_units=8, n_periods=14, treatment_time=9, seed=71):
     rng = np.random.default_rng(seed)
@@ -110,6 +127,11 @@ def test_synth_power_plot(panel):
                                n_simulations=20, seed=0)
     out = power_mod.synth_power_plot(df)
     assert out is not None
+    np.testing.assert_allclose(
+        df[['effect_size', 'power', 'n_rejections', 'n_simulations']].to_numpy(),
+        np.array([[0.0, 1.0, 20.0, 20.0], [2.0, 1.0, 20.0, 20.0], [5.0, 1.0, 20.0, 20.0]]),
+        atol=1e-12,
+    )
 
 
 # ---------------- report sensitivity sections (markdown + latex) ----------------

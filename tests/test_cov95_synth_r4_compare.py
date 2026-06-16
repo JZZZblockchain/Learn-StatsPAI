@@ -36,6 +36,12 @@ def test_synth_compare_table_and_recommendation(comparison):
     assert not comparison.comparison_table.empty
     assert comparison.recommended in comparison.results
     assert isinstance(comparison.recommendation_reason, str)
+    table = comparison.comparison_table.sort_values("method")
+    np.testing.assert_allclose(
+        table["att"].to_numpy(),
+        [-15.748268, -13.085166],
+        atol=5e-7,
+    )
 
 
 def test_synth_comparison_summary_repr(comparison):
@@ -78,6 +84,8 @@ def test_synth_recommend_returns_name():
         methods=["classic"],
     )
     assert isinstance(name, str)
+    assert name == "classic"
+    np.testing.assert_allclose([len(name), int(name == "classic")], [7, 1])
 
 
 # --- _recommend branch coverage (direct, with crafted tables) ---

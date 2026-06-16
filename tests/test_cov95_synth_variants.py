@@ -151,6 +151,16 @@ def test_conformal_synth_basic(panel):
     assert np.isfinite(res.estimate)
     mi = res.model_info or {}
     assert 'period_results' in mi and mi['inference_method'].startswith('conformal')
+    np.testing.assert_allclose(
+        [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
+        [2.8031848526798764, 1.7123081037547074, -0.5528773611154243, 6.159247066475177, 0.08333333333333333],
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        mi['period_results']['effect'].head(3).to_numpy(),
+        [3.020643, 2.875103, 2.702355],
+        atol=5e-7,
+    )
 
 
 def test_conformal_synth_grid_range(panel):
@@ -158,6 +168,11 @@ def test_conformal_synth_grid_range(panel):
                                     grid_size=15, grid_range=(-10.0, 10.0),
                                     penalization=0.1)
     assert np.isfinite(res.estimate)
+    np.testing.assert_allclose(
+        [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
+        [2.7956817105608613, 5.102134569246539, -10.0, 10.0, 0.08333333333333333],
+        atol=1e-12,
+    )
 
 
 # --- multi_outcome ---
@@ -168,6 +183,15 @@ def test_multi_outcome(panel_cov, method):
         treated_unit='u0', treatment_time=12, method=method,
         standardize=True, placebo=False)
     assert np.isfinite(res.estimate)
+    expected = {
+        'concatenated': [0.35050597844905407, 2.858039, -2.157027],
+        'averaged': [0.404784096292488, 2.956794, -2.147226],
+    }[method]
+    np.testing.assert_allclose(
+        [res.estimate, *res.model_info['per_outcome_effects']['att'].to_numpy()],
+        expected,
+        atol=5e-7,
+    )
 
 
 def test_multi_outcome_no_standardize_placebo(panel_cov):
@@ -175,6 +199,16 @@ def test_multi_outcome_no_standardize_placebo(panel_cov):
         panel_cov, outcomes=['outcome', 'x1'], unit='unit', time='time',
         treated_unit='u0', treatment_time=12, standardize=False, placebo=True)
     assert np.isfinite(res.estimate)
+    np.testing.assert_allclose(
+        [res.estimate, res.se, res.ci[0], res.ci[1]],
+        [1.3333396060631233, 0.6716419151020026, 0.016945641955689705, 2.649733570170557],
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        res.model_info['per_outcome_effects']['att'].to_numpy(),
+        [2.208574, 0.458106],
+        atol=5e-7,
+    )
 
 
 # --- fdid ---

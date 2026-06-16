@@ -268,6 +268,16 @@ class TestMultiOutcomeSCM:
         assert 'per_outcome_effects' in mi
         oe = mi['per_outcome_effects']
         assert len(oe) == 3
+        np.testing.assert_allclose(
+            [result.estimate, oe['att'].mean()],
+            [2.0500675158579713, 2.0500675158579713],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            oe['att'].to_numpy(),
+            [1.274515, 3.568886, 1.306802],
+            atol=5e-7,
+        )
 
     def test_shared_weights(self, multi_outcome_data):
         """Should use a single set of donor weights for all outcomes."""
@@ -404,6 +414,11 @@ class TestSensitivity:
         assert 'dropped_unit' in loo.columns or 'unit' in loo.columns
         assert 'att' in loo.columns
         assert len(loo) >= 5  # at least half of donors
+        np.testing.assert_allclose(
+            [loo['att'].mean(), loo['att'].std(), loo['att'].min(), loo['att'].max()],
+            [5.203214288817167, 0.1772123678980847, 4.748068949701723, 5.467812084888023],
+            atol=1e-12,
+        )
 
     def test_time_placebo(self, panel_data):
         from statspai.synth.sensitivity import synth_time_placebo
@@ -416,6 +431,11 @@ class TestSensitivity:
         assert isinstance(tp, pd.DataFrame)
         assert 'placebo_time' in tp.columns
         assert 'att' in tp.columns
+        np.testing.assert_allclose(
+            [tp['att'].sum(), tp['att'].mean(), tp['att'].min(), tp['att'].max()],
+            [3.2070738962818575, 0.4008842370352322, -0.16739911527023565, 0.7630928354486967],
+            atol=1e-12,
+        )
 
     def test_time_placebo_near_zero(self, panel_data):
         """Backdated placebos should find no effect (≈ 0)."""
@@ -444,6 +464,16 @@ class TestSensitivity:
         assert 'loo' in sens
         assert 'time_placebo' in sens
         assert 'summary' in sens
+        np.testing.assert_allclose(
+            [sens['loo']['att'].mean(), sens['time_placebo']['att'].max()],
+            [5.203214288817167, 0.7630928354486967],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            sens['rmspe_filter'][['threshold', 'n_placebos', 'pvalue']].head(3).to_numpy(),
+            np.array([[1.0, 5.0, 0.16666667], [2.0, 8.0, 0.11111111], [5.0, 9.0, 0.1]]),
+            atol=5e-8,
+        )
 
     def test_loo_atts_near_original(self, panel_data):
         """LOO ATTs should not deviate wildly from original."""

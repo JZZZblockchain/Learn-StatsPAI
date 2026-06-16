@@ -227,6 +227,21 @@ class TestSynthdidMethods:
         assert r1.model_info['estimator'] == 'sdid'
         assert r2.model_info['estimator'] == 'sc'
         assert r3.model_info['estimator'] == 'did'
+        np.testing.assert_allclose(
+            [r1.estimate, r1.se, r1.ci[0], r1.ci[1]],
+            [3.0487671564274175, 0.2506589448462623, 2.5574846521259316, 3.5400496607289034],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            [r2.estimate, r2.se, r2.ci[0], r2.ci[1]],
+            [2.869914758406992, 0.39153506164425145, 2.1025201388995893, 3.6373093779143946],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            [r3.estimate, r3.se, r3.ci[0], r3.ci[1]],
+            [2.7565565537646974, 0.32592391468540266, 2.117757419281003, 3.395355688248392],
+            atol=1e-12,
+        )
 
     def test_three_methods_different(self, scm_panel):
         """Three methods should give different estimates."""
@@ -341,6 +356,11 @@ class TestPlaceboAnalysis:
         assert 'unit' in result.columns
         assert 'estimate' in result.columns
         assert len(result) > 0
+        np.testing.assert_allclose(
+            [result['estimate'].mean(), result['estimate'].std(), result['estimate'].min(), result['estimate'].max()],
+            [-0.014365922775235601, 0.25065894484626233, -0.5861092435370364, 0.444951516529003],
+            atol=1e-12,
+        )
 
 
 class TestModelInfo:
