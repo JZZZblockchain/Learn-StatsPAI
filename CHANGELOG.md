@@ -107,6 +107,18 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **⚠️ Correctness — `sp.feols` now honours `weights=` when no fixed effects
+  are absorbed.** The intercept-only fallback path (`feols` with regressors but
+  no FE terms) accepted the `weights=` argument but silently discarded it and
+  returned an *unweighted* OLS fit — coefficients, standard errors, and R² were
+  all affected. The fallback now solves the weighted (WLS) normal equations,
+  validates the weight vector (finite, non-negative, positive total mass),
+  aligns an array-valued `weights=` to the post-`dropna` sample, and threads the
+  weights through the clustered sandwich. FE-absorbed paths were already
+  weighted and are numerically unchanged; no-`weights=` calls are unchanged.
+  Guarded by new cases in `tests/test_panel_cov_feols.py`. See
+  [MIGRATION.md](MIGRATION.md#feols-nofe-weights).
+
 - Typo `boostrap` → `bootstrap` in a `structural/production/wooldridge.py`
   comment; added `.codespellrc` (curated econ-vocabulary ignore list) so
   `codespell` runs clean as a dev convenience. `pyproject.toml` advertises

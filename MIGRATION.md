@@ -5,6 +5,26 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="feols-nofe-weights"></a>
+
+## 1.18.0 — ⚠️ `sp.feols` ignored `weights=` when no fixed effects were absorbed
+
+**What changed.** Called with regressors but **no** fixed effects, `sp.feols`
+took an intercept-only OLS fallback that accepted the `weights=` argument but
+never used it — the fit was unweighted. As of 1.18.0 the fallback solves the
+weighted least squares (WLS) normal equations, so `weights=` now changes the
+coefficients, standard errors, and R² exactly as a weighted regression should.
+
+**Who is affected.** Anyone who called `sp.feols(..., weights=w)` **without**
+fixed effects. Calls *with* fixed effects were already weighted correctly and
+are unaffected; calls without `weights=` are numerically identical.
+
+**Action required.** Re-run any no-FE weighted `sp.feols` fits — prior results
+were the unweighted OLS solution. The new path also raises on non-finite,
+negative, or zero-total-mass weight vectors instead of silently proceeding.
+
+---
+
 <a id="evalue-hr-ci-parity"></a>
 
 ## 1.18.0 — ⚠️ `sp.evalue` HR / CI E-value parity with R `EValue`

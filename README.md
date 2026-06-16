@@ -142,6 +142,20 @@ StatsPAI's focus is **causal inference**. The grid below summarizes method-famil
 
 **Validation tiers matter**: `stability="stable"` means the public API is SemVer-stable; it does not by itself mean R/Stata/paper parity. Use `sp.list_functions(validation_status="certified")` for cross-language or published-reference evidence, and inspect `sp.describe_function(name)["limitations"]` before production use. See [`docs/guides/stability.md`](docs/guides/stability.md).
 
+**📦 v1.18.0 (2026-06-15) — Stata `psmatch2` matching + a no-FE weights correctness fix**
+
+StatsPAI 1.18.0 adds `sp.psmatch2`, a Stata `psmatch2`-faithful propensity-score
+matching workflow: nearest-neighbour / kernel / radius matching with a full
+post-matching frame (`.matched_data` / `.balance()` / `.psplot()` / `.psm_did()`),
+plus Stata's digit-exact analytic ATT standard error and the Abadie–Imbens
+heteroskedasticity-robust SE — pinned against Stata 18 to machine precision. It
+also fixes `sp.feols`, which silently ignored `weights=` when no fixed effects
+were absorbed (now proper WLS) — flagged ⚠️ **Correctness**, so re-run affected
+no-FE weighted regressions. Full notes in [`CHANGELOG.md`](CHANGELOG.md) under
+`[1.18.0]`.
+
+---
+
 **📦 v1.16.1 (2026-06-01) — synthetic-control default + weight-simplex correctness fixes**
 
 StatsPAI 1.16.1 restores the bare `sp.synth(...)` default to the canonical
@@ -1436,7 +1450,7 @@ resolves to the latest version):
   author       = {Wang, Biaoyue and Rozelle, Scott},
   title        = {StatsPAI: Validation-Tiered Causal Inference and Econometrics Workflows for Python},
   year         = {2026},
-  version      = {1.17.0},
+  version      = {1.18.0},
   doi          = {10.5281/zenodo.19933900},
   url          = {https://doi.org/10.5281/zenodo.19933900},
   license      = {MIT},
