@@ -189,13 +189,27 @@ def kdensity(
     """
     if data is None:
         raise ValueError("data is required")
+    if n_grid <= 0:
+        raise ValueError("n_grid must be positive")
+    if bandwidth is not None and (bandwidth <= 0 or not np.isfinite(bandwidth)):
+        raise ValueError("bandwidth must be a positive finite number")
 
     x_data = data[x].dropna().values.astype(float)
     n = len(x_data)
+    if n == 0:
+        raise ValueError("data has no finite observations after dropping missing values")
 
     if weights is not None:
         w = data.loc[data[x].notna(), weights].values.astype(float)
-        w = w / w.sum()
+        total_weight = w.sum()
+        if (
+            len(w) != n
+            or not np.all(np.isfinite(w))
+            or np.any(w < 0)
+            or total_weight <= 0
+        ):
+            raise ValueError("weights must be finite, non-negative, and sum to a positive value")
+        w = w / total_weight
     else:
         w = np.ones(n) / n
 
@@ -205,17 +219,24 @@ def kdensity(
         elif bw_method == 'sheather-jones':
             bandwidth = _sheather_jones_bw(x_data)
         else:
-            bandwidth = _silverman_bw(x_data)
+            raise ValueError("bw_method must be one of 'silverman' or 'sheather-jones'")
 
     if grid is None:
         pad = 3 * bandwidth
         grid = np.linspace(x_data.min() - pad, x_data.max() + pad, n_grid)
+    else:
+        grid = np.asarray(grid, dtype=float)
+        if grid.ndim != 1 or len(grid) == 0 or not np.all(np.isfinite(grid)):
+            raise ValueError("grid must be a non-empty one-dimensional finite array")
 
-    # Compute density at each grid point
-    density = np.zeros(len(grid))
-    for i, g in enumerate(grid):
-        u = (g - x_data) / bandwidth
-        density[i] = np.sum(w * _kernel_fn(u, kernel)) / bandwidth
+    # Compute density in grid blocks. This keeps the public result identical to
+    # the direct kernel sum while avoiding one Python loop per grid point.
+    density = np.empty(len(grid))
+    block_size = max(1, min(len(grid), 1_000_000 // max(n, 1)))
+    for start in range(0, len(grid), block_size):
+        stop = min(start + block_size, len(grid))
+        u = (grid[start:stop, None] - x_data[None, :]) / bandwidth
+        density[start:stop] = (_kernel_fn(u, kernel) @ w) / bandwidth
 
     return KDensityResult(
         grid=grid, density=density, bandwidth=bandwidth,

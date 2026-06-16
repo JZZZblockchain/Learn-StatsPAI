@@ -127,6 +127,9 @@ def _local_poly_fit(x0, x, y, h, degree, kernel):
 
     Returns (estimate, standard_error).
     """
+    if h <= 0 or not np.isfinite(h):
+        raise ValueError("bandwidth must be a positive finite number")
+
     u = (x - x0) / h
     w = _kernel_fn(u, kernel) / h
 
@@ -141,11 +144,9 @@ def _local_poly_fit(x0, x, y, h, degree, kernel):
 
     # Design matrix: [1, (x-x0), (x-x0)^2, ..., (x-x0)^p]
     X = np.column_stack([x_local**j for j in range(degree + 1)])
-    W = np.diag(w_local)
-
     try:
-        XtWX = X.T @ W @ X
-        XtWy = X.T @ W @ y_local
+        XtWX = X.T @ (w_local[:, None] * X)
+        XtWy = X.T @ (w_local * y_local)
         beta = np.linalg.solve(XtWX, XtWy)
     except np.linalg.LinAlgError:
         return np.nan, np.nan
@@ -153,14 +154,19 @@ def _local_poly_fit(x0, x, y, h, degree, kernel):
     # Estimate is beta[0] (the intercept = E[Y|X=x0])
     fitted = beta[0]
 
-    # Standard error via sandwich
+    # Kernel weights are smoothing weights, not inverse-variance weights.
+    # Use the local-polynomial sandwich meat X' W diag(e^2) W X.
     resid = y_local - X @ beta
-    sigma2 = np.sum(w_local * resid**2) / max(mask.sum() - degree - 1, 1)
     try:
-        XtWX_inv = np.linalg.inv(XtWX)
-        se = np.sqrt(sigma2 * XtWX_inv[0, 0])
+        bread = np.linalg.inv(XtWX)
     except np.linalg.LinAlgError:
-        se = np.nan
+        bread = np.linalg.pinv(XtWX)
+
+    df = mask.sum() - (degree + 1)
+    correction = mask.sum() / df if df > 0 else 1.0
+    meat = X.T @ ((w_local**2 * resid**2)[:, None] * X)
+    vcov = correction * bread @ meat @ bread
+    se = np.sqrt(max(vcov[0, 0], 0.0))
 
     return fitted, se
 
@@ -223,6 +229,12 @@ def lpoly(
     """
     if data is None:
         raise ValueError("data is required")
+    if degree < 0:
+        raise ValueError("degree must be non-negative")
+    if n_grid <= 0:
+        raise ValueError("n_grid must be positive")
+    if bandwidth is not None and (bandwidth <= 0 or not np.isfinite(bandwidth)):
+        raise ValueError("bandwidth must be a positive finite number")
 
     y_data = data[y].values.astype(float)
     x_data = data[x].values.astype(float)
@@ -233,11 +245,18 @@ def lpoly(
     x_data = x_data[valid]
     n = len(y_data)
 
+    if n == 0:
+        raise ValueError("data has no finite observations after dropping missing values")
+
     if bandwidth is None:
         bandwidth = _silverman_bandwidth(x_data)
 
     if grid is None:
         grid = np.linspace(x_data.min(), x_data.max(), n_grid)
+    else:
+        grid = np.asarray(grid, dtype=float)
+        if grid.ndim != 1 or len(grid) == 0 or not np.all(np.isfinite(grid)):
+            raise ValueError("grid must be a non-empty one-dimensional finite array")
 
     fitted = np.empty(len(grid))
     se = np.empty(len(grid))
