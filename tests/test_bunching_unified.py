@@ -36,3 +36,8 @@ def test_kink_unified():
     assert isinstance(res, sp.KinkUnifiedResult)
     # RKD should pick up the slope difference (≈ 1.0)
     assert 0.3 < abs(res.rkd_effect) < 2.0
+    np.testing.assert_allclose(
+        [res.rdd_effect, res.rdd_se, res.rkd_effect, res.rkd_se, res.bunching_elasticity],
+        [0.026282374858113442, 0.04813381034944931, 0.8212406458004073, 0.19376515528326926, 0.001350587535326446],
+        atol=1e-12,
+    )

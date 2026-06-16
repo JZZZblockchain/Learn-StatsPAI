@@ -82,6 +82,7 @@ def test_rd2d_bw_selector():
                    approach="distance")
     assert isinstance(h, float)
     assert h > 0
+    np.testing.assert_allclose(h, 0.21015049861820304, atol=1e-12)
 
 
 def test_rd2d_invalid_approach():

@@ -95,6 +95,22 @@ def test_rd_multi_extrapolate_methods(method):
     assert res.model_info["n_cutoffs"] >= 2
     het = res.model_info["heterogeneity_test"]
     assert het is None or 0.0 <= het["p_value"] <= 1.0
+    expected_se = 0.017058047956112595 if method == "weighted" else 0.09130901401147287
+    np.testing.assert_allclose(
+        [res.estimate, res.se, res.ci[0], res.ci[1]],
+        [
+            1.276579926129427,
+            expected_se,
+            1.2431467664888884 if method == "weighted" else 1.0976175472030771,
+            1.310013085769964 if method == "weighted" else 1.455542305055777,
+        ],
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        res.detail["cate_extrapolated"].head(3).to_numpy(),
+        [3.481527, 2.599548, 1.717569],
+        atol=5e-7,
+    )
 
 
 def test_rd_multi_extrapolate_polynomial_three_cutoffs():
@@ -126,6 +142,16 @@ def test_rd_external_validity_with_covs():
     assert "z" in cov_diag
     assert 0.0 <= cov_diag["z"]["overlap_coefficient"] <= 1.0
     assert 0.0 <= cov_diag["z"]["ks_pvalue"] <= 1.0
+    np.testing.assert_allclose(
+        [
+            diag["ci_test"]["control_side"]["p_value"],
+            diag["ci_test"]["treated_side"]["p_value"],
+            cov_diag["z"]["overlap_coefficient"],
+            cov_diag["z"]["std_mean_diff"],
+        ],
+        [0.9351517084851074, 0.023372360360149558, 0.6823772047473244, 0.08575978496385764],
+        atol=1e-12,
+    )
 
 
 def test_rd_external_validity_ci_holds_triggers_extrapolation():

@@ -30,6 +30,15 @@ def test_rdbwsensitivity_grid():
     assert isinstance(out, pd.DataFrame)
     assert (out["bandwidth"] > 0).all()
     assert ((out["pvalue"] >= 0) & (out["pvalue"] <= 1)).all()
+    np.testing.assert_allclose(
+        out[["bandwidth", "estimate", "se"]].head(3).to_numpy(),
+        np.array([
+            [0.169524, 2.803506, 0.185342],
+            [0.271238, 2.877359, 0.146894],
+            [0.372953, 2.919283, 0.124040],
+        ]),
+        atol=5e-7,
+    )
     plt.close("all")
 
 
@@ -45,6 +54,11 @@ def test_rdbalance_default_and_explicit_covs():
     df = _make_sharp()
     out = sp.rdbalance(df, x="x", c=0, covs=["z", "z2"])
     assert set(["covariate", "estimate", "se", "pvalue"]).issubset(out.columns)
+    np.testing.assert_allclose(
+        out[["estimate", "se", "pvalue"]].to_numpy(),
+        np.array([[-0.156353, 0.380231, 0.680923], [0.033809, 0.343974, 0.921703]]),
+        atol=5e-7,
+    )
     # auto-detect covariates (all numeric except x)
     out2 = sp.rdbalance(df, x="x", c=0)
     assert len(out2) >= 1
@@ -55,6 +69,12 @@ def test_rdplacebo_auto_cutoffs():
     out = sp.rdplacebo(df, y="y", x="x", c=0, n_placebo=8, side="both")
     assert "is_true_cutoff" in out.columns
     assert out["is_true_cutoff"].any()
+    true = out.loc[out["is_true_cutoff"]].iloc[0]
+    np.testing.assert_allclose(
+        [true["cutoff"], true["estimate"], true["se"], true["pvalue"]],
+        [0.0, 2.903995, 0.130938, 0.0],
+        atol=5e-7,
+    )
     plt.close("all")
 
 

@@ -80,6 +80,21 @@ def test_rd_honest_mse_and_flci_and_manual_M():
     assert r_flci.se >= 0
     r_M = sp.rd_honest(df, y="y", x="x", c=0, M=5.0)
     assert np.isfinite(r_M.estimate)
+    np.testing.assert_allclose(
+        [r_mse.estimate, r_mse.se, r_mse.ci[0], r_mse.ci[1], r_mse.model_info["bias_bound"]],
+        [3.075221537406432, 0.06848787439334914, 2.667657858640401, 3.4827852161724624, 0.1366649557886817],
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        [r_flci.estimate, r_flci.se, r_flci.ci[0], r_flci.ci[1], r_flci.model_info["bias_bound"]],
+        [3.09668701925409, 0.09801637617962299, 2.8453998509496996, 3.3479741875584805, 0.02958930054859988],
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        [r_M.estimate, r_M.se, r_M.ci[0], r_M.ci[1], r_M.model_info["bias_bound"]],
+        [3.075221537406432, 0.06848787439334914, 2.8305431453530514, 3.319899929459812, 0.05522231243235646],
+        atol=1e-12,
+    )
 
 
 @pytest.mark.parametrize("kernel", ["triangular", "epanechnikov", "uniform"])

@@ -24,6 +24,11 @@ def test_rdsampsi_returns_positive():
     assert r.n_total > 0
     assert r.n_left > 0
     assert r.n_right > 0
+    np.testing.assert_allclose(
+        [r.n_left, r.n_right, r.n_total, r.tau, r.target_power],
+        [123, 123, 246, 0.3, 0.80],
+        atol=1e-12,
+    )
 
 
 def test_rdsampsi_larger_effect_needs_fewer_obs():

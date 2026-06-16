@@ -79,6 +79,15 @@ def test_rdwinselect():
                          nwindows=6, seed=7)
     assert isinstance(out, pd.DataFrame)
     assert len(out) >= 3
+    np.testing.assert_allclose(
+        out[["window_left", "window_right", "n_left", "n_right", "p_value"]].head(3).to_numpy(),
+        np.array([
+            [-0.083237, 0.083237, 98.0, 77.0, 0.394],
+            [-0.266358, 0.266358, 285.0, 250.0, 0.384],
+            [-0.449480, 0.449480, 449.0, 410.0, 0.680],
+        ]),
+        atol=5e-7,
+    )
 
 
 def test_rdsensitivity():
@@ -87,6 +96,15 @@ def test_rdsensitivity():
                            n_perms=100, seed=8)
     assert isinstance(out, pd.DataFrame)
     assert "estimate" in out.columns
+    np.testing.assert_allclose(
+        out[["window", "estimate", "se", "pvalue"]].head(3).to_numpy(),
+        np.array([
+            [0.099884, 3.013447, 0.066839, 0.0],
+            [0.312139, 3.117404, 0.034816, 0.0],
+            [0.524393, 3.250576, 0.027918, 0.0],
+        ]),
+        atol=5e-7,
+    )
     plt.close("all")
 
 
@@ -109,3 +127,8 @@ def test_rdrbounds():
     for col in pcols:
         vals = out[col].dropna()
         assert ((vals >= -1e-9) & (vals <= 1 + 1e-9)).all()
+    np.testing.assert_allclose(
+        out[["gamma", "pvalue_upper", "pvalue_lower"]].to_numpy(),
+        np.array([[1.0, 0.0, 0.0], [1.5, 0.0, 0.0], [2.0, 0.0, 0.0]]),
+        atol=1e-12,
+    )

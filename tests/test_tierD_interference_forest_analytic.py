@@ -103,6 +103,16 @@ class TestNotchAnalytic:
         # The polynomial counterfactual is a full per-bin density vector.
         assert len(res.counterfactual) == len(res.bin_centers)
         assert np.isfinite(float(res.excess_bunching))
+        np.testing.assert_allclose(
+            [res.excess_bunching, res.missing_mass, res.se_bunching, res.pvalue],
+            [62.631548856082375, 65.69429856082435, 32.59876800238219, 0.054695691007236924],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            [res.bin_centers[:3], res.counterfactual[:3]],
+            [[1000.0, 3000.0, 5000.0], [112.55276798, 253.37984697, 346.93565711]],
+            atol=5e-9,
+        )
 
 
 # ---------------------------------------------------------------------------

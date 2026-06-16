@@ -46,6 +46,8 @@ def test_dist_iv(iv_data):
     # True LATE on compliers ≈ 1.5
     median_late = res.late_q[1]
     assert 0.5 < median_late < 3.5
+    np.testing.assert_allclose(res.late_q, [2.59108666, 2.57194475, 2.28643254], atol=5e-9)
+    np.testing.assert_allclose(res.se_q, [0.38290231, 0.32793698, 0.32574394], atol=5e-9)
 
 
 def test_kan_dlate(iv_data):
@@ -54,6 +56,11 @@ def test_kan_dlate(iv_data):
         quantiles=np.array([0.5]), n_boot=30,
     )
     assert isinstance(res, sp.DistIVResult)
+    np.testing.assert_allclose(
+        [res.late_q[0], res.se_q[0], res.ci_low[0], res.ci_high[0]],
+        [2.57194475, 0.33825034, 1.90898627, 3.23490323],
+        atol=5e-9,
+    )
 
 
 def test_qte_hd_panel(panel_qte_data):
@@ -64,6 +71,8 @@ def test_qte_hd_panel(panel_qte_data):
     )
     assert isinstance(res, sp.HDPanelQTEResult)
     assert len(res.qte) == 3
+    np.testing.assert_allclose(res.qte, [0.83499144, 1.15884398, 1.1358614], atol=5e-9)
+    np.testing.assert_allclose(res.se, [0.41172991, 0.44621274, 0.46754694], atol=5e-9)
 
 
 def test_beyond_average(iv_data):
