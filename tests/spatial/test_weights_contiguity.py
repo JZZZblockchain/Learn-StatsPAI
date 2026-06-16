@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 
 gpd = pytest.importorskip("geopandas")
 from shapely.geometry import Polygon
@@ -18,6 +19,8 @@ def three_squares():
 def test_queen_vs_rook_edge_vs_corner(three_squares):
     wq = queen_weights(three_squares)
     wr = rook_weights(three_squares)
+    np.testing.assert_allclose(wq.sparse.toarray(), wr.sparse.toarray())
+    np.testing.assert_allclose(wr.sparse.sum(axis=1).A1, [1, 2, 1])
     assert set(wq.neighbors[1]) == {0, 2}
     assert set(wr.neighbors[1]) == {0, 2}
     assert wq.neighbors[0] == wr.neighbors[0]

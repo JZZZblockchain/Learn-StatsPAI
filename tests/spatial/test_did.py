@@ -30,6 +30,14 @@ def _chain_w(n: int) -> np.ndarray:
     return Wm
 
 
+def _ring_w(n: int) -> np.ndarray:
+    Wm = np.zeros((n, n))
+    for i in range(n):
+        Wm[i, (i - 1) % n] = 1.0
+        Wm[i, (i + 1) % n] = 1.0
+    return Wm / Wm.sum(axis=1, keepdims=True)
+
+
 def test_spatial_did_w_object_and_exports():
     df = _panel()
     n = df["i"].nunique()
@@ -49,6 +57,33 @@ def test_spatial_did_w_object_and_exports():
     assert "direct" in res.to_csv()
     assert "spillover" in res.to_markdown()
     assert json.loads(res.to_json())["se_type"] == "cluster"
+
+
+def test_spatial_did_recovers_noiseless_direct_and_spillover_effects():
+    n, t_periods = 8, 5
+    Wm = _ring_w(n)
+    unit_fe = np.linspace(-0.2, 0.3, n)
+    time_fe = np.linspace(0.0, 0.4, t_periods)
+    rows = []
+    for t in range(t_periods):
+        d = np.array(
+            [
+                int((i in [0, 2, 5] and t >= 2) or (i in [3, 6] and t >= 3))
+                for i in range(n)
+            ],
+            dtype=float,
+        )
+        wd = Wm @ d
+        for i in range(n):
+            y = unit_fe[i] + time_fe[t] + 1.25 * d[i] + 0.75 * wd[i]
+            rows.append({"i": i, "t": t, "d": d[i], "y": y})
+    df = pd.DataFrame(rows)
+
+    res = spatial_did(df, y="y", treat="d", unit="i", time="t", W=Wm, se_type="robust")
+
+    np.testing.assert_allclose(res.direct_effect, 1.25, atol=1e-12)
+    np.testing.assert_allclose(res.spillover_effect, 0.75, atol=1e-12)
+    np.testing.assert_allclose(res.total_effect, 2.0, atol=1e-12)
 
 
 def test_spatial_did_conley_distance_matrix():

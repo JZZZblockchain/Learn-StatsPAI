@@ -24,6 +24,11 @@ def dgp():
 def test_slx_returns_augmented_coefficients(dgp):
     w, df = dgp
     res = slx(w, df, "y ~ x + z")
+    X = np.column_stack([np.ones(len(df)), df["x"], df["z"]])
+    WX = w.sparse @ X[:, 1:]
+    X_aug = np.column_stack([X, WX])
+    beta_manual = np.linalg.inv(X_aug.T @ X_aug) @ X_aug.T @ df["y"].to_numpy()
+    np.testing.assert_allclose(res.params.to_numpy(), beta_manual, atol=1e-12)
     # Expect const, x, z, W_x, W_z — 5 params
     assert len(res.params) == 5
     assert "W_x" in res.params.index

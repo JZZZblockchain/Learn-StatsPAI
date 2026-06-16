@@ -16,6 +16,7 @@ def test_knn_basic():
 def test_distance_band_binary():
     coords = np.array([[0.0, 0.0], [1.0, 0.0], [5.0, 0.0]])
     w = distance_band(coords, threshold=1.5, binary=True)
+    np.testing.assert_allclose(w.sparse.toarray(), [[0, 1, 0], [1, 0, 0], [0, 0, 0]])
     assert sorted(w.neighbors[0]) == [1]
     assert sorted(w.neighbors[2]) == []
 

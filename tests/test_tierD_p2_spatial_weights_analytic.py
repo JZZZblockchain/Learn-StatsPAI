@@ -35,12 +35,12 @@ class TestDistanceBandAnalytic:
         w = sp.distance_band(_grid_coords(3), threshold=1.0, binary=True)
         deg = np.asarray(w.sparse.sum(axis=1)).ravel()
         expected = np.array([2, 3, 2, 3, 4, 3, 2, 3, 2])
-        np.testing.assert_array_equal(deg.astype(int), expected)
+        np.testing.assert_allclose(deg, expected)
 
     def test_weights_symmetric(self):
         w = sp.distance_band(_grid_coords(4), threshold=1.0, binary=True)
         S = w.sparse.toarray()
-        np.testing.assert_array_equal(S, S.T)
+        np.testing.assert_allclose(S, S.T)
 
     def test_larger_threshold_adds_neighbours(self):
         coords = _grid_coords(3)
@@ -89,6 +89,8 @@ class TestGetisOrdAnalytic:
         y = np.array([10, 10, 10, 1, 1, 1, 1, 1, 1], dtype=float)
         out = sp.getis_ord_local(y, w, star=True, permutations=0)
         z = np.asarray(out["z"])
+        np.testing.assert_allclose(z[1], 2.23606797749979)
+        np.testing.assert_allclose(z[7], -1.7888543819998317)
         assert z[1] > 0  # interior of the hot cluster
         assert z[7] < 0  # interior of the cold cluster
 
@@ -98,4 +100,5 @@ class TestGetisOrdAnalytic:
         y = np.array([10, 10, 10, 1, 1, 1, 1, 1, 1], dtype=float)
         out = sp.getis_ord_local(y, w, star=True, permutations=0)
         z = np.asarray(out["z"])
+        np.testing.assert_allclose(z[1], np.max(z))
         assert int(np.argmax(z)) in {0, 1, 2}

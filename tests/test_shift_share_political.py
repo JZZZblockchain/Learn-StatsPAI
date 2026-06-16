@@ -38,12 +38,31 @@ def _political_panel(units=40, T=6, K=5, seed=0):
     return pd.DataFrame(rows), shares, shocks, tau_true
 
 
+def _manual_2sls_slope(y, d, z):
+    y_arr = np.asarray(y, dtype=float)
+    d_arr = np.asarray(d, dtype=float)
+    z_arr = np.asarray(z, dtype=float)
+    stage1 = np.column_stack([np.ones_like(z_arr), z_arr])
+    first_stage, *_ = np.linalg.lstsq(stage1, d_arr, rcond=None)
+    d_hat = stage1 @ first_stage
+    stage2 = np.column_stack([np.ones_like(d_hat), d_hat])
+    second_stage, *_ = np.linalg.lstsq(stage2, y_arr, rcond=None)
+    return float(second_stage[1])
+
+
 def test_shift_share_political_returns_point_estimate():
     df, shares, shocks, _ = _political_panel(seed=0)
     r = sp.shift_share_political(
         df, unit="unit", time="time", outcome="y", endog="d",
         shares=shares, shocks=shocks, leave_one_out=False,
     )
+    panel = df.sort_values(["unit", "time"])
+    first = panel.groupby("unit").first()
+    last = panel.groupby("unit").last()
+    dy = last["y"] - first["y"]
+    dx = last["d"] - first["d"]
+    z = shares.loc[dy.index].to_numpy(float) @ shocks.to_numpy(float)
+    np.testing.assert_allclose(r.estimate, _manual_2sls_slope(dy, dx, z))
     assert r is not None
     est = getattr(r, "estimate", None) or getattr(r, "coefficient", None)
     assert est is not None
@@ -111,6 +130,20 @@ def _panel_long_df(units=20, T=4, K=3, seed=0):
     return pd.DataFrame(rows), shares, shocks
 
 
+def _manual_panel_shift_share_slope(df, shares, shocks, *, fe):
+    work = df.sort_values(["u", "t"]).reset_index(drop=True).copy()
+    work["z"] = [
+        float((shares.loc[row.u] * shocks.loc[row.t]).sum())
+        for row in work.itertuples(index=False)
+    ]
+    cols = ["y", "d", "z"]
+    if fe in ("two-way", "unit"):
+        work[cols] = work[cols].sub(work.groupby("u")[cols].transform("mean"))
+    if fe in ("two-way", "time"):
+        work[cols] = work[cols].sub(work.groupby("t")[cols].transform("mean"))
+    return _manual_2sls_slope(work["y"], work["d"], work["z"])
+
+
 @pytest.mark.parametrize("fe_mode,expected", [
     ("two-way", "u+t"),
     ("unit", "u"),
@@ -126,6 +159,10 @@ def test_panel_writes_fe_to_model_info(fe_mode, expected):
     r = sp.shift_share_political_panel(
         df, unit="u", time="t", outcome="y", endog="d",
         shares=shares, shocks=shocks, fe=fe_mode,
+    )
+    np.testing.assert_allclose(
+        r.estimate,
+        _manual_panel_shift_share_slope(df, shares, shocks, fe=fe_mode),
     )
     # Canonical key for the output layer
     assert r.model_info["fixed_effects"] == expected
