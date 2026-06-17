@@ -5,7 +5,12 @@ Tests for OLS regression functionality
 import pytest
 import numpy as np
 import pandas as pd
+from patsy import dmatrices
 from statspai import regress
+from statspai.core.utils import (
+    _try_simple_numeric_design_matrices,
+    create_design_matrices,
+)
 from statspai.regression.ols import OLSRegression
 
 
@@ -100,6 +105,50 @@ class TestOLSRegression:
         # Should have only 2 parameters (no intercept)
         assert len(results.params) == 2
         assert 'Intercept' not in results.params.index
+
+    def test_simple_numeric_design_fast_path_matches_patsy(self):
+        """Plain numeric formulas use the direct builder without changing semantics."""
+        df = pd.DataFrame(
+            {
+                "y": [1.0, 2.0, np.nan, 4.0],
+                "x1": [0.5, 1.0, 1.5, 2.0],
+                "x2": [3.0, np.nan, 5.0, 6.0],
+            },
+            index=[10, 11, 12, 13],
+        )
+        formula = "y ~ x1 + x2"
+
+        assert _try_simple_numeric_design_matrices(formula, df) is not None
+        y_fast, X_fast = create_design_matrices(formula, df)
+        y_patsy, X_patsy = dmatrices(formula, df, return_type="dataframe")
+
+        pd.testing.assert_frame_equal(y_fast, y_patsy)
+        pd.testing.assert_frame_equal(X_fast, X_patsy)
+
+    def test_simple_numeric_no_intercept_fast_path_matches_patsy(self):
+        """The direct builder preserves Patsy's no-intercept column contract."""
+        df = pd.DataFrame(
+            {
+                "y": [1.0, 2.0, 3.0],
+                "x1": [0.5, 1.0, 1.5],
+                "x2": [3.0, 4.0, 5.0],
+            }
+        )
+        formula = "y ~ x1 + x2 - 1"
+
+        assert _try_simple_numeric_design_matrices(formula, df) is not None
+        y_fast, X_fast = create_design_matrices(formula, df)
+        y_patsy, X_patsy = dmatrices(formula, df, return_type="dataframe")
+
+        pd.testing.assert_frame_equal(y_fast, y_patsy)
+        pd.testing.assert_frame_equal(X_fast, X_patsy)
+
+    def test_complex_formula_stays_on_patsy_path(self, sample_data):
+        """Categorical/transformed formulas are left to Patsy."""
+        assert (
+            _try_simple_numeric_design_matrices("y ~ x1 + C(group)", sample_data)
+            is None
+        )
     
     def test_confidence_intervals(self, sample_data):
         """Test confidence interval calculation"""

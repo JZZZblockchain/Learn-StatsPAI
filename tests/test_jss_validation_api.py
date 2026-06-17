@@ -74,6 +74,19 @@ def test_validation_report_format_options():
     assert as_markdown.startswith("# StatsPAI Validation Report")
 
 
+def test_validation_report_registry_counts_are_self_consistent():
+    """Registry totals in the validation report must reconcile exactly."""
+    report = sp.validation_report(fmt="dict")
+    registry = report["registry"]
+
+    total = registry["total_functions"]
+    assert sum(registry["per_category"].values()) == total
+    assert sum(registry["per_stability"].values()) == total
+    assert sum(registry["per_validation_status"].values()) == total
+    assert registry["handwritten_specs"] + registry["auto_specs"] == total
+    assert registry["functions_with_limitations"] <= total
+
+
 def test_coverage_matrix_category_and_parity_levels():
     category_rows = sp.coverage_matrix(fmt="records")
     parity_rows = sp.coverage_matrix(level="parity", fmt="records")
@@ -83,6 +96,30 @@ def test_coverage_matrix_category_and_parity_levels():
     assert len(parity_rows) >= 30
     assert parity_rows[0]["schema_registered"] is True
     assert parity_rows[0]["has_r_parity"] is True
+
+
+def test_coverage_matrix_reconciles_category_totals():
+    """The category coverage matrix must be a lossless registry aggregation."""
+    report = sp.validation_report(fmt="dict")
+    rows = sp.coverage_matrix(fmt="records")
+    total_registered = sum(row["registered_functions"] for row in rows)
+
+    assert total_registered == report["registry"]["total_functions"]
+    assert total_registered / report["registry"]["total_functions"] == pytest.approx(
+        1.0
+    )
+    for row in rows:
+        status_total = (
+            row["stable_functions"]
+            + row["experimental_functions"]
+            + row["deprecated_functions"]
+        )
+        assert status_total == row["registered_functions"]
+        assert (
+            row["handwritten_specs"] + row["auto_specs"]
+            == row["registered_functions"]
+        )
+        assert row["agent_cards"] <= row["registered_functions"]
 
 
 def test_coverage_matrix_markdown_output():
@@ -99,6 +136,70 @@ def test_parity_gap_report_surfaces_open_gaps():
     assert any("next_action" in row for row in rows)
     md = sp.parity_gap_report(fmt="markdown")
     assert "next_action" in md
+
+
+def test_validation_result_containers_have_failure_contracts():
+    """Validation dataclasses should round-trip and expose failure state."""
+    report = sp.ValidationReport(
+        generated_at="2026-01-01T00:00:00+00:00",
+        version="1.18.0",
+        repo_root=".",
+        registry={"total_functions": 3, "total_categories": 2},
+        evidence={
+            "r_parity": {"matched_modules": 1},
+            "stata_parity": {"modules": 1},
+            "monte_carlo": {"runs": 0},
+            "agent_bench": {"trials": 0},
+        },
+    )
+    assert report.to_dict()["registry"]["total_functions"] == pytest.approx(3)
+    assert "3 registered functions across 2 categories" in report.summary()
+    assert "| Registered functions | 3 |" in report.to_markdown()
+
+    ok_step = sp.ReproductionStep(
+        name="ok",
+        action="command",
+        command=["python", "-V"],
+        cwd=".",
+        returncode=0,
+        elapsed_s=0.25,
+    )
+    failed_step = sp.ReproductionStep(
+        name="bad",
+        action="command",
+        command=["python", "missing.py"],
+        cwd=".",
+        returncode=2,
+        elapsed_s=1.5,
+        stderr_tail="missing.py",
+    )
+    skipped_step = sp.ReproductionStep(
+        name="skip",
+        action="copy",
+        command=["a", "b"],
+        cwd=".",
+        skipped=True,
+    )
+
+    assert ok_step.ok is True
+    assert failed_step.ok is False
+    assert skipped_step.ok is True
+    assert failed_step.to_dict()["elapsed_s"] == pytest.approx(1.5)
+
+    result = sp.ReproductionResult(
+        generated_at="2026-01-01T00:00:00+00:00",
+        repo_root=".",
+        targets=["inventory"],
+        dry_run=False,
+        success=False,
+        steps=[ok_step, failed_step, skipped_step],
+        artifacts={"tables": []},
+    )
+    assert result.failed_steps() == ["bad"]
+    assert result.to_dict()["steps"][1]["stderr_tail"] == "missing.py"
+    markdown = result.to_markdown()
+    assert "| bad | command | 2 | 1.50 |" in markdown
+    assert "| skip | copy | skipped | 0.00 |" in markdown
 
 
 def test_certified_functions_surface_variant_level_gaps():
