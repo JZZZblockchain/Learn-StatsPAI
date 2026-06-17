@@ -7,6 +7,8 @@ from typing import Dict, Any, Optional, List, Union
 import pandas as pd
 import numpy as np
 
+from ..exceptions import MethodIncompatibility
+
 
 def _scipy_stats():
     """Lazily import ``scipy.stats`` for result-time inference only."""
@@ -107,6 +109,21 @@ def _filter_jsonable_scalars(d: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _validate_probability(value: Any, *, name: str) -> float:
+    """Validate probabilities such as alpha or confidence level."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{name} must be a finite number in the open interval (0, 1)"
+        ) from exc
+    if not np.isfinite(parsed) or not (0.0 < parsed < 1.0):
+        raise MethodIncompatibility(
+            f"{name} must be a finite number in the open interval (0, 1)"
+        )
+    return parsed
+
+
 class EconometricResults:
     """
     Unified results class for econometric models
@@ -194,6 +211,7 @@ class EconometricResults:
         str
             Formatted summary table
         """
+        alpha = _validate_probability(alpha, name="alpha")
         # Create coefficients table
         coef_table = pd.DataFrame({
             'Coefficient': self.params,
@@ -244,6 +262,7 @@ class EconometricResults:
         pd.DataFrame
             Confidence intervals
         """
+        alpha = _validate_probability(alpha, name="alpha")
         stats = _scipy_stats()
         t_crit = stats.t.ppf(1 - alpha/2, self.data_info.get('df_resid', np.inf))
         lower = self.params - t_crit * self.std_errors
@@ -301,6 +320,7 @@ class EconometricResults:
         --------
         glance : 1-row model-level summary (R^2, F, N, AIC, BIC).
         """
+        conf_level = _validate_probability(conf_level, name="conf_level")
         alpha = 1 - conf_level
         df_resid = self.data_info.get('df_resid', np.inf)
         stats = _scipy_stats()
@@ -397,6 +417,15 @@ class EconometricResults:
 
         # Out-of-sample: X @ params (works for simple linear models only)
         if self.params is not None and isinstance(self.params, pd.Series):
+            if not isinstance(data, pd.DataFrame):
+                raise MethodIncompatibility(
+                    "Out-of-sample prediction requires a pandas DataFrame.",
+                    recovery_hint=(
+                        "Pass a DataFrame containing the fitted model's "
+                        "coefficient columns."
+                    ),
+                    diagnostics={"data_type": data.__class__.__name__},
+                )
             var_names = list(self.params.index)
             has_intercept = 'Intercept' in var_names
 
@@ -410,18 +439,39 @@ class EconometricResults:
                            if ':' in c or '[' in c
                            or re.search(r'[()]', c)]
                 if derived:
-                    raise ValueError(
+                    raise MethodIncompatibility(
                         f"Out-of-sample prediction is not supported for "
                         f"models with formula transforms (found: "
                         f"{derived[:3]}{'...' if len(derived) > 3 else ''}). "
                         f"Re-fit using statsmodels directly, or use "
                         f"in-sample prediction with result.predict() "
-                        f"(no arguments)."
+                        f"(no arguments).",
+                        recovery_hint=(
+                            "Use the estimator-specific predict() method when "
+                            "available, or call result.predict() without data "
+                            "for stored in-sample fitted values."
+                        ),
+                        diagnostics={"derived_terms": derived},
                     )
-                raise ValueError(
-                    f"Prediction data missing column(s): {missing}"
+                raise MethodIncompatibility(
+                    f"Prediction data missing column(s): {missing}",
+                    recovery_hint=(
+                        "Add the missing coefficient columns to the prediction "
+                        "DataFrame or use the estimator-specific predict()."
+                    ),
+                    diagnostics={"missing_columns": missing},
                 )
-            X = data[X_cols].values.astype(float)
+            try:
+                X = data[X_cols].to_numpy(dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    "Prediction columns must be numeric.",
+                    recovery_hint=(
+                        "Coerce prediction data columns to numeric values "
+                        "before calling predict()."
+                    ),
+                    diagnostics={"columns": X_cols, "error": str(exc)},
+                ) from exc
             if has_intercept:
                 ones = np.ones((X.shape[0], 1))
                 X = np.column_stack([ones, X])
@@ -1408,7 +1458,8 @@ class CausalResult:
         -------
         str
         """
-        alpha = alpha or self.alpha
+        alpha = self.alpha if alpha is None else alpha
+        alpha = _validate_probability(alpha, name="alpha")
         lines: List[str] = []
 
         lines.append("=" * 78)
@@ -1537,7 +1588,11 @@ class CausalResult:
         >>> r.tidy().query("type=='main'")
         """
         # Main row
-        alpha = 1 - conf_level if conf_level is not None else self.alpha
+        if conf_level is not None:
+            conf_level = _validate_probability(conf_level, name="conf_level")
+            alpha = 1 - conf_level
+        else:
+            alpha = _validate_probability(self.alpha, name="alpha")
         if conf_level is not None and abs(conf_level - (1 - self.alpha)) > 1e-9:
             # Recompute CI at requested conf_level. Prefer t-distribution
             # when df_resid is recorded (small-sample correctness);

@@ -26,12 +26,137 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from .exceptions import MethodIncompatibility
+
 __all__ = [
     "auto_did",
     "auto_iv",
     "AutoDIDResult",
     "AutoIVResult",
 ]
+
+
+def _validate_probability(value: Any, *, name: str, context: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: {name} must be a finite number in (0, 1)"
+        ) from exc
+    if not np.isfinite(parsed) or not (0.0 < parsed < 1.0):
+        raise MethodIncompatibility(
+            f"{context}: {name} must be a finite number in (0, 1)"
+        )
+    return parsed
+
+
+def _as_string_list(
+    value: Any,
+    *,
+    name: str,
+    context: str,
+    allow_none: bool = False,
+) -> List[str]:
+    if value is None:
+        if allow_none:
+            return []
+        raise MethodIncompatibility(f"{context}: {name} must not be empty")
+    if isinstance(value, str):
+        items = [value]
+    else:
+        try:
+            items = list(value)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"{context}: {name} must be a string or sequence of strings"
+            ) from exc
+    if not items and not allow_none:
+        raise MethodIncompatibility(f"{context}: {name} must not be empty")
+    bad = [item for item in items if not isinstance(item, str) or not item]
+    if bad:
+        raise MethodIncompatibility(
+            f"{context}: {name} entries must be non-empty strings"
+        )
+    return list(items)
+
+
+def _normalize_methods(
+    methods: Optional[List[str]],
+    *,
+    default: List[str],
+    valid: set[str],
+    context: str,
+) -> List[str]:
+    raw = default if methods is None else list(methods)
+    if not raw:
+        raise MethodIncompatibility(f"{context}: methods must not be empty")
+    out = [str(m).lower() for m in raw]
+    bad = [m for m in out if m not in valid]
+    if bad:
+        raise MethodIncompatibility(
+            f"{context}: unknown methods {bad}; valid = {sorted(valid)}"
+        )
+    return out
+
+
+def _require_columns(data: pd.DataFrame, columns: List[str], *, context: str) -> None:
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(f"{context}: data must be a pandas DataFrame")
+    needed = list(dict.fromkeys(columns))
+    missing = [col for col in needed if col not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"{context}: data is missing required columns {missing}"
+        )
+
+
+def _jsonable(value: Any) -> Any:
+    """Convert common NumPy/Pandas values to strict JSON primitives."""
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        value_float = float(value)
+        return value_float if np.isfinite(value_float) else None
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, pd.DataFrame):
+        return _jsonable(value.to_dict(orient="records"))
+    if isinstance(value, pd.Series):
+        return _jsonable(value.to_dict())
+    if isinstance(value, np.ndarray):
+        return _jsonable(value.tolist())
+    if isinstance(value, dict):
+        return {str(key): _jsonable(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def _candidate_status(candidates: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """JSON-safe status records for raw candidate result objects."""
+    out: List[Dict[str, Any]] = []
+    for method, candidate in candidates.items():
+        if isinstance(candidate, Exception):
+            out.append({
+                "method": method,
+                "ok": False,
+                "error_type": type(candidate).__name__,
+                "message": str(candidate),
+            })
+        else:
+            out.append({
+                "method": method,
+                "ok": True,
+                "result_type": type(candidate).__name__,
+            })
+    return out
 
 
 # =====================================================================
@@ -89,6 +214,33 @@ class AutoDIDResult:
             f"(rule={self.selection_rule})"
         )
         return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON-safe leaderboard and candidate-status payload."""
+        return _jsonable({
+            "kind": "auto_did_result",
+            "selection_rule": self.selection_rule,
+            "winner_method": self._winner_method(),
+            "leaderboard": self.leaderboard.to_dict(orient="records"),
+            "candidate_status": _candidate_status(self.candidates),
+        })
+
+    def to_agent_summary(self, *, max_methods: int = 10) -> Dict[str, Any]:
+        """Bounded agent-facing summary of the DiD estimator race."""
+        limit = max(int(max_methods), 0)
+        statuses = _candidate_status(self.candidates)
+        successes = [row for row in statuses if row["ok"]]
+        failures = [row for row in statuses if not row["ok"]]
+        return _jsonable({
+            "kind": "auto_did_agent_summary",
+            "selection_rule": self.selection_rule,
+            "winner_method": self._winner_method(),
+            "leaderboard": self.leaderboard.head(limit).to_dict(orient="records"),
+            "n_methods": int(len(self.leaderboard)),
+            "truncated_methods": max(int(len(self.leaderboard)) - limit, 0),
+            "n_successes": int(len(successes)),
+            "failures": failures,
+        })
 
     def _winner_method(self) -> str:
         # Resolve the winner back to its method label by equality check
@@ -166,13 +318,13 @@ def auto_did(
     ----------
     callaway2021difference, sun2021estimating, borusyak2024revisiting
     """
-    methods = [m.lower() for m in (methods or ["cs", "sa", "bjs"])]
     valid = {"cs", "sa", "bjs"}
-    bad = [m for m in methods if m not in valid]
-    if bad:
-        raise ValueError(
-            f"auto_did: unknown methods {bad}; valid = {sorted(valid)}"
-        )
+    methods = _normalize_methods(
+        methods, default=["cs", "sa", "bjs"], valid=valid, context="auto_did"
+    )
+    alpha = _validate_probability(alpha, name="alpha", context="auto_did")
+    x_list = _as_string_list(x, name="x", context="auto_did", allow_none=True)
+    _require_columns(data, [y, g, t, i] + x_list, context="auto_did")
 
     # BJS (did_imputation) interprets `g` as the first-treatment timing
     # (integer period, NaN for never-treated) — not a cohort label.
@@ -181,7 +333,7 @@ def auto_did(
     if "bjs" in methods and g in data.columns:
         g_vals = data[g].dropna().unique()
         if len(g_vals) > 0 and not pd.api.types.is_numeric_dtype(data[g]):
-            raise TypeError(
+            raise MethodIncompatibility(
                 f"auto_did: BJS branch requires column {g!r} to be a "
                 "numeric first-treatment timing (not a cohort label). "
                 "Either convert to the period of first treatment or drop "
@@ -202,16 +354,17 @@ def auto_did(
 
     runners = {
         "cs": lambda: _cs_mod.callaway_santanna(
-            data=data, y=y, g=g, t=t, i=i, x=x, alpha=alpha,
+            data=data, y=y, g=g, t=t, i=i, x=x_list or None, alpha=alpha,
         ),
         "sa": lambda: _sa_mod.sun_abraham(
-            data=data, y=y, g=g, t=t, i=i, covariates=x, alpha=alpha,
+            data=data, y=y, g=g, t=t, i=i, covariates=x_list or None,
+            alpha=alpha,
         ),
         # did_imputation is the BJS name in statspai; keep the mapping
         # explicit here so the leaderboard label stays 'bjs'.
         "bjs": lambda: _bjs_mod.did_imputation(
             data=data, y=y, group=i, time=t, first_treat=g,
-            controls=x, alpha=alpha,
+            controls=x_list or None, alpha=alpha,
         ),
     }
 
@@ -267,7 +420,7 @@ def auto_did(
         mid = len(sorted_pairs) // 2
         winner = sorted_pairs[mid][1]
     else:
-        raise ValueError(
+        raise MethodIncompatibility(
             f"auto_did: select_by={select_by!r} not recognised. "
             f"Use 'median', 'first_success', or a method name."
         )
@@ -322,6 +475,33 @@ class AutoIVResult:
         lines.append(f"selected winner : {self._winner_method()} "
                      f"(rule={self.selection_rule})")
         return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON-safe leaderboard and candidate-status payload."""
+        return _jsonable({
+            "kind": "auto_iv_result",
+            "selection_rule": self.selection_rule,
+            "winner_method": self._winner_method(),
+            "leaderboard": self.leaderboard.to_dict(orient="records"),
+            "candidate_status": _candidate_status(self.candidates),
+        })
+
+    def to_agent_summary(self, *, max_methods: int = 10) -> Dict[str, Any]:
+        """Bounded agent-facing summary of the IV estimator race."""
+        limit = max(int(max_methods), 0)
+        statuses = _candidate_status(self.candidates)
+        successes = [row for row in statuses if row["ok"]]
+        failures = [row for row in statuses if not row["ok"]]
+        return _jsonable({
+            "kind": "auto_iv_agent_summary",
+            "selection_rule": self.selection_rule,
+            "winner_method": self._winner_method(),
+            "leaderboard": self.leaderboard.head(limit).to_dict(orient="records"),
+            "n_methods": int(len(self.leaderboard)),
+            "truncated_methods": max(int(len(self.leaderboard)) - limit, 0),
+            "n_successes": int(len(successes)),
+            "failures": failures,
+        })
 
     def _winner_method(self) -> str:
         for k, v in self.candidates.items():
@@ -405,19 +585,22 @@ def auto_iv(
     ----------
     angrist2009mostly
     """
-    if isinstance(instruments, str):
-        instruments_list = [instruments]
-    else:
-        instruments_list = list(instruments)
-    exog_list = list(exog) if exog else []
-
-    methods = [m.lower() for m in (methods or ["2sls", "liml", "jive"])]
+    instruments_list = _as_string_list(
+        instruments, name="instruments", context="auto_iv",
+    )
+    exog_list = _as_string_list(
+        exog, name="exog", context="auto_iv", allow_none=True,
+    )
     valid = {"2sls", "liml", "jive"}
-    bad = [m for m in methods if m not in valid]
-    if bad:
-        raise ValueError(
-            f"auto_iv: unknown methods {bad}; valid = {sorted(valid)}"
-        )
+    methods = _normalize_methods(
+        methods, default=["2sls", "liml", "jive"], valid=valid,
+        context="auto_iv",
+    )
+    alpha = _validate_probability(alpha, name="alpha", context="auto_iv")
+    required = [y, endog] + instruments_list + exog_list
+    if cluster is not None:
+        required.append(cluster)
+    _require_columns(data, required, context="auto_iv")
 
     from .regression.iv import iv as iv_regress
     from .regression.advanced_iv import liml, jive
@@ -530,7 +713,7 @@ def auto_iv(
             mid = len(sorted_pairs) // 2
             winner = sorted_pairs[mid][1]
     else:
-        raise ValueError(
+        raise MethodIncompatibility(
             f"auto_iv: select_by={select_by!r} not recognised."
         )
 

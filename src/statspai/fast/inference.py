@@ -36,6 +36,65 @@ import numpy as np
 import pandas as pd
 
 from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
+from ._result_protocol import distribution_summary as _distribution_summary
+from ._result_protocol import jsonable as _jsonable
+
+
+def _factorize_cluster_labels(
+    cluster: np.ndarray,
+    n: int,
+    *,
+    context: str,
+) -> tuple[np.ndarray, int]:
+    """Factorize cluster labels after rejecting missing/misaligned labels."""
+    cluster_arr = np.asarray(cluster)
+    cluster_len = cluster_arr.shape[0] if cluster_arr.ndim >= 1 else 0
+    if cluster_arr.ndim != 1 or cluster_len != n:
+        raise MethodIncompatibility(
+            f"{context}: cluster length {cluster_len} does not match n={n}"
+        )
+    cluster_codes, _ = pd.factorize(
+        cluster_arr, sort=False, use_na_sentinel=True,
+    )
+    if (cluster_codes < 0).any():
+        raise DataInsufficient(
+            f"{context}: cluster identifiers contain missing values; "
+            "drop or impute upstream"
+        )
+    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
+    if G < 2:
+        raise DataInsufficient(f"{context}: need at least 2 clusters, got {G}")
+    return cluster_codes, G
+
+
+def _prepare_weights(
+    weights: Optional[np.ndarray],
+    n: int,
+    *,
+    context: str,
+    strictly_positive: bool = False,
+) -> np.ndarray:
+    """Return validated observation weights for fast inference helpers."""
+    if weights is None:
+        return np.ones(n, dtype=np.float64)
+    arr = np.asarray(weights, dtype=np.float64).ravel()
+    if arr.shape[0] != n:
+        raise MethodIncompatibility(
+            f"{context}: weights length {arr.shape[0]} does not match n={n}"
+        )
+    if not np.isfinite(arr).all():
+        raise DataInsufficient(
+            f"{context}: weights contain non-finite values; "
+            "drop or impute upstream"
+        )
+    if strictly_positive:
+        if (arr <= 0).any():
+            raise MethodIncompatibility(
+                f"{context}: weights must be strictly positive"
+            )
+    elif (arr < 0).any():
+        raise MethodIncompatibility(f"{context}: weights must be non-negative")
+    return arr
 
 
 # ---------------------------------------------------------------------------
@@ -112,13 +171,18 @@ def crve(
         raise MethodIncompatibility(f"extra_df={extra_df}; must be >= 0")
 
     n, k = X.shape
-    if weights is None:
-        weights = np.ones(n)
+    residuals = np.asarray(residuals, dtype=np.float64)
+    if residuals.shape[0] != n:
+        raise MethodIncompatibility(
+            f"crve: residuals length {residuals.shape[0]} does not match n={n}"
+        )
+    if not np.isfinite(residuals).all():
+        raise DataInsufficient(
+            "crve: residuals contain non-finite values; refit or clean upstream"
+        )
+    weights = _prepare_weights(weights, n, context="crve")
 
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G < 2:
-        raise DataInsufficient(f"crve: need at least 2 clusters, got {G}")
+    cluster_codes, G = _factorize_cluster_labels(cluster, n, context="crve")
 
     if bread is None:
         XtWX = X.T @ (X * weights[:, None])
@@ -216,6 +280,36 @@ class BootTestResult:
             f"(method: {self.method})"
         )
 
+    def to_dict(self) -> dict:
+        """Return a JSON-safe payload, including the full bootstrap draws."""
+        return {
+            "kind": "fast_boottest_result",
+            "null_coef": _jsonable(self.null_coef),
+            "null_value": _jsonable(self.null_value),
+            "t_obs": _jsonable(self.t_obs),
+            "pvalue": _jsonable(self.pvalue),
+            "n_boots": _jsonable(self.n_boots),
+            "weights": self.weights,
+            "method": self.method,
+            "boot_t_dist": _jsonable(self.boot_t_dist),
+        }
+
+    def to_agent_summary(self) -> dict:
+        """Return a compact bootstrap-test summary for agent workflows."""
+        return {
+            "kind": "fast_boottest_agent_summary",
+            "null": {
+                "coef_index": _jsonable(self.null_coef),
+                "value": _jsonable(self.null_value),
+            },
+            "test_statistic": {"t_obs": _jsonable(self.t_obs)},
+            "pvalue": _jsonable(self.pvalue),
+            "n_boots": _jsonable(self.n_boots),
+            "weights": self.weights,
+            "method": self.method,
+            "bootstrap_distribution": _distribution_summary(self.boot_t_dist),
+        }
+
 
 _RADEMACHER = np.array([-1.0, 1.0])
 
@@ -305,20 +399,15 @@ def boottest(
     n, k = X.shape
     if y.shape[0] != n:
         raise MethodIncompatibility(f"y has {y.shape[0]} rows but X has {n}")
-    if cluster.shape[0] != n:
-        raise MethodIncompatibility(
-            f"cluster has {cluster.shape[0]} rows but X has {n}"
-        )
     if not (0 <= null_coef < k):
         raise IndexError(f"null_coef={null_coef} out of range [0, {k})")
 
     rng = np.random.default_rng(seed)
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G < 2:
-        raise DataInsufficient(f"boottest: need at least 2 clusters, got {G}")
+    cluster_codes, G = _factorize_cluster_labels(
+        cluster, n, context="boottest",
+    )
 
-    w = obs_weights if obs_weights is not None else np.ones(n)
+    w = _prepare_weights(obs_weights, n, context="boottest")
 
     # --- Unrestricted fit ---
     XtWX = X.T @ (X * w[:, None])
@@ -431,6 +520,32 @@ class BootWaldResult:
             f"  Wald = {self.wald_obs:.4f}    p = {self.pvalue:.4f}"
         )
 
+    def to_dict(self) -> dict:
+        """Return a JSON-safe payload, including the full bootstrap draws."""
+        return {
+            "kind": "fast_boottest_wald_result",
+            "R": _jsonable(self.R),
+            "r": _jsonable(self.r),
+            "wald_obs": _jsonable(self.wald_obs),
+            "pvalue": _jsonable(self.pvalue),
+            "n_boots": _jsonable(self.n_boots),
+            "weights": self.weights,
+            "boot_wald_dist": _jsonable(self.boot_wald_dist),
+            "df": _jsonable(self.df),
+        }
+
+    def to_agent_summary(self) -> dict:
+        """Return a compact joint-bootstrap summary for agent workflows."""
+        return {
+            "kind": "fast_boottest_wald_agent_summary",
+            "restriction_df": _jsonable(self.df),
+            "test_statistic": {"wald_obs": _jsonable(self.wald_obs)},
+            "pvalue": _jsonable(self.pvalue),
+            "n_boots": _jsonable(self.n_boots),
+            "weights": self.weights,
+            "bootstrap_distribution": _distribution_summary(self.boot_wald_dist),
+        }
+
 
 def boottest_wald(
     X: np.ndarray,
@@ -506,12 +621,11 @@ def boottest_wald(
             )
 
     rng = np.random.default_rng(seed)
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G < 2:
-        raise DataInsufficient(f"boottest_wald: need at least 2 clusters, got {G}")
+    cluster_codes, G = _factorize_cluster_labels(
+        cluster, n, context="boottest_wald",
+    )
 
-    w = obs_weights if obs_weights is not None else np.ones(n)
+    w = _prepare_weights(obs_weights, n, context="boottest_wald")
 
     # --- Unrestricted fit + observed Wald ---
     XtWX = X.T @ (X * w[:, None])
@@ -676,13 +790,11 @@ def cluster_dof_bm(
         raise MethodIncompatibility(
             f"contrast has {contrast.shape[0]} entries but X has k={k} cols"
         )
-    if weights is None:
-        weights = np.ones(n)
+    weights = _prepare_weights(weights, n, context="cluster_dof_bm")
 
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G < 2:
-        raise DataInsufficient(f"cluster_dof_bm: need at least 2 clusters, got {G}")
+    cluster_codes, G = _factorize_cluster_labels(
+        cluster, n, context="cluster_dof_bm",
+    )
 
     if bread is None:
         XtWX = X.T @ (X * weights[:, None])
@@ -809,15 +921,11 @@ def cluster_dof_wald_bm(
     if np.linalg.matrix_rank(R) < q:
         raise MethodIncompatibility("R must have full row rank")
 
-    if weights is None:
-        weights = np.ones(n)
+    weights = _prepare_weights(weights, n, context="cluster_dof_wald_bm")
 
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G < 2:
-        raise DataInsufficient(
-            f"cluster_dof_wald_bm: need at least 2 clusters, got {G}"
-        )
+    cluster_codes, G = _factorize_cluster_labels(
+        cluster, n, context="cluster_dof_wald_bm",
+    )
     if G <= q:
         raise DataInsufficient(
             f"cluster_dof_wald_bm: need G > q for a meaningful Wald DOF "
@@ -930,6 +1038,18 @@ class WaldTestResult:
             "V_R": self.V_R.tolist(),
         }
 
+    def to_agent_summary(self) -> dict:
+        """Return a compact CR2 Wald-test summary for agent workflows."""
+        return {
+            "kind": "fast_wald_test_agent_summary",
+            "test": self.test,
+            "q": _jsonable(self.q),
+            "eta": _jsonable(self.eta),
+            "F_stat": _jsonable(self.F_stat),
+            "p_value": _jsonable(self.p_value),
+            "Q": _jsonable(self.Q),
+        }
+
 
 def _htz_per_cluster_quantities(
     X: np.ndarray,
@@ -1010,29 +1130,23 @@ def _htz_per_cluster_quantities(
     if np.linalg.matrix_rank(R) < q:
         raise MethodIncompatibility("R must have full row rank")
 
-    if weights is None:
-        weights = np.ones(n)
-    else:
-        weights = np.asarray(weights, dtype=np.float64).ravel()
-        if (weights <= 0).any():
-            raise MethodIncompatibility("weights must be strictly positive")
-        # Fail fast at the helper boundary rather than after one O(G·n_g²·k)
-        # loop: v1 locks Φ = I (HTZ paper-faithful path) and the η formula
-        # in :func:`_htz_eta_from_quantities` would reject non-uniform
-        # weights anyway. Earlier exception keeps the stack trace clean.
-        if not np.allclose(weights, 1.0):
-            raise NotImplementedError(
-                "HTZ with non-uniform weights is not implemented in v1 "
-                "(working covariance Φ = I, OLS+CR2 only). "
-                "Use boottest_wald or open a v2 issue."
-            )
-
-    cluster_codes, _ = pd.factorize(cluster, sort=False)
-    G_clusters = int(cluster_codes.max()) + 1 if cluster_codes.size else 0
-    if G_clusters < 2:
-        raise DataInsufficient(
-            f"HTZ requires at least 2 clusters, got {G_clusters}"
+    weights = _prepare_weights(
+        weights, n, context="HTZ", strictly_positive=True,
+    )
+    # Fail fast at the helper boundary rather than after one O(G·n_g²·k)
+    # loop: v1 locks Φ = I (HTZ paper-faithful path) and the η formula
+    # in :func:`_htz_eta_from_quantities` would reject non-uniform
+    # weights anyway. Earlier exception keeps the stack trace clean.
+    if not np.allclose(weights, 1.0):
+        raise NotImplementedError(
+            "HTZ with non-uniform weights is not implemented in v1 "
+            "(working covariance Φ = I, OLS+CR2 only). "
+            "Use boottest_wald or open a v2 issue."
         )
+
+    cluster_codes, G_clusters = _factorize_cluster_labels(
+        cluster, n, context="HTZ",
+    )
     if G_clusters <= q:
         raise DataInsufficient(
             f"HTZ Wald requires G > q (got G={G_clusters}, q={q})"

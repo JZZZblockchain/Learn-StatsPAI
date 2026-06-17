@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from .core.results import CausalResult
+from .exceptions import MethodIncompatibility
 
 __all__ = [
     "rdd",
@@ -44,6 +45,69 @@ __all__ = [
     "policy_tree",
     "dml",
 ]
+
+
+def _require_string_option(value: Any, name: str, function: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must be a string option.",
+            diagnostics={"function": function, name: repr(value)},
+        )
+    out = value.lower().strip()
+    if not out:
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must be a non-empty string option.",
+            diagnostics={"function": function, name: repr(value)},
+        )
+    return out
+
+
+def _require_column_name(value: Any, name: str, function: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must be a non-empty column name.",
+            diagnostics={"function": function, name: repr(value)},
+        )
+    return value
+
+
+def _coerce_column_list(
+    value: Any,
+    name: str,
+    function: str,
+    *,
+    allow_none: bool = False,
+    allow_empty: bool = False,
+) -> Optional[List[str]]:
+    if value is None:
+        if allow_none:
+            return None
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must be a column name or list of column names.",
+            diagnostics={"function": function, name: None},
+        )
+    if isinstance(value, str):
+        out = [value]
+    else:
+        try:
+            out = list(value)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"{function}: `{name}` must be a column name or list of column names.",
+                diagnostics={"function": function, name: repr(value)},
+            ) from exc
+    if not allow_empty and not out:
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must contain at least one column name.",
+            diagnostics={"function": function, name: out},
+        )
+    bad = [col for col in out if not isinstance(col, str) or not col]
+    if bad:
+        raise MethodIncompatibility(
+            f"{function}: `{name}` must contain only non-empty string column names.",
+            diagnostics={"function": function, name: out, "invalid_columns": bad},
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -181,10 +245,17 @@ def xlearner(
     (800,)
     """
     if "learner" in kwargs:
-        raise TypeError(
+        raise MethodIncompatibility(
             "sp.xlearner is fixed to learner='x'. Use sp.metalearner(..., "
-            f"learner={kwargs['learner']!r}) for a different meta-learner."
+            f"learner={kwargs['learner']!r}) for a different meta-learner.",
+            recovery_hint=(
+                "Call sp.metalearner directly when selecting a non-X learner."
+            ),
+            diagnostics={"function": "xlearner", "learner": kwargs["learner"]},
+            alternative_functions=["sp.metalearner"],
         )
+    covariates = _coerce_column_list(X, "X", "xlearner")
+    assert covariates is not None
 
     from .metalearners.metalearners import metalearner
 
@@ -192,7 +263,7 @@ def xlearner(
         data=data,
         y=y,
         treat=d,
-        covariates=X,
+        covariates=covariates,
         learner="x",
         **kwargs,
     )
@@ -364,50 +435,79 @@ def partial_identification(
     """
     from . import bounds as _bounds
 
-    method = method.lower()
+    method = _require_string_option(method, "method", "partial_identification")
+    X_final = _coerce_column_list(
+        X, "X", "partial_identification", allow_none=True, allow_empty=True,
+    )
 
     if method == "manski":
         # manski_bounds uses `treat`; no covariates supported — warn if given.
-        if X:
-            raise ValueError(
+        if X_final:
+            raise MethodIncompatibility(
                 "partial_identification(method='manski') does not use "
                 "covariates (pure worst-case bounds). Drop X or use "
-                "method='horowitz_manski' for a covariate-aware variant."
+                "method='horowitz_manski' for a covariate-aware variant.",
+                recovery_hint=(
+                    "Drop X for Manski bounds or use method='horowitz_manski'."
+                ),
+                diagnostics={
+                    "function": "partial_identification",
+                    "method": method,
+                    "covariates": X_final,
+                },
+                alternative_functions=["sp.partial_identification"],
             )
         return _bounds.manski_bounds(data=data, y=y, treat=d, **kwargs)
 
     if method == "lee":
         # lee_bounds uses `treat` and REQUIRES `selection`.
         if selection is None:
-            raise ValueError(
+            raise MethodIncompatibility(
                 "partial_identification(method='lee') requires "
-                "`selection=<column name>` — Lee (2009) bounds are for "
+                "`selection=<column name>` - Lee (2009) bounds are for "
                 "sample-selection problems where a binary observability "
-                "indicator is needed."
+                "indicator is needed.",
+                recovery_hint=(
+                    "Pass the binary observability indicator as selection=..."
+                ),
+                diagnostics={
+                    "function": "partial_identification",
+                    "method": method,
+                },
             )
+        selection_final = _require_column_name(
+            selection, "selection", "partial_identification",
+        )
         return _bounds.lee_bounds(
             data=data,
             y=y,
             treat=d,
-            selection=selection,
-            covariates=X,
+            selection=selection_final,
+            covariates=X_final,
             **kwargs,
         )
 
     if method in {"horowitz_manski", "horowitz-manski", "hm"}:
         # horowitz_manski uses `treatment` (not `treat`) and REQUIRES
         # `covariates` (cannot be None).
-        if not X:
-            raise ValueError(
+        if not X_final:
+            raise MethodIncompatibility(
                 "partial_identification(method='horowitz_manski') requires "
-                "a non-empty list of covariates via `X=[...]` — the "
-                "Horowitz-Manski bounds condition on X."
+                "a non-empty list of covariates via `X=[...]` - the "
+                "Horowitz-Manski bounds condition on X.",
+                recovery_hint=(
+                    "Pass covariates through X=[...] for Horowitz-Manski bounds."
+                ),
+                diagnostics={
+                    "function": "partial_identification",
+                    "method": method,
+                },
             )
         return _bounds.horowitz_manski(
             data=data,
             y=y,
             treatment=d,
-            covariates=X,
+            covariates=X_final,
             **kwargs,
         )
 
@@ -415,22 +515,33 @@ def partial_identification(
         # iv_bounds uses `treatment`, `instrument`, and `controls` (not
         # `covariates`).  `X` maps to `controls` here.
         if instrument is None:
-            raise ValueError(
+            raise MethodIncompatibility(
                 "partial_identification(method='iv') requires "
-                "`instrument=<column name>` for the IV bounds (Manski-Pepper)."
+                "`instrument=<column name>` for the IV bounds (Manski-Pepper).",
+                recovery_hint="Pass the instrument column as instrument=...",
+                diagnostics={"function": "partial_identification", "method": method},
             )
+        instrument_final = _require_column_name(
+            instrument, "instrument", "partial_identification",
+        )
         return _bounds.iv_bounds(
             data=data,
             y=y,
             treatment=d,
-            instrument=instrument,
-            controls=X,
+            instrument=instrument_final,
+            controls=X_final,
             **kwargs,
         )
 
-    raise ValueError(
+    raise MethodIncompatibility(
         f"Unknown partial_identification method '{method}'. "
-        "Expected one of: 'manski', 'lee', 'horowitz_manski', 'iv'."
+        "Expected one of: 'manski', 'lee', 'horowitz_manski', 'iv'.",
+        recovery_hint="Choose one of: manski, lee, horowitz_manski, iv.",
+        diagnostics={
+            "function": "partial_identification",
+            "method": method,
+            "valid_methods": ["manski", "lee", "horowitz_manski", "iv"],
+        },
     )
 
 
@@ -641,19 +752,27 @@ def causal_discovery(
 
     _cd = importlib.import_module("statspai.causal_discovery")
 
-    method = method.lower()
+    method = _require_string_option(method, "method", "causal_discovery")
     valid = {"notears", "pc", "ges", "lingam"}
     if method not in valid:
-        raise ValueError(
+        raise MethodIncompatibility(
             f"Unknown causal_discovery method {method!r}. "
-            f"Expected one of: {sorted(valid)}."
+            f"Expected one of: {sorted(valid)}.",
+            recovery_hint="Choose one of: notears, pc, ges, lingam.",
+            diagnostics={
+                "function": "causal_discovery",
+                "method": method,
+                "valid_methods": sorted(valid),
+            },
         )
 
     # Normalise the data at the dispatcher level so the per-backend
     # kwargs stay clean.  Only notears / pc support a `variables=`
     # kwarg natively; ges / lingam just take the whole frame.
     if variables is not None:
-        data = data[list(variables)]
+        data = data[
+            _coerce_column_list(variables, "variables", "causal_discovery")
+        ]
 
     if method == "notears":
         return _cd.notears(data=data, **kwargs)
@@ -767,7 +886,15 @@ def evalue_rr(
     if rr_lower is not None and rr_upper is not None:
         ci = (float(rr_lower), float(rr_upper))
     elif rr_lower is not None or rr_upper is not None:
-        raise ValueError("evalue_rr: provide BOTH rr_lower and rr_upper, or neither.")
+        raise MethodIncompatibility(
+            "evalue_rr: provide BOTH rr_lower and rr_upper, or neither.",
+            recovery_hint="Pass both confidence bounds or omit both.",
+            diagnostics={
+                "function": "evalue_rr",
+                "rr_lower": rr_lower,
+                "rr_upper": rr_upper,
+            },
+        )
 
     return _evalue(
         estimate=float(rr),
@@ -798,7 +925,7 @@ def policy_tree(
     * library form   — ``sp.policy_tree(df, y, treat=..., covariates=...,
                                          max_depth=3)``
 
-    Passing conflicting names raises ``TypeError``.  Delegates to
+    Passing conflicting names raises ``MethodIncompatibility``.  Delegates to
     :func:`statspai.policy_learning.policy_tree`.
 
     Examples
@@ -832,33 +959,68 @@ def policy_tree(
     # different values (reviewer flagged the old "treat wins, d ignored"
     # behaviour as a silent-wrong-pick foot-gun).
     if d is not None and treat is not None and d != treat:
-        raise TypeError(
+        raise MethodIncompatibility(
             f"policy_tree: conflicting treatment columns "
-            f"d={d!r} vs treat={treat!r}. Pass only one."
+            f"d={d!r} vs treat={treat!r}. Pass only one.",
+            recovery_hint="Pass only one of d or treat.",
+            diagnostics={"function": "policy_tree", "d": d, "treat": treat},
         )
     treat_final = treat if treat is not None else d
     if treat_final is None:
-        raise TypeError(
+        raise MethodIncompatibility(
             "policy_tree() missing required argument: pass either 'd' "
-            "(article form) or 'treat=' (library form)."
+            "(article form) or 'treat=' (library form).",
+            recovery_hint="Provide the treatment column as d or treat.",
+            diagnostics={"function": "policy_tree"},
         )
+    treat_final = _require_column_name(treat_final, "treat", "policy_tree")
 
     # Resolve X / covariates
-    if X is not None and covariates is not None and list(X) != list(covariates):
-        raise TypeError(
+    X_final = _coerce_column_list(
+        X, "X", "policy_tree", allow_none=True,
+    )
+    covariates_final = _coerce_column_list(
+        covariates, "covariates", "policy_tree", allow_none=True,
+    )
+    if (
+        X_final is not None
+        and covariates_final is not None
+        and X_final != covariates_final
+    ):
+        raise MethodIncompatibility(
             "policy_tree: conflicting covariate lists — `X` and "
-            "`covariates` must agree if both are given."
+            "`covariates` must agree if both are given.",
+            recovery_hint=(
+                "Pass covariates through either X or covariates, not both."
+            ),
+            diagnostics={
+                "function": "policy_tree",
+                "X": X_final,
+                "covariates": covariates_final,
+            },
         )
-    cov_final = covariates if covariates is not None else X
+    cov_final = covariates_final if covariates_final is not None else X_final
     if cov_final is None:
-        raise TypeError(
+        raise MethodIncompatibility(
             "policy_tree() missing required argument: pass either 'X' "
-            "(article form) or 'covariates=' (library form)."
+            "(article form) or 'covariates=' (library form).",
+            recovery_hint="Provide covariates as X=[...] or covariates=[...].",
+            diagnostics={"function": "policy_tree"},
         )
 
     # Resolve depth / max_depth
     if depth is not None and max_depth is not None and depth != max_depth:
-        raise TypeError("policy_tree: pass either `depth` or `max_depth`, not both.")
+        raise MethodIncompatibility(
+            "policy_tree: pass either `depth` or `max_depth`, not both.",
+            recovery_hint=(
+                "Use depth for the article API or max_depth for the library API."
+            ),
+            diagnostics={
+                "function": "policy_tree",
+                "depth": depth,
+                "max_depth": max_depth,
+            },
+        )
     md = depth if depth is not None else max_depth
     if md is None:
         md = 2  # matches underlying default
@@ -953,26 +1115,50 @@ def dml(
     # Refuse silent loss when both are given with conflicting values —
     # matches the same safety rule added in `policy_tree`.
     if d is not None and treat is not None and d != treat:
-        raise TypeError(
+        raise MethodIncompatibility(
             f"dml: conflicting treatment columns d={d!r} vs "
-            f"treat={treat!r}. Pass only one."
+            f"treat={treat!r}. Pass only one.",
+            recovery_hint="Pass only one of d or treat.",
+            diagnostics={"function": "dml", "d": d, "treat": treat},
         )
     treat_final = treat if treat is not None else d
-    if X is not None and covariates is not None and list(X) != list(covariates):
-        raise TypeError(
+    if treat_final is not None:
+        treat_final = _require_column_name(treat_final, "treat", "dml")
+    X_final = _coerce_column_list(X, "X", "dml", allow_none=True)
+    covariates_final = _coerce_column_list(
+        covariates, "covariates", "dml", allow_none=True,
+    )
+    if (
+        X_final is not None
+        and covariates_final is not None
+        and X_final != covariates_final
+    ):
+        raise MethodIncompatibility(
             "dml: conflicting covariate lists — `X` and `covariates` "
-            "must agree if both are given."
+            "must agree if both are given.",
+            recovery_hint=(
+                "Pass covariates through either X or covariates, not both."
+            ),
+            diagnostics={
+                "function": "dml",
+                "X": X_final,
+                "covariates": covariates_final,
+            },
         )
-    cov_final = covariates if covariates is not None else X
+    cov_final = covariates_final if covariates_final is not None else X_final
     if treat_final is None:
-        raise TypeError(
+        raise MethodIncompatibility(
             "dml() missing required argument: pass either 'd' (positional "
-            "article form) or 'treat=' (library form)."
+            "article form) or 'treat=' (library form).",
+            recovery_hint="Provide the treatment column as d or treat.",
+            diagnostics={"function": "dml"},
         )
     if cov_final is None:
-        raise TypeError(
+        raise MethodIncompatibility(
             "dml() missing required argument: pass either 'X' (positional "
-            "article form) or 'covariates=' (library form)."
+            "article form) or 'covariates=' (library form).",
+            recovery_hint="Provide covariates as X=[...] or covariates=[...].",
+            diagnostics={"function": "dml"},
         )
 
     # Only forward model_y/model_d if set — otherwise let the underlying

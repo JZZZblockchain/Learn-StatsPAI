@@ -12,6 +12,26 @@ from patsy import dmatrices, dmatrix
 _BARE_NAME_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
+def _split_additive_formula_terms(part: str) -> List[str]:
+    """Split simple ``+`` formulas, preserving common intercept controls."""
+    normalized = re.sub(r"(?<!^)\s*-\s*(?=[01](?:\b|$))", "+-", part)
+    terms: List[str] = []
+    for raw in normalized.split("+"):
+        term = raw.strip()
+        if not term:
+            continue
+        compact = re.sub(r"\s+", "", term)
+        if compact in {"1", "+1"}:
+            terms.append("1")
+        elif compact == "-1":
+            terms.append("-1")
+        elif compact in {"0", "+0", "-0"}:
+            terms.append("0")
+        else:
+            terms.append(term)
+    return terms
+
+
 def _try_simple_numeric_design_matrices(
     formula: str,
     data: pd.DataFrame,
@@ -72,25 +92,36 @@ def _try_simple_numeric_design_matrices(
     if not pd.api.types.is_numeric_dtype(data[lhs]):
         return None
 
-    used_cols = [lhs] + x_names
-    frame = data.loc[:, used_cols]
-    arr = frame.to_numpy(dtype=float, na_value=np.nan, copy=False)
-    complete = ~pd.isna(arr).any(axis=1)
+    col_arrays = [
+        data[col].to_numpy(dtype=float, na_value=np.nan, copy=False)
+        for col in [lhs] + x_names
+    ]
+    complete = np.ones(len(data), dtype=bool)
+    for col_arr in col_arrays:
+        complete &= ~np.isnan(col_arr)
     if not bool(complete.any()):
         return None
-    arr = arr[complete]
-    index = data.index[complete]
+    all_complete = bool(complete.all())
+    if all_complete:
+        index = data.index
+    else:
+        index = data.index[complete]
 
-    y_arr = arr[:, [0]]
-    x_parts = []
+    y_values = col_arrays[0] if all_complete else col_arrays[0][complete]
+    y_arr = y_values.reshape(-1, 1)
     x_cols: List[str] = []
+    n_rows = y_arr.shape[0]
+    n_cols = int(intercept) + len(x_names)
+    X_arr = np.empty((n_rows, n_cols), dtype=float)
+    offset = 0
     if intercept:
-        x_parts.append(np.ones((arr.shape[0], 1), dtype=float))
+        X_arr[:, 0] = 1.0
         x_cols.append("Intercept")
+        offset = 1
     if x_names:
-        x_parts.append(arr[:, 1:])
+        for pos, col_arr in enumerate(col_arrays[1:], start=offset):
+            X_arr[:, pos] = col_arr if all_complete else col_arr[complete]
         x_cols.extend(x_names)
-    X_arr = np.column_stack(x_parts) if len(x_parts) > 1 else x_parts[0]
 
     if return_type == "array":
         return y_arr, X_arr
@@ -158,7 +189,7 @@ def parse_formula(formula: str) -> Dict[str, Any]:
         independent_part = re.sub(iv_pattern, '', independent_part)
     
     # Parse remaining exogenous variables
-    remaining_vars = [var.strip() for var in independent_part.split('+') if var.strip()]
+    remaining_vars = _split_additive_formula_terms(independent_part)
     result['exogenous'].extend(remaining_vars)
     
     # Check for constant term

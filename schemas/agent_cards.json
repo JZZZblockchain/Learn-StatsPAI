@@ -27566,10 +27566,7 @@
           },
           "covariates": {
             "description": "Covariate matrix, DataFrame, or column names.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
+            "type": "string"
           },
           "data": {
             "description": "pandas DataFrame containing the variables used by the estimator.",
@@ -27583,11 +27580,8 @@
               "r",
               "dr"
             ],
-            "description": "learners parameter (Sequence[str]).",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
+            "description": "learners parameter (LearnersArg).",
+            "type": "string"
           },
           "n_bootstrap": {
             "default": 200,
