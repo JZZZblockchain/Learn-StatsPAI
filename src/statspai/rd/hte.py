@@ -139,7 +139,9 @@ def rdhte(
         if col not in data.columns:
             raise ValueError(f"Column '{col}' not found in data")  # pragma: no cover
     if cluster is not None and cluster not in data.columns:
-        raise ValueError(f"Cluster column '{cluster}' not found in data")  # pragma: no cover
+        raise ValueError(  # pragma: no cover
+            f"Cluster column '{cluster}' not found in data"
+        )
 
     # --- Parse data ---
     Y_raw = data[y].values.astype(float)
@@ -224,9 +226,11 @@ def rdhte(
 
     # --- Extract CATE coefficients ---
     # Model on each side: Y = alpha + beta_1*(X-c) + ... + beta_p*(X-c)^p
-    #                        + Z'gamma + (X-c)*Z'delta_1 + ... + (X-c)^p*Z'delta_p
+    #                        + Z'gamma + (X-c)*Z'delta_1
+    #                        + ... + (X-c)^p*Z'delta_p
     # Parameter layout: [intercept, (X-c), ..., (X-c)^p, Z_1, ..., Z_dz,
-    #                    (X-c)*Z_1, ..., (X-c)*Z_dz, ..., (X-c)^p*Z_1, ..., (X-c)^p*Z_dz]
+    #                    (X-c)*Z_1, ..., (X-c)*Z_dz,
+    #                    ..., (X-c)^p*Z_1, ..., (X-c)^p*Z_dz]
     # CATE(z) = (alpha_R - alpha_L) + z'(gamma_R - gamma_L)
     # Indices: intercept = 0, gamma starts at p+1, gamma has dz entries
 
@@ -236,12 +240,20 @@ def rdhte(
 
     # Difference vector for CATE constant part and Z-coefficients
     diff_alpha = beta_R[idx_intercept] - beta_L[idx_intercept]
-    diff_gamma = beta_R[idx_gamma_start:idx_gamma_end] - beta_L[idx_gamma_start:idx_gamma_end]
+    diff_gamma = (
+        beta_R[idx_gamma_start:idx_gamma_end]
+        - beta_L[idx_gamma_start:idx_gamma_end]
+    )
 
     # Joint variance of the differences (independent sides)
     # Indices to extract: [intercept, gamma_1, ..., gamma_dz]
-    extract_idx = np.array([idx_intercept] + list(range(idx_gamma_start, idx_gamma_end)))
-    vcov_diff = vcov_R[np.ix_(extract_idx, extract_idx)] + vcov_L[np.ix_(extract_idx, extract_idx)]
+    extract_idx = np.array(
+        [idx_intercept] + list(range(idx_gamma_start, idx_gamma_end))
+    )
+    vcov_diff = (
+        vcov_R[np.ix_(extract_idx, extract_idx)]
+        + vcov_L[np.ix_(extract_idx, extract_idx)]
+    )
 
     # --- Evaluate CATE at each point ---
     cate_vals = np.empty(n_eval_actual)
@@ -283,6 +295,7 @@ def rdhte(
     het_test = _heterogeneity_test(diff_gamma, vcov_diff, dz)
 
     # --- Detail DataFrame ---
+    z_display: Any
     if dz == 1:
         z_display = eval_pts[:, 0]
     else:
@@ -340,7 +353,7 @@ def rdhte(
     )
 
     # Attach plot method
-    result.plot = lambda **kw: _rdhte_plot(result, **kw)
+    setattr(result, "plot", lambda **kw: _rdhte_plot(result, **kw))
 
     return result
 
@@ -433,7 +446,8 @@ def rdbwhte(
     # optimal bandwidth is wider. The adjustment factor comes from the
     # ratio of integrated variance constants.
     #
-    # For local linear (p=1): standard has 2 params, interacted has 2 + dz + dz = 2(1+dz)
+    # For local linear (p=1): standard has 2 params, interacted has
+    # 2 + dz + dz = 2(1+dz)
     # The variance inflation factor scales the bandwidth upward:
     # h_hte = h_base * (n_params_interacted / n_params_standard)^{1/(2p+3)}
     n_params_std = p + 1
@@ -447,8 +461,12 @@ def rdbwhte(
     h_pilot = min(h_hte * 1.5, 0.98 * np.ptp(X_c))
 
     # Pilot fit: residual variance from interacted model on each side
-    sigma2_L = _interacted_residual_var(Y[left], X_c[left], Z[left], h_pilot, p, kernel)
-    sigma2_R = _interacted_residual_var(Y[right], X_c[right], Z[right], h_pilot, p, kernel)
+    sigma2_L = _interacted_residual_var(
+        Y[left], X_c[left], Z[left], h_pilot, p, kernel
+    )
+    sigma2_R = _interacted_residual_var(
+        Y[right], X_c[right], Z[right], h_pilot, p, kernel
+    )
 
     # Curvature (second derivative of conditional mean)
     h_deriv = max(np.median(np.abs(X_c)), h_pilot) * 1.5
@@ -469,8 +487,9 @@ def rdbwhte(
     if bias_sq < 1e-12:
         h_opt = h_hte
     else:
-        h_opt = (C_K * (sigma2_L + sigma2_R) /
-                 (f_c * bias_sq * n)) ** rate_exponent
+        h_opt = (
+            C_K * (sigma2_L + sigma2_R) / (f_c * bias_sq * n)
+        ) ** rate_exponent
 
     h_opt = float(np.clip(h_opt, 0.02 * x_range, 0.98 * x_range))
 
@@ -525,6 +544,8 @@ def rdhte_lincom(
     """
     weights = np.asarray(weights, dtype=float)
     detail = result.detail
+    if detail is None:
+        raise ValueError("rdhte_lincom requires result.detail.")
     n_pts = len(detail)
 
     if len(weights) != n_pts:
@@ -548,6 +569,7 @@ def rdhte_lincom(
 
     # Reconstruct evaluation points from detail
     z_values = detail['z_value'].values
+    eval_pts: Any
     if dz == 1:
         eval_pts = np.array(z_values, dtype=float).reshape(-1, 1)
     else:
@@ -608,7 +630,6 @@ def _build_interacted_design(
     -------
     np.ndarray, shape (n, (p+1) + dz + p*dz) = (n, (p+1)(1+dz))
     """
-    n = len(X_c)
     dz = Z.shape[1] if Z.ndim > 1 else 1
     if Z.ndim == 1:
         Z = Z.reshape(-1, 1)
@@ -804,7 +825,7 @@ def _interacted_second_deriv(
 
 def _rdhte_plot(
     result: CausalResult,
-    ax=None,
+    ax: Any = None,
     ci_alpha: float = 0.2,
     cate_color: str = '#2171B5',
     ate_color: str = '#CB181D',
@@ -813,7 +834,7 @@ def _rdhte_plot(
     ylabel: str = 'CATE',
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (8, 5),
-):
+) -> Any:
     """
     Plot CATE(z) vs z with confidence bands.
 
@@ -851,6 +872,8 @@ def _rdhte_plot(
                           "Install it with: pip install matplotlib")
 
     detail = result.detail
+    if detail is None:
+        raise ValueError("rdhte plot requires result.detail.")
     mi = result.model_info
     dz = mi['n_z']
 

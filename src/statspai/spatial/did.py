@@ -47,10 +47,49 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import SummaryText, _to_jsonable
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 _EPS = 1e-12
 _EARTH_RADIUS_KM = 6371.0
+_SE_TYPES = {"cluster", "robust", "conley"}
+_CONLEY_KERNELS = {"uniform", "bartlett"}
+
+
+def _column_list(columns: Optional[Sequence[str] | str], label: str) -> list[str]:
+    """Normalize optional column-name input to a validated list."""
+    if columns is None:
+        return []
+    if isinstance(columns, str):
+        out = [columns]
+    else:
+        try:
+            out = list(columns)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{label}` must be a column name or a sequence of column names.",
+                recovery_hint=f"Pass {label}='x' or {label}=['x1', 'x2'].",
+                diagnostics={"argument": label, "type": type(columns).__name__},
+            ) from exc
+    bad = [c for c in out if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{label}` must contain non-empty column-name strings.",
+            recovery_hint=f"Check the `{label}` argument before calling spatial_did.",
+            diagnostics={"argument": label, "bad_values": [repr(c) for c in bad]},
+        )
+    return out
+
+
+def _require_column_name(name: str, label: str) -> None:
+    if not isinstance(name, str) or not name:
+        raise MethodIncompatibility(
+            f"`{label}` must be a non-empty column-name string.",
+            recovery_hint=(
+                f"Pass the name of an existing DataFrame column for `{label}`."
+            ),
+            diagnostics={"argument": label, "value": repr(name)},
+        )
 
 
 @dataclass
@@ -312,7 +351,13 @@ class SpatialDiDResult:
 
     def to_dict(self, *, detail: str = "standard", detail_head: int = 20) -> Dict[str, Any]:
         if detail not in {"minimal", "standard", "agent"}:
-            raise ValueError("detail must be 'minimal', 'standard', or 'agent'")
+            raise MethodIncompatibility(
+                "detail must be 'minimal', 'standard', or 'agent'",
+                recovery_hint=(
+                    "Use detail='minimal', detail='standard', or detail='agent'."
+                ),
+                diagnostics={"detail": detail},
+            )
         out = {
             "method": "Spatial Difference-in-Differences",
             "direct_effect": _to_jsonable(self.direct_effect),
@@ -445,7 +490,14 @@ class SpatialDiDResult:
         if kind == "exposure":
             exposure = self.detail.get("exposure_frame")
             if not isinstance(exposure, pd.DataFrame):
-                raise ValueError("Exposure diagnostics are not stored on this result.")
+                raise MethodIncompatibility(
+                    "Exposure diagnostics are not stored on this result.",
+                    recovery_hint=(
+                        "Call plot(kind='coef') or use a SpatialDiDResult "
+                        "created by spatial_did."
+                    ),
+                    diagnostics={"kind": kind},
+                )
             if ax is None:
                 fig, ax = plt.subplots(figsize=figsize)
             else:
@@ -468,7 +520,14 @@ class SpatialDiDResult:
         if kind in {"event", "event_study"}:
             es = self.detail.get("event_study")
             if not isinstance(es, pd.DataFrame) or len(es) == 0:
-                raise ValueError("No spatial event-study estimates are available.")
+                raise MethodIncompatibility(
+                    "No spatial event-study estimates are available.",
+                    recovery_hint=(
+                        "Call spatial_did(..., event_study=True) before "
+                        "plotting event-study paths."
+                    ),
+                    diagnostics={"kind": kind, "event_study": False},
+                )
             if ax is None:
                 fig, axes = plt.subplots(1, 2, figsize=kwargs.pop("figsize", (11, 4)), sharey=True)
             else:
@@ -492,7 +551,11 @@ class SpatialDiDResult:
             fig.tight_layout()
             return fig, axes
 
-        raise ValueError("kind must be 'coef', 'exposure', or 'event_study'")
+        raise MethodIncompatibility(
+            "kind must be 'coef', 'exposure', or 'event_study'",
+            recovery_hint="Use one of {'coef', 'exposure', 'event_study'}.",
+            diagnostics={"kind": kind},
+        )
 
     def __repr__(self) -> str:
         return (
@@ -505,19 +568,39 @@ class SpatialDiDResult:
 def _as_weight_matrix(W) -> Tuple[np.ndarray, Optional[Sequence[Any]]]:
     """Return a dense weights matrix and any object-level unit order."""
     id_order = getattr(W, "_id_order", None)
-    if hasattr(W, "full"):
-        W_full = W.full()
-        if isinstance(W_full, tuple):
-            W_full = W_full[0]
-        W_mat = np.asarray(W_full, dtype=float)
-    elif hasattr(W, "sparse"):
-        W_mat = np.asarray(W.sparse.toarray(), dtype=float)
-    elif hasattr(W, "toarray"):
-        W_mat = np.asarray(W.toarray(), dtype=float)
-    else:
-        W_mat = np.asarray(W, dtype=float)
+    try:
+        if hasattr(W, "full"):
+            W_full = W.full()
+            if isinstance(W_full, tuple):
+                W_full = W_full[0]
+            W_mat = np.asarray(W_full, dtype=float)
+        elif hasattr(W, "sparse"):
+            W_mat = np.asarray(W.sparse.toarray(), dtype=float)
+        elif hasattr(W, "toarray"):
+            W_mat = np.asarray(W.toarray(), dtype=float)
+        else:
+            W_mat = np.asarray(W, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "W must be convertible to a numeric spatial weights matrix",
+            recovery_hint=(
+                "Pass a square ndarray, scipy sparse matrix, or "
+                "statspai.spatial.W object."
+            ),
+            diagnostics={"type": type(W).__name__},
+        ) from exc
     if W_mat.ndim != 2 or W_mat.shape[0] != W_mat.shape[1]:
-        raise ValueError("W must be a square spatial weights matrix")
+        raise MethodIncompatibility(
+            "W must be a square spatial weights matrix",
+            recovery_hint="Use a unit-by-unit square spatial weights matrix.",
+            diagnostics={"shape": tuple(W_mat.shape)},
+        )
+    if not np.all(np.isfinite(W_mat)):
+        raise MethodIncompatibility(
+            "W must contain only finite numeric weights",
+            recovery_hint="Replace NaN or infinite weights before calling spatial_did.",
+            diagnostics={"shape": tuple(W_mat.shape)},
+        )
     return W_mat, id_order
 
 
@@ -536,12 +619,26 @@ def _resolve_unit_order(
     order = list(unit_order) if unit_order is not None else (
         list(W_id_order) if W_id_order is not None else units
     )
+    if not units:
+        raise DataInsufficient(
+            "spatial_did requires at least one observed unit",
+            recovery_hint="Provide non-empty panel data after dropping missing values.",
+            diagnostics={"unit": unit},
+        )
+    if len(set(order)) != len(order):
+        raise MethodIncompatibility(
+            "W unit order must not contain duplicate units",
+            recovery_hint="Pass each unit exactly once in `unit_order` or W.id_order.",
+            diagnostics={"duplicates": [u for u in order if order.count(u) > 1]},
+        )
     if set(order) != set(units):
         missing = sorted(set(units) - set(order), key=str)
         extra = sorted(set(order) - set(units), key=str)
-        raise ValueError(
+        raise MethodIncompatibility(
             "W unit order must match data units; "
-            f"missing={missing[:5]}, extra={extra[:5]}"
+            f"missing={missing[:5]}, extra={extra[:5]}",
+            recovery_hint="Align the rows/columns of W with the units in `data`.",
+            diagnostics={"missing": missing, "extra": extra},
         )
     return order
 
@@ -612,9 +709,22 @@ def _haversine_unit_distances(
     coords = df[[unit, lat, lon]].drop_duplicates(subset=[unit]).set_index(unit)
     coords = coords.reindex(unit_order)
     if coords[[lat, lon]].isna().any().any():
-        raise ValueError("Each unit must have non-missing latitude/longitude")
+        raise DataInsufficient(
+            "Each unit must have non-missing latitude/longitude",
+            recovery_hint=(
+                "Provide complete coordinates for every unit or use "
+                "distance_matrix."
+            ),
+            diagnostics={"lat": lat, "lon": lon},
+        )
     lat_vals = np.radians(coords[lat].to_numpy(dtype=float))
     lon_vals = np.radians(coords[lon].to_numpy(dtype=float))
+    if not np.all(np.isfinite(lat_vals)) or not np.all(np.isfinite(lon_vals)):
+        raise DataInsufficient(
+            "Each unit must have finite latitude/longitude",
+            recovery_hint="Replace NaN or infinite coordinates before using Conley SEs.",
+            diagnostics={"lat": lat, "lon": lon},
+        )
     dlat = lat_vals[:, None] - lat_vals[None, :]
     dlon = lon_vals[:, None] - lon_vals[None, :]
     a = (
@@ -626,13 +736,23 @@ def _haversine_unit_distances(
 
 
 def _distance_kernel(dist: np.ndarray, cutoff: float, kernel: str) -> np.ndarray:
+    if not np.isfinite(cutoff) or cutoff <= 0:
+        raise MethodIncompatibility(
+            "conley_cutoff must be positive and finite",
+            recovery_hint="Pass a positive distance cutoff for Conley standard errors.",
+            diagnostics={"conley_cutoff": cutoff},
+        )
     within = dist <= cutoff
     if kernel == "uniform":
         weights = within.astype(float)
     elif kernel == "bartlett":
         weights = np.maximum(1.0 - dist / cutoff, 0.0) * within
     else:
-        raise ValueError("conley_kernel must be 'uniform' or 'bartlett'")
+        raise MethodIncompatibility(
+            "conley_kernel must be 'uniform' or 'bartlett'",
+            recovery_hint="Use conley_kernel='uniform' or conley_kernel='bartlett'.",
+            diagnostics={"conley_kernel": kernel},
+        )
     np.fill_diagonal(weights, 1.0)
     return weights
 
@@ -683,15 +803,26 @@ def _vcov(
         return _hc1_vcov(X, resid)
     if se_type == "conley":
         if unit_distances is None or conley_cutoff is None:
-            raise ValueError(
+            raise MethodIncompatibility(
                 "se_type='conley' requires conley_cutoff and either "
-                "coords=(lat, lon), lat/lon, or distance_matrix"
+                "coords=(lat, lon), lat/lon, or distance_matrix",
+                recovery_hint=(
+                    "Provide conley_cutoff plus coordinates or a distance "
+                    "matrix."
+                ),
+                diagnostics={"se_type": se_type, "conley_cutoff": conley_cutoff},
             )
         return _conley_spatial_vcov(
             X, resid, df, unit, time, unit_index, unit_distances,
             conley_cutoff, conley_kernel,
         )
-    raise ValueError("se_type must be 'cluster', 'robust', or 'conley'")
+    raise MethodIncompatibility(
+        "se_type must be 'cluster', 'robust', or 'conley'",
+        recovery_hint=(
+            "Use se_type='cluster', se_type='robust', or se_type='conley'."
+        ),
+        diagnostics={"se_type": se_type},
+    )
 
 
 def _effect_stats(
@@ -729,7 +860,6 @@ def _build_spatial_lags(
     unit_order: Sequence[Any],
     out_col: str,
 ) -> pd.Series:
-    unit_index = {u: i for i, u in enumerate(unit_order)}
     wide = df.pivot(index=unit, columns=time, values=value_col).reindex(unit_order)
     time_cols = list(wide.columns)
     mat = wide.fillna(0.0).to_numpy(dtype=float)
@@ -747,7 +877,6 @@ def _event_time(
     unit: str,
     time: str,
 ) -> pd.Series:
-    times = list(pd.unique(df[time].sort_values() if hasattr(df[time], "sort_values") else df[time]))
     try:
         time_num = df[time].astype(float)
         time_lookup = dict(zip(df[time], time_num))
@@ -849,10 +978,16 @@ def _spatial_event_study(
     lead_times = [k for k in event_times if k < 0]
     pretrend: Dict[str, Any] = {}
     if lead_times:
-        direct_idx = [x_cols.index(f"_E_{k}") for k in lead_times]
-        spill_idx = [x_cols.index(f"_WE_{k}") for k in lead_times]
-        pretrend["direct"] = _wald_zero(beta[direct_idx], V[np.ix_(direct_idx, direct_idx)])
-        pretrend["spillover"] = _wald_zero(beta[spill_idx], V[np.ix_(spill_idx, spill_idx)])
+        direct_lead_idx = [x_cols.index(f"_E_{k}") for k in lead_times]
+        spill_lead_idx = [x_cols.index(f"_WE_{k}") for k in lead_times]
+        pretrend["direct"] = _wald_zero(
+            beta[direct_lead_idx],
+            V[np.ix_(direct_lead_idx, direct_lead_idx)],
+        )
+        pretrend["spillover"] = _wald_zero(
+            beta[spill_lead_idx],
+            V[np.ix_(spill_lead_idx, spill_lead_idx)],
+        )
     return pd.DataFrame(rows), pretrend
 
 
@@ -1031,27 +1166,142 @@ def spatial_did(
     >>> res.n_obs
     72
     """
-    cov = list(covariates or [])
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "`data` must be a pandas DataFrame",
+            recovery_hint="Pass a long panel DataFrame with unit and time columns.",
+            diagnostics={"type": type(data).__name__},
+        )
+    for label, col in (("y", y), ("treat", treat), ("unit", unit), ("time", time)):
+        _require_column_name(col, label)
+    cov = _column_list(covariates, "covariates")
     if coords is not None:
-        lat, lon = coords
+        try:
+            coord_list = list(coords)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "`coords` must be a pair of latitude/longitude column names",
+                recovery_hint="Pass coords=('lat', 'lon') or set lat=... and lon=....",
+                diagnostics={"coords": repr(coords)},
+            ) from exc
+        if len(coord_list) != 2:
+            raise MethodIncompatibility(
+                "`coords` must contain exactly two column names",
+                recovery_hint="Pass coords=('lat', 'lon').",
+                diagnostics={"coords": coord_list},
+            )
+        lat, lon = coord_list
+    if lat is not None:
+        _require_column_name(lat, "lat")
+    if lon is not None:
+        _require_column_name(lon, "lon")
     if cluster is None:
         cluster = unit
+    else:
+        _require_column_name(cluster, "cluster")
+    if not np.isfinite(alpha) or not 0 < alpha < 1:
+        raise MethodIncompatibility(
+            "alpha must be between 0 and 1",
+            recovery_hint="Pass a significance level such as alpha=0.05.",
+            diagnostics={"alpha": alpha},
+        )
+    if conley_cutoff is not None and (
+        not np.isfinite(conley_cutoff) or conley_cutoff <= 0
+    ):
+        raise MethodIncompatibility(
+            "conley_cutoff must be positive and finite",
+            recovery_hint="Pass a positive distance cutoff for Conley standard errors.",
+            diagnostics={"conley_cutoff": conley_cutoff},
+        )
+    if conley_kernel not in _CONLEY_KERNELS:
+        raise MethodIncompatibility(
+            "conley_kernel must be 'uniform' or 'bartlett'",
+            recovery_hint="Use conley_kernel='uniform' or conley_kernel='bartlett'.",
+            diagnostics={"conley_kernel": conley_kernel},
+        )
+    if se_type not in _SE_TYPES:
+        raise MethodIncompatibility(
+            "se_type must be 'cluster', 'robust', or 'conley'",
+            recovery_hint=(
+                "Use se_type='cluster', se_type='robust', or se_type='conley'."
+            ),
+            diagnostics={"se_type": se_type},
+        )
+    if not isinstance(normalize_W, bool):
+        raise MethodIncompatibility(
+            "normalize_W must be True or False",
+            recovery_hint="Pass a boolean for `normalize_W`.",
+            diagnostics={"normalize_W": normalize_W},
+        )
+    if event_window is not None:
+        try:
+            event_window_values = tuple(event_window)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "event_window must be a two-element tuple",
+                recovery_hint="Pass event_window=(-5, 5) or leave it as None.",
+                diagnostics={"event_window": repr(event_window)},
+            ) from exc
+        if (
+            len(event_window_values) != 2
+            or event_window_values[0] > event_window_values[1]
+        ):
+            raise MethodIncompatibility(
+                "event_window must be an ordered two-element tuple",
+                recovery_hint="Pass event_window=(min_event_time, max_event_time).",
+                diagnostics={"event_window": event_window_values},
+            )
+        event_window = (int(event_window_values[0]), int(event_window_values[1]))
     extra_keep = [cluster] if cluster not in {y, treat, unit, time, *cov} else []
     coord_keep = [c for c in (lat, lon) if c is not None and c not in {y, treat, unit, time, *cov, *extra_keep}]
     keep = [y, treat, unit, time] + cov + extra_keep + coord_keep
+    missing_cols = [c for c in keep if c not in data.columns]
+    if missing_cols:
+        raise MethodIncompatibility(
+            f"Columns not found in data: {missing_cols}",
+            recovery_hint="Check y/treat/unit/time/covariate/coordinate column names.",
+            diagnostics={"missing_columns": missing_cols},
+        )
     df = data[keep].dropna().sort_values([unit, time]).reset_index(drop=True)
+    if df.empty:
+        raise DataInsufficient(
+            "No complete observations remain after dropping missing values",
+            recovery_hint="Impute or remove missing values before calling spatial_did.",
+            diagnostics={"required_columns": keep},
+        )
+    if df[unit].nunique() < 2 or df[time].nunique() < 2:
+        raise DataInsufficient(
+            "spatial_did requires at least two units and two time periods",
+            recovery_hint="Provide panel data with variation across units and time.",
+            diagnostics={
+                "n_units": int(df[unit].nunique()),
+                "n_periods": int(df[time].nunique()),
+            },
+        )
 
     duplicated = df.duplicated([unit, time])
     if duplicated.any():
-        raise ValueError(
+        raise MethodIncompatibility(
             "spatial_did requires one row per unit-period; aggregate "
-            "repeated cross sections before calling."
+            "repeated cross sections before calling.",
+            recovery_hint=(
+                "Aggregate repeated unit-time cells or choose a "
+                "repeated-cross-section estimator."
+            ),
+            diagnostics={"duplicate_rows": int(duplicated.sum())},
         )
 
     W_mat, W_id_order = _as_weight_matrix(W)
     resolved_order = _resolve_unit_order(df, unit, W_id_order, unit_order)
     if W_mat.shape[0] != len(resolved_order):
-        raise ValueError("W dimensions must match number of unique units")
+        raise MethodIncompatibility(
+            "W dimensions must match number of unique units",
+            recovery_hint="Align W rows/columns with the data units.",
+            diagnostics={
+                "W_shape": tuple(W_mat.shape),
+                "n_units": len(resolved_order),
+            },
+        )
     W_norm = _row_normalize(W_mat) if normalize_W else W_mat.astype(float)
     unit_index = {u: i for i, u in enumerate(resolved_order)}
 
@@ -1078,7 +1328,22 @@ def spatial_did(
     if distance_matrix is not None:
         unit_distances = np.asarray(distance_matrix, dtype=float)
         if unit_distances.shape != W_mat.shape:
-            raise ValueError("distance_matrix must have the same shape as W")
+            raise MethodIncompatibility(
+                "distance_matrix must have the same shape as W",
+                recovery_hint="Pass a unit-by-unit distance matrix aligned to W.",
+                diagnostics={
+                    "distance_shape": tuple(unit_distances.shape),
+                    "W_shape": tuple(W_mat.shape),
+                },
+            )
+        if not np.all(np.isfinite(unit_distances)):
+            raise MethodIncompatibility(
+                "distance_matrix must contain only finite distances",
+                recovery_hint=(
+                    "Replace NaN or infinite distances before using Conley SEs."
+                ),
+                diagnostics={"distance_shape": tuple(unit_distances.shape)},
+            )
     elif lat is not None and lon is not None:
         unit_distances = _haversine_unit_distances(df, unit, lat, lon, resolved_order)
     if se_type == "cluster" and conley_cutoff is not None:

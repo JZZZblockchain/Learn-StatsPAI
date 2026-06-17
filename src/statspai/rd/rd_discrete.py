@@ -194,29 +194,37 @@ def rd_discrete(
     # — the Kolesár-Rothe (2018) BSD bias functional applied to a WLS
     # local-linear-on-bin-means estimator.
     bias_bound = 0.0
+    M_value: Optional[float] = None
+    K_value: Optional[float] = None
     if method == "bsd":
         M_estimated = M is None
-        if M_estimated:
+        if M is None:
             M = _estimate_M_discrete(unique_x, bin_means)
-        M = float(max(M, 1e-12))
+        M_value = float(max(M, 1e-12))
         x_l_centered = unique_x[left] - c
         x_r_centered = unique_x[right] - c
-        bias_bound = 0.5 * float(M) * (
+        bias_bound = 0.5 * M_value * (
             float(np.sum(np.abs(w_l) * x_l_centered ** 2))
             + float(np.sum(np.abs(w_r) * x_r_centered ** 2))
         )
-        smoothness_label = f"M = {M:.4g}{' (estimated)' if M_estimated else ' (supplied)'}"
+        smoothness_label = (
+            f"M = {M_value:.4g}"
+            f"{' (estimated)' if M_estimated else ' (supplied)'}"
+        )
     else:  # bm
         K_estimated = K is None
-        if K_estimated:
+        if K is None:
             K = _estimate_K_bm(unique_x, bin_means, c)
-        K = float(max(K, 1e-12))
+        K_value = float(max(K, 1e-12))
         # Worst-case bias is K · ∑ |w_j| on each side ≥ K (Kolesár-Rothe
         # 2018, eq. 5).  Use the exact weight-based bound.
-        bias_bound = float(K) * (
+        bias_bound = K_value * (
             float(np.sum(np.abs(w_l))) + float(np.sum(np.abs(w_r)))
         )
-        smoothness_label = f"K = {K:.4g}{' (estimated)' if K_estimated else ' (supplied)'}"
+        smoothness_label = (
+            f"K = {K_value:.4g}"
+            f"{' (estimated)' if K_estimated else ' (supplied)'}"
+        )
 
     # --- Honest CI (Armstrong-Kolesár FLCI critical value) -----------
     # CI half-length is cv * se where cv = cv_α(bias_bound / se) — the
@@ -248,11 +256,14 @@ def rd_discrete(
         f"  Method:                   {method.upper()}\n"
         f"  τ̂:                        {tau_hat:.4f}\n"
         f"  SE:                       {se:.4f}\n"
-        f"  Naive {int((1 - alpha) * 100)}% CI:        [{naive_ci[0]:.4f}, {naive_ci[1]:.4f}]\n"
-        f"  Honest {int((1 - alpha) * 100)}% CI:       [{honest_ci[0]:.4f}, {honest_ci[1]:.4f}]\n"
+        f"  Naive {int((1 - alpha) * 100)}% CI:        "
+        f"[{naive_ci[0]:.4f}, {naive_ci[1]:.4f}]\n"
+        f"  Honest {int((1 - alpha) * 100)}% CI:       "
+        f"[{honest_ci[0]:.4f}, {honest_ci[1]:.4f}]\n"
         f"  Smoothness:               {smoothness_label}\n"
         f"  Worst-case bias bound:    {bias_bound:.4f}\n"
-        f"  Distinct mass points:     {n_bins} ({int(left.sum())} L / {int(right.sum())} R)\n"
+        f"  Distinct mass points:     {n_bins} "
+        f"({int(left.sum())} L / {int(right.sum())} R)\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     )
 
@@ -273,8 +284,8 @@ def rd_discrete(
                 "n_right": int(right.sum()),
                 "bin_means": bin_means.tolist(),
                 "bin_n": bin_n.tolist(),
-                "M": float(M) if method == "bsd" else None,
-                "K": float(K) if method == "bm" else None,
+                "M": M_value,
+                "K": K_value,
                 "bias_bound": float(bias_bound),
                 "naive_ci": naive_ci,
                 "honest_ci": honest_ci,
@@ -288,7 +299,8 @@ def rd_discrete(
             out,
             function="sp.rd.rd_discrete",
             params={
-                "y": y, "x": x, "c": c, "M": M, "K": K, "method": method,
+                "y": y, "x": x, "c": c,
+                "M": M_value, "K": K_value, "method": method,
                 "h": h, "alpha": alpha,
             },
             data=data,

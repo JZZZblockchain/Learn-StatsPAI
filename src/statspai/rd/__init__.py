@@ -88,7 +88,10 @@ from ._aliases import (
 
 import sys as _sys
 from types import ModuleType as _ModuleType
-from typing import Any as _Any, Dict as _Dict
+from typing import Any as _Any, Callable as _Callable, Dict as _Dict
+from typing import Optional as _Optional
+
+from ..exceptions import MethodIncompatibility
 
 
 _RD_METHOD_ALIASES: _Dict[str, str] = {
@@ -164,6 +167,29 @@ _RD_METHOD_ALIASES: _Dict[str, str] = {
 }
 
 
+_RD_ALTERNATIVES = [
+    "sp.rd",
+    "sp.rdrobust",
+    "sp.rd.rd_honest",
+    "sp.rd.rd_flex",
+    "sp.rd.rd_discrete",
+]
+
+
+def _rd_error(
+    message: str,
+    *,
+    diagnostics: _Optional[_Dict[str, _Any]] = None,
+    recovery_hint: str = "Check the RD dispatcher method and options.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_RD_ALTERNATIVES,
+    )
+
+
 def _rd_rename(kwargs: _Dict[str, _Any], mapping: _Dict[str, str]) -> None:
     """Translate alias kwargs to the underlying estimator's expected
     names.  Mutates ``kwargs`` in place.  Raises if both alias and
@@ -187,7 +213,7 @@ def _rd_dispatch(
     *,
     method: str = "rdrobust",
     **kwargs: _Any,
-):
+) -> _Any:
     """Unified RD dispatcher.
 
     Parameters
@@ -220,13 +246,16 @@ def _rd_dispatch(
     key = method.lower().strip().replace("-", "_")
     canon = _RD_METHOD_ALIASES.get(key)
     if canon is None:
-        raise ValueError(
+        valid = sorted(set(_RD_METHOD_ALIASES.values()))
+        raise _rd_error(
             f"Unknown method '{method}' for sp.rd. "
-            f"Choose from: {sorted(set(_RD_METHOD_ALIASES.values()))}"
+            f"Choose from: {valid}",
+            diagnostics={"method": method, "valid_methods": valid},
+            recovery_hint="Choose one of the supported RD method strings.",
         )
 
     # ── Methods that take (data, y, x, c) directly ───────────────────
-    _passthrough_xc = {
+    _passthrough_xc: _Dict[str, _Callable[..., _Any]] = {
         "rdrobust": rdrobust,
         "honest": rd_honest,
         "randinf": rdrandinf,
@@ -248,8 +277,12 @@ def _rd_dispatch(
     if canon == "bias_aware_fuzzy":
         fuzzy = kwargs.pop("fuzzy", None)
         if fuzzy is None:
-            raise ValueError(
-                "method='bias_aware_fuzzy' requires fuzzy=<treatment column>."
+            raise _rd_error(
+                "method='bias_aware_fuzzy' requires fuzzy=<treatment column>.",
+                diagnostics={"method": method, "missing_argument": "fuzzy"},
+                recovery_hint=(
+                    "Pass fuzzy='<treatment column>' for bias-aware fuzzy RD."
+                ),
             )
         return rd_bias_aware_fuzzy(
             data=data, y=y, x=x, c=c, fuzzy=fuzzy, **kwargs,
@@ -323,7 +356,7 @@ def fit(
     *,
     method: str = "rdrobust",
     **kwargs: _Any,
-):
+) -> _Any:
     """Alias for :func:`_rd_dispatch`.  See ``sp.rd.__doc__`` for usage."""
     return _rd_dispatch(data=data, y=y, x=x, c=c, method=method, **kwargs)
 
@@ -333,7 +366,7 @@ class _CallableRDModule(_ModuleType):
     :func:`_rd_dispatch` while preserving submodule/attribute access.
     """
 
-    def __call__(self, *args: _Any, **kwargs: _Any):  # noqa: D401
+    def __call__(self, *args: _Any, **kwargs: _Any) -> _Any:  # noqa: D401
         return _rd_dispatch(*args, **kwargs)
 
 

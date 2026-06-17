@@ -41,9 +41,146 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import optimize, stats
+from scipy import optimize
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
+
+def _require_dataframe(value: Any, name: str) -> pd.DataFrame:
+    if not isinstance(value, pd.DataFrame):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas DataFrame.",
+            diagnostics={name: value.__class__.__name__},
+        )
+    if value.empty:
+        raise DataInsufficient(
+            f"`{name}` is empty.",
+            diagnostics={name: len(value)},
+        )
+    return value
+
+
+def _require_column_name(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty column name.",
+            diagnostics={name: repr(value)},
+        )
+    return value
+
+
+def _require_string_option(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"`{name}` must be a string option.",
+            diagnostics={name: repr(value)},
+        )
+    out = value.lower().strip()
+    if not out:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty string option.",
+            diagnostics={name: repr(value)},
+        )
+    return out
+
+
+def _require_open_unit_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        )
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be in (0, 1).",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_int_at_least(value: Any, name: str, minimum: int) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    try:
+        out = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        ) from exc
+    if out != value or out < minimum:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    return out
+
+
+def _coerce_column_list(value: Any, name: str, *, allow_empty: bool = False) -> List[str]:
+    if isinstance(value, str):
+        out = [value]
+    else:
+        try:
+            out = list(value)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{name}` must be a column name or list of column names.",
+                diagnostics={name: repr(value)},
+            ) from exc
+    if not allow_empty and not out:
+        raise MethodIncompatibility(
+            f"`{name}` must contain at least one column name.",
+            diagnostics={name: out},
+        )
+    bad = [c for c in out if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{name}` must contain only non-empty string column names.",
+            diagnostics={name: out, "invalid_columns": bad},
+        )
+    return out
+
+
+def _coerce_optional_column_list(value: Any, name: str) -> List[str]:
+    if value is None:
+        return []
+    return _coerce_column_list(value, name, allow_empty=True)
+
+
+def _require_period_pair(value: Any, name: str) -> Tuple[Any, Any]:
+    try:
+        out = tuple(value)
+    except TypeError as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a two-element period pair.",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if len(out) != 2:
+        raise MethodIncompatibility(
+            f"`{name}` must be a two-element period pair.",
+            diagnostics={name: repr(value)},
+        )
+    return out
+
+
+def _raise_missing_columns(data: pd.DataFrame, columns: List[str], context: str) -> None:
+    missing = [col for col in columns if col not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"{context} missing columns: {missing}",
+            diagnostics={"missing_columns": missing, "context": context},
+        )
 
 # ====================================================================== #
 #  Kalman filter / smoother for local-level (+ optional linear-trend)
@@ -545,58 +682,89 @@ def causal_impact(
     # ------------------------------------------------------------------
     # Input validation
     # ------------------------------------------------------------------
-    if not isinstance(data, pd.DataFrame):
-        raise TypeError("`data` must be a pandas DataFrame.")
-    if data.empty:
-        raise ValueError("`data` is empty.")
+    data = _require_dataframe(data, "data")
+    pre_period = _require_period_pair(pre_period, "pre_period")
+    post_period = _require_period_pair(post_period, "post_period")
+    model = _require_string_option(model, "model")
+    n_simulations = _require_int_at_least(n_simulations, "n_simulations", 2)
+    alpha = _require_open_unit_float(alpha, "alpha")
 
     use_trend = model == "local_linear_trend"
     if model not in ("local_level", "local_linear_trend"):
-        raise ValueError(
-            f"Unknown model '{model}'. Choose 'local_level' or 'local_linear_trend'."
+        raise MethodIncompatibility(
+            f"Unknown model '{model}'. Choose 'local_level' or 'local_linear_trend'.",
+            diagnostics={"model": model},
         )
 
     # Resolve outcome / covariates
     if outcome is None:
         outcome = data.columns[0]
+    else:
+        outcome = _require_column_name(outcome, "outcome")
     if covariates is None:
         covariates = [c for c in data.columns if c != outcome]
+    else:
+        covariates = _coerce_optional_column_list(covariates, "covariates")
 
-    if outcome not in data.columns:
-        raise ValueError(f"Outcome column '{outcome}' not found in data.")
-    for c in covariates:
-        if c not in data.columns:
-            raise ValueError(f"Covariate column '{c}' not found in data.")
+    _raise_missing_columns(data, [outcome], "causal_impact outcome")
+    _raise_missing_columns(data, list(covariates), "causal_impact covariates")
 
     # ------------------------------------------------------------------
     # Period slicing
     # ------------------------------------------------------------------
     idx = data.index
-    pre_mask = (idx >= pre_period[0]) & (idx <= pre_period[1])
-    post_mask = (idx >= post_period[0]) & (idx <= post_period[1])
+    try:
+        pre_mask = (idx >= pre_period[0]) & (idx <= pre_period[1])
+        post_mask = (idx >= post_period[0]) & (idx <= post_period[1])
+    except TypeError as exc:
+        raise MethodIncompatibility(
+            "pre_period and post_period values must be comparable with the index.",
+            diagnostics={"pre_period": pre_period, "post_period": post_period},
+        ) from exc
 
     if pre_mask.sum() == 0:
-        raise ValueError("No observations found in the pre-period.")
+        raise DataInsufficient(
+            "No observations found in the pre-period.",
+            diagnostics={"pre_period": pre_period},
+        )
     if post_mask.sum() == 0:
-        raise ValueError("No observations found in the post-period.")
+        raise DataInsufficient(
+            "No observations found in the post-period.",
+            diagnostics={"post_period": post_period},
+        )
 
     # Ensure pre ends before post starts
     pre_end_idx = idx[pre_mask][-1]
     post_start_idx = idx[post_mask][0]
     if pre_end_idx >= post_start_idx:
-        raise ValueError(
+        raise MethodIncompatibility(
             "Pre-period must end before post-period starts. "
-            f"Got pre_end={pre_end_idx}, post_start={post_start_idx}."
+            f"Got pre_end={pre_end_idx}, post_start={post_start_idx}.",
+            diagnostics={"pre_end": pre_end_idx, "post_start": post_start_idx},
         )
 
     y_pre = data.loc[pre_mask, outcome].values.astype(float)
     y_post = data.loc[post_mask, outcome].values.astype(float)
-    X_pre = data.loc[pre_mask, covariates].values.astype(float) if covariates else np.zeros((len(y_pre), 0))
-    X_post = data.loc[post_mask, covariates].values.astype(float) if covariates else np.zeros((len(y_post), 0))
+    if np.any(np.isinf(y_pre)) or np.any(np.isinf(y_post)):
+        raise DataInsufficient(
+            "Outcome column contains non-finite values.",
+            diagnostics={"outcome": outcome},
+        )
+    if covariates:
+        X_pre = data.loc[pre_mask, covariates].values.astype(float)
+        X_post = data.loc[post_mask, covariates].values.astype(float)
+    else:
+        X_pre = np.zeros((len(y_pre), 0))
+        X_post = np.zeros((len(y_post), 0))
 
     # Handle missing covariates: fill NaN with column means from pre-period
     if X_pre.shape[1] > 0:
         col_means = np.nanmean(X_pre, axis=0)
+        if np.any(~np.isfinite(col_means)):
+            raise DataInsufficient(
+                "Covariates must have observed pre-period values.",
+                diagnostics={"covariates": list(covariates)},
+            )
         for k in range(X_pre.shape[1]):
             nan_mask_pre = np.isnan(X_pre[:, k])
             X_pre[nan_mask_pre, k] = col_means[k]
@@ -822,13 +990,18 @@ def bsts_synth(
     # ------------------------------------------------------------------
     # Input validation
     # ------------------------------------------------------------------
-    if not isinstance(data, pd.DataFrame):
-        raise TypeError("`data` must be a pandas DataFrame.")
-    for col in [outcome, unit, time]:
-        if col not in data.columns:
-            raise ValueError(f"Column '{col}' not found in data.")
+    data = _require_dataframe(data, "data")
+    outcome = _require_column_name(outcome, "outcome")
+    unit = _require_column_name(unit, "unit")
+    time = _require_column_name(time, "time")
+    covariates = _coerce_optional_column_list(covariates, "covariates")
+    _raise_missing_columns(data, [outcome, unit, time], "bsts_synth")
     if treated_unit not in data[unit].values:
-        raise ValueError(f"Treated unit '{treated_unit}' not found in '{unit}' column.")
+        raise DataInsufficient(
+            f"Treated unit '{treated_unit}' not found in '{unit}' column.",
+            recovery_hint="Check treated_unit or include the treated unit in data.",
+            diagnostics={"treated_unit": treated_unit, "unit": unit},
+        )
 
     # ------------------------------------------------------------------
     # Reshape: long → wide
@@ -837,15 +1010,19 @@ def bsts_synth(
     panel = panel.sort_index()
 
     if treated_unit not in panel.columns:
-        raise ValueError(  # pragma: no cover
-            f"Treated unit '{treated_unit}' has no outcome data after pivoting."
+        raise DataInsufficient(  # pragma: no cover
+            f"Treated unit '{treated_unit}' has no outcome data after pivoting.",
+            diagnostics={"treated_unit": treated_unit},
         )
 
     all_times = panel.index
     donors = [u for u in panel.columns if u != treated_unit]
 
     if len(donors) == 0:
-        raise ValueError("No control/donor units found.")
+        raise DataInsufficient(
+            "No control/donor units found.",
+            recovery_hint="Include at least one untreated donor unit.",
+        )
 
     # Drop donors with too many missing values in pre-period
     pre_times = all_times[all_times < treatment_time]
@@ -855,8 +1032,10 @@ def bsts_synth(
         if missing_frac < 0.5:
             keep_donors.append(d)
     if len(keep_donors) == 0:
-        raise ValueError(
-            "All donor units have >50% missing data in the pre-period."
+        raise DataInsufficient(
+            "All donor units have >50% missing data in the pre-period.",
+            recovery_hint="Add donor units with observed pre-treatment outcomes.",
+            diagnostics={"n_donors": len(donors)},
         )
     donors = keep_donors
 
@@ -871,7 +1050,13 @@ def bsts_synth(
     if covariates:
         for cov in covariates:
             if cov not in data.columns:
-                raise ValueError(f"Covariate column '{cov}' not found in data.")
+                raise MethodIncompatibility(
+                    f"Covariate column '{cov}' not found in data.",
+                    diagnostics={
+                        "missing_column": cov,
+                        "available_columns": list(data.columns),
+                    },
+                )
             cov_panel = data.pivot_table(
                 index=time, columns=unit, values=cov, aggfunc="mean",
             ).sort_index()
@@ -892,7 +1077,11 @@ def bsts_synth(
     # Pre-period ends at the last time strictly before treatment
     pre_end_candidates = all_times[all_times < treatment_time]
     if len(pre_end_candidates) == 0:
-        raise ValueError("No pre-treatment periods found.")  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
+            "No pre-treatment periods found.",
+            recovery_hint="Choose a later treatment_time or add pre-period rows.",
+            diagnostics={"treatment_time": treatment_time},
+        )
     pre_end = pre_end_candidates[-1]
 
     post_start = treatment_time

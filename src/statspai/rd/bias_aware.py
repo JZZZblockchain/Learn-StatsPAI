@@ -38,12 +38,12 @@ NBER Working Paper No. 33972. doi:10.3386/w33972. [@kaliski2025power]
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional
 import warnings
 
 import numpy as np
 import pandas as pd
-from scipy import stats, optimize
+from scipy import stats
 
 from ..core.results import CausalResult
 from ._core import _kernel_fn, _local_poly_wls
@@ -162,9 +162,9 @@ def rd_bias_aware_fuzzy(
     # --- M estimation -------------------------------------------------
     M_y_estimated = M_y is None
     M_d_estimated = M_d is None
-    if M_y_estimated:
+    if M_y is None:
         M_y = _estimate_M(Y, X, 0.0, h, kernel)
-    if M_d_estimated:
+    if M_d is None:
         M_d = _estimate_M(D, X, 0.0, h, kernel)
     M_y = max(float(M_y), 1e-12)
     M_d = max(float(M_d), 1e-12)
@@ -297,12 +297,16 @@ def rd_bias_aware_fuzzy(
         f"  Δ̂_D (denominator jump):   {delta_d:.4f}\n"
         f"  First-stage F:            {first_stage_F:.2f}\n"
         f"\n"
-        f"  Naive {int((1 - alpha) * 100)}% CI:       [{naive_ci[0]:.4f}, {naive_ci[1]:.4f}]\n"
-        f"  Bias-aware {int((1 - alpha) * 100)}% CI:  [{ci_lo:.4f}, {ci_hi:.4f}]"
+        f"  Naive {int((1 - alpha) * 100)}% CI:       "
+        f"[{naive_ci[0]:.4f}, {naive_ci[1]:.4f}]\n"
+        f"  Bias-aware {int((1 - alpha) * 100)}% CI:  "
+        f"[{ci_lo:.4f}, {ci_hi:.4f}]"
         f"{' (non-convex)' if non_convex else ''}\n"
         f"\n"
-        f"  M_y:                      {M_y:.4g} {'(estimated)' if M_y_estimated else '(supplied)'}\n"
-        f"  M_d:                      {M_d:.4g} {'(estimated)' if M_d_estimated else '(supplied)'}\n"
+        f"  M_y:                      {M_y:.4g} "
+        f"{'(estimated)' if M_y_estimated else '(supplied)'}\n"
+        f"  M_d:                      {M_d:.4g} "
+        f"{'(estimated)' if M_d_estimated else '(supplied)'}\n"
         f"  Bandwidth h:              {h:.4f}\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     )

@@ -73,7 +73,10 @@ CausalResult._CITATIONS['rd_multi_extrapolate'] = (
 # Internal helpers
 # ======================================================================
 
-def _ols_fit(X: np.ndarray, y: np.ndarray):
+def _ols_fit(
+    X: np.ndarray,
+    y: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     OLS regression via QR decomposition with fallback to lstsq.
 
@@ -106,7 +109,11 @@ def _add_intercept(Z: np.ndarray) -> np.ndarray:
     return np.hstack([ones, Z])
 
 
-def _partial_f_test(y: np.ndarray, Z: np.ndarray, x_running: np.ndarray):
+def _partial_f_test(
+    y: np.ndarray,
+    Z: np.ndarray,
+    x_running: np.ndarray,
+) -> Tuple[float, float]:
     """
     Partial F-test for conditional independence: test whether the running
     variable X adds predictive power for Y beyond covariates Z.
@@ -133,7 +140,11 @@ def _partial_f_test(y: np.ndarray, Z: np.ndarray, x_running: np.ndarray):
     return float(f_stat), float(p_value)
 
 
-def _propensity_score(Z: np.ndarray, D: np.ndarray, max_iter: int = 50):
+def _propensity_score(
+    Z: np.ndarray,
+    D: np.ndarray,
+    max_iter: int = 50,
+) -> np.ndarray:
     """
     Logistic regression P(D=1|Z) via iteratively reweighted least squares.
 
@@ -163,7 +174,7 @@ def _propensity_score(Z: np.ndarray, D: np.ndarray, max_iter: int = 50):
     eta = X @ beta
     eta = np.clip(eta, -20, 20)
     ps = 1.0 / (1.0 + np.exp(-eta))
-    return np.clip(ps, 0.01, 0.99)
+    return np.asarray(np.clip(ps, 0.01, 0.99), dtype=float)
 
 
 def _bootstrap_cate(
@@ -174,7 +185,7 @@ def _bootstrap_cate(
     eval_Z: np.ndarray,
     method: str,
     n_boot: int = 200,
-    rng: np.random.Generator = None,
+    rng: Optional[np.random.Generator] = None,
 ) -> np.ndarray:
     """
     Bootstrap standard errors for CATE at eval_Z points.
@@ -190,7 +201,7 @@ def _bootstrap_cate(
 
     for b in range(n_boot):
         idx = rng.integers(0, n, size=n)
-        y_b, Z_b, x_b, D_b = y[idx], Z[idx], x_running[idx], D[idx]
+        y_b, Z_b, D_b = y[idx], Z[idx], D[idx]
 
         treated = D_b == 1
         control = D_b == 0
@@ -229,7 +240,7 @@ def _cate_ols(
     X_eval = _add_intercept(eval_Z)
     y1_hat = X_eval @ beta_t
     y0_hat = X_eval @ beta_c
-    return y1_hat - y0_hat
+    return np.asarray(y1_hat - y0_hat, dtype=float)
 
 
 def _cate_ipw(
@@ -651,7 +662,9 @@ def rd_multi_extrapolate(
     True
     """
     if len(cutoffs) < 2:
-        raise ValueError("At least 2 cutoffs are required for multi-cutoff extrapolation.")
+        raise ValueError(
+            "At least 2 cutoffs are required for multi-cutoff extrapolation."
+        )
     if method not in ('linear', 'polynomial', 'weighted'):
         raise ValueError(
             f"method must be 'linear', 'polynomial', or 'weighted', got '{method}'"
@@ -825,7 +838,7 @@ def rd_external_validity(
     covs: Optional[List[str]] = None,
     target_x_range: Optional[tuple] = None,
     alpha: float = 0.05,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Diagnostic assessment of RD external validity.
 
@@ -1016,7 +1029,11 @@ def rd_external_validity(
     }
 
 
-def _build_recommendation(ci_test, overlap, alpha):
+def _build_recommendation(
+    ci_test: Optional[Dict[str, Any]],
+    overlap: Optional[Dict[str, Any]],
+    alpha: float,
+) -> str:
     """Build a human-readable recommendation string."""
     lines = []
 
@@ -1099,15 +1116,15 @@ def _extrapolation_plot(
     result: CausalResult,
     local_estimate: Optional[float] = None,
     cutoffs: Optional[List[float]] = None,
-    ax=None,
-    figsize: tuple = (10, 7),
+    ax: Any = None,
+    figsize: Tuple[int, int] = (10, 7),
     title: Optional[str] = None,
     xlabel: str = 'Running Variable (X)',
     ylabel: str = 'Treatment Effect',
     show_ci: bool = True,
     ci_alpha: float = 0.15,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """
     Plot extrapolated CATE(x) curve with confidence bands.
 
@@ -1156,7 +1173,9 @@ def _extrapolation_plot(
     elif 'cate_extrapolated' in detail.columns:
         cate_col = 'cate_extrapolated'
     else:
-        raise ValueError("Cannot find CATE column in detail DataFrame.")  # pragma: no cover
+        raise ValueError(
+            "Cannot find CATE column in detail DataFrame."
+        )  # pragma: no cover
 
     x_vals = detail['x_value'].values
     cate_vals = detail[cate_col].values

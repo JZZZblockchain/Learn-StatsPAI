@@ -22,14 +22,12 @@ Lee, L.-F. & Yu, J. (2010). "Estimation of spatial autoregressive panel
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 from scipy.optimize import minimize_scalar
 
-from ..weights.core import W as _W
 from ..models.ml import _coerce_W
 
 
@@ -50,7 +48,7 @@ def _balanced_panel_matrix(
         raise ValueError(
             "Panel is unbalanced — every (entity, time) cell must be present."
         )
-    return pivot.to_numpy(dtype=float)
+    return np.asarray(pivot.to_numpy(dtype=float), dtype=float)
 
 
 def _within_transform(arr: np.ndarray, effects: EffectKind) -> np.ndarray:
@@ -59,11 +57,14 @@ def _within_transform(arr: np.ndarray, effects: EffectKind) -> np.ndarray:
     Two-way: y_tilde = y_it - y_bar_i - y_bar_t + y_bar  (all from original arr).
     """
     if effects == "twoways":
-        return (arr
-                - arr.mean(axis=1, keepdims=True)
-                - arr.mean(axis=0, keepdims=True)
-                + arr.mean())
-    return arr - arr.mean(axis=1, keepdims=True)
+        return np.asarray(
+            arr
+            - arr.mean(axis=1, keepdims=True)
+            - arr.mean(axis=0, keepdims=True)
+            + arr.mean(),
+            dtype=float,
+        )
+    return np.asarray(arr - arr.mean(axis=1, keepdims=True), dtype=float)
 
 
 # --------------------------------------------------------------------- #
@@ -116,7 +117,7 @@ def spatial_panel(
     formula: str,
     entity: str,
     time: str,
-    W,
+    W: Any,
     model: ModelKind = "sar",
     effects: EffectKind = "fe",
     row_normalize: bool = True,
@@ -173,7 +174,8 @@ def spatial_panel(
 
     entities = sorted(data[entity].unique())
     times = sorted(data[time].unique())
-    N = len(entities); T = len(times)
+    N = len(entities)
+    T = len(times)
 
     # (N, T) matrices for dependent + each independent
     Y = _balanced_panel_matrix(data, entity, time, dep)
@@ -188,7 +190,6 @@ def spatial_panel(
     X_w = [_within_transform(x, effects) for x in X_mats]
 
     # Stack to NT vectors / matrix
-    y_vec = Y_w.flatten(order="F")               # time-major (t=0 first, then t=1, …)
     X_stack = np.column_stack([x.flatten(order="F") for x in X_w])
 
     if model == "sdm":
@@ -209,7 +210,7 @@ def spatial_panel(
         """Apply (I - θ W) to each period column of an (N, T) matrix."""
         # target is (N, T); premultiply by (I - θ W)
         out = target - rho_or_lam * (W_dense @ target)
-        return out
+        return np.asarray(out, dtype=float)
 
     if model in ("sar", "sdm"):
         # y_star = (I - ρ W) Y_w  (column-wise); β from OLS on X_w
@@ -224,8 +225,12 @@ def spatial_panel(
                 return 1e20
             # log |I - ρ W| = sum log|1 - ρ λ_i|; panel brings factor T
             ldet = T * float(np.sum(np.log(np.abs(1 - rho * eigvals))))
-            return -(-N * T / 2 * np.log(2 * np.pi * sigma2)
-                     + ldet - (e @ e) / (2 * sigma2))
+            return float(
+                -(
+                    -N * T / 2 * np.log(2 * np.pi * sigma2)
+                    + ldet - (e @ e) / (2 * sigma2)
+                )
+            )
 
         opt = minimize_scalar(neg_ll, bounds=(lo, hi), method="bounded")
         rho_hat = float(opt.x)
@@ -238,13 +243,15 @@ def spatial_panel(
         se_beta = np.sqrt(np.diag(sigma2 * XtX_inv))
         # simple numerical SE for ρ
         h = 1e-4
-        d2 = (neg_ll(rho_hat + h) - 2 * neg_ll(rho_hat) + neg_ll(rho_hat - h)) / (h * h)
+        d2 = (
+            neg_ll(rho_hat + h) - 2 * neg_ll(rho_hat) + neg_ll(rho_hat - h)
+        ) / (h * h)
         se_rho = float(1.0 / np.sqrt(max(d2, 1e-10)))
         spatial_name = "rho"
         spatial_value = rho_hat
 
     else:  # SEM-FE: (I - λW) premultiplied to both sides
-        def neg_ll(lam: float) -> float:
+        def neg_ll_sem(lam: float) -> float:
             Y_star = _apply_spatial(lam, Y_w)
             y_star_vec = Y_star.flatten(order="F")
             X_star_stack = np.column_stack(
@@ -257,10 +264,14 @@ def spatial_panel(
             if sigma2 <= 0:
                 return 1e20
             ldet = T * float(np.sum(np.log(np.abs(1 - lam * eigvals))))
-            return -(-N * T / 2 * np.log(2 * np.pi * sigma2)
-                     + ldet - (e @ e) / (2 * sigma2))
+            return float(
+                -(
+                    -N * T / 2 * np.log(2 * np.pi * sigma2)
+                    + ldet - (e @ e) / (2 * sigma2)
+                )
+            )
 
-        opt = minimize_scalar(neg_ll, bounds=(lo, hi), method="bounded")
+        opt = minimize_scalar(neg_ll_sem, bounds=(lo, hi), method="bounded")
         lam_hat = float(opt.x)
         Y_star = _apply_spatial(lam_hat, Y_w)
         y_star_vec = Y_star.flatten(order="F")
@@ -273,7 +284,11 @@ def spatial_panel(
         sigma2 = float(e @ e) / (N * T)
         se_beta = np.sqrt(np.diag(sigma2 * XtX_inv))
         h = 1e-4
-        d2 = (neg_ll(lam_hat + h) - 2 * neg_ll(lam_hat) + neg_ll(lam_hat - h)) / (h * h)
+        d2 = (
+            neg_ll_sem(lam_hat + h)
+            - 2 * neg_ll_sem(lam_hat)
+            + neg_ll_sem(lam_hat - h)
+        ) / (h * h)
         se_rho = float(1.0 / np.sqrt(max(d2, 1e-10)))
         spatial_name = "lambda"
         spatial_value = lam_hat

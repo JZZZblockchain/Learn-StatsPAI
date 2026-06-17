@@ -8,6 +8,9 @@ methodology document uses, so that ``sp.geographic_rd(...)`` and
 
 from __future__ import annotations
 
+from typing import Any
+
+from ..core.results import CausalResult
 from .rdmulti import rdmc, rdms, RDMultiResult
 from .rd2d import rd2d
 from .multi_score import rd_multi_score, MultiScoreRDResult
@@ -21,7 +24,7 @@ __all__ = [
 ]
 
 
-def multi_cutoff_rd(*args, **kwargs):
+def multi_cutoff_rd(*args: Any, **kwargs: Any) -> RDMultiResult:
     """User-friendly alias for :func:`sp.rdmc` (multi-cutoff RD).
 
     See :func:`statspai.rd.rdmulti.rdmc` for full documentation.
@@ -49,7 +52,7 @@ def multi_cutoff_rd(*args, **kwargs):
     return rdmc(*args, **kwargs)
 
 
-def geographic_rd(*args, **kwargs):
+def geographic_rd(*args: Any, **kwargs: Any) -> CausalResult:
     """User-friendly alias for :func:`sp.rdms` (multi-score RD).
 
     Geographic RD is the most common multi-score special case: the running
@@ -83,7 +86,7 @@ def geographic_rd(*args, **kwargs):
     return rdms(*args, **kwargs)
 
 
-def boundary_rd(*args, **kwargs):
+def boundary_rd(*args: Any, **kwargs: Any) -> CausalResult:
     """User-friendly alias for :func:`sp.rd2d` (boundary discontinuity design).
 
     Cattaneo, Titiunik & Yu (2025) boundary discontinuity design for 2D
@@ -116,7 +119,7 @@ def boundary_rd(*args, **kwargs):
     return rd2d(*args, **kwargs)
 
 
-def multi_score_rd(*args, **kwargs):
+def multi_score_rd(*args: Any, **kwargs: Any) -> MultiScoreRDResult:
     """User-friendly alias for :func:`sp.rd_multi_score`.
 
     Multi-score RD when eligibility depends on more than one discontinuous

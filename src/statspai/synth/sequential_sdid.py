@@ -20,7 +20,7 @@ aggregated ATT.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -92,7 +92,7 @@ def sequential_sdid(
     time: str,
     cohort: str,
     never_treated_value: Any = 0,
-    se_method: str = "placebo",
+    se_method: Literal["placebo", "bootstrap", "jackknife"] = "placebo",
     n_reps: int = 200,
     cohort_weights: str = "size",
     alpha: float = 0.05,
@@ -152,7 +152,8 @@ def sequential_sdid(
     References
     ----------
     Arkhangelsky, D. & Samkov, A. (arXiv:2404.00164, 2024).
-    Arkhangelsky, Athey, Hirshberg, Imbens & Wager (2021). AER 111(12). [@arkhangelsky2024sequential]
+    Arkhangelsky, Athey, Hirshberg, Imbens & Wager (2021).
+    AER 111(12). [@arkhangelsky2024sequential]
 
     Examples
     --------
@@ -235,13 +236,18 @@ def sequential_sdid(
             continue  # pragma: no cover
         # Need at least 2 pre-periods for SDID time weights.
         pre_times = sub.loc[sub[time] < g, time].unique()
-        post_times = sub.loc[(sub[time] >= g) & (sub[time] <= t_max_g), time].unique()
+        post_times = sub.loc[
+            (sub[time] >= g) & (sub[time] <= t_max_g), time
+        ].unique()
         if pre_times.size < 2 or post_times.size < 1:
             per_cohort_rows.append({
                 "cohort": g, "treatment_period": g,
                 "att": np.nan, "se": np.nan,
                 "n_treated": len(treated_units),
-                "n_donors": int((sub[cohort] != g).sum() / max(len(sub[time].unique()), 1)),
+                "n_donors": int(
+                    (sub[cohort] != g).sum()
+                    / max(len(sub[time].unique()), 1)
+                ),
                 "note": "insufficient pre/post periods",
             })
             continue  # pragma: no cover
@@ -264,7 +270,7 @@ def sequential_sdid(
                 ),
                 "note": "",
             })
-        except Exception as exc:  # noqa: BLE001 — surface but keep going  # pragma: no cover
+        except Exception as exc:  # noqa: BLE001  # pragma: no cover
             per_cohort_rows.append({
                 "cohort": g, "treatment_period": g,
                 "att": np.nan, "se": np.nan,

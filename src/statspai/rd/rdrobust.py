@@ -25,6 +25,145 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import ConvergenceFailure, DataInsufficient, MethodIncompatibility
+
+
+def _require_dataframe(value: Any, name: str) -> pd.DataFrame:
+    if not isinstance(value, pd.DataFrame):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas DataFrame.",
+            diagnostics={name: value.__class__.__name__},
+        )
+    if value.empty:
+        raise DataInsufficient(f"`{name}` is empty.", diagnostics={name: len(value)})
+    return value
+
+
+def _require_column_name(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty column name.",
+            diagnostics={name: repr(value)},
+        )
+    return value
+
+
+def _require_string_option(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"`{name}` must be a string option.",
+            diagnostics={name: repr(value)},
+        )
+    out = value.lower().strip()
+    if not out:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty string option.",
+            diagnostics={name: repr(value)},
+        )
+    return out
+
+
+def _require_finite_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be a finite number.",
+            diagnostics={name: repr(value)},
+        )
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a finite number.",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out):
+        raise MethodIncompatibility(
+            f"`{name}` must be finite.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_open_unit_float(value: Any, name: str) -> float:
+    out = _require_finite_float(value, name)
+    if not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be in (0, 1).",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_nonnegative_float(value: Any, name: str) -> float:
+    out = _require_finite_float(value, name)
+    if out < 0.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be non-negative.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_positive_float(value: Any, name: str) -> float:
+    out = _require_finite_float(value, name)
+    if out <= 0.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be strictly positive.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_int_at_least(value: Any, name: str, minimum: int) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    try:
+        out = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        ) from exc
+    if out != value or out < minimum:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    return out
+
+
+def _coerce_column_list(value: Any, name: str, *, allow_empty: bool = False) -> List[str]:
+    if isinstance(value, str):
+        out = [value]
+    else:
+        try:
+            out = list(value)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{name}` must be a column name or list of column names.",
+                diagnostics={name: repr(value)},
+            ) from exc
+    if not allow_empty and not out:
+        raise MethodIncompatibility(
+            f"`{name}` must contain at least one column name.",
+            diagnostics={name: out},
+        )
+    bad = [c for c in out if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{name}` must contain only non-empty string column names.",
+            diagnostics={name: out, "invalid_columns": bad},
+        )
+    return out
+
+
+def _coerce_optional_column_list(value: Any, name: str) -> Optional[List[str]]:
+    if value is None:
+        return None
+    return _coerce_column_list(value, name, allow_empty=True)
 
 
 # ======================================================================
@@ -201,13 +340,50 @@ def rdrobust(
         # ``pip install statspai[rd-cct]``.  Added 2026-05-06.
         "cct",
     }
+    data = _require_dataframe(data, "data")
+    y = _require_column_name(y, "y")
+    x = _require_column_name(x, "x")
+    c = _require_finite_float(c, "c")
+    if fuzzy is not None:
+        fuzzy = _require_column_name(fuzzy, "fuzzy")
+    covs = _coerce_optional_column_list(covs, "covs")
+    if cluster is not None:
+        cluster = _require_column_name(cluster, "cluster")
+        if cluster not in data.columns:
+            raise MethodIncompatibility(
+                f"Cluster column '{cluster}' not found in data.",
+                diagnostics={
+                    "missing_column": cluster,
+                    "available_columns": list(data.columns),
+                },
+            )
+    kernel = _require_string_option(kernel, "kernel")
+    bwselect = _require_string_option(bwselect, "bwselect")
+    deriv = _require_int_at_least(deriv, "deriv", 0)
+    p = _require_int_at_least(p, "p", 0)
+    if q is not None:
+        q = _require_int_at_least(q, "q", 0)
+    donut = _require_nonnegative_float(donut, "donut")
+    alpha = _require_open_unit_float(alpha, "alpha")
+    n_boot = _require_int_at_least(n_boot, "n_boot", 0)
+    if h is not None:
+        h = _require_positive_float(h, "h")
+    if b is not None:
+        b = _require_positive_float(b, "b")
+    if rho is not None:
+        rho = _require_positive_float(rho, "rho")
+
     if kernel not in ("triangular", "uniform", "epanechnikov"):
-        raise ValueError(
+        raise MethodIncompatibility(
             f"kernel must be 'triangular', 'uniform', or "
-            f"'epanechnikov', got '{kernel}'"
+            f"'epanechnikov', got '{kernel}'",
+            diagnostics={"kernel": kernel},
         )
     if bwselect not in _VALID_BW:
-        raise ValueError(f"bwselect must be one of {_VALID_BW}, got '{bwselect}'")
+        raise MethodIncompatibility(
+            f"bwselect must be one of {_VALID_BW}, got '{bwselect}'",
+            diagnostics={"bwselect": bwselect},
+        )
 
     # ── R-parity delegation: bwselect='cct' ─────────────────────────────
     # Route the entire call through the official ``rdrobust`` Python
@@ -237,17 +413,19 @@ def rdrobust(
             donut=donut,
             alpha=alpha,
         )
-    if deriv < 0:
-        raise ValueError(f"deriv must be non-negative, got {deriv}")
-    if donut < 0:
-        raise ValueError(f"donut must be non-negative, got {donut}")
     if bootstrap is not None and bootstrap not in ("rbc",):
-        raise ValueError(
+        bootstrap = _require_string_option(bootstrap, "bootstrap")
+    if bootstrap is not None and bootstrap not in ("rbc",):
+        raise MethodIncompatibility(
             f"bootstrap must be None or 'rbc', got {bootstrap!r}. "
-            "See Cavaliere, Gonçalves, Nielsen & Zanelli (arXiv:2512.00566, 2025)."
+            "See Cavaliere, Gonçalves, Nielsen & Zanelli (arXiv:2512.00566, 2025).",
+            diagnostics={"bootstrap": bootstrap},
         )
     if bootstrap is not None and n_boot < 99:
-        raise ValueError("rbc bootstrap needs n_boot >= 99 (recommended 999).")
+        raise MethodIncompatibility(
+            "rbc bootstrap needs n_boot >= 99 (recommended 999).",
+            diagnostics={"n_boot": n_boot},
+        )
     # For RKD (deriv >= 1), polynomial order must be at least deriv + 1
     if deriv > 0 and p < deriv + 1:
         p = deriv + 1
@@ -255,11 +433,10 @@ def rdrobust(
         q = p + 1
 
     if rho is not None and b is not None:
-        raise ValueError(
-            "Pass at most one of `b` or `rho` — they are mutually exclusive."
+        raise MethodIncompatibility(
+            "Pass at most one of `b` or `rho` — they are mutually exclusive.",
+            diagnostics={"b": b, "rho": rho},
         )
-    if rho is not None and rho <= 0:
-        raise ValueError(f"rho must be strictly positive (got {rho}).")
 
     # --- Parse and prepare data ---
     Y, X_c, D, Z = _parse_data(data, y, x, c, fuzzy, covs)
@@ -287,9 +464,11 @@ def rdrobust(
     if donut > 0:
         keep = np.abs(X_c) > donut
         if keep.sum() < 10:
-            raise ValueError(
+            raise DataInsufficient(
                 f"donut={donut} excludes too many observations "
-                f"({(~keep).sum()} dropped, {keep.sum()} remain)."
+                f"({(~keep).sum()} dropped, {keep.sum()} remain).",
+                recovery_hint="Use a smaller donut radius or add observations.",
+                diagnostics={"donut": donut, "n_remaining": int(keep.sum())},
             )
         Y, X_c = Y[keep], X_c[keep]
         if D is not None:
@@ -304,9 +483,15 @@ def rdrobust(
     n_right_total = int(right.sum())
 
     if n_left_total < p + 2 or n_right_total < p + 2:
-        raise ValueError(
+        raise DataInsufficient(
             f"Not enough observations on each side of the cutoff "
-            f"(left={n_left_total}, right={n_right_total}, need ≥{p + 2})."
+            f"(left={n_left_total}, right={n_right_total}, need ≥{p + 2}).",
+            recovery_hint="Add observations around the cutoff or lower p.",
+            diagnostics={
+                "left": n_left_total,
+                "right": n_right_total,
+                "minimum_per_side": p + 2,
+            },
         )
 
     # --- Bandwidth selection ---
@@ -633,9 +818,11 @@ def _delegate_to_cct_rdrobust(
     if donut > 0:
         keep = np.abs(X_c) > donut
         if keep.sum() < 10:
-            raise ValueError(
+            raise DataInsufficient(
                 f"donut={donut} excludes too many observations "
-                f"({(~keep).sum()} dropped, {keep.sum()} remain)."
+                f"({(~keep).sum()} dropped, {keep.sum()} remain).",
+                recovery_hint="Use a smaller donut radius or add observations.",
+                diagnostics={"donut": donut, "n_remaining": int(keep.sum())},
             )
         Y_arr, X_c = Y_arr[keep], X_c[keep]
         if D is not None:
@@ -1326,7 +1513,6 @@ def rdplotdensity(
 
     X = data[x].values.astype(float)
     X = X[np.isfinite(X)]
-    n = len(X)
 
     x_left = X[X < c]
     x_right = X[X >= c]
@@ -1443,11 +1629,29 @@ def _parse_data(
     local polynomial (covariate-adjusted estimation per Calonico et al. 2019),
     rather than being partialled out globally.
     """
+    data = _require_dataframe(data, "data")
+    y = _require_column_name(y, "y")
+    x = _require_column_name(x, "x")
+    if fuzzy is not None:
+        fuzzy = _require_column_name(fuzzy, "fuzzy")
+    covs = _coerce_optional_column_list(covs, "covs")
     for col in [y, x]:
         if col not in data.columns:
-            raise ValueError(f"Column '{col}' not found in data")
+            raise MethodIncompatibility(
+                f"Column '{col}' not found in data",
+                diagnostics={
+                    "missing_column": col,
+                    "available_columns": list(data.columns),
+                },
+            )
     if fuzzy and fuzzy not in data.columns:
-        raise ValueError(f"Fuzzy variable '{fuzzy}' not found in data")
+        raise MethodIncompatibility(
+            f"Fuzzy variable '{fuzzy}' not found in data",
+            diagnostics={
+                "missing_column": fuzzy,
+                "available_columns": list(data.columns),
+            },
+        )
 
     Y = data[y].values.astype(float)
     X_c = data[x].values.astype(float) - c
@@ -1460,12 +1664,23 @@ def _parse_data(
     if covs:
         for col in covs:
             if col not in data.columns:
-                raise ValueError(f"Covariate '{col}' not found in data")
+                raise MethodIncompatibility(
+                    f"Covariate '{col}' not found in data",
+                    diagnostics={
+                        "missing_column": col,
+                        "available_columns": list(data.columns),
+                    },
+                )
             valid &= np.isfinite(data[col].values.astype(float))
 
     Y, X_c = Y[valid], X_c[valid]
     if D is not None:
         D = D[valid]
+    if len(Y) == 0:
+        raise DataInsufficient(
+            "No finite RD observations remain after dropping missing values.",
+            diagnostics={"y": y, "x": x},
+        )
 
     # Return covariates as matrix for inclusion in local polynomial
     Z = None
@@ -1807,9 +2022,15 @@ def _rbc_bootstrap(
     idx_l = np.where(left & (X_c >= -bw_max_l))[0]
     idx_r = np.where(right & (X_c <= bw_max_r))[0]
     if idx_l.size < p + 2 or idx_r.size < p + 2:
-        raise RuntimeError(
+        raise DataInsufficient(
             "rbc bootstrap: too few observations inside the effective "
-            f"bandwidth (left={idx_l.size}, right={idx_r.size})."
+            f"bandwidth (left={idx_l.size}, right={idx_r.size}).",
+            recovery_hint="Increase bandwidth or reduce polynomial order.",
+            diagnostics={
+                "left": int(idx_l.size),
+                "right": int(idx_r.size),
+                "minimum_per_side": int(p + 2),
+            },
         )
     have_cluster = cluster_vals is not None
 
@@ -1909,9 +2130,11 @@ def _rbc_bootstrap(
         n_ok += 1
 
     if n_ok < max(99, int(0.5 * n_boot)):
-        raise RuntimeError(
+        raise ConvergenceFailure(
             f"rbc bootstrap only produced {n_ok}/{n_boot} valid replicates; "
-            "increase bandwidth or reduce polynomial order."
+            "increase bandwidth or reduce polynomial order.",
+            recovery_hint="Increase bandwidth, reduce polynomial order, or raise n_boot.",
+            diagnostics={"valid_replicates": int(n_ok), "n_boot": int(n_boot)},
         )
     t_star = t_star[:n_ok]
     q_hi = float(np.quantile(t_star, 1 - alpha / 2))

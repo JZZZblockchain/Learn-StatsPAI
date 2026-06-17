@@ -24,13 +24,14 @@ Controls." *Review of Economic Studies*, 81(2), 608-650. [@belloni2014inference]
 
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from ._core import _kernel_fn
 
 # ======================================================================
@@ -148,9 +149,11 @@ def _restrict_to_bandwidth(
     mask = (data[x] >= c - h) & (data[x] <= c + h)
     sub = data.loc[mask].copy()
     if len(sub) < 10:
-        raise ValueError(  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
             f"Only {len(sub)} observations within bandwidth h={h:.4f}. "
-            "Increase h or check data."
+            "Increase h or check data.",
+            recovery_hint="Increase `h`, use a denser window near the cutoff, or check the running variable.",
+            diagnostics={"n_bandwidth": int(len(sub)), "h": float(h), "cutoff": float(c)},
         )
     return sub, h
 
@@ -161,15 +164,37 @@ def _triangular_weights(x_vals: np.ndarray, c: float, h: float) -> np.ndarray:
 
 
 def _validate_covariates(
-    data: pd.DataFrame, covs: Optional[List[str]],
+    data: pd.DataFrame, covs: Optional[Sequence[str] | str],
 ) -> List[str]:
     """Return validated covariate list; raise on missing columns."""
     if covs is None:
         return []  # pragma: no cover
-    missing = [c for c in covs if c not in data.columns]
+    if isinstance(covs, str):
+        cov_list = [covs]
+    else:
+        try:
+            cov_list = list(covs)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "`covs` must be a covariate name or a sequence of covariate names.",
+                recovery_hint="Pass covs='z1' or covs=['z1', 'z2'].",
+                diagnostics={"argument": "covs", "type": type(covs).__name__},
+            ) from exc
+    bad = [c for c in cov_list if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            "`covs` must contain non-empty column-name strings.",
+            recovery_hint="Pass covariate names that exist in `data`.",
+            diagnostics={"argument": "covs", "bad_values": [repr(c) for c in bad]},
+        )
+    missing = [c for c in cov_list if c not in data.columns]
     if missing:
-        raise ValueError(f"Covariates not found in data: {missing}")  # pragma: no cover
-    return list(covs)
+        raise MethodIncompatibility(
+            f"Covariates not found in data: {missing}",
+            recovery_hint="Check `covs` against the DataFrame columns.",
+            diagnostics={"missing_covariates": missing, "available_columns": list(data.columns)},
+        )  # pragma: no cover
+    return cov_list
 
 
 # ======================================================================
@@ -262,15 +287,19 @@ def rd_forest(
     # --- Validate inputs ---
     covs = _validate_covariates(data, covs)
     if not covs:
-        raise ValueError(  # pragma: no cover
+        raise MethodIncompatibility(  # pragma: no cover
             "rd_forest requires at least one covariate in `covs` for "
-            "heterogeneity estimation."
+            "heterogeneity estimation.",
+            recovery_hint="Pass at least one covariate for ML heterogeneity estimation.",
+            diagnostics={"function": "rd_forest"},
         )
     if x in covs:
-        raise ValueError(  # pragma: no cover
+        raise MethodIncompatibility(  # pragma: no cover
             f"Running variable '{x}' must not be in covs; the forest "
             "estimates heterogeneity over covariates, not the running "
-            "variable itself."
+            "variable itself.",
+            recovery_hint="Remove the running variable from `covs`.",
+            diagnostics={"function": "rd_forest", "running_variable": x},
         )
 
     rng = np.random.RandomState(seed)
@@ -286,9 +315,16 @@ def rd_forest(
     n_treated = treated.sum()
     n_control = control.sum()
     if n_treated < min_leaf or n_control < min_leaf:
-        raise ValueError(  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
             f"Too few observations on one side of cutoff (treated={n_treated}, "
-            f"control={n_control}). Increase bandwidth or reduce min_leaf."
+            f"control={n_control}). Increase bandwidth or reduce min_leaf.",
+            recovery_hint="Increase bandwidth, reduce min_leaf, or collect more near-cutoff data.",
+            diagnostics={
+                "function": "rd_forest",
+                "n_treated": int(n_treated),
+                "n_control": int(n_control),
+                "min_leaf": int(min_leaf),
+            },
         )
 
     # --- Honest split ---
@@ -316,9 +352,16 @@ def rd_forest(
     mask_c_build = ~T_build
 
     if mask_t_build.sum() < min_leaf or mask_c_build.sum() < min_leaf:
-        raise ValueError(  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
             "Too few treated or control observations in the build sample "
-            "after honest split. Increase bandwidth or set honesty=False."
+            "after honest split. Increase bandwidth or set honesty=False.",
+            recovery_hint="Increase bandwidth, reduce min_leaf, or set honesty=False.",
+            diagnostics={
+                "function": "rd_forest",
+                "n_build_treated": int(mask_t_build.sum()),
+                "n_build_control": int(mask_c_build.sum()),
+                "min_leaf": int(min_leaf),
+            },
         )
 
     rf1 = RandomForestRegressor(**rf_params)
@@ -498,12 +541,16 @@ def rd_boost(
 
     covs = _validate_covariates(data, covs)
     if not covs:
-        raise ValueError(  # pragma: no cover
-            "rd_boost requires at least one covariate in `covs`."
+        raise MethodIncompatibility(  # pragma: no cover
+            "rd_boost requires at least one covariate in `covs`.",
+            recovery_hint="Pass at least one covariate for ML heterogeneity estimation.",
+            diagnostics={"function": "rd_boost"},
         )
     if x in covs:
-        raise ValueError(  # pragma: no cover
-            f"Running variable '{x}' must not be in covs."
+        raise MethodIncompatibility(  # pragma: no cover
+            f"Running variable '{x}' must not be in covs.",
+            recovery_hint="Remove the running variable from `covs`.",
+            diagnostics={"function": "rd_boost", "running_variable": x},
         )
 
     rng = np.random.RandomState(seed)
@@ -520,9 +567,15 @@ def rd_boost(
     n_treated = int(treated.sum())
     n_control = int(control.sum())
     if n_treated < 5 or n_control < 5:
-        raise ValueError(  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
             f"Too few observations (treated={n_treated}, "
-            f"control={n_control}). Increase bandwidth."
+            f"control={n_control}). Increase bandwidth.",
+            recovery_hint="Increase bandwidth or collect more near-cutoff data.",
+            diagnostics={
+                "function": "rd_boost",
+                "n_treated": n_treated,
+                "n_control": n_control,
+            },
         )
 
     # --- Fit full-sample GBMs ---
@@ -711,8 +764,10 @@ def rd_lasso(
 
     covs = _validate_covariates(data, covs)
     if not covs:
-        raise ValueError(  # pragma: no cover
-            "rd_lasso requires candidate covariates in `covs`."
+        raise MethodIncompatibility(  # pragma: no cover
+            "rd_lasso requires candidate covariates in `covs`.",
+            recovery_hint="Pass at least one candidate covariate in `covs`.",
+            diagnostics={"function": "rd_lasso"},
         )
 
     # --- Restrict to bandwidth ---
@@ -922,10 +977,16 @@ def rd_cate_summary(
     if methods is None:
         methods = ['forest', 'boost', 'lasso']
     else:
+        methods = [methods] if isinstance(methods, str) else list(methods)
         unknown = set(methods) - valid_methods
         if unknown:
-            raise ValueError(  # pragma: no cover
-                f"Unknown methods: {unknown}. Choose from {valid_methods}."
+            raise MethodIncompatibility(  # pragma: no cover
+                f"Unknown methods: {unknown}. Choose from {valid_methods}.",
+                recovery_hint="Use methods drawn from {'forest', 'boost', 'lasso'}.",
+                diagnostics={
+                    "unknown_methods": sorted(unknown),
+                    "valid_methods": sorted(valid_methods),
+                },
             )
 
     results: Dict[str, Any] = {}
@@ -1046,9 +1107,11 @@ def _importance_plot(
 
     vi = result.model_info.get('variable_importance', {})
     if not vi:
-        raise ValueError(  # pragma: no cover
+        raise MethodIncompatibility(  # pragma: no cover
             "No variable_importance found in result.model_info. "
-            "Pass a CausalResult from rd_forest or rd_boost."
+            "Pass a CausalResult from rd_forest or rd_boost.",
+            recovery_hint="Call _importance_plot with a result from rd_forest or rd_boost.",
+            diagnostics={"result_method": getattr(result, "method", None)},
         )
 
     # Sort and truncate

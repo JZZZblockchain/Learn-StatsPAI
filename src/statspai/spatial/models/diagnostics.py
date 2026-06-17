@@ -9,7 +9,7 @@ Five tests, each distributed χ² under H0:
 """
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -18,8 +18,12 @@ from scipy import stats as sp_stats
 from .ml import _coerce_W, _parse_formula
 
 
-def lm_tests(formula: str, data: pd.DataFrame, W,
-             row_normalize: bool = True) -> Dict[str, Tuple[float, float]]:
+def lm_tests(
+    formula: str,
+    data: pd.DataFrame,
+    W: Any,
+    row_normalize: bool = True,
+) -> Dict[str, Tuple[float, float]]:
     """Anselin (1988) Lagrange multiplier battery.
 
     Parameters
@@ -88,22 +92,25 @@ def lm_tests(formula: str, data: pd.DataFrame, W,
 
     SARMA = LM_err + RLM_lag
 
-    def pv(stat, df=1):
+    def pv(stat: float, df: int = 1) -> float:
         if not np.isfinite(stat) or stat < 0:
             return np.nan
         return float(1 - sp_stats.chi2.cdf(stat, df=df))
 
     return {
-        "LM_err":        (float(LM_err), pv(LM_err)),
-        "LM_lag":        (float(LM_lag), pv(LM_lag)),
+        "LM_err": (float(LM_err), pv(LM_err)),
+        "LM_lag": (float(LM_lag), pv(LM_lag)),
         "Robust_LM_err": (float(RLM_err), pv(RLM_err)),
         "Robust_LM_lag": (float(RLM_lag), pv(RLM_lag)),
-        "SARMA":         (float(SARMA), pv(SARMA, df=2)),
+        "SARMA": (float(SARMA), pv(SARMA, df=2)),
     }
 
 
-def moran_residuals(residuals: np.ndarray, W,
-                    row_normalize: bool = True) -> Tuple[float, float]:
+def moran_residuals(
+    residuals: np.ndarray,
+    W: Any,
+    row_normalize: bool = True,
+) -> Tuple[float, float]:
     """Moran's I applied to regression residuals (quick LM-err companion).
 
     Examples
@@ -120,13 +127,12 @@ def moran_residuals(residuals: np.ndarray, W,
     """
     from ..esda.moran import moran
     M = _coerce_W(W, n_expected=len(residuals), row_normalize=row_normalize)
-    from ..weights.core import W as _W
     # Build a lightweight W-like wrapper from the sparse matrix
     res = moran(residuals, _from_sparse(M), permutations=0)
     return res.value, res.p_norm
 
 
-def _from_sparse(M):
+def _from_sparse(M: Any) -> Any:
     """Wrap a CSR sparse matrix back into a W-compatible shim for ESDA helpers."""
     from ..weights.core import W as _W
     Md = M.toarray()

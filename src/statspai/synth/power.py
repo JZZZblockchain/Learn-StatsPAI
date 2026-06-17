@@ -40,14 +40,12 @@ Confidence Sets."
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
-from .scm import synth, SyntheticControl
-from ..core.results import CausalResult
+from .scm import SyntheticControl
 
 
 # ======================================================================
@@ -176,7 +174,7 @@ def _treated_ratio_with_effect(
 
     if pre_mspe < 1e-10:
         return np.inf  # pragma: no cover
-    return np.sqrt(post_mspe) / np.sqrt(pre_mspe)
+    return float(np.sqrt(post_mspe) / np.sqrt(pre_mspe))
 
 
 # ======================================================================
@@ -305,14 +303,14 @@ def synth_power(
         pre_sd = float(np.std(Y_pre_treated))
         if pre_sd < 1e-10:
             pre_sd = 1.0
-        effect_sizes = np.linspace(0, 3 * pre_sd, 10)
+        effect_grid = np.linspace(0, 3 * pre_sd, 10)
     else:
-        effect_sizes = np.asarray(effect_sizes, dtype=float)
+        effect_grid = np.asarray(effect_sizes, dtype=float)
 
     # --- Step 4: simulate power for each effect size ---
     records: list[dict[str, Any]] = []
 
-    for delta in effect_sizes:
+    for delta in effect_grid:
         n_reject = 0
         for _ in range(n_simulations):
             ratio = _treated_ratio_with_effect(

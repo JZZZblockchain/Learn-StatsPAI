@@ -28,7 +28,7 @@ arXiv preprint arXiv:2107.07942 v5. [@noack2025flexible]
 
 from __future__ import annotations
 
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 import warnings
 
 import numpy as np
@@ -159,9 +159,7 @@ def rd_flex(
 
     df = data.dropna(subset=needed).copy()
     Y = df[y].to_numpy(dtype=float)
-    X = df[x].to_numpy(dtype=float)
     Wmat = df[W].to_numpy(dtype=float)
-    D = df[fuzzy].to_numpy(dtype=float) if fuzzy is not None else None
 
     # --- Cross-fit residualisation -----------------------------------
     Y_resid, r2_y = _crossfit_residualise(
@@ -170,6 +168,7 @@ def rd_flex(
     df = df.assign(_yflex_=Y_resid)
 
     if fuzzy is not None:
+        D = df[fuzzy].to_numpy(dtype=float)
         D_resid, _ = _crossfit_residualise(
             Wmat, D, learner, sklearn_estimator, n_folds, random_state,
         )
@@ -202,6 +201,9 @@ def rd_flex(
         if (np.isfinite(se_plain) and np.isfinite(se_flex) and se_plain > 0)
         else np.nan
     )
+    var_reduction_pct = (
+        var_reduction * 100 if np.isfinite(var_reduction) else float("nan")
+    )
 
     method_label = (
         f"RD with flexible covariate adjustment "
@@ -231,7 +233,7 @@ def rd_flex(
             f"  τ̂ (plain rdrobust):       {float(r_plain.estimate):.4f}\n"
             f"  SE (plain):               {se_plain:.4f}\n"
             f"  Variance reduction:       "
-            f"{(var_reduction * 100 if np.isfinite(var_reduction) else float('nan')):.1f}%\n"
+            f"{var_reduction_pct:.1f}%\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         ),
     }
@@ -275,7 +277,7 @@ def rd_flex(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_learner(name: str, random_state: Optional[int]):
+def _make_learner(name: str, random_state: Optional[int]) -> Any:
     """Construct a default sklearn learner by name."""
     name = name.lower()
     try:
@@ -315,7 +317,7 @@ def _crossfit_residualise(
     sklearn_estimator: Optional[Any],
     n_folds: int,
     random_state: Optional[int],
-) -> tuple:
+) -> Tuple[np.ndarray, float]:
     """K-fold cross-fitted residualisation.  Returns (y - η̂(W), R²_oos)."""
     from sklearn.base import clone
     from sklearn.model_selection import KFold

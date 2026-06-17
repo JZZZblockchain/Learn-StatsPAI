@@ -197,7 +197,7 @@ class SynthComparison:
     #  Plotting
     # ------------------------------------------------------------------ #
 
-    def plot(self, **kwargs) -> Any:
+    def plot(self, **kwargs: Any) -> Any:
         """Overlay all results using ``synthplot(type='compare')``.
 
         Parameters
@@ -218,7 +218,7 @@ class SynthComparison:
     #  Manuscript/reporting exports
     # ------------------------------------------------------------------ #
 
-    def to_latex(self, **kwargs) -> str:
+    def to_latex(self, **kwargs: Any) -> str:
         """Render the comparison as a LaTeX table.
 
         Forwards to :func:`statspai.synth.exports.synth_to_latex` with
@@ -237,7 +237,7 @@ class SynthComparison:
         from .exports import synth_to_latex
         return synth_to_latex(self, **kwargs)
 
-    def to_markdown(self, **kwargs) -> str:
+    def to_markdown(self, **kwargs: Any) -> str:
         """Render the comparison as a Markdown table.
 
         Forwards to :func:`statspai.synth.exports.synth_to_markdown`.
@@ -245,7 +245,7 @@ class SynthComparison:
         from .exports import synth_to_markdown
         return synth_to_markdown(self, **kwargs)
 
-    def to_excel(self, path: str, **kwargs) -> str:
+    def to_excel(self, path: str, **kwargs: Any) -> str:
         """Write a multi-sheet Excel workbook covering all methods.
 
         Forwards to :func:`statspai.synth.exports.synth_to_excel`.
@@ -341,7 +341,7 @@ def synth_compare(
     methods: Optional[List[str]] = None,
     placebo: bool = True,
     alpha: float = 0.05,
-    **kwargs,
+    **kwargs: Any,
 ) -> SynthComparison:
     """Run multiple SCM variants and compare them side by side.
 
@@ -478,7 +478,7 @@ def synth_recommend(
     time: str,
     treated_unit: Any = None,
     treatment_time: Any = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> str:
     """Quickly recommend the best SCM method for the given data.
 

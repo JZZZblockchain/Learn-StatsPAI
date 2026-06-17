@@ -21,13 +21,109 @@ Keele, L. and Titiunik, R. (2015).
 *Political Analysis*, 23(1), 127-155. [@keele2015geographic]
 """
 
-from typing import Optional, Callable, Tuple, Dict, Any, List, Union
+from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats, optimize
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
+
+_APPROACHES = {'distance', 'location'}
+_KERNELS = {'triangular', 'uniform', 'epanechnikov'}
+_PLOT_TYPES = {'scatter', 'heatmap', 'boundary_effects'}
+
+
+def _require_dataframe(data: Any) -> None:
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "`data` must be a pandas DataFrame.",
+            recovery_hint="Pass a DataFrame containing y, x1, x2, and treatment.",
+            diagnostics={"type": type(data).__name__},
+        )
+
+
+def _require_column_name(name: Any, label: str) -> None:
+    if not isinstance(name, str) or not name:
+        raise MethodIncompatibility(
+            f"`{label}` must be a non-empty column-name string.",
+            recovery_hint=f"Pass an existing DataFrame column name for `{label}`.",
+            diagnostics={"argument": label, "value": repr(name)},
+        )
+
+
+def _require_columns(data: pd.DataFrame, columns: list[str]) -> None:
+    for label, col in zip(("y", "x1", "x2", "treatment"), columns):
+        _require_column_name(col, label)
+    missing = [col for col in columns if col not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"Column '{missing[0]}' not found in data",
+            recovery_hint="Check y/x1/x2/treatment names against data.columns.",
+            diagnostics={
+                "missing_columns": missing,
+                "available_columns": list(data.columns),
+            },
+        )
+
+
+def _require_options(
+    *,
+    approach: str,
+    kernel: str,
+    p: int,
+    h: Optional[float],
+    alpha: Optional[float] = None,
+) -> None:
+    if approach not in _APPROACHES:
+        raise MethodIncompatibility(
+            f"approach must be 'distance' or 'location', got '{approach}'",
+            recovery_hint="Use approach='distance' or approach='location'.",
+            diagnostics={"approach": approach},
+        )
+    if kernel not in _KERNELS:
+        raise MethodIncompatibility(
+            f"kernel must be 'triangular', 'uniform', or 'epanechnikov', got '{kernel}'",
+            recovery_hint="Use one of {'triangular', 'uniform', 'epanechnikov'}.",
+            diagnostics={"kernel": kernel},
+        )
+    if not isinstance(p, int) or isinstance(p, bool) or p < 0:
+        raise MethodIncompatibility(
+            "p must be a non-negative integer",
+            recovery_hint="Use p=0, p=1, or p=2 for local polynomial order.",
+            diagnostics={"p": p},
+        )
+    if h is not None and (not np.isfinite(h) or h <= 0):
+        raise MethodIncompatibility(
+            "h must be positive and finite",
+            recovery_hint="Pass a positive bandwidth or leave h=None.",
+            diagnostics={"h": h},
+        )
+    if alpha is not None and (not np.isfinite(alpha) or not 0 < alpha < 1):
+        raise MethodIncompatibility(
+            "alpha must be between 0 and 1",
+            recovery_hint="Pass a significance level such as alpha=0.05.",
+            diagnostics={"alpha": alpha},
+        )
+
+
+def _numeric_arrays(
+    data: pd.DataFrame, y: str, x1: str, x2: str, treatment: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    try:
+        Y = data[y].values.astype(float)
+        X1 = data[x1].values.astype(float)
+        X2 = data[x2].values.astype(float)
+        T = data[treatment].values.astype(float)
+    except (TypeError, ValueError) as exc:
+        raise DataInsufficient(
+            "rd2d columns must be numeric",
+            recovery_hint="Convert y, x1, x2, and treatment to numeric values.",
+            diagnostics={"columns": [y, x1, x2, treatment]},
+        ) from exc
+    return Y, X1, X2, T
 
 
 # ======================================================================
@@ -131,39 +227,57 @@ def rd2d(
     >>> round(float(res.estimate), 2)
     1.45
     """
-    if approach not in ('distance', 'location'):
-        raise ValueError(
-            f"approach must be 'distance' or 'location', got '{approach}'"
+    _require_dataframe(data)
+    _require_columns(data, [y, x1, x2, treatment])
+    _require_options(approach=approach, kernel=kernel, p=p, h=h, alpha=alpha)
+    if boundary is not None and not callable(boundary):
+        raise MethodIncompatibility(
+            "boundary must be callable or None",
+            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
+            diagnostics={"boundary_type": type(boundary).__name__},
         )
-    if kernel not in ('triangular', 'uniform', 'epanechnikov'):
-        raise ValueError(  # pragma: no cover
-            f"kernel must be 'triangular', 'uniform', or "
-            f"'epanechnikov', got '{kernel}'"
+    if not isinstance(n_eval, int) or isinstance(n_eval, bool) or n_eval < 1:
+        raise MethodIncompatibility(
+            "n_eval must be a positive integer",
+            recovery_hint="Pass n_eval=1 for a pooled effect or a larger integer.",
+            diagnostics={"n_eval": n_eval},
         )
-    for col in [y, x1, x2, treatment]:
-        if col not in data.columns:
-            raise ValueError(f"Column '{col}' not found in data")  # pragma: no cover
+    if eval_points is not None:
+        eval_points = np.asarray(eval_points, dtype=float)
+        if (
+            eval_points.ndim != 2
+            or eval_points.shape[1] != 2
+            or not np.isfinite(eval_points).all()
+        ):
+            raise MethodIncompatibility(
+                "eval_points must be a finite array with shape (k, 2)",
+                recovery_hint="Pass boundary points as [[x1, x2], ...].",
+                diagnostics={"shape": tuple(eval_points.shape)},
+            )
 
     # --- Extract and clean data ---
-    Y = data[y].values.astype(float)
-    X1 = data[x1].values.astype(float)
-    X2 = data[x2].values.astype(float)
-    T = data[treatment].values.astype(float)
+    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
 
     valid = np.isfinite(Y) & np.isfinite(X1) & np.isfinite(X2) & np.isfinite(T)
     Y, X1, X2, T = Y[valid], X1[valid], X2[valid], T[valid]
     n = len(Y)
 
     if n < 20:
-        raise ValueError(f"Too few valid observations ({n}). Need at least 20.")  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
+            f"Too few valid observations ({n}). Need at least 20.",
+            recovery_hint="Provide at least 20 complete finite rows.",
+            diagnostics={"n_valid": int(n), "min_required": 20},
+        )
 
     treated = T == 1
     control = T == 0
     n_treated = int(treated.sum())
     n_control = int(control.sum())
     if n_treated < 5 or n_control < 5:
-        raise ValueError(  # pragma: no cover
-            f"Too few treated ({n_treated}) or control ({n_control}) units."
+        raise DataInsufficient(  # pragma: no cover
+            f"Too few treated ({n_treated}) or control ({n_control}) units.",
+            recovery_hint="Provide at least 5 treated and 5 control units.",
+            diagnostics={"n_treated": n_treated, "n_control": n_control},
         )
 
     if approach == 'distance':
@@ -232,14 +346,17 @@ def rd2d_bw(
     >>> round(float(h), 3)
     0.338
     """
-    for col in [y, x1, x2, treatment]:
-        if col not in data.columns:
-            raise ValueError(f"Column '{col}' not found in data")  # pragma: no cover
+    _require_dataframe(data)
+    _require_columns(data, [y, x1, x2, treatment])
+    _require_options(approach=approach, kernel=kernel, p=p, h=None)
+    if boundary is not None and not callable(boundary):
+        raise MethodIncompatibility(
+            "boundary must be callable or None",
+            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
+            diagnostics={"boundary_type": type(boundary).__name__},
+        )
 
-    Y = data[y].values.astype(float)
-    X1 = data[x1].values.astype(float)
-    X2 = data[x2].values.astype(float)
-    T = data[treatment].values.astype(float)
+    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
 
     valid = np.isfinite(Y) & np.isfinite(X1) & np.isfinite(X2) & np.isfinite(T)
     Y, X1, X2, T = Y[valid], X1[valid], X2[valid], T[valid]
@@ -320,24 +437,26 @@ def rd2d_plot(
     try:
         import matplotlib.pyplot as plt
         from matplotlib.colors import Normalize
-        import matplotlib.cm as cm
     except ImportError:  # pragma: no cover
         raise ImportError("matplotlib required. Install: pip install matplotlib")  # pragma: no cover
 
-    if plot_type not in ('scatter', 'heatmap', 'boundary_effects'):
-        raise ValueError(
+    _require_dataframe(data)
+    _require_columns(data, [y, x1, x2, treatment])
+    if boundary is not None and not callable(boundary):
+        raise MethodIncompatibility(
+            "boundary must be callable or None",
+            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
+            diagnostics={"boundary_type": type(boundary).__name__},
+        )
+    if plot_type not in _PLOT_TYPES:
+        raise MethodIncompatibility(
             f"plot_type must be 'scatter', 'heatmap', or "
-            f"'boundary_effects', got '{plot_type}'"
+            f"'boundary_effects', got '{plot_type}'",
+            recovery_hint="Use plot_type='scatter', 'heatmap', or 'boundary_effects'.",
+            diagnostics={"plot_type": plot_type},
         )
 
-    for col in [y, x1, x2, treatment]:
-        if col not in data.columns:
-            raise ValueError(f"Column '{col}' not found in data")  # pragma: no cover
-
-    X1 = data[x1].values.astype(float)
-    X2 = data[x2].values.astype(float)
-    Y = data[y].values.astype(float)
-    T = data[treatment].values.astype(float)
+    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -409,15 +528,24 @@ def rd2d_plot(
 
     elif plot_type == 'boundary_effects':
         if result is None or result.detail is None:
-            raise ValueError(  # pragma: no cover
+            raise MethodIncompatibility(  # pragma: no cover
                 "plot_type='boundary_effects' requires a result from "
-                "rd2d() with multiple eval points."
+                "rd2d() with multiple eval points.",
+                recovery_hint=(
+                    "Pass result=rd2d(..., approach='location', n_eval > 1)."
+                ),
+                diagnostics={"plot_type": plot_type, "has_result": result is not None},
             )
         detail = result.detail
         if 'eval_x1' not in detail.columns:
-            raise ValueError(  # pragma: no cover
+            raise MethodIncompatibility(  # pragma: no cover
                 "Result detail does not contain boundary eval points. "
-                "Use approach='location' with n_eval > 1."
+                "Use approach='location' with n_eval > 1.",
+                recovery_hint=(
+                    "Re-estimate with rd2d(..., approach='location', "
+                    "n_eval > 1)."
+                ),
+                diagnostics={"detail_columns": list(detail.columns)},
             )
 
         ax.errorbar(
@@ -479,9 +607,15 @@ def _rd2d_distance(
     n_left = int(left.sum())
     n_right = int(right.sum())
     if n_left < p + 2 or n_right < p + 2:
-        raise ValueError(  # pragma: no cover
+        raise DataInsufficient(  # pragma: no cover
             f"Not enough observations on each side of the boundary "
-            f"(left={n_left}, right={n_right}, need >= {p + 2})."
+            f"(left={n_left}, right={n_right}, need >= {p + 2}).",
+            recovery_hint="Increase sample size or use a lower polynomial order.",
+            diagnostics={
+                "n_left": n_left,
+                "n_right": n_right,
+                "min_required_per_side": int(p + 2),
+            },
         )
 
     h_auto = h is None

@@ -12,7 +12,7 @@ eigenvalue-based ML is intractable.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,12 @@ from .ml import _coerce_W, _parse_formula
 #  SEM GMM (Kelejian-Prucha 1999)
 # --------------------------------------------------------------------- #
 
-def _kp_moment_residuals(u: np.ndarray, W, lam: float, sigma2: float) -> np.ndarray:
+def _kp_moment_residuals(
+    u: np.ndarray,
+    W: Any,
+    lam: float,
+    sigma2: float,
+) -> np.ndarray:
     """Three KP 1999 moment residuals given residuals ``u`` and candidate
     ``(λ, σ²)``.
 
@@ -41,15 +46,22 @@ def _kp_moment_residuals(u: np.ndarray, W, lam: float, sigma2: float) -> np.ndar
     # Moment 1
     m1 = (u @ u - 2 * lam * u @ v + lam ** 2 * v @ v) / n - sigma2
     # Moment 2
-    m2 = (v @ v - 2 * lam * v @ w_bar + lam ** 2 * w_bar @ w_bar) / n - sigma2 * tr_WtW_over_n
+    m2 = (
+        (v @ v - 2 * lam * v @ w_bar + lam ** 2 * w_bar @ w_bar) / n
+        - sigma2 * tr_WtW_over_n
+    )
     # Moment 3
     m3 = (u @ v - lam * (u @ w_bar + v @ v) + lam ** 2 * v @ w_bar) / n
     return np.array([m1, m2, m3])
 
 
-def sem_gmm(W, data: pd.DataFrame, formula: str,
-            row_normalize: bool = True,
-            robust: Optional[str] = None) -> EconometricResults:
+def sem_gmm(
+    W: Any,
+    data: pd.DataFrame,
+    formula: str,
+    row_normalize: bool = True,
+    robust: Optional[str] = None,
+) -> EconometricResults:
     """Kelejian-Prucha (1999) GMM for the spatial-error parameter λ.
 
     Stage 1 — OLS on ``y = Xβ + u`` ⇒ residuals ``u``.
@@ -89,7 +101,7 @@ def sem_gmm(W, data: pd.DataFrame, formula: str,
     u = y - X @ beta_ols
 
     # Stage 2 — minimise sum of squared moment residuals
-    def obj(theta):
+    def obj(theta: np.ndarray) -> float:
         lam, s2 = float(theta[0]), float(theta[1])
         if not (-0.99 < lam < 0.99) or s2 <= 0:
             return 1e20
@@ -153,10 +165,14 @@ def sem_gmm(W, data: pd.DataFrame, formula: str,
 #  SAR GMM / 2SLS (Kelejian-Prucha 1998)
 # --------------------------------------------------------------------- #
 
-def sar_gmm(W, data: pd.DataFrame, formula: str,
-            row_normalize: bool = True,
-            robust: Optional[str] = None,
-            w_lags: int = 1) -> EconometricResults:
+def sar_gmm(
+    W: Any,
+    data: pd.DataFrame,
+    formula: str,
+    row_normalize: bool = True,
+    robust: Optional[str] = None,
+    w_lags: int = 1,
+) -> EconometricResults:
     """Kelejian-Prucha (1998) 2SLS for SAR with spatial-lag instruments.
 
     Instruments: ``[X, W X, …, W^w_lags X]`` (dropping constant duplicates).
@@ -255,9 +271,13 @@ def sar_gmm(W, data: pd.DataFrame, formula: str,
 #  SARAR GMM = SAR GMM + SEM GMM on residuals (spreg's GM_Combo)
 # --------------------------------------------------------------------- #
 
-def sarar_gmm(W, data: pd.DataFrame, formula: str,
-              row_normalize: bool = True,
-              robust: Optional[str] = None) -> EconometricResults:
+def sarar_gmm(
+    W: Any,
+    data: pd.DataFrame,
+    formula: str,
+    row_normalize: bool = True,
+    robust: Optional[str] = None,
+) -> EconometricResults:
     """Combined GMM: Kelejian-Prucha SAR 2SLS then SEM GMM on residuals.
 
     Equivalent to ``spreg.GM_Combo`` (or ``GM_Combo_Het`` with ``robust='het'``).
@@ -292,7 +312,7 @@ def sarar_gmm(W, data: pd.DataFrame, formula: str,
     _, X, dep, indep = _parse_formula(formula, data)
     M = _coerce_W(W, n_expected=len(e1), row_normalize=row_normalize)
 
-    def obj(theta):
+    def obj(theta: np.ndarray) -> float:
         lam, s2 = float(theta[0]), float(theta[1])
         if not (-0.99 < lam < 0.99) or s2 <= 0:
             return 1e20
@@ -314,8 +334,8 @@ def sarar_gmm(W, data: pd.DataFrame, formula: str,
                               data[list(indep)].to_numpy(float)])
     Wy_full = M @ y_full
     A = _sp.eye(n_full) - lam_hat * M
-    y_flt  = A @ y_full
-    X_flt  = A @ X_full
+    y_flt = A @ y_full
+    X_flt = A @ X_full
     Wy_flt = A @ Wy_full
     # Instruments: apply same filter so orthogonality is preserved
     X_nc = X_full[:, 1:]

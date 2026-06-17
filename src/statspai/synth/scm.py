@@ -41,9 +41,142 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import pandas as pd
-from scipy import optimize, stats
+from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import ConvergenceFailure, DataInsufficient, MethodIncompatibility
+
+
+def _require_dataframe(value: Any, name: str) -> pd.DataFrame:
+    if not isinstance(value, pd.DataFrame):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas DataFrame.",
+            diagnostics={name: value.__class__.__name__},
+        )
+    return value
+
+
+def _require_column_name(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty column name.",
+            diagnostics={name: repr(value)},
+        )
+    return value
+
+
+def _require_string_option(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"`{name}` must be a string option.",
+            diagnostics={name: repr(value)},
+        )
+    out = value.lower().strip()
+    if not out:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-empty string option.",
+            diagnostics={name: repr(value)},
+        )
+    return out
+
+
+def _require_open_unit_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        )
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be in (0, 1).",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_nonnegative_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-negative finite number.",
+            diagnostics={name: repr(value)},
+        )
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-negative finite number.",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or out < 0.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be a non-negative finite number.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_int_at_least(value: Any, name: str, minimum: int) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    try:
+        out = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        ) from exc
+    if out != value or out < minimum:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    return out
+
+
+def _coerce_column_list(
+    columns: Any,
+    name: str,
+    *,
+    allow_empty: bool = False,
+) -> List[str]:
+    if isinstance(columns, str):
+        out = [columns]
+    else:
+        try:
+            out = list(columns)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{name}` must be a column name or list of column names.",
+                diagnostics={name: repr(columns)},
+            ) from exc
+    if not allow_empty and not out:
+        raise MethodIncompatibility(
+            f"`{name}` must contain at least one column name.",
+            diagnostics={name: out},
+        )
+    bad = [c for c in out if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{name}` must contain only non-empty string column names.",
+            diagnostics={name: out, "invalid_columns": bad},
+        )
+    return out
+
+
+def _coerce_optional_column_list(columns: Any, name: str) -> Optional[List[str]]:
+    if columns is None:
+        return None
+    return _coerce_column_list(columns, name, allow_empty=True)
 
 
 def synth(
@@ -320,7 +453,16 @@ def _dispatch_synth_impl(
     sdid, augsynth, gsynth, demeaned_synth, robust_synth,
     staggered_synth, conformal_synth
     """
-    method = method.lower().strip()
+    data = _require_dataframe(data, "data")
+    outcome = _require_column_name(outcome, "outcome")
+    unit = _require_column_name(unit, "unit")
+    time = _require_column_name(time, "time")
+    method = _require_string_option(method, "method")
+    covariates = _coerce_optional_column_list(covariates, "covariates")
+    penalization = _require_nonnegative_float(penalization, "penalization")
+    alpha = _require_open_unit_float(alpha, "alpha")
+    if inference is not None:
+        inference = _require_string_option(inference, "inference")
 
     # --- Conformal inference override ---
     if inference == "conformal":
@@ -342,7 +484,7 @@ def _dispatch_synth_impl(
     # --- Dispatch ---
     if method in ("classic", "classic_adh", "adh", "penalized", "ridge"):
         backend = kwargs.pop("backend", "native")
-        backend_norm = str(backend).lower().replace("-", "_")
+        backend_norm = _require_string_option(backend, "backend").replace("-", "_")
         if backend_norm in {"synth", "r", "synth_r"}:
             if method not in ("classic", "classic_adh", "adh"):
                 raise NotImplementedError(
@@ -371,10 +513,16 @@ def _dispatch_synth_impl(
                 alpha=alpha,
             )
         if backend_norm != "native":
-            raise ValueError("Unknown backend. Use 'native', 'synth', or 'r'.")
+            raise MethodIncompatibility(
+                "Unknown backend. Use 'native', 'synth', or 'r'.",
+                diagnostics={"backend": backend},
+                alternative_functions=["sp.synth"],
+            )
 
         if method in ("penalized", "ridge") and penalization == 0.0:
-            penalization = kwargs.pop("l2_penalty", 0.01)
+            penalization = _require_nonnegative_float(
+                kwargs.pop("l2_penalty", 0.01), "l2_penalty"
+            )
         special_predictors = kwargs.pop("special_predictors", None)
         v_method = kwargs.pop("v_method", "auto")
         standardize_predictors = kwargs.pop("standardize_predictors", True)
@@ -484,10 +632,13 @@ def _dispatch_synth_impl(
         from .staggered import staggered_synth
 
         if treatment is None:
-            raise ValueError(
+            raise MethodIncompatibility(
                 "method='staggered' requires the `treatment` parameter "
-                "(binary treatment indicator column name)"
+                "(binary treatment indicator column name)",
+                diagnostics={"method": method, "treatment": treatment},
+                alternative_functions=["sp.staggered_synth", "sp.synth"],
             )
+        treatment = _require_column_name(treatment, "treatment")
         return staggered_synth(
             data=data,
             outcome=outcome,
@@ -690,14 +841,16 @@ def _dispatch_synth_impl(
             **kwargs,
         )
 
-    raise ValueError(
+    raise MethodIncompatibility(
         f"Unknown method {method!r}. Choose from: 'classic', 'penalized', "
         f"'ridge', 'demeaned', 'detrended', 'unconstrained', 'elastic_net', "
         f"'augmented', 'ascm', 'sdid', 'factor', 'gsynth', 'staggered', "
         f"'mc', 'discos', 'multi_outcome', 'scpi', "
         f"'bayesian', 'bsts', 'causal_impact', 'penscm', 'abadie_lhour', "
         f"'fdid', 'forward_did', 'cluster', 'sparse', 'lasso', "
-        f"'kernel', 'kernel_ridge'."
+        f"'kernel', 'kernel_ridge'.",
+        diagnostics={"method": method},
+        alternative_functions=["sp.synth_compare", "sp.synth"],
     )
 
 
@@ -715,9 +868,11 @@ def _find_rscript() -> str:
     for candidate in candidates:
         if candidate and Path(candidate).exists():
             return str(candidate)
-    raise RuntimeError(
+    raise ConvergenceFailure(
         "The Synth backend requires Rscript plus the R packages "
-        "'Synth' and 'jsonlite'. Install R or use backend='native'."
+        "'Synth' and 'jsonlite'. Install R or use backend='native'.",
+        recovery_hint="Install Rscript and Synth/jsonlite, or set backend='native'.",
+        alternative_functions=["sp.synth"],
     )
 
 
@@ -733,11 +888,19 @@ def _synth_r_backend(
 ) -> CausalResult:
     """Delegate classical SCM estimation to R ``Synth`` for parity."""
     if treated_unit is None or treatment_time is None:
-        raise ValueError("treated_unit and treatment_time are required")
+        raise MethodIncompatibility(
+            "treated_unit and treatment_time are required",
+            diagnostics={
+                "treated_unit": treated_unit,
+                "treatment_time": treatment_time,
+            },
+        )
     if not pd.api.types.is_numeric_dtype(data[time]):
-        raise TypeError(
+        raise MethodIncompatibility(
             "The Synth R backend requires a numeric time column so it can "
-            "construct pre-treatment special predictors."
+            "construct pre-treatment special predictors.",
+            diagnostics={"time": time, "dtype": str(data[time].dtype)},
+            alternative_functions=["sp.synth"],
         )
 
     unit_col = "statspai_unit"
@@ -859,8 +1022,14 @@ jsonlite::write_json(
             check=False,
         )
         if proc.returncode != 0:
-            raise RuntimeError(
-                "R Synth backend failed. stderr:\n" f"{proc.stderr.strip()}"
+            raise ConvergenceFailure(
+                "R Synth backend failed. stderr:\n" f"{proc.stderr.strip()}",
+                recovery_hint=(
+                    "Check the R Synth/jsonlite installation or rerun with "
+                    "backend='native'."
+                ),
+                diagnostics={"returncode": proc.returncode},
+                alternative_functions=["sp.synth"],
             )
         payload = json.loads(out_path.read_text(encoding="utf-8"))
 
@@ -979,19 +1148,40 @@ class SyntheticControl:
         penalization: float = 0.0,
         alpha: float = 0.05,
     ):
-        self.data = data
-        self.outcome = outcome
-        self.unit = unit
-        self.time = time
+        self.data = _require_dataframe(data, "data")
+        self.outcome = _require_column_name(outcome, "outcome")
+        self.unit = _require_column_name(unit, "unit")
+        self.time = _require_column_name(time, "time")
+        if treated_unit is None or treatment_time is None:
+            raise MethodIncompatibility(
+                "treated_unit and treatment_time are required",
+                diagnostics={
+                    "treated_unit": treated_unit,
+                    "treatment_time": treatment_time,
+                },
+                alternative_functions=["sp.synth"],
+            )
         self.treated_unit = treated_unit
         self.treatment_time = treatment_time
-        self.covariates = covariates or []
+        self.covariates = _coerce_optional_column_list(covariates, "covariates") or []
         self.special_predictors = special_predictors or []
-        self.v_method = v_method
-        self.standardize_predictors = standardize_predictors
-        self.n_random_starts = n_random_starts
-        self.penalization = penalization
-        self.alpha = alpha
+        self.v_method = _require_string_option(v_method, "v_method")
+        if self.v_method not in {"auto", "equal", "nested"}:
+            raise MethodIncompatibility(
+                "v_method must be one of 'auto', 'equal', or 'nested'.",
+                diagnostics={"v_method": v_method},
+            )
+        if not isinstance(standardize_predictors, (bool, np.bool_)):
+            raise MethodIncompatibility(
+                "standardize_predictors must be True or False.",
+                diagnostics={"standardize_predictors": repr(standardize_predictors)},
+            )
+        self.standardize_predictors = bool(standardize_predictors)
+        self.n_random_starts = _require_int_at_least(
+            n_random_starts, "n_random_starts", 0
+        )
+        self.penalization = _require_nonnegative_float(penalization, "penalization")
+        self.alpha = _require_open_unit_float(alpha, "alpha")
 
         self._validate()
         self._prepare_matrices()
@@ -1003,10 +1193,21 @@ class SyntheticControl:
     def _validate(self):
         for col in [self.outcome, self.unit, self.time] + self.covariates:
             if col not in self.data.columns:
-                raise ValueError(f"Column '{col}' not found in data")
+                raise MethodIncompatibility(
+                    f"Column '{col}' not found in data",
+                    diagnostics={
+                        "missing_column": col,
+                        "available_columns": list(self.data.columns),
+                    },
+                )
         if self.treated_unit not in self.data[self.unit].values:
-            raise ValueError(
-                f"Treated unit '{self.treated_unit}' not found in '{self.unit}'"
+            raise DataInsufficient(
+                f"Treated unit '{self.treated_unit}' not found in '{self.unit}'",
+                recovery_hint="Check treated_unit or filter the data to include it.",
+                diagnostics={
+                    "treated_unit": self.treated_unit,
+                    "unit": self.unit,
+                },
             )
 
     def _prepare_matrices(self):
@@ -1018,16 +1219,36 @@ class SyntheticControl:
         )
 
         if self.treated_unit not in pivot.columns:
-            raise ValueError(f"Treated unit '{self.treated_unit}' missing after pivot")
+            raise DataInsufficient(
+                f"Treated unit '{self.treated_unit}' missing after pivot",
+                diagnostics={"treated_unit": self.treated_unit},
+            )
 
         self.times = pivot.index.values
-        self.pre_mask = self.times < self.treatment_time
-        self.post_mask = self.times >= self.treatment_time
+        try:
+            self.pre_mask = self.times < self.treatment_time
+            self.post_mask = self.times >= self.treatment_time
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "treatment_time must be comparable with the time column.",
+                diagnostics={
+                    "treatment_time": repr(self.treatment_time),
+                    "time": self.time,
+                },
+            ) from exc
 
         if self.pre_mask.sum() < 2:
-            raise ValueError("Need at least 2 pre-treatment periods")
+            raise DataInsufficient(
+                "Need at least 2 pre-treatment periods",
+                recovery_hint="Choose an earlier treatment_time or add pre-period rows.",
+                diagnostics={"n_pre_periods": int(self.pre_mask.sum())},
+            )
         if self.post_mask.sum() < 1:
-            raise ValueError("Need at least 1 post-treatment period")
+            raise DataInsufficient(
+                "Need at least 1 post-treatment period",
+                recovery_hint="Choose a later treatment_time or add post-period rows.",
+                diagnostics={"n_post_periods": int(self.post_mask.sum())},
+            )
 
         self.Y_treated = pivot[self.treated_unit].values  # (T,)
         donor_cols = [c for c in pivot.columns if c != self.treated_unit]
@@ -1038,7 +1259,11 @@ class SyntheticControl:
         pre_donors = self.Y_donors[self.pre_mask]
         valid = ~np.any(np.isnan(pre_donors), axis=0)
         if valid.sum() == 0:
-            raise ValueError("No valid donor units (all have NaN in pre-period)")
+            raise DataInsufficient(
+                "No valid donor units (all have NaN in pre-period)",
+                recovery_hint="Add donor units with observed pre-treatment outcomes.",
+                diagnostics={"n_donors": len(self.donor_units)},
+            )
         self.Y_donors = self.Y_donors[:, valid]
         self.donor_units = [
             self.donor_units[i] for i in range(len(self.donor_units)) if valid[i]
@@ -1064,7 +1289,13 @@ class SyntheticControl:
         if self.special_predictors:
             for col, period_spec, op in self.special_predictors:
                 if col not in self.data.columns:
-                    raise ValueError(f"special_predictor column '{col}' not in data")
+                    raise MethodIncompatibility(
+                        f"special_predictor column '{col}' not in data",
+                        diagnostics={
+                            "missing_column": col,
+                            "available_columns": list(self.data.columns),
+                        },
+                    )
                 row = []
                 years = self._resolve_period_spec(period_spec)
                 spec_df = self.data[self.data[self.time].isin(years)]
@@ -1077,9 +1308,10 @@ class SyntheticControl:
                     elif op == "sum":
                         row.append(vals.sum())
                     else:
-                        raise ValueError(
+                        raise MethodIncompatibility(
                             f"special_predictor op must be 'mean' or 'sum', "
-                            f"got '{op}'"
+                            f"got '{op}'",
+                            diagnostics={"op": op},
                         )
                 predictor_rows.append(np.asarray(row, dtype=float))
                 label = (
@@ -1092,8 +1324,12 @@ class SyntheticControl:
         if predictor_rows:
             X_full = np.vstack(predictor_rows)  # (K, J+1)
             if np.any(~np.isfinite(X_full)):
-                raise ValueError(  # pragma: no cover
-                    "Predictor matrix contains NaN/Inf — check data coverage."
+                raise DataInsufficient(  # pragma: no cover
+                    "Predictor matrix contains NaN/Inf — check data coverage.",
+                    recovery_hint=(
+                        "Add complete pre-treatment covariate or special "
+                        "predictor coverage for the treated and donor units."
+                    ),
                 )
             self.X_treated = X_full[:, 0]  # (K,)
             self.X_donors = X_full[:, 1:]  # (K, J)
@@ -1611,7 +1847,10 @@ def synthplot(
     mi = result.model_info
     gap_df = mi.get("gap_table")
     if gap_df is None:
-        raise ValueError("No gap_table in model_info. Use synth() result.")
+        raise MethodIncompatibility(
+            "No gap_table in model_info. Use synth() result.",
+            alternative_functions=["sp.synth"],
+        )
 
     times = gap_df["time"].values
     treated = gap_df["treated"].values
