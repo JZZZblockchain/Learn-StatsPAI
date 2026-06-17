@@ -34,7 +34,6 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 from scipy.optimize import minimize
 from scipy.special import logsumexp
 
@@ -320,7 +319,7 @@ def _fit_ti_tvd(
     k_beta = X_mat.shape[1]
 
     # Precompute within-group last period T_i for TVD (relative time = t - T_i).
-    # For TVD a_it = exp(-eta*(t - T_i)).  If time unavailable, treat as sequence 1..T_i.
+    # If time is unavailable, treat observations as sequence 1..T_i.
     if time_col is None:
         # Assign within-group rank (0, 1, ..., T_i-1); T_i = counts[i]-1 for last.
         rel_time = np.empty(n, dtype=float)
@@ -380,7 +379,9 @@ def _fit_ti_tvd(
         mu_star = (sign * sigma_u**2 * A_i + sigma_v**2 * mu_scalar) / denom
         if has_mu:
             term_eps = -C_i * (eps_tilde - sign * mu_scalar) ** 2 / (2.0 * denom)
-            log_trunc = _fc._log_phi_cdf(mu_scalar / sigma_u)
+            log_trunc = float(
+                _fc._log_phi_cdf(np.array([mu_scalar / sigma_u], dtype=float))[0]
+            )
         else:
             term_eps = -C_i * eps_tilde**2 / (2.0 * denom)
             log_trunc = -np.log(2.0)
@@ -395,7 +396,7 @@ def _fit_ti_tvd(
                 + term_eps
                 + _fc._log_phi_cdf(mu_star / sigma_star)
             )
-        return ll_group
+        return np.asarray(ll_group, dtype=float)
 
     def neg_loglik(theta: np.ndarray) -> float:
         if not np.all(np.isfinite(theta)):
@@ -435,7 +436,9 @@ def _fit_ti_tvd(
             # -log Phi(mu/sigma_u): normalization of truncation
             # Contribution of ε̃ quadratic:  -C_i (ε̃ - sign mu)^2 / (2 denom)
             term_eps = -C_i * (eps_tilde - sign * mu_scalar) ** 2 / (2.0 * denom)
-            log_trunc = _fc._log_phi_cdf(mu_scalar / sigma_u)
+            log_trunc = float(
+                _fc._log_phi_cdf(np.array([mu_scalar / sigma_u], dtype=float))[0]
+            )
         else:
             # Half-normal prior (mu=0): -log Phi(0) = log 2 → + log 2 in LL.
             term_eps = -C_i * eps_tilde**2 / (2.0 * denom)
@@ -564,10 +567,10 @@ def _fit_ti_tvd(
 
     E_u_i = _fc._posterior_truncnormal_mean(mu_star, sigma_star)
     TE_bc_i = _fc._battese_coelli_te(mu_star, sigma_star)
-    TE_jlms_i = np.clip(np.exp(-E_u_i), 0.0, 1.0)
 
     # Unit-level and observation-level efficiencies
-    # Obs-level: u_it = a_it * u_i, so TE_it = exp(-a_it * u_i) ≈ exp(-a_it * E[u_i|e_i])
+    # Obs-level: u_it = a_it * u_i, so
+    # TE_it = exp(-a_it * u_i) ~= exp(-a_it * E[u_i|e_i]).
     # Using JLMS: TE_jlms_obs = exp(-a_it * E_u_i[group_idx])
     E_u_obs = a_vec * E_u_i[group_idx]
     TE_jlms_obs = np.clip(np.exp(-E_u_obs), 0.0, 1.0)
@@ -600,7 +603,9 @@ def _fit_ti_tvd(
             "method": f"Panel ML ({model}, {dist})",
             "panel_model": model,
             "inefficiency_dist": dist,
-            "vce": vce if cluster_effective is None else f"cluster({cluster_effective})",
+            "vce": (
+                vce if cluster_effective is None else f"cluster({cluster_effective})"
+            ),
             "cost": cost,
             "sign": sign,
             "te_method": "bc",
@@ -690,11 +695,13 @@ def _fit_tfe(
     ).reset_index(drop=True)
 
     # Build firm-dummy columns (drop first for identification, keep cons).
-    dummies = pd.get_dummies(df[id_col], prefix=f"_{id_col}", drop_first=True,
-                              dtype=float)
+    dummies = pd.get_dummies(
+        df[id_col], prefix=f"_{id_col}", drop_first=True, dtype=float
+    )
     extended_x = list(x) + list(dummies.columns)
-    df_ext = pd.concat([df.drop(columns=dummies.columns, errors="ignore"),
-                        dummies], axis=1)
+    df_ext = pd.concat(
+        [df.drop(columns=dummies.columns, errors="ignore"), dummies], axis=1
+    )
 
     # Delegate to cross-sectional frontier() — it returns a FrontierResult.
     res = _cs_frontier(
@@ -712,7 +719,9 @@ def _fit_tfe(
     res.model_info["model_type"] = (
         f"Panel Stochastic Frontier (TFE, {'Cost' if cost else 'Production'})"
     )
-    res.model_info["method"] = f"Greene 2005 TFE ({dist}, N={df[id_col].nunique()} dummies)"
+    res.model_info["method"] = (
+        f"Greene 2005 TFE ({dist}, N={df[id_col].nunique()} dummies)"
+    )
     res.model_info["panel_model"] = "tfe"
     res.data_info["id_col"] = id_col
     res.data_info["time_col"] = time_col
@@ -839,7 +848,6 @@ def _fit_tre(
     Integrates alpha_i out of the group likelihood via n_quad-node
     Gauss-Hermite quadrature.
     """
-    from scipy import stats as _sst
     if dist not in {"half-normal", "exponential"}:
         raise ValueError(
             "TRE currently supports dist in {'half-normal', 'exponential'}. "
@@ -880,14 +888,16 @@ def _fit_tre(
         alpha_shifts = sigma_alpha * np.sqrt(2.0) * nodes  # (n_quad,)
         # Shift eps by each alpha_k: shape (n_quad, n)
         eps_shifted = eps[None, :] - alpha_shifts[:, None]
+        sigma_v_grid = np.full(eps_shifted.shape, sigma_v, dtype=float)
+        sigma_u_grid = np.full(eps_shifted.shape, sigma_u, dtype=float)
 
         if dist == "half-normal":
             log_f = _fc.loglik_halfnormal(
-                eps_shifted, sigma_v, sigma_u, sign
+                eps_shifted, sigma_v_grid, sigma_u_grid, sign
             )
         else:
             log_f = _fc.loglik_exponential(
-                eps_shifted, sigma_v, sigma_u, sign
+                eps_shifted, sigma_v_grid, sigma_u_grid, sign
             )
         # Sum log-f within each group, per quadrature node → (n_quad, N).
         log_f_group = np.zeros((n_quad, N))
@@ -899,9 +909,9 @@ def _fit_tre(
         # scipy logsumexp handles the all-(-inf) corner (returns -inf rather
         # than NaN from exp(-inf - (-inf)) = exp(nan) in a hand-rolled form).
         ll_group = logsumexp(log_contrib, axis=0) - 0.5 * np.log(np.pi)
-        return ll_group
+        return np.asarray(ll_group, dtype=float)
 
-    def neg_loglik(theta):
+    def neg_loglik(theta: np.ndarray) -> float:
         if not np.all(np.isfinite(theta)):
             return 1e20
         sigma_v = float(np.exp(theta[k_beta]))
@@ -1034,8 +1044,10 @@ def _fit_tre(
             "mean_efficiency_bc": float(np.mean(TE_bc_obs)),
             "mean_efficiency_jlms": float(np.mean(TE_jlms_obs)),
             "converged": bool(result.success),
-            "vce": vce_l if (cluster is None or cluster == id_col)
-                   else f"cluster({cluster})",
+            "vce": (
+                vce_l if (cluster is None or cluster == id_col)
+                else f"cluster({cluster})"
+            ),
             # Tell FrontierResult.efficiency() / summary() that per-obs
             # efficiency is a broadcast marginal, not a posterior score,
             # so callers can be warned rather than silently read a

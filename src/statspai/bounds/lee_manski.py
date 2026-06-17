@@ -31,7 +31,7 @@ Manski, C. F. (1990). "Nonparametric Bounds on Treatment Effects."
 American Economic Review P&P, 80(2), 319-323. [@manski1990nonparametric]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -161,11 +161,11 @@ def lee_bounds(
     se_lb = np.std(boot_lb, ddof=1)
     se_ub = np.std(boot_ub, ddof=1)
 
-    ci_lower = lb - z_crit * se_lb
-    ci_upper = ub + z_crit * se_ub
+    ci_lower = float(lb - z_crit * se_lb)
+    ci_upper = float(ub + z_crit * se_ub)
 
-    midpoint = (lb + ub) / 2
-    se_mid = (se_lb + se_ub) / 2
+    midpoint = float((lb + ub) / 2)
+    se_mid = float((se_lb + se_ub) / 2)
 
     if se_mid > 0:
         z_stat = midpoint / se_mid
@@ -217,7 +217,12 @@ def lee_bounds(
     return _result
 
 
-def _compute_lee_bounds(Y1, Y0, p1, p0):
+def _compute_lee_bounds(
+    Y1: np.ndarray,
+    Y0: np.ndarray,
+    p1: float,
+    p0: float,
+) -> tuple[float, float]:
     """Compute Lee bounds given observed outcomes and retention rates."""
     mean_y0 = np.mean(Y0)
 
@@ -354,11 +359,11 @@ def manski_bounds(
     se_lb = np.std(boot_lb, ddof=1)
     se_ub = np.std(boot_ub, ddof=1)
 
-    ci_lower = lb - z_crit * se_lb
-    ci_upper = ub + z_crit * se_ub
+    ci_lower = float(lb - z_crit * se_lb)
+    ci_upper = float(ub + z_crit * se_ub)
 
-    midpoint = (lb + ub) / 2
-    se_mid = (se_lb + se_ub) / 2
+    midpoint = float((lb + ub) / 2)
+    se_mid = float((se_lb + se_ub) / 2)
 
     if se_mid > 0:
         pvalue = float(2 * (1 - sp_stats.norm.cdf(abs(midpoint / se_mid))))
@@ -411,7 +416,14 @@ def manski_bounds(
     return _result
 
 
-def _compute_manski_bounds(Y1, Y0, p, y_lo, y_hi, assumption):
+def _compute_manski_bounds(
+    Y1: np.ndarray,
+    Y0: np.ndarray,
+    p: float,
+    y_lo: float,
+    y_hi: float,
+    assumption: str,
+) -> tuple[float, float]:
     """Compute Manski bounds under given assumption."""
     e1 = np.mean(Y1)  # E[Y|D=1]
     e0 = np.mean(Y0)  # E[Y|D=0]

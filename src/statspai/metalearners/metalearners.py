@@ -32,6 +32,7 @@ from scipy import stats
 # this file when the user never touches metalearners.
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -69,6 +70,64 @@ def _get_propensity(model, X, clip=(0.01, 0.99)):
     else:
         p = model.predict(X)
     return np.clip(p, clip[0], clip[1])
+
+
+def _prepare_effect_matrix(estimator: Any, X: Any, *, context: str) -> np.ndarray:
+    """Validate direct low-level meta-learner CATE prediction inputs."""
+    if not getattr(estimator, "_fitted", False):
+        raise MethodIncompatibility(
+            f"{context} requires a fitted learner.",
+            recovery_hint="Call fit() before requesting CATE predictions.",
+        )
+    try:
+        X_arr = np.asarray(X, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context} requires numeric covariates.",
+            recovery_hint="Convert CATE prediction covariates to numeric values.",
+        ) from exc
+    expected = getattr(estimator, "_n_features", None)
+    if X_arr.ndim == 1:
+        if expected is not None and expected > 1 and X_arr.size == expected:
+            X_arr = X_arr.reshape(1, -1)
+        elif expected in (None, 1):
+            X_arr = X_arr.reshape(-1, 1)
+        else:
+            raise MethodIncompatibility(
+                f"{context}: one-dimensional input does not match fitted "
+                "feature count.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+                diagnostics={
+                    "n_values": int(X_arr.size),
+                    "expected_features": expected,
+                },
+            )
+    elif X_arr.ndim != 2:
+        raise MethodIncompatibility(
+            f"{context}: X must be a 1D or 2D numeric array.",
+            recovery_hint="Pass X shaped (n_samples, n_features).",
+            diagnostics={"x_ndim": int(X_arr.ndim)},
+        )
+    if X_arr.shape[0] == 0:
+        raise DataInsufficient(
+            f"{context} received no rows.",
+            recovery_hint="Pass at least one prediction row.",
+        )
+    if expected is not None and X_arr.shape[1] != expected:
+        raise MethodIncompatibility(
+            f"{context}: feature count does not match fit().",
+            recovery_hint="Use the same covariates and order used at fit time.",
+            diagnostics={
+                "expected_features": expected,
+                "observed_features": int(X_arr.shape[1]),
+            },
+        )
+    if not np.isfinite(X_arr).all():
+        raise MethodIncompatibility(
+            f"{context}: X contains NaN or infinite values.",
+            recovery_hint="Drop or impute non-finite CATE prediction rows.",
+        )
+    return X_arr
 
 
 def _cross_fit_predict(model, X, y, n_folds, method='predict'):
@@ -229,7 +288,7 @@ class SLearner:
 
     def effect(self, X):
         """Estimate CATE: mu(X,1) - mu(X,0)."""
-        X = np.asarray(X)
+        X = _prepare_effect_matrix(self, X, context="SLearner.effect()")
         X1 = np.column_stack([X, np.ones(len(X))])
         X0 = np.column_stack([X, np.zeros(len(X))])
         return self._model.predict(X1) - self._model.predict(X0)
@@ -291,11 +350,12 @@ class TLearner:
         self._mu1 = clone(self.model_1)
         self._mu0.fit(X[mask0], Y[mask0])
         self._mu1.fit(X[mask1], Y[mask1])
+        self._n_features = X.shape[1]
         self._fitted = True
         return self
 
     def effect(self, X):
-        X = np.asarray(X)
+        X = _prepare_effect_matrix(self, X, context="TLearner.effect()")
         return self._mu1.predict(X) - self._mu0.predict(X)
 
 
@@ -393,11 +453,12 @@ class XLearner:
         self._prop = clone(self.propensity_model)
         self._prop.fit(X, D)
 
+        self._n_features = X.shape[1]
         self._fitted = True
         return self
 
     def effect(self, X):
-        X = np.asarray(X)
+        X = _prepare_effect_matrix(self, X, context="XLearner.effect()")
         e = _get_propensity(self._prop, X)
         tau0 = self._tau0.predict(X)
         tau1 = self._tau1.predict(X)
@@ -490,11 +551,12 @@ class RLearner:
         self._cate = clone(self.cate_model)
         self._cate.fit(X, pseudo_Y, sample_weight=weights)
 
+        self._n_features = X.shape[1]
         self._fitted = True
         return self
 
     def effect(self, X):
-        X = np.asarray(X)
+        X = _prepare_effect_matrix(self, X, context="RLearner.effect()")
         return self._cate.predict(X)
 
 
@@ -626,11 +688,12 @@ class DRLearner:
             "clip": (0.01, 0.99),
         }
 
+        self._n_features = X.shape[1]
         self._fitted = True
         return self
 
     def effect(self, X):
-        X = np.asarray(X)
+        X = _prepare_effect_matrix(self, X, context="DRLearner.effect()")
         return self._cate.predict(X)
 
 

@@ -19,12 +19,15 @@ References
 ----------
 Shalit, U., Johansson, F. D., & Sontag, D. (2017).
 Estimating individual treatment effect: generalization bounds and algorithms.
-Proceedings of the 34th International Conference on Machine Learning (ICML). [@shalit2017estimating]
+Proceedings of the 34th International Conference on Machine Learning
+(ICML). [@shalit2017estimating]
 
 Shi, C., Blei, D. M., & Veitch, V. (2019).
 Adapting neural networks for the estimation of treatment effects.
 Advances in Neural Information Processing Systems (NeurIPS), 32. [@shi2019adapting]
 """
+
+from typing import Any
 
 __all__ = [
     'tarnet',
@@ -66,7 +69,7 @@ _LAZY_ATTRS = {
 }
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Resolve optional PyTorch/sklearn-backed neural exports lazily."""
     if name in _LAZY_ATTRS:
         import importlib

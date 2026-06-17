@@ -63,14 +63,23 @@ import pandas as pd
 from scipy import stats
 from scipy.special import expit, logit
 
-from ..exceptions import ConvergenceWarning
+from ..exceptions import ConvergenceWarning, DataInsufficient, MethodIncompatibility
 
-# sklearn is imported lazily inside the helpers that need it so that
-# ``import statspai`` doesn't pull ~245 sklearn submodules through this
-# file when the user never touches ltmle.
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from sklearn.linear_model import LogisticRegression, LinearRegression
+_LTMLE_ALTERNATIVES = ["sp.ltmle", "sp.tmle.ltmle", "sp.ltmle_survival"]
+
+
+def _ltmle_error(
+    message: str,
+    *,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    recovery_hint: str = "Check LTMLE column names and regime options.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_LTMLE_ALTERNATIVES,
+    )
 
 
 # Type alias for regime specification: either a static sequence of 0/1
@@ -78,7 +87,10 @@ if TYPE_CHECKING:
 # vector of 0/1. The history dict contains, at call time, all
 # baseline/time-varying covariates plus any treatments already assigned
 # by the regime at earlier time points.
-Regime = Union[Sequence[int], Callable[[int, Dict[str, np.ndarray]], np.ndarray]]
+Regime = Union[
+    Sequence[int],
+    Callable[[int, Dict[str, np.ndarray]], np.ndarray],
+]
 
 
 @dataclass
@@ -87,7 +99,7 @@ class LTMLEResult:
     psi_control: float
     ate: float
     se: float
-    ci: tuple
+    ci: tuple[float, float]
     pvalue: float
     K: int
     n_obs: int
@@ -117,22 +129,24 @@ class LTMLEResult:
 # Internal helpers
 # --------------------------------------------------------------------
 
-def _safe_logit(p, eps=1e-6):
+def _safe_logit(p: Any, eps: float = 1e-6) -> np.ndarray:
     p = np.clip(p, eps, 1 - eps)
-    return logit(p)
+    return np.asarray(logit(p), dtype=float)
 
 
-def _fit_logit(X: np.ndarray, y: np.ndarray) -> 'LogisticRegression':
+def _fit_logit(X: np.ndarray, y: np.ndarray) -> Any:
     """Logistic regression with l2; handles degenerate y."""
     if np.all(y == y[0]):
         # trivial constant response; LR will fail — return dummy
         class _Const:
-            def __init__(self, p):
+            def __init__(self, p: float) -> None:
                 self.p = p
 
-            def predict_proba(self, X):
-                return np.column_stack([1 - self.p * np.ones(X.shape[0]),
-                                        self.p * np.ones(X.shape[0])])
+            def predict_proba(self, X: np.ndarray) -> np.ndarray:
+                return np.column_stack([
+                    1 - self.p * np.ones(X.shape[0]),
+                    self.p * np.ones(X.shape[0]),
+                ])
 
         return _Const(float(y[0]))
     from sklearn.linear_model import LogisticRegression
@@ -141,12 +155,13 @@ def _fit_logit(X: np.ndarray, y: np.ndarray) -> 'LogisticRegression':
     return lr
 
 
-def _predict_proba(model, X: np.ndarray) -> np.ndarray:
+def _predict_proba(model: Any, X: np.ndarray) -> np.ndarray:
     prob = model.predict_proba(X)
-    return prob[:, 1] if prob.ndim == 2 else prob
+    out = prob[:, 1] if prob.ndim == 2 else prob
+    return np.asarray(out, dtype=float)
 
 
-def _fit_linear(X: np.ndarray, y: np.ndarray) -> 'LinearRegression':
+def _fit_linear(X: np.ndarray, y: np.ndarray) -> Any:
     from sklearn.linear_model import LinearRegression
     lr = LinearRegression()
     lr.fit(X, y)
@@ -254,18 +269,77 @@ def ltmle(
     ``detail['targeting_failures']``. Per-step epsilons (time order
     k=0..K-1) are exposed in ``detail['epsilons']``.
     """
+    if not isinstance(data, pd.DataFrame):
+        raise _ltmle_error(
+            "ltmle data must be a pandas DataFrame.",
+            diagnostics={"type": type(data).__name__},
+            recovery_hint="Pass a wide-format pandas DataFrame.",
+        )
     treatments = list(treatments)
     covariates_time = [list(c) for c in covariates_time]
     if len(treatments) != len(covariates_time):
-        raise ValueError("treatments and covariates_time must have equal length")
+        raise _ltmle_error(
+            "treatments and covariates_time must have equal length.",
+            diagnostics={
+                "n_treatments": len(treatments),
+                "n_covariate_blocks": len(covariates_time),
+            },
+            recovery_hint="Pass one covariate block for each treatment time.",
+        )
     K = len(treatments)
     if K < 1:
-        raise ValueError("Need at least one time point")
+        raise DataInsufficient(
+            "ltmle needs at least one time point.",
+            recovery_hint="Pass at least one treatment column.",
+            diagnostics={"K": K},
+            alternative_functions=_LTMLE_ALTERNATIVES,
+        )
 
     baseline = list(baseline or [])
     censoring = list(censoring or []) if censoring else []
     if censoring and len(censoring) != K:
-        raise ValueError("censoring must have length K if provided")
+        raise _ltmle_error(
+            "censoring must have length K if provided.",
+            diagnostics={"K": K, "n_censoring": len(censoring)},
+            recovery_hint="Pass one censoring indicator per treatment time.",
+        )
+    if outcome_type not in {"auto", "binary", "continuous"}:
+        raise _ltmle_error(
+            "outcome_type must be 'auto', 'binary', or 'continuous'.",
+            diagnostics={"outcome_type": outcome_type},
+            recovery_hint="Use outcome_type='auto', 'binary', or 'continuous'.",
+        )
+    if not (0 < alpha < 1):
+        raise _ltmle_error(
+            f"alpha must be in (0, 1), got {alpha}.",
+            diagnostics={"alpha": alpha},
+            recovery_hint="Use a confidence level such as alpha=0.05.",
+        )
+    if len(propensity_bounds) != 2:
+        raise _ltmle_error(
+            "propensity_bounds must contain exactly two values.",
+            diagnostics={"propensity_bounds": list(propensity_bounds)},
+            recovery_hint="Use propensity_bounds=(0.01, 0.99).",
+        )
+    p_lo, p_hi = float(propensity_bounds[0]), float(propensity_bounds[1])
+    if not (0 < p_lo < p_hi < 1):
+        raise _ltmle_error(
+            "propensity_bounds must satisfy 0 < lower < upper < 1.",
+            diagnostics={"propensity_bounds": [p_lo, p_hi]},
+            recovery_hint="Use bounds such as (0.01, 0.99).",
+        )
+    propensity_bounds = (p_lo, p_hi)
+
+    required = [y] + treatments + baseline + censoring
+    for block in covariates_time:
+        required.extend(block)
+    missing = set(required) - set(data.columns)
+    if missing:
+        raise _ltmle_error(
+            f"Missing columns: {missing}",
+            diagnostics={"missing_columns": sorted(str(col) for col in missing)},
+            recovery_hint="Pass LTMLE column names present in the DataFrame.",
+        )
 
     if regime_treated is None:
         regime_treated = [1] * K
@@ -274,12 +348,27 @@ def ltmle(
     # Validate shape only for static (non-callable) regimes. Callable
     # dynamic regimes are evaluated lazily at each time step.
     if not callable(regime_treated) and len(regime_treated) != K:
-        raise ValueError("regime_treated must have length K or be callable")
+        raise _ltmle_error(
+            "regime_treated must have length K or be callable.",
+            diagnostics={"K": K, "regime_length": len(regime_treated)},
+            recovery_hint="Pass a static regime with one value per time point.",
+        )
     if not callable(regime_control) and len(regime_control) != K:
-        raise ValueError("regime_control must have length K or be callable")
+        raise _ltmle_error(
+            "regime_control must have length K or be callable.",
+            diagnostics={"K": K, "regime_length": len(regime_control)},
+            recovery_hint="Pass a static regime with one value per time point.",
+        )
 
     df = data.copy().reset_index(drop=True)
     n = len(df)
+    if n < 2:
+        raise DataInsufficient(
+            "ltmle requires at least two observations.",
+            recovery_hint="Provide more rows for longitudinal TMLE.",
+            diagnostics={"n": n},
+            alternative_functions=_LTMLE_ALTERNATIVES,
+        )
 
     # Detect outcome type
     if outcome_type == "auto":
@@ -295,8 +384,8 @@ def ltmle(
     for k in range(K):
         hist_cols = list(baseline)
         for j in range(k):
-            hist_cols += [treatments[j]] + covariates_time[j]
-        hist_cols += covariates_time[k]
+            hist_cols += [treatments[j]] + list(covariates_time[j])
+        hist_cols += list(covariates_time[k])
         X_k = df[hist_cols].to_numpy(dtype=float) if hist_cols else np.ones((n, 0))
         X_k = np.column_stack([np.ones(n), X_k])
         A_k = df[treatments[k]].to_numpy(dtype=int)
@@ -313,8 +402,8 @@ def ltmle(
             continue
         hist_cols = list(baseline)
         for j in range(k):
-            hist_cols += [treatments[j]] + covariates_time[j]
-        hist_cols += covariates_time[k] + [treatments[k]]
+            hist_cols += [treatments[j]] + list(covariates_time[j])
+        hist_cols += list(covariates_time[k]) + [treatments[k]]
         X_c = df[hist_cols].to_numpy(dtype=float) if hist_cols else np.ones((n, 0))
         X_c = np.column_stack([np.ones(n), X_c])
         C_k = df[censoring[k]].to_numpy(dtype=int)
@@ -347,13 +436,17 @@ def ltmle(
                 history[c] = df[c].to_numpy(dtype=float)
             a_k = np.asarray(regime(k, history), dtype=int).reshape(-1)
             if a_k.size != n:
-                raise ValueError(
+                raise _ltmle_error(
                     f"Dynamic regime at k={k} returned length "
-                    f"{a_k.size}, expected {n}."
+                    f"{a_k.size}, expected {n}.",
+                    diagnostics={"k": k, "length": a_k.size, "expected": n},
+                    recovery_hint="Return one treatment assignment per row.",
                 )
             if not set(np.unique(a_k)).issubset({0, 1}):
-                raise ValueError(
-                    f"Dynamic regime at k={k} produced non-binary values."
+                raise _ltmle_error(
+                    f"Dynamic regime at k={k} produced non-binary values.",
+                    diagnostics={"k": k, "values": np.unique(a_k).tolist()},
+                    recovery_hint="Return only 0/1 treatment assignments.",
                 )
             mat[:, k] = a_k
             # Expose the regime's own past assignments to subsequent calls.
@@ -379,9 +472,13 @@ def ltmle(
             # History at time k
             hist_cols = list(baseline)
             for j in range(k):
-                hist_cols += [treatments[j]] + covariates_time[j]
-            hist_cols += covariates_time[k]
-            X_k_hist = df[hist_cols].to_numpy(dtype=float) if hist_cols else np.ones((n, 0))
+                hist_cols += [treatments[j]] + list(covariates_time[j])
+            hist_cols += list(covariates_time[k])
+            X_k_hist = (
+                df[hist_cols].to_numpy(dtype=float)
+                if hist_cols
+                else np.ones((n, 0))
+            )
             X_k_hist = np.column_stack([np.ones(n), X_k_hist])
 
             # Design matrix for Q regression includes A_k
@@ -460,11 +557,15 @@ def ltmle(
                     resid = _safe_logit(Yb) - offset
                     mask = H > 0
                     if mask.sum() > 1 and np.std(H[mask]) > 1e-10:
-                        eps = float(np.sum(H[mask] * resid[mask]) /
-                                    np.sum(H[mask] ** 2))
+                        eps = float(
+                            np.sum(H[mask] * resid[mask])
+                            / np.sum(H[mask] ** 2)
+                        )
                     else:
                         eps = 0.0
-                    Q_star_regime = expit(_safe_logit(Q_hat_regime) + eps * new_cum_weight)
+                    Q_star_regime = expit(
+                        _safe_logit(Q_hat_regime) + eps * new_cum_weight
+                    )
                 except Exception as exc:
                     eps = 0.0
                     Q_star_regime = Q_hat_regime
@@ -482,8 +583,10 @@ def ltmle(
                 resid = Q - Q_hat_raw
                 mask = H > 0
                 if mask.sum() > 1 and np.std(H[mask]) > 1e-10:
-                    eps = float(np.sum(H[mask] * resid[mask]) /
-                                np.sum(H[mask] ** 2))
+                    eps = float(
+                        np.sum(H[mask] * resid[mask])
+                        / np.sum(H[mask] ** 2)
+                    )
                 else:
                     eps = 0.0
                 Q_star_regime = Q_hat_regime + eps * new_cum_weight
@@ -528,7 +631,9 @@ def ltmle(
         regime_treated=_serialise_regime(regime_treated),
         regime_control=_serialise_regime(regime_control),
         detail={
-            "propensity_summary": [(float(p.min()), float(p.max())) for p in propensities],
+            "propensity_summary": [
+                (float(p.min()), float(p.max())) for p in propensities
+            ],
             "regime_treated_callable": callable(regime_treated),
             "regime_control_callable": callable(regime_control),
             # Per-step targeting epsilons (time order k=0..K-1) and the

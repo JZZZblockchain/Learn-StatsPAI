@@ -41,7 +41,7 @@ not a sensible selector.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -62,7 +62,6 @@ from .metalearners import (
     metalearner,
     _default_outcome_model,
     _default_propensity_model,
-    _default_cate_model,
     _get_propensity,
     _prepare_data,
 )
@@ -180,11 +179,11 @@ class AutoCATEResult:
 
 def _build_learner(
     code: str,
-    outcome_model,
-    propensity_model,
-    cate_model,
+    outcome_model: Any,
+    propensity_model: Any,
+    cate_model: Any,
     n_folds: int,
-):
+) -> Any:
     """Instantiate a fresh learner for a given short code."""
     from sklearn.base import clone
     code = code.lower()
@@ -226,8 +225,8 @@ def _cross_fit_nuisance(
     X: np.ndarray,
     Y: np.ndarray,
     D: np.ndarray,
-    outcome_model,
-    propensity_model,
+    outcome_model: Any,
+    propensity_model: Any,
     n_folds: int,
     random_state: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -254,9 +253,9 @@ def _honest_cate_predictions(
     X: np.ndarray,
     Y: np.ndarray,
     D: np.ndarray,
-    outcome_model,
-    propensity_model,
-    cate_model,
+    outcome_model: Any,
+    propensity_model: Any,
+    cate_model: Any,
     n_folds: int,
     random_state: int,
 ) -> np.ndarray:
@@ -443,7 +442,11 @@ def auto_cate(
 
     # Shared nuisance: one cross-fit for all learners' scoring
     om = outcome_model if outcome_model is not None else _default_outcome_model()
-    pm = propensity_model if propensity_model is not None else _default_propensity_model()
+    pm = (
+        propensity_model
+        if propensity_model is not None
+        else _default_propensity_model()
+    )
     m_hat, e_hat = _cross_fit_nuisance(
         X, Y, D,
         outcome_model=om, propensity_model=pm,

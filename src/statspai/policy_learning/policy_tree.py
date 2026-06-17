@@ -28,6 +28,7 @@ import pandas as pd
 # file when the user never touches policy_tree.
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -533,6 +534,7 @@ class PolicyTree:
 
         self._tree = tree
         self._scores = scores
+        self._n_policy_features = X_pol.shape[1]
 
         # Influence-function SE on the policy value:
         # V̂(π̂) = (1/n) Σ Γ_i π̂(X_i)  →  IF_i = Γ_i π̂(X_i) - V̂.
@@ -582,8 +584,60 @@ class PolicyTree:
             Binary treatment recommendations (0 or 1).
         """
         if not hasattr(self, '_tree'):
-            raise ValueError("PolicyTree must be fitted first.")
-        X_new = np.asarray(X_new, dtype=np.float64)
+            raise MethodIncompatibility(
+                "PolicyTree.predict() requires a fitted policy tree.",
+                recovery_hint="Call fit() before predict().",
+            )
+        try:
+            X_new = np.asarray(X_new, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "PolicyTree.predict() requires numeric policy covariates.",
+                recovery_hint="Convert prediction covariates to numeric values.",
+            ) from exc
+        expected = getattr(self, "_n_policy_features", None)
+        if X_new.ndim == 1:
+            if expected is not None and expected > 1 and X_new.size == expected:
+                X_new = X_new.reshape(1, -1)
+            elif expected in (None, 1):
+                X_new = X_new.reshape(-1, 1)
+            else:
+                raise MethodIncompatibility(
+                    "PolicyTree.predict(): one-dimensional input does not "
+                    "match the fitted policy feature count.",
+                    recovery_hint="Pass X_new shaped (n_samples, n_policy_features).",
+                    diagnostics={
+                        "n_values": int(X_new.size),
+                        "expected_features": expected,
+                    },
+                )
+        elif X_new.ndim != 2:
+            raise MethodIncompatibility(
+                "PolicyTree.predict(): X_new must be a 1D or 2D array.",
+                recovery_hint="Pass X_new shaped (n_samples, n_policy_features).",
+                diagnostics={"x_ndim": int(X_new.ndim)},
+            )
+        if X_new.shape[0] == 0:
+            raise DataInsufficient(
+                "PolicyTree.predict() received no rows.",
+                recovery_hint="Pass at least one prediction row.",
+            )
+        if expected is not None and X_new.shape[1] != expected:
+            raise MethodIncompatibility(
+                "PolicyTree.predict(): feature count does not match fit().",
+                recovery_hint=(
+                    "Use the same policy covariates and order used when fitting."
+                ),
+                diagnostics={
+                    "expected_features": expected,
+                    "observed_features": int(X_new.shape[1]),
+                },
+            )
+        if not np.isfinite(X_new).all():
+            raise MethodIncompatibility(
+                "PolicyTree.predict(): X_new contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite policy covariate rows.",
+            )
         return self._predict_tree(self._tree, X_new)
 
     def _compute_dr_scores(self, Y, D, W, n):

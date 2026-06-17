@@ -19,19 +19,94 @@ per-unit/per-action diagnostics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.tree import DecisionTreeClassifier
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
 
 __all__ = [
     "sharp_ope_unobserved", "causal_policy_forest",
     "SharpOPEResult", "CausalPolicyForestResult",
 ]
+
+_OPE_ALTERNATIVES = [
+    "sp.sharp_ope_unobserved",
+    "sp.causal_policy_forest",
+    "sp.ope.evaluate",
+]
+
+
+def _ope_contract_error(
+    message: str,
+    *,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    recovery_hint: str = "Check OPE input columns and option values.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_OPE_ALTERNATIVES,
+    )
+
+
+def _require_dataframe(data: Any, context: str) -> pd.DataFrame:
+    if not isinstance(data, pd.DataFrame):
+        raise _ope_contract_error(
+            f"{context} must be a pandas DataFrame.",
+            diagnostics={"context": context, "type": type(data).__name__},
+            recovery_hint="Pass a pandas DataFrame with logged policy rows.",
+        )
+    if data.empty:
+        raise DataInsufficient(
+            f"{context} is empty.",
+            recovery_hint="Provide a non-empty logged-policy sample.",
+            diagnostics={"context": context, "n_rows": 0},
+            alternative_functions=_OPE_ALTERNATIVES,
+        )
+    return data
+
+
+def _require_columns(
+    data: pd.DataFrame,
+    columns: Sequence[str],
+    *,
+    context: str,
+) -> None:
+    missing = set(columns) - set(data.columns)
+    if missing:
+        raise _ope_contract_error(
+            f"Missing columns: {missing}",
+            diagnostics={
+                "context": context,
+                "missing_columns": sorted(str(col) for col in missing),
+            },
+            recovery_hint="Pass valid column names from the input DataFrame.",
+        )
+
+
+def _normalize_covariates(covariates: Sequence[str] | str) -> List[str]:
+    raw = [covariates] if isinstance(covariates, str) else list(covariates)
+    if not raw:
+        raise _ope_contract_error(
+            "causal_policy_forest requires at least one covariate.",
+            diagnostics={"covariates": raw},
+            recovery_hint="Pass covariates=['x1', 'x2'] or a single column name.",
+        )
+    for idx, covariate in enumerate(raw):
+        if not isinstance(covariate, str) or not covariate:
+            raise _ope_contract_error(
+                f"covariates[{idx}] must be a non-empty column-name string.",
+                diagnostics={"index": idx, "value": repr(covariate)},
+                recovery_hint="Pass covariates as column-name strings.",
+            )
+    return raw
 
 
 @dataclass
@@ -69,7 +144,8 @@ class CausalPolicyForestResult:
         return "\n".join([
             "Causal-Policy Forest (Kato 2025, arXiv:2512.22846)",
             "=" * 60,
-            f"  Policy value       : {self.policy_value:+.6f}  (SE {self.policy_value_se:.6f})",
+            "  Policy value       : "
+            f"{self.policy_value:+.6f}  (SE {self.policy_value_se:.6f})",
             f"  Trees              : {self.n_trees}",
             f"  Max depth          : {self.depth}",
             f"  Action assignments : {self.action_counts}",
@@ -151,17 +227,47 @@ def sharp_ope_unobserved(
     >>> bool(res.lower_bound <= res.point_estimate <= res.upper_bound)
     True
     """
+    data = _require_dataframe(data, "sharp_ope_unobserved data")
     if gamma < 1.0:
-        raise ValueError(f"gamma must be >= 1; got {gamma}.")
+        raise _ope_contract_error(
+            f"gamma must be >= 1; got {gamma}.",
+            diagnostics={"gamma": gamma},
+            recovery_hint="Use gamma >= 1.0; gamma=1 recovers IPS.",
+        )
     cols = {actions, rewards, logging_prob, target_prob}
-    missing = cols - set(data.columns)
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
+    _require_columns(data, list(cols), context="sharp_ope_unobserved")
     R = data[rewards].to_numpy(dtype=float)
     e_hat = data[logging_prob].to_numpy(dtype=float)
     pi = data[target_prob].to_numpy(dtype=float)
+    if not (np.isfinite(R).all() and np.isfinite(e_hat).all()
+            and np.isfinite(pi).all()):
+        raise _ope_contract_error(
+            "sharp_ope_unobserved requires finite rewards and probabilities.",
+            diagnostics={
+                "finite_rewards": bool(np.isfinite(R).all()),
+                "finite_logging_prob": bool(np.isfinite(e_hat).all()),
+                "finite_target_prob": bool(np.isfinite(pi).all()),
+            },
+            recovery_hint="Drop or impute non-finite OPE inputs before fitting.",
+        )
     if (e_hat <= 0).any() or (e_hat > 1).any():
-        raise ValueError("`logging_prob` must be in (0,1].")
+        raise _ope_contract_error(
+            "`logging_prob` must be in (0,1].",
+            diagnostics={
+                "min_logging_prob": float(np.min(e_hat)),
+                "max_logging_prob": float(np.max(e_hat)),
+            },
+            recovery_hint="Pass chosen-action logging probabilities in (0, 1].",
+        )
+    if (pi < 0).any() or (pi > 1).any():
+        raise _ope_contract_error(
+            "`target_prob` must be in [0,1].",
+            diagnostics={
+                "min_target_prob": float(np.min(pi)),
+                "max_target_prob": float(np.max(pi)),
+            },
+            recovery_hint="Pass target-policy probabilities for each logged action.",
+        )
     n = len(data)
 
     # IPS point estimate
@@ -274,16 +380,85 @@ def causal_policy_forest(
     >>> bool(np.isfinite(res.policy_value))
     True
     """
+    data = _require_dataframe(data, "causal_policy_forest data")
+    covariates = _normalize_covariates(covariates)
+    _require_columns(
+        data,
+        [actions, rewards, *covariates],
+        context="causal_policy_forest",
+    )
+    if n_trees < 1:
+        raise _ope_contract_error(
+            f"n_trees must be >= 1, got {n_trees}.",
+            diagnostics={"n_trees": n_trees},
+            recovery_hint="Use n_trees >= 1.",
+        )
+    if depth < 1:
+        raise _ope_contract_error(
+            f"depth must be >= 1, got {depth}.",
+            diagnostics={"depth": depth},
+            recovery_hint="Use a positive decision-tree depth.",
+        )
+    if not (0 < subsample_frac <= 1):
+        raise _ope_contract_error(
+            "subsample_frac must be in the interval (0, 1].",
+            diagnostics={"subsample_frac": subsample_frac},
+            recovery_hint="Use a subsample fraction such as 0.7.",
+        )
     rng = np.random.default_rng(random_state)
-    missing = set([actions, rewards, *covariates]) - set(data.columns)
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
     A = data[actions].to_numpy(dtype=int)
     R = data[rewards].to_numpy(dtype=float)
     X = data[list(covariates)].to_numpy(dtype=float)
     n = len(data)
+    if n < 30:
+        raise DataInsufficient(
+            "causal_policy_forest requires at least 30 logged observations.",
+            recovery_hint="Provide more logged-policy rows or use a simpler OPE "
+            "estimator.",
+            diagnostics={"n": n},
+            alternative_functions=_OPE_ALTERNATIVES,
+        )
+    if not (np.isfinite(R).all() and np.isfinite(X).all()):
+        raise _ope_contract_error(
+            "causal_policy_forest requires finite rewards and covariates.",
+            diagnostics={
+                "finite_rewards": bool(np.isfinite(R).all()),
+                "finite_covariates": bool(np.isfinite(X).all()),
+            },
+            recovery_hint="Drop or impute non-finite policy-forest inputs.",
+        )
+    if A.size == 0 or (A < 0).any():
+        raise _ope_contract_error(
+            "actions must be non-negative integer labels.",
+            diagnostics={"min_action": int(A.min()) if A.size else None},
+            recovery_hint="Encode actions as integers 0, 1, ...",
+        )
     if n_actions is None:
         n_actions = int(A.max() + 1)
+    if n_actions < 2:
+        raise DataInsufficient(
+            "causal_policy_forest requires at least two possible actions.",
+            recovery_hint="Provide logged data with multiple actions.",
+            diagnostics={"n_actions": n_actions},
+            alternative_functions=_OPE_ALTERNATIVES,
+        )
+    if (A >= n_actions).any():
+        raise _ope_contract_error(
+            "actions contain labels outside [0, n_actions).",
+            diagnostics={
+                "n_actions": n_actions,
+                "max_action": int(A.max()),
+            },
+            recovery_hint="Increase n_actions or recode action labels.",
+        )
+    observed_actions = np.unique(A)
+    if observed_actions.size < 2:
+        raise DataInsufficient(
+            "causal_policy_forest requires at least two observed actions.",
+            recovery_hint="Provide logged data containing more than one action.",
+            diagnostics={"observed_actions": observed_actions.tolist()},
+            alternative_functions=_OPE_ALTERNATIVES,
+        )
     # Per-action AIPW scores: Γ_a(X) = m_a(X) + 1[A=a] / e_a(X) * (R - m_a(X))
     m_hat = np.zeros((n, n_actions))
     e_hat = np.zeros((n, n_actions))
@@ -306,8 +481,8 @@ def causal_policy_forest(
         # Align columns to action indices
         for a in range(n_actions):
             if a in clf.classes_:
-                idx = int(np.where(clf.classes_ == a)[0][0])
-                e_hat[:, a] = np.clip(probs[:, idx], 0.01, 0.99)
+                class_idx = int(np.where(clf.classes_ == a)[0][0])
+                e_hat[:, a] = np.clip(probs[:, class_idx], 0.01, 0.99)
             else:
                 e_hat[:, a] = 0.5
     else:
@@ -325,11 +500,11 @@ def causal_policy_forest(
     preds = np.zeros((n_trees, n), dtype=int)
     policy_values = np.zeros(n_trees)
     for b in range(n_trees):
-        idx = rng.choice(n, size=n_sub, replace=False)
+        sample_idx = rng.choice(n, size=n_sub, replace=False)
         clf = DecisionTreeClassifier(
             max_depth=depth, random_state=random_state + b,
         )
-        clf.fit(X[idx], labels[idx])
+        clf.fit(X[sample_idx], labels[sample_idx])
         preds[b] = clf.predict(X)
         # Tree-level DR value: pick dr[i, preds[b, i]]
         v = float(np.mean(dr[np.arange(n), preds[b]]))
@@ -337,17 +512,17 @@ def causal_policy_forest(
     # Aggregate by plurality vote
     final = np.zeros(n, dtype=int)
     for i in range(n):
-        counts = np.bincount(preds[:, i], minlength=n_actions)
-        final[i] = int(counts.argmax())
+        vote_counts = np.bincount(preds[:, i], minlength=n_actions)
+        final[i] = int(vote_counts.argmax())
     # Policy value: mean across trees
     value = float(policy_values.mean())
     se = float(policy_values.std(ddof=1) / np.sqrt(n_trees)) if n_trees > 1 else 0.0
-    counts = {int(a): int((final == a).sum()) for a in range(n_actions)}
+    action_counts = {int(a): int((final == a).sum()) for a in range(n_actions)}
     return CausalPolicyForestResult(
         policy_value=value,
         policy_value_se=se,
         assignments=final,
-        action_counts=counts,
+        action_counts=action_counts,
         n_trees=n_trees,
         depth=depth,
     )

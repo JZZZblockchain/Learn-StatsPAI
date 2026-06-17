@@ -47,6 +47,8 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import BSpline
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
 
 @dataclass
 class VCNetResult:
@@ -68,7 +70,7 @@ class VCNetResult:
             "ci_lo": self.ci_lo,
             "ci_hi": self.ci_hi,
         })
-        return "VCNet dose-response curve\n" + df.to_string(index=False)
+        return "VCNet dose-response curve\n" + str(df.to_string(index=False))
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"VCNetResult(n={self.n_obs}, grid_size={len(self.t_grid)})"
@@ -99,6 +101,169 @@ def _bspline_basis(t: np.ndarray, n_basis: int = 6, degree: int = 3) -> np.ndarr
         vals = np.where(np.isnan(vals), 0.0, vals)
         basis[:, b] = vals
     return basis
+
+
+def _coerce_covariates(covariates: Sequence[str]) -> list[str]:
+    """Normalize one-column string shortcuts without splitting names."""
+    if isinstance(covariates, str):
+        return [covariates]
+    try:
+        return list(covariates)
+    except TypeError as exc:
+        raise MethodIncompatibility(
+            "vcnet() requires covariates to be a column name or sequence.",
+            recovery_hint="Pass covariates=[] or a list of column names.",
+        ) from exc
+
+
+def _validate_vcnet_controls(
+    n_basis: int,
+    spline_degree: int,
+    ridge: float,
+    n_bootstrap: int,
+    alpha: float,
+) -> tuple[int, int, float, int, float]:
+    """Validate scalar VCNet controls before building spline designs."""
+    if (
+        isinstance(spline_degree, bool)
+        or not isinstance(spline_degree, (int, np.integer))
+        or int(spline_degree) < 0
+    ):
+        raise MethodIncompatibility(
+            "vcnet(): spline_degree must be a non-negative integer.",
+            recovery_hint="Use spline_degree=3 for cubic splines.",
+            diagnostics={"spline_degree": spline_degree},
+        )
+    degree_value = int(spline_degree)
+    if (
+        isinstance(n_basis, bool)
+        or not isinstance(n_basis, (int, np.integer))
+        or int(n_basis) < degree_value + 1
+    ):
+        raise MethodIncompatibility(
+            "vcnet(): n_basis must be at least spline_degree + 1.",
+            recovery_hint="Use n_basis >= spline_degree + 1.",
+            diagnostics={"n_basis": n_basis, "spline_degree": spline_degree},
+        )
+    try:
+        ridge_value = float(ridge)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "vcnet(): ridge must be a finite non-negative scalar.",
+            recovery_hint="Use ridge >= 0.",
+            diagnostics={"ridge": ridge},
+        ) from exc
+    if not np.isfinite(ridge_value) or ridge_value < 0:
+        raise MethodIncompatibility(
+            "vcnet(): ridge must be a finite non-negative scalar.",
+            recovery_hint="Use ridge >= 0.",
+            diagnostics={"ridge": ridge},
+        )
+    if (
+        isinstance(n_bootstrap, bool)
+        or not isinstance(n_bootstrap, (int, np.integer))
+        or int(n_bootstrap) < 2
+    ):
+        raise MethodIncompatibility(
+            "vcnet(): n_bootstrap must be an integer >= 2.",
+            recovery_hint="Use at least two bootstrap draws for pointwise SEs.",
+            diagnostics={"n_bootstrap": n_bootstrap},
+        )
+    try:
+        alpha_value = float(alpha)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "vcnet(): alpha must be a finite scalar in (0, 1).",
+            recovery_hint="Use alpha=0.05 for 95% intervals.",
+            diagnostics={"alpha": alpha},
+        ) from exc
+    if not np.isfinite(alpha_value) or not 0.0 < alpha_value < 1.0:
+        raise MethodIncompatibility(
+            "vcnet(): alpha must be in the open interval (0, 1).",
+            recovery_hint="Use alpha=0.05 for 95% intervals.",
+            diagnostics={"alpha": alpha},
+        )
+    return (
+        int(n_basis),
+        degree_value,
+        ridge_value,
+        int(n_bootstrap),
+        alpha_value,
+    )
+
+
+def _prepare_vcnet_frame(
+    data: pd.DataFrame,
+    y: str,
+    treatment: str,
+    covariates: Sequence[str],
+) -> tuple[pd.DataFrame, list[str]]:
+    """Validate data/column inputs and drop rows with missing estimation data."""
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "vcnet() requires data to be a pandas DataFrame.",
+            recovery_hint="Pass a DataFrame with outcome, treatment, and covariates.",
+        )
+    x_cols = _coerce_covariates(covariates)
+    required = [y, treatment] + x_cols
+    missing = [col for col in required if col not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            "vcnet() input data is missing required column(s).",
+            recovery_hint="Check y, treatment, and covariate names.",
+            diagnostics={"missing_columns": missing},
+        )
+    df = data[required].dropna().reset_index(drop=True)
+    if len(df) < 2:
+        raise DataInsufficient(
+            "vcnet() requires at least two complete rows.",
+            recovery_hint="Drop missing data or provide a larger sample.",
+        )
+    try:
+        df = df.astype(float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "vcnet() requires numeric outcome, treatment, and covariates.",
+            recovery_hint="Convert VCNet inputs to numeric columns.",
+            diagnostics={"columns": required},
+        ) from exc
+    if not np.isfinite(df.to_numpy(dtype=float)).all():
+        raise MethodIncompatibility(
+            "vcnet() inputs contain NaN or infinite values.",
+            recovery_hint="Drop or impute non-finite rows before fitting.",
+            diagnostics={"columns": required},
+        )
+    if df[treatment].nunique() < 2:
+        raise DataInsufficient(
+            "vcnet() requires at least two distinct treatment values.",
+            recovery_hint="Use a sample with treatment variation.",
+        )
+    return df, x_cols
+
+
+def _prepare_t_grid(t_grid: Optional[Sequence[float]], T: np.ndarray) -> np.ndarray:
+    """Validate or construct the dose-response evaluation grid."""
+    if t_grid is None:
+        return np.linspace(T.min(), T.max(), 40)
+    try:
+        grid = np.asarray(t_grid, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "vcnet(): t_grid must contain numeric treatment values.",
+            recovery_hint="Pass a one-dimensional finite dose grid.",
+        ) from exc
+    if grid.ndim != 1 or grid.size == 0:
+        raise MethodIncompatibility(
+            "vcnet(): t_grid must be a non-empty one-dimensional array.",
+            recovery_hint="Pass treatment values such as np.linspace(...).",
+            diagnostics={"t_grid_ndim": int(grid.ndim), "t_grid_size": int(grid.size)},
+        )
+    if not np.isfinite(grid).all():
+        raise MethodIncompatibility(
+            "vcnet(): t_grid contains NaN or infinite values.",
+            recovery_hint="Drop or replace non-finite dose-grid values.",
+        )
+    return grid
 
 
 def vcnet(
@@ -140,16 +305,19 @@ def vcnet(
     -------
     VCNetResult
     """
-    X_cols = list(covariates)
-    df = data[[y, treatment] + X_cols].dropna().reset_index(drop=True)
+    n_basis, spline_degree, ridge, n_bootstrap, alpha = _validate_vcnet_controls(
+        n_basis=n_basis,
+        spline_degree=spline_degree,
+        ridge=ridge,
+        n_bootstrap=n_bootstrap,
+        alpha=alpha,
+    )
+    df, X_cols = _prepare_vcnet_frame(data, y, treatment, covariates)
     n = len(df)
     Y = df[y].to_numpy(dtype=float)
     T = df[treatment].to_numpy(dtype=float)
     X = df[X_cols].to_numpy(dtype=float) if X_cols else np.zeros((n, 0))
-
-    if t_grid is None:
-        t_grid = np.linspace(T.min(), T.max(), 40)
-    t_grid = np.asarray(t_grid, dtype=float)
+    t_grid_arr = _prepare_t_grid(t_grid, T)
 
     # Full design: [phi(t) tensor (1, X)], i.e. n x (B * (p+1))
     B = _bspline_basis(T, n_basis=n_basis, degree=spline_degree)
@@ -157,36 +325,38 @@ def vcnet(
     # outer per-row: shape n x (n_basis * (p+1))
     design = np.einsum("nb,np->nbp", B, X_aug).reshape(n, -1)
 
-    def fit(design, Y):
+    def fit(design: np.ndarray, Y: np.ndarray) -> np.ndarray:
         G = design.T @ design + ridge * np.eye(design.shape[1])
         rhs = design.T @ Y
-        return np.linalg.solve(G, rhs)
+        return np.asarray(np.linalg.solve(G, rhs), dtype=float)
 
     beta = fit(design, Y)
     coef_matrix = beta.reshape(n_basis, X_aug.shape[1])
 
     # Predict curve on grid
-    B_grid = _bspline_basis(t_grid, n_basis=n_basis, degree=spline_degree)
+    B_grid = _bspline_basis(t_grid_arr, n_basis=n_basis, degree=spline_degree)
 
-    def predict_curve(coef):
+    def predict_curve(coef: np.ndarray) -> np.ndarray:
         # For each t, mu(t) = mean_i sum_b phi_b(t) * (x_i dot coef[b])
         # = sum_b phi_b(t) * (mean(x) dot coef[b])
         x_mean = X_aug.mean(axis=0)
         mu_per_basis = coef @ x_mean  # shape (n_basis,)
-        return B_grid @ mu_per_basis
+        return np.asarray(B_grid @ mu_per_basis, dtype=float)
 
     mu_hat = predict_curve(coef_matrix)
 
     # Bootstrap for SE
     rng = np.random.default_rng(random_state)
-    boot_curves = np.zeros((n_bootstrap, len(t_grid)))
+    boot_curves = np.zeros((n_bootstrap, len(t_grid_arr)))
     for b in range(n_bootstrap):
         idx = rng.integers(0, n, size=n)
         d_boot = design[idx]
         y_boot = Y[idx]
         try:
             beta_b = fit(d_boot, y_boot)
-            boot_curves[b] = predict_curve(beta_b.reshape(n_basis, X_aug.shape[1]))
+            boot_curves[b] = predict_curve(
+                beta_b.reshape(n_basis, X_aug.shape[1])
+            )
         except np.linalg.LinAlgError:
             boot_curves[b] = mu_hat
 
@@ -195,7 +365,7 @@ def vcnet(
     q_hi = np.quantile(boot_curves, 1 - alpha / 2, axis=0)
 
     _result = VCNetResult(
-        t_grid=t_grid,
+        t_grid=t_grid_arr,
         mu_hat=mu_hat,
         se=se,
         ci_lo=q_lo,
@@ -238,7 +408,7 @@ def scigan(
     covariates: Sequence[str],
     t_grid: Optional[Sequence[float]] = None,
     propensity_weights: Optional[np.ndarray] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> VCNetResult:
     """
     Adversarial dose-response estimator (Bica et al. 2020).
@@ -252,12 +422,34 @@ def scigan(
     your own GAN-generated counterfactual samples and pass the
     re-weighting through ``propensity_weights``.
     """
-    X_cols = list(covariates)
-    df = data[[y, treatment] + X_cols].dropna().reset_index(drop=True)
+    df, X_cols = _prepare_vcnet_frame(data, y, treatment, covariates)
     if propensity_weights is not None:
-        w = np.asarray(propensity_weights, dtype=float)
+        try:
+            w = np.asarray(propensity_weights, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "scigan(): propensity_weights must be numeric.",
+                recovery_hint=(
+                    "Pass finite non-negative weights aligned to complete rows."
+                ),
+            ) from exc
         if len(w) != len(df):
-            raise ValueError("propensity_weights length mismatch")
+            raise MethodIncompatibility(
+                "scigan(): propensity_weights length mismatch.",
+                recovery_hint="Pass one weight per complete estimation row.",
+                diagnostics={"n_weights": int(len(w)), "n_rows": int(len(df))},
+            )
+        if w.ndim != 1 or not np.isfinite(w).all() or np.any(w < 0):
+            raise MethodIncompatibility(
+                "scigan(): propensity_weights must be a finite non-negative vector.",
+                recovery_hint="Use one non-negative balancing weight per row.",
+                diagnostics={"weights_ndim": int(w.ndim)},
+            )
+        if float(w.sum()) <= 0:
+            raise DataInsufficient(
+                "scigan(): propensity_weights have zero total mass.",
+                recovery_hint="Pass at least one positive balancing weight.",
+            )
         df = df.assign(_w=w)
         # Expand (sample with replacement by weight); simplest proxy.
         rng = np.random.default_rng(kwargs.get("random_state", 42))
@@ -265,7 +457,14 @@ def scigan(
         probs /= probs.sum()
         idx = rng.choice(len(df), size=len(df), replace=True, p=probs)
         df = df.iloc[idx].reset_index(drop=True)
-    return vcnet(df, y=y, treatment=treatment, covariates=X_cols, t_grid=t_grid, **kwargs)
+    return vcnet(
+        df,
+        y=y,
+        treatment=treatment,
+        covariates=X_cols,
+        t_grid=t_grid,
+        **kwargs,
+    )
 
 
 __all__ = ["vcnet", "scigan", "VCNetResult"]

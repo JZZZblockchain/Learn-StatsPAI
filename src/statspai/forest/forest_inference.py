@@ -47,14 +47,102 @@ Forests." Annals of Statistics, 47(2), 1148-1178. [@athey2019surrogate]
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
 if TYPE_CHECKING:
     from .causal_forest import CausalForest
+
+
+def _require_fitted_forest(forest: "CausalForest", context: str) -> None:
+    """Raise a StatsPAI taxonomy error when an inference helper is unfitted."""
+    if not getattr(forest, "fitted_", False):
+        raise MethodIncompatibility(
+            f"{context} requires a fitted forest.",
+            recovery_hint="Call fit() before running forest inference.",
+        )
+
+
+def _validate_alpha(alpha: float, context: str) -> float:
+    """Validate a confidence/significance level."""
+    try:
+        alpha_value = float(alpha)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: alpha must be a finite scalar.",
+            recovery_hint="Use an alpha value in the open interval (0, 1).",
+            diagnostics={"alpha": alpha},
+        ) from exc
+    if not np.isfinite(alpha_value) or not 0.0 < alpha_value < 1.0:
+        raise MethodIncompatibility(
+            f"{context}: alpha must be in the open interval (0, 1).",
+            recovery_hint="Use an alpha value such as 0.05.",
+            diagnostics={"alpha": alpha},
+        )
+    return alpha_value
+
+
+def _prepare_forest_features(
+    forest: "CausalForest",
+    X: Optional[np.ndarray],
+    context: str,
+) -> np.ndarray:
+    """Validate inference features with the forest's fitted schema."""
+    if X is None:
+        return np.asarray(forest._X_original, dtype=np.float64)
+    if callable(getattr(forest, "_prepare_effect_matrix", None)):
+        return np.asarray(
+            forest._prepare_effect_matrix(X, context=context),
+            dtype=np.float64,
+        )
+    try:
+        return np.asarray(X, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: X must be numeric.",
+            recovery_hint="Pass X shaped (n_samples, n_features).",
+        ) from exc
+
+
+def _prepare_forest_vector(
+    values: Any,
+    name: str,
+    expected_rows: int,
+    context: str,
+) -> np.ndarray:
+    """Validate a numeric inference vector aligned with X."""
+    try:
+        arr = np.asarray(values, dtype=np.float64).ravel()
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: {name} must be numeric.",
+            recovery_hint=f"Pass a numeric {name} vector aligned with X.",
+        ) from exc
+    if arr.shape[0] != expected_rows:
+        raise MethodIncompatibility(
+            f"{context}: {name} must have the same row count as X.",
+            recovery_hint="Align X, Y, and T before running forest inference.",
+            diagnostics={
+                f"n_{name.lower()}": int(arr.shape[0]),
+                "n_x": int(expected_rows),
+            },
+        )
+    if expected_rows == 0:
+        raise DataInsufficient(
+            f"{context}: no rows were supplied.",
+            recovery_hint="Pass at least one inference row.",
+        )
+    if not np.isfinite(arr).all():
+        raise MethodIncompatibility(
+            f"{context}: {name} contains NaN or infinite values.",
+            recovery_hint=f"Drop or impute non-finite {name} rows.",
+        )
+    return arr
 
 
 # ======================================================================
@@ -125,18 +213,27 @@ def calibration_test(
     >>> sp.test_calibration is sp.calibration_test
     True
     """
-    if not forest.fitted_:
-        raise ValueError("Forest must be fitted before calibration testing.")
+    _require_fitted_forest(forest, "calibration_test()")
+    alpha_value = _validate_alpha(alpha, "calibration_test()")
 
-    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
-    Y_ = np.asarray(
+    X_ = _prepare_forest_features(forest, X, "calibration_test()")
+    Y_ = _prepare_forest_vector(
         Y if Y is not None else getattr(forest, "_Y_original", None),
-        dtype=np.float64,
-    ).ravel()
-    T_ = np.asarray(
+        "Y",
+        X_.shape[0],
+        "calibration_test()",
+    )
+    T_ = _prepare_forest_vector(
         T if T is not None else getattr(forest, "_T_original", None),
-        dtype=np.float64,
-    ).ravel()
+        "T",
+        X_.shape[0],
+        "calibration_test()",
+    )
+    if X_.shape[0] < 3:
+        raise DataInsufficient(
+            "calibration_test() requires at least 3 rows.",
+            recovery_hint="Use a larger sample for the calibration regression.",
+        )
 
     tau_hat = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
     tau_bar = float(tau_hat.mean())
@@ -172,7 +269,7 @@ def calibration_test(
     V_hc1 = (n / max(n - k, 1)) * DtD_inv @ meat @ DtD_inv
     se = np.sqrt(np.maximum(np.diag(V_hc1), 0.0))
 
-    z = stats.norm.ppf(1 - alpha / 2)
+    z = stats.norm.ppf(1 - alpha_value / 2)
     # Calibration: β_1 tests against 1; Heterogeneity: β_2 tests against 0.
     names = ["mean_forest_prediction", "differential_forest_prediction"]
     null_values = [1.0, 0.0]
@@ -223,14 +320,18 @@ def _get_nuisances(
     """Extract the fitted nuisance predictions from the CausalForest, with
     fallbacks if they are unavailable.
     """
-    m_hat = getattr(forest, "_m_insample", None)
-    e_hat = getattr(forest, "_e_insample", None)
-    if m_hat is None:
+    m_hat_raw = getattr(forest, "_m_insample", None)
+    e_hat_raw = getattr(forest, "_e_insample", None)
+    if m_hat_raw is not None and len(np.asarray(m_hat_raw).ravel()) == len(Y):
+        m_hat = np.asarray(m_hat_raw, dtype=np.float64).ravel()
+    else:
         # Fall back to sample mean of Y
         m_hat = np.full_like(Y, Y.mean())
-    if e_hat is None:
+    if e_hat_raw is not None and len(np.asarray(e_hat_raw).ravel()) == len(T):
+        e_hat = np.asarray(e_hat_raw, dtype=np.float64).ravel()
+    else:
         e_hat = np.full_like(T, T.mean())
-    return np.asarray(m_hat, dtype=np.float64).ravel(), np.asarray(e_hat, dtype=np.float64).ravel()
+    return m_hat, e_hat
 
 
 # ======================================================================
@@ -334,21 +435,53 @@ def rate(
     >>> res["toc_curve"].shape
     (100, 2)
     """
-    if not forest.fitted_:
-        raise ValueError("Forest must be fitted.")
-    if target not in ("AUTOC", "QINI"):
-        raise ValueError("target must be 'AUTOC' or 'QINI'")
+    _require_fitted_forest(forest, "rate()")
+    try:
+        target_key = target.upper().strip()
+    except AttributeError as exc:
+        raise MethodIncompatibility(
+            "rate(): target must be a string.",
+            recovery_hint="Use target='AUTOC' or target='QINI'.",
+            diagnostics={"target": target},
+        ) from exc
+    if target_key not in ("AUTOC", "QINI"):
+        raise MethodIncompatibility(
+            "rate(): target must be 'AUTOC' or 'QINI'.",
+            recovery_hint="Use a supported RATE summary target.",
+            diagnostics={"target": target},
+        )
+    if (
+        isinstance(q_grid, bool)
+        or not isinstance(q_grid, (int, np.integer))
+        or int(q_grid) < 1
+    ):
+        raise MethodIncompatibility(
+            "rate(): q_grid must be a positive integer.",
+            recovery_hint="Use q_grid >= 1.",
+            diagnostics={"q_grid": q_grid},
+        )
+    q_grid_value = int(q_grid)
+    alpha_value = _validate_alpha(alpha, "rate()")
 
-    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
-    Y_ = np.asarray(
+    X_ = _prepare_forest_features(forest, X, "rate()")
+    Y_ = _prepare_forest_vector(
         Y if Y is not None else getattr(forest, "_Y_original", None),
-        dtype=np.float64,
-    ).ravel()
-    T_ = np.asarray(
+        "Y",
+        X_.shape[0],
+        "rate()",
+    )
+    T_ = _prepare_forest_vector(
         T if T is not None else getattr(forest, "_T_original", None),
-        dtype=np.float64,
-    ).ravel()
+        "T",
+        X_.shape[0],
+        "rate()",
+    )
     n = len(Y_)
+    if n < 2:
+        raise DataInsufficient(
+            "rate() requires at least 2 rows.",
+            recovery_hint="Use a larger sample for RATE inference.",
+        )
 
     m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
     e_hat = np.clip(e_hat, 0.02, 0.98)
@@ -387,7 +520,7 @@ def rate(
     # depends only on obs i (treating the ranks as conditioning), so
     # its sample variance over n gives the correct influence-function
     # variance of θ̂ — no whole-sample subtraction is needed.
-    if target == "AUTOC":
+    if target_key == "AUTOC":
         phi = psi * (w_autoc - 1.0)
     else:  # QINI
         phi = psi * (w_qini - 0.5)
@@ -396,16 +529,19 @@ def rate(
     # Influence-function variance: Var_hat(φ) / n, using the n-1
     # denominator for the centred sum of squares.
     phi_centered = phi - phi.mean()
-    var_est = float(phi_centered @ phi_centered) / (n * (n - 1)) if n > 1 else float("nan")
+    var_est = (
+        float(phi_centered @ phi_centered) / (n * (n - 1))
+        if n > 1 else float("nan")
+    )
     se = float(np.sqrt(max(var_est, 0.0)))
-    z = stats.norm.ppf(1 - alpha / 2)
+    z = stats.norm.ppf(1 - alpha_value / 2)
     ci = (estimate - z * se, estimate + z * se)
 
     # TOC curve for diagnostics (not used in the IF variance path).
     psi_sorted = psi[desc_order]
     cum = np.cumsum(psi_sorted) / np.arange(1, n + 1)
     toc_all = cum - psi_bar  # length-n array, evaluated at q_k = k/n
-    q_targets = np.linspace(1.0 / q_grid, 1.0, q_grid)
+    q_targets = np.linspace(1.0 / q_grid_value, 1.0, q_grid_value)
     idx_sel = np.clip((q_targets * n).astype(np.int64) - 1, 0, n - 1)
     toc_grid = np.column_stack([q_targets, toc_all[idx_sel]])
 
@@ -414,7 +550,7 @@ def rate(
         "se": se,
         "ci_low": ci[0],
         "ci_high": ci[1],
-        "target": target,
+        "target": target_key,
         "toc_curve": toc_grid,
         "n": n,
         "method": "Influence-function SE (Yadlowsky et al. 2023)",
@@ -475,21 +611,36 @@ def honest_variance(
     >>> bool(hv["se"] >= 0 and hv["ci_low"] <= hv["ate"] <= hv["ci_high"])
     True
     """
-    if not forest.fitted_:
-        raise ValueError("Forest must be fitted.")
-    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
+    _require_fitted_forest(forest, "honest_variance()")
+    if (
+        isinstance(n_splits, bool)
+        or not isinstance(n_splits, (int, np.integer))
+        or int(n_splits) < 2
+    ):
+        raise MethodIncompatibility(
+            "honest_variance(): n_splits must be an integer >= 2.",
+            recovery_hint="Use at least two half-sample splits.",
+            diagnostics={"n_splits": n_splits},
+        )
+    n_splits_value = int(n_splits)
+    X_ = _prepare_forest_features(forest, X, "honest_variance()")
     tau = np.asarray(forest.effect(X_)).ravel()
     n = len(tau)
+    if n < 2:
+        raise DataInsufficient(
+            "honest_variance() requires at least 2 CATE rows.",
+            recovery_hint="Pass at least two rows of effect modifiers.",
+        )
     rng = np.random.default_rng(seed)
 
-    means = np.empty(n_splits)
-    for s in range(n_splits):
+    means = np.empty(n_splits_value)
+    for s in range(n_splits_value):
         perm = rng.permutation(n)
         half = perm[: n // 2]
         means[s] = float(tau[half].mean())
 
     ate = float(tau.mean())
-    se = float(np.std(means, ddof=1) / np.sqrt(n_splits))
+    se = float(np.std(means, ddof=1) / np.sqrt(n_splits_value))
     z = stats.norm.ppf(0.975)
     return {
         "ate": ate,
@@ -563,10 +714,22 @@ def average_treatment_effect(
     >>> att["estimand"]
     'ATT'
     """
-    if not forest.fitted_:
-        raise ValueError("Forest must be fitted.")
+    if not getattr(forest, "fitted_", False):
+        raise MethodIncompatibility(
+            "average_treatment_effect() requires a fitted forest.",
+            recovery_hint="Call fit() before aggregating treatment effects.",
+        )
 
-    target = target_sample.lower().strip()
+    try:
+        target_key = target_sample.lower().strip()
+    except AttributeError as exc:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): target_sample must be a string.",
+            recovery_hint=(
+                "Use one of 'all', 'treated', 'control', or 'overlap'."
+            ),
+            diagnostics={"target_sample": target_sample},
+        ) from exc
     aliases = {
         "ate": "all",
         "all": "all",
@@ -577,23 +740,104 @@ def average_treatment_effect(
         "ato": "overlap",
         "overlap": "overlap",
     }
-    target = aliases.get(target)
+    target = aliases.get(target_key)
     if target is None:
-        raise ValueError(
+        raise MethodIncompatibility(
             "target_sample must be one of 'all', 'treated', 'control', "
-            "or 'overlap'"
+            "or 'overlap'",
+            recovery_hint="Use a supported GRF aggregation target.",
+            diagnostics={"target_sample": target_sample},
+        )
+    try:
+        alpha_value = float(alpha)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): alpha must be a finite scalar.",
+            recovery_hint="Use an alpha value in the open interval (0, 1).",
+            diagnostics={"alpha": alpha},
+        ) from exc
+    if not np.isfinite(alpha_value) or not 0.0 < alpha_value < 1.0:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): alpha must be in the open interval (0, 1).",
+            recovery_hint="Use an alpha value such as 0.05.",
+            diagnostics={"alpha": alpha},
+        )
+    try:
+        clip_value = float(clip)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): clip must be a finite scalar.",
+            recovery_hint="Use a propensity clip in the interval [0, 0.5).",
+            diagnostics={"clip": clip},
+        ) from exc
+    if not np.isfinite(clip_value) or not 0.0 <= clip_value < 0.5:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): clip must be in the interval [0, 0.5).",
+            recovery_hint="Use a small propensity clip such as 0.01.",
+            diagnostics={"clip": clip},
         )
 
     use_insample = X is None and T is None
-    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
+    if X is None:
+        X_ = np.asarray(forest._X_original, dtype=np.float64)
+    elif callable(getattr(forest, "_prepare_effect_matrix", None)):
+        X_ = np.asarray(
+            forest._prepare_effect_matrix(
+                X,
+                context="average_treatment_effect()",
+            ),
+            dtype=np.float64,
+        )
+    else:
+        try:
+            X_ = np.asarray(X, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "average_treatment_effect(): X must be numeric.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+            ) from exc
     tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
-    T_ = np.asarray(
-        T if T is not None else getattr(forest, "_T_original", None),
-        dtype=np.float64,
-    ).ravel()
-    Y_ = np.asarray(getattr(forest, "_Y_original", None), dtype=np.float64).ravel()
+    try:
+        T_ = np.asarray(
+            T if T is not None else getattr(forest, "_T_original", None),
+            dtype=np.float64,
+        ).ravel()
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): T must be numeric.",
+            recovery_hint="Pass a numeric treatment vector aligned with X.",
+        ) from exc
     if len(T_) != len(tau):
-        raise ValueError("T must have the same length as X/effect predictions.")
+        raise MethodIncompatibility(
+            "average_treatment_effect(): T must match the number of effect rows.",
+            recovery_hint="Pass treatment values aligned with the CATE rows.",
+            diagnostics={"n_t": int(len(T_)), "n_effects": int(len(tau))},
+        )
+    if not np.isfinite(T_).all():
+        raise MethodIncompatibility(
+            "average_treatment_effect(): T contains NaN or infinite values.",
+            recovery_hint="Drop or impute non-finite treatment rows.",
+        )
+    if target == "treated" and not np.any(T_ == 1):
+        raise DataInsufficient(
+            "average_treatment_effect(): no treated observations for ATT.",
+            recovery_hint="Use target_sample='all' or pass at least one T == 1 row.",
+        )
+    if target == "control" and not np.any(T_ == 0):
+        raise DataInsufficient(
+            "average_treatment_effect(): no control observations for ATC.",
+            recovery_hint="Use target_sample='all' or pass at least one T == 0 row.",
+        )
+    try:
+        Y_ = np.asarray(
+            getattr(forest, "_Y_original", None),
+            dtype=np.float64,
+        ).ravel()
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "average_treatment_effect(): stored outcomes must be numeric.",
+            recovery_hint="Refit the forest with numeric outcomes.",
+        ) from exc
 
     # Outcome and propensity nuisances.  When aggregating on the training
     # sample we reuse the forest's own cross-fitted (cv=3) out-of-fold
@@ -610,14 +854,14 @@ def average_treatment_effect(
         m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
         m_hat = np.asarray(m_hat, dtype=np.float64).ravel()
         e_hat = np.asarray(e_hat, dtype=np.float64).ravel()
-    e_hat = np.clip(e_hat, clip, 1.0 - clip)
+    e_hat = np.clip(e_hat, clip_value, 1.0 - clip_value)
     if len(e_hat) != len(tau) or len(m_hat) != len(tau) or len(Y_) != len(tau):
         # AIPW score is unavailable (out-of-sample without nuisances or a
         # length mismatch); fall back to the plug-in CATE average and flag it.
         return _plug_in_average(tau, T_, e_hat, target, alpha)
 
     n = int(len(tau))
-    z = float(stats.norm.ppf(1 - alpha / 2))
+    z = float(stats.norm.ppf(1 - alpha_value / 2))
     # Reconstruct the per-arm outcome regressions from (m̂, ê, τ̂):
     #   m = e·μ1 + (1-e)·μ0,  μ1 - μ0 = τ  ⇒  μ0 = m - e·τ,  μ1 = m + (1-e)·τ.
     mu0 = m_hat - e_hat * tau
@@ -648,8 +892,9 @@ def average_treatment_effect(
         estimand = "ATO"
         w = e_hat * (1.0 - e_hat)
         if float(w.sum()) <= 0:
-            raise ValueError(
-                f"No observations contribute to target_sample={target_sample!r}."
+            raise DataInsufficient(
+                f"No observations contribute to target_sample={target_sample!r}.",
+                recovery_hint="Choose a target with support in the supplied sample.",
             )
         psi_pt = tau + (T_ - e_hat) / (e_hat * (1.0 - e_hat)) * (Y_ - m_full)
         estimate = float(np.average(psi_pt, weights=w))
@@ -667,7 +912,7 @@ def average_treatment_effect(
         "method": "aipw",
         "effective_sample_size": ess,
         "n": n,
-        "alpha": float(alpha),
+        "alpha": alpha_value,
         "pscore_min": float(e_hat.min()),
         "pscore_max": float(e_hat.max()),
     }
@@ -698,7 +943,10 @@ def _plug_in_average(
         weights = e_hat * (1.0 - e_hat)
         estimand = "ATO"
     if float(weights.sum()) <= 0:
-        raise ValueError("No observations contribute to the requested target_sample.")
+        raise DataInsufficient(
+            "No observations contribute to the requested target_sample.",
+            recovery_hint="Choose a target with support in the supplied sample.",
+        )
     estimate = float(np.average(tau, weights=weights))
     norm_w = weights / weights.sum()
     se = float(np.sqrt(np.sum((norm_w ** 2) * (tau - estimate) ** 2)))
@@ -751,23 +999,44 @@ def forest_diagnostics(
     >>> bool(diag["n_treated"] + diag["n_control"] == diag["n"])
     True
     """
-    if not forest.fitted_:
-        raise ValueError("Forest must be fitted.")
+    _require_fitted_forest(forest, "forest_diagnostics()")
+    try:
+        low_raw, high_raw = propensity_bounds
+        low = float(low_raw)
+        high = float(high_raw)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "forest_diagnostics(): propensity_bounds must contain two scalars.",
+            recovery_hint="Use bounds such as (0.05, 0.95).",
+            diagnostics={"propensity_bounds": propensity_bounds},
+        ) from exc
+    if not np.isfinite(low) or not np.isfinite(high) or not 0 <= low < high <= 1:
+        raise MethodIncompatibility(
+            "propensity_bounds must satisfy 0 <= low < high <= 1.",
+            recovery_hint="Use bounds such as (0.05, 0.95).",
+            diagnostics={"propensity_bounds": propensity_bounds},
+        )
 
-    low, high = propensity_bounds
-    if not 0 <= low < high <= 1:
-        raise ValueError("propensity_bounds must satisfy 0 <= low < high <= 1.")
-
-    X_ = np.asarray(X if X is not None else forest._X_original, dtype=np.float64)
+    X_ = _prepare_forest_features(forest, X, "forest_diagnostics()")
     tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
-    T_ = np.asarray(
+    if X is not None and T is None:
+        raise MethodIncompatibility(
+            "forest_diagnostics(): T is required when X is supplied.",
+            recovery_hint="Pass treatment values aligned with the diagnostic X rows.",
+        )
+    T_ = _prepare_forest_vector(
         T if T is not None else getattr(forest, "_T_original", np.zeros(len(tau))),
-        dtype=np.float64,
-    ).ravel()
+        "T",
+        len(tau),
+        "forest_diagnostics()",
+    )
     Y_ = np.asarray(
         getattr(forest, "_Y_original", np.zeros(len(tau))),
         dtype=np.float64,
-    ).ravel()
+    )
+    Y_ = Y_.ravel()
+    if len(Y_) != len(tau):
+        Y_ = np.zeros(len(tau), dtype=np.float64)
     _m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
     e_hat = np.clip(np.asarray(e_hat, dtype=np.float64).ravel(), 0.0, 1.0)
     if len(e_hat) != len(tau):

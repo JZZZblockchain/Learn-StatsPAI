@@ -33,6 +33,7 @@ import warnings
 from ..core.base import BaseModel
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 class CausalForest(BaseModel):
@@ -166,9 +167,9 @@ class CausalForest(BaseModel):
         
         # Initialize internal state
         self.fitted_ = False
-        self._forest = None
-        self._treatment_values = None
-        self._feature_names = None
+        self._forest: Optional[List[DecisionTreeRegressor]] = None
+        self._treatment_values: Optional[np.ndarray] = None
+        self._feature_names: Optional[List[str]] = None
         
     def fit(
         self,
@@ -203,10 +204,13 @@ class CausalForest(BaseModel):
         self : CausalForest
             Fitted estimator
         """
+        self._validate_fit_controls()
+
         # Parse inputs
         if formula is not None and data is not None:
             Y, T, X, W = self._parse_formula_inputs(formula, data)
         elif Y is not None and T is not None and X is not None:
+            self._feature_names = None
             Y, T, X, W = self._validate_array_inputs(Y, T, X, W)
         else:
             raise ValueError(
@@ -214,22 +218,102 @@ class CausalForest(BaseModel):
             )
         
         # Validate inputs
-        Y = np.asarray(Y).ravel()
-        T = np.asarray(T).ravel()
-        X = np.asarray(X)
-        if W is not None:
-            W = np.asarray(W)
+        try:
+            Y = np.asarray(Y, dtype=float).ravel()
+            T = np.asarray(T, dtype=float).ravel()
+            X = np.asarray(X, dtype=float)
+            if W is not None:
+                W = np.asarray(W, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "CausalForest.fit() requires numeric Y, T, X, and W inputs.",
+                recovery_hint=(
+                    "Convert the outcome, treatment, effect modifiers, and "
+                    "controls to numeric columns before fitting."
+                ),
+            ) from exc
         
         if X.ndim == 1:
             X = X.reshape(-1, 1)
+        elif X.ndim != 2:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): X must be a 1D or 2D numeric array.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+                diagnostics={"x_ndim": int(X.ndim)},
+            )
         if W is not None and W.ndim == 1:
             W = W.reshape(-1, 1)
+        elif W is not None and W.ndim != 2:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): W must be a 1D or 2D numeric array.",
+                recovery_hint="Pass W shaped (n_samples, n_controls).",
+                diagnostics={"w_ndim": int(W.ndim)},
+            )
             
         n_samples = len(Y)
         if len(T) != n_samples or len(X) != n_samples:
-            raise ValueError("Y, T, and X must have the same number of samples")
+            raise MethodIncompatibility(
+                "CausalForest.fit(): Y, T, and X must have the same row count.",
+                recovery_hint="Align all fit inputs to the same sample.",
+                diagnostics={
+                    "n_y": int(len(Y)),
+                    "n_t": int(len(T)),
+                    "n_x": int(len(X)),
+                },
+            )
         if W is not None and len(W) != n_samples:
-            raise ValueError("W must have the same number of samples as Y")
+            raise MethodIncompatibility(
+                "CausalForest.fit(): W must have the same row count as Y.",
+                recovery_hint="Align controls to the outcome sample.",
+                diagnostics={"n_y": int(len(Y)), "n_w": int(len(W))},
+            )
+        if n_samples < 3:
+            raise DataInsufficient(
+                "CausalForest.fit() needs at least 3 rows for cross-fitting.",
+                recovery_hint="Use at least 3 complete observations.",
+                diagnostics={"nobs": int(n_samples)},
+            )
+        if X.shape[1] == 0:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): X must contain at least one feature.",
+                recovery_hint="Pass at least one effect modifier column.",
+            )
+        if not np.isfinite(Y).all():
+            raise MethodIncompatibility(
+                "CausalForest.fit(): outcome contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite outcome rows.",
+            )
+        if not np.isfinite(T).all():
+            raise MethodIncompatibility(
+                "CausalForest.fit(): treatment contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite treatment rows.",
+            )
+        if not np.isfinite(X).all():
+            raise MethodIncompatibility(
+                "CausalForest.fit(): X contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite effect modifiers.",
+            )
+        if W is not None and not np.isfinite(W).all():
+            raise MethodIncompatibility(
+                "CausalForest.fit(): W contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite controls.",
+            )
+        n_tree_samples = int(float(self.max_samples) * n_samples)
+        min_tree_samples = 2 if self.honest else 1
+        if n_tree_samples < min_tree_samples:
+            raise DataInsufficient(
+                "CausalForest.fit(): max_samples leaves too few rows per tree.",
+                recovery_hint=(
+                    "Increase max_samples or fit on more observations so each "
+                    "tree has enough rows."
+                ),
+                diagnostics={
+                    "nobs": int(n_samples),
+                    "max_samples": float(self.max_samples),
+                    "rows_per_tree": int(n_tree_samples),
+                    "minimum_rows_per_tree": min_tree_samples,
+                },
+            )
         
         # Store data info
         self.data_info = {
@@ -239,16 +323,58 @@ class CausalForest(BaseModel):
             'treatment_values': np.unique(T),
         }
         
-        self._treatment_values = np.unique(T)
-        self._feature_names = [f'X{i}' for i in range(X.shape[1])]
+        treatment_values = np.unique(T)
+        self._treatment_values = treatment_values
+        self.data_info['treatment_values'] = treatment_values
+        if self._feature_names is None or len(self._feature_names) != X.shape[1]:
+            self._feature_names = [f'X{i}' for i in range(X.shape[1])]
         self._X_original = X.copy()
         self._T_original = T.copy()
         self._Y_original = Y.copy()
         
         # Validate treatment
         if self.discrete_treatment:
-            if len(self._treatment_values) < 2:
-                raise ValueError("Need at least 2 treatment values for discrete treatment")
+            if len(treatment_values) < 2:
+                raise DataInsufficient(
+                    "CausalForest.fit() needs two treatment values.",
+                    recovery_hint="Provide both treated and control observations.",
+                    diagnostics={"treatment_values": treatment_values.tolist()},
+                )
+            if len(treatment_values) > 2:
+                raise MethodIncompatibility(
+                    "CausalForest.fit() currently supports binary treatment only.",
+                    recovery_hint=(
+                        "Use sp.multi_arm_forest() for multi-arm treatments or "
+                        "fit separate binary contrasts."
+                    ),
+                    diagnostics={"treatment_values": treatment_values.tolist()},
+                    alternative_functions=["sp.multi_arm_forest"],
+                )
+            if not np.array_equal(treatment_values, np.array([0.0, 1.0])):
+                raise MethodIncompatibility(
+                    "CausalForest.fit() expects binary treatment coded as 0/1.",
+                    recovery_hint="Recode the control group to 0 and treated group to 1.",
+                    diagnostics={"treatment_values": treatment_values.tolist()},
+                )
+            _, treatment_counts = np.unique(T, return_counts=True)
+            if np.min(treatment_counts) < 3:
+                raise DataInsufficient(
+                    "CausalForest.fit() needs at least 3 observations per "
+                    "treatment group for 3-fold cross-fitting.",
+                    recovery_hint=(
+                        "Add observations or reduce the estimator to a design "
+                        "that does not require 3-fold nuisance cross-fitting."
+                    ),
+                    diagnostics={
+                        "treatment_values": treatment_values.tolist(),
+                        "counts": treatment_counts.tolist(),
+                    },
+                )
+        elif np.var(T) <= 1e-12:
+            raise DataInsufficient(
+                "CausalForest.fit() needs treatment variation.",
+                recovery_hint="Provide a non-constant continuous treatment.",
+            )
         
         # Step 1: Fit first stage models (Double ML approach)
         # This follows the EconML CausalForestDML implementation
@@ -384,6 +510,159 @@ class CausalForest(BaseModel):
         if W is not None:
             W = np.asarray(W)
         return Y, T, X, W
+
+    def _validate_fit_controls(self) -> None:
+        """Validate scalar controls before fitting expensive nuisance models."""
+        if (
+            not isinstance(self.n_estimators, (int, np.integer))
+            or isinstance(self.n_estimators, bool)
+            or int(self.n_estimators) < 1
+        ):
+            raise MethodIncompatibility(
+                "CausalForest.fit(): n_estimators must be a positive integer.",
+                recovery_hint="Use n_estimators >= 1.",
+                diagnostics={"n_estimators": self.n_estimators},
+            )
+        if (
+            not isinstance(self.min_samples_leaf, (int, np.integer))
+            or isinstance(self.min_samples_leaf, bool)
+            or int(self.min_samples_leaf) < 1
+        ):
+            raise MethodIncompatibility(
+                "CausalForest.fit(): min_samples_leaf must be a positive integer.",
+                recovery_hint="Use min_samples_leaf >= 1.",
+                diagnostics={"min_samples_leaf": self.min_samples_leaf},
+            )
+        if self.max_depth is not None and (
+            not isinstance(self.max_depth, (int, np.integer))
+            or isinstance(self.max_depth, bool)
+            or int(self.max_depth) < 1
+        ):
+            raise MethodIncompatibility(
+                "CausalForest.fit(): max_depth must be None or a positive integer.",
+                recovery_hint="Use max_depth=None or max_depth >= 1.",
+                diagnostics={"max_depth": self.max_depth},
+            )
+        try:
+            max_samples = float(self.max_samples)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): max_samples must be a finite fraction.",
+                recovery_hint="Use a scalar max_samples in the interval (0, 1].",
+                diagnostics={"max_samples": self.max_samples},
+            ) from exc
+        if not np.isfinite(max_samples) or not 0.0 < max_samples <= 1.0:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): max_samples must be in the interval (0, 1].",
+                recovery_hint="Use a scalar max_samples such as 0.5 or 1.0.",
+                diagnostics={"max_samples": self.max_samples},
+            )
+
+    def _prepare_effect_matrix(self, data: Any, *, context: str) -> np.ndarray:
+        """Validate prediction/effect inputs against the fitted feature schema."""
+        expected = None
+        if hasattr(self, "data_info"):
+            expected = int(self.data_info.get("n_features", 0))
+        feature_names = list(getattr(self, "_feature_names", []) or [])
+
+        if isinstance(data, pd.DataFrame):
+            if feature_names:
+                missing = [name for name in feature_names if name not in data.columns]
+                if missing:
+                    raise MethodIncompatibility(
+                        f"{context}: missing effect-modifier column(s) {missing}.",
+                        recovery_hint=(
+                            "Pass a DataFrame containing the same effect "
+                            "modifier columns used at fit time."
+                        ),
+                        diagnostics={"missing_columns": missing},
+                    )
+                selected = data[feature_names]
+            else:
+                selected = data.select_dtypes(include=[np.number])
+                if selected.shape[1] == 0:
+                    raise MethodIncompatibility(
+                        f"{context}: no numeric effect-modifier columns found.",
+                        recovery_hint=(
+                            "Pass numeric effect modifiers or fit with a formula "
+                            "so column names can be reused."
+                        ),
+                    )
+            try:
+                X = selected.to_numpy(dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    f"{context}: effect-modifier columns must be numeric.",
+                    recovery_hint=(
+                        "Convert prediction columns to numeric values before "
+                        "calling predict() or effect()."
+                    ),
+                    diagnostics={"columns": list(selected.columns)},
+                ) from exc
+        else:
+            try:
+                X = np.asarray(data, dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    f"{context}: effect modifiers must be numeric.",
+                    recovery_hint=(
+                        "Pass a numeric array or a DataFrame with the fitted "
+                        "effect-modifier columns."
+                    ),
+                ) from exc
+
+        if X.ndim == 1:
+            if expected is not None and expected > 1 and X.size == expected:
+                X = X.reshape(1, -1)
+            elif expected in (None, 0, 1):
+                X = X.reshape(-1, 1)
+            else:
+                raise MethodIncompatibility(
+                    f"{context}: one-dimensional input has {X.size} values, "
+                    f"but the model was fit with {expected} features.",
+                    recovery_hint=(
+                        "Pass a two-dimensional array with one row per "
+                        "prediction sample."
+                    ),
+                    diagnostics={
+                        "n_values": int(X.size),
+                        "expected_features": expected,
+                    },
+                )
+        elif X.ndim != 2:
+            raise MethodIncompatibility(
+                f"{context}: effect modifiers must be a 1D or 2D array.",
+                recovery_hint="Pass an array shaped (n_samples, n_features).",
+                diagnostics={"ndim": int(X.ndim)},
+            )
+
+        if X.shape[0] == 0:
+            raise DataInsufficient(
+                f"{context}: no prediction rows were supplied.",
+                recovery_hint="Pass at least one row of effect modifiers.",
+            )
+        if expected not in (None, 0) and X.shape[1] != expected:
+            raise MethodIncompatibility(
+                f"{context}: expected {expected} effect-modifier column(s), "
+                f"got {X.shape[1]}.",
+                recovery_hint=(
+                    "Use the same number and order of effect modifiers used "
+                    "when fitting the causal forest."
+                ),
+                diagnostics={
+                    "expected_features": expected,
+                    "observed_features": int(X.shape[1]),
+                },
+            )
+        if not np.isfinite(X).all():
+            raise MethodIncompatibility(
+                f"{context}: effect modifiers contain NaN or infinite values.",
+                recovery_hint=(
+                    "Drop or impute non-finite prediction rows before calling "
+                    "predict() or effect()."
+                ),
+            )
+        return X
     
     def _fit_causal_forest(
         self, X: np.ndarray, T_residual: np.ndarray, Y_residual: np.ndarray
@@ -544,23 +823,30 @@ class CausalForest(BaseModel):
             Estimated conditional average treatment effects
         """
         if not self.fitted_:
-            raise ValueError("Model must be fitted before predicting effects")
-        
-        X = np.asarray(X)
-        if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            raise MethodIncompatibility(
+                "CausalForest.effect() requires a fitted model.",
+                recovery_hint="Call fit() before requesting treatment effects.",
+            )
+
+        X = self._prepare_effect_matrix(X, context="effect()")
+        forest = self._forest
+        if forest is None:
+            raise MethodIncompatibility(
+                "CausalForest.effect() has no fitted forest.",
+                recovery_hint="Refit the causal forest before requesting effects.",
+            )
         
         # Average predictions across all trees
-        predictions = []
-        for tree in self._forest:
+        predictions_list: List[np.ndarray] = []
+        for tree in forest:
             pred = tree.predict(X)
             # Ensure pred is 1D for each tree
             if pred.ndim > 1:
                 pred = pred.ravel()
-            predictions.append(pred)
+            predictions_list.append(pred)
         
         # Return average effect across trees
-        predictions = np.array(predictions)  # shape: (n_trees, n_samples)
+        predictions = np.array(predictions_list)  # shape: (n_trees, n_samples)
         return np.mean(predictions, axis=0)  # shape: (n_samples,)
     
     def predict(self, data: Optional[pd.DataFrame] = None) -> np.ndarray:
@@ -583,22 +869,24 @@ class CausalForest(BaseModel):
         "predictions" are treatment effect estimates rather than outcome predictions.
         """
         if not self.fitted_:
-            raise ValueError("Model must be fitted before making predictions")
+            raise MethodIncompatibility(
+                "CausalForest.predict() requires a fitted model.",
+                recovery_hint="Call fit() before requesting predictions.",
+            )
         
         if data is None:
             if hasattr(self, '_X_original'):
                 X = self._X_original
             else:
-                raise ValueError("No data provided and no training data available")
+                raise MethodIncompatibility(
+                    "CausalForest.predict() has no training data to reuse.",
+                    recovery_hint=(
+                        "Pass prediction data explicitly or refit the model "
+                        "with retained training data."
+                    ),
+                )
         else:
-            if isinstance(data, pd.DataFrame):
-                if hasattr(self, '_feature_names'):
-                    X = data[self._feature_names].values
-                else:
-                    # Use all numeric columns
-                    X = data.select_dtypes(include=[np.number]).values
-            else:
-                X = np.asarray(data)
+            X = self._prepare_effect_matrix(data, context="predict()")
         
         return self.effect(X)
     
@@ -623,29 +911,48 @@ class CausalForest(BaseModel):
             Upper bounds of confidence intervals
         """
         if not self.fitted_:
-            raise ValueError("Model must be fitted before computing intervals")
-        
-        X = np.asarray(X)
-        if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            raise MethodIncompatibility(
+                "CausalForest.effect_interval() requires a fitted model.",
+                recovery_hint="Call fit() before requesting intervals.",
+            )
+        if not np.isscalar(alpha) or not np.isfinite(float(alpha)):
+            raise MethodIncompatibility(
+                "effect_interval(): alpha must be a finite scalar.",
+                recovery_hint="Pass a scalar alpha in the open interval (0, 1).",
+            )
+        alpha = float(alpha)
+        if not 0.0 < alpha < 1.0:
+            raise MethodIncompatibility(
+                "effect_interval(): alpha must be in the open interval (0, 1).",
+                recovery_hint="Use a confidence level such as alpha=0.05.",
+                diagnostics={"alpha": alpha},
+            )
+
+        X = self._prepare_effect_matrix(X, context="effect_interval()")
+        forest = self._forest
+        if forest is None:
+            raise MethodIncompatibility(
+                "CausalForest.effect_interval() has no fitted forest.",
+                recovery_hint="Refit the causal forest before requesting intervals.",
+            )
         
         # Use bootstrap of little bags approach
         # Collect predictions from each tree (which are already bootstrap samples)
-        predictions = []
-        for tree in self._forest:
+        predictions_list: List[np.ndarray] = []
+        for tree in forest:
             pred = tree.predict(X)
             # Ensure pred is 1D
             if pred.ndim > 1:
                 pred = pred.ravel()
-            predictions.append(pred)
+            predictions_list.append(pred)
         
         # Convert to array and ensure consistent shapes
         try:
-            predictions = np.array(predictions)  # shape: (n_trees, n_samples)
+            predictions = np.array(predictions_list)  # shape: (n_trees, n_samples)
         except ValueError:
             # Handle inconsistent shapes by ensuring all predictions have same length
-            min_len = min(len(p) for p in predictions)
-            predictions = np.array([p[:min_len] for p in predictions])
+            min_len = min(len(p) for p in predictions_list)
+            predictions = np.array([p[:min_len] for p in predictions_list])
         
         # Compute percentiles across trees for each sample
         lower_percentile = 100 * alpha / 2
@@ -752,7 +1059,10 @@ class CausalForest(BaseModel):
         Returns a normalised importance score (sums to 1).
         """
         if not self.fitted_:
-            raise ValueError("Model must be fitted before computing importance")
+            raise MethodIncompatibility(
+                "CausalForest.variable_importance() requires a fitted model.",
+                recovery_hint="Call fit() before computing variable importance.",
+            )
         X = self._X_original.copy()
         cate_baseline = self.effect(X)
         n, k = X.shape
@@ -819,15 +1129,51 @@ class CausalForest(BaseModel):
         DOI: 10.1093/ectj/utaa027.
         """
         if not self.fitted_:
-            raise ValueError("Model must be fitted first")
+            raise MethodIncompatibility(
+                "CausalForest.best_linear_projection() requires a fitted model.",
+                recovery_hint="Call fit() before computing the BLP.",
+            )
+        try:
+            alpha_value = float(alpha)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "best_linear_projection(): alpha must be a finite scalar.",
+                recovery_hint="Use an alpha value in the open interval (0, 1).",
+                diagnostics={"alpha": alpha},
+            ) from exc
+        if not np.isfinite(alpha_value) or not 0.0 < alpha_value < 1.0:
+            raise MethodIncompatibility(
+                "best_linear_projection(): alpha must be in the open interval (0, 1).",
+                recovery_hint="Use an alpha value such as 0.05.",
+                diagnostics={"alpha": alpha},
+            )
+        try:
+            clip_value = float(clip)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "best_linear_projection(): clip must be a finite scalar.",
+                recovery_hint="Use a clip value in the interval [0, 0.5).",
+                diagnostics={"clip": clip},
+            ) from exc
+        if not np.isfinite(clip_value) or not 0.0 <= clip_value < 0.5:
+            raise MethodIncompatibility(
+                "best_linear_projection(): clip must be in the interval [0, 0.5).",
+                recovery_hint="Use a small propensity clip such as 0.01.",
+                diagnostics={"clip": clip},
+            )
         from scipy import stats as _stats
 
-        X = X_test if X_test is not None else self._X_original
-        X = np.asarray(X, dtype=float)
+        if X_test is None:
+            X = self._X_original
+        else:
+            X = self._prepare_effect_matrix(
+                X_test,
+                context="best_linear_projection()",
+            )
         n, k = X.shape
 
         # Use the in-sample DR construction (requires Y, T, m̂, ê).
-        if X_test is not None and X_test.shape[0] != self._Y_original.shape[0]:
+        if X_test is not None and X.shape[0] != self._Y_original.shape[0]:
             warnings.warn(
                 "best_linear_projection: X_test has a different sample size "
                 "than the training data; falling back to the plug-in CATE "
@@ -846,8 +1192,10 @@ class CausalForest(BaseModel):
             e_hat = np.asarray(self._e_insample, dtype=float)
 
             if self.discrete_treatment:
-                e_clip = np.clip(e_hat, clip, 1.0 - clip)
-                n_clipped = int(np.sum((e_hat < clip) | (e_hat > 1 - clip)))
+                e_clip = np.clip(e_hat, clip_value, 1.0 - clip_value)
+                n_clipped = int(
+                    np.sum((e_hat < clip_value) | (e_hat > 1 - clip_value))
+                )
                 weight = (T - e_clip) / (e_clip * (1.0 - e_clip))
             else:
                 # Continuous treatment: use partialled-out Robinson form.
@@ -886,7 +1234,7 @@ class CausalForest(BaseModel):
         tvals = beta / np.where(se > 0, se, np.nan)
         df = max(n - p, 1)
         pvals = 2.0 * (1.0 - _stats.t.cdf(np.abs(tvals), df=df))
-        z = float(_stats.t.ppf(1.0 - alpha / 2.0, df=df))
+        z = float(_stats.t.ppf(1.0 - alpha_value / 2.0, df=df))
 
         names = ["Intercept"] + (
             self._feature_names or [f"X{j}" for j in range(k)]
@@ -902,19 +1250,58 @@ class CausalForest(BaseModel):
 
     def ate(self, X: Optional[np.ndarray] = None) -> float:
         """Average Treatment Effect (mean CATE)."""
+        if not self.fitted_:
+            raise MethodIncompatibility(
+                "CausalForest.ate() requires a fitted model.",
+                recovery_hint="Call fit() before computing ATE.",
+            )
         return float(self.effect(X if X is not None else self._X_original).mean())
 
     def att(self, X: Optional[np.ndarray] = None,
             T: Optional[np.ndarray] = None) -> float:
         """Average Treatment Effect on the Treated."""
+        if not self.fitted_:
+            raise MethodIncompatibility(
+                "CausalForest.att() requires a fitted model.",
+                recovery_hint="Call fit() before computing ATT.",
+            )
         if T is None:
             if hasattr(self, "_T_original"):
                 T = self._T_original
             else:
-                raise ValueError("Treatment vector needed for ATT")
+                raise MethodIncompatibility(
+                    "CausalForest.att() requires a treatment vector.",
+                    recovery_hint="Pass T or fit the model before calling att().",
+                )
         X = X if X is not None else self._X_original
         cate = self.effect(X)
-        mask = np.asarray(T).ravel() == 1
+        try:
+            T_arr = np.asarray(T, dtype=float).ravel()
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "CausalForest.att() requires numeric treatment values.",
+                recovery_hint="Pass a numeric binary treatment vector.",
+            ) from exc
+        if T_arr.shape[0] != cate.shape[0]:
+            raise MethodIncompatibility(
+                "CausalForest.att(): T must have the same row count as X.",
+                recovery_hint="Pass treatment values aligned with the CATE rows.",
+                diagnostics={
+                    "n_t": int(T_arr.shape[0]),
+                    "n_effects": int(cate.shape[0]),
+                },
+            )
+        if not np.isfinite(T_arr).all():
+            raise MethodIncompatibility(
+                "CausalForest.att() requires finite treatment values.",
+                recovery_hint="Drop or impute rows with NaN or infinite treatments.",
+            )
+        mask = T_arr == 1
+        if not np.any(mask):
+            raise DataInsufficient(
+                "CausalForest.att() received no treated observations.",
+                recovery_hint="Pass a treatment vector with at least one T == 1 row.",
+            )
         return float(cate[mask].mean())
 
 

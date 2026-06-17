@@ -21,6 +21,10 @@ Spirtes, P., Glymour, C., & Scheines, R. (2000).
 Causation, Prediction, and Search (2nd ed.). MIT Press. [@spirtes2000causation]
 """
 
+from typing import Any, Callable
+
+import numpy as np
+
 from .notears import notears, NOTEARS
 from .pc import pc_algorithm, PCAlgorithm
 from .lingam import lingam, LiNGAMResult
@@ -30,8 +34,11 @@ from .icp import icp, nonlinear_icp, ICPResult
 from .pcmci import pcmci, PCMCIResult, partial_corr_pvalue
 from .lpcmci import lpcmci, LPCMCIResult
 from .dynotears import dynotears, DYNOTEARSResult
-from . import _viz
 from ._viz import to_networkx, to_dot, plot_dag, edge_list, shd
+
+_AdjPayload = tuple[Any, Any, bool]
+_AdjGetter = Callable[[Any], _AdjPayload]
+_VizMethod = Callable[..., Any]
 
 # ---------------------------------------------------------------- #
 #  Attach .to_networkx / .to_dot / .plot to every result class so
@@ -41,17 +48,17 @@ from ._viz import to_networkx, to_dot, plot_dag, edge_list, shd
 # ---------------------------------------------------------------- #
 
 
-def _adj_and_names_lingam(result: LiNGAMResult):
+def _adj_and_names_lingam(result: LiNGAMResult) -> _AdjPayload:
     # LiNGAM stores B[i,j] = effect of j on i, so transpose to canonical.
     return result.adjacency.T, result.names, True
 
 
-def _adj_and_names_default(result):
+def _adj_and_names_default(result: Any) -> _AdjPayload:
     # Standard: A[i,j] != 0 ⇒ names[i] → names[j]
     return result.adjacency, result.names, True
 
 
-def _adj_and_names_pcmci(result):
+def _adj_and_names_pcmci(result: Any) -> _AdjPayload:
     # PCMCI stores (lag, i, j); collapse over lags by taking the maximum
     # absolute link-strength across lags so the static plot summarises
     # all temporal dependencies.
@@ -63,21 +70,29 @@ def _adj_and_names_pcmci(result):
     return A, result.names, True
 
 
-def _adj_and_names_dynotears(result: DYNOTEARSResult):
+def _adj_and_names_dynotears(result: DYNOTEARSResult) -> _AdjPayload:
     # DYNOTEARS exposes a contemporaneous W and a lagged A; the static
     # DAG plot uses W only (lagged links are best inspected in tabular form).
     W = getattr(result, "W", None)
     if W is None:
         W = getattr(result, "adjacency", None)
-    return W, getattr(result, "names", None) or getattr(result, "var_names", None), True
+    return (
+        W,
+        getattr(result, "names", None) or getattr(result, "var_names", None),
+        True,
+    )
 
 
-def _adj_and_names_icp(result: ICPResult):
+def _adj_and_names_icp(result: ICPResult) -> _AdjPayload:
     # ICP returns parent sets; build adjacency from accepted parents.
     parents = getattr(result, "parents", {}) or {}
     target = getattr(result, "target", None)
-    names = list(getattr(result, "names", None) or
-                 getattr(result, "predictors", None) or [])
+    names_source = (
+        getattr(result, "names", None)
+        or getattr(result, "predictors", None)
+        or []
+    )
+    names = list(names_source)
     if target is not None and target not in names:
         names = names + [target]
     name_to_idx = {nm: i for i, nm in enumerate(names)}
@@ -90,9 +105,7 @@ def _adj_and_names_icp(result: ICPResult):
     return A, names, True
 
 
-import numpy as np  # noqa: E402  (after the patch helpers reference it)
-
-_ADJ_GETTERS = {
+_ADJ_GETTERS: dict[type[Any], _AdjGetter] = {
     LiNGAMResult: _adj_and_names_lingam,
     GESResult: _adj_and_names_default,
     FCIResult: _adj_and_names_default,
@@ -103,8 +116,8 @@ _ADJ_GETTERS = {
 }
 
 
-def _make_method(viz_func, transform_axes=("matrix", "names", "directed")):
-    def _bound(self, *args, **kwargs):
+def _make_method(viz_func: _VizMethod) -> _VizMethod:
+    def _bound(self: Any, *args: Any, **kwargs: Any) -> Any:
         getter = _ADJ_GETTERS.get(type(self), _adj_and_names_default)
         A, names, directed = getter(self)
         kwargs.setdefault("directed", directed)
@@ -114,13 +127,13 @@ def _make_method(viz_func, transform_axes=("matrix", "names", "directed")):
 
 for _cls in _ADJ_GETTERS:
     if not hasattr(_cls, "to_networkx"):
-        _cls.to_networkx = _make_method(to_networkx)
+        setattr(_cls, "to_networkx", _make_method(to_networkx))
     if not hasattr(_cls, "to_dot"):
-        _cls.to_dot = _make_method(to_dot)
+        setattr(_cls, "to_dot", _make_method(to_dot))
     if not hasattr(_cls, "plot"):
-        _cls.plot = _make_method(plot_dag)
+        setattr(_cls, "plot", _make_method(plot_dag))
     if not hasattr(_cls, "edge_list"):
-        _cls.edge_list = _make_method(edge_list)
+        setattr(_cls, "edge_list", _make_method(edge_list))
 
 
 __all__ = [

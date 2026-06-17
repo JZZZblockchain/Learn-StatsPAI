@@ -21,7 +21,7 @@ Elasticities: Theory and Evidence from Pakistan."
 QJE, 128(2), 669-723. [@kleven2013using]
 """
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -98,9 +98,9 @@ class NotchResult:
         excess_bunching: float,
         missing_mass: float,
         marginal_buncher: float,
-        elasticity,
+        elasticity: Optional[float],
         se_bunching: float,
-        se_elasticity,
+        se_elasticity: Optional[float],
         pvalue: float,
         ci: Tuple[float, float],
         alpha: float,
@@ -110,8 +110,8 @@ class NotchResult:
         counterfactual: np.ndarray,
         n_obs: int,
         causal_result: CausalResult,
-        notch_size=None,
-    ):
+        notch_size: Optional[float] = None,
+    ) -> None:
         self.excess_bunching = excess_bunching
         self.missing_mass = missing_mass
         self.marginal_buncher = marginal_buncher
@@ -172,7 +172,11 @@ class NotchResult:
     # ------------------------------------------------------------------
     # plot
     # ------------------------------------------------------------------
-    def plot(self, figsize=(10, 6), title=None):
+    def plot(
+        self,
+        figsize: Tuple[float, float] = (10, 6),
+        title: Optional[str] = None,
+    ) -> Any:
         """
         Plot observed histogram with counterfactual overlay.
 
@@ -286,8 +290,14 @@ class NotchResult:
 # Core estimation helpers
 # ======================================================================
 
-def _fit_counterfactual(bin_centers, counts, exclude_mask, poly_order,
-                        notch_point, bin_width):
+def _fit_counterfactual(
+    bin_centers: np.ndarray,
+    counts: np.ndarray,
+    exclude_mask: np.ndarray,
+    poly_order: int,
+    notch_point: float,
+    bin_width: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Fit counterfactual polynomial excluding the notch region."""
     x_out = bin_centers[~exclude_mask]
     y_out = counts[~exclude_mask]
@@ -296,14 +306,19 @@ def _fit_counterfactual(bin_centers, counts, exclude_mask, poly_order,
     x_norm = (x_out - notch_point) / bin_width
     x_all_norm = (bin_centers - notch_point) / bin_width
 
-    coeffs = np.polyfit(x_norm, y_out, poly_order)
-    cf = np.polyval(coeffs, x_all_norm)
+    coeffs = np.asarray(np.polyfit(x_norm, y_out, poly_order), dtype=float)
+    cf = np.asarray(np.polyval(coeffs, x_all_norm), dtype=float)
     cf = np.maximum(cf, 0)
     return cf, coeffs
 
 
-def _find_marginal_buncher(bin_centers, counts, counterfactual,
-                           notch_point, bin_width):
+def _find_marginal_buncher(
+    bin_centers: np.ndarray,
+    counts: np.ndarray,
+    counterfactual: np.ndarray,
+    notch_point: float,
+    bin_width: float,
+) -> Tuple[float, float, float]:
     """
     Iteratively find x* such that excess bunching = missing mass.
 
@@ -342,7 +357,7 @@ def notch(
     data: pd.DataFrame,
     x: str,
     notch_point: float,
-    notch_size=None,
+    notch_size: Optional[float] = None,
     bin_width: float = 500,
     poly_order: int = 7,
     exclude_range: Optional[Tuple[float, float]] = None,
@@ -492,7 +507,12 @@ def notch(
         )
         boot_B[b] = B_b
 
-        if boot_elast is not None and notch_size > 0 and notch_point > 0:
+        if (
+            boot_elast is not None
+            and notch_size is not None
+            and notch_size > 0
+            and notch_point > 0
+        ):
             dx_b = x_star_b - notch_point
             boot_elast[b] = max(dx_b / (notch_point * notch_size), 0)
 

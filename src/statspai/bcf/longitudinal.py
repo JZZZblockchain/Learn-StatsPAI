@@ -24,18 +24,14 @@ Trials." arXiv:2508.08418.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 # sklearn is imported lazily inside the helpers that need it so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
 # file when the user never touches bcf_longitudinal.
-
-from ..core.results import CausalResult
-
 
 __all__ = ["bcf_longitudinal", "BCFLongResult"]
 
@@ -79,7 +75,7 @@ def _estimate_propensity(
         n_estimators=100, max_depth=3, random_state=random_state,
     )
     clf.fit(X, D)
-    p = clf.predict_proba(X)[:, 1]
+    p = np.asarray(clf.predict_proba(X)[:, 1], dtype=float)
     return np.clip(p, 0.01, 0.99)
 
 
@@ -88,7 +84,7 @@ def _fit_mu_tau_at_time(
     unit_effect: np.ndarray,
     n_trees_mu: int = 200, n_trees_tau: int = 50,
     random_state: int = 42,
-) -> tuple:
+) -> tuple[np.ndarray, np.ndarray]:
     """Fit BCF prognostic/treatment forests at a single time point.
 
     Uses a T-learner variant for ``tau`` to avoid the "mu absorbs tau"
@@ -106,7 +102,7 @@ def _fit_mu_tau_at_time(
     control = ~treated
     rs = int(random_state) % (2 ** 31)
 
-    def _fit(mask):
+    def _fit(mask: np.ndarray) -> Any:
         if mask.sum() < 5:
             return None
         rf = RandomForestRegressor(
@@ -186,7 +182,8 @@ def bcf_longitudinal(
 
     References
     ----------
-    Prevot, Häring, Nichols, Holmes & Ganjgahi (arXiv:2508.08418, 2025). [@prevot2025hierarchical]
+    Prevot, Häring, Nichols, Holmes & Ganjgahi
+    (arXiv:2508.08418, 2025). [@prevot2025hierarchical]
     Hahn, Murray, Carvalho (2020), Bayesian Analysis.
 
     Examples
@@ -204,7 +201,11 @@ def bcf_longitudinal(
     ...         rows.append({"unit": u, "time": t, "y": y, "d": d,
     ...                      "x1": x1, "x2": x2})
     >>> df = pd.DataFrame(rows)
-    >>> res = sp.bcf_longitudinal(df, outcome="y", treatment="d", unit="unit", time="time", covariates=["x1", "x2"], n_trees_mu=80, n_trees_tau=30, n_bootstrap=30, random_state=53)  # doctest: +SKIP
+    >>> res = sp.bcf_longitudinal(  # doctest: +SKIP
+    ...     df, outcome="y", treatment="d", unit="unit", time="time",
+    ...     covariates=["x1", "x2"], n_trees_mu=80, n_trees_tau=30,
+    ...     n_bootstrap=30, random_state=53,
+    ... )
     >>> res.per_time_ate  # doctest: +SKIP
     """
     if not isinstance(data, pd.DataFrame):
@@ -301,7 +302,7 @@ def bcf_longitudinal(
     rng = np.random.default_rng(random_state)
     all_units = df[unit].unique()
     boot_point = []
-    boot_per_time = {t: [] for t in time_vals}
+    boot_per_time: Dict[Any, List[float]] = {t: [] for t in time_vals}
     for b in range(n_bootstrap):
         draw = rng.choice(all_units, size=len(all_units), replace=True)
         boot_parts = []
@@ -380,6 +381,9 @@ def bcf_longitudinal(
             "n_trees_mu": n_trees_mu,
             "n_trees_tau": n_trees_tau,
             "n_bootstrap_effective": len(boot_point),
-            "reference": "Prevot, Häring, Nichols, Holmes & Ganjgahi (arXiv:2508.08418, 2025)",
+            "reference": (
+                "Prevot, Häring, Nichols, Holmes & Ganjgahi "
+                "(arXiv:2508.08418, 2025)"
+            ),
         },
     )

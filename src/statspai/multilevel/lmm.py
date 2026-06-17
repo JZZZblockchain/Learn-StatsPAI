@@ -48,6 +48,7 @@ from scipy import stats
 from scipy.optimize import minimize
 
 from ..core.results import EconometricResults
+from ..exceptions import MethodIncompatibility
 from ._core import (
     _GroupBlock,
     _as_str_list,
@@ -233,20 +234,62 @@ class MixedResult:
             return pd.Series(out, name="yhat")
 
         # Arbitrary new data ------------------------------------------------
-        for c in self._x_fixed + self._group_cols:
-            if c not in data.columns:
-                raise KeyError(f"predict(): missing column {c!r}")
+        if not isinstance(data, pd.DataFrame):
+            raise MethodIncompatibility(
+                "predict() requires a pandas DataFrame for new LMM data.",
+                diagnostics={"data_type": data.__class__.__name__},
+            )
+        required = list(self._x_fixed)
+        if include_random:
+            required.extend(self._x_random or [])
+            required.extend(self._group_cols)
+        missing = [c for c in dict.fromkeys(required) if c not in data.columns]
+        if missing:
+            raise MethodIncompatibility(
+                f"predict(): missing column(s) {missing}",
+                recovery_hint=(
+                    "Pass fixed-effect columns for marginal prediction; add "
+                    "random-effect and group columns when include_random=True."
+                ),
+                diagnostics={
+                    "missing_columns": missing,
+                    "include_random": bool(include_random),
+                },
+            )
 
-        X_new = np.column_stack(
-            [np.ones(len(data))] + [data[c].to_numpy(dtype=float) for c in self._x_fixed]
-        )
+        try:
+            X_new = np.column_stack(
+                [np.ones(len(data))]
+                + [data[c].to_numpy(dtype=float) for c in self._x_fixed]
+            )
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "LMM prediction fixed-effect columns must be numeric.",
+                diagnostics={"columns": list(self._x_fixed), "error": str(exc)},
+            ) from exc
+        if not np.isfinite(X_new).all():
+            raise MethodIncompatibility(
+                "LMM prediction fixed-effect columns must be finite.",
+                diagnostics={"columns": list(self._x_fixed)},
+            )
         mu = X_new @ self.fixed_effects.values
 
         if include_random and self._x_random is not None:
-            Z_new = np.column_stack(
-                [np.ones(len(data))]
-                + [data[c].to_numpy(dtype=float) for c in self._x_random]
-            )
+            try:
+                Z_new = np.column_stack(
+                    [np.ones(len(data))]
+                    + [data[c].to_numpy(dtype=float) for c in self._x_random]
+                )
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    "LMM prediction random-effect columns must be numeric.",
+                    diagnostics={"columns": list(self._x_random), "error": str(exc)},
+                ) from exc
+            if not np.isfinite(Z_new).all():
+                raise MethodIncompatibility(
+                    "LMM prediction random-effect columns must be finite.",
+                    diagnostics={"columns": list(self._x_random)},
+                )
             # Map each row to its BLUP (or zero for unseen groups).
             group_key_col = _compose_group_key(data, self._group_cols)
             u_mat = np.zeros_like(Z_new)

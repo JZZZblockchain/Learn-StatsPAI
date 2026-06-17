@@ -8,6 +8,8 @@ unobserved confounding (Hess, Frauen, Melnychuk & Feuerriegel 2025,
 arXiv:2502.13022), causal-policy forest (Kato 2025, arXiv:2512.22846).
 """
 
+from typing import Any
+
 from .estimators import (
     direct_method,
     ips,
@@ -26,8 +28,10 @@ __all__ = [
     "switch_dr",
     "evaluate",
     "OPEResult",
-    "sharp_ope_unobserved", "causal_policy_forest",
-    "SharpOPEResult", "CausalPolicyForestResult",
+    "sharp_ope_unobserved",
+    "causal_policy_forest",
+    "SharpOPEResult",
+    "CausalPolicyForestResult",
 ]
 
 _SHARP_EXPORTS = {
@@ -38,7 +42,7 @@ _SHARP_EXPORTS = {
 }
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Load sklearn-backed sharp OPE extensions only on first use."""
     if name in _SHARP_EXPORTS:
         from . import sharp_confounding as _sharp

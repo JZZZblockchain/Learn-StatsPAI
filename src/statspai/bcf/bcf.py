@@ -21,7 +21,7 @@ Hahn, P. R., Murray, J. S., & Carvalho, C. M. (2020).
 Bayesian Analysis, 15(3), 965-1056. [@hahn2020bayesian]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -31,6 +31,7 @@ from scipy import stats as sp_stats
 # file when the user never touches bcf.
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -213,7 +214,7 @@ class BayesianCausalForest:
 
         unique_d = np.unique(D)
         if not (len(unique_d) == 2 and set(unique_d.astype(int)) == {0, 1}):
-            raise ValueError(f"Treatment must be binary (0/1)")
+            raise ValueError("Treatment must be binary (0/1)")
 
         from sklearn.base import clone
         from sklearn.ensemble import (
@@ -227,8 +228,11 @@ class BayesianCausalForest:
 
         # Step 1: Estimate propensity scores via cross-fitting
         e_hat = np.zeros(n)
-        kf = KFold(n_splits=self.n_folds, shuffle=True,
-                    random_state=self.random_state)
+        kf = KFold(
+            n_splits=self.n_folds,
+            shuffle=True,
+            random_state=self.random_state,
+        )
 
         for train_idx, test_idx in kf.split(X):
             prop = GradientBoostingClassifier(
@@ -332,6 +336,7 @@ class BayesianCausalForest:
         self._mu_model = mu_model
         self._tau_model = tau_model
         self._cate = cate
+        self._n_features = X.shape[1]
 
         return CausalResult(
             method='BCF (Hahn, Murray, Carvalho 2020)',
@@ -350,11 +355,62 @@ class BayesianCausalForest:
     def effect(self, X_new: Optional[np.ndarray] = None) -> np.ndarray:
         """Predict CATE for new observations."""
         if not hasattr(self, '_tau_model'):
-            raise ValueError("Model must be fitted first.")
+            raise MethodIncompatibility(
+                "BayesianCausalForest.effect() requires a fitted model.",
+                recovery_hint="Call fit() before requesting CATE predictions.",
+            )
         if X_new is None:
-            return self._cate.copy()
-        X_new = np.asarray(X_new, dtype=np.float64)
-        return self._tau_model.predict(X_new)
+            return np.asarray(self._cate, dtype=np.float64).copy()
+        try:
+            X_new = np.asarray(X_new, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "BayesianCausalForest.effect() requires numeric covariates.",
+                recovery_hint="Convert CATE prediction covariates to numeric values.",
+            ) from exc
+        expected = getattr(self, "_n_features", None)
+        if X_new.ndim == 1:
+            if expected is not None and expected > 1 and X_new.size == expected:
+                X_new = X_new.reshape(1, -1)
+            elif expected in (None, 1):
+                X_new = X_new.reshape(-1, 1)
+            else:
+                raise MethodIncompatibility(
+                    "BayesianCausalForest.effect(): one-dimensional input does "
+                    "not match the fitted covariate count.",
+                    recovery_hint="Pass X_new shaped (n_samples, n_covariates).",
+                    diagnostics={
+                        "n_values": int(X_new.size),
+                        "expected_features": expected,
+                    },
+                )
+        elif X_new.ndim != 2:
+            raise MethodIncompatibility(
+                "BayesianCausalForest.effect(): X_new must be a 1D or 2D array.",
+                recovery_hint="Pass X_new shaped (n_samples, n_covariates).",
+                diagnostics={"x_ndim": int(X_new.ndim)},
+            )
+        if X_new.shape[0] == 0:
+            raise DataInsufficient(
+                "BayesianCausalForest.effect() received no rows.",
+                recovery_hint="Pass at least one prediction row.",
+            )
+        if expected is not None and X_new.shape[1] != expected:
+            raise MethodIncompatibility(
+                "BayesianCausalForest.effect(): covariate count does not "
+                "match fit().",
+                recovery_hint="Use the same covariates and order used at fit time.",
+                diagnostics={
+                    "expected_features": expected,
+                    "observed_features": int(X_new.shape[1]),
+                },
+            )
+        if not np.isfinite(X_new).all():
+            raise MethodIncompatibility(
+                "BayesianCausalForest.effect(): X_new contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite CATE prediction rows.",
+            )
+        return np.asarray(self._tau_model.predict(X_new), dtype=np.float64)
 
 
 # ======================================================================

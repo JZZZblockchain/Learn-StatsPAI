@@ -41,7 +41,7 @@ Ackerberg, Caves & Frazer (2015, Econometrica) [@ackerberg2015identification]
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -205,7 +205,7 @@ def _estimate_proxy(
         )
 
     # ---- Stage 2: GMM minimization ------------------------------------
-    def obj(beta):
+    def obj(beta: np.ndarray) -> float:
         return gmm_objective(
             np.asarray(beta, dtype=float),
             phi_hat=phi_w,
@@ -224,7 +224,8 @@ def _estimate_proxy(
     # objective among converged starts wins.
     n_in = inputs_mat.shape[1]
     n_lin = len(raw_input_names)
-    def _start(linear_vals):
+
+    def _start(linear_vals: Sequence[float]) -> np.ndarray:
         s = np.zeros(n_in)
         s[:n_lin] = linear_vals[:n_lin]
         return s
@@ -402,7 +403,10 @@ def _resolve_inputs(
     free_default: Sequence[str],
     state_default: Sequence[str],
 ) -> Tuple[List[str], List[str]]:
-    def _to_list(x, default):
+    def _to_list(
+        x: Optional[Sequence[str] | str],
+        default: Sequence[str],
+    ) -> List[str]:
         if x is None:
             return list(default)
         if isinstance(x, str):

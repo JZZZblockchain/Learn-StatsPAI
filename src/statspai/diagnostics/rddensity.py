@@ -24,13 +24,102 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict, Any, Sequence, Tuple, Union
+from typing import Optional, Dict, Any, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import (
+    ConvergenceFailure,
+    DataInsufficient,
+    MethodIncompatibility,
+)
+
+
+def _validate_inputs(
+    data: Any,
+    x: Any,
+    c: float,
+    p: int,
+    alpha: float,
+    backend: Any,
+) -> str:
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "`data` must be a pandas DataFrame.",
+            recovery_hint="Pass a DataFrame containing the running variable.",
+            diagnostics={"type": type(data).__name__},
+        )
+    if not isinstance(x, str) or not x:
+        raise MethodIncompatibility(
+            "`x` must be a non-empty running-variable column name.",
+            recovery_hint="Pass x='running_variable'.",
+            diagnostics={"x": repr(x)},
+        )
+    if x not in data.columns:
+        raise MethodIncompatibility(
+            f"Column '{x}' not found in data.",
+            recovery_hint="Check `x` against data.columns.",
+            diagnostics={"x": x, "available_columns": list(data.columns)},
+        )
+    if not np.isfinite(c):
+        raise MethodIncompatibility(
+            "`c` must be finite.",
+            recovery_hint="Pass a finite RD cutoff.",
+            diagnostics={"c": c},
+        )
+    if not isinstance(p, int) or isinstance(p, bool) or not 1 <= p <= 7:
+        raise MethodIncompatibility(
+            "p must be an integer between 1 and 7 for rddensity defaults.",
+            recovery_hint="Use a local-polynomial order such as p=2.",
+            diagnostics={"p": p},
+        )
+    if not np.isfinite(alpha) or not 0 < alpha < 1:
+        raise MethodIncompatibility(
+            "alpha must be between 0 and 1.",
+            recovery_hint="Pass a significance level such as alpha=0.05.",
+            diagnostics={"alpha": alpha},
+        )
+    if not isinstance(backend, str):
+        raise MethodIncompatibility(
+            "backend must be 'native' or 'r'.",
+            recovery_hint="Use backend='native' or backend='r'.",
+            diagnostics={"backend": repr(backend)},
+        )
+    return backend.lower().replace("-", "_")
+
+
+def _running_values(data: pd.DataFrame, x: str) -> np.ndarray:
+    try:
+        X = data[x].values.astype(float)
+    except (TypeError, ValueError) as exc:
+        raise DataInsufficient(
+            f"Column '{x}' must be numeric.",
+            recovery_hint="Convert the running variable to numeric values.",
+            diagnostics={"x": x},
+        ) from exc
+    return np.asarray(X[np.isfinite(X)], dtype=float)
+
+
+def _validate_support(X: np.ndarray, c: float) -> Tuple[int, int, int]:
+    n = len(X)
+    if n < 20:
+        raise DataInsufficient(
+            "Need at least 20 observations.",
+            recovery_hint="Provide at least 20 finite running-variable values.",
+            diagnostics={"n_valid": int(n), "min_required": 20},
+        )
+    n_l = int(np.sum(X < c))
+    n_r = int(np.sum(X >= c))
+    if n_l < 5 or n_r < 5:
+        raise DataInsufficient(
+            "Not enough observations on each side.",
+            recovery_hint="Provide at least 5 observations on each side of the cutoff.",
+            diagnostics={"n_left": n_l, "n_right": n_r},
+        )
+    return n, n_l, n_r
 
 
 def rddensity(
@@ -103,27 +192,22 @@ def rddensity(
 
     See Cattaneo, Jansson & Ma (2020, *JASA*).
     """
-    backend_norm = backend.lower().replace("-", "_")
+    backend_norm = _validate_inputs(data, x, c, p, alpha, backend)
     if backend_norm in {"r", "rddensity", "r_reference", "r_package"}:
         return _rddensity_r_backend(data=data, x=x, c=c, p=p, h=h, alpha=alpha)
     if backend_norm not in {"native", "statspai"}:
-        raise ValueError("backend must be 'native' or 'r'.")
+        raise MethodIncompatibility(
+            "backend must be 'native' or 'r'.",
+            recovery_hint="Use backend='native' or backend='r'.",
+            diagnostics={"backend": backend},
+        )
 
-    X = data[x].values.astype(float)
-    X = X[np.isfinite(X)]
-    n = len(X)
-
-    if n < 20:
-        raise ValueError("Need at least 20 observations.")
+    X = _running_values(data, x)
+    n, n_l, n_r = _validate_support(X, c)
 
     X_c = X - c
     x_left = X_c[X_c < 0]
     x_right = X_c[X_c >= 0]
-    n_l = len(x_left)
-    n_r = len(x_right)
-
-    if n_l < 5 or n_r < 5:
-        raise ValueError("Not enough observations on each side.")
 
     h_l, h_r, h_source = _resolve_bandwidths(h, x_left, x_right, p, x_all=X_c)
 
@@ -194,10 +278,10 @@ def rddensity(
 
 
 def _resolve_bandwidths(
-    h,
-    x_left,
-    x_right,
-    p,
+    h: Optional[Union[float, Sequence[float]]],
+    x_left: np.ndarray,
+    x_right: np.ndarray,
+    p: int,
     x_all: Optional[np.ndarray] = None,
 ) -> Tuple[float, float, str]:
     if h is None:
@@ -207,17 +291,50 @@ def _resolve_bandwidths(
         return h_l, h_r, "rddensity_comb"
 
     if np.isscalar(h):
-        h_value = float(h)
+        try:
+            h_value = float(cast(Any, h))
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "h must be positive and finite.",
+                recovery_hint="Pass h=None or a positive finite bandwidth.",
+                diagnostics={"h": repr(h)},
+            ) from exc
         if not np.isfinite(h_value) or h_value <= 0:
-            raise ValueError("h must be positive and finite.")
+            raise MethodIncompatibility(
+                "h must be positive and finite.",
+                recovery_hint="Pass h=None or a positive finite bandwidth.",
+                diagnostics={"h": h},
+            )
         return h_value, h_value, "manual_scalar"
 
-    h_values = list(h)
+    try:
+        h_values = list(cast(Sequence[float], h))
+    except TypeError as exc:
+        raise MethodIncompatibility(
+            "h must be a scalar or a length-2 sequence (h_left, h_right).",
+            recovery_hint="Pass h=0.5 or h=(0.35, 0.55).",
+            diagnostics={"h": repr(h)},
+        ) from exc
     if len(h_values) != 2:
-        raise ValueError("h must be a scalar or a length-2 sequence (h_left, h_right).")
-    h_l, h_r = float(h_values[0]), float(h_values[1])
+        raise MethodIncompatibility(
+            "h must be a scalar or a length-2 sequence (h_left, h_right).",
+            recovery_hint="Pass h=0.5 or h=(0.35, 0.55).",
+            diagnostics={"h_length": len(h_values)},
+        )
+    try:
+        h_l, h_r = float(h_values[0]), float(h_values[1])
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "h_left and h_right must be positive and finite.",
+            recovery_hint="Use positive finite side-specific bandwidths.",
+            diagnostics={"h": [repr(v) for v in h_values]},
+        ) from exc
     if not (np.isfinite(h_l) and np.isfinite(h_r)) or h_l <= 0 or h_r <= 0:
-        raise ValueError("h_left and h_right must be positive and finite.")
+        raise MethodIncompatibility(
+            "h_left and h_right must be positive and finite.",
+            recovery_hint="Use positive finite side-specific bandwidths.",
+            diagnostics={"h_left": h_l, "h_right": h_r},
+        )
     return h_l, h_r, "manual_side_specific"
 
 
@@ -233,15 +350,8 @@ def _rddensity_r_backend(
     if rscript is None:
         raise ImportError("backend='r' requires Rscript and the R package rddensity.")
 
-    X = data[x].values.astype(float)
-    X = X[np.isfinite(X)]
-    n = len(X)
-    if n < 20:
-        raise ValueError("Need at least 20 observations.")
-    n_l = int(np.sum(X < c))
-    n_r = int(np.sum(X >= c))
-    if n_l < 5 or n_r < 5:
-        raise ValueError("Not enough observations on each side.")
+    X = _running_values(data, x)
+    n, n_l, n_r = _validate_support(X, c)
 
     if h is None:
         h_l = h_r = None
@@ -315,9 +425,11 @@ cat(jsonlite::toJSON(out, auto_unbox = TRUE, digits = 16, null = "null"))
             text=True,
         )
     if proc.returncode != 0:
-        raise RuntimeError(
+        raise ConvergenceFailure(
             "backend='r' failed while running rddensity::rddensity: "
-            f"{proc.stderr.strip() or proc.stdout.strip()}"
+            f"{proc.stderr.strip() or proc.stdout.strip()}",
+            recovery_hint="Check the R rddensity/jsonlite installation and input data.",
+            diagnostics={"returncode": int(proc.returncode)},
         )
 
     out: Dict[str, Any] = json.loads(proc.stdout)
@@ -395,12 +507,12 @@ def _find_rscript() -> Optional[str]:
     return None
 
 
-def _cjm_bandwidth(x, p):
+def _cjm_bandwidth(x: np.ndarray, p: int) -> float:
     """Legacy fallback bandwidth used only when no full sample is available."""
     n = len(x)
     sd = np.std(x)
     h = 1.06 * sd * n ** (-1 / (2 * p + 3))
-    return max(h, 0.01 * sd)
+    return float(max(h, 0.01 * sd))
 
 
 def _rddensity_unique(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -454,7 +566,11 @@ def _rddensity_h(x: float, p: int) -> float:
         return x ** 9 - 36 * x ** 7 + 378 * x ** 5 - 1260 * x ** 3 + 945 * x
     if p == 10:
         return x ** 10 - 45 * x ** 8 + 630 * x ** 6 - 3150 * x ** 4 + 4725 * x ** 2 - 945
-    raise ValueError("p must be between 1 and 7 for rddensity defaults.")
+    raise MethodIncompatibility(
+        "p must be between 1 and 7 for rddensity defaults.",
+        recovery_hint="Use p in the supported range 1..7.",
+        diagnostics={"p": p},
+    )
 
 
 def _dnorm(x: float) -> float:

@@ -38,7 +38,111 @@ from scipy import stats
 from scipy.optimize import minimize
 
 from ..core.results import EconometricResults
+from ..exceptions import (
+    ConvergenceFailure,
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 from . import _core as _fc
+
+
+def _require_string_option(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"`{name}` must be a string option.",
+            diagnostics={name: repr(value)},
+        )
+    return value
+
+
+def _require_open_unit_float(value: Any, name: str) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be in (0, 1).",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_positive_float(value: Any, name: str) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a positive finite number.",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or out <= 0.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be a positive finite number.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_int_at_least(value: Any, name: str, minimum: int) -> int:
+    if isinstance(value, bool):
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    try:
+        out = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        ) from exc
+    if out != value or out < minimum:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    return out
+
+
+def _coerce_column_list(
+    columns: Any,
+    name: str,
+    *,
+    allow_empty: bool = False,
+) -> List[str]:
+    if isinstance(columns, str):
+        out = [columns]
+    else:
+        try:
+            out = list(columns)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{name}` must be a column name or a list of column names.",
+                diagnostics={name: repr(columns)},
+            ) from exc
+    if not allow_empty and not out:
+        raise MethodIncompatibility(
+            f"`{name}` must contain at least one column name.",
+            diagnostics={name: out},
+        )
+    bad = [c for c in out if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{name}` must contain only non-empty string column names.",
+            diagnostics={name: out, "invalid_columns": bad},
+        )
+    return out
+
+
+def _coerce_optional_column_list(columns: Any, name: str) -> Optional[List[str]]:
+    if columns is None:
+        return None
+    return _coerce_column_list(columns, name, allow_empty=True)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +257,18 @@ class FrontierResult(EconometricResults):
         key = self._efficiency_key(method)
         vals = self.diagnostics.get(key)
         if vals is None:
-            raise KeyError(f"Efficiency scores '{key}' not available.")
+            raise MethodIncompatibility(
+                f"Efficiency scores '{key}' not available.",
+                recovery_hint=(
+                    "Use a fitted frontier result that stores technical "
+                    "efficiency diagnostics, or choose a supported method."
+                ),
+                diagnostics={
+                    "method": method,
+                    "missing_diagnostic": key,
+                    "available": sorted(self.diagnostics),
+                },
+            )
         # TRE stores a broadcast marginal, not a per-obs posterior; warn
         # once per call so callers don't mistake a constant Series for a
         # degenerate model fit.
@@ -174,19 +289,31 @@ class FrontierResult(EconometricResults):
         """Return ``E[u|eps]`` (inefficiency), Jondrow et al. (1982)."""
         vals = self.diagnostics.get("inefficiency_jlms")
         if vals is None:
-            raise KeyError("Inefficiency scores not available.")
+            raise MethodIncompatibility(
+                "Inefficiency scores not available.",
+                recovery_hint=(
+                    "Use a fitted frontier result that stores JLMS "
+                    "inefficiency diagnostics."
+                ),
+                diagnostics={"missing_diagnostic": "inefficiency_jlms"},
+            )
         idx = self.diagnostics.get("efficiency_index")
         return pd.Series(vals, name="u_hat", index=idx if idx is not None else None)
 
     def _efficiency_key(self, method: Optional[str]) -> str:
         if method is None:
             method = self.model_info.get("te_method", "bc")
+        _require_string_option(method, "method")
         method = method.lower()
         if method in {"bc", "battese-coelli", "battesecoelli", "bc_mixture"}:
             return "efficiency_bc"
         if method in {"jlms", "jondrow", "jlms_mixture"}:
             return "efficiency_jlms"
-        raise ValueError(f"Unknown TE method: {method!r}")
+        raise MethodIncompatibility(
+            f"Unknown TE method: {method!r}",
+            recovery_hint="Choose method='bc' or method='jlms'.",
+            diagnostics={"method": method, "valid": ["bc", "jlms"]},
+        )
 
     # ------------------------------------------------------------------
     # Out-of-sample prediction
@@ -224,13 +351,31 @@ class FrontierResult(EconometricResults):
         pandas.Series
             Indexed by the (post-dropna) rows of ``new_data``.
         """
+        if not isinstance(what, str):
+            raise MethodIncompatibility(
+                "`what` must be a string prediction target.",
+                diagnostics={"what": repr(what)},
+            )
         what = what.lower()
         valid = {
             "frontier", "expected_inefficiency", "expected_efficiency",
             "conditional_inefficiency", "conditional_efficiency",
         }
         if what not in valid:
-            raise ValueError(f"Unknown what={what!r}.  Valid: {sorted(valid)}.")
+            raise MethodIncompatibility(
+                f"Unknown what={what!r}.  Valid: {sorted(valid)}.",
+                recovery_hint=(
+                    "Choose one of: frontier, expected_inefficiency, "
+                    "expected_efficiency, conditional_inefficiency, "
+                    "conditional_efficiency."
+                ),
+                diagnostics={"what": what, "valid": sorted(valid)},
+            )
+        if not isinstance(new_data, pd.DataFrame):
+            raise MethodIncompatibility(
+                "frontier predict() requires a pandas DataFrame.",
+                diagnostics={"data_type": new_data.__class__.__name__},
+            )
 
         regressors = self.data_info.get("regressors", [])
         usigma_cols = self.data_info.get("usigma_cols") or []
@@ -242,25 +387,58 @@ class FrontierResult(EconometricResults):
         if needs_y:
             y_col = self.data_info.get("dep_var")
             if y_col is None or y_col not in new_data.columns:
-                raise KeyError(
+                raise MethodIncompatibility(
                     f"what={what!r} requires the dependent variable "
-                    f"{y_col!r} to be present in new_data."
+                    f"{y_col!r} to be present in new_data.",
+                    recovery_hint=(
+                        "Include the fitted outcome column when requesting "
+                        "conditional frontier predictions."
+                    ),
+                    diagnostics={"dependent_var": y_col, "what": what},
                 )
             required = [y_col] + required
         missing = [c for c in required if c not in new_data.columns]
         if missing:
-            raise KeyError(f"new_data is missing required columns: {missing}")
+            raise MethodIncompatibility(
+                f"new_data is missing required columns: {missing}",
+                recovery_hint=(
+                    "Add the fitted frontier, variance, inefficiency, and "
+                    "conditional-outcome columns needed for this prediction."
+                ),
+                diagnostics={"missing_columns": missing, "what": what},
+            )
         df_new = new_data[required].dropna().copy()
         idx = df_new.index
         n_new = len(df_new)
         if n_new == 0:
-            raise ValueError("All rows dropped after removing missing values.")
+            raise DataInsufficient(
+                "All rows dropped after removing missing values.",
+                recovery_hint=(
+                    "Provide at least one row with complete prediction inputs."
+                ),
+                diagnostics={"required_columns": required},
+            )
+        try:
+            numeric_required = df_new[required].to_numpy(dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "frontier prediction columns must be numeric.",
+                diagnostics={"required_columns": required, "error": str(exc)},
+            ) from exc
+        if not np.isfinite(numeric_required).all():
+            raise MethodIncompatibility(
+                "frontier prediction columns must be finite.",
+                diagnostics={"required_columns": required},
+            )
 
         # --- Rebuild design and pull fitted coefficients ---
         params = self.params
         beta = params.loc[["_cons"] + list(regressors)].to_numpy()
         const = np.ones((n_new, 1))
-        X_new = np.concatenate([const, df_new[regressors].to_numpy()], axis=1)
+        X_new = np.concatenate(
+            [const, df_new[regressors].to_numpy(dtype=float)],
+            axis=1,
+        )
         frontier_hat = X_new @ beta
 
         if what == "frontier":
@@ -290,7 +468,14 @@ class FrontierResult(EconometricResults):
             E_u = mu_new + sigma_u_new * _fc._phi_over_Phi(ratio)
             E_u = np.maximum(E_u, 0.0)
         else:
-            raise RuntimeError(f"Unsupported dist for predict: {dist}")
+            raise NumericalInstability(
+                f"Unsupported fitted distribution for predict(): {dist!r}",
+                recovery_hint=(
+                    "Refit with dist='half-normal', 'exponential', or "
+                    "'truncated-normal'."
+                ),
+                diagnostics={"inefficiency_dist": dist},
+            )
 
         if what == "expected_inefficiency":
             return pd.Series(E_u, index=idx, name="expected_inefficiency")
@@ -411,25 +596,63 @@ class FrontierResult(EconometricResults):
             d E[u_i] / d w_ij = gamma_j * sigma_u_i * [phi/Phi + ratio * phi/Phi * (phi/Phi - (-ratio))]
             (chain rule through sigma_u_i = exp(gamma'[1, w_i])).
         """
+        kind = _require_string_option(kind, "kind").lower()
         if kind != "inefficiency":
-            raise ValueError("Only kind='inefficiency' is supported.")
+            raise MethodIncompatibility(
+                "Only kind='inefficiency' is supported.",
+                recovery_hint="Use kind='inefficiency'.",
+                diagnostics={"kind": kind, "valid": ["inefficiency"]},
+            )
 
-        source = source.lower()
+        source = _require_string_option(source, "source").lower()
+        at = _require_string_option(at, "at").lower()
+        if at not in {"observation", "mean", "ame"}:
+            raise MethodIncompatibility(
+                "Unknown marginal-effects evaluation point.",
+                recovery_hint=(
+                    "Choose at='observation', at='mean', or at='ame'."
+                ),
+                diagnostics={
+                    "at": at,
+                    "valid": ["observation", "mean", "ame"],
+                },
+            )
         if source == "emean":
             return self._marginal_effects_emean(at=at)
         if source == "usigma":
             return self._marginal_effects_usigma(at=at)
-        raise ValueError(f"Unknown source={source!r}.")
+        raise MethodIncompatibility(
+            f"Unknown source={source!r}.",
+            recovery_hint="Choose source='emean' or source='usigma'.",
+            diagnostics={"source": source, "valid": ["emean", "usigma"]},
+        )
 
     def _marginal_effects_emean(self, at: str) -> pd.DataFrame:
         if self.model_info.get("inefficiency_dist") != "truncated-normal":
-            raise RuntimeError(
-                "marginal_effects(source='emean') requires dist='truncated-normal'."
+            raise MethodIncompatibility(
+                "marginal_effects(source='emean') requires "
+                "dist='truncated-normal'.",
+                recovery_hint=(
+                    "Refit with dist='truncated-normal' and emean=[...] "
+                    "before requesting emean marginal effects."
+                ),
+                diagnostics={
+                    "source": "emean",
+                    "inefficiency_dist": self.model_info.get(
+                        "inefficiency_dist"
+                    ),
+                },
             )
         emean_cols = self.data_info.get("emean_cols")
         if not emean_cols:
-            raise RuntimeError(
-                "marginal_effects(source='emean') requires model to have emean=[...]."
+            raise MethodIncompatibility(
+                "marginal_effects(source='emean') requires model to have "
+                "emean=[...].",
+                recovery_hint=(
+                    "Refit the frontier with emean=[...] before requesting "
+                    "emean marginal effects."
+                ),
+                diagnostics={"source": "emean", "emean_cols": emean_cols},
             )
         mu_i = np.asarray(self.diagnostics["mu_i"])
         sigma_u_i = np.asarray(self.diagnostics["sigma_u_i"])
@@ -447,8 +670,14 @@ class FrontierResult(EconometricResults):
     def _marginal_effects_usigma(self, at: str) -> pd.DataFrame:
         usigma_cols = self.data_info.get("usigma_cols")
         if not usigma_cols:
-            raise RuntimeError(
-                "marginal_effects(source='usigma') requires model to have usigma=[...]."
+            raise MethodIncompatibility(
+                "marginal_effects(source='usigma') requires model to have "
+                "usigma=[...].",
+                recovery_hint=(
+                    "Refit the frontier with usigma=[...] before requesting "
+                    "usigma marginal effects."
+                ),
+                diagnostics={"source": "usigma", "usigma_cols": usigma_cols},
             )
         dist = self.model_info.get("inefficiency_dist", "half-normal")
         sigma_u_i = np.asarray(self.diagnostics["sigma_u_i"])
@@ -501,15 +730,33 @@ class FrontierResult(EconometricResults):
         """
         if inputs is None:
             inputs = self.data_info.get("regressors", [])
+        alpha = _require_open_unit_float(alpha, "alpha")
         if not inputs:
-            raise RuntimeError("No regressors found to compute RTS.")
+            raise MethodIncompatibility(
+                "No regressors found to compute RTS.",
+                recovery_hint=(
+                    "Pass explicit input parameter names or fit the frontier "
+                    "with frontier regressors."
+                ),
+                diagnostics={"inputs": inputs},
+            )
         vcov = self.diagnostics.get("vcov")
         # Build restriction vector R such that R @ beta = sum of elasticities.
         param_names = self.params.index.tolist()
         R = np.zeros(len(param_names))
         for v in inputs:
             if v not in param_names:
-                raise KeyError(f"{v!r} is not a fitted parameter.")
+                raise MethodIncompatibility(
+                    f"{v!r} is not a fitted parameter.",
+                    recovery_hint=(
+                        "Pass only coefficient names present in "
+                        "result.params."
+                    ),
+                    diagnostics={
+                        "missing_parameter": v,
+                        "available_parameters": param_names,
+                    },
+                )
             R[param_names.index(v)] = 1.0
 
         rts_hat = float(R @ self.params.to_numpy())
@@ -561,6 +808,8 @@ class FrontierResult(EconometricResults):
         the resampled composed error.  Returns a DataFrame indexed like
         :meth:`efficiency` with columns ``['point', 'lower', 'upper']``.
         """
+        alpha = _require_open_unit_float(alpha, "alpha")
+        B = _require_int_at_least(B, "B", 2)
         point = self.efficiency(method=method).to_numpy()
         sigma_u_i = np.asarray(self.diagnostics.get("sigma_u_i"))
         sigma_v_i = np.asarray(self.diagnostics.get("sigma_v_i"))
@@ -569,7 +818,14 @@ class FrontierResult(EconometricResults):
         sign = self.model_info.get("sign", -1)
         eps = np.asarray(self.diagnostics.get("eps"))
         if eps.size == 0:
-            raise RuntimeError("eps not stored; cannot bootstrap.")
+            raise DataInsufficient(
+                "eps not stored; cannot bootstrap.",
+                recovery_hint=(
+                    "Use a fitted frontier result that retains residual "
+                    "diagnostics before requesting efficiency_ci()."
+                ),
+                diagnostics={"missing_diagnostic": "eps"},
+            )
         rng = np.random.default_rng(seed)
         n = eps.size
         sims = np.empty((B, n))
@@ -770,15 +1026,65 @@ def frontier(
     >>> sorted(lr)
     ['df', 'pvalue', 'statistic']
     """
-    dist = dist.lower().replace("_", "-")
-    if dist not in {"half-normal", "exponential", "truncated-normal"}:
-        raise ValueError(f"Unknown distribution: {dist!r}.")
-    if emean is not None and dist != "truncated-normal":
-        raise ValueError("emean=... requires dist='truncated-normal'.")
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "frontier() requires a pandas DataFrame.",
+            diagnostics={"data_type": data.__class__.__name__},
+        )
+    y = _require_string_option(y, "y")
+    x = _coerce_column_list(x, "x")
+    usigma = _coerce_optional_column_list(usigma, "usigma")
+    vsigma = _coerce_optional_column_list(vsigma, "vsigma")
+    emean = _coerce_optional_column_list(emean, "emean")
+    if cluster is not None:
+        cluster = _require_string_option(cluster, "cluster")
+    te_method = _require_string_option(te_method, "te_method").lower()
+    if te_method not in {"bc", "jlms"}:
+        raise MethodIncompatibility(
+            f"Unknown te_method={te_method!r}.",
+            recovery_hint="Choose te_method='bc' or te_method='jlms'.",
+            diagnostics={"te_method": te_method, "valid": ["bc", "jlms"]},
+        )
+    B = _require_int_at_least(B, "B", 2)
+    maxiter = _require_int_at_least(maxiter, "maxiter", 1)
+    tol = _require_positive_float(tol, "tol")
+    _require_open_unit_float(alpha, "alpha")
 
-    vce = vce.lower()
+    dist = _require_string_option(dist, "dist").lower().replace("_", "-")
+    if dist not in {"half-normal", "exponential", "truncated-normal"}:
+        raise MethodIncompatibility(
+            f"Unknown distribution: {dist!r}.",
+            recovery_hint=(
+                "Choose dist='half-normal', dist='exponential', or "
+                "dist='truncated-normal'."
+            ),
+            diagnostics={
+                "dist": dist,
+                "valid": ["half-normal", "exponential", "truncated-normal"],
+            },
+        )
+    if emean is not None and dist != "truncated-normal":
+        raise MethodIncompatibility(
+            "emean=... requires dist='truncated-normal'.",
+            recovery_hint=(
+                "Use dist='truncated-normal' or remove emean=[...]."
+            ),
+            diagnostics={"dist": dist, "emean": emean},
+        )
+
+    vce = _require_string_option(vce, "vce").lower()
     if vce not in {"oim", "opg", "robust", "bootstrap"}:
-        raise ValueError(f"Unknown vce={vce!r}.")
+        raise MethodIncompatibility(
+            f"Unknown vce={vce!r}.",
+            recovery_hint=(
+                "Choose vce='oim', vce='opg', vce='robust', or "
+                "vce='bootstrap'."
+            ),
+            diagnostics={
+                "vce": vce,
+                "valid": ["oim", "opg", "robust", "bootstrap"],
+            },
+        )
     if cluster is not None and vce == "oim":
         vce = "robust"
 
@@ -788,10 +1094,35 @@ def frontier(
             required += list(opt)
     if cluster is not None and cluster not in required:
         required.append(cluster)
+    missing = [col for col in required if col not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"frontier() data is missing required columns: {missing}",
+            recovery_hint=(
+                "Add the outcome, frontier regressors, variance covariates, "
+                "inefficiency covariates, or cluster column referenced by "
+                "the call."
+            ),
+            diagnostics={
+                "missing_columns": missing,
+                "required_columns": required,
+            },
+        )
     df = data[required].dropna().copy()
     n = len(df)
     if n < len(x) + 3:
-        raise ValueError("Too few observations for frontier estimation.")
+        raise DataInsufficient(
+            "Too few observations for frontier estimation.",
+            recovery_hint=(
+                "Provide more complete rows or simplify the frontier "
+                "regressor specification."
+            ),
+            diagnostics={
+                "n_complete": n,
+                "minimum": len(x) + 3,
+                "required_columns": required,
+            },
+        )
 
     sign = 1 if cost else -1
 
@@ -901,10 +1232,30 @@ def frontier(
                 theta0_parts.append(np.zeros(k_delta_mu))
         start = np.concatenate(theta0_parts)
     else:
-        start = np.asarray(start, dtype=float).copy()
+        try:
+            start = np.asarray(start, dtype=float).copy()
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "start must be numeric.",
+                diagnostics={"start_type": start.__class__.__name__},
+            ) from exc
         if start.size != spec.k_total:
-            raise ValueError(
-                f"start has wrong length: got {start.size}, expected {spec.k_total}."
+            raise MethodIncompatibility(
+                f"start has wrong length: got {start.size}, "
+                f"expected {spec.k_total}.",
+                recovery_hint=(
+                    "Pass one starting value for each frontier, variance, "
+                    "and distribution parameter in the fitted specification."
+                ),
+                diagnostics={
+                    "actual_length": int(start.size),
+                    "expected_length": int(spec.k_total),
+                },
+            )
+        if not np.isfinite(start).all():
+            raise MethodIncompatibility(
+                "start must contain only finite values.",
+                diagnostics={"start": start.tolist()},
             )
 
     # ---------------------- Optimize ----------------------
@@ -991,10 +1342,15 @@ def frontier(
         valid_mask = np.isfinite(estimates).all(axis=1)
         n_valid = int(valid_mask.sum())
         if n_valid < max(5, B // 10):
-            raise RuntimeError(
+            raise ConvergenceFailure(
                 f"Bootstrap converged on only {n_valid}/{B} replicates; "
                 "variance estimate is unreliable. Try vce='robust' or "
-                "larger B, or check for near-boundary sigma."
+                "larger B, or check for near-boundary sigma.",
+                recovery_hint=(
+                    "Try vce='robust', increase B, or respecify a model "
+                    "away from near-boundary variance parameters."
+                ),
+                diagnostics={"valid_replicates": n_valid, "B": B},
             )
         if n_valid < B:
             warnings.warn(

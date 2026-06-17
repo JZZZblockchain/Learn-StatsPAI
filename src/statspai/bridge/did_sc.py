@@ -8,7 +8,7 @@ implies the doubly-robust estimate is well-defined.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ def did_sc_bridge(
     y: str,
     unit: str,
     time: str,
-    treated_unit,
+    treated_unit: Any,
     treatment_time: int,
     covariates: Optional[List[str]] = None,
     alpha: float = 0.05,
@@ -103,32 +103,42 @@ def did_sc_bridge(
 
     sc_estimate = np.nan
     sc_se = np.nan
-    sc_detail = {}
+    sc_detail: dict[str, Any] = {}
     try:
         sc = SyntheticControl(
+            data=data,
             outcome=y, unit=unit, time=time,
             treated_unit=treated_units[0],
             treatment_time=treatment_time,
             covariates=covariates,
         )
-        sc.fit(data)
+        sc_result = sc.fit(placebo=False)
         # ATT ≡ average post-treatment gap in SC
-        gap = sc.gap_  # Series indexed by time
-        sc_estimate = float(np.mean(gap[gap.index >= treatment_time]))
+        gap_table = sc_result.model_info.get("gap_table")
+        if not isinstance(gap_table, pd.DataFrame):
+            raise RuntimeError("SyntheticControl result did not expose gap_table")
+        post_gap = gap_table.loc[gap_table["time"] >= treatment_time, "gap"]
+        sc_estimate = float(post_gap.mean())
         # Placebo SE: refit SC on each donor, compute post-mean gap
         donor_units = [u for u in units if u not in treated_units]
         placebo = []
         for du in donor_units[: min(20, len(donor_units))]:
             try:
                 placebo_sc = SyntheticControl(
+                    data=data,
                     outcome=y, unit=unit, time=time,
                     treated_unit=du,
                     treatment_time=treatment_time,
                     covariates=covariates,
                 )
-                placebo_sc.fit(data)
-                pg = placebo_sc.gap_
-                placebo.append(np.mean(pg[pg.index >= treatment_time]))
+                placebo_result = placebo_sc.fit(placebo=False)
+                placebo_gap_table = placebo_result.model_info.get("gap_table")
+                if not isinstance(placebo_gap_table, pd.DataFrame):
+                    continue
+                placebo_post_gap = placebo_gap_table.loc[
+                    placebo_gap_table["time"] >= treatment_time, "gap"
+                ]
+                placebo.append(float(placebo_post_gap.mean()))
             except Exception:
                 continue
         if len(placebo) >= 3:

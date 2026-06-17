@@ -52,7 +52,8 @@ References
 ----------
 Hartford, J., Lewis, G., Leyton-Brown, K., & Taddy, M. (2017).
     "Deep IV: A Flexible Approach for Counterfactual Prediction."
-    Proceedings of the 34th International Conference on Machine Learning. [@hartford2017deep]
+    Proceedings of the 34th International Conference on Machine Learning.
+    [@hartford2017deep]
 
 Microsoft EconML. ``DeepIVEstimator`` — reference implementation whose
     ``n_gradient_samples`` default of 0 this package follows.
@@ -70,7 +71,7 @@ Muandet, K., Mehrjou, A., Lee, S. K., & Raj, A. (2020).
     "Dual Instrumental Variable Regression." NeurIPS 2020.
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Any, Tuple
 import math
 import numpy as np
 import pandas as pd
@@ -316,7 +317,7 @@ class DeepIV:
 
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         all_cols = [self.y, self.treat] + self.instruments + self.covariates
         missing = [c for c in all_cols if c not in self.data.columns]
         if missing:
@@ -338,7 +339,6 @@ class DeepIV:
         """
         try:
             import torch
-            import torch.nn as nn
             import torch.optim as optim
             from torch.utils.data import TensorDataset, DataLoader
         except ImportError:
@@ -493,7 +493,6 @@ class DeepIV:
         # Default: effect of 1-SD increase from mean
         # ---------------------------------------------------------------
         t0_raw = self._t_mean
-        t1_raw = self._t_mean + self._t_std
         t0_s = 0.0  # (t0_raw - t_mean) / t_std
         t1_s = 1.0  # (t1_raw - t_mean) / t_std
 
@@ -584,7 +583,12 @@ class DeepIV:
             _citation_key='deepiv',
         )
 
-    def effect(self, t0: float, t1: float, X: Optional[np.ndarray] = None) -> np.ndarray:
+    def effect(
+        self,
+        t0: float,
+        t1: float,
+        X: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
         """
         Estimate E[Y(t1) - Y(t0) | X] for given treatment levels.
 
@@ -629,17 +633,30 @@ class DeepIV:
         with torch.no_grad():
             tv0 = torch.full((n, 1), t0_s, dtype=torch.float32, device=device)
             tv1 = torch.full((n, 1), t1_s, dtype=torch.float32, device=device)
-            y0 = self._response_net(torch.cat([tv0, X_t], dim=1)).squeeze().cpu().numpy()
-            y1 = self._response_net(torch.cat([tv1, X_t], dim=1)).squeeze().cpu().numpy()
+            y0 = (
+                self._response_net(torch.cat([tv0, X_t], dim=1))
+                .squeeze()
+                .cpu()
+                .numpy()
+            )
+            y1 = (
+                self._response_net(torch.cat([tv1, X_t], dim=1))
+                .squeeze()
+                .cpu()
+                .numpy()
+            )
 
-        return (y1 - y0) * self._y_std
+        return np.asarray((y1 - y0) * self._y_std, dtype=float)
 
 
 # ---------------------------------------------------------------------------
 # Neural network builders (PyTorch)
 # ---------------------------------------------------------------------------
 
-def _build_hidden_layers(input_dim: int, hidden_layers: Tuple[int, ...]):
+def _build_hidden_layers(
+    input_dim: int,
+    hidden_layers: Tuple[int, ...],
+) -> Tuple[Any, int]:
     """Build a sequence of hidden layers with ReLU activations."""
     import torch.nn as nn
 
@@ -653,7 +670,11 @@ def _build_hidden_layers(input_dim: int, hidden_layers: Tuple[int, ...]):
     return nn.Sequential(*layers), prev
 
 
-def _build_mdn(input_dim: int, n_components: int, hidden_layers: Tuple[int, ...]):
+def _build_mdn(
+    input_dim: int,
+    n_components: int,
+    hidden_layers: Tuple[int, ...],
+) -> Any:
     """Build a Gaussian Mixture Density Network for P(T | Z, X)."""
     import torch
     import torch.nn as nn
@@ -662,14 +683,14 @@ def _build_mdn(input_dim: int, n_components: int, hidden_layers: Tuple[int, ...]
     hidden_seq, h_dim = _build_hidden_layers(input_dim, hidden_layers)
 
     class MDN(nn.Module):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__()
             self.hidden = hidden_seq
             self.pi_head = nn.Linear(h_dim, n_components)
             self.mu_head = nn.Linear(h_dim, n_components)
             self.log_sigma_head = nn.Linear(h_dim, n_components)
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Tuple[Any, Any, Any]:
             h = self.hidden(x)
             pi = F.softmax(self.pi_head(h), dim=-1)
             mu = self.mu_head(h)
@@ -679,26 +700,29 @@ def _build_mdn(input_dim: int, n_components: int, hidden_layers: Tuple[int, ...]
     return MDN()
 
 
-def _build_response_net(input_dim: int, hidden_layers: Tuple[int, ...]):
+def _build_response_net(
+    input_dim: int,
+    hidden_layers: Tuple[int, ...],
+) -> Any:
     """Build a feed-forward network h(T, X) -> Y."""
     import torch.nn as nn
 
     hidden_seq, h_dim = _build_hidden_layers(input_dim, hidden_layers)
 
     class ResponseNet(nn.Module):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__()
             self.hidden = hidden_seq
             self.output_head = nn.Linear(h_dim, 1)
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             h = self.hidden(x)
             return self.output_head(h)
 
     return ResponseNet()
 
 
-def _mdn_loss(pi, mu, sigma, target):
+def _mdn_loss(pi: Any, mu: Any, sigma: Any, target: Any) -> Any:
     """Negative log-likelihood for Gaussian MDN."""
     import torch
 
@@ -713,7 +737,7 @@ def _mdn_loss(pi, mu, sigma, target):
     return -torch.mean(log_sum)
 
 
-def _sample_mdn(pi, mu, sigma, n_samples: int):
+def _sample_mdn(pi: Any, mu: Any, sigma: Any, n_samples: int) -> Any:
     """Sample from a Gaussian mixture density network."""
     import torch
 

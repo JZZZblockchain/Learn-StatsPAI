@@ -172,10 +172,10 @@ def ssaggregate(
     # ------------------------------------------------------------------
     # Residualise Y, X_endog, and instrument wrt controls
     # ------------------------------------------------------------------
-    def _residualise(v, M):
+    def _residualise(v: np.ndarray, M: np.ndarray) -> np.ndarray:
         """OLS residuals of v on M."""
         beta = np.linalg.lstsq(M, v, rcond=None)[0]
-        return v - M @ beta
+        return np.asarray(v - M @ beta, dtype=float)
 
     Y_tilde = _residualise(Y, W)
     X_tilde = _residualise(X_endog, W)
@@ -295,7 +295,10 @@ def ssaggregate(
 
     model_info = {
         "model_type": "Shift-Share IV (AKM 2019)",
-        "method": "2SLS with AKM-corrected SEs" if iv_constructed else "OLS with AKM-corrected SEs",
+        "method": (
+            "2SLS with AKM-corrected SEs"
+            if iv_constructed else "OLS with AKM-corrected SEs"
+        ),
         "robust": "AKM (shock-level clustering)",
     }
 
@@ -412,8 +415,6 @@ def shift_share_se(
     fitted = iv_result.data_info.get("fitted_values")
     if fitted is not None:
         fitted = np.asarray(fitted, dtype=float)
-        Y_actual = fitted + eps
-        Y_mean = np.mean(Y_actual)
         # Residualise fitted (remove mean)
         Z_tilde = fitted - np.mean(fitted)
     else:

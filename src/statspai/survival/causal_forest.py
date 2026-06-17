@@ -29,8 +29,10 @@ Algorithm (honest forest variant)
               + \\frac{W_i - \\hat e(X_i)}{\\hat e(X_i)(1-\\hat e(X_i))}
                 (Z_i - \\hat\\mu(W_i, X_i)),
 
-   where :math:`Z_i = \\min(T_i, \\tau) \\cdot \\mathbf 1\\{\\delta_i\\, \\text{or}\\, T_i \\ge \\tau\\} / \\hat S_C(\\min(T_i,\\tau) \\mid X_i, W_i)`
-   is the IPCW-RMST pseudo-outcome.
+   where :math:`Z_i = \\min(T_i, \\tau) \\cdot
+   \\mathbf 1\\{\\delta_i\\, \\text{or}\\, T_i \\ge \\tau\\}
+   / \\hat S_C(\\min(T_i,\\tau) \\mid X_i, W_i)` is the IPCW-RMST
+   pseudo-outcome.
 
 2. CATE at ``x`` = average of pseudo-outcomes from the leaves matching
    ``x`` across trees.
@@ -60,12 +62,53 @@ from scipy import stats
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
+
+_SURVIVAL_FOREST_ALTERNATIVES = [
+    "sp.survival.causal_survival_forest",
+    "sp.causal_survival_forest",
+    "sp.survival.cox",
+]
+
+
+def _csf_error(
+    message: str,
+    *,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    recovery_hint: str = "Check causal-survival-forest inputs.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_SURVIVAL_FOREST_ALTERNATIVES,
+    )
+
+
+def _normalize_covariates(covariates: Sequence[str] | str) -> list[str]:
+    raw = [covariates] if isinstance(covariates, str) else list(covariates)
+    if not raw:
+        raise _csf_error(
+            "causal_survival_forest requires at least one covariate.",
+            diagnostics={"covariates": raw},
+            recovery_hint="Pass covariates=['x1', 'x2'] or a single column name.",
+        )
+    for idx, covariate in enumerate(raw):
+        if not isinstance(covariate, str) or not covariate:
+            raise _csf_error(
+                f"covariates[{idx}] must be a non-empty column-name string.",
+                diagnostics={"index": idx, "value": repr(covariate)},
+                recovery_hint="Pass covariates as column-name strings.",
+            )
+    return raw
+
 
 @dataclass
 class CausalSurvivalForestResult:
     ate_rmst: float
     se: float
-    ci: tuple
+    ci: tuple[float, float]
     pvalue: float
     cate: np.ndarray
     horizon: float
@@ -94,20 +137,22 @@ class CausalSurvivalForestResult:
 # Helpers
 # --------------------------------------------------------------------
 
-def _km_survivor(times: np.ndarray, events: np.ndarray, eval_times: np.ndarray) -> np.ndarray:
+def _km_survivor(
+    times: np.ndarray,
+    events: np.ndarray,
+    eval_times: np.ndarray,
+) -> np.ndarray:
     """Kaplan-Meier survivor S(t) evaluated at ``eval_times``."""
     if times.size == 0:
         return np.ones_like(eval_times, dtype=float)
     order = np.argsort(times)
     t_sorted = times[order]
     e_sorted = events[order].astype(int)
-    unique_t, idx = np.unique(t_sorted, return_index=True)
-    S = np.ones(len(unique_t))
+    unique_t = np.unique(t_sorted)
     n_at_risk = len(times)
     s_curr = 1.0
     S_vals = []
-    current_idx = 0
-    for i, ut in enumerate(unique_t):
+    for ut in unique_t:
         # count events and total at ut
         group = (t_sorted == ut)
         d = int(np.sum(e_sorted[group]))
@@ -126,7 +171,7 @@ def _km_survivor(times: np.ndarray, events: np.ndarray, eval_times: np.ndarray) 
 
 def _ipcw_rmst_pseudo(
     T: np.ndarray, delta: np.ndarray, W: np.ndarray, tau: float
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """IPCW pseudo-outcome for RMST: Z_i = min(T, tau) / S_C(min(T, tau)).
 
     Censoring distribution estimated per treatment arm via KM.
@@ -160,12 +205,12 @@ def causal_survival_forest(
     time: str,
     event: str,
     treat: str,
-    covariates: Sequence[str],
+    covariates: Sequence[str] | str,
     horizon: Optional[float] = None,
     n_trees: int = 200,
     min_leaf: int = 5,
     max_depth: Optional[int] = None,
-    propensity_bounds: tuple = (0.05, 0.95),
+    propensity_bounds: tuple[float, float] = (0.05, 0.95),
     random_state: int = 42,
     alpha: float = 0.05,
 ) -> CausalSurvivalForestResult:
@@ -200,22 +245,121 @@ def causal_survival_forest(
     CausalSurvivalForestResult
         ``cate`` contains the individual RMST effect prediction.
     """
-    covariates = list(covariates)
-    df = data[[time, event, treat] + covariates].dropna().reset_index(drop=True)
+    if not isinstance(data, pd.DataFrame):
+        raise _csf_error(
+            "causal_survival_forest data must be a pandas DataFrame.",
+            diagnostics={"type": type(data).__name__},
+            recovery_hint="Pass a pandas DataFrame with survival outcome rows.",
+        )
+    covariates = _normalize_covariates(covariates)
+    required = [time, event, treat] + covariates
+    missing = set(required) - set(data.columns)
+    if missing:
+        raise _csf_error(
+            f"Missing columns: {missing}",
+            diagnostics={"missing_columns": sorted(str(col) for col in missing)},
+            recovery_hint="Pass column names present in the input DataFrame.",
+        )
+    if n_trees < 1:
+        raise _csf_error(
+            f"n_trees must be >= 1, got {n_trees}.",
+            diagnostics={"n_trees": n_trees},
+            recovery_hint="Use n_trees >= 1.",
+        )
+    if min_leaf < 1:
+        raise _csf_error(
+            f"min_leaf must be >= 1, got {min_leaf}.",
+            diagnostics={"min_leaf": min_leaf},
+            recovery_hint="Use min_leaf >= 1.",
+        )
+    if not (0 < alpha < 1):
+        raise _csf_error(
+            f"alpha must be in (0, 1), got {alpha}.",
+            diagnostics={"alpha": alpha},
+            recovery_hint="Use a confidence level such as alpha=0.05.",
+        )
+    if len(propensity_bounds) != 2:
+        raise _csf_error(
+            "propensity_bounds must contain exactly two values.",
+            diagnostics={"propensity_bounds": list(propensity_bounds)},
+            recovery_hint="Use propensity_bounds=(0.05, 0.95).",
+        )
+    p_lo, p_hi = float(propensity_bounds[0]), float(propensity_bounds[1])
+    if not (0 < p_lo < p_hi < 1):
+        raise _csf_error(
+            "propensity_bounds must satisfy 0 < lower < upper < 1.",
+            diagnostics={"propensity_bounds": [p_lo, p_hi]},
+            recovery_hint="Use bounds such as (0.05, 0.95).",
+        )
+    if horizon is not None:
+        horizon = float(horizon)
+        if not np.isfinite(horizon) or horizon <= 0:
+            raise _csf_error(
+                "horizon must be a positive finite number.",
+                diagnostics={"horizon": horizon},
+                recovery_hint="Pass a positive RMST horizon.",
+            )
+
+    df = data[required].dropna().reset_index(drop=True)
     n = len(df)
+    if n < 3:
+        raise DataInsufficient(
+            "causal_survival_forest requires at least 3 complete rows.",
+            recovery_hint="Provide more complete survival rows after dropna.",
+            diagnostics={"n_complete": n},
+            alternative_functions=_SURVIVAL_FOREST_ALTERNATIVES,
+        )
     T = df[time].to_numpy(dtype=float)
     delta = df[event].to_numpy(dtype=int)
     W = df[treat].to_numpy(dtype=int)
     X = df[covariates].to_numpy(dtype=float)
+    if not (np.isfinite(T).all() and np.isfinite(X).all()):
+        raise _csf_error(
+            "time and covariate values must be finite.",
+            diagnostics={
+                "finite_time": bool(np.isfinite(T).all()),
+                "finite_covariates": bool(np.isfinite(X).all()),
+            },
+            recovery_hint="Drop or impute non-finite survival inputs.",
+        )
+    if (T <= 0).any():
+        raise _csf_error(
+            "time values must be strictly positive.",
+            diagnostics={"min_time": float(np.min(T))},
+            recovery_hint="Use positive observed time-to-event values.",
+        )
+    if not set(np.unique(delta)).issubset({0, 1}):
+        raise _csf_error(
+            "event must be binary 0/1.",
+            diagnostics={"event_values": np.unique(delta).tolist()},
+            recovery_hint="Encode event as 1 for observed event and 0 for censored.",
+        )
+    if not set(np.unique(W)).issubset({0, 1}):
+        raise _csf_error(
+            "treat must be binary 0/1.",
+            diagnostics={"treat_values": np.unique(W).tolist()},
+            recovery_hint="Encode treatment as binary 0/1 before fitting.",
+        )
+    if np.unique(W).size < 2:
+        raise DataInsufficient(
+            "causal_survival_forest requires both treatment arms.",
+            recovery_hint="Provide complete rows from treated and control units.",
+            diagnostics={"treat_values": np.unique(W).tolist()},
+            alternative_functions=_SURVIVAL_FOREST_ALTERNATIVES,
+        )
 
     if horizon is None:
-        horizon = float(np.quantile(T[delta == 1], 0.80)) if (delta == 1).any() else float(np.quantile(T, 0.8))
+        horizon = (
+            float(np.quantile(T[delta == 1], 0.80))
+            if (delta == 1).any()
+            else float(np.quantile(T, 0.8))
+        )
 
     # Propensity (logistic)
     lr = LogisticRegression(C=1e6, solver="lbfgs", max_iter=500)
     lr.fit(X, W)
     e_hat = lr.predict_proba(X)[:, 1]
-    e_hat = np.clip(e_hat, *propensity_bounds)
+    e_hat = np.clip(e_hat, p_lo, p_hi)
 
     # IPCW RMST pseudo-outcome per arm
     pseudo, S_C = _ipcw_rmst_pseudo(T, delta, W, horizon)
@@ -235,7 +379,12 @@ def causal_survival_forest(
     # Double-robust score (analogue of AIPW for RMST)
     # psi_i = mu1 - mu0 + (W_i - e_i) / (e_i(1-e_i)) * (pseudo_i - mu_{W_i}(X_i))
     mu_w = np.where(W == 1, mu1, mu0)
-    psi = (mu1 - mu0) + (W - e_hat) / np.maximum(e_hat * (1 - e_hat), 1e-6) * (pseudo - mu_w)
+    psi = (
+        (mu1 - mu0)
+        + (W - e_hat)
+        / np.maximum(e_hat * (1 - e_hat), 1e-6)
+        * (pseudo - mu_w)
+    )
 
     ate = float(np.mean(psi))
     se = float(np.std(psi, ddof=1) / np.sqrt(n))

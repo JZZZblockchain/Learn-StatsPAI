@@ -36,13 +36,15 @@ Adão, R., Kolesár, M. & Morales, E. (2019).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence
+from numbers import Real
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult, EconometricResults
+from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
 from .shift_share import bartik as _bartik_cs
 
 
@@ -110,6 +112,154 @@ class ShiftSharePoliticalResult:
 # ---------------------------------------------------------------------------
 
 
+def _require_dataframe(obj: Any, *, name: str, function: str) -> pd.DataFrame:
+    if not isinstance(obj, pd.DataFrame):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas DataFrame, got {type(obj).__name__}.",
+            recovery_hint=f"Pass `{name}` as a pandas DataFrame to `{function}`.",
+            diagnostics={"function": function, "argument": name, "type": type(obj).__name__},
+        )
+    if obj.empty:
+        raise DataInsufficient(
+            f"`{name}` must contain at least one row and one column.",
+            recovery_hint=f"Provide non-empty `{name}` data before calling `{function}`.",
+            diagnostics={"function": function, "argument": name, "shape": obj.shape},
+        )
+    return obj
+
+
+def _require_series(obj: Any, *, name: str, function: str) -> pd.Series:
+    if not isinstance(obj, pd.Series):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas Series, got {type(obj).__name__}.",
+            recovery_hint=f"Pass `{name}` as a pandas Series indexed by industry.",
+            diagnostics={"function": function, "argument": name, "type": type(obj).__name__},
+        )
+    if obj.empty:
+        raise DataInsufficient(
+            f"`{name}` must contain at least one industry shock.",
+            recovery_hint=f"Provide non-empty `{name}` shocks before calling `{function}`.",
+            diagnostics={"function": function, "argument": name},
+        )
+    return obj
+
+
+def _require_column_name(name: Any, *, argument: str) -> str:
+    if not isinstance(name, str) or not name:
+        raise MethodIncompatibility(
+            f"`{argument}` must be a non-empty column name string.",
+            recovery_hint=f"Pass the name of an existing DataFrame column for `{argument}`.",
+            diagnostics={"argument": argument, "type": type(name).__name__},
+        )
+    return name
+
+
+def _require_columns(df: pd.DataFrame, columns: Sequence[str], *, function: str) -> None:
+    missing = [col for col in columns if col not in df.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"Columns not found in data: {missing}",
+            recovery_hint=f"Check the column names passed to `{function}`.",
+            diagnostics={
+                "function": function,
+                "missing_columns": missing,
+                "available_columns": list(df.columns),
+            },
+        )
+
+
+def _coerce_optional_columns(columns: Optional[Sequence[str] | str], *, argument: str) -> List[str]:
+    if columns is None:
+        return []
+    if isinstance(columns, str):
+        out = [columns]
+    else:
+        try:
+            out = list(columns)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{argument}` must be a column name or sequence of column names.",
+                recovery_hint=f"Pass `{argument}` as 'x' or ['x1', 'x2'].",
+                diagnostics={"argument": argument, "type": type(columns).__name__},
+            ) from exc
+    return [_require_column_name(col, argument=argument) for col in out]
+
+
+def _require_alpha(alpha: Any) -> float:
+    if isinstance(alpha, (bool, np.bool_)) or not isinstance(alpha, Real):
+        raise MethodIncompatibility(
+            "`alpha` must be a finite number in (0, 1).",
+            recovery_hint="Pass a significance level such as alpha=0.05.",
+            diagnostics={"argument": "alpha", "value": alpha},
+        )
+    out = float(alpha)
+    if not np.isfinite(out) or not (0.0 < out < 1.0):
+        raise MethodIncompatibility(
+            "`alpha` must be a finite number in (0, 1).",
+            recovery_hint="Pass a significance level such as alpha=0.05.",
+            diagnostics={"argument": "alpha", "value": alpha},
+        )
+    return out
+
+
+def _require_bool(value: Any, *, argument: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise MethodIncompatibility(
+            f"`{argument}` must be boolean.",
+            recovery_hint=f"Pass `{argument}=True` or `{argument}=False`.",
+            diagnostics={"argument": argument, "type": type(value).__name__},
+        )
+    return bool(value)
+
+
+def _finite_frame(df: pd.DataFrame, *, name: str) -> np.ndarray:
+    try:
+        arr: np.ndarray = np.asarray(df.to_numpy(dtype=float), dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must contain numeric values.",
+            recovery_hint=f"Coerce `{name}` to numeric columns before estimation.",
+            diagnostics={"argument": name, "columns": list(df.columns)},
+        ) from exc
+    if arr.ndim != 2 or arr.shape[1] == 0:
+        raise DataInsufficient(
+            f"`{name}` must have at least one numeric column.",
+            recovery_hint=f"Provide at least one industry column in `{name}`.",
+            diagnostics={"argument": name, "shape": arr.shape},
+        )
+    if not np.all(np.isfinite(arr)):
+        raise NumericalInstability(
+            f"`{name}` contains non-finite values.",
+            recovery_hint=f"Drop or impute NaN/Inf values in `{name}` before estimation.",
+            diagnostics={"argument": name, "shape": arr.shape},
+        )
+    return arr
+
+
+def _finite_series(series: pd.Series, *, name: str) -> np.ndarray:
+    try:
+        arr: np.ndarray = np.asarray(series.to_numpy(dtype=float), dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must contain numeric values.",
+            recovery_hint=f"Coerce `{name}` to numeric values before estimation.",
+            diagnostics={"argument": name},
+        ) from exc
+    if arr.ndim != 1 or arr.size == 0:
+        raise DataInsufficient(
+            f"`{name}` must contain at least one value.",
+            recovery_hint=f"Provide non-empty `{name}` values before estimation.",
+            diagnostics={"argument": name, "shape": arr.shape},
+        )
+    if not np.all(np.isfinite(arr)):
+        raise NumericalInstability(
+            f"`{name}` contains non-finite values.",
+            recovery_hint=f"Drop or impute NaN/Inf values in `{name}` before estimation.",
+            diagnostics={"argument": name},
+        )
+    return arr
+
+
 def _long_to_panel(
     data: pd.DataFrame,
     shares: pd.DataFrame,
@@ -148,11 +298,12 @@ def _rotemberg_weights(
     α_k ∝ g_k * (∑_i s_{ik} (x_i - x̄)) ; we return the normalised vector.
     """
     x_c = dx - dx.mean()
-    num = shocks * (shares.T @ x_c)
+    num: np.ndarray = np.asarray(shocks * (shares.T @ x_c), dtype=float)
     tot = np.sum(np.abs(num))
     if tot > 0:
-        return num / tot
-    return num
+        weights: np.ndarray = np.asarray(num / float(tot), dtype=float)
+        return weights
+    return np.asarray(num, dtype=float)
 
 
 def _share_balance_test(
@@ -256,28 +407,51 @@ def shift_share_political(
     True
     """
     # --- Validation --------------------------------------------------------
-    for col in (unit, time, outcome, endog):
-        if col not in data.columns:
-            raise ValueError(f"column {col!r} not in data")
-    if not isinstance(shares, pd.DataFrame):
-        raise TypeError("shares must be a DataFrame")
-    if not isinstance(shocks, pd.Series):
-        raise TypeError("shocks must be a Series")
+    data = _require_dataframe(data, name="data", function="shift_share_political")
+    unit = _require_column_name(unit, argument="unit")
+    time = _require_column_name(time, argument="time")
+    outcome = _require_column_name(outcome, argument="outcome")
+    endog = _require_column_name(endog, argument="endog")
+    covariates = _coerce_optional_columns(covariates, argument="covariates")
+    alpha = _require_alpha(alpha)
+    leave_one_out = _require_bool(leave_one_out, argument="leave_one_out")
+    _require_columns(data, (unit, time, outcome, endog, *covariates), function="shift_share_political")
+    shares = _require_dataframe(shares, name="shares", function="shift_share_political")
+    shocks = _require_series(shocks, name="shocks", function="shift_share_political")
+    _finite_frame(shares, name="shares")
+    _finite_series(shocks, name="shocks")
     if list(shares.columns) != list(shocks.index):
         # Align on intersection
         common = [c for c in shares.columns if c in shocks.index]
         if not common:
-            raise ValueError(
-                "shares.columns and shocks.index have no overlap."
+            raise MethodIncompatibility(
+                "shares.columns and shocks.index have no overlap.",
+                recovery_hint="Use the same industry labels for `shares` columns and `shocks` index.",
+                diagnostics={
+                    "shares_columns": list(shares.columns),
+                    "shocks_index": list(shocks.index),
+                },
             )
         shares = shares[common]
         shocks = shocks.loc[common]
+    if data[time].nunique() < 2:
+        raise DataInsufficient(
+            "`data` must contain at least two time periods for long-difference shift-share IV.",
+            recovery_hint="Provide pre/post or multi-period panel data.",
+            diagnostics={"function": "shift_share_political", "n_periods": int(data[time].nunique())},
+        )
 
     # --- Build cross-section of long-differences --------------------------
     cs = _long_to_panel(
         data, shares, unit=unit, time=time,
         endog=endog, outcome=outcome,
     )
+    if cs.empty:
+        raise DataInsufficient(
+            "No units remain after aligning `data` with `shares`.",
+            recovery_hint="Ensure `shares.index` contains the unit identifiers in `data`.",
+            diagnostics={"function": "shift_share_political"},
+        )
     cs_with_shares = cs.reset_index()
     cs_with_shares = cs_with_shares.rename(columns={"index": unit}) \
         if unit not in cs_with_shares.columns else cs_with_shares
@@ -447,6 +621,7 @@ def _resolve_shares(
         share the same industry columns).
     """
     if isinstance(shares, pd.DataFrame):
+        _finite_frame(shares, name="shares")
         out = {}
         for t in times:
             s = shares.loc[[u for u in units if u in shares.index]]
@@ -457,23 +632,38 @@ def _resolve_shares(
         cols0 = None
         for t in times:
             if t not in shares:
-                raise KeyError(f"shares missing entry for time={t!r}")
+                raise MethodIncompatibility(
+                    f"shares missing entry for time={t!r}",
+                    recovery_hint="Provide a share matrix for every time period in the data.",
+                    diagnostics={"time": t, "available_times": list(shares.keys())},
+                )
             s = shares[t]
             if not isinstance(s, pd.DataFrame):
-                raise TypeError(
-                    f"shares[{t!r}] must be DataFrame, got {type(s).__name__}"
+                raise MethodIncompatibility(
+                    f"shares[{t!r}] must be DataFrame, got {type(s).__name__}",
+                    recovery_hint="Use pandas DataFrames for all time-specific share matrices.",
+                    diagnostics={"time": t, "type": type(s).__name__},
                 )
+            _finite_frame(s, name=f"shares[{t!r}]")
             if cols0 is None:
                 cols0 = list(s.columns)
             elif list(s.columns) != cols0:
-                raise ValueError(
-                    f"shares[{t!r}].columns != shares[{times[0]!r}].columns"
+                raise MethodIncompatibility(
+                    f"shares[{t!r}].columns != shares[{times[0]!r}].columns",
+                    recovery_hint="Use the same industry columns in every time-specific share matrix.",
+                    diagnostics={
+                        "time": t,
+                        "columns": list(s.columns),
+                        "reference_columns": cols0,
+                    },
                 )
             out[t] = s
         return out
-    raise TypeError(
+    raise MethodIncompatibility(
         "shares must be a DataFrame or dict[time → DataFrame]; "
-        f"got {type(shares).__name__}"
+        f"got {type(shares).__name__}",
+        recovery_hint="Pass a time-invariant share DataFrame or a dict of time-specific DataFrames.",
+        diagnostics={"argument": "shares", "type": type(shares).__name__},
     )
 
 
@@ -484,19 +674,44 @@ def _resolve_shocks(
 ) -> Dict[Any, pd.Series]:
     """Normalise the `shocks` input into ``{time: Series(industry)}``."""
     if isinstance(shocks, pd.Series):
+        _finite_series(shocks, name="shocks")
         return {t: shocks for t in times}
     if isinstance(shocks, pd.DataFrame):
         # Rows = time, columns = industry
         out = {}
         for t in times:
             if t not in shocks.index:
-                raise KeyError(f"shocks row missing for time={t!r}")
+                raise MethodIncompatibility(
+                    f"shocks row missing for time={t!r}",
+                    recovery_hint="Provide one shock row for every time period in the data.",
+                    diagnostics={"time": t, "available_times": list(shocks.index)},
+                )
             out[t] = shocks.loc[t]
+            _finite_series(out[t], name=f"shocks.loc[{t!r}]")
         return out
     if isinstance(shocks, dict):
-        return {t: shocks[t] for t in times}
-    raise TypeError(
-        "shocks must be Series, DataFrame(time × industry), or dict[time → Series]"
+        out = {}
+        for t in times:
+            if t not in shocks:
+                raise MethodIncompatibility(
+                    f"shocks missing entry for time={t!r}",
+                    recovery_hint="Provide one shock vector for every time period in the data.",
+                    diagnostics={"time": t, "available_times": list(shocks.keys())},
+                )
+            s = shocks[t]
+            if not isinstance(s, pd.Series):
+                raise MethodIncompatibility(
+                    f"shocks[{t!r}] must be Series, got {type(s).__name__}",
+                    recovery_hint="Use pandas Series for all time-specific shock vectors.",
+                    diagnostics={"time": t, "type": type(s).__name__},
+                )
+            _finite_series(s, name=f"shocks[{t!r}]")
+            out[t] = s
+        return out
+    raise MethodIncompatibility(
+        "shocks must be Series, DataFrame(time × industry), or dict[time → Series]",
+        recovery_hint="Pass shocks as a Series, a time-by-industry DataFrame, or a dict of Series.",
+        diagnostics={"argument": "shocks", "type": type(shocks).__name__},
     )
 
 
@@ -516,7 +731,15 @@ def _build_bartik_panel(
         # Align industries
         cols = [c for c in shares_t.columns if c in shocks_t.index]
         if not cols:
-            raise ValueError(f"no shared industries at time={t!r}")
+            raise MethodIncompatibility(
+                f"no shared industries at time={t!r}",
+                recovery_hint="Align share-matrix columns with shock-vector indexes for every period.",
+                diagnostics={
+                    "time": t,
+                    "shares_columns": list(shares_t.columns),
+                    "shocks_index": list(shocks_t.index),
+                },
+            )
         bart = shares_t[cols] @ shocks_t.loc[cols]
         mask = (out[time] == t) & (out[unit].isin(bart.index))
         if mask.any():
@@ -595,22 +818,48 @@ def shift_share_political_panel(
     >>> abs(out.estimate - tau) < 0.15
     True
     """
+    data = _require_dataframe(data, name="data", function="shift_share_political_panel")
+    unit = _require_column_name(unit, argument="unit")
+    time = _require_column_name(time, argument="time")
+    outcome = _require_column_name(outcome, argument="outcome")
+    endog = _require_column_name(endog, argument="endog")
+    cov_cols = _coerce_optional_columns(covariates, argument="covariates")
+    alpha = _require_alpha(alpha)
     if fe not in ("two-way", "unit", "time", "none"):
-        raise ValueError(f"fe must be one of two-way/unit/time/none; got {fe!r}")
+        raise MethodIncompatibility(
+            f"fe must be one of two-way/unit/time/none; got {fe!r}",
+            recovery_hint="Use fe='two-way', 'unit', 'time', or 'none'.",
+            diagnostics={"argument": "fe", "value": fe},
+        )
     if cluster not in ("unit", "time", "twoway", "shock"):
-        raise ValueError(
+        raise MethodIncompatibility(
             f"cluster must be unit/time/twoway/shock; got {cluster!r}. "
             "`'shock'` invokes the Adão-Kolesár-Morales (2019) "
             "shock-clustered variance estimator — strongly recommended "
-            "by Park-Xu (2026) §4.2."
+            "by Park-Xu (2026) §4.2.",
+            recovery_hint="Use cluster='unit', 'time', 'twoway', or 'shock'.",
+            diagnostics={"argument": "cluster", "value": cluster},
         )
-    for col in (unit, time, outcome, endog):
-        if col not in data.columns:
-            raise ValueError(f"column {col!r} not in data")
+    _require_columns(
+        data, (unit, time, outcome, endog, *cov_cols),
+        function="shift_share_political_panel",
+    )
 
     data_sorted = data.sort_values([unit, time]).reset_index(drop=True)
     times = sorted(data_sorted[time].unique())
     units = sorted(data_sorted[unit].unique())
+    if len(times) < 2:
+        raise DataInsufficient(
+            "`data` must contain at least two time periods for panel shift-share IV.",
+            recovery_hint="Provide multi-period panel data.",
+            diagnostics={"function": "shift_share_political_panel", "n_periods": len(times)},
+        )
+    if len(units) < 2:
+        raise DataInsufficient(
+            "`data` must contain at least two units for panel shift-share IV.",
+            recovery_hint="Provide data for at least two units.",
+            diagnostics={"function": "shift_share_political_panel", "n_units": len(units)},
+        )
     shares_by_t = _resolve_shares(shares, times, units)
     first_t = times[0]
     industries = list(shares_by_t[first_t].columns)
@@ -622,9 +871,11 @@ def shift_share_political_panel(
     )
     if df_iv["__bartik_iv__"].isna().any():
         n_missing = int(df_iv["__bartik_iv__"].isna().sum())
-        raise ValueError(
+        raise DataInsufficient(
             f"{n_missing} rows have missing Bartik IV — check that "
-            "every (unit, time) is covered by shares + shocks."
+            "every (unit, time) is covered by shares + shocks.",
+            recovery_hint="Ensure every unit and period is covered by the share and shock inputs.",
+            diagnostics={"function": "shift_share_political_panel", "n_missing": n_missing},
         )
 
     # --- Within-transformation for FE ------------------------------------
@@ -636,8 +887,8 @@ def shift_share_political_panel(
             out[cols] = out[cols].sub(out.groupby(time)[cols].transform("mean"))
         return out
 
-    cov_cols = list(covariates) if covariates else []
     work_cols = [outcome, endog, "__bartik_iv__"] + cov_cols
+    _finite_frame(df_iv[work_cols], name="panel outcome/endog/instrument/covariates")
     df_demean = _demean(df_iv, work_cols)
 
     Y = df_demean[outcome].to_numpy(dtype=float)
@@ -702,9 +953,18 @@ def shift_share_political_panel(
         # Denominator: (D_hat' D_tilde) under FE demeaning.
         denom = float(np.dot(D_hat, D_tilde))
         if abs(denom) < 1e-12:
-            raise RuntimeError(
+            raise NumericalInstability(
                 "AKM shock-cluster SE: (D_hat' D_tilde) ≈ 0 — instrument "
-                "too weak after FE demeaning."
+                "too weak after FE demeaning.",
+                recovery_hint=(
+                    "Check first-stage strength, simplify fixed effects, or use a stronger "
+                    "shift-share instrument."
+                ),
+                diagnostics={
+                    "function": "shift_share_political_panel",
+                    "cluster": "shock",
+                    "denominator": denom,
+                },
             )
         var_akm = float(np.sum(u_k ** 2) / denom ** 2)
         se = float(np.sqrt(max(var_akm, 0.0)))
@@ -791,9 +1051,9 @@ def shift_share_political_panel(
         .reset_index(drop=True)
 
     # --- Share-balance diagnostic (using time=first share matrix) --------
-    if covariates:
+    if cov_cols:
         first_period = data_sorted[data_sorted[time] == first_t]
-        cov_df = first_period.set_index(unit)[list(covariates)]
+        cov_df = first_period.set_index(unit)[cov_cols]
         shares_first = shares_by_t[first_t].loc[
             [u for u in cov_df.index if u in shares_by_t[first_t].index]
         ]

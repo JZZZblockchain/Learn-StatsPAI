@@ -13,7 +13,7 @@ Hausman, J.A. (1978).
 *Econometrica*, 46(6), 1251-1271. [@hausman1978specification]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
@@ -109,6 +109,11 @@ def hausman_test(
     pvalue = float(1 - stats.chi2.cdf(H, k))
 
     recommendation = 'FE' if pvalue < alpha else 'RE'
+    recommendation_detail = (
+        "Reject H0: use Fixed Effects."
+        if pvalue < alpha
+        else "Cannot reject H0: Random Effects is more efficient."
+    )
 
     return {
         'statistic': H,
@@ -119,12 +124,17 @@ def hausman_test(
         'beta_re': pd.Series(beta_re, index=x),
         'interpretation': (
             f"chi2({k}) = {H:.4f}, p = {pvalue:.4f}. "
-            f"{'Reject H0: use Fixed Effects.' if pvalue < alpha else 'Cannot reject H0: Random Effects is more efficient.'}"
+            f"{recommendation_detail}"
         ),
     }
 
 
-def _within_estimator(df, y, x, id_col):
+def _within_estimator(
+    df: pd.DataFrame,
+    y: str,
+    x: List[str],
+    id_col: str,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Fixed Effects (within transformation)."""
     n = len(df)
     k = len(x)
@@ -154,10 +164,15 @@ def _within_estimator(df, y, x, id_col):
     sigma2 = np.sum(resid ** 2) / (n - n_groups - k)
     vcov = sigma2 * np.linalg.pinv(XtX)
 
-    return beta, vcov
+    return np.asarray(beta, dtype=float), np.asarray(vcov, dtype=float)
 
 
-def _re_estimator(df, y, x, id_col):
+def _re_estimator(
+    df: pd.DataFrame,
+    y: str,
+    x: List[str],
+    id_col: str,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Random Effects (GLS with estimated variance components)."""
     n = len(df)
     k = len(x)
@@ -186,15 +201,22 @@ def _re_estimator(df, y, x, id_col):
     # Between estimator residuals
     group_means_y = np.array([Y[ids == uid].mean() for uid in unique_ids])
     group_means_x = np.column_stack(
-        [np.ones(N)] + [np.array([df[v].values[ids == uid].mean()
-                                   for uid in unique_ids])
-                         for v in x])
+        [np.ones(N)]
+        + [
+            np.array([df[v].values[ids == uid].mean() for uid in unique_ids])
+            for v in x
+        ]
+    )
     beta_between = np.linalg.lstsq(group_means_x, group_means_y, rcond=None)[0]
     resid_between = group_means_y - group_means_x @ beta_between
     sigma2_b = max(np.var(resid_between) - sigma2_e / T_bar, 0)
 
     # GLS transformation: θ = 1 - sqrt(σ²_e / (T*σ²_α + σ²_e))
-    theta = 1 - np.sqrt(sigma2_e / (T_bar * sigma2_b + sigma2_e)) if sigma2_b > 0 else 0
+    theta = (
+        1 - np.sqrt(sigma2_e / (T_bar * sigma2_b + sigma2_e))
+        if sigma2_b > 0
+        else 0
+    )
 
     # Quasi-demean
     Y_gls = Y.copy()
@@ -220,7 +242,7 @@ def _re_estimator(df, y, x, id_col):
     beta_re = beta_full[1:]
     vcov_re = vcov_full[1:, 1:]
 
-    return beta_re, vcov_re
+    return np.asarray(beta_re, dtype=float), np.asarray(vcov_re, dtype=float)
 
 
 # Citation

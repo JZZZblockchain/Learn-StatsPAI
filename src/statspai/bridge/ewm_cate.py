@@ -10,7 +10,7 @@ threshold-vs-EWM agreement.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
@@ -65,11 +65,15 @@ def ewm_cate_bridge(
     # ---------- Path B: CATE → threshold ---------- #
     # Use simple T-learner with linear regression for both arms (fast,
     # transparent; user can swap to sp.metalearner upstream if desired).
-    def _t_learner_cate(Yi, Di, Xi):
+    def _t_learner_cate(
+        Yi: np.ndarray,
+        Di: np.ndarray,
+        Xi: np.ndarray,
+    ) -> np.ndarray:
         from sklearn.linear_model import LinearRegression
         m1 = LinearRegression().fit(Xi[Di == 1], Yi[Di == 1])
         m0 = LinearRegression().fit(Xi[Di == 0], Yi[Di == 0])
-        return m1.predict(Xi) - m0.predict(Xi)
+        return np.asarray(m1.predict(Xi) - m0.predict(Xi), dtype=float)
 
     cate = _t_learner_cate(Y, D, X)
     pi_cate = (cate > 0).astype(int)

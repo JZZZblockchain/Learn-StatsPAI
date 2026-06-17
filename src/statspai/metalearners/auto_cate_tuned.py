@@ -17,7 +17,7 @@ raises :class:`ImportError` with the install recipe; the rest of
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,7 @@ import pandas as pd
 # file when the user never touches auto_cate_tuned.
 
 from ..core.results import CausalResult  # noqa: F401 - re-exported via result
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from .auto_cate import (
     AutoCATEResult,
     auto_cate,
@@ -67,7 +68,154 @@ DEFAULT_PER_LEARNER_SEARCH_SPACE: Dict[str, List[Any]] = {
 }
 
 
-def _require_optuna():
+CovariatesArg = Union[Sequence[str], str]
+LearnersArg = Union[Sequence[str], str]
+_VALID_LEARNERS = {"s", "t", "x", "r", "dr"}
+
+_AUTO_CATE_TUNED_ALTERNATIVES = [
+    "sp.auto_cate_tuned",
+    "sp.auto_cate",
+    "sp.metalearner",
+]
+
+
+def _auto_cate_tuned_error(
+    message: str,
+    *,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    recovery_hint: str = "Check auto_cate_tuned inputs and option values.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_AUTO_CATE_TUNED_ALTERNATIVES,
+    )
+
+
+def _normalize_covariates(raw: CovariatesArg) -> List[str]:
+    if isinstance(raw, str):
+        return [raw]
+    try:
+        covariates = list(raw)
+    except TypeError as err:
+        raise _auto_cate_tuned_error(
+            "covariates must be a column name or a sequence of column names.",
+            diagnostics={"covariates": repr(raw)},
+            recovery_hint="Pass covariates=['x1', 'x2'] or a single column name.",
+        ) from err
+    if not covariates:
+        raise DataInsufficient(
+            "auto_cate_tuned requires at least one covariate.",
+            recovery_hint="Pass one or more effect-modifier columns.",
+            diagnostics={"n_covariates": 0},
+            alternative_functions=_AUTO_CATE_TUNED_ALTERNATIVES,
+        )
+    for idx, covariate in enumerate(covariates):
+        if not isinstance(covariate, str) or not covariate:
+            raise _auto_cate_tuned_error(
+                "covariates must contain non-empty column-name strings.",
+                diagnostics={"index": idx, "value": repr(covariate)},
+                recovery_hint="Pass covariates as column-name strings.",
+            )
+    return covariates
+
+
+def _normalize_learners(raw: LearnersArg) -> List[str]:
+    if isinstance(raw, str):
+        raw_learners = [raw]
+    else:
+        try:
+            raw_learners = list(raw)
+        except TypeError as err:
+            raise _auto_cate_tuned_error(
+                "learners must be a learner code or a sequence of learner codes.",
+                diagnostics={"learners": repr(raw)},
+                recovery_hint="Pass learners=('t', 'dr') or a single learner code.",
+            ) from err
+    out: List[str] = []
+    for idx, learner in enumerate(raw_learners):
+        if not isinstance(learner, str) or not learner:
+            raise _auto_cate_tuned_error(
+                "learners must contain non-empty learner-code strings.",
+                diagnostics={"index": idx, "value": repr(learner)},
+                recovery_hint="Use learner codes 's', 't', 'x', 'r', or 'dr'.",
+            )
+        code = learner.lower()
+        if code not in _VALID_LEARNERS:
+            raise _auto_cate_tuned_error(
+                f"Unknown learner {learner!r}.",
+                diagnostics={
+                    "learner": learner,
+                    "valid": sorted(_VALID_LEARNERS),
+                },
+                recovery_hint="Use learner codes 's', 't', 'x', 'r', or 'dr'.",
+            )
+        if code not in out:
+            out.append(code)
+    if not out:
+        raise DataInsufficient(
+            "auto_cate_tuned requires at least one learner.",
+            recovery_hint="Pass one or more learner codes to tune.",
+            diagnostics={"n_learners": 0},
+            alternative_functions=_AUTO_CATE_TUNED_ALTERNATIVES,
+        )
+    return out
+
+
+def _validate_search_space(
+    search_space: Dict[str, List[Any]],
+    *,
+    context: str,
+) -> None:
+    if not isinstance(search_space, dict):
+        raise _auto_cate_tuned_error(
+            f"{context} search space must be a dictionary.",
+            diagnostics={"context": context, "type": type(search_space).__name__},
+            recovery_hint="Pass a dict mapping hyperparameter names to choices.",
+        )
+    for name, choices in search_space.items():
+        if not isinstance(name, str) or not name:
+            raise _auto_cate_tuned_error(
+                f"{context} search-space keys must be non-empty strings.",
+                diagnostics={"context": context, "name": repr(name)},
+                recovery_hint="Use string hyperparameter names in search_space.",
+            )
+        if isinstance(choices, (str, bytes)):
+            raise _auto_cate_tuned_error(
+                f"{context} search-space choices must be sequences.",
+                diagnostics={
+                    "context": context,
+                    "name": name,
+                    "choices": repr(choices),
+                },
+                recovery_hint="Give each tuned hyperparameter at least one choice.",
+            )
+        try:
+            choices_list = list(choices)
+        except TypeError as err:
+            raise _auto_cate_tuned_error(
+                f"{context} search-space choices must be sequences.",
+                diagnostics={
+                    "context": context,
+                    "name": name,
+                    "choices": repr(choices),
+                },
+                recovery_hint="Give each tuned hyperparameter at least one choice.",
+            ) from err
+        if not choices_list:
+            raise _auto_cate_tuned_error(
+                f"{context} search-space choices must be non-empty.",
+                diagnostics={
+                    "context": context,
+                    "name": name,
+                    "choices": repr(choices),
+                },
+                recovery_hint="Give each tuned hyperparameter at least one choice.",
+            )
+
+
+def _require_optuna() -> Any:
     try:
         import optuna  # noqa: F401
     except ImportError as err:
@@ -75,7 +223,10 @@ def _require_optuna():
     return optuna
 
 
-def _build_models_from_params(params: Dict[str, Any], random_state: int) -> Tuple[Any, Any]:
+def _build_models_from_params(
+    params: Dict[str, Any],
+    random_state: int,
+) -> Tuple[Any, Any]:
     from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
     outcome = GradientBoostingRegressor(
         n_estimators=int(params['outcome_n_estimators']),
@@ -93,7 +244,7 @@ def _build_models_from_params(params: Dict[str, Any], random_state: int) -> Tupl
     return outcome, propensity
 
 
-def _sample_params(trial, search_space: Dict[str, List[Any]]) -> Dict[str, Any]:
+def _sample_params(trial: Any, search_space: Dict[str, List[Any]]) -> Dict[str, Any]:
     params: Dict[str, Any] = {}
     for name, choices in search_space.items():
         params[name] = trial.suggest_categorical(name, list(choices))
@@ -130,7 +281,7 @@ def _r_loss_on_nuisance(
     return _r_loss(tau_zero, Y, D, m_hat, e_hat)
 
 
-def _build_cate_model(params: Dict[str, Any], random_state: int):
+def _build_cate_model(params: Dict[str, Any], random_state: int) -> Any:
     """GBM factory for the CATE-stage search space."""
     from sklearn.ensemble import GradientBoostingRegressor
     return GradientBoostingRegressor(
@@ -150,8 +301,8 @@ def _r_loss_per_learner(
     D: np.ndarray,
     m_hat: np.ndarray,
     e_hat: np.ndarray,
-    outcome_model,
-    propensity_model,
+    outcome_model: Any,
+    propensity_model: Any,
     n_folds: int,
     random_state: int,
 ) -> float:
@@ -171,8 +322,8 @@ def auto_cate_tuned(
     data: pd.DataFrame,
     y: str,
     treat: str,
-    covariates: List[str],
-    learners: Sequence[str] = ('s', 't', 'x', 'r', 'dr'),
+    covariates: CovariatesArg,
+    learners: LearnersArg = ('s', 't', 'x', 'r', 'dr'),
     *,
     tune: str = 'nuisance',
     n_trials: int = 25,
@@ -253,16 +404,97 @@ def auto_cate_tuned(
     >>> res.best_result.model_info["tune_mode"]  # doctest: +SKIP
     'nuisance'
     """
-    optuna = _require_optuna()
-
     if tune not in ('nuisance', 'per_learner', 'both'):
-        raise ValueError(
+        raise _auto_cate_tuned_error(
             f"tune must be one of 'nuisance', 'per_learner', 'both'; "
-            f"got {tune!r}"
+            f"got {tune!r}",
+            diagnostics={"tune": tune},
+            recovery_hint="Use tune='nuisance', 'per_learner', or 'both'.",
         )
+    if not isinstance(data, pd.DataFrame):
+        raise _auto_cate_tuned_error(
+            "data must be a pandas DataFrame.",
+            diagnostics={"type": type(data).__name__},
+            recovery_hint=(
+                "Pass a pandas DataFrame with outcome, treatment, and "
+                "covariates."
+            ),
+        )
+    if data.empty:
+        raise DataInsufficient(
+            "auto_cate_tuned requires non-empty data.",
+            recovery_hint="Provide rows before tuning CATE learners.",
+            diagnostics={"n_rows": 0},
+            alternative_functions=_AUTO_CATE_TUNED_ALTERNATIVES,
+        )
+    for argument, value in (("y", y), ("treat", treat)):
+        if not isinstance(value, str) or not value:
+            raise _auto_cate_tuned_error(
+                f"{argument} must be a non-empty column-name string.",
+                diagnostics={"argument": argument, "value": repr(value)},
+                recovery_hint=(
+                    f"Pass an existing DataFrame column name for `{argument}`."
+                ),
+            )
 
-    if not verbose:
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    covariate_list = _normalize_covariates(covariates)
+    learner_codes = _normalize_learners(learners)
+    required_columns = [y, treat] + covariate_list
+    missing = [col for col in required_columns if col not in data.columns]
+    if missing:
+        raise _auto_cate_tuned_error(
+            "auto_cate_tuned input columns are missing from data.",
+            diagnostics={"missing_columns": sorted(missing)},
+            recovery_hint="Pass column names present in the DataFrame.",
+        )
+    if not isinstance(n_folds, int) or isinstance(n_folds, bool) or n_folds < 2:
+        raise _auto_cate_tuned_error(
+            "n_folds must be an integer >= 2.",
+            diagnostics={"n_folds": n_folds},
+            recovery_hint="Use n_folds=2 or larger for cross-fitting.",
+        )
+    try:
+        alpha_value = float(alpha)
+    except (TypeError, ValueError) as err:
+        raise _auto_cate_tuned_error(
+            "alpha must be numeric.",
+            diagnostics={"alpha": repr(alpha)},
+            recovery_hint="Use a confidence level such as alpha=0.05.",
+        ) from err
+    if not (0 < alpha_value < 1):
+        raise _auto_cate_tuned_error(
+            "alpha must be between 0 and 1.",
+            diagnostics={"alpha": alpha},
+            recovery_hint="Use a confidence level such as alpha=0.05.",
+        )
+    if (
+        not isinstance(n_bootstrap, int)
+        or isinstance(n_bootstrap, bool)
+        or n_bootstrap < 1
+    ):
+        raise _auto_cate_tuned_error(
+            "n_bootstrap must be an integer >= 1.",
+            diagnostics={"n_bootstrap": n_bootstrap},
+            recovery_hint="Use n_bootstrap=50 or larger for stable intervals.",
+        )
+    if tune in ('nuisance', 'both') and (
+        not isinstance(n_trials, int)
+        or isinstance(n_trials, bool)
+        or n_trials < 1
+    ):
+        raise _auto_cate_tuned_error(
+            "n_trials must be an integer >= 1 for nuisance tuning.",
+            diagnostics={"n_trials": n_trials, "tune": tune},
+            recovery_hint="Increase n_trials or use tune='per_learner'.",
+        )
+    if n_trials_per_learner is None and (
+        not isinstance(n_trials, int) or isinstance(n_trials, bool)
+    ):
+        raise _auto_cate_tuned_error(
+            "n_trials must be an integer when deriving per-learner trials.",
+            diagnostics={"n_trials": n_trials, "tune": tune},
+            recovery_hint="Pass an integer n_trials or explicit n_trials_per_learner.",
+        )
 
     space = search_space if search_space is not None else DEFAULT_SEARCH_SPACE
     pl_space = (per_learner_search_space
@@ -271,14 +503,39 @@ def auto_cate_tuned(
     pl_trials = (n_trials_per_learner
                  if n_trials_per_learner is not None
                  else max(5, n_trials // 3))
+    _validate_search_space(space, context="nuisance")
+    _validate_search_space(pl_space, context="per_learner")
+    if tune in ('per_learner', 'both') and (
+        not isinstance(pl_trials, int)
+        or isinstance(pl_trials, bool)
+        or pl_trials < 1
+    ):
+        raise _auto_cate_tuned_error(
+            "n_trials_per_learner must be an integer >= 1.",
+            diagnostics={"n_trials_per_learner": pl_trials, "tune": tune},
+            recovery_hint="Increase n_trials_per_learner before per-learner tuning.",
+        )
 
     # Extract arrays once (same cleaning as auto_cate)
-    Y, D, X, n = _prepare_data(data, y, treat, covariates)
+    Y, D, X, n = _prepare_data(data, y, treat, covariate_list)
+    if n < n_folds:
+        raise DataInsufficient(
+            "auto_cate_tuned requires at least n_folds complete rows.",
+            recovery_hint="Use fewer folds or provide more complete rows.",
+            diagnostics={"n_complete": n, "n_folds": n_folds},
+            alternative_functions=_AUTO_CATE_TUNED_ALTERNATIVES,
+        )
     unique_d = np.unique(D)
     if not (len(unique_d) == 2 and set(unique_d) == {0.0, 1.0}):
-        raise ValueError(
-            f"Treatment must be binary (0/1), got unique values: {unique_d}"
+        raise _auto_cate_tuned_error(
+            f"Treatment must be binary (0/1), got unique values: {unique_d}",
+            diagnostics={"treat_values": unique_d.tolist()},
+            recovery_hint="Encode treatment as binary 0/1 before tuning.",
         )
+
+    optuna = _require_optuna()
+    if not verbose:
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     # ------------------------------------------------------------------
     # Step 1: Nuisance tuning (modes 'nuisance' and 'both')
@@ -290,7 +547,7 @@ def auto_cate_tuned(
     best_propensity = None
 
     if tune in ('nuisance', 'both'):
-        def _objective_nuisance(trial):
+        def _objective_nuisance(trial: Any) -> float:
             params = _sample_params(trial, space)
             return _r_loss_on_nuisance(
                 params, X, Y, D,
@@ -342,8 +599,8 @@ def auto_cate_tuned(
         )
         e_hat = np.clip(e_hat, 0.01, 0.99)
 
-        for code in learners:
-            def _objective_pl(trial, _code=code):
+        for code in learner_codes:
+            def _objective_pl(trial: Any, _code: str = code) -> float:
                 params = _sample_params(trial, pl_space)
                 return _r_loss_per_learner(
                     _code, params, X, Y, D, m_hat, e_hat,
@@ -370,7 +627,10 @@ def auto_cate_tuned(
     # lowest-per-learner-R-loss learner as the *shared* cate_model hint;
     # auto_cate still races all learners and picks its winner by R-loss.
     if per_learner_params:
-        best_pl_code = min(per_learner_r_loss, key=per_learner_r_loss.get)
+        best_pl_code = min(
+            per_learner_r_loss,
+            key=lambda code: per_learner_r_loss[code],
+        )
         best_pl_cate_model = _build_cate_model(
             per_learner_params[best_pl_code], random_state=random_state,
         )
@@ -378,8 +638,8 @@ def auto_cate_tuned(
         best_pl_cate_model = None
 
     result = auto_cate(
-        data, y=y, treat=treat, covariates=covariates,
-        learners=learners,
+        data, y=y, treat=treat, covariates=covariate_list,
+        learners=learner_codes,
         outcome_model=best_outcome,
         propensity_model=best_propensity,
         cate_model=best_pl_cate_model,

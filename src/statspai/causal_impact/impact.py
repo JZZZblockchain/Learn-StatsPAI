@@ -17,11 +17,10 @@ The model:
 Fit on pre-period, then forecast into post-period for counterfactual.
 """
 
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.optimize import minimize
 
 from ..core.results import CausalResult
 
@@ -174,7 +173,7 @@ class CausalImpactEstimator:
         covariates: Optional[List[str]] = None,
         alpha: float = 0.05,
         n_seasons: Optional[int] = None,
-    ):
+    ) -> None:
         self.data = data.sort_values(time).copy()
         self.y = y
         self.time = time
@@ -186,7 +185,7 @@ class CausalImpactEstimator:
         self._validate()
         self._prepare()
 
-    def _validate(self):
+    def _validate(self) -> None:
         for col in [self.y, self.time] + self.covariates:
             if col not in self.data.columns:
                 raise ValueError(f"Column '{col}' not found in data")
@@ -200,7 +199,7 @@ class CausalImpactEstimator:
                     f"[{times.min()}, {times.max()}]"
                 )
 
-    def _prepare(self):
+    def _prepare(self) -> None:
         """Split data into pre and post periods."""
         self.times = self.data[self.time].values
         self.Y = self.data[self.y].values.astype(float)
@@ -212,7 +211,9 @@ class CausalImpactEstimator:
         self.n_post = int(self.post_mask.sum())
 
         if self.n_pre < 3:
-            raise ValueError(f"Need at least 3 pre-intervention periods, got {self.n_pre}")
+            raise ValueError(
+                f"Need at least 3 pre-intervention periods, got {self.n_pre}"
+            )
         if self.n_post < 1:
             raise ValueError("Need at least 1 post-intervention period")
 
@@ -225,7 +226,6 @@ class CausalImpactEstimator:
         """Fit the structural time-series model and estimate causal impact."""
         Y_pre = self.Y[self.pre_mask]
         X_pre = self.X[self.pre_mask] if self.X is not None else None
-        X_post = self.X[self.post_mask] if self.X is not None else None
 
         # Fit model on pre-intervention period
         model = self._fit_structural_model(Y_pre, X_pre)
@@ -236,8 +236,12 @@ class CausalImpactEstimator:
         # Point estimates
         Y_actual = self.Y
         pointwise_effect = Y_actual - Y_pred
-        pointwise_lower = Y_actual - (Y_pred + stats.norm.ppf(1 - self.alpha / 2) * Y_pred_se)
-        pointwise_upper = Y_actual - (Y_pred - stats.norm.ppf(1 - self.alpha / 2) * Y_pred_se)
+        pointwise_lower = Y_actual - (
+            Y_pred + stats.norm.ppf(1 - self.alpha / 2) * Y_pred_se
+        )
+        pointwise_upper = Y_actual - (
+            Y_pred - stats.norm.ppf(1 - self.alpha / 2) * Y_pred_se
+        )
 
         # Cumulative effect (post-period only)
         post_effect = pointwise_effect[self.post_mask]
@@ -254,7 +258,11 @@ class CausalImpactEstimator:
 
         # Relative effect
         post_pred_mean = float(np.mean(Y_pred[self.post_mask]))
-        relative_effect = avg_effect / post_pred_mean if abs(post_pred_mean) > 1e-10 else np.nan
+        relative_effect = (
+            avg_effect / post_pred_mean
+            if abs(post_pred_mean) > 1e-10
+            else np.nan
+        )
 
         # P-value (two-sided test against zero effect)
         z_stat = avg_effect / se_avg if se_avg > 0 else 0
@@ -284,7 +292,11 @@ class CausalImpactEstimator:
             'se_avg': se_avg,
             'se_total': se_total,
             'relative_effect': relative_effect,
-            'relative_effect_pct': relative_effect * 100 if not np.isnan(relative_effect) else np.nan,
+            'relative_effect_pct': (
+                relative_effect * 100
+                if not np.isnan(relative_effect)
+                else np.nan
+            ),
             'n_covariates': len(self.covariates),
             'model_params': model,
             'Y_pred': Y_pred,
@@ -313,7 +325,11 @@ class CausalImpactEstimator:
     # Structural time-series model
     # ------------------------------------------------------------------
 
-    def _fit_structural_model(self, Y_pre, X_pre):
+    def _fit_structural_model(
+        self,
+        Y_pre: np.ndarray,
+        X_pre: Optional[np.ndarray],
+    ) -> Dict[str, Any]:
         """
         Fit a local-level + regression model on pre-intervention data.
 
@@ -344,7 +360,7 @@ class CausalImpactEstimator:
             r_lead = residuals[1:]
             if np.var(r_lag) > 1e-10:
                 rho = float(np.corrcoef(r_lag, r_lead)[0, 1])
-                rho = np.clip(rho, -0.99, 0.99)
+                rho = float(np.clip(rho, -0.99, 0.99))
             else:
                 rho = 0.0
         else:
@@ -352,7 +368,11 @@ class CausalImpactEstimator:
 
         # Variance decomposition
         sigma_obs = float(np.std(residuals, ddof=1)) if n > 1 else 1.0
-        sigma_state = sigma_obs * np.sqrt(1 - rho**2) if abs(rho) < 1 else sigma_obs * 0.1
+        sigma_state = (
+            sigma_obs * np.sqrt(1 - rho**2)
+            if abs(rho) < 1
+            else sigma_obs * 0.1
+        )
 
         return {
             'beta': beta,
@@ -363,17 +383,21 @@ class CausalImpactEstimator:
             'n_covariates': X_pre.shape[1] if X_pre is not None else 0,
         }
 
-    def _predict(self, model, X_full):
+    def _predict(
+        self,
+        model: Dict[str, Any],
+        X_full: Optional[np.ndarray],
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Generate counterfactual predictions for all time periods.
 
         Returns (Y_pred, Y_pred_se) arrays.
         """
         n = len(self.Y)
-        beta = model['beta']
-        rho = model['rho']
-        sigma_obs = model['sigma_obs']
-        sigma_state = model['sigma_state']
+        beta = np.asarray(model['beta'], dtype=float)
+        rho = float(model['rho'])
+        sigma_obs = float(model['sigma_obs'])
+        sigma_state = float(model['sigma_state'])
 
         if X_full is not None and X_full.shape[1] > 0:
             X_aug = np.column_stack([np.ones(n), X_full])
@@ -415,10 +439,10 @@ class CausalImpactEstimator:
 def impactplot(
     result: CausalResult,
     type: str = 'all',
-    ax=None,
-    figsize: tuple = (12, 9),
-    title=None,
-):
+    ax: Any = None,
+    figsize: tuple[float, float] = (12, 9),
+    title: Optional[str] = None,
+) -> Any:
     """
     Causal Impact visualization (Google-style 3-panel plot).
 
@@ -522,7 +546,14 @@ def impactplot(
     return fig, ax
 
 
-def _original_panel(ax, times, actual, predicted, t0, alpha):
+def _original_panel(
+    ax: Any,
+    times: np.ndarray,
+    actual: np.ndarray,
+    predicted: np.ndarray,
+    t0: Any,
+    alpha: float,
+) -> None:
     ax.plot(times, actual, color='#2C3E50', linewidth=1.5, label='Observed')
     ax.plot(times, predicted, color='#3498DB', linewidth=1.5,
             linestyle='--', label='Counterfactual')
@@ -535,7 +566,15 @@ def _original_panel(ax, times, actual, predicted, t0, alpha):
     ax.spines['right'].set_visible(False)
 
 
-def _pointwise_panel(ax, times, effect, lo, hi, post, t0):
+def _pointwise_panel(
+    ax: Any,
+    times: np.ndarray,
+    effect: np.ndarray,
+    lo: np.ndarray,
+    hi: np.ndarray,
+    post: np.ndarray,
+    t0: Any,
+) -> None:
     ax.plot(times, effect, color='#2C3E50', linewidth=1.5)
     ax.fill_between(times, lo, hi, alpha=0.15, color='#3498DB')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.8)
@@ -547,7 +586,13 @@ def _pointwise_panel(ax, times, effect, lo, hi, post, t0):
     ax.spines['right'].set_visible(False)
 
 
-def _cumulative_panel(ax, times, cumulative, post, t0):
+def _cumulative_panel(
+    ax: Any,
+    times: np.ndarray,
+    cumulative: np.ndarray,
+    post: np.ndarray,
+    t0: Any,
+) -> None:
     ax.plot(times, cumulative, color='#2C3E50', linewidth=1.5)
     ax.fill_between(times, 0, cumulative, alpha=0.15, color='#3498DB')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.8)

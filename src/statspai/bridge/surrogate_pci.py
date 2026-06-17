@@ -63,7 +63,12 @@ def surrogate_pci_bridge(
     # 1. Predict long-term Y from short-term S (and X) on controls only
     # 2. Apply prediction to treated to get expected long-term Y under
     #    treatment via the surrogate index, then take treated - control mean
-    def _surrogate(Yi, Di, Si, Xi):
+    def _surrogate(
+        Yi: np.ndarray,
+        Di: np.ndarray,
+        Si: np.ndarray,
+        Xi: np.ndarray,
+    ) -> float:
         from sklearn.linear_model import LinearRegression
         Z = np.hstack([Si, Xi])
         idx_c = Di == 0
@@ -102,7 +107,12 @@ def surrogate_pci_bridge(
     # assumption is violated.  Plain OLS on (D, W, X), which the
     # previous implementation returned, would have collapsed Path B
     # into Path A under linear outcomes.
-    def _pci(Yi, Di, Si, Xi):
+    def _pci(
+        Yi: np.ndarray,
+        Di: np.ndarray,
+        Si: np.ndarray,
+        Xi: np.ndarray,
+    ) -> float:
         from sklearn.linear_model import LinearRegression
         Z = np.hstack([Si, Xi]) if Xi.shape[1] > 0 else Si
         idx_t = Di == 1

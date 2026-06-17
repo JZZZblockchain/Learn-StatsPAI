@@ -12,6 +12,8 @@ replication support:
 - replicate()           — famous paper replication with built-in data
 """
 
+from typing import Any
+
 from .recommend import recommend, RecommendationResult
 from .compare import compare_estimators, ComparisonResult
 from .assumptions import assumption_audit, AssumptionResult
@@ -58,7 +60,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     # Cache into globals() after first resolve so subsequent attribute
     # accesses bypass __getattr__ entirely (matches the top-level
     # statspai/__init__.py pattern).

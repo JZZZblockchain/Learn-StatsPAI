@@ -20,6 +20,8 @@ Plan to migrate within one minor cycle.
 from __future__ import annotations
 
 import sys
+import types as _types
+from typing import Any
 import warnings
 
 warnings.warn(
@@ -34,7 +36,7 @@ warnings.warn(
 # This also has the side effect of loading the ``statspai.forest.*``
 # submodules into :data:`sys.modules` (forest/__init__.py does
 # ``from .causal_forest import ...`` etc.).
-from ..forest import (  # noqa: F401
+from ..forest import (  # noqa: F401,E402
     CausalForest, causal_forest,
     calibration_test, test_calibration, rate, honest_variance,
     average_treatment_effect, forest_diagnostics,
@@ -70,13 +72,12 @@ sys.modules["statspai.causal.multi_arm_forest"] = (
 # subclass whose ``__call__`` proxies to the workflow function, so
 # ``sp.causal(df, y=, treatment=, ...)`` keeps working *and*
 # ``sp.causal.CausalForest`` (deprecated submodule access) still resolves.
-import types as _types
 
 
 class _CausalShimModule(_types.ModuleType):
     """Module-as-callable that forwards to :func:`statspai.workflow.causal`."""
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         from ..workflow import causal as _workflow_causal
         return _workflow_causal(*args, **kwargs)
 

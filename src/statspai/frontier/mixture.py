@@ -36,7 +36,6 @@ import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
 
-from ..core.results import EconometricResults
 from . import _core as _fc
 from .sfa import FrontierResult
 
@@ -156,7 +155,10 @@ def zisf(
             np.full(n, sigma_u),
             sign,
         )
-        return np.logaddexp(log_p + log_f_eff, log_1mp + log_f_ineff)
+        return np.asarray(
+            np.logaddexp(log_p + log_f_eff, log_1mp + log_f_ineff),
+            dtype=float,
+        )
 
     def neg_loglik(params: np.ndarray) -> float:
         if not np.all(np.isfinite(params)):
@@ -209,7 +211,8 @@ def zisf(
     se = np.sqrt(np.clip(np.diag(vcov), 0.0, None))
 
     # Posterior efficiency:
-    # Given eps, posterior P(efficient | eps) = p_i * f_eff / [p_i*f_eff + (1-p_i)*f_ineff]
+    # Given eps, posterior P(efficient | eps) =
+    # p_i * f_eff / [p_i*f_eff + (1-p_i)*f_ineff].
     eps_hat = y_vec - X_mat @ beta_hat
     log_p = -np.logaddexp(0.0, -(Z_mat @ theta_p))
     log_1mp = -np.logaddexp(0.0, (Z_mat @ theta_p))
@@ -382,12 +385,18 @@ def lcsf(
 
     def per_obs_loglik(params: np.ndarray) -> np.ndarray:
         idx = 0
-        beta1 = params[idx:idx + k_beta]; idx += k_beta
-        ln_sv1 = params[idx]; idx += 1
-        ln_su1 = params[idx]; idx += 1
-        beta2 = params[idx:idx + k_beta]; idx += k_beta
-        ln_sv2 = params[idx]; idx += 1
-        ln_su2 = params[idx]; idx += 1
+        beta1 = params[idx:idx + k_beta]
+        idx += k_beta
+        ln_sv1 = params[idx]
+        idx += 1
+        ln_su1 = params[idx]
+        idx += 1
+        beta2 = params[idx:idx + k_beta]
+        idx += k_beta
+        ln_sv2 = params[idx]
+        idx += 1
+        ln_su2 = params[idx]
+        idx += 1
         theta = params[idx:]
         sv1, su1 = np.exp(ln_sv1), np.exp(ln_su1)
         sv2, su2 = np.exp(ln_sv2), np.exp(ln_su2)
@@ -397,7 +406,10 @@ def lcsf(
         log_pi2 = -np.logaddexp(0.0, (Z_mat @ theta))
         log_f1 = _fc.loglik_halfnormal(eps1, np.full(n, sv1), np.full(n, su1), sign)
         log_f2 = _fc.loglik_halfnormal(eps2, np.full(n, sv2), np.full(n, su2), sign)
-        return np.logaddexp(log_pi1 + log_f1, log_pi2 + log_f2)
+        return np.asarray(
+            np.logaddexp(log_pi1 + log_f1, log_pi2 + log_f2),
+            dtype=float,
+        )
 
     def neg_loglik(params: np.ndarray) -> float:
         if not np.all(np.isfinite(params)):
@@ -479,12 +491,18 @@ def lcsf(
     ll_val = -neg_loglik(theta_hat)
 
     idx = 0
-    beta1_hat = theta_hat[idx:idx + k_beta]; idx += k_beta
-    ln_sv1 = theta_hat[idx]; idx += 1
-    ln_su1 = theta_hat[idx]; idx += 1
-    beta2_hat = theta_hat[idx:idx + k_beta]; idx += k_beta
-    ln_sv2 = theta_hat[idx]; idx += 1
-    ln_su2 = theta_hat[idx]; idx += 1
+    beta1_hat = theta_hat[idx:idx + k_beta]
+    idx += k_beta
+    ln_sv1 = theta_hat[idx]
+    idx += 1
+    ln_su1 = theta_hat[idx]
+    idx += 1
+    beta2_hat = theta_hat[idx:idx + k_beta]
+    idx += k_beta
+    ln_sv2 = theta_hat[idx]
+    idx += 1
+    ln_su2 = theta_hat[idx]
+    idx += 1
     theta_p = theta_hat[idx:]
     sv1, su1 = float(np.exp(ln_sv1)), float(np.exp(ln_su1))
     sv2, su2 = float(np.exp(ln_sv2)), float(np.exp(ln_su2))

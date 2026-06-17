@@ -137,7 +137,10 @@ class LLMAnnotatorResult(CausalResult):
         self.correction_factor = float(correction_factor)
         self.annotator_diagnostics = dict(annotator_diagnostics)
 
-    def summary(self) -> str:  # pragma: no cover (cosmetic)
+    def summary(
+        self,
+        alpha: Optional[float] = None,
+    ) -> str:  # pragma: no cover (cosmetic)
         d = self.annotator_diagnostics
         n_classes = d.get('n_classes', 2)
         lines = [

@@ -59,7 +59,11 @@ def kink_rdd_bridge(
         bandwidth = float(np.subtract(*np.percentile(R, [75, 25])))
 
     # ---------- Path A: RKD via local linear slope-difference ---------- #
-    def _local_slope(R, Y, side):
+    def _local_slope(
+        R: np.ndarray,
+        Y: np.ndarray,
+        side: str,
+    ) -> tuple[float, float]:
         # Triangular kernel local linear at boundary; returns slope coef.
         if side == 'left':
             mask = (R < cutoff) & (R >= cutoff - bandwidth)

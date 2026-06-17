@@ -42,12 +42,13 @@ van der Laan, M. J., Benkeser, D. & Cai, W. (2023). Efficient estimation
 from __future__ import annotations
 
 import inspect
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 __all__ = ["hal_tmle", "HALRegressor", "HALClassifier"]
@@ -142,8 +143,9 @@ def _hal_basis(
             for v in xv:
                 cols.append(j)
                 vals.append(v)
-        anchors = np.column_stack([np.asarray(cols, dtype=int),
-                                    np.asarray(vals, dtype=float)])
+        anchors = np.column_stack(
+            [np.asarray(cols, dtype=int), np.asarray(vals, dtype=float)]
+        )
 
     B = np.zeros((n, anchors.shape[0]))
     for k in range(anchors.shape[0]):
@@ -151,6 +153,104 @@ def _hal_basis(
         v = float(anchors[k, 1])
         B[:, k] = (X[:, j] <= v).astype(float)
     return B, anchors
+
+
+def _validate_hal_positive_int(value, *, name: str) -> int:
+    if (
+        not isinstance(value, (int, np.integer))
+        or isinstance(value, bool)
+        or int(value) < 1
+    ):
+        raise MethodIncompatibility(
+            f"{name} must be a positive integer.",
+            recovery_hint=f"Use {name} >= 1.",
+            diagnostics={name: value},
+        )
+    return int(value)
+
+
+def _coerce_hal_matrix(
+    X,
+    *,
+    context: str,
+    expected_features: Optional[int] = None,
+) -> np.ndarray:
+    try:
+        X_arr = np.asarray(X, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: X must be numeric.",
+            recovery_hint="Convert HAL feature columns to numeric values.",
+        ) from exc
+    if X_arr.ndim == 1:
+        if (
+            expected_features is not None
+            and expected_features > 1
+            and X_arr.size == expected_features
+        ):
+            X_arr = X_arr.reshape(1, -1)
+        elif expected_features in (None, 1):
+            X_arr = X_arr.reshape(-1, 1)
+        else:
+            raise MethodIncompatibility(
+                f"{context}: one-dimensional X does not match fit features.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+                diagnostics={
+                    "n_values": int(X_arr.size),
+                    "expected_features": expected_features,
+                },
+            )
+    elif X_arr.ndim != 2:
+        raise MethodIncompatibility(
+            f"{context}: X must be a 1D or 2D numeric array.",
+            recovery_hint="Pass X shaped (n_samples, n_features).",
+            diagnostics={"x_ndim": int(X_arr.ndim)},
+        )
+    if X_arr.shape[0] == 0 or X_arr.shape[1] == 0:
+        raise DataInsufficient(
+            f"{context}: X must contain at least one row and one feature.",
+            recovery_hint="Pass a non-empty HAL feature matrix.",
+            diagnostics={
+                "nobs": int(X_arr.shape[0]),
+                "n_features": int(X_arr.shape[1]),
+            },
+        )
+    if expected_features is not None and X_arr.shape[1] != expected_features:
+        raise MethodIncompatibility(
+            f"{context}: feature count does not match fit().",
+            recovery_hint="Use the same number and order of HAL features.",
+            diagnostics={
+                "expected_features": expected_features,
+                "observed_features": int(X_arr.shape[1]),
+            },
+        )
+    if not np.isfinite(X_arr).all():
+        raise MethodIncompatibility(
+            f"{context}: X contains NaN or infinite values.",
+            recovery_hint="Drop or impute non-finite HAL feature rows.",
+        )
+    return X_arr
+
+
+def _coerce_hal_target(y, *, context: str) -> np.ndarray:
+    try:
+        y_arr = np.asarray(y, dtype=float).ravel()
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{context}: y must be numeric.",
+            recovery_hint="Convert the HAL target to numeric values.",
+        ) from exc
+    if y_arr.shape[0] == 0:
+        raise DataInsufficient(
+            f"{context}: y must contain at least one row.",
+            recovery_hint="Pass a non-empty HAL target vector.",
+        )
+    if not np.isfinite(y_arr).all():
+        raise MethodIncompatibility(
+            f"{context}: y contains NaN or infinite values.",
+            recovery_hint="Drop or impute non-finite HAL target rows.",
+        )
+    return y_arr
 
 
 class HALRegressor(_BaseHAL):
@@ -196,16 +296,59 @@ class HALRegressor(_BaseHAL):
         self.max_anchors_per_col = max_anchors_per_col
         self.cv = cv
         self.random_state = random_state
+        self.n_features_in_: Optional[int] = None
 
     def fit(self, X, y):
-        X = np.asarray(X, dtype=float)
-        y = np.asarray(y, dtype=float).ravel()
-        B, anchors = _hal_basis(X, anchors=None,
-                                 max_anchors_per_col=self.max_anchors_per_col)
+        max_anchors = _validate_hal_positive_int(
+            self.max_anchors_per_col,
+            name="max_anchors_per_col",
+        )
+        cv = _validate_hal_positive_int(self.cv, name="cv")
+        if cv < 2:
+            raise MethodIncompatibility(
+                "cv must be an integer >= 2.",
+                recovery_hint="Use at least two HAL penalty-search folds.",
+                diagnostics={"cv": self.cv},
+            )
+        if self.lambda_ is not None:
+            try:
+                lambda_ = float(self.lambda_)
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    "lambda_ must be a finite non-negative scalar.",
+                    recovery_hint="Use lambda_=None or lambda_ >= 0.",
+                    diagnostics={"lambda_": self.lambda_},
+                ) from exc
+            if not np.isfinite(lambda_) or lambda_ < 0:
+                raise MethodIncompatibility(
+                    "lambda_ must be a finite non-negative scalar.",
+                    recovery_hint="Use lambda_=None or lambda_ >= 0.",
+                    diagnostics={"lambda_": self.lambda_},
+                )
+            self.lambda_ = lambda_
+        X = _coerce_hal_matrix(X, context="HALRegressor.fit()")
+        y = _coerce_hal_target(y, context="HALRegressor.fit()")
+        if X.shape[0] != y.shape[0]:
+            raise MethodIncompatibility(
+                "HALRegressor.fit(): X and y must have the same row count.",
+                recovery_hint="Align HAL features and target to the same sample.",
+                diagnostics={"n_x": int(X.shape[0]), "n_y": int(y.shape[0])},
+            )
+        if X.shape[0] < 2:
+            raise DataInsufficient(
+                "HALRegressor.fit() needs at least 2 observations.",
+                recovery_hint="Pass at least two complete rows.",
+                diagnostics={"nobs": int(X.shape[0])},
+            )
+        B, anchors = _hal_basis(
+            X,
+            anchors=None,
+            max_anchors_per_col=max_anchors,
+        )
         from sklearn.linear_model import Lasso, LassoCV
         from ..compat.sklearn import lasso_cv_alphas_kwargs
         if self.lambda_ is None:
-            cv = int(max(2, min(self.cv, max(2, len(y) // 20))))
+            cv = int(max(2, min(cv, max(2, len(y) // 20))))
             model = LassoCV(
                 cv=cv, random_state=self.random_state,
                 max_iter=5000, **lasso_cv_alphas_kwargs(20),
@@ -216,10 +359,20 @@ class HALRegressor(_BaseHAL):
         model.fit(B, y)
         self._model = model
         self._anchors = anchors
+        self.n_features_in_ = X.shape[1]
         return self
 
     def predict(self, X):
-        X = np.asarray(X, dtype=float)
+        if not hasattr(self, "_model") or not hasattr(self, "_anchors"):
+            raise MethodIncompatibility(
+                "HALRegressor.predict() requires a fitted model.",
+                recovery_hint="Call fit() before predict().",
+            )
+        X = _coerce_hal_matrix(
+            X,
+            context="HALRegressor.predict()",
+            expected_features=self.n_features_in_,
+        )
         B, _ = _hal_basis(X, anchors=self._anchors)
         return self._model.predict(B)
 
@@ -265,12 +418,57 @@ class HALClassifier(_BaseHAL):
         self.C = C
         self.max_anchors_per_col = max_anchors_per_col
         self.random_state = random_state
+        self.n_features_in_: Optional[int] = None
 
     def fit(self, X, y):
-        X = np.asarray(X, dtype=float)
-        y = np.asarray(y).ravel().astype(int)
-        B, anchors = _hal_basis(X, anchors=None,
-                                 max_anchors_per_col=self.max_anchors_per_col)
+        max_anchors = _validate_hal_positive_int(
+            self.max_anchors_per_col,
+            name="max_anchors_per_col",
+        )
+        try:
+            C = float(self.C)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "C must be a finite positive scalar.",
+                recovery_hint="Use C > 0 for HALClassifier.",
+                diagnostics={"C": self.C},
+            ) from exc
+        if not np.isfinite(C) or C <= 0:
+            raise MethodIncompatibility(
+                "C must be a finite positive scalar.",
+                recovery_hint="Use C > 0 for HALClassifier.",
+                diagnostics={"C": self.C},
+            )
+        self.C = C
+        X = _coerce_hal_matrix(X, context="HALClassifier.fit()")
+        y_float = _coerce_hal_target(y, context="HALClassifier.fit()")
+        if X.shape[0] != y_float.shape[0]:
+            raise MethodIncompatibility(
+                "HALClassifier.fit(): X and y must have the same row count.",
+                recovery_hint="Align HAL features and binary target.",
+                diagnostics={"n_x": int(X.shape[0]), "n_y": int(y_float.shape[0])},
+            )
+        classes = np.unique(y_float)
+        if len(classes) < 2:
+            raise DataInsufficient(
+                "HALClassifier.fit() needs both outcome classes.",
+                recovery_hint="Provide both 0 and 1 outcomes.",
+                diagnostics={"classes": classes.tolist()},
+            )
+        if len(classes) > 2 or not np.array_equal(classes, np.array([0.0, 1.0])):
+            raise MethodIncompatibility(
+                "HALClassifier.fit() expects binary y coded as 0/1.",
+                recovery_hint=(
+                    "Recode the negative class to 0 and positive class to 1."
+                ),
+                diagnostics={"classes": classes.tolist()},
+            )
+        y = y_float.astype(int)
+        B, anchors = _hal_basis(
+            X,
+            anchors=None,
+            max_anchors_per_col=max_anchors,
+        )
         from sklearn.linear_model import LogisticRegression
         model = LogisticRegression(
             penalty="l1", solver="liblinear", C=self.C,
@@ -280,15 +478,34 @@ class HALClassifier(_BaseHAL):
         self._model = model
         self._anchors = anchors
         self.classes_ = model.classes_
+        self.n_features_in_ = X.shape[1]
         return self
 
     def predict(self, X):
-        X = np.asarray(X, dtype=float)
+        if not hasattr(self, "_model") or not hasattr(self, "_anchors"):
+            raise MethodIncompatibility(
+                "HALClassifier.predict() requires a fitted model.",
+                recovery_hint="Call fit() before predict().",
+            )
+        X = _coerce_hal_matrix(
+            X,
+            context="HALClassifier.predict()",
+            expected_features=self.n_features_in_,
+        )
         B, _ = _hal_basis(X, anchors=self._anchors)
         return self._model.predict(B)
 
     def predict_proba(self, X):
-        X = np.asarray(X, dtype=float)
+        if not hasattr(self, "_model") or not hasattr(self, "_anchors"):
+            raise MethodIncompatibility(
+                "HALClassifier.predict_proba() requires a fitted model.",
+                recovery_hint="Call fit() before predict_proba().",
+            )
+        X = _coerce_hal_matrix(
+            X,
+            context="HALClassifier.predict_proba()",
+            expected_features=self.n_features_in_,
+        )
         B, _ = _hal_basis(X, anchors=self._anchors)
         return self._model.predict_proba(B)
 

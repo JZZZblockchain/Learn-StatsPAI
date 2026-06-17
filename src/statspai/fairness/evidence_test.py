@@ -39,12 +39,19 @@ specific variation on top of the admissible evidence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from numbers import Integral, Real
+from typing import Any, Callable, Dict, List, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..exceptions import (
+    ConvergenceFailure,
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 from .core import FairnessResult
 
 
@@ -89,6 +96,179 @@ class EvidenceWithoutInjusticeResult(FairnessResult):
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def _require_dataframe(data: Any) -> pd.DataFrame:
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "`data` must be a pandas DataFrame.",
+            recovery_hint="Pass a DataFrame containing protected and feature columns.",
+            diagnostics={"type": type(data).__name__},
+        )
+    if data.empty:
+        raise DataInsufficient(
+            "`data` must contain at least one row.",
+            recovery_hint="Provide non-empty fairness audit data.",
+            diagnostics={"n_rows": 0},
+        )
+    return data
+
+
+def _require_probability(value: Any, *, argument: str) -> float:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise MethodIncompatibility(
+            f"{argument} must be a finite probability in (0, 1).",
+            recovery_hint=f"Pass a value such as {argument}=0.05.",
+            diagnostics={"argument": argument, "value": repr(value)},
+        )
+    out = float(value)
+    if not np.isfinite(out) or not 0 < out < 1:
+        raise MethodIncompatibility(
+            f"{argument} must be a finite probability in (0, 1).",
+            recovery_hint=f"Pass a value such as {argument}=0.05.",
+            diagnostics={"argument": argument, "value": out},
+        )
+    return out
+
+
+def _require_threshold(value: Any) -> float:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise MethodIncompatibility(
+            "threshold must be a finite non-negative number.",
+            recovery_hint="Pass a practical-significance threshold such as 0.05.",
+            diagnostics={"threshold": repr(value)},
+        )
+    out = float(value)
+    if not np.isfinite(out) or out < 0:
+        raise MethodIncompatibility(
+            "threshold must be a finite non-negative number.",
+            recovery_hint="Pass a practical-significance threshold such as 0.05.",
+            diagnostics={"threshold": out},
+        )
+    return out
+
+
+def _require_n_boot(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+        raise MethodIncompatibility(
+            "n_boot must be an integer >= 99 for a stable CI.",
+            recovery_hint="Use at least 99 paired bootstrap replicates.",
+            diagnostics={"n_boot": repr(value)},
+        )
+    out = int(value)
+    if out < 99:
+        raise MethodIncompatibility(
+            "n_boot must be >= 99 for a stable CI.",
+            recovery_hint="Use at least 99 paired bootstrap replicates.",
+            diagnostics={"n_boot": out},
+        )
+    return out
+
+
+def _require_column_name(value: Any, *, argument: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MethodIncompatibility(
+            f"`{argument}` must be a non-empty column name string.",
+            recovery_hint=f"Pass the name of an existing column for `{argument}`.",
+            diagnostics={"argument": argument, "type": type(value).__name__},
+        )
+    return value
+
+
+def _coerce_admissible_features(features: Sequence[str] | str) -> list[str]:
+    if isinstance(features, str):
+        out = [features]
+    else:
+        try:
+            out = list(features)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "admissible_features must be a sequence of column names.",
+                recovery_hint="Pass admissible_features=[] or ['credit_score'].",
+                diagnostics={"type": type(features).__name__},
+            ) from exc
+    return [
+        _require_column_name(col, argument="admissible_features")
+        for col in out
+    ]
+
+
+def _coerce_alternative_values(values: Sequence[Any] | Any) -> list[Any]:
+    out: list[Any]
+    if isinstance(values, (str, bytes)):
+        out = [values]
+    else:
+        try:
+            out = list(values)
+        except TypeError:
+            out = [values]
+    if not out:
+        raise MethodIncompatibility(
+            "alternative_values must contain at least one value.",
+            recovery_hint="Pass at least one protected-attribute intervention value.",
+            diagnostics={"alternative_values": []},
+        )
+    return out
+
+
+def _predict_vector(
+    predictor: Callable[[pd.DataFrame], np.ndarray],
+    frame: pd.DataFrame,
+    *,
+    n_expected: int,
+    context: str,
+) -> np.ndarray:
+    try:
+        y = np.asarray(predictor(frame), dtype=float).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "predictor must return numeric one-dimensional predictions.",
+            recovery_hint="Return one numeric prediction per input row.",
+            diagnostics={"context": context},
+        ) from exc
+    if y.shape[0] != n_expected:
+        raise MethodIncompatibility(
+            "predictor returned wrong length: "
+            f"{y.shape[0]} vs {n_expected}.",
+            recovery_hint="Return exactly one prediction per input row.",
+            diagnostics={
+                "context": context,
+                "n_predictions": y.shape[0],
+                "n_expected": n_expected,
+            },
+        )
+    if not np.all(np.isfinite(y)):
+        raise NumericalInstability(
+            "predictor returned non-finite values.",
+            recovery_hint="Check predictor preprocessing and output clipping.",
+            diagnostics={
+                "context": context,
+                "n_nonfinite": int((~np.isfinite(y)).sum()),
+            },
+        )
+    return y
+
+
+def _intervene_frame(
+    scm_intervention: Callable[[pd.DataFrame, Any], pd.DataFrame],
+    frame: pd.DataFrame,
+    value: Any,
+) -> pd.DataFrame:
+    out = scm_intervention(frame, value)
+    if not isinstance(out, pd.DataFrame):
+        raise MethodIncompatibility(
+            "scm_intervention must return a pandas DataFrame.",
+            recovery_hint="Return a DataFrame with the same number of rows as input.",
+            diagnostics={"type": type(out).__name__},
+        )
+    if len(out) != len(frame):
+        raise MethodIncompatibility(
+            "scm_intervention length mismatch "
+            f"({len(out)} vs {len(frame)}).",
+            recovery_hint="Return one counterfactual row per factual row.",
+            diagnostics={"n_counterfactual": len(out), "n_factual": len(frame)},
+        )
+    return out.copy()
 
 
 def evidence_without_injustice(
@@ -177,33 +357,72 @@ def evidence_without_injustice(
     the predictor in its own bootstrap at a higher level.
     """
     # --- Validation --------------------------------------------------------
+    data = _require_dataframe(data)
+    if not callable(predictor):
+        raise MethodIncompatibility(
+            "predictor must be callable.",
+            recovery_hint=(
+                "Pass a function accepting a DataFrame and returning "
+                "predictions."
+            ),
+            diagnostics={"type": type(predictor).__name__},
+        )
+    if not callable(scm_intervention):
+        raise MethodIncompatibility(
+            "scm_intervention must be callable.",
+            recovery_hint="Pass a function accepting (data, protected_value).",
+            diagnostics={"type": type(scm_intervention).__name__},
+        )
+    protected = _require_column_name(protected, argument="protected")
+    admissible_features = _coerce_admissible_features(admissible_features)
+    alpha = _require_probability(alpha, argument="alpha")
+    threshold = _require_threshold(threshold)
+    n_boot = _require_n_boot(n_boot)
     if protected not in data.columns:
-        raise ValueError(f"`protected` column {protected!r} not in data.")
+        raise MethodIncompatibility(
+            f"`protected` column {protected!r} not in data.",
+            recovery_hint="Check the protected column name.",
+            diagnostics={
+                "protected": protected,
+                "available_columns": list(data.columns),
+            },
+        )
     missing = [c for c in admissible_features if c not in data.columns]
     if missing:
-        raise ValueError(f"admissible_features not in data: {missing}")
-    if not (0 < alpha < 1):
-        raise ValueError(f"alpha must be in (0, 1); got {alpha}")
-    if threshold < 0:
-        raise ValueError(f"threshold must be >= 0; got {threshold}")
-    if n_boot < 99:
-        raise ValueError(f"n_boot must be >= 99 for a stable CI; got {n_boot}")
+        raise MethodIncompatibility(
+            f"admissible_features not in data: {missing}",
+            recovery_hint="Check admissible feature names against data.columns.",
+            diagnostics={
+                "missing_columns": missing,
+                "available_columns": list(data.columns),
+            },
+        )
 
     # --- Predictor on factual ---------------------------------------------
-    y_obs = np.asarray(predictor(data), dtype=float)
-    if y_obs.shape[0] != len(data):
-        raise ValueError(
-            "predictor returned wrong length: "
-            f"{y_obs.shape[0]} vs {len(data)}."
-        )
+    y_obs = _predict_vector(
+        predictor,
+        data,
+        n_expected=len(data),
+        context="factual",
+    )
     observed_a = data[protected].to_numpy()
     if alternative_values is None:
         alternative_values = list(pd.unique(observed_a))
         if len(alternative_values) < 2:
-            raise ValueError(
+            raise DataInsufficient(
                 f"Protected attribute {protected!r} has only one level; "
-                "EWI test is undefined."
+                "EWI test is undefined.",
+                recovery_hint=(
+                    "Provide at least two protected-attribute levels or "
+                    "explicit alternative_values."
+                ),
+                diagnostics={
+                    "protected": protected,
+                    "levels": [repr(v) for v in alternative_values],
+                },
             )
+    else:
+        alternative_values = _coerce_alternative_values(alternative_values)
 
     # --- Compute counterfactual predictions under each alternative --------
     def _ewi_statistic(sample_df: pd.DataFrame, y_base: np.ndarray) -> float:
@@ -211,25 +430,22 @@ def evidence_without_injustice(
         a_obs = sample_df[protected].to_numpy()
         max_abs = np.zeros(len(sample_df), dtype=float)
         for a_alt in alternative_values:
-            df_cf = scm_intervention(sample_df, a_alt)
-            if not isinstance(df_cf, pd.DataFrame):
-                raise TypeError(
-                    "scm_intervention must return a DataFrame, got "
-                    f"{type(df_cf).__name__}."
-                )
-            if len(df_cf) != len(sample_df):
-                raise ValueError(
-                    "scm_intervention length mismatch "
-                    f"({len(df_cf)} vs {len(sample_df)})."
-                )
+            df_cf = _intervene_frame(scm_intervention, sample_df, a_alt)
             # Freeze admissible evidence at factual values.
             for col in admissible_features:
-                df_cf = df_cf.copy() if not df_cf is sample_df else df_cf
                 df_cf[col] = sample_df[col].to_numpy()
-            y_cf = np.asarray(predictor(df_cf), dtype=float)
+            y_cf = _predict_vector(
+                predictor,
+                df_cf,
+                n_expected=len(sample_df),
+                context=f"counterfactual:{a_alt!r}",
+            )
             differs = a_obs != a_alt
             diff = np.abs(y_cf - y_base)
-            max_abs = np.where(differs, np.maximum(max_abs, diff), max_abs)
+            max_abs = cast(
+                np.ndarray,
+                np.where(differs, np.maximum(max_abs, diff), max_abs),
+            )
         return float(max_abs.mean())
 
     stat_obs = _ewi_statistic(data, y_obs)
@@ -249,10 +465,15 @@ def evidence_without_injustice(
         except Exception:
             continue
     if n_ok < max(99, int(0.7 * n_boot)):
-        raise RuntimeError(
-            f"EWI bootstrap only produced {n_ok}/{n_boot} valid replicates."
+        raise ConvergenceFailure(
+            f"EWI bootstrap only produced {n_ok}/{n_boot} valid replicates.",
+            recovery_hint=(
+                "Check that predictor and scm_intervention work on bootstrap "
+                "resamples, or increase n_boot."
+            ),
+            diagnostics={"n_ok": n_ok, "n_boot": n_boot},
         )
-    boots = boots[:n_ok]
+    boots = cast(np.ndarray, boots[:n_ok])
     lo = float(np.quantile(boots, alpha / 2))
     hi = float(np.quantile(boots, 1 - alpha / 2))
 
@@ -267,10 +488,15 @@ def evidence_without_injustice(
     # Per-alternative breakdown
     per_alt: Dict[Any, float] = {}
     for a_alt in alternative_values:
-        df_cf = scm_intervention(data, a_alt)
+        df_cf = _intervene_frame(scm_intervention, data, a_alt)
         for col in admissible_features:
             df_cf[col] = data[col].to_numpy()
-        y_cf = np.asarray(predictor(df_cf), dtype=float)
+        y_cf = _predict_vector(
+            predictor,
+            df_cf,
+            n_expected=len(data),
+            context=f"counterfactual:{a_alt!r}",
+        )
         differs = observed_a != a_alt
         if differs.any():
             per_alt[a_alt] = float(np.abs(y_cf - y_obs)[differs].mean())

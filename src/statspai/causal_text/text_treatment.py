@@ -106,7 +106,10 @@ class TextTreatmentResult(CausalResult):
         self.embedding_dim = int(embedding_dim)
         self.embedder_name = str(embedder_name)
 
-    def summary(self) -> str:  # pragma: no cover (cosmetic)
+    def summary(
+        self,
+        alpha: Optional[float] = None,
+    ) -> str:  # pragma: no cover (cosmetic)
         lines = [
             "TextTreatmentResult (experimental)",
             "=" * 60,

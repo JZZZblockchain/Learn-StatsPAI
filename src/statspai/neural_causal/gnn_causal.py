@@ -9,7 +9,8 @@ model uses
 
 .. math::
 
-    \\mu(D_i, X_i, G) = f\\bigl(D_i, X_i, \\tfrac{1}{|N(i)|}\\sum_{j \\in N(i)} X_j\\bigr).
+    \\mu(D_i, X_i, G) =
+    f\\bigl(D_i, X_i, \\tfrac{1}{|N(i)|}\\sum_{j \\in N(i)} X_j\\bigr).
 
 To stay self-contained (no PyTorch / JAX dependency) we realise this
 via **random-forest regression on GCN-aggregated features**. The
@@ -43,12 +44,53 @@ from scipy import stats
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
+
+_GNN_CAUSAL_ALTERNATIVES = [
+    "sp.gnn_causal",
+    "sp.neural_causal.gnn_causal",
+    "sp.dml",
+]
+
+
+def _gnn_error(
+    message: str,
+    *,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    recovery_hint: str = "Check gnn_causal inputs.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_GNN_CAUSAL_ALTERNATIVES,
+    )
+
+
+def _normalize_covariates(covariates: Sequence[str] | str) -> list[str]:
+    raw = [covariates] if isinstance(covariates, str) else list(covariates)
+    if not raw:
+        raise _gnn_error(
+            "gnn_causal requires at least one covariate.",
+            diagnostics={"covariates": raw},
+            recovery_hint="Pass covariates=['x1', 'x2'] or a single column name.",
+        )
+    for idx, covariate in enumerate(raw):
+        if not isinstance(covariate, str) or not covariate:
+            raise _gnn_error(
+                f"covariates[{idx}] must be a non-empty column-name string.",
+                diagnostics={"index": idx, "value": repr(covariate)},
+                recovery_hint="Pass covariates as column-name strings.",
+            )
+    return raw
+
 
 @dataclass
 class GNNCausalResult:
     ate: float
     se: float
-    ci: tuple
+    ci: tuple[float, float]
     pvalue: float
     feature_map: np.ndarray
     n_obs: int
@@ -74,19 +116,19 @@ class GNNCausalResult:
 def _row_normalise(A: np.ndarray) -> np.ndarray:
     rs = A.sum(axis=1, keepdims=True)
     rs = np.where(rs == 0, 1.0, rs)
-    return A / rs
+    return np.asarray(A / rs, dtype=float)
 
 
 def gnn_causal(
     data: pd.DataFrame,
     y: str,
     treat: str,
-    covariates: Sequence[str],
-    adjacency,
+    covariates: Sequence[str] | str,
+    adjacency: Any,
     n_layers: int = 2,
     n_trees: int = 200,
     min_leaf: int = 5,
-    propensity_bounds: tuple = (0.02, 0.98),
+    propensity_bounds: tuple[float, float] = (0.02, 0.98),
     random_state: int = 42,
     alpha: float = 0.05,
 ) -> GNNCausalResult:
@@ -110,19 +152,110 @@ def gnn_causal(
     -------
     GNNCausalResult
     """
-    cov = list(covariates)
-    df = data[[y, treat] + cov].dropna().reset_index(drop=True)
+    if not isinstance(data, pd.DataFrame):
+        raise _gnn_error(
+            "gnn_causal data must be a pandas DataFrame.",
+            diagnostics={"type": type(data).__name__},
+            recovery_hint="Pass a pandas DataFrame with one row per network unit.",
+        )
+    cov = _normalize_covariates(covariates)
+    required = [y, treat] + cov
+    missing = set(required) - set(data.columns)
+    if missing:
+        raise _gnn_error(
+            f"Missing columns: {missing}",
+            diagnostics={"missing_columns": sorted(str(col) for col in missing)},
+            recovery_hint="Pass column names present in the input DataFrame.",
+        )
+    if n_layers < 0:
+        raise _gnn_error(
+            f"n_layers must be >= 0, got {n_layers}.",
+            diagnostics={"n_layers": n_layers},
+            recovery_hint="Use n_layers=0 for raw covariates or a positive integer.",
+        )
+    if n_trees < 1:
+        raise _gnn_error(
+            f"n_trees must be >= 1, got {n_trees}.",
+            diagnostics={"n_trees": n_trees},
+            recovery_hint="Use n_trees >= 1.",
+        )
+    if min_leaf < 1:
+        raise _gnn_error(
+            f"min_leaf must be >= 1, got {min_leaf}.",
+            diagnostics={"min_leaf": min_leaf},
+            recovery_hint="Use min_leaf >= 1.",
+        )
+    if not (0 < alpha < 1):
+        raise _gnn_error(
+            f"alpha must be in (0, 1), got {alpha}.",
+            diagnostics={"alpha": alpha},
+            recovery_hint="Use a confidence level such as alpha=0.05.",
+        )
+    if len(propensity_bounds) != 2:
+        raise _gnn_error(
+            "propensity_bounds must contain exactly two values.",
+            diagnostics={"propensity_bounds": list(propensity_bounds)},
+            recovery_hint="Use propensity_bounds=(0.02, 0.98).",
+        )
+    p_lo, p_hi = float(propensity_bounds[0]), float(propensity_bounds[1])
+    if not (0 < p_lo < p_hi < 1):
+        raise _gnn_error(
+            "propensity_bounds must satisfy 0 < lower < upper < 1.",
+            diagnostics={"propensity_bounds": [p_lo, p_hi]},
+            recovery_hint="Use bounds such as (0.02, 0.98).",
+        )
+
+    df = data[required].dropna().reset_index(drop=True)
     n = len(df)
+    if n < 3:
+        raise DataInsufficient(
+            "gnn_causal requires at least 3 complete rows.",
+            recovery_hint="Provide more complete network-unit rows after dropna.",
+            diagnostics={"n_complete": n},
+            alternative_functions=_GNN_CAUSAL_ALTERNATIVES,
+        )
     Y = df[y].to_numpy(dtype=float)
     D = df[treat].to_numpy(dtype=int)
     X = df[cov].to_numpy(dtype=float)
+    if not (np.isfinite(Y).all() and np.isfinite(X).all()):
+        raise _gnn_error(
+            "outcome and covariate values must be finite.",
+            diagnostics={
+                "finite_outcome": bool(np.isfinite(Y).all()),
+                "finite_covariates": bool(np.isfinite(X).all()),
+            },
+            recovery_hint="Drop or impute non-finite GNN causal inputs.",
+        )
+    if not set(np.unique(D)).issubset({0, 1}):
+        raise _gnn_error(
+            "treat must be binary 0/1.",
+            diagnostics={"treat_values": np.unique(D).tolist()},
+            recovery_hint="Encode treatment as binary 0/1 before fitting.",
+        )
+    if np.unique(D).size < 2:
+        raise DataInsufficient(
+            "gnn_causal requires both treatment arms.",
+            recovery_hint="Provide complete rows from treated and control units.",
+            diagnostics={"treat_values": np.unique(D).tolist()},
+            alternative_functions=_GNN_CAUSAL_ALTERNATIVES,
+        )
 
     if isinstance(adjacency, pd.DataFrame):
         A = adjacency.to_numpy(dtype=float)
     else:
         A = np.asarray(adjacency, dtype=float)
-    if A.shape[0] != n:
-        raise ValueError("adjacency size must match data length")
+    if A.ndim != 2 or A.shape != (n, n):
+        raise _gnn_error(
+            "adjacency must be a square matrix matching the complete data rows.",
+            diagnostics={"adjacency_shape": tuple(A.shape), "n_complete": n},
+            recovery_hint="Pass an n-by-n adjacency aligned with rows after dropna.",
+        )
+    if not np.isfinite(A).all():
+        raise _gnn_error(
+            "adjacency values must be finite.",
+            diagnostics={"finite_adjacency": False},
+            recovery_hint="Drop or impute non-finite adjacency entries.",
+        )
     A = _row_normalise(A)
 
     # GCN-style feature propagation: F = [X, WX, W²X, ...]
@@ -141,16 +274,16 @@ def gnn_causal(
         e_hat = lr.predict_proba(F)[:, 1]
     except Exception:
         e_hat = np.full(n, float(D.mean()))
-    e_hat = np.clip(e_hat, *propensity_bounds)
+    e_hat = np.clip(e_hat, p_lo, p_hi)
 
     # Outcome regression per arm via RF
-    def _fit_rf(idx):
+    def _fit_rf(idx: np.ndarray) -> np.ndarray:
         rf = RandomForestRegressor(
             n_estimators=n_trees, min_samples_leaf=min_leaf,
             random_state=random_state, bootstrap=True, n_jobs=-1,
         )
         rf.fit(F[idx], Y[idx])
-        return rf.predict(F)
+        return np.asarray(rf.predict(F), dtype=float)
 
     mu1 = _fit_rf(D == 1)
     mu0 = _fit_rf(D == 0)
@@ -180,7 +313,7 @@ def gnn_causal(
             function="sp.neural_causal.gnn_causal",
             params={
                 "y": y, "treat": treat,
-                "covariates": list(covariates),
+                "covariates": list(cov),
                 "n_layers": n_layers, "n_trees": n_trees,
                 "min_leaf": min_leaf,
                 "propensity_bounds": list(propensity_bounds),

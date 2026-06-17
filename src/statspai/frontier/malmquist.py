@@ -37,7 +37,7 @@ Kumbhakar, S.C., Wang, H.J. & Horncastle, A.P. (2015).  A Practitioner's
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -111,7 +111,7 @@ def malmquist(
     dist: str = "half-normal",
     cost: bool = False,
     overflow_threshold: float = 1e6,
-    **frontier_kwargs,
+    **frontier_kwargs: Any,
 ) -> MalmquistResult:
     """Compute the Malmquist productivity index via period-by-period SFA.
 
@@ -195,10 +195,13 @@ def malmquist(
         period_frontiers[t] = res
         period_betas[t] = res.params.loc[["_cons"] + list(x)].to_numpy()
 
-    def _log_distance(xmat: np.ndarray, y_vals: np.ndarray,
-                      beta: np.ndarray) -> np.ndarray:
+    def _log_distance(
+        xmat: np.ndarray,
+        y_vals: np.ndarray,
+        beta: np.ndarray,
+    ) -> np.ndarray:
         """log D^s(x, y) = log y - x' beta_s (for production; flip for cost)."""
-        return y_vals - xmat @ beta
+        return np.asarray(y_vals - xmat @ beta, dtype=float)
 
     # Walk all firms through adjacent period pairs.
     rows = []
@@ -224,17 +227,32 @@ def malmquist(
             beta1 = period_betas[t1]
             beta2 = period_betas[t2]
 
-            log_D_t_xt_yt   = _log_distance(x1.reshape(1, -1), np.array([yv1]), beta1)[0]
-            log_D_tp_xtp_ytp = _log_distance(x2.reshape(1, -1), np.array([yv2]), beta2)[0]
-            log_D_t_xtp_ytp  = _log_distance(x2.reshape(1, -1), np.array([yv2]), beta1)[0]
-            log_D_tp_xt_yt   = _log_distance(x1.reshape(1, -1), np.array([yv1]), beta2)[0]
+            log_D_t_xt_yt = _log_distance(
+                x1.reshape(1, -1), np.array([yv1]), beta1
+            )[0]
+            log_D_tp_xtp_ytp = _log_distance(
+                x2.reshape(1, -1), np.array([yv2]), beta2
+            )[0]
+            log_D_t_xtp_ytp = _log_distance(
+                x2.reshape(1, -1), np.array([yv2]), beta1
+            )[0]
+            log_D_tp_xt_yt = _log_distance(
+                x1.reshape(1, -1), np.array([yv1]), beta2
+            )[0]
 
             # Output-oriented Malmquist index.
             if cost:
                 # Cost orientation: reciprocal for distance-to-cost-frontier.
-                log_D_t_xt_yt, log_D_tp_xtp_ytp, log_D_t_xtp_ytp, log_D_tp_xt_yt = (
-                    -log_D_t_xt_yt, -log_D_tp_xtp_ytp,
-                    -log_D_t_xtp_ytp, -log_D_tp_xt_yt,
+                (
+                    log_D_t_xt_yt,
+                    log_D_tp_xtp_ytp,
+                    log_D_t_xtp_ytp,
+                    log_D_tp_xt_yt,
+                ) = (
+                    -log_D_t_xt_yt,
+                    -log_D_tp_xtp_ytp,
+                    -log_D_t_xtp_ytp,
+                    -log_D_tp_xt_yt,
                 )
 
             log_M = 0.5 * (
@@ -267,8 +285,9 @@ def malmquist(
     # summary. We replace values above `overflow_threshold` with NaN so
     # that `.mean()` / `.std()` skip them cleanly.
     import warnings as _warnings
-    overflow_mask = pd.DataFrame(False, index=index_table.index,
-                                  columns=["m_index", "ec", "tc"])
+    overflow_mask = pd.DataFrame(
+        False, index=index_table.index, columns=["m_index", "ec", "tc"]
+    )
     for col in ("m_index", "ec", "tc"):
         mask = ~np.isfinite(index_table[col].to_numpy()) | (
             np.abs(index_table[col].to_numpy()) > overflow_threshold
@@ -393,9 +412,9 @@ def translog_design(
 
     if include_interactions:
         for i, k in enumerate(inputs):
-            for l in inputs[i + 1:]:
-                col = f"{interaction_prefix}{k}_x_{l}"
-                df[col] = df[k] * df[l]
+            for other in inputs[i + 1:]:
+                col = f"{interaction_prefix}{k}_x_{other}"
+                df[col] = df[k] * df[other]
                 added.append(col)
 
     # The full translog regressor list = original inputs + newly added terms.

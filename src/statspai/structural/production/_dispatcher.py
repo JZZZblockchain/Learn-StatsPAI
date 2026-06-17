@@ -8,7 +8,7 @@ Ackerberg-Caves-Frazer, and Wooldridge.
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import pandas as pd
 
@@ -47,7 +47,7 @@ def prod_fn(
     functional_form: str = "cobb-douglas",
     boot_reps: int = 0,
     seed: Optional[int] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> ProductionResult:
     """Production function estimation — unified interface.
 
@@ -132,7 +132,9 @@ def prod_fn(
     >>> # production-function coefficients, so refit with materials as free:
     >>> res_m = sp.prod_fn(df, output="y", free=["l", "m"], state="k",
     ...                    proxy="m", panel_id="id", time="year", method="acf")
-    >>> mu = sp.markup(res_m, revenue="y", input_cost="m", flexible_input="m")  # doctest: +SKIP
+    >>> mu = sp.markup(  # doctest: +SKIP
+    ...     res_m, revenue="y", input_cost="m", flexible_input="m"
+    ... )
 
     See Also
     --------

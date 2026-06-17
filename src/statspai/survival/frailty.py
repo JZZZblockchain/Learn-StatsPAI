@@ -17,18 +17,19 @@ References
 ----------
 Therneau, T.M. & Grambsch, P.M. (2000). *Modeling Survival Data:
   Extending the Cox Model*. Springer.
-Duchateau, L. & Janssen, P. (2008). *The Frailty Model*. Springer. [@therneau2000modeling]
+Duchateau, L. & Janssen, P. (2008). *The Frailty Model*. Springer.
+[@therneau2000modeling]
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
 
-from .models import _parse_formula, CoxResult
+from .models import _parse_formula
 
 
 @dataclass
@@ -52,7 +53,8 @@ class FrailtyResult:
             f"Observations   : {self.n}",
             f"Events         : {self.n_events}",
             f"Clusters       : {self.n_clusters}",
-            f"Theta (frailty): {self.theta:.4f}  (frailty variance = {1/self.theta:.4f})",
+            f"Theta (frailty): {self.theta:.4f}  "
+            f"(frailty variance = {1/self.theta:.4f})",
             f"Log-Lik        : {self.log_likelihood:.4f}",
             f"Concordance    : {self.concordance:.4f}",
             "",
@@ -157,11 +159,13 @@ def cox_frailty(
 
         # M-step 1: update beta given z
         offset = np.log(z[cluster_idx])
-        X_aug = X.copy()
 
-        def _penalised_nll(b):
+        def _penalised_nll(b: np.ndarray) -> float:
             eta = X @ b + offset
-            return _cox_neg_logpl_efron(b, X, T, E) - offset @ (np.exp(eta) - eta)
+            return float(
+                _cox_neg_logpl_efron(b, X, T, E)
+                - offset @ (np.exp(eta) - eta)
+            )
 
         from scipy.optimize import minimize
         opt = minimize(lambda b: _cox_neg_logpl_efron(b, X, T, E),
@@ -170,7 +174,7 @@ def cox_frailty(
         beta = opt.x
 
         # M-step 2: update theta via profile ML
-        def _theta_nll(th):
+        def _theta_nll(th: float) -> float:
             if th <= 0.1:
                 return 1e15
             from scipy.special import gammaln

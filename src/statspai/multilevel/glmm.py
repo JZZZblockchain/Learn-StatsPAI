@@ -65,6 +65,7 @@ import pandas as pd
 from scipy import special, stats
 from scipy.optimize import minimize
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from ._core import (
     _GroupBlock,
     _group_blocks,
@@ -73,6 +74,103 @@ from ._core import (
     _prepare_frame,
     _unpack_G,
 )
+
+
+def _require_string(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise MethodIncompatibility(
+            f"`{name}` must be a string.",
+            diagnostics={name: repr(value)},
+        )
+    return value
+
+
+def _require_dataframe(value: Any, name: str) -> pd.DataFrame:
+    if not isinstance(value, pd.DataFrame):
+        raise MethodIncompatibility(
+            f"`{name}` must be a pandas DataFrame.",
+            diagnostics={name: value.__class__.__name__},
+        )
+    return value
+
+
+def _require_open_unit_float(value: Any, name: str) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a number in (0, 1).",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be in (0, 1).",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_positive_float(value: Any, name: str) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be a positive finite number.",
+            diagnostics={name: repr(value)},
+        ) from exc
+    if not np.isfinite(out) or out <= 0.0:
+        raise MethodIncompatibility(
+            f"`{name}` must be a positive finite number.",
+            diagnostics={name: out},
+        )
+    return out
+
+
+def _require_int_at_least(value: Any, name: str, minimum: int) -> int:
+    if isinstance(value, bool):
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    try:
+        out = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        ) from exc
+    if out != value or out < minimum:
+        raise MethodIncompatibility(
+            f"`{name}` must be an integer >= {minimum}.",
+            diagnostics={name: repr(value), "minimum": minimum},
+        )
+    return out
+
+
+def _coerce_column_list(value: Any, name: str) -> List[str]:
+    if isinstance(value, str):
+        cols = [value]
+    else:
+        try:
+            cols = list(value)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                f"`{name}` must be a column name or list of column names.",
+                diagnostics={name: repr(value)},
+            ) from exc
+    bad = [c for c in cols if not isinstance(c, str) or not c]
+    if bad:
+        raise MethodIncompatibility(
+            f"`{name}` must contain only non-empty string column names.",
+            diagnostics={name: cols, "invalid_columns": bad},
+        )
+    return cols
+
+
+def _coerce_optional_column_list(value: Any, name: str) -> List[str]:
+    if value is None:
+        return []
+    return _coerce_column_list(value, name)
 
 
 # ---------------------------------------------------------------------------
@@ -354,12 +452,22 @@ _FAMILY_ALIASES: Dict[str, str] = {
 
 
 def _resolve_family(name: str) -> _Family:
+    name = _require_string(name, "family")
     key = name.lower()
     key = _FAMILY_ALIASES.get(key, key)
     if key not in _FAMILIES:
-        raise ValueError(
+        raise MethodIncompatibility(
             f"family must be one of {sorted(_FAMILIES)} (with aliases "
-            f"{sorted(_FAMILY_ALIASES)}); got {name!r}."
+            f"{sorted(_FAMILY_ALIASES)}); got {name!r}.",
+            recovery_hint=(
+                "Use family='gaussian', 'binomial', 'poisson', 'gamma', "
+                "or 'nbinomial'."
+            ),
+            diagnostics={
+                "family": name,
+                "valid": sorted(_FAMILIES),
+                "aliases": sorted(_FAMILY_ALIASES),
+            },
         )
     return _FAMILIES[key]
 
@@ -485,6 +593,7 @@ class MEGLMResult:
         return self._dispersion
 
     def conf_int(self, alpha: float = 0.05) -> pd.DataFrame:
+        alpha = _require_open_unit_float(alpha, "alpha")
         z = stats.norm.ppf(1 - alpha / 2)
         lo = self.fixed_effects - z * self._se_fixed
         hi = self.fixed_effects + z * self._se_fixed
@@ -493,8 +602,13 @@ class MEGLMResult:
     def odds_ratios(self) -> pd.DataFrame:
         """Exponentiated fixed effects with Wald CIs (binomial / ordinal)."""
         if self.family not in ("binomial", "ordinal"):
-            raise ValueError(
-                "odds_ratios() is meaningful for binomial and ordinal GLMMs only"
+            raise MethodIncompatibility(
+                "odds_ratios() is meaningful for binomial and ordinal "
+                "GLMMs only.",
+                recovery_hint=(
+                    "Use odds_ratios() only after melogit/meologit fits."
+                ),
+                diagnostics={"family": self.family},
             )
         ci = self.conf_int()
         return pd.DataFrame({
@@ -506,8 +620,14 @@ class MEGLMResult:
     def incidence_rate_ratios(self) -> pd.DataFrame:
         """Exponentiated coefficients for log-link count GLMMs (Poisson / NB)."""
         if self.family not in ("poisson", "nbinomial"):
-            raise ValueError(
-                "IRR is meaningful for Poisson and negative-binomial GLMMs only"
+            raise MethodIncompatibility(
+                "IRR is meaningful for Poisson and negative-binomial GLMMs "
+                "only.",
+                recovery_hint=(
+                    "Use incidence_rate_ratios() only after mepoisson or "
+                    "menbreg fits."
+                ),
+                diagnostics={"family": self.family},
             )
         ci = self.conf_int()
         return pd.DataFrame({
@@ -670,7 +790,12 @@ class MEGLMResult:
         lines.append(r"\end{table}")
         return "\n".join(lines)
 
-    def plot(self, kind: str = "caterpillar", variable: Optional[str] = None, **kwargs):
+    def plot(
+        self,
+        kind: str = "caterpillar",
+        variable: Optional[str] = None,
+        **kwargs,
+    ):
         """
         Diagnostic plot for the GLMM fit.
 
@@ -681,12 +806,27 @@ class MEGLMResult:
         """
         import matplotlib.pyplot as plt  # local import to keep plotting optional
 
+        kind = _require_string(kind, "kind")
         if kind != "caterpillar":
-            raise ValueError(f"unknown plot kind {kind!r}")
+            raise MethodIncompatibility(
+                f"unknown plot kind {kind!r}",
+                recovery_hint="Use kind='caterpillar'.",
+                diagnostics={"kind": kind, "valid": ["caterpillar"]},
+            )
 
         name = variable if variable is not None else self._random_names[0]
         if name not in self.random_effects.columns:
-            raise ValueError(f"random effect {name!r} not in model")
+            raise MethodIncompatibility(
+                f"random effect {name!r} not in model",
+                recovery_hint=(
+                    "Choose a random-effect name present in "
+                    "result.random_effects.columns."
+                ),
+                diagnostics={
+                    "random_effect": name,
+                    "available": list(self.random_effects.columns),
+                },
+            )
         u = self.random_effects[name].copy().sort_values()
         fig, ax = plt.subplots(**{"figsize": (6, 0.2 * len(u) + 1), **kwargs})
         y_pos = np.arange(len(u))
@@ -715,16 +855,76 @@ class MEGLMResult:
         fit time.
         """
         if data is None:
-            raise ValueError("predict() requires a dataframe for GLMMs")
-        X = np.column_stack(
-            [np.ones(len(data))] + [data[c].to_numpy(dtype=float) for c in self._x_fixed]
-        )
+            raise MethodIncompatibility(
+                "predict() requires a dataframe for GLMMs.",
+                recovery_hint="Pass the training data or new prediction data.",
+                diagnostics={"data": None},
+            )
+        if not isinstance(data, pd.DataFrame):
+            raise MethodIncompatibility(
+                "predict() requires a pandas DataFrame for GLMMs.",
+                diagnostics={"data_type": data.__class__.__name__},
+            )
+        valid_types = {"response", "linear"}
+        if not isinstance(type, str) or type not in valid_types:
+            raise MethodIncompatibility(
+                "`type` must be 'response' or 'linear'.",
+                recovery_hint="Use type='response' or type='linear'.",
+                diagnostics={"type": repr(type), "valid": sorted(valid_types)},
+            )
+        required = list(self._x_fixed)
+        if include_random:
+            required.extend(self._x_random or [])
+            required.append(self._group_col)
+        if self._offset_name:
+            required.append(self._offset_name)
+        missing = [c for c in dict.fromkeys(required) if c not in data.columns]
+        if missing:
+            raise MethodIncompatibility(
+                f"predict(): missing column(s) {missing}",
+                recovery_hint=(
+                    "Pass fixed-effect columns for marginal prediction; add "
+                    "random-effect, group, and offset columns when the fitted "
+                    "model uses them."
+                ),
+                diagnostics={
+                    "missing_columns": missing,
+                    "include_random": bool(include_random),
+                    "offset": self._offset_name,
+                },
+            )
+        try:
+            X = np.column_stack(
+                [np.ones(len(data))]
+                + [data[c].to_numpy(dtype=float) for c in self._x_fixed]
+            )
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "GLMM prediction fixed-effect columns must be numeric.",
+                diagnostics={"columns": list(self._x_fixed), "error": str(exc)},
+            ) from exc
+        if not np.isfinite(X).all():
+            raise MethodIncompatibility(
+                "GLMM prediction fixed-effect columns must be finite.",
+                diagnostics={"columns": list(self._x_fixed)},
+            )
         eta = X @ self.fixed_effects.values
         if include_random:
-            Z = np.column_stack(
-                [np.ones(len(data))]
-                + [data[c].to_numpy(dtype=float) for c in self._x_random]
-            )
+            try:
+                Z = np.column_stack(
+                    [np.ones(len(data))]
+                    + [data[c].to_numpy(dtype=float) for c in self._x_random]
+                )
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    "GLMM prediction random-effect columns must be numeric.",
+                    diagnostics={"columns": list(self._x_random), "error": str(exc)},
+                ) from exc
+            if not np.isfinite(Z).all():
+                raise MethodIncompatibility(
+                    "GLMM prediction random-effect columns must be finite.",
+                    diagnostics={"columns": list(self._x_random)},
+                )
             keys = list(data[self._group_col].values)
             u_mat = np.zeros_like(Z)
             for i, k in enumerate(keys):
@@ -732,8 +932,20 @@ class MEGLMResult:
                 if u is not None:
                     u_mat[i, :] = u
             eta = eta + np.einsum("ij,ij->i", Z, u_mat)
-        if self._offset_name and self._offset_name in data.columns:
-            eta = eta + data[self._offset_name].to_numpy(dtype=float)
+        if self._offset_name:
+            try:
+                offset_values = data[self._offset_name].to_numpy(dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise MethodIncompatibility(
+                    "GLMM prediction offset column must be numeric.",
+                    diagnostics={"column": self._offset_name, "error": str(exc)},
+                ) from exc
+            if not np.isfinite(offset_values).all():
+                raise MethodIncompatibility(
+                    "GLMM prediction offset column must be finite.",
+                    diagnostics={"column": self._offset_name},
+                )
+            eta = eta + offset_values
         if type == "linear":
             return pd.Series(eta, index=data.index, name="eta")
         fam = _resolve_family(self.family)
@@ -914,7 +1126,10 @@ def _glmm_nll(
     use_aghq = nAGQ > 1
     if use_aghq and q_random != 1:
         # Defensive — should be rejected at the public-API boundary.
-        raise ValueError("AGHQ supports only q=1 random-intercept models")
+        raise MethodIncompatibility(
+            "AGHQ supports only q=1 random-intercept models.",
+            diagnostics={"nAGQ": nAGQ, "q_random": q_random},
+        )
     sigma2 = float(G[0, 0]) if use_aghq else None
 
     nll = 0.0
@@ -1081,41 +1296,96 @@ def meglm(
     >>> bool(res.fixed_effects["x"] > 0)  # recovers the positive slope
     True
     """
+    data = _require_dataframe(data, "data")
+    y = _require_string(y, "y")
     fam = _resolve_family(family)
     fam_key = fam.name
+    cov_type = _require_string(cov_type, "cov_type")
     if cov_type not in ("unstructured", "diagonal", "identity"):
-        raise ValueError(f"unknown cov_type {cov_type!r}")
+        raise MethodIncompatibility(
+            f"unknown cov_type {cov_type!r}",
+            recovery_hint=(
+                "Use cov_type='unstructured', 'diagonal', or 'identity'."
+            ),
+            diagnostics={
+                "cov_type": cov_type,
+                "valid": ["unstructured", "diagonal", "identity"],
+            },
+        )
     if isinstance(group, (list, tuple)):
         if len(group) != 1:
-            raise ValueError(
+            raise MethodIncompatibility(
                 "meglm() currently supports a single grouping variable; "
-                "collapse nested levels into one key first."
+                "collapse nested levels into one key first.",
+                recovery_hint=(
+                    "Create a single grouped key column before calling "
+                    "meglm()."
+                ),
+                diagnostics={"group": list(group)},
             )
         group = group[0]
     if not isinstance(group, str):
-        raise TypeError("`group` must be a column name string")
+        raise MethodIncompatibility(
+            "`group` must be a column name string.",
+            diagnostics={"group": repr(group)},
+        )
 
-    nAGQ = int(nAGQ)
-    if nAGQ < 1:
-        raise ValueError(f"nAGQ must be >= 1, got {nAGQ}")
+    nAGQ = _require_int_at_least(nAGQ, "nAGQ", 1)
+    maxiter = _require_int_at_least(maxiter, "maxiter", 1)
+    tol = _require_positive_float(tol, "tol")
+    alpha = _require_open_unit_float(alpha, "alpha")
 
-    x_fixed = list(x_fixed)
-    x_random_cols: List[str] = list(x_random) if x_random is not None else []
+    x_fixed = _coerce_column_list(x_fixed, "x_fixed")
+    x_random_cols = _coerce_optional_column_list(x_random, "x_random")
     if nAGQ > 1 and len(x_random_cols) > 0:
-        raise ValueError(
+        raise MethodIncompatibility(
             "AGHQ (nAGQ > 1) currently supports only random-intercept models "
-            "(empty x_random).  Use nAGQ=1 (Laplace) for random-slope models."
+            "(empty x_random).  Use nAGQ=1 (Laplace) for random-slope models.",
+            recovery_hint="Use nAGQ=1 or remove x_random slopes.",
+            diagnostics={"nAGQ": nAGQ, "x_random": x_random_cols},
         )
 
     extra_cols = []
     if trials:
+        trials = _require_string(trials, "trials")
         extra_cols.append(trials)
     if offset:
+        offset = _require_string(offset, "offset")
         extra_cols.append(offset)
 
-    df = _prepare_frame(
-        data, y, x_fixed + extra_cols, [group], x_random_cols
-    )
+    required_cols = [y] + x_fixed + [group] + x_random_cols + extra_cols
+    missing = [c for c in dict.fromkeys(required_cols) if c not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"meglm(): missing column(s) {missing}",
+            recovery_hint=(
+                "Add the response, fixed-effect, random-effect, group, "
+                "trials, or offset columns referenced by the model."
+            ),
+            diagnostics={"missing_columns": missing},
+        )
+    try:
+        df = _prepare_frame(
+            data, y, x_fixed + extra_cols, [group], x_random_cols
+        )
+    except (KeyError, TypeError) as exc:
+        raise MethodIncompatibility(
+            str(exc),
+            recovery_hint=(
+                "Check that all GLMM columns exist and that group values "
+                "are hashable."
+            ),
+            diagnostics={"error": str(exc)},
+        ) from exc
+    if len(df) == 0:
+        raise DataInsufficient(
+            "No rows remain after dropping missing GLMM inputs.",
+            recovery_hint=(
+                "Provide at least one complete row for response, fixed, "
+                "random, group, trials, and offset columns."
+            ),
+            diagnostics={"required_columns": required_cols},
+        )
     blocks, fixed_names, random_names = _group_blocks(
         df, y, x_fixed, x_random_cols, group
     )

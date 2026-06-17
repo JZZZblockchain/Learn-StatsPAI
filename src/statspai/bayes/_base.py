@@ -8,10 +8,13 @@ install recipe, leaving the rest of the package unaffected.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from numbers import Integral, Real
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
 
 
 # ---------------------------------------------------------------------------
@@ -35,8 +38,15 @@ _PYMC_INSTALL_HINT = (
 # one-line change here; all callers pick it up automatically.
 PROBIT_CLIP: float = 1e-6
 
+_BAYES_ALTERNATIVES = [
+    "sp.bayes_did",
+    "sp.bayes_iv",
+    "sp.bayes_rd",
+    "sp.bayes_mte",
+]
 
-def _require_pymc():
+
+def _require_pymc() -> Tuple[Any, Any]:
     """Import PyMC and ArviZ, or raise a clear ImportError."""
     try:
         import pymc as pm  # noqa: F401
@@ -46,7 +56,112 @@ def _require_pymc():
     return pm, az
 
 
-def _az_hdi_compat(samples, hdi_prob: float = 0.95) -> np.ndarray:
+def _positive_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise MethodIncompatibility(
+            f"{name} must be a positive integer.",
+            recovery_hint=f"Pass {name} as an integer greater than zero.",
+            diagnostics={"parameter": name, "value": repr(value)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    out = int(value)
+    if out <= 0:
+        raise MethodIncompatibility(
+            f"{name} must be a positive integer.",
+            recovery_hint=f"Increase {name} above zero.",
+            diagnostics={"parameter": name, "value": out},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    return out
+
+
+def _nonnegative_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise MethodIncompatibility(
+            f"{name} must be a non-negative integer.",
+            recovery_hint=f"Pass {name} as an integer greater than or equal to zero.",
+            diagnostics={"parameter": name, "value": repr(value)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    out = int(value)
+    if out < 0:
+        raise MethodIncompatibility(
+            f"{name} must be a non-negative integer.",
+            recovery_hint=f"Increase {name} to zero or above.",
+            diagnostics={"parameter": name, "value": out},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    return out
+
+
+def _open_unit_float(value: Any, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise MethodIncompatibility(
+            f"{name} must be a finite float in (0, 1).",
+            recovery_hint=f"Pass {name} as a probability-like float such as 0.9.",
+            diagnostics={"parameter": name, "value": repr(value)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    out = float(value)
+    if not np.isfinite(out) or not 0.0 < out < 1.0:
+        raise MethodIncompatibility(
+            f"{name} must be a finite float in (0, 1).",
+            recovery_hint=f"Choose a value strictly between 0 and 1 for {name}.",
+            diagnostics={"parameter": name, "value": out},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    return out
+
+
+def _normalise_terms(terms: Any, *, context: str) -> List[Any]:
+    if isinstance(terms, str):
+        return [terms]
+    try:
+        return list(terms)
+    except TypeError as exc:
+        raise MethodIncompatibility(
+            f"{context} terms must be a string or an iterable of strings.",
+            recovery_hint="Pass a single term string or a list such as "
+            "['att', 'cohort:2019'].",
+            diagnostics={"terms": repr(terms)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        ) from exc
+
+
+def _validate_rope(
+    rope: Optional[Tuple[float, float]],
+) -> Optional[Tuple[float, float]]:
+    if rope is None:
+        return None
+    try:
+        lo, hi = rope
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            "rope must be a two-value tuple (lower, upper).",
+            recovery_hint="Pass rope=(lower, upper) with finite numeric bounds.",
+            diagnostics={"rope": repr(rope)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        ) from exc
+    if not isinstance(lo, Real) or not isinstance(hi, Real):
+        raise MethodIncompatibility(
+            "rope bounds must be numeric.",
+            recovery_hint="Pass finite numeric lower and upper bounds.",
+            diagnostics={"rope": repr(rope)},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    lo_f = float(lo)
+    hi_f = float(hi)
+    if not np.isfinite([lo_f, hi_f]).all() or lo_f >= hi_f:
+        raise MethodIncompatibility(
+            "rope bounds must be finite and ordered as lower < upper.",
+            recovery_hint="Use a finite interval such as rope=(-0.1, 0.1).",
+            diagnostics={"lower": lo_f, "upper": hi_f},
+            alternative_functions=_BAYES_ALTERNATIVES,
+        )
+    return lo_f, hi_f
+
+
+def _az_hdi_compat(samples: Any, hdi_prob: float = 0.95) -> np.ndarray:
     """Call ``arviz.hdi`` with the correct kwarg regardless of version.
 
     arviz < 0.18 accepts ``hdi_prob=...``; arviz ≥ 0.18 renamed it to
@@ -242,6 +357,103 @@ class BayesianCausalResult:
         ])
         return '\n'.join(lines)
 
+    @staticmethod
+    def _jsonable(value: Any) -> Any:
+        """Coerce posterior payload values to strict JSON-safe primitives."""
+        if value is None:
+            return None
+        if isinstance(value, (bool, str)):
+            return value
+        if isinstance(value, (int, np.integer)):
+            return int(value)
+        if isinstance(value, (float, np.floating)):
+            v = float(value)
+            return v if np.isfinite(v) else None
+        if isinstance(value, dict):
+            return {
+                str(k): BayesianCausalResult._jsonable(v)
+                for k, v in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [BayesianCausalResult._jsonable(v) for v in value]
+        if isinstance(value, np.ndarray):
+            return BayesianCausalResult._jsonable(value.tolist())
+        if isinstance(value, pd.Series):
+            return BayesianCausalResult._jsonable(value.to_dict())
+        if isinstance(value, pd.DataFrame):
+            return BayesianCausalResult._jsonable(value.to_dict(orient="records"))
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+        return str(value)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-safe Bayesian-result payload without posterior trace.
+
+        The full ArviZ trace can be large and may carry backend-specific
+        objects. This method serializes the stable decision surface: posterior
+        point/interval summaries, convergence diagnostics, tidy/glance records,
+        and JSON-safe fit metadata.
+        """
+        tidy_records = self.tidy().to_dict(orient="records")
+        glance_records = self.glance().to_dict(orient="records")
+        return {
+            "kind": "bayesian_causal_result",
+            "method": self.method,
+            "estimand": self.estimand,
+            "n_obs": self._jsonable(self.n_obs),
+            "posterior": {
+                "mean": self._jsonable(self.posterior_mean),
+                "median": self._jsonable(self.posterior_median),
+                "sd": self._jsonable(self.posterior_sd),
+                "hdi": {
+                    "level": self._jsonable(self.hdi_prob),
+                    "lower": self._jsonable(self.hdi_lower),
+                    "upper": self._jsonable(self.hdi_upper),
+                },
+                "prob_positive": self._jsonable(self.prob_positive),
+                "prob_rope": self._jsonable(self.prob_rope),
+            },
+            "diagnostics": {
+                "rhat": self._jsonable(self.rhat),
+                "ess": self._jsonable(self.ess),
+                "inference": self._jsonable(
+                    self.model_info.get("inference", "nuts")
+                ),
+                "chains": self._jsonable(self.model_info.get("chains")),
+                "draws": self._jsonable(self.model_info.get("draws")),
+                "tune": self._jsonable(self.model_info.get("tune")),
+            },
+            "model_info": self._jsonable(self.model_info),
+            "tidy": self._jsonable(tidy_records),
+            "glance": self._jsonable(glance_records),
+        }
+
+    def to_agent_summary(self) -> Dict[str, Any]:
+        """Return a compact nested summary for LLM/tool-loop decisions."""
+        payload = self.to_dict()
+        rhat = payload["diagnostics"]["rhat"]
+        ess = payload["diagnostics"]["ess"]
+        warnings: List[str] = []
+        if rhat is None:
+            warnings.append("R-hat unavailable; convergence cannot be checked.")
+        elif rhat > 1.01:
+            warnings.append("R-hat exceeds 1.01; inspect convergence.")
+        if ess is not None and ess < 400:
+            warnings.append("Bulk ESS is below 400; posterior may be noisy.")
+        return {
+            "kind": "bayesian_causal_agent_summary",
+            "method": payload["method"],
+            "estimand": payload["estimand"],
+            "n_obs": payload["n_obs"],
+            "posterior": payload["posterior"],
+            "diagnostics": payload["diagnostics"],
+            "warnings": warnings,
+            "model_info": payload["model_info"],
+        }
+
     def __repr__(self) -> str:  # pragma: no cover - cosmetic
         return (f"<BayesianCausalResult {self.method}: "
                 f"{self.estimand}={self.posterior_mean:.3f} "
@@ -254,7 +466,7 @@ class BayesianCausalResult:
 # ---------------------------------------------------------------------------
 
 def _sample_model(
-    model,
+    model: Any,
     *,
     inference: str = 'nuts',
     draws: int = 2000,
@@ -264,7 +476,7 @@ def _sample_model(
     random_state: int = 42,
     progressbar: bool = False,
     advi_iterations: int = 20000,
-):
+) -> Any:
     """Unified sampling entry-point for all Bayesian estimators.
 
     Parameters
@@ -287,12 +499,22 @@ def _sample_model(
     arviz.InferenceData
         Directly usable by :func:`_summarise_posterior`.
     """
-    pm, _ = _require_pymc()
     valid = ('nuts', 'advi', 'pathfinder', 'smc')
-    if inference not in valid:
-        raise ValueError(
-            f"inference must be one of {valid}; got {inference!r}"
+    if not isinstance(inference, str) or inference not in valid:
+        raise MethodIncompatibility(
+            f"inference must be one of {valid}; got {inference!r}.",
+            recovery_hint="Use inference='nuts' for calibrated MCMC or "
+            "inference='advi' for a faster variational approximation.",
+            diagnostics={"parameter": "inference", "valid": valid},
+            alternative_functions=_BAYES_ALTERNATIVES,
         )
+    draws = _positive_int(draws, "draws")
+    tune = _nonnegative_int(tune, "tune")
+    chains = _positive_int(chains, "chains")
+    advi_iterations = _positive_int(advi_iterations, "advi_iterations")
+    target_accept = _open_unit_float(target_accept, "target_accept")
+
+    pm, _ = _require_pymc()
     with model:
         if inference == 'advi':
             approx = pm.fit(
@@ -368,7 +590,11 @@ def _tidy_row_from_summary(
     lo = summary.get('hdi_lower', float('nan'))
     hi = summary.get('hdi_upper', float('nan'))
     pp = summary.get('prob_positive', float('nan'))
-    stat = (est / sd) if (sd is not None and np.isfinite(sd) and sd > 0) else np.nan
+    stat = (
+        (est / sd)
+        if (sd is not None and np.isfinite(sd) and sd > 0)
+        else np.nan
+    )
     return {
         'term': term_label,
         'estimate': est,
@@ -435,21 +661,29 @@ class BayesianDIDResult(BayesianCausalResult):
               ``'cohort:'`` followed by the user's original cohort
               value coerced to string. Unknown cohort labels raise.
         """
-        if terms is None or terms == 'att' or terms == [self.estimand.lower()]:
+        if terms is None:
             return super().tidy(conf_level=conf_level)
 
         if isinstance(terms, str):
+            if terms == 'att':
+                return super().tidy(conf_level=conf_level)
             if terms == 'per_cohort':
                 if not self.cohort_summaries:
-                    raise ValueError(
+                    raise MethodIncompatibility(
                         "terms='per_cohort' requires a fit with "
-                        "cohort=... populating cohort_summaries."
+                        "cohort=... populating cohort_summaries.",
+                        recovery_hint="Refit sp.bayes_did(..., cohort=...) or "
+                        "request terms='att'.",
+                        diagnostics={"terms": terms, "has_cohorts": False},
+                        alternative_functions=["sp.bayes_did"],
                     )
                 term_list = [f'cohort:{c}' for c in self.cohort_labels]
             else:
                 term_list = [terms]
         else:
-            term_list = list(terms)
+            term_list = _normalise_terms(terms, context="Bayesian DID tidy")
+            if term_list == [self.estimand.lower()]:
+                return super().tidy(conf_level=conf_level)
 
         rows: List[Dict[str, Any]] = []
         # Back-compat label for the average ATT so downstream concat
@@ -478,10 +712,17 @@ class BayesianDIDResult(BayesianCausalResult):
                     term, summary, self.hdi_prob,
                 ))
             else:
-                raise ValueError(
+                raise MethodIncompatibility(
                     f"Unknown term {term!r}. Valid options: "
                     f"'att' (average), 'per_cohort', or a cohort label "
-                    f"in {sorted(cohort_keys)}."
+                    f"in {sorted(cohort_keys)}.",
+                    recovery_hint="Request terms='att', terms='per_cohort', "
+                    "or one of the returned cohort labels.",
+                    diagnostics={
+                        "term": term,
+                        "valid_terms": ['att', 'per_cohort', *sorted(cohort_keys)],
+                    },
+                    alternative_functions=["sp.bayes_did"],
                 )
         return pd.DataFrame(rows)
 
@@ -529,16 +770,25 @@ class BayesianIVResult(BayesianCausalResult):
             - list like ``['late', 'instrument:z1', 'instrument:z2']`` —
               explicit selection. Unknown labels raise.
         """
-        if terms is None or terms == 'late' or terms == [self.estimand.lower()]:
+        if terms is None:
             return super().tidy(conf_level=conf_level)
 
         if isinstance(terms, str):
+            if terms == 'late':
+                return super().tidy(conf_level=conf_level)
             if terms == 'per_instrument':
                 if not self.instrument_summaries:
-                    raise ValueError(
+                    raise MethodIncompatibility(
                         "terms='per_instrument' requires a fit with "
                         "per_instrument=True populating "
-                        "instrument_summaries."
+                        "instrument_summaries.",
+                        recovery_hint="Refit sp.bayes_iv(..., "
+                        "per_instrument=True) or request terms='late'.",
+                        diagnostics={
+                            "terms": terms,
+                            "has_instruments": False,
+                        },
+                        alternative_functions=["sp.bayes_iv"],
                     )
                 term_list = [
                     f'instrument:{z}' for z in self.instrument_labels
@@ -546,7 +796,9 @@ class BayesianIVResult(BayesianCausalResult):
             else:
                 term_list = [terms]
         else:
-            term_list = list(terms)
+            term_list = _normalise_terms(terms, context="Bayesian IV tidy")
+            if term_list == [self.estimand.lower()]:
+                return super().tidy(conf_level=conf_level)
 
         rows: List[Dict[str, Any]] = []
         known_avg = {'late', self.estimand.lower()}
@@ -573,10 +825,22 @@ class BayesianIVResult(BayesianCausalResult):
                     term, summary, self.hdi_prob,
                 ))
             else:
-                raise ValueError(
+                raise MethodIncompatibility(
                     f"Unknown term {term!r}. Valid options: "
                     f"'late' (pooled), 'per_instrument', or an "
-                    f"instrument label in {sorted(instr_keys)}."
+                    f"instrument label in {sorted(instr_keys)}.",
+                    recovery_hint="Request terms='late', "
+                    "terms='per_instrument', or one of the returned "
+                    "instrument labels.",
+                    diagnostics={
+                        "term": term,
+                        "valid_terms": [
+                            'late',
+                            'per_instrument',
+                            *sorted(instr_keys),
+                        ],
+                    },
+                    alternative_functions=["sp.bayes_iv"],
                 )
         return pd.DataFrame(rows)
 
@@ -620,13 +884,26 @@ class BayesianHTEIVResult(BayesianCausalResult):
             'prob_positive'}``.
         """
         if self.trace is None or self._modifier_means is None:
-            raise RuntimeError(
+            raise MethodIncompatibility(
                 "predict_cate requires the posterior trace and "
-                "modifier means to be present on the result."
+                "modifier means to be present on the result.",
+                recovery_hint="Call predict_cate() on a fitted "
+                "BayesianHTEIVResult rather than a serialized summary.",
+                diagnostics={
+                    "has_trace": self.trace is not None,
+                    "has_modifier_means": self._modifier_means is not None,
+                },
+                alternative_functions=["sp.bayes_hte_iv"],
             )
-        _, az = _require_pymc()
+        if not hasattr(values, "get"):
+            raise MethodIncompatibility(
+                "predict_cate values must be a mapping from modifier to value.",
+                recovery_hint="Pass a dict such as {'age': 40}.",
+                diagnostics={"type": type(values).__name__},
+                alternative_functions=["sp.bayes_hte_iv"],
+            )
 
-        # Fetch posterior draws of tau_0 and tau_hte (shape (chains, draws) and (chains, draws, K))
+        # Fetch posterior draws of tau_0 and tau_hte.
         tau0 = self.trace.posterior['tau_0'].values.reshape(-1)
         tau_hte = self.trace.posterior['tau_hte'].values.reshape(
             -1, len(self.effect_modifiers)
@@ -636,7 +913,15 @@ class BayesianHTEIVResult(BayesianCausalResult):
         m_vec = np.zeros(len(self.effect_modifiers))
         for i, name in enumerate(self.effect_modifiers):
             v = values.get(name, self._modifier_means[i])
-            m_vec[i] = v - self._modifier_means[i]
+            if not isinstance(v, Real) or not np.isfinite(float(v)):
+                raise MethodIncompatibility(
+                    f"Modifier value for {name!r} must be finite numeric.",
+                    recovery_hint="Pass finite numeric values for all requested "
+                    "effect modifiers.",
+                    diagnostics={"modifier": name, "value": repr(v)},
+                    alternative_functions=["sp.bayes_hte_iv"],
+                )
+            m_vec[i] = float(v) - self._modifier_means[i]
 
         cate_samples = tau0 + tau_hte @ m_vec
         hdi = _az_hdi_compat(cate_samples, hdi_prob=self.hdi_prob)
@@ -774,14 +1059,17 @@ class BayesianMTEResult(BayesianCausalResult):
         if isinstance(terms, str):
             terms_list = [terms]
         else:
-            terms_list = list(terms)
+            terms_list = _normalise_terms(terms, context="Bayesian MTE tidy")
 
         known = {'ate', 'att', 'atu'}
         unknown = [t for t in terms_list if t not in known]
         if unknown:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"Unknown term(s) {unknown}; valid options are "
-                f"{sorted(known)}."
+                f"{sorted(known)}.",
+                recovery_hint="Request one or more of 'ate', 'att', or 'atu'.",
+                diagnostics={"unknown_terms": unknown, "valid_terms": sorted(known)},
+                alternative_functions=["sp.bayes_mte"],
             )
 
         def _row(term: str) -> Dict[str, Any]:
@@ -812,8 +1100,11 @@ class BayesianMTEResult(BayesianCausalResult):
                 lo = self.atu_hdi_lower
                 hi = self.atu_hdi_upper
                 pp = self.atu_prob_positive
-            stat = (est / sd) if (sd is not None
-                                   and np.isfinite(sd) and sd > 0) else np.nan
+            stat = (
+                (est / sd)
+                if (sd is not None and np.isfinite(sd) and sd > 0)
+                else np.nan
+            )
             return {
                 'term': term_label,
                 'estimate': est,
@@ -830,10 +1121,10 @@ class BayesianMTEResult(BayesianCausalResult):
 
     def policy_effect(
         self,
-        weight_fn,
+        weight_fn: Any,
         label: str = 'policy',
         rope: Optional[Tuple[float, float]] = None,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """Posterior summary of a policy-relevant treatment effect.
 
         Computes ``E[w(U) * MTE(U)] / E[w(U)]`` as a posterior
@@ -860,14 +1151,42 @@ class BayesianMTEResult(BayesianCausalResult):
             prob_positive``, plus ``prob_rope`` if ``rope`` given.
         """
         if self.trace is None or self.u_grid is None:
-            raise RuntimeError(
-                "policy_effect requires the fit's trace and u_grid."
+            raise MethodIncompatibility(
+                "policy_effect requires the fit's trace and u_grid.",
+                recovery_hint="Call policy_effect() on a fitted "
+                "BayesianMTEResult rather than a serialized summary.",
+                diagnostics={
+                    "has_trace": self.trace is not None,
+                    "has_u_grid": self.u_grid is not None,
+                },
+                alternative_functions=["sp.bayes_mte"],
             )
-        _, az = _require_pymc()
+        if not callable(weight_fn):
+            raise MethodIncompatibility(
+                "weight_fn must be callable.",
+                recovery_hint="Pass a function that accepts u_grid and returns "
+                "one weight per grid point.",
+                diagnostics={"type": type(weight_fn).__name__},
+                alternative_functions=["sp.bayes_mte"],
+            )
         b_mte_post = self.trace.posterior['b_mte'].values
         poly_u = b_mte_post.shape[-1] - 1
         flat = b_mte_post.reshape(-1, poly_u + 1)
         u = np.asarray(self.u_grid, dtype=float)
+        if u.ndim != 1 or len(u) == 0:
+            raise DataInsufficient(
+                "u_grid must be a non-empty one-dimensional array.",
+                recovery_hint="Refit sp.bayes_mte() with a valid u_grid.",
+                diagnostics={"shape": u.shape},
+                alternative_functions=["sp.bayes_mte"],
+            )
+        if not np.all(np.isfinite(u)):
+            raise NumericalInstability(
+                "u_grid contains NaN or infinite values.",
+                recovery_hint="Refit sp.bayes_mte() with a finite propensity grid.",
+                diagnostics={"nonfinite_count": int((~np.isfinite(u)).sum())},
+                alternative_functions=["sp.bayes_mte"],
+            )
 
         # v0.9.12: respect the selection scale. Under
         # ``selection='normal'`` the polynomial is in ``v = Φ^{-1}(u)``
@@ -881,15 +1200,41 @@ class BayesianMTEResult(BayesianCausalResult):
             abscissa = u
         u_pow = np.column_stack([abscissa ** k for k in range(poly_u + 1)])
         mte_samples = flat @ u_pow.T         # (S, n_grid)
-        weights = np.asarray(weight_fn(u), dtype=float)
+        try:
+            weights = np.asarray(weight_fn(u), dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "weight_fn must return numeric weights.",
+                recovery_hint="Return a numeric array with the same shape as "
+                "the provided u_grid.",
+                diagnostics={"u_shape": u.shape},
+                alternative_functions=["sp.bayes_mte"],
+            ) from exc
         if weights.shape != u.shape:
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"weight_fn must return an array of shape {u.shape}; "
-                f"got {weights.shape}."
+                f"got {weights.shape}.",
+                recovery_hint="Return exactly one weight per u_grid point.",
+                diagnostics={"expected_shape": u.shape, "actual_shape": weights.shape},
+                alternative_functions=["sp.bayes_mte"],
+            )
+        if not np.all(np.isfinite(weights)):
+            raise NumericalInstability(
+                "weight_fn produced NaN or infinite weights.",
+                recovery_hint="Clip or redefine the policy weights so they are "
+                "finite on the fitted u_grid.",
+                diagnostics={
+                    "nonfinite_count": int((~np.isfinite(weights)).sum()),
+                },
+                alternative_functions=["sp.bayes_mte"],
             )
         if not np.any(weights):
-            raise ValueError(
-                "weight_fn produced all-zero weights on the grid."
+            raise MethodIncompatibility(
+                "weight_fn produced all-zero weights on the grid.",
+                recovery_hint="Use weights with positive support on the fitted "
+                "u_grid.",
+                diagnostics={"n_grid": int(len(u))},
+                alternative_functions=["sp.bayes_mte"],
             )
 
         # Trapezoidal integration on ``u_grid`` for both the numerator
@@ -903,8 +1248,11 @@ class BayesianMTEResult(BayesianCausalResult):
         # more important for agent-native parity.
         denom = float(np.trapezoid(weights, x=u))
         if denom == 0.0:
-            raise ValueError(
-                "weight_fn produced an integrated weight of 0 on the grid."
+            raise MethodIncompatibility(
+                "weight_fn produced an integrated weight of 0 on the grid.",
+                recovery_hint="Use weights with non-zero integrated mass.",
+                diagnostics={"denominator": denom},
+                alternative_functions=["sp.bayes_mte"],
             )
         numer_samples = np.trapezoid(mte_samples * weights, x=u, axis=1)
         policy_samples = numer_samples / denom
@@ -918,6 +1266,7 @@ class BayesianMTEResult(BayesianCausalResult):
             'hdi_high': float(hdi[1]),
             'prob_positive': float(np.mean(policy_samples > 0)),
         }
+        rope = _validate_rope(rope)
         if rope is not None:
             lo, hi = rope
             summary['prob_rope'] = float(
@@ -925,7 +1274,11 @@ class BayesianMTEResult(BayesianCausalResult):
             )
         return summary
 
-    def plot_mte(self, ax=None, figsize=(8, 5)):
+    def plot_mte(
+        self,
+        ax: Any = None,
+        figsize: Tuple[float, float] = (8, 5),
+    ) -> Tuple[Any, Any]:
         """Plot the MTE curve with HDI ribbon. Requires matplotlib."""
         try:
             import matplotlib.pyplot as plt
@@ -955,7 +1308,7 @@ class BayesianMTEResult(BayesianCausalResult):
 
 
 def _summarise_posterior(
-    trace,
+    trace: Any,
     var_name: str,
     hdi_prob: float = 0.95,
     rope: Optional[Tuple[float, float]] = None,

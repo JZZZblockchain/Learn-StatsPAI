@@ -25,7 +25,7 @@ def _isotonic_calibrate(scores: np.ndarray, target: np.ndarray) -> np.ndarray:
     from sklearn.isotonic import IsotonicRegression
     iso = IsotonicRegression(out_of_bounds='clip')
     iso.fit(scores, target)
-    return iso.predict(scores)
+    return np.asarray(iso.predict(scores), dtype=float)
 
 
 @_register("dr_calib")
@@ -49,7 +49,12 @@ def dr_calib_bridge(
     n = len(df)
     rng = np.random.default_rng(seed)
 
-    def _aipw_one(Yi, Di, Xi, calibrate=False):
+    def _aipw_one(
+        Yi: np.ndarray,
+        Di: np.ndarray,
+        Xi: np.ndarray,
+        calibrate: bool = False,
+    ) -> float:
         from sklearn.linear_model import LinearRegression, LogisticRegression
         # Outcome models
         m1 = LinearRegression().fit(Xi[Di == 1], Yi[Di == 1])

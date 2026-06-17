@@ -37,7 +37,7 @@ Battese, G.E., Rao, D.S.P. & O'Donnell, C.J. (2004).  "A Metafrontier
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -98,9 +98,9 @@ class MetafrontierResult:
         lines.append("")
         lines.append("Group-specific mean TGR / TE_group / TE_meta:")
         group_summary = pd.DataFrame({
-            "mean_tgr":   self.tgr.groupby(self.data_info["group_vec"]).mean(),
+            "mean_tgr": self.tgr.groupby(self.data_info["group_vec"]).mean(),
             "mean_te_group": self.te_group.groupby(self.data_info["group_vec"]).mean(),
-            "mean_te_meta":  self.te_meta.groupby(self.data_info["group_vec"]).mean(),
+            "mean_te_meta": self.te_meta.groupby(self.data_info["group_vec"]).mean(),
         })
         lines.append(group_summary.round(4).to_string())
         return "\n".join(lines)
@@ -116,7 +116,7 @@ def metafrontier(
     cost: bool = False,
     te_method: str = "bc",
     lp_tol: float = 1e-7,
-    **frontier_kwargs,
+    **frontier_kwargs: Any,
 ) -> MetafrontierResult:
     """Estimate a metafrontier across ``K`` groups.
 
@@ -177,10 +177,18 @@ def metafrontier(
         sub = df[df[group] == g].copy()
         if len(sub) < len(x) + 3:
             raise ValueError(
-                f"Group {g!r} has only {len(sub)} observations; need at least {len(x) + 3}."
+                f"Group {g!r} has only {len(sub)} observations; need at "
+                f"least {len(x) + 3}."
             )
-        res = _frontier(sub, y=y, x=x, dist=dist, cost=cost,
-                        te_method=te_method, **frontier_kwargs)
+        res = _frontier(
+            sub,
+            y=y,
+            x=x,
+            dist=dist,
+            cost=cost,
+            te_method=te_method,
+            **frontier_kwargs,
+        )
         group_frontiers[g] = res
         beta_groups[g] = res.params.loc[["_cons"] + list(x)].copy()
 
@@ -200,7 +208,7 @@ def metafrontier(
     # Objective: min sum_i (x_i' beta_meta - own_frontier_i).
     # For cost (sign=+1), flip to min sum_i (own_frontier_i - x_i' beta_meta).
     if cost:
-        c = -X.sum(axis=0)        # maximise x_i' beta_meta, which is min(-c'beta).
+        c = -X.sum(axis=0)  # maximise x_i' beta_meta, which is min(-c'beta).
     else:
         c = X.sum(axis=0)         # minimise x_i' beta_meta.
 
@@ -222,7 +230,7 @@ def metafrontier(
     A_ub = np.concatenate(A_ub_rows, axis=0)
     b_ub = np.concatenate(b_ub_rows, axis=0)
 
-    # beta_meta unbounded; default linprog bounds are (0, None), override to (None, None)
+    # beta_meta unbounded; default bounds are (0, None), so override them.
     bounds = [(None, None)] * p
 
     lp_options = {
@@ -245,8 +253,12 @@ def metafrontier(
         lp_options_loose["primal_feasibility_tolerance"] = 1e-5
         lp_options_loose["dual_feasibility_tolerance"] = 1e-5
         lp_retry = linprog(
-            c=c, A_ub=A_ub, b_ub=b_ub, bounds=bounds,
-            method="highs", options=lp_options_loose,
+            c=c,
+            A_ub=A_ub,
+            b_ub=b_ub,
+            bounds=bounds,
+            method="highs",
+            options=lp_options_loose,
         )
         if lp_retry.success:
             lp = lp_retry
@@ -260,21 +272,24 @@ def metafrontier(
             f"check for near-collinear group betas, or reduce group count."
         )
     beta_meta_arr = lp.x
-    beta_meta = pd.Series(beta_meta_arr, index=beta_groups[group_ids[0]].index,
-                          name="beta_meta")
+    beta_meta = pd.Series(
+        beta_meta_arr, index=beta_groups[group_ids[0]].index, name="beta_meta"
+    )
 
     # ------------------------------------------------------------------
     # Step 3: technology-gap ratios and meta-efficiencies.
     # ------------------------------------------------------------------
     meta_frontier_hat = X @ beta_meta_arr
     # TGR per obs: ratio of group frontier to meta frontier.
-    # Production: frontier = max output.  In log units, TGR_i = exp(log_y_group_frontier - log_y_meta_frontier).
-    gap = own_frontier - meta_frontier_hat  # negative for production, positive for cost (with sign flip enforced)
+    # Production: frontier = max output. In log units:
+    # TGR_i = exp(log_y_group_frontier - log_y_meta_frontier).
+    # The gap is negative for production and positive for cost after sign flip.
+    gap = own_frontier - meta_frontier_hat
     tgr = np.exp(gap)
     tgr = np.clip(tgr, 0.0, 1.0)
     tgr_series = pd.Series(tgr, index=df.index, name="tgr")
 
-    # TE_group = the BC efficiency from the group frontier (aligned to df row order).
+    # TE_group = the BC efficiency from the group frontier, aligned to df rows.
     te_group_arr = np.empty(n)
     for g in group_ids:
         mask_df = df[group] == g

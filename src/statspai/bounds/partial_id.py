@@ -13,10 +13,11 @@ References
 ----------
 Horowitz, J. L. & Manski, C. F. (2000).
 "Nonparametric Analysis of Randomized Experiments with Missing
-Covariate and Outcome Data." JASA, 95(449), 77-84. [@horowitz2000nonparametric]
+Covariate and Outcome Data." JASA, 95(449), 77-84.
+[@horowitz2000nonparametric]
 
-Nevo, A. & Rosen, A. M. (2012).
-"Identification with Imperfect Instruments." RES, 79(3), 1104-1127. [@nevo2012identification]
+Nevo, A. & Rosen, A. M. (2012). "Identification with Imperfect Instruments."
+RES, 79(3), 1104-1127. [@nevo2012identification]
 
 Oster, E. (2019).
 "Unobservable Selection and Coefficient Stability: Theory and Evidence."
@@ -31,7 +32,7 @@ Econometrica, 89(3), 1449-1469. [@masten2021salvaging]
 """
 
 import warnings
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any, Tuple, Callable
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -153,7 +154,9 @@ class BoundsResult:
             lines.append("  \u2192 Bounds include zero: cannot reject null")
         else:
             direction = "positive" if self.lower > 0 else "negative"
-            lines.append(f"  \u2192 Bounds exclude zero: treatment effect is {direction}")
+            lines.append(
+                f"  \u2192 Bounds exclude zero: treatment effect is {direction}"
+            )
 
         # Method-specific extras
         if 'selection_rate_treated' in self.model_info:
@@ -163,9 +166,14 @@ class BoundsResult:
                 f"{self.model_info['selection_rate_control']:.1%} (control)"
             )
         if 'delta_star' in self.model_info:
-            lines.append(f"  \u2192 \u03b4* for \u03b2=0: {self.model_info['delta_star']:.4f}")
+            lines.append(
+                f"  \u2192 \u03b4* for \u03b2=0: "
+                f"{self.model_info['delta_star']:.4f}"
+            )
         if 'r_max' in self.model_info:
-            lines.append(f"  \u2192 R\u00b2_max assumption: {self.model_info['r_max']:.4f}")
+            lines.append(
+                f"  \u2192 R\u00b2_max assumption: {self.model_info['r_max']:.4f}"
+            )
 
         lines.append("\u2501" * 56)
         lines.append("")
@@ -185,7 +193,10 @@ class BoundsResult:
             verdict = '<span style="color:#e67e22">Bounds include zero</span>'
         else:
             direction = "positive" if self.lower > 0 else "negative"
-            verdict = f'<span style="color:#27ae60">Bounds exclude zero ({direction})</span>'
+            verdict = (
+                '<span style="color:#27ae60">'
+                f"Bounds exclude zero ({direction})</span>"
+            )
 
         return (
             f'<div style="font-family:monospace; padding:12px; '
@@ -203,7 +214,7 @@ class BoundsResult:
             f'</div>'
         )
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Any = None, **kwargs: Any) -> Any:
         """Interval plot showing the identified set with confidence intervals.
 
         Parameters
@@ -263,9 +274,14 @@ class BoundsResult:
 # ======================================================================
 
 def _bootstrap_bounds(
-    compute_fn, data: pd.DataFrame, n_boot: int, alpha: float,
-    random_state: int, label: str = 'bounds bootstrap', **kwargs,
-) -> Tuple[float, float, Tuple, Tuple, int]:
+    compute_fn: Callable[..., tuple[float, float]],
+    data: pd.DataFrame,
+    n_boot: int,
+    alpha: float,
+    random_state: int,
+    label: str = 'bounds bootstrap',
+    **kwargs: Any,
+) -> Tuple[float, float, Tuple[float, float], Tuple[float, float], int]:
     """Generic bootstrap for a function that returns (lower, upper).
 
     Failed replicates (exception or NaN bounds) are dropped from the
@@ -386,7 +402,6 @@ def horowitz_manski(
     df = data.dropna(subset=[y, treatment] + covariates).copy()
 
     Y = df[y].values.astype(np.float64)
-    D = df[treatment].values.astype(np.float64)
 
     if y_lower is None:
         y_lower = float(Y.min())
@@ -399,7 +414,7 @@ def horowitz_manski(
     lb, ub = _hm_point(df, y, treatment, strata_col, y_lower, y_upper)
 
     # Bootstrap
-    def _compute(df_b, **kw):
+    def _compute(df_b: pd.DataFrame, **kw: Any) -> tuple[float, float]:
         sc = _create_strata(df_b, covariates)
         return _hm_point(df_b, y, treatment, sc, y_lower, y_upper)
 
@@ -427,7 +442,14 @@ def horowitz_manski(
     )
 
 
-def _hm_point(df, y, treatment, strata, y_lo, y_hi):
+def _hm_point(
+    df: pd.DataFrame,
+    y: str,
+    treatment: str,
+    strata: pd.Series,
+    y_lo: float,
+    y_hi: float,
+) -> tuple[float, float]:
     """Compute Horowitz-Manski conditional bounds."""
     Y = df[y].values.astype(np.float64)
     D = df[treatment].values.astype(np.float64)
@@ -587,7 +609,7 @@ def iv_bounds(
     lb, ub = _iv_bounds_point(Y, D, Z, assumption)
 
     # Bootstrap
-    def _compute(df_b, **kw):
+    def _compute(df_b: pd.DataFrame, **kw: Any) -> tuple[float, float]:
         Yb = df_b[y].values.astype(np.float64)
         Db = df_b[treatment].values.astype(np.float64)
         Zb = df_b[instrument].values.astype(np.float64)
@@ -626,20 +648,24 @@ def iv_bounds(
             'wald_estimate': float(wald) if np.isfinite(wald) else None,
             'cov_zy': float(cov_zy),
             'cov_zd': float(cov_zd),
-            'first_stage_f': float(cov_zd ** 2 / (np.var(Z) * np.var(D) / len(Z)))
-            if np.var(D) > 0 else 0.0,
+            'first_stage_f': (
+                float(cov_zd ** 2 / (np.var(Z) * np.var(D) / len(Z)))
+                if np.var(D) > 0 else 0.0
+            ),
             'n_boot_failed': n_failed,
         },
     )
 
 
-def _iv_bounds_point(Y, D, Z, assumption):
+def _iv_bounds_point(
+    Y: np.ndarray,
+    D: np.ndarray,
+    Z: np.ndarray,
+    assumption: str,
+) -> tuple[float, float]:
     """Compute Nevo-Rosen bounds for given arrays."""
-    n = len(Y)
-
     cov_zy = np.cov(Z, Y, ddof=1)[0, 1]
     cov_zd = np.cov(Z, D, ddof=1)[0, 1]
-    var_z = np.var(Z, ddof=1)
     var_d = np.var(D, ddof=1)
 
     # Standard Wald/IV estimate
@@ -784,7 +810,9 @@ def oster_delta(
         r_max = min(1.3 * r2_full, 1.0)
 
     # Oster's bias-adjusted estimate at delta=1
-    beta_star = _oster_bias_adjusted(beta_short, beta_full, r2_short, r2_full, r_max, delta=1.0)
+    beta_star = _oster_bias_adjusted(
+        beta_short, beta_full, r2_short, r2_full, r_max, delta=1.0
+    )
 
     # Identified set: [min(beta_full, beta_star), max(beta_full, beta_star)]
     lb = min(beta_full, beta_star)
@@ -801,7 +829,7 @@ def oster_delta(
     ])
 
     # Bootstrap
-    def _compute(df_b, **kw):
+    def _compute(df_b: pd.DataFrame, **kw: Any) -> tuple[float, float]:
         nb = len(df_b)
         Yb = df_b[y].values.astype(np.float64)
         Xs = np.column_stack([np.ones(nb), df_b[x_base].values.astype(np.float64)])
@@ -820,7 +848,7 @@ def oster_delta(
         bs_star = _oster_bias_adjusted(bs_all[1], bf_all[1], rs, rf, rm, 1.0)
         return float(min(bf_all[1], bs_star)), float(max(bf_all[1], bs_star))
 
-    def Y_var_ratio(Yv, Xv, bv):
+    def Y_var_ratio(Yv: np.ndarray, Xv: np.ndarray, bv: np.ndarray) -> float:
         resid = Yv - Xv @ bv
         return 1 - np.var(resid) / np.var(Yv) if np.var(Yv) > 0 else 0.0
 
@@ -853,7 +881,14 @@ def oster_delta(
     )
 
 
-def _oster_bias_adjusted(beta_short, beta_full, r2_short, r2_full, r_max, delta):
+def _oster_bias_adjusted(
+    beta_short: float,
+    beta_full: float,
+    r2_short: float,
+    r2_full: float,
+    r_max: float,
+    delta: float,
+) -> float:
     """Oster's bias-adjusted beta* at a given delta and R_max.
 
     Formula (Oster 2019, eq. 3):
@@ -862,12 +897,18 @@ def _oster_bias_adjusted(beta_short, beta_full, r2_short, r2_full, r_max, delta)
     """
     denom = r2_full - r2_short
     if abs(denom) < 1e-12:
-        return beta_full
+        return float(beta_full)
     bias = delta * (beta_short - beta_full) * (r_max - r2_full) / denom
-    return beta_full - bias
+    return float(beta_full - bias)
 
 
-def _oster_delta_star(beta_short, beta_full, r2_short, r2_full, r_max):
+def _oster_delta_star(
+    beta_short: float,
+    beta_full: float,
+    r2_short: float,
+    r2_full: float,
+    r_max: float,
+) -> float:
     """Compute delta* such that beta*(delta*, r_max) = 0.
 
     From beta* = 0:
@@ -877,8 +918,8 @@ def _oster_delta_star(beta_short, beta_full, r2_short, r2_full, r_max):
     numer = beta_full * (r2_full - r2_short)
     denom = (beta_short - beta_full) * (r_max - r2_full)
     if abs(denom) < 1e-12:
-        return np.inf
-    return numer / denom
+        return float(np.inf)
+    return float(numer / denom)
 
 
 # ======================================================================
@@ -967,7 +1008,7 @@ def selection_bounds(
         lb, ub = _conditional_lee_bounds(df, y, treatment, selection, covariates)
 
     # Bootstrap
-    def _compute(df_b, **kw):
+    def _compute(df_b: pd.DataFrame, **kw: Any) -> tuple[float, float]:
         if method == 'unconditional' or covariates is None or len(covariates) == 0:
             return _lee_bounds_core(df_b, y, treatment, selection)
         else:
@@ -991,14 +1032,22 @@ def selection_bounds(
             'method': method,
             'selection_rate_treated': float(p1),
             'selection_rate_control': float(p0),
-            'trimming_fraction': float(abs(p1 - p0) / max(p1, p0)) if max(p1, p0) > 0 else 0.0,
+            'trimming_fraction': (
+                float(abs(p1 - p0) / max(p1, p0))
+                if max(p1, p0) > 0 else 0.0
+            ),
             'covariates': covariates or [],
             'n_boot_failed': n_failed,
         },
     )
 
 
-def _lee_bounds_core(df, y, treatment, selection):
+def _lee_bounds_core(
+    df: pd.DataFrame,
+    y: str,
+    treatment: str,
+    selection: str,
+) -> tuple[float, float]:
     """Core unconditional Lee bounds computation."""
     D = df[treatment].values.astype(float)
     S = df[selection].values.astype(float)
@@ -1043,12 +1092,16 @@ def _lee_bounds_core(df, y, treatment, selection):
     return float(lb), float(ub)
 
 
-def _conditional_lee_bounds(df, y, treatment, selection, covariates):
+def _conditional_lee_bounds(
+    df: pd.DataFrame,
+    y: str,
+    treatment: str,
+    selection: str,
+    covariates: List[str],
+) -> tuple[float, float]:
     """Conditional Lee bounds — average stratum-specific bounds."""
     strata = _create_strata(df, covariates)
 
-    D = df[treatment].values.astype(float)
-    S = df[selection].values.astype(float)
     strata_arr = strata.values
     n = len(df)
 
@@ -1187,7 +1240,9 @@ def breakdown_frontier(
             'frontier_grid': violations.tolist(),
             'frontier_lower': lower_bounds.tolist(),
             'frontier_upper': upper_bounds.tolist(),
-            'conclusion_at_zero_violation': 'positive' if estimate > 0 else 'negative',
+            'conclusion_at_zero_violation': (
+                'positive' if estimate > 0 else 'negative'
+            ),
             'robust_at_max_violation': bool(lb > 0) if estimate > 0 else bool(ub < 0),
         },
     )
@@ -1197,7 +1252,7 @@ def breakdown_frontier(
 # Utilities
 # ======================================================================
 
-def _check_cols(data: pd.DataFrame, cols: List[str]):
+def _check_cols(data: pd.DataFrame, cols: List[str]) -> None:
     """Raise if any columns are missing from the DataFrame."""
     missing = [c for c in cols if c not in data.columns]
     if missing:

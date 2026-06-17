@@ -15,7 +15,7 @@ Supports:
 - Diagnostics for share vs. shock exogeneity
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 import warnings
 
 import numpy as np
@@ -119,10 +119,12 @@ def bartik(
                 "covariates": list(covariates) if covariates else None,
                 "leave_one_out": leave_one_out,
                 "robust": robust, "alpha": alpha,
-                "shares_shape": list(shares.shape)
-                                 if hasattr(shares, "shape") else None,
-                "shocks_len": int(len(shocks))
-                              if hasattr(shocks, "__len__") else None,
+                "shares_shape": (
+                    list(shares.shape) if hasattr(shares, "shape") else None
+                ),
+                "shocks_len": (
+                    int(len(shocks)) if hasattr(shocks, "__len__") else None
+                ),
             },
             data=data,
             overwrite=False,
@@ -190,7 +192,7 @@ class BartikIV:
 
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         for col in [self.y, self.endog] + self.covariates:
             if col not in self.data.columns:
                 raise ValueError(f"Column '{col}' not found in data")
@@ -239,11 +241,11 @@ class BartikIV:
         does not carry. We now warn loudly instead so users notice
         the fallback.
         """
-        S = self.shares.values  # (n, K)
-        g = self.shocks.values  # (K,)
+        S = self.shares.to_numpy(dtype=float)  # (n, K)
+        g = self.shocks.to_numpy(dtype=float)  # (K,)
 
         if not self.leave_one_out:
-            return S @ g  # (n,)
+            return np.asarray(S @ g, dtype=float)  # (n,)
 
         if self.regional_shocks is None:
             warnings.warn(
@@ -257,9 +259,9 @@ class BartikIV:
                 UserWarning,
                 stacklevel=3,
             )
-            return S @ g
+            return np.asarray(S @ g, dtype=float)
 
-        G = self.regional_shocks.values.astype(float)  # (n, K)
+        G = self.regional_shocks.to_numpy(dtype=float)  # (n, K)
         n = G.shape[0]
         if n < 2:
             raise ValueError(
@@ -268,9 +270,15 @@ class BartikIV:
         # g_k^{-i} = (col_sum_k - G[i,k]) / (n - 1)
         col_sum = G.sum(axis=0, keepdims=True)        # (1, K)
         g_loo = (col_sum - G) / (n - 1)                # (n, K)
-        return np.einsum('ij,ij->i', S, g_loo)         # (n,)
+        return np.asarray(np.einsum('ij,ij->i', S, g_loo), dtype=float)
 
-    def _rotemberg_weights(self, B, Y, X_endog, X_exog):
+    def _rotemberg_weights(
+        self,
+        B: np.ndarray,
+        Y: np.ndarray,
+        X_endog: np.ndarray,
+        X_exog: Optional[np.ndarray],
+    ) -> pd.DataFrame:
         """
         Compute Rotemberg (1983) weights for Bartik IV.
 
@@ -341,8 +349,14 @@ class BartikIV:
         rss_f = resid_full @ resid_full
         rss_r = resid_restricted @ resid_restricted
         df_denom = n - Z.shape[1]
-        f_stat = ((rss_r - rss_f) / 1) / (rss_f / df_denom) if df_denom > 0 else np.nan
-        f_pvalue = 1 - stats.f.cdf(f_stat, 1, df_denom) if not np.isnan(f_stat) else np.nan
+        f_stat = (
+            ((rss_r - rss_f) / 1) / (rss_f / df_denom)
+            if df_denom > 0 else np.nan
+        )
+        f_pvalue = (
+            1 - stats.f.cdf(f_stat, 1, df_denom)
+            if not np.isnan(f_stat) else np.nan
+        )
 
         # --- Second stage: Y ~ endog_hat + exog ---
         X_2sls = np.column_stack([X_exog, X_endog_hat])

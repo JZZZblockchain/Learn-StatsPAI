@@ -114,11 +114,6 @@ def sensemakr(
     rss_no_d = np.sum((Y - Z_no_d @ beta_no_d) ** 2)
     partial_r2_yd = 1 - rss_full / rss_no_d  # partial R² of D on Y|X
 
-    # Partial R² of treatment with itself (after controlling for X)
-    beta_d_x = np.linalg.lstsq(Z_no_d, D, rcond=None)[0]
-    resid_d = D - Z_no_d @ beta_d_x
-    partial_r2_dd = float(np.var(resid_d) * n / np.sum(resid_d ** 2))
-
     # --- Robustness Value ---
     # Mirrors sensemakr::robustness_value.numeric. ``rv_q`` sets alpha=1
     # (point estimate only); ``rv_qa`` uses the caller's alpha threshold.
@@ -170,11 +165,20 @@ def sensemakr(
         'rv_qa': rv_qa,
         'robustness': robustness,
         'benchmark_table': bench_df,
-        'interpretation': f"{robustness}: RV_q = {rv_q:.1%}, RV_{{q,α}} = {rv_qa:.1%}. {detail}",
+        'interpretation': (
+            f"{robustness}: RV_q = {rv_q:.1%}, "
+            f"RV_{{q,α}} = {rv_qa:.1%}. {detail}"
+        ),
     }
 
 
-def _partial_r2_of(Y, var, df, controls, treat):
+def _partial_r2_of(
+    Y: np.ndarray,
+    var: str,
+    df: pd.DataFrame,
+    controls: List[str],
+    treat: Optional[str],
+) -> float:
     """Compute partial R² of 'var' with Y controlling for everything else."""
     other = [c for c in controls if c != var]
     n = len(df)
@@ -190,7 +194,7 @@ def _partial_r2_of(Y, var, df, controls, treat):
     Z_restr = np.column_stack(base + [df[c].values for c in other])
     rss_restr = np.sum((Y - Z_restr @ np.linalg.lstsq(Z_restr, Y, rcond=None)[0]) ** 2)
 
-    return max(1 - rss_full / rss_restr, 0) if rss_restr > 0 else 0
+    return float(max(1 - rss_full / rss_restr, 0)) if rss_restr > 0 else 0.0
 
 
 def _sensemakr_bound_scale(

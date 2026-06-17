@@ -22,9 +22,11 @@ van der Laan, M. J., Polley, E. C., & Hubbard, A. E. (2007).
 Statistical Applications in Genetics and Molecular Biology, 6(1). [@vanderlaan2007super]
 """
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING
 import numpy as np
 from scipy.optimize import minimize
+
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 # sklearn is imported lazily inside the methods that need it so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
@@ -145,6 +147,7 @@ class SuperLearner:
         self.task = task
         self.random_state = random_state
         self._fitted = False
+        self.n_features_in_: Optional[int] = None
 
     def fit(self, X, y):
         """
@@ -156,9 +159,20 @@ class SuperLearner:
         """
         from sklearn.base import clone
         from sklearn.model_selection import KFold, StratifiedKFold
-        X = np.asarray(X, dtype=np.float64)
-        y = np.asarray(y, dtype=np.float64).ravel()
+
+        self._validate_fit_controls()
+        X, y = self._prepare_fit_arrays(X, y)
         n = len(y)
+
+        if self.library is None:
+            self.library = self._default_library()
+        if not isinstance(self.library, list) or len(self.library) == 0:
+            raise MethodIncompatibility(
+                "SuperLearner.fit() requires a non-empty learner library.",
+                recovery_hint="Pass at least one sklearn-style estimator.",
+                diagnostics={"library_type": type(self.library).__name__},
+            )
+        n_learners = len(self.library)
 
         # Multiclass guard: classification SuperLearner pulls
         # ``predict_proba(X)[:, 1]`` and would silently drop other class
@@ -167,18 +181,41 @@ class SuperLearner:
         if self.task == 'classification':
             uniq = np.unique(y)
             if len(uniq) > 2:
-                raise ValueError(
+                raise MethodIncompatibility(
                     "SuperLearner(task='classification') only supports binary "
                     f"targets; got {len(uniq)} unique values: "
                     f"{uniq[:10].tolist()}{'...' if len(uniq) > 10 else ''}. "
                     "Encode multi-class outcomes as binary indicators or use "
                     "task='regression' on a probabilistic target."
                 )
-
-        if self.library is None:
-            self.library = self._default_library()
-
-        n_learners = len(self.library)
+            if len(uniq) < 2:
+                raise DataInsufficient(
+                    "SuperLearner(task='classification') needs two classes.",
+                    recovery_hint="Provide both outcome classes.",
+                    diagnostics={"classes": uniq.tolist()},
+                )
+            if not np.array_equal(uniq, np.array([0.0, 1.0])):
+                raise MethodIncompatibility(
+                    "SuperLearner(task='classification') expects y coded 0/1.",
+                    recovery_hint=(
+                        "Recode the negative class to 0 and positive class to 1."
+                    ),
+                    diagnostics={"classes": uniq.tolist()},
+                )
+            _, class_counts = np.unique(y, return_counts=True)
+            if np.min(class_counts) < self.n_folds:
+                raise DataInsufficient(
+                    "SuperLearner(task='classification') needs at least "
+                    "n_folds observations in each class.",
+                    recovery_hint=(
+                        "Reduce n_folds or provide more observations in the "
+                        "rarer class."
+                    ),
+                    diagnostics={
+                        "n_folds": int(self.n_folds),
+                        "class_counts": class_counts.tolist(),
+                    },
+                )
 
         # Step 1: Cross-validated predictions
         # Stratify on y for classification so every fold contains both
@@ -274,8 +311,138 @@ class SuperLearner:
             m.fit(X, y)
             self._fitted_learners.append(m)
 
+        self.n_features_in_ = X.shape[1]
         self._fitted = True
         return self
+
+    def _validate_fit_controls(self) -> None:
+        """Validate scalar controls before cross-validation starts."""
+        if self.task not in {"regression", "classification"}:
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): task must be 'regression' or "
+                "'classification'.",
+                recovery_hint="Choose task='regression' or task='classification'.",
+                diagnostics={"task": self.task},
+            )
+        if (
+            not isinstance(self.n_folds, (int, np.integer))
+            or isinstance(self.n_folds, bool)
+            or int(self.n_folds) < 2
+        ):
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): n_folds must be an integer >= 2.",
+                recovery_hint="Use at least two cross-validation folds.",
+                diagnostics={"n_folds": self.n_folds},
+            )
+        self.n_folds = int(self.n_folds)
+
+    def _prepare_fit_arrays(self, X, y) -> tuple[np.ndarray, np.ndarray]:
+        """Coerce and validate fit arrays with clear taxonomy errors."""
+        try:
+            X_arr = np.asarray(X, dtype=np.float64)
+            y_arr = np.asarray(y, dtype=np.float64).ravel()
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "SuperLearner.fit() requires numeric X and y.",
+                recovery_hint="Convert features and target to numeric arrays.",
+            ) from exc
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(-1, 1)
+        elif X_arr.ndim != 2:
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): X must be a 1D or 2D numeric array.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+                diagnostics={"x_ndim": int(X_arr.ndim)},
+            )
+        if X_arr.shape[0] != y_arr.shape[0]:
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): X and y must have the same row count.",
+                recovery_hint="Align features and target to the same sample.",
+                diagnostics={
+                    "n_x": int(X_arr.shape[0]),
+                    "n_y": int(y_arr.shape[0]),
+                },
+            )
+        if X_arr.shape[0] < self.n_folds:
+            raise DataInsufficient(
+                "SuperLearner.fit() needs at least n_folds observations.",
+                recovery_hint="Reduce n_folds or provide more observations.",
+                diagnostics={"nobs": int(X_arr.shape[0]), "n_folds": self.n_folds},
+            )
+        if X_arr.shape[0] == 0 or X_arr.shape[1] == 0:
+            raise DataInsufficient(
+                "SuperLearner.fit() needs at least one row and one feature.",
+                recovery_hint="Pass a non-empty feature matrix.",
+                diagnostics={
+                    "nobs": int(X_arr.shape[0]),
+                    "n_features": int(X_arr.shape[1]),
+                },
+            )
+        if not np.isfinite(X_arr).all():
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): X contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite feature rows.",
+            )
+        if not np.isfinite(y_arr).all():
+            raise MethodIncompatibility(
+                "SuperLearner.fit(): y contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite target rows.",
+            )
+        return X_arr, y_arr
+
+    def _prepare_predict_matrix(self, X) -> np.ndarray:
+        """Validate prediction features against the fitted feature count."""
+        try:
+            X_arr = np.asarray(X, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                "SuperLearner.predict() requires numeric X.",
+                recovery_hint="Convert prediction features to numeric values.",
+            ) from exc
+        expected = self.n_features_in_
+        if X_arr.ndim == 1:
+            if expected is not None and expected > 1 and X_arr.size == expected:
+                X_arr = X_arr.reshape(1, -1)
+            elif expected in (None, 1):
+                X_arr = X_arr.reshape(-1, 1)
+            else:
+                raise MethodIncompatibility(
+                    "SuperLearner.predict(): one-dimensional input does not "
+                    "match the fitted feature count.",
+                    recovery_hint="Pass X shaped (n_samples, n_features).",
+                    diagnostics={
+                        "n_values": int(X_arr.size),
+                        "expected_features": expected,
+                    },
+                )
+        elif X_arr.ndim != 2:
+            raise MethodIncompatibility(
+                "SuperLearner.predict(): X must be a 1D or 2D numeric array.",
+                recovery_hint="Pass X shaped (n_samples, n_features).",
+                diagnostics={"x_ndim": int(X_arr.ndim)},
+            )
+        if X_arr.shape[0] == 0:
+            raise DataInsufficient(
+                "SuperLearner.predict() received no rows.",
+                recovery_hint="Pass at least one prediction row.",
+            )
+        if expected is not None and X_arr.shape[1] != expected:
+            raise MethodIncompatibility(
+                "SuperLearner.predict(): feature count does not match fit().",
+                recovery_hint=(
+                    "Use the same number and order of features used at fit time."
+                ),
+                diagnostics={
+                    "expected_features": expected,
+                    "observed_features": int(X_arr.shape[1]),
+                },
+            )
+        if not np.isfinite(X_arr).all():
+            raise MethodIncompatibility(
+                "SuperLearner.predict(): X contains NaN or infinite values.",
+                recovery_hint="Drop or impute non-finite prediction rows.",
+            )
+        return X_arr
 
     def predict(self, X):
         """
@@ -296,9 +463,12 @@ class SuperLearner:
         np.ndarray (n,)
         """
         if not self._fitted:
-            raise ValueError("SuperLearner must be fitted first.")
+            raise MethodIncompatibility(
+                "SuperLearner.predict() requires a fitted ensemble.",
+                recovery_hint="Call fit() before predict().",
+            )
 
-        X = np.asarray(X, dtype=np.float64)
+        X = self._prepare_predict_matrix(X)
         n = X.shape[0]
         n_learners = len(self._fitted_learners)
 

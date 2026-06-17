@@ -28,15 +28,66 @@ Hahn, Murray, Carvalho (2020). Bayesian Analysis, 15(3). [@hahn2020bayesian]
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Sequence, Union
 
 import numpy as np
 import pandas as pd
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from .bcf import bcf as _bcf_binary
 
 
 __all__ = ["bcf_ordinal", "BCFOrdinalResult"]
+
+CovariatesArg = Union[Sequence[str], str]
+
+_BCF_ORDINAL_ALTERNATIVES = [
+    "sp.bcf_ordinal",
+    "sp.bcf",
+    "sp.multi_treatment",
+]
+
+
+def _bcf_ordinal_error(
+    message: str,
+    *,
+    diagnostics: Dict[str, Any] | None = None,
+    recovery_hint: str = "Check bcf_ordinal inputs and ordered-treatment levels.",
+) -> MethodIncompatibility:
+    return MethodIncompatibility(
+        message,
+        recovery_hint=recovery_hint,
+        diagnostics=diagnostics,
+        alternative_functions=_BCF_ORDINAL_ALTERNATIVES,
+    )
+
+
+def _normalize_covariates(raw: CovariatesArg) -> List[str]:
+    if isinstance(raw, str):
+        return [raw]
+    try:
+        covariates = list(raw)
+    except TypeError as err:
+        raise _bcf_ordinal_error(
+            "covariates must be a column name or sequence of column names.",
+            diagnostics={"covariates": repr(raw)},
+            recovery_hint="Pass covariates=['x1', 'x2'] or a single column name.",
+        ) from err
+    if not covariates:
+        raise DataInsufficient(
+            "bcf_ordinal requires at least one covariate.",
+            recovery_hint="Pass one or more pre-treatment covariate columns.",
+            diagnostics={"n_covariates": 0},
+            alternative_functions=_BCF_ORDINAL_ALTERNATIVES,
+        )
+    for idx, covariate in enumerate(covariates):
+        if not isinstance(covariate, str) or not covariate:
+            raise _bcf_ordinal_error(
+                "covariates must contain non-empty column-name strings.",
+                diagnostics={"index": idx, "value": repr(covariate)},
+                recovery_hint="Pass covariates as column-name strings.",
+            )
+    return covariates
 
 
 @dataclass
@@ -94,7 +145,7 @@ def bcf_ordinal(
     *,
     y: str,
     treat: str,
-    covariates: Sequence[str],
+    covariates: CovariatesArg,
     baseline: Any = None,
     n_trees_mu: int = 200,
     n_trees_tau: int = 50,
@@ -150,19 +201,48 @@ def bcf_ordinal(
     True
     """
     # --- Validation --------------------------------------------------------
-    for col in (y, treat, *covariates):
-        if col not in data.columns:
-            raise ValueError(f"column {col!r} not in data")
+    if not isinstance(data, pd.DataFrame):
+        raise _bcf_ordinal_error(
+            "data must be a pandas DataFrame.",
+            diagnostics={"type": type(data).__name__},
+            recovery_hint=(
+                "Pass a pandas DataFrame with outcome, treatment, and "
+                "covariates."
+            ),
+        )
+    if data.empty:
+        raise DataInsufficient(
+            "bcf_ordinal requires non-empty data.",
+            recovery_hint="Provide rows before fitting ordered-treatment BCF.",
+            diagnostics={"n_rows": 0},
+            alternative_functions=_BCF_ORDINAL_ALTERNATIVES,
+        )
+    covariate_list = _normalize_covariates(covariates)
+    required_cols = [y, treat] + covariate_list
+    missing = [col for col in required_cols if col not in data.columns]
+    if missing:
+        raise _bcf_ordinal_error(
+            "bcf_ordinal input columns are missing from data.",
+            diagnostics={"missing_columns": sorted(str(col) for col in missing)},
+            recovery_hint="Pass column names present in the DataFrame.",
+        )
     t_vals = np.asarray(data[treat])
     levels = sorted([lv for lv in pd.unique(t_vals) if pd.notna(lv)])
     if len(levels) < 2:
-        raise ValueError(
-            f"ordinal BCF needs >=2 levels; found {levels}."
+        raise DataInsufficient(
+            f"ordinal BCF needs >=2 levels; found {levels}.",
+            recovery_hint="Provide at least two ordered treatment levels.",
+            diagnostics={"levels": levels},
+            alternative_functions=_BCF_ORDINAL_ALTERNATIVES,
         )
     if baseline is None:
         baseline = levels[0]
     if baseline not in levels:
-        raise ValueError(f"baseline {baseline!r} not in levels {levels}")
+        raise _bcf_ordinal_error(
+            f"baseline {baseline!r} not in levels {levels}",
+            diagnostics={"baseline": baseline, "levels": levels},
+            recovery_hint="Choose a baseline level observed in the treatment column.",
+        )
     non_base = [lv for lv in levels if lv != baseline]
 
     # --- Cumulative increments --------------------------------------------
@@ -175,8 +255,8 @@ def bcf_ordinal(
     ate_ses: Dict[Any, float] = {}
     ate_lower: Dict[Any, float] = {}
     ate_upper: Dict[Any, float] = {}
-    cum_cate = np.zeros(len(data))
-    cum_var = np.zeros(len(data))
+    cum_cate: np.ndarray = np.zeros(len(data), dtype=float)
+    cum_var: np.ndarray = np.zeros(len(data), dtype=float)
     prev = baseline
     step_results = []
     for k in ordered_non_base:
@@ -184,12 +264,15 @@ def bcf_ordinal(
         sub = data[pair_mask].copy().reset_index(drop=True)
         sub["__T_bin__"] = (np.asarray(sub[treat]) == k).astype(int)
         if sub["__T_bin__"].sum() == 0 or (sub["__T_bin__"] == 0).sum() == 0:
-            raise ValueError(
-                f"Level {k!r} or baseline {prev!r} has zero observations."
+            raise DataInsufficient(
+                f"Level {k!r} or baseline {prev!r} has zero observations.",
+                recovery_hint="Provide observations at each adjacent dose level.",
+                diagnostics={"level": k, "previous_level": prev},
+                alternative_functions=_BCF_ORDINAL_ALTERNATIVES,
             )
         step = _bcf_binary(
             sub, y=y, treat="__T_bin__",
-            covariates=list(covariates),
+            covariates=covariate_list,
             n_trees_mu=n_trees_mu,
             n_trees_tau=n_trees_tau,
             n_bootstrap=n_bootstrap,
@@ -207,16 +290,16 @@ def bcf_ordinal(
             se_pair = None
         # If not exposed, fall back to aggregate ATT replicated per unit.
         if cate_pair is None:
-            cate_on_sub = np.full(len(sub), step.estimate)
-            se_on_sub = np.full(len(sub), step.se)
+            cate_on_sub: np.ndarray = np.full(len(sub), step.estimate)
+            se_on_sub: np.ndarray = np.full(len(sub), step.se)
         else:
             cate_on_sub = np.asarray(cate_pair, dtype=float)
             se_on_sub = (
                 np.asarray(se_pair, dtype=float)
                 if se_pair is not None else np.full(len(sub), step.se)
             )
-        full = np.full(len(data), np.nan)
-        full_se = np.full(len(data), np.nan)
+        full: np.ndarray = np.full(len(data), np.nan)
+        full_se: np.ndarray = np.full(len(data), np.nan)
         full[pair_mask] = cate_on_sub
         full_se[pair_mask] = se_on_sub
         # Impute out-of-pair units with conditional mean (overall ATT).
@@ -257,6 +340,6 @@ def bcf_ordinal(
             "n_levels": len(levels),
             "pairs": [(p, k) for p, k, _ in step_results],
             "n_obs": int(len(data)),
-            "covariates": list(covariates),
+            "covariates": covariate_list,
         },
     )

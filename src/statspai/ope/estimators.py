@@ -24,8 +24,49 @@ counterfactual learning. NeurIPS.
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Callable, TypeVar
 import numpy as np
+
+from ..exceptions import MethodIncompatibility
+
+RewardModel = Callable[[np.ndarray, Any], Any]
+_T = TypeVar("_T")
+_OPE_METHODS = ("DM", "IPS", "SNIPS", "DR", "SWITCH-DR")
+
+
+def _ope_error(
+    message: str,
+    *,
+    method: str | None = None,
+    diagnostics: dict[str, Any] | None = None,
+) -> MethodIncompatibility:
+    payload = dict(diagnostics or {})
+    if method is not None:
+        payload.setdefault("method", method)
+    return MethodIncompatibility(
+        message,
+        recovery_hint=(
+            "Use one of DM, IPS, SNIPS, DR, or Switch-DR and provide the "
+            "required logged-policy arrays."
+        ),
+        diagnostics=payload,
+        alternative_functions=[
+            "sp.ope.evaluate",
+            "sp.ope.ips",
+            "sp.ope.snips",
+            "sp.ope.doubly_robust",
+        ],
+    )
+
+
+def _require(value: _T | None, name: str, method: str) -> _T:
+    if value is None:
+        raise _ope_error(
+            f"OPE method {method} requires {name}.",
+            method=method,
+            diagnostics={"missing_argument": name},
+        )
+    return value
 
 
 @dataclass
@@ -59,8 +100,8 @@ class OPEResult:
     method: str
     value: float
     se: float
-    ci: tuple
-    diagnostics: dict
+    ci: tuple[float, float]
+    diagnostics: dict[str, Any]
 
     @property
     def estimator(self) -> str:
@@ -69,7 +110,7 @@ class OPEResult:
 
     @property
     def n_obs(self) -> int:
-        """Convenience accessor: returns ``diagnostics['n']`` or ``diagnostics['n_obs']`` if present."""
+        """Return ``diagnostics['n']`` or ``diagnostics['n_obs']`` if present."""
         return int(
             self.diagnostics.get("n_obs", self.diagnostics.get("n", 0))
         )
@@ -83,7 +124,7 @@ class OPEResult:
 
 
 def direct_method(
-    reward_model,
+    reward_model: RewardModel,
     X: np.ndarray,
     pi_e: np.ndarray,
 ) -> OPEResult:
@@ -171,7 +212,6 @@ def snips(
         rho = np.clip(rho, 0, clip)
     val = float((rho * r).sum() / max(rho.sum(), 1e-12))
     # Delta-method SE for self-normalized estimator
-    m1 = (rho * r).mean()
     m2 = rho.mean()
     n = len(a)
     var = (
@@ -193,7 +233,7 @@ def doubly_robust(
     rewards: np.ndarray,
     pi_b: np.ndarray,
     pi_e: np.ndarray,
-    reward_model,
+    reward_model: RewardModel,
     clip: float | None = 1000.0,
 ) -> OPEResult:
     """Doubly Robust estimator (Dudik, Langford, Li 2011)."""
@@ -233,7 +273,7 @@ def switch_dr(
     rewards: np.ndarray,
     pi_b: np.ndarray,
     pi_e: np.ndarray,
-    reward_model,
+    reward_model: RewardModel,
     tau: float = 10.0,
 ) -> OPEResult:
     """Switch-DR (Wang, Agarwal, Dudík 2017): fall back to the DM
@@ -269,22 +309,63 @@ def evaluate(
     rewards: np.ndarray | None = None,
     pi_b: np.ndarray | None = None,
     pi_e: np.ndarray | None = None,
-    reward_model=None,
-    **kw,
+    reward_model: RewardModel | None = None,
+    **kw: Any,
 ) -> OPEResult:
     """Dispatch-by-name for OPE methods.
 
     method : {"DM", "IPS", "SNIPS", "DR", "Switch-DR"}
     """
+    if not isinstance(method, str) or not method:
+        raise _ope_error(
+            "OPE method must be a non-empty string.",
+            diagnostics={"method": repr(method)},
+        )
     method_upper = method.upper().replace("_", "-")
     if method_upper == "DM":
-        return direct_method(reward_model, X, pi_e)
+        return direct_method(
+            _require(reward_model, "reward_model", method_upper),
+            _require(X, "X", method_upper),
+            _require(pi_e, "pi_e", method_upper),
+        )
     if method_upper == "IPS":
-        return ips(actions, rewards, pi_b, pi_e, **kw)
+        return ips(
+            _require(actions, "actions", method_upper),
+            _require(rewards, "rewards", method_upper),
+            _require(pi_b, "pi_b", method_upper),
+            _require(pi_e, "pi_e", method_upper),
+            **kw,
+        )
     if method_upper == "SNIPS":
-        return snips(actions, rewards, pi_b, pi_e, **kw)
+        return snips(
+            _require(actions, "actions", method_upper),
+            _require(rewards, "rewards", method_upper),
+            _require(pi_b, "pi_b", method_upper),
+            _require(pi_e, "pi_e", method_upper),
+            **kw,
+        )
     if method_upper == "DR":
-        return doubly_robust(X, actions, rewards, pi_b, pi_e, reward_model, **kw)
+        return doubly_robust(
+            _require(X, "X", method_upper),
+            _require(actions, "actions", method_upper),
+            _require(rewards, "rewards", method_upper),
+            _require(pi_b, "pi_b", method_upper),
+            _require(pi_e, "pi_e", method_upper),
+            _require(reward_model, "reward_model", method_upper),
+            **kw,
+        )
     if method_upper == "SWITCH-DR":
-        return switch_dr(X, actions, rewards, pi_b, pi_e, reward_model, **kw)
-    raise ValueError(f"Unknown OPE method: {method!r}")
+        return switch_dr(
+            _require(X, "X", method_upper),
+            _require(actions, "actions", method_upper),
+            _require(rewards, "rewards", method_upper),
+            _require(pi_b, "pi_b", method_upper),
+            _require(pi_e, "pi_e", method_upper),
+            _require(reward_model, "reward_model", method_upper),
+            **kw,
+        )
+    raise _ope_error(
+        f"Unknown OPE method: {method!r}",
+        method=method_upper,
+        diagnostics={"valid_methods": list(_OPE_METHODS)},
+    )

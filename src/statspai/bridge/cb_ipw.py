@@ -47,7 +47,7 @@ def cb_ipw_bridge(
     rng = np.random.default_rng(seed)
 
     # ---------- Path A: classic IPW ATE ---------- #
-    def _ipw_ate(Yi, Di, Xi):
+    def _ipw_ate(Yi: np.ndarray, Di: np.ndarray, Xi: np.ndarray) -> float:
         from sklearn.linear_model import LogisticRegression
         # Add intercept implicitly via sklearn
         ps = LogisticRegression(max_iter=1000).fit(Xi, Di).predict_proba(Xi)[:, 1]
@@ -63,7 +63,7 @@ def cb_ipw_bridge(
     ate_ipw = _ipw_ate(Y, D, X)
 
     # ---------- Path B: entropy balancing weighted DIM ---------- #
-    def _ebalance_ate(Yi, Di, Xi):
+    def _ebalance_ate(Yi: np.ndarray, Di: np.ndarray, Xi: np.ndarray) -> float:
         # Entropy balancing on the treated mean: solve for weights w_0
         # such that sum(w_0 * X_control) = mean(X_treated), maximising
         # entropy. Reweight controls; treated keep weight 1/n_t.

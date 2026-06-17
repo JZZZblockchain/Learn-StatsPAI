@@ -23,7 +23,7 @@ Lei, L. & Candes, E. J. (2021).
 JRSS-B, 83(5), 911-938. [@lei2021conformal]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -212,7 +212,7 @@ class ConformalCATE:
 
         unique_d = np.unique(D)
         if not (len(unique_d) == 2 and set(unique_d.astype(int)) == {0, 1}):
-            raise ValueError(f"Treatment must be binary (0/1)")
+            raise ValueError("Treatment must be binary (0/1)")
 
         rng = np.random.RandomState(self.random_state)
 
@@ -246,7 +246,7 @@ class ConformalCATE:
         # Quantile for prediction intervals
         # For ITE interval, we need to account for uncertainty in both arms
         # Use the max of the two arm quantiles (conservative)
-        def _conformal_quantile(scores, alpha):
+        def _conformal_quantile(scores: np.ndarray, alpha: float) -> float:
             n_s = len(scores)
             if n_s == 0:
                 return np.inf

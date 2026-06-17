@@ -6,19 +6,188 @@ parameter is the ATT coefficient ``tau`` on ``treat * post``.
 """
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
 import pandas as pd
 
 from ._base import (
-    BayesianCausalResult,
     BayesianDIDResult,
     _az_hdi_compat,
     _require_pymc,
     _sample_model,
     _summarise_posterior,
 )
+from ..exceptions import (
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+    StatsPAIError,
+)
+
+
+_DID_ALTERNATIVES = ["sp.did", "sp.wooldridge_did"]
+
+
+def _available_columns(data: pd.DataFrame) -> List[str]:
+    return [str(column) for column in data.columns]
+
+
+def _require_dataframe(data: Any) -> pd.DataFrame:
+    if not isinstance(data, pd.DataFrame):
+        raise MethodIncompatibility(
+            "bayes_did data must be a pandas DataFrame.",
+            recovery_hint="Pass a DataFrame with y, treat, post, and optional "
+            "panel/covariate columns.",
+            diagnostics={"type": type(data).__name__},
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    if data.empty:
+        raise DataInsufficient(
+            "bayes_did data has no rows.",
+            recovery_hint="Provide at least one pre/post observation for each "
+            "comparison group.",
+            diagnostics={"n_rows": 0, "n_columns": int(data.shape[1])},
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    return data
+
+
+def _require_column_name(name: Any, role: str) -> str:
+    if not isinstance(name, str) or not name:
+        raise MethodIncompatibility(
+            f"{role} must be a non-empty column-name string.",
+            recovery_hint="Pass column names as strings, not Series or arrays.",
+            diagnostics={"role": role, "value": repr(name)},
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    return name
+
+
+def _require_column(data: pd.DataFrame, name: Any, role: str) -> str:
+    column = _require_column_name(name, role)
+    if column not in data.columns:
+        raise MethodIncompatibility(
+            f"Column '{column}' not found in data.",
+            recovery_hint="Check the column spelling or rename the DataFrame "
+            "before calling sp.bayes_did().",
+            diagnostics={
+                "role": role,
+                "column": column,
+                "available_columns": _available_columns(data),
+            },
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    return column
+
+
+def _normalize_covariates(covariates: Optional[Sequence[str]]) -> List[str]:
+    if covariates is None:
+        return []
+    if isinstance(covariates, str):
+        values: List[Any] = [covariates]
+    else:
+        try:
+            values = list(covariates)
+        except TypeError as exc:
+            raise MethodIncompatibility(
+                "covariates must be a sequence of column-name strings.",
+                recovery_hint="Pass covariates=['x1', 'x2'] or a single "
+                "column name such as covariates='x1'.",
+                diagnostics={"type": type(covariates).__name__},
+                alternative_functions=_DID_ALTERNATIVES,
+            ) from exc
+    return [
+        _require_column_name(column, f"covariate[{idx}]")
+        for idx, column in enumerate(values)
+    ]
+
+
+def _ensure_distinct_roles(role_columns: Sequence[Tuple[str, str]]) -> None:
+    seen: dict[str, str] = {}
+    duplicates: List[dict[str, str]] = []
+    for role, column in role_columns:
+        if column in seen:
+            duplicates.append(
+                {"column": column, "first_role": seen[column], "role": role}
+            )
+        else:
+            seen[column] = role
+    if duplicates:
+        raise MethodIncompatibility(
+            "bayes_did requires distinct columns for each model role.",
+            recovery_hint="Use separate columns for outcome, treatment, post, "
+            "panel identifiers, cohort labels, and covariates.",
+            diagnostics={"duplicates": duplicates},
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+
+
+def _numeric_vector(
+    clean: pd.DataFrame,
+    column: str,
+    role: str,
+    *,
+    nonfinite_error: Type[StatsPAIError],
+) -> np.ndarray:
+    try:
+        values = pd.to_numeric(clean[column], errors="raise")
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"{role} column '{column}' must be numeric.",
+            recovery_hint="Convert the column to numeric values before fitting "
+            "the Bayesian DID model.",
+            diagnostics={"role": role, "column": column},
+            alternative_functions=_DID_ALTERNATIVES,
+        ) from exc
+
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim != 1:
+        raise MethodIncompatibility(
+            f"{role} column '{column}' must be one-dimensional.",
+            recovery_hint="Pass a single DataFrame column for each model role.",
+            diagnostics={"role": role, "column": column, "shape": arr.shape},
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    if not np.all(np.isfinite(arr)):
+        bad_count = int((~np.isfinite(arr)).sum())
+        raise nonfinite_error(
+            f"{role} column '{column}' contains NaN or infinite values "
+            "after row filtering.",
+            recovery_hint="Drop, impute, or recode non-finite values before "
+            "fitting the Bayesian DID model.",
+            diagnostics={
+                "role": role,
+                "column": column,
+                "nonfinite_count": bad_count,
+            },
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    return arr
+
+
+def _binary_vector(clean: pd.DataFrame, column: str, role: str) -> np.ndarray:
+    arr = _numeric_vector(
+        clean,
+        column,
+        role,
+        nonfinite_error=MethodIncompatibility,
+    )
+    uniq = np.unique(arr)
+    if not np.all(np.isin(uniq, [0.0, 1.0])):
+        raise MethodIncompatibility(
+            f"'{role}' must be binary 0/1; got unique values "
+            f"{uniq[:10].tolist()}.",
+            recovery_hint="Recode the treatment and post indicators to 0/1 "
+            "before calling sp.bayes_did().",
+            diagnostics={
+                "role": role,
+                "column": column,
+                "unique_values": uniq[:10].tolist(),
+            },
+            alternative_functions=_DID_ALTERNATIVES,
+        )
+    return arr
 
 
 def _prepare_did_frame(
@@ -28,7 +197,7 @@ def _prepare_did_frame(
     post: str,
     unit: Optional[str],
     time: Optional[str],
-    covariates: Optional[List[str]],
+    covariates: Optional[Sequence[str]],
     cohort: Optional[str] = None,
 ) -> dict:
     """Validate, drop NA, and extract arrays for DID.
@@ -42,48 +211,56 @@ def _prepare_did_frame(
     cohort-codes array and ``DID`` array ended up with different
     lengths (or same length but different rows).
     """
-    required = [y, treat, post]
-    for c in required:
-        if c not in data.columns:
-            raise ValueError(f"Column '{c}' not found in data")
+    frame = _require_dataframe(data)
+    y_col = _require_column(frame, y, "outcome")
+    treat_col = _require_column(frame, treat, "treatment indicator")
+    post_col = _require_column(frame, post, "post indicator")
+    covariate_cols = _normalize_covariates(covariates)
 
-    cols = list(required)
+    cols = [y_col, treat_col, post_col]
+    role_columns = [
+        ("outcome", y_col),
+        ("treatment indicator", treat_col),
+        ("post indicator", post_col),
+    ]
     if unit is not None:
-        if unit not in data.columns:
-            raise ValueError(f"Column '{unit}' (unit) not found in data")
+        unit = _require_column(frame, unit, "unit")
         cols.append(unit)
+        role_columns.append(("unit", unit))
     if time is not None:
-        if time not in data.columns:
-            raise ValueError(f"Column '{time}' (time) not found in data")
+        time = _require_column(frame, time, "time")
         cols.append(time)
-    if covariates:
-        for c in covariates:
-            if c not in data.columns:
-                raise ValueError(f"Covariate '{c}' not found in data")
-        cols.extend(covariates)
+        role_columns.append(("time", time))
+    if covariate_cols:
+        for covariate in covariate_cols:
+            _require_column(frame, covariate, "covariate")
+            role_columns.append((f"covariate {covariate}", covariate))
+        cols.extend(covariate_cols)
     if cohort is not None:
-        if cohort not in data.columns:
-            raise ValueError(f"Column '{cohort}' (cohort) not found in data")
+        cohort = _require_column(frame, cohort, "cohort")
         cols.append(cohort)
+        role_columns.append(("cohort", cohort))
+    _ensure_distinct_roles(role_columns)
 
-    clean = data[cols].dropna().reset_index(drop=True)
+    clean = frame[cols].dropna().reset_index(drop=True)
     n = len(clean)
     if n < 4:
-        raise ValueError(
-            f"DID needs at least 4 observations after dropping NA, got {n}."
+        raise DataInsufficient(
+            f"DID needs at least 4 observations after dropping NA, got {n}.",
+            recovery_hint="Provide a larger complete-case DID sample or reduce "
+            "optional covariates/cohort columns that introduce missingness.",
+            diagnostics={"n_complete": n, "columns": cols},
+            alternative_functions=_DID_ALTERNATIVES,
         )
 
-    Y = clean[y].to_numpy(dtype=float)
-    T = clean[treat].to_numpy(dtype=float)
-    P = clean[post].to_numpy(dtype=float)
-
-    # Validate 0/1 coding
-    for name, arr in [('treat', T), ('post', P)]:
-        uniq = np.unique(arr)
-        if not set(uniq).issubset({0.0, 1.0}):
-            raise ValueError(
-                f"'{name}' must be binary 0/1; got unique values {uniq}."
-            )
+    Y = _numeric_vector(
+        clean,
+        y_col,
+        "outcome",
+        nonfinite_error=NumericalInstability,
+    )
+    T = _binary_vector(clean, treat_col, "treat")
+    P = _binary_vector(clean, post_col, "post")
 
     unit_idx: Optional[np.ndarray] = None
     n_units: int = 0
@@ -92,9 +269,13 @@ def _prepare_did_frame(
         unit_idx = np.asarray(codes, dtype=np.int64)
         n_units = int(len(uniques))
         if n_units < 2:
-            raise ValueError(
+            raise DataInsufficient(
                 f"Unit column '{unit}' has < 2 distinct values; cannot fit "
-                "panel random effect."
+                "panel random effect.",
+                recovery_hint="Use at least two units or omit unit= for a 2x2 "
+                "Bayesian DID specification.",
+                diagnostics={"column": unit, "n_units": n_units},
+                alternative_functions=_DID_ALTERNATIVES,
             )
 
     time_idx: Optional[np.ndarray] = None
@@ -104,9 +285,13 @@ def _prepare_did_frame(
         time_idx = np.asarray(codes, dtype=np.int64)
         n_times = int(len(uniques))
         if n_times < 2:
-            raise ValueError(
+            raise DataInsufficient(
                 f"Time column '{time}' has < 2 distinct values; cannot fit "
-                "time random effect."
+                "time random effect.",
+                recovery_hint="Use at least two time periods or omit time= for "
+                "a 2x2 Bayesian DID specification.",
+                diagnostics={"column": time, "n_times": n_times},
+                alternative_functions=_DID_ALTERNATIVES,
             )
 
     cohort_codes: Optional[np.ndarray] = None
@@ -116,14 +301,29 @@ def _prepare_did_frame(
         cohort_codes = np.asarray(codes, dtype=np.int64)
         cohort_labels = list(uniques)
         if len(cohort_labels) < 2:
-            raise ValueError(
+            raise DataInsufficient(
                 f"cohort column '{cohort}' has < 2 distinct values; "
-                "per-cohort ATT requires at least 2 cohorts."
+                "per-cohort ATT requires at least 2 cohorts.",
+                recovery_hint="Provide at least two cohort labels or omit "
+                "cohort= to fit a pooled ATT.",
+                diagnostics={
+                    "column": cohort,
+                    "n_cohorts": len(cohort_labels),
+                },
+                alternative_functions=_DID_ALTERNATIVES,
             )
 
     X: Optional[np.ndarray] = None
-    if covariates:
-        X = clean[covariates].to_numpy(dtype=float)
+    if covariate_cols:
+        X = np.column_stack([
+            _numeric_vector(
+                clean,
+                covariate,
+                f"covariate '{covariate}'",
+                nonfinite_error=NumericalInstability,
+            )
+            for covariate in covariate_cols
+        ])
 
     return {
         'n': n,
@@ -138,7 +338,7 @@ def _prepare_did_frame(
         'cohort_idx': cohort_codes,
         'cohort_labels': cohort_labels,
         'X': X,
-        'covariates': list(covariates) if covariates else [],
+        'covariates': covariate_cols,
     }
 
 
@@ -149,7 +349,7 @@ def bayes_did(
     post: str,
     unit: Optional[str] = None,
     time: Optional[str] = None,
-    covariates: Optional[List[str]] = None,
+    covariates: Optional[Sequence[str]] = None,
     *,
     cohort: Optional[str] = None,
     prior_ate: Tuple[float, float] = (0.0, 10.0),
@@ -172,7 +372,8 @@ def bayes_did(
 
     Two model shapes:
 
-    - **2×2** (no ``unit``/``time``): ``y = a + b1*treat + b2*post + tau*treat*post + X*beta + eps``.
+    - **2×2** (no ``unit``/``time``):
+      ``y = a + b1*treat + b2*post + tau*treat*post + X*beta + eps``.
       Both group effects are Normal(0, ``prior_covariate_sigma``).
 
     - **Panel** (``unit`` or ``time`` supplied): hierarchical Gaussian
@@ -247,8 +448,6 @@ def bayes_did(
     >>> print(res.summary())  # posterior ATT + R-hat / ESS  # doctest: +SKIP
     >>> res.tidy()  # doctest: +SKIP
     """
-    pm, _ = _require_pymc()
-
     # Thread `cohort` into `_prepare_did_frame` so every NaN gets
     # dropped in a single pass and `cohort_codes` is guaranteed to
     # align row-for-row with `DID`. A prior implementation did two
@@ -258,6 +457,7 @@ def bayes_did(
     prep = _prepare_did_frame(
         data, y, treat, post, unit, time, covariates, cohort=cohort,
     )
+    pm, _ = _require_pymc()
     n = prep['n']
     Y = prep['Y']
     T = prep['T']
