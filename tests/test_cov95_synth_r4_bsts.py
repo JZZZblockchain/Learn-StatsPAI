@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.synth import bsts as _bsts
 
 
@@ -91,7 +91,7 @@ def test_causal_impact_no_outcome_uses_first_column():
 
 def test_causal_impact_errors():
     df, n_pre = _make_ts()
-    with pytest.raises(TypeError):
+    with pytest.raises(MethodIncompatibility):
         _bsts.causal_impact(data=[1, 2, 3], pre_period=(0, 1), post_period=(2, 3))
     with pytest.raises(ValueError):
         _bsts.causal_impact(
@@ -148,7 +148,7 @@ def test_bsts_synth_real_panel():
 
 def test_bsts_synth_unit_not_found():
     df, tt = _make_panel()
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         _bsts.bsts_synth(
             data=df,
             outcome="y",
@@ -167,7 +167,7 @@ def test_estimate_beta_ridge_empty_regressors():
 def test_causal_impact_no_post_observations_raises():
     df, n_pre = _make_ts(n_pre=40, n_post=20)
     # Post-period window beyond the index -> empty post mask.
-    with pytest.raises(ValueError, match="post-period"):
+    with pytest.raises(DataInsufficient, match="post-period"):
         _bsts.causal_impact(
             data=df,
             pre_period=(0, n_pre - 1),
@@ -201,7 +201,7 @@ def test_bsts_synth_no_pre_periods_raises():
     # -> one of the pre-period guard ValueErrors fires.
     df, tt = _make_panel(seed=23)
     earliest = df["year"].min()
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         _bsts.bsts_synth(
             data=df,
             outcome="y",
@@ -218,7 +218,7 @@ def test_bsts_synth_single_unit_no_donors_raises():
     # Only the treated unit present -> no donors.
     rows = [("T", 2000 + i, float(i)) for i in range(20)]
     df = pd.DataFrame(rows, columns=["unit", "year", "y"])
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         _bsts.bsts_synth(
             data=df,
             outcome="y",

@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 @pytest.fixture
@@ -111,6 +112,18 @@ class TestJsonSafety:
         assert j("abc") == "abc"
         assert j(True) is True
 
+    def test_summary_and_agent_summary_are_json_safe(self, table):
+        assert table.summary() == table.to_text()
+
+        payload = table.to_agent_summary(max_rows=3, max_terms=1)
+        encoded = json.dumps(payload)
+        assert "regression_table_summary" in encoded
+        assert payload["kind"] == "regression_table_summary"
+        assert payload["n_models"] == 2
+        assert len(payload["table_head"]) == 3
+        assert len(payload["models"]) == 2
+        assert len(payload["models"][0]["coefficients"]) == 1
+
 
 class TestRenders:
 
@@ -164,3 +177,26 @@ class TestConsistency:
     def test_n_models_matches_models_layer(self, table):
         d = table.to_dict()
         assert d["n_models"] == len(d["models"])
+
+
+class TestValidationTaxonomy:
+
+    def test_regtable_requires_at_least_one_model(self):
+        with pytest.raises(DataInsufficient):
+            sp.regtable()
+
+    def test_invalid_output_reports_diagnostics(self, two_models):
+        m1, _ = two_models
+        with pytest.raises(MethodIncompatibility) as exc:
+            sp.regtable(m1, output="quartoo")
+        assert exc.value.diagnostics["output"] == "quartoo"
+
+    def test_tests_length_reports_diagnostics(self, two_models):
+        m1, m2 = two_models
+        with pytest.raises(MethodIncompatibility) as exc:
+            sp.regtable(m1, m2, tests={"Bad": [1.0]})
+        assert exc.value.diagnostics == {
+            "label": "Bad",
+            "n_entries": 1,
+            "n_models": 2,
+        }

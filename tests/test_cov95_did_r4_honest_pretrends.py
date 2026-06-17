@@ -25,6 +25,7 @@ import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
 import statspai as sp  # noqa: E402
+from statspai.exceptions import DataInsufficient, MethodIncompatibility  # noqa: E402
 
 
 def _cs_panel(seed=0, n_units=120, n_periods=10, att=2.0):
@@ -63,8 +64,13 @@ def test_honest_did_custom_mgrid(cs_result):
 
 
 def test_honest_did_bad_method_raises(cs_result):
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility, match="method"):
         sp.honest_did(cs_result, e=0, method="not_a_method")
+
+
+def test_honest_did_invalid_m_grid_raises(cs_result):
+    with pytest.raises(MethodIncompatibility, match="m_grid"):
+        sp.honest_did(cs_result, e=0, m_grid=[0.0, np.inf])
 
 
 def test_honest_did_no_event_study_raises():
@@ -72,7 +78,7 @@ def test_honest_did_no_event_study_raises():
     df = sp.dgp_did(n_units=40, n_periods=6, effect=1.0, seed=0)
     r = sp.did(df, y="y", treat="treated", time="time", id="unit",
                method="twfe")
-    with pytest.raises((ValueError, AttributeError, TypeError)):
+    with pytest.raises((MethodIncompatibility, AttributeError, TypeError)):
         sp.honest_did(r, e=0)
 
 
@@ -83,7 +89,7 @@ def test_breakdown_m(cs_result):
 
 
 def test_breakdown_m_bad_e_raises(cs_result):
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         sp.breakdown_m(cs_result, e=999)
 
 

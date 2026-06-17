@@ -8,6 +8,12 @@ import numpy as np
 import pytest
 
 import statspai as sp
+from statspai.epi import measures as epi_measures
+from statspai.exceptions import (
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +55,35 @@ def test_odds_ratio_accepts_2x2_array():
     assert r.estimate == pytest.approx(3.333333333, rel=1e-6)
 
 
+def test_odds_ratio_input_validation_uses_taxonomy():
+    with pytest.raises(MethodIncompatibility) as excinfo:
+        sp.epi.odds_ratio([[1, 2, 3]])
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.recovery_hint
+    assert excinfo.value.diagnostics["shape"] == (1, 3)
+
+    with pytest.raises(MethodIncompatibility, match="non-negative"):
+        sp.epi.odds_ratio(1, -1, 2, 3)
+
+
+def test_odds_ratio_rejects_invalid_method_and_alpha():
+    with pytest.raises(MethodIncompatibility, match="method"):
+        sp.epi.odds_ratio(50, 20, 30, 40, method="midp")
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.epi.odds_ratio(50, 20, 30, 40, alpha=0)
+
+
+def test_odds_ratio_exact_backend_failure_uses_taxonomy(monkeypatch):
+    def _fail_fisher_exact(*args, **kwargs):
+        raise ValueError("backend unavailable")
+
+    monkeypatch.setattr(epi_measures.stats, "fisher_exact", _fail_fisher_exact)
+    with pytest.raises(NumericalInstability) as excinfo:
+        sp.epi.odds_ratio(50, 20, 30, 40, method="exact")
+    assert isinstance(excinfo.value, RuntimeError)
+    assert excinfo.value.diagnostics["table"] == [[50, 20], [30, 40]]
+
+
 # ---------------------------------------------------------------------------
 # Relative risk
 # ---------------------------------------------------------------------------
@@ -69,6 +104,13 @@ def test_prevalence_ratio_delegates_to_rr():
     assert b.method == "prevalence-ratio"
 
 
+def test_relative_risk_rejects_empty_rows_with_taxonomy():
+    with pytest.raises(DataInsufficient) as excinfo:
+        sp.epi.relative_risk(0, 0, 30, 40)
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["n_exposed"] == 0
+
+
 # ---------------------------------------------------------------------------
 # Risk difference
 # ---------------------------------------------------------------------------
@@ -86,6 +128,13 @@ def test_risk_difference_newcombe_narrower_or_comparable():
     # Newcombe CI shouldn't be wildly off; both should contain the estimate
     for r in (rw, rn):
         assert r.ci[0] < r.estimate < r.ci[1]
+
+
+def test_risk_difference_rejects_invalid_method_and_empty_rows():
+    with pytest.raises(MethodIncompatibility, match="method"):
+        sp.epi.risk_difference(50, 50, 30, 70, method="agresti")
+    with pytest.raises(DataInsufficient):
+        sp.epi.risk_difference(0, 0, 30, 70)
 
 
 # ---------------------------------------------------------------------------
@@ -120,8 +169,17 @@ def test_incidence_rate_ratio_wald():
 
 
 def test_incidence_rate_ratio_rejects_zero_person_time():
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         sp.epi.incidence_rate_ratio(5, 0, 5, 10)
+
+
+def test_incidence_rate_ratio_rejects_bad_inputs_before_zero_event_shortcut():
+    with pytest.raises(MethodIncompatibility, match="method"):
+        sp.epi.incidence_rate_ratio(0, 1, 0, 1, method="bad")
+    with pytest.raises(MethodIncompatibility, match="non-negative"):
+        sp.epi.incidence_rate_ratio(-1, 1, 0, 1)
+    with pytest.raises(MethodIncompatibility, match="finite"):
+        sp.epi.incidence_rate_ratio(1, np.nan, 0, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +246,6 @@ def test_indirect_standardize_smr():
     events_ref = [10, 20, 30]
     pop_ref = [1000, 1000, 1000]
     pop_study = [1000, 1000, 1000]
-    expected = 0.01 * 1000 + 0.02 * 1000 + 0.03 * 1000  # 60
     r = sp.epi.indirect_standardize(
         observed=60,
         events_reference=events_ref,

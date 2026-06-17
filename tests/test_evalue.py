@@ -16,6 +16,7 @@ import pytest
 
 import statspai as sp
 from statspai.diagnostics.evalue import _threshold
+from statspai.exceptions import MethodIncompatibility
 
 
 # Tolerance vs the R EValue package (closed-form / deterministic grid).
@@ -139,9 +140,25 @@ def test_negative_se_rejected():
         sp.evalue(estimate=2.0, se=-0.1, measure="RR")
 
 
+def test_nonfinite_inputs_rejected():
+    with pytest.raises(MethodIncompatibility, match="estimate"):
+        sp.evalue(estimate=np.nan, measure="RR")
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.evalue(estimate=2.0, measure="RR", alpha=0.0)
+    with pytest.raises(MethodIncompatibility, match="rare"):
+        sp.evalue(estimate=2.0, measure="OR", rare="yes")
+
+
 def test_ci_misordered_rejected():
     with pytest.raises(ValueError):
         sp.evalue(estimate=2.0, ci=(3.0, 1.0), measure="RR")
+
+
+def test_ci_shape_and_finiteness_rejected():
+    with pytest.raises(MethodIncompatibility, match="two-element"):
+        sp.evalue(estimate=2.0, ci=(1.0, 2.0, 3.0), measure="RR")
+    with pytest.raises(MethodIncompatibility, match="finite"):
+        sp.evalue(estimate=2.0, ci=(1.0, np.inf), measure="RR")
 
 
 def test_estimate_outside_ci_rejected():
@@ -159,6 +176,15 @@ def test_rd_negative_cells_rejected():
         sp.evalue_rd(-1, 150, 100, 250)
 
 
+def test_rd_rejects_bad_alpha_grid_and_nonfinite_cells():
+    with pytest.raises(MethodIncompatibility, match="grid"):
+        sp.evalue_rd(200, 150, 100, 250, grid=0.0)
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.evalue_rd(200, 150, 100, 250, alpha=1.0)
+    with pytest.raises(MethodIncompatibility, match="n11"):
+        sp.evalue_rd(np.nan, 150, 100, 250)
+
+
 def test_rd_requires_positive_rd():
     # p1 < p0 -> risk difference negative -> must relabel.
     with pytest.raises(ValueError):
@@ -168,6 +194,11 @@ def test_rd_requires_positive_rd():
 def test_bias_factor_requires_associations_above_one():
     with pytest.raises(ValueError):
         sp.bias_factor(0.5, 2.0)
+
+
+def test_bias_factor_rejects_nonfinite_inputs():
+    with pytest.raises(MethodIncompatibility, match="rr_eu"):
+        sp.bias_factor(np.inf, 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +229,7 @@ def test_evalue_from_result_roundtrip():
 
 
 def test_evalue_from_result_bad_type():
-    with pytest.raises(TypeError):
+    with pytest.raises(MethodIncompatibility):
         sp.evalue_from_result(object())
 
 

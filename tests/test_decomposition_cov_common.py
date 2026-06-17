@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from statspai.decomposition import _common as C
+from statspai.exceptions import MethodIncompatibility
 
 
 # ── WLS ──────────────────────────────────────────────────────────────
@@ -60,7 +61,9 @@ def test_weighted_quantile_monotone_and_bounded():
 
 def test_weighted_gini_properties():
     # Perfect equality → Gini 0.
-    assert C.weighted_gini(np.array([5.0, 5, 5, 5]), np.ones(4)) == pytest.approx(0.0, abs=1e-12)
+    assert C.weighted_gini(
+        np.array([5.0, 5, 5, 5]), np.ones(4)
+    ) == pytest.approx(0.0, abs=1e-12)
     # Bounded in [0, 1].
     g = C.weighted_gini(np.array([1.0, 2, 3, 10, 50]), np.ones(5))
     assert 0.0 <= g <= 1.0
@@ -84,9 +87,15 @@ def test_statistic_value_closed_forms():
     rng = np.random.default_rng(2)
     y = np.abs(rng.normal(5, 2, 500)) + 0.1
     w = np.ones_like(y)
-    assert C.statistic_value(y, w, "mean") == pytest.approx(float(np.average(y)))
-    assert C.statistic_value(y, w, "variance") == pytest.approx(float(np.cov(y)), rel=1e-9)
-    assert C.statistic_value(y, w, "std") == pytest.approx(float(np.sqrt(np.cov(y))), rel=1e-9)
+    assert C.statistic_value(y, w, "mean") == pytest.approx(
+        float(np.average(y))
+    )
+    assert C.statistic_value(y, w, "variance") == pytest.approx(
+        float(np.cov(y)), rel=1e-9
+    )
+    assert C.statistic_value(y, w, "std") == pytest.approx(
+        float(np.sqrt(np.cov(y))), rel=1e-9
+    )
     # Theil-T, Theil-L, Atkinson, Gini all non-negative for positive incomes.
     for stat in ("gini", "theil_t", "theil_l", "atkinson", "log_var"):
         assert C.statistic_value(y, w, stat) >= -1e-9
@@ -96,8 +105,10 @@ def test_statistic_value_closed_forms():
 
 
 def test_statistic_value_unknown_raises():
-    with pytest.raises(ValueError, match="(?i)unknown statistic"):
+    with pytest.raises(MethodIncompatibility, match="(?i)unknown statistic") as excinfo:
         C.statistic_value(np.array([1.0, 2.0]), np.ones(2), "not_a_stat")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["stat"] == "not_a_stat"
 
 
 # ── influence function ───────────────────────────────────────────────
@@ -120,11 +131,17 @@ def test_rif_variance_family_recenters_to_population_moment():
     rng = np.random.default_rng(31)
     y = np.abs(rng.normal(10, 3, 400)) + 0.5
     pop_var = float(np.average((y - y.mean()) ** 2))
-    assert float(np.mean(C.influence_function(y, "variance"))) == pytest.approx(pop_var, rel=1e-9)
-    assert float(np.mean(C.influence_function(y, "std"))) == pytest.approx(np.sqrt(pop_var), rel=1e-9)
+    assert float(np.mean(C.influence_function(y, "variance"))) == pytest.approx(
+        pop_var, rel=1e-9
+    )
+    assert float(np.mean(C.influence_function(y, "std"))) == pytest.approx(
+        np.sqrt(pop_var), rel=1e-9
+    )
     ly = np.log(y)
     pop_logvar = float(np.average((ly - ly.mean()) ** 2))
-    assert float(np.mean(C.influence_function(y, "log_var"))) == pytest.approx(pop_logvar, rel=1e-9)
+    assert float(np.mean(C.influence_function(y, "log_var"))) == pytest.approx(
+        pop_logvar, rel=1e-9
+    )
 
 
 def test_rif_of_mean_is_y():
@@ -143,21 +160,27 @@ def test_bootstrap_ci_methods(method):
     boot = rng.normal(2.0, 0.5, 2000)
     point = np.array([2.0])
     # bootstrap_ci returns (se, lo, hi).
-    se, lo, hi = C.bootstrap_ci(boot.reshape(-1, 1), point, alpha=0.05, method=method)
+    se, lo, hi = C.bootstrap_ci(
+        boot.reshape(-1, 1), point, alpha=0.05, method=method
+    )
     assert np.all(lo < hi)
     assert np.all(se > 0)
 
 
 def test_bootstrap_ci_percentile_endpoints():
     boot = np.linspace(0, 1, 1001).reshape(-1, 1)
-    _se, lo, hi = C.bootstrap_ci(boot, np.array([0.5]), alpha=0.10, method="percentile")
+    _se, lo, hi = C.bootstrap_ci(
+        boot, np.array([0.5]), alpha=0.10, method="percentile"
+    )
     assert lo[0] == pytest.approx(0.05, abs=1e-2)
     assert hi[0] == pytest.approx(0.95, abs=1e-2)
 
 
 def test_bootstrap_ci_unknown_method_raises():
-    with pytest.raises(ValueError, match="(?i)unknown method"):
+    with pytest.raises(MethodIncompatibility, match="(?i)unknown method") as excinfo:
         C.bootstrap_ci(np.zeros((10, 1)), np.array([0.0]), method="nope")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["method"] == "nope"
 
 
 # ── logit ────────────────────────────────────────────────────────────
@@ -184,8 +207,21 @@ def test_parse_formula():
     dep, indep = C.parse_formula("y ~ x1 + x2 + 1 + x3")
     assert dep == "y"
     assert indep == ["x1", "x2", "x3"]  # intercept token filtered
-    with pytest.raises(ValueError, match="~"):
+    with pytest.raises(MethodIncompatibility, match="~") as excinfo:
         C.parse_formula("no tilde here")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.recovery_hint
+
+
+def test_weighted_quantile_hmisc_validation_uses_taxonomy():
+    y = np.array([1.0, 2.0, 3.0])
+    with pytest.raises(MethodIncompatibility, match="same length") as excinfo:
+        C.weighted_quantile_hmisc(y, 0.5, w=np.ones(2))
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics == {"n_y": 3, "n_w": 2}
+
+    with pytest.raises(MethodIncompatibility, match="between 0 and 1"):
+        C.weighted_quantile_hmisc(y, 1.5)
 
 
 def test_prepare_frame_drops_na_and_extracts_weights():
@@ -199,6 +235,15 @@ def test_prepare_frame_drops_na_and_extracts_weights():
     # weights=None → unit weights
     d3, w3 = C.prepare_frame(df.dropna(), ["y", "x"])
     assert np.all(w3 == 1.0)
+
+
+def test_prepare_frame_missing_columns_use_taxonomy():
+    import pandas as pd
+    df = pd.DataFrame({"y": [1.0], "x": [2.0]})
+    with pytest.raises(MethodIncompatibility, match="missing") as excinfo:
+        C.prepare_frame(df, ["y", "missing"], weights="wt")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["missing_columns"] == ["missing", "wt"]
 
 
 # ── generic / wild bootstrap drivers ─────────────────────────────────

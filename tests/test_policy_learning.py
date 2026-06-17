@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from statspai.policy_learning import policy_tree, PolicyTree, policy_value
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -141,8 +142,35 @@ class TestPolicyTree:
             'x1': [1, 2]
         })
         est = PolicyTree(data=df, y='y', treat='d', covariates=['x1'])
-        with pytest.raises(ValueError, match="fitted"):
+        with pytest.raises(MethodIncompatibility, match="fitted"):
             est.predict(np.array([[1]]))
+
+    def test_predict_validates_new_policy_covariates(self, small_data):
+        result = policy_tree(
+            small_data,
+            y='y',
+            treat='d',
+            covariates=['x1', 'x2'],
+            max_depth=1,
+            n_folds=3,
+        )
+        tree = result['tree']
+
+        one_row = tree.predict(np.array([0.0, 0.0]))
+        assert one_row.shape == (1,)
+
+        with pytest.raises(MethodIncompatibility) as wrong_shape:
+            tree.predict(np.ones((2, 3)))
+        assert wrong_shape.value.diagnostics["expected_features"] == 2
+
+        with pytest.raises(MethodIncompatibility, match="numeric"):
+            tree.predict(np.array([["bad", "data"]], dtype=object))
+
+        with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+            tree.predict(np.array([[np.nan, 0.0]]))
+
+        with pytest.raises(DataInsufficient):
+            tree.predict(np.empty((0, 2)))
 
 
 # ======================================================================

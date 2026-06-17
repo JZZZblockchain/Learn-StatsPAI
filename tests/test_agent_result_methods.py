@@ -146,6 +146,20 @@ class TestCausalAgentSummary:
         assert all(isinstance(v, dict) for v in s["violations"])
         assert any(v["test"] == "pretrend" for v in s["violations"])
 
+    @pytest.mark.parametrize(
+        "method_name, kwargs",
+        [
+            ("summary", {"alpha": 0.0}),
+            ("summary", {"alpha": 1.0}),
+            ("tidy", {"conf_level": 0.0}),
+            ("tidy", {"conf_level": 1.0}),
+        ],
+    )
+    def test_probability_arguments_rejected(self, method_name, kwargs):
+        r = _make_causal_result()
+        with pytest.raises(ValueError, match="open interval"):
+            getattr(r, method_name)(**kwargs)
+
 
 # ====================================================================== #
 #  EconometricResults
@@ -191,3 +205,22 @@ class TestEconometricAgentSummary:
         s = r.to_agent_summary()
         # Must round-trip through json
         json.dumps(s, default=str)
+
+    @pytest.mark.parametrize(
+        "method_name, kwargs",
+        [
+            ("summary", {"alpha": 0.0}),
+            ("conf_int", {"alpha": 1.0}),
+            ("tidy", {"conf_level": 0.0}),
+            ("tidy", {"conf_level": float("nan")}),
+        ],
+    )
+    def test_probability_arguments_rejected(self, method_name, kwargs):
+        np.random.seed(0)
+        df = pd.DataFrame({
+            "y": np.random.randn(100),
+            "x": np.random.randn(100),
+        })
+        r = sp.regress("y ~ x", data=df)
+        with pytest.raises(ValueError, match="open interval"):
+            getattr(r, method_name)(**kwargs)

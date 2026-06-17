@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 def _panel_nb_data(seed: int = 20260507, n_g: int = 24, n_t: int = 6) -> pd.DataFrame:
@@ -61,3 +63,68 @@ def test_xtnbreg_allows_formula_panel_part_without_entity_argument():
         result.model_info["n_fe_params"],
         df["id"].nunique() - 1,
     )
+
+
+def test_nbreg_input_errors_use_exception_taxonomy():
+    df = _panel_nb_data()
+
+    with pytest.raises(MethodIncompatibility, match="Must provide") as excinfo:
+        sp.nbreg(data=df)
+    assert isinstance(excinfo.value, ValueError)
+
+    with pytest.raises(MethodIncompatibility, match="missing column"):
+        sp.nbreg("y ~ missing", data=df, maxiter=5)
+
+    with pytest.raises(MethodIncompatibility, match="fixed effects"):
+        sp.nbreg("y ~ x | missing_id", data=df, maxiter=5)
+
+    missing_fe = df.copy()
+    missing_fe.loc[0, "id"] = np.nan
+    with pytest.raises(MethodIncompatibility, match="fixed-effect column"):
+        sp.nbreg("y ~ x | id", data=missing_fe, maxiter=5)
+
+
+def test_count_models_reject_nonpositive_exposure_taxonomy():
+    df = _panel_nb_data()
+    df["exposure"] = 1.0
+    df.loc[0, "exposure"] = 0.0
+
+    with pytest.raises(MethodIncompatibility, match="exposure"):
+        sp.nbreg("y ~ x", data=df, exposure="exposure", maxiter=5)
+
+    with pytest.raises(MethodIncompatibility, match="exposure"):
+        sp.poisson("y ~ x", data=df, exposure="exposure", maxiter=5)
+
+
+def test_xtnbreg_configuration_errors_use_exception_taxonomy():
+    df = _panel_nb_data()
+
+    with pytest.raises(MethodIncompatibility, match="data"):
+        sp.xtnbreg("y ~ x", data=None, entity="id")
+
+    with pytest.raises(MethodIncompatibility, match="either `formula` or `y=`"):
+        sp.xtnbreg(data=df)
+
+    with pytest.raises(MethodIncompatibility, match="fixed-effects xtnbreg"):
+        sp.xtnbreg("y ~ x", data=df, model="fe")
+
+    with pytest.raises(MethodIncompatibility, match="time_effects=True"):
+        sp.xtnbreg("y ~ x", data=df, entity="id", time_effects=True)
+
+    with pytest.raises(MethodIncompatibility, match="random-effects xtnbreg"):
+        sp.xtnbreg("y ~ x", data=df, model="re")
+
+    with pytest.raises(MethodIncompatibility, match="model must be"):
+        sp.xtnbreg("y ~ x", data=df, entity="id", model="bad")
+
+    bad_exposure = df.copy()
+    bad_exposure["exposure"] = 1.0
+    bad_exposure.loc[0, "exposure"] = 0.0
+    with pytest.raises(MethodIncompatibility, match="exposure"):
+        sp.xtnbreg(
+            "y ~ x",
+            data=bad_exposure,
+            entity="id",
+            model="re",
+            exposure="exposure",
+        )

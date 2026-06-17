@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 def _poisson_data(seed=0, n=2000):
@@ -211,3 +212,36 @@ def test_etable_falls_back_to_z_when_no_df_residual():
     tab = sp.fast.etable(_MinimalFit())
     # 0.30 / 0.10 = 3.0 > 2.576 (z critical at 1%)
     assert "***" in tab.loc["x1", "(1)"]
+
+
+class _TinyFit:
+    n_obs = 4
+
+    def coef(self):
+        return pd.Series([1.2], index=["x1"])
+
+    def se(self):
+        return pd.Series([0.4], index=["x1"])
+
+
+def test_etable_digits_zero_allowed_and_invalid_digits_rejected():
+    tab = sp.fast.etable(_TinyFit(), digits=0, stars=False)
+    assert tab.loc["x1", "(1)"] == "1 (0)"
+
+    for bad in (-1, True, 1.5):
+        with pytest.raises(MethodIncompatibility, match="digits"):
+            sp.fast.etable(_TinyFit(), digits=bad)
+
+
+def test_etable_rejects_bare_string_sequences():
+    with pytest.raises(MethodIncompatibility, match="names"):
+        sp.fast.etable(_TinyFit(), names="model")
+    with pytest.raises(MethodIncompatibility, match="keep"):
+        sp.fast.etable(_TinyFit(), keep="x1")
+    with pytest.raises(MethodIncompatibility, match="drop"):
+        sp.fast.etable(_TinyFit(), drop="x1")
+
+
+def test_etable_rejects_unsupported_fit_object_with_taxonomy_error():
+    with pytest.raises(MethodIncompatibility, match="cannot extract coefficients"):
+        sp.fast.etable(object())

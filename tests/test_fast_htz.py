@@ -363,6 +363,21 @@ def test_htz_negative_weights_rejected():
         sp.fast.cluster_dof_wald_htz(X, g, R=np.eye(2), weights=bad_w)
 
 
+def test_htz_weight_length_and_nonfinite_rejected():
+    df = _ols_panel(seed=86, n_clusters=20)
+    X = df[["x1", "x2"]].to_numpy()
+    g = df["g"].to_numpy()
+
+    with pytest.raises(ValueError, match="weights length"):
+        sp.fast.cluster_dof_wald_htz(
+            X, g, R=np.eye(2), weights=np.ones(len(df) - 1),
+        )
+    bad_w = np.ones(len(df))
+    bad_w[0] = np.nan
+    with pytest.raises(ValueError, match="weights contain non-finite"):
+        sp.fast.cluster_dof_wald_htz(X, g, R=np.eye(2), weights=bad_w)
+
+
 def test_htz_non_uniform_weights_not_implemented():
     """v1 spec locks Φ=I (weights=None or all 1); other weights raise."""
     df = _ols_panel(seed=87, n_clusters=20)

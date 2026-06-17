@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 import statspai as sp
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def _make_2d(n=2500, tau=2.0, seed=42):
@@ -87,8 +88,31 @@ def test_rd2d_bw_selector():
 
 def test_rd2d_invalid_approach():
     df = _make_2d()
-    with pytest.raises(ValueError, match="approach"):
+    with pytest.raises(MethodIncompatibility, match="approach"):
         sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="d", approach="bad")
+
+
+def test_rd2d_input_validation_taxonomy():
+    df = _make_2d()
+
+    with pytest.raises(MethodIncompatibility, match="Column"):
+        sp.rd2d(df, y="missing", x1="x1", x2="x2", treatment="d")
+
+    with pytest.raises(DataInsufficient, match="Too few valid"):
+        sp.rd2d(df.head(10), y="y", x1="x1", x2="x2", treatment="d")
+
+    all_treated = df.assign(d=1.0)
+    with pytest.raises(DataInsufficient, match="Too few treated"):
+        sp.rd2d(all_treated, y="y", x1="x1", x2="x2", treatment="d")
+
+    with pytest.raises(MethodIncompatibility, match="eval_points"):
+        sp.rd2d(
+            df, y="y", x1="x1", x2="x2", treatment="d",
+            approach="location", eval_points=np.ones((2, 3)),
+        )
+
+    with pytest.raises(MethodIncompatibility, match="Column"):
+        sp.rd2d_bw(df, y="missing", x1="x1", x2="x2", treatment="d")
 
 
 @pytest.mark.parametrize("ptype", ["scatter", "heatmap"])
@@ -127,6 +151,16 @@ def test_rd2d_plot_custom_boundary_and_boundary_effects():
 
 def test_rd2d_plot_invalid_type():
     df = _make_2d()
-    with pytest.raises(ValueError, match="plot_type"):
+    with pytest.raises(MethodIncompatibility, match="plot_type"):
         sp.rd2d_plot(df, y="y", x1="x1", x2="x2", treatment="d",
                      plot_type="bad")
+
+
+def test_rd2d_plot_boundary_effects_requires_location_detail():
+    df = _make_2d()
+    res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="d")
+    with pytest.raises(MethodIncompatibility, match="boundary eval points"):
+        sp.rd2d_plot(
+            df, y="y", x1="x1", x2="x2", treatment="d",
+            result=res, plot_type="boundary_effects",
+        )

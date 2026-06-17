@@ -17,6 +17,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +175,13 @@ def test_cascading_singleton_drop():
     assert info.keep_mask[-1] == False  # noqa: E712
 
 
+def test_all_singletons_default_drop_raises_data_insufficient():
+    y = np.arange(6, dtype=float)
+    fe = np.arange(6, dtype=np.int64)
+    with pytest.raises(DataInsufficient, match="singleton"):
+        sp.fast.demean(y, [fe])
+
+
 # ---------------------------------------------------------------------------
 # DataFrame / Series / list inputs
 # ---------------------------------------------------------------------------
@@ -225,12 +233,69 @@ def test_nan_in_FE_raises():
         sp.fast.demean(y, [fe])
 
 
+def test_dataframe_fe_row_mismatch_raises():
+    y = np.arange(10, dtype=float)
+    fe = pd.DataFrame({"g": np.arange(9)})
+    with pytest.raises(ValueError, match="fe has 9 rows"):
+        sp.fast.demean(y, fe)
+
+
+def test_array_fe_row_mismatch_raises():
+    y = np.arange(10, dtype=float)
+    fe = np.arange(9)
+    with pytest.raises(ValueError, match="fe column has length 9"):
+        sp.fast.demean(y, fe)
+
+
+def test_sequence_fe_non_1d_raises():
+    y = np.arange(10, dtype=float)
+    fe = np.zeros((10, 2), dtype=np.int64)
+    with pytest.raises(ValueError, match="fe column 0 must be 1-D"):
+        sp.fast.demean(y, [fe])
+
+
 def test_unknown_accel_rejected():
     n = 20
     fe = np.zeros(n, dtype=np.int64)
     y = np.arange(n, dtype=float)
     with pytest.raises(ValueError, match="accel"):
         sp.fast.demean(y, [fe], accel="bogus")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"max_iter": 0}, "max_iter"),
+        ({"max_iter": True}, "max_iter"),
+        ({"tol": -1.0}, "tol"),
+        ({"tol": np.nan}, "tol"),
+        ({"tol_abs": np.nan}, "tol_abs"),
+        ({"accel_period": 0}, "accel_period"),
+        ({"backend": "bogus"}, "backend"),
+        ({"jax_max_iter": 0}, "jax_max_iter"),
+    ],
+)
+def test_invalid_demean_controls_raise(kwargs, match):
+    n = 20
+    fe = np.zeros(n, dtype=np.int64)
+    y = np.arange(n, dtype=float)
+    with pytest.raises(MethodIncompatibility, match=match):
+        sp.fast.demean(y, [fe], **kwargs)
+
+
+def test_empty_demean_sample_raises_data_insufficient():
+    with pytest.raises(DataInsufficient, match="at least one row"):
+        sp.fast.demean(np.array([], dtype=float), [np.array([], dtype=np.int64)])
+
+
+def test_empty_fe_spec_raises_taxonomy_error():
+    y = np.arange(10, dtype=float)
+    with pytest.raises(MethodIncompatibility, match="at least one"):
+        sp.fast.demean(y, [])
+    with pytest.raises(MethodIncompatibility, match="at least one"):
+        sp.fast.demean(y, np.empty((10, 0), dtype=np.int64))
+    with pytest.raises(MethodIncompatibility, match="at least one"):
+        sp.fast.demean(y, pd.DataFrame(index=np.arange(10)))
 
 
 def test_rust_backend_when_unavailable():

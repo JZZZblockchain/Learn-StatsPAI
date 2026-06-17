@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +203,7 @@ def test_feols_cluster_nan_rejected():
 
 def test_feols_missing_column_raises():
     df = _ols_panel(seed=15)
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing"):
         sp.fast.feols("y ~ x_missing | fe1", df)
 
 
@@ -218,6 +219,45 @@ def test_feols_x_nonfinite_raises():
     df.loc[df.index[3], "x1"] = np.inf
     with pytest.raises(ValueError, match="non-finite"):
         sp.fast.feols("y ~ x1 | fe1", df)
+
+
+def test_feols_empty_data_raises():
+    df = _ols_panel(seed=171).iloc[0:0].copy()
+    with pytest.raises(ValueError, match="at least one row"):
+        sp.fast.feols("y ~ x1 | fe1", df)
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"fe_maxiter": 0}, "fe_maxiter"),
+        ({"fe_tol": -1.0}, "fe_tol"),
+        ({"fe_tol": np.nan}, "fe_tol"),
+    ],
+)
+def test_feols_invalid_demean_controls_raise(kwargs, match):
+    df = _ols_panel(seed=172)
+    with pytest.raises(ValueError, match=match):
+        sp.fast.feols("y ~ x1 | fe1", df, **kwargs)
+
+
+def test_feols_all_zero_weights_raise():
+    df = _ols_panel(seed=173)
+    df["w"] = 0.0
+    with pytest.raises(ValueError, match="no positive mass"):
+        sp.fast.feols("y ~ x1 | fe1", df, weights="w")
+
+
+def test_feols_kept_sample_all_zero_weights_raise():
+    df = _ols_panel(seed=174, n_units=10, n_periods=5)
+    df["w"] = 0.0
+    extra = df.iloc[[0]].copy()
+    extra["fe1"] = 999
+    extra["w"] = 1.0
+    df_aug = pd.concat([df, extra], ignore_index=True)
+
+    with pytest.raises(ValueError, match="no positive mass"):
+        sp.fast.feols("y ~ x1 | fe1 + fe2", df_aug, weights="w")
 
 
 def test_feols_singleton_drop():
@@ -247,6 +287,24 @@ def test_feols_result_accessors_shape():
     assert fit.coef_vec.size == 2          # x1, x2
     assert fit.vcov_matrix.shape == (2, 2)
     assert 0.0 <= fit.r_squared_within <= 1.0
+
+
+def test_feols_result_protocol_json_safe():
+    df = _ols_panel(seed=25, n=800, n_units=40, n_periods=20)
+    fit = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, vcov="hc1")
+
+    full = fit.to_dict()
+    agent = fit.to_agent_summary(max_terms=1)
+
+    assert full["kind"] == "fast_feols_result"
+    assert full["model"] == "ols_hdfe"
+    assert len(full["coefficients"]) == 2
+    assert full["vcov"]["terms"] == ["x1", "x2"]
+    assert agent["kind"] == "fast_feols_agent_summary"
+    assert len(agent["coefficients"]) == 1
+    assert agent["truncated_terms"] == 1
+    json.dumps(full)
+    json.dumps(agent)
 
 
 def test_feols_df_resid_accounting():

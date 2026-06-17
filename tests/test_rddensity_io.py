@@ -10,6 +10,7 @@ import subprocess
 from statspai.diagnostics.rddensity import rddensity, _find_rscript
 from statspai.utils.io import read_data
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 @pytest.fixture
@@ -131,14 +132,28 @@ class TestRDDensity:
         assert "backend='r'" in result.model_info['validation_note']
 
     def test_invalid_bandwidth(self, clean_rd):
-        with pytest.raises(ValueError, match="length-2"):
+        with pytest.raises(MethodIncompatibility, match="length-2"):
             rddensity(clean_rd, x='x', c=0, h=(0.2, 0.3, 0.4))
-        with pytest.raises(ValueError, match="positive"):
+        with pytest.raises(MethodIncompatibility, match="positive"):
             rddensity(clean_rd, x='x', c=0, h=-0.2)
 
     def test_invalid_backend(self, clean_rd):
-        with pytest.raises(ValueError, match="backend"):
+        with pytest.raises(MethodIncompatibility, match="backend"):
             rddensity(clean_rd, x='x', c=0, backend='unknown')
+
+    def test_input_validation_taxonomy(self, clean_rd):
+        with pytest.raises(MethodIncompatibility, match="Column"):
+            rddensity(clean_rd, x='missing', c=0)
+
+        with pytest.raises(MethodIncompatibility, match="p must"):
+            rddensity(clean_rd, x='x', c=0, p=0)
+
+        with pytest.raises(DataInsufficient, match="Need at least 20"):
+            rddensity(clean_rd.head(10), x='x', c=0)
+
+        one_sided = pd.DataFrame({'x': np.linspace(0.1, 2.0, 100)})
+        with pytest.raises(DataInsufficient, match="each side"):
+            rddensity(one_sided, x='x', c=0)
 
     def test_r_backend_matches_reference_package(self, clean_rd):
         rscript = _find_rscript()

@@ -26,6 +26,7 @@ import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
 import statspai as sp  # noqa: E402
+from statspai.exceptions import MethodIncompatibility  # noqa: E402
 from statspai.rd.rdml import _importance_plot  # noqa: E402
 
 JUMP_Z0 = 2.0
@@ -80,33 +81,33 @@ def test_rd_forest_no_honesty():
 
 def test_rd_forest_requires_covs():
     df = _rd_df()
-    with pytest.raises(ValueError, match="covariate"):
+    with pytest.raises(MethodIncompatibility, match="covariate"):
         sp.rd_forest(df, y="y", x="x", c=0, covs=None, n_trees=50)
 
 
 def test_rd_forest_running_var_in_covs_errors():
     df = _rd_df()
-    with pytest.raises(ValueError, match="must not be in covs"):
+    with pytest.raises(MethodIncompatibility, match="must not be in covs"):
         sp.rd_forest(df, y="y", x="x", c=0, covs=["x", "cov1"], n_trees=50)
 
 
 def test_rd_forest_missing_covariate_column():
     df = _rd_df()
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(MethodIncompatibility, match="not found"):
         sp.rd_forest(df, y="y", x="x", c=0, covs=["does_not_exist"],
                      n_trees=50)
 
 
 def test_rd_lasso_requires_covs():
     df = _rd_df()
-    with pytest.raises(ValueError, match="covariates"):
+    with pytest.raises(MethodIncompatibility, match="covariates"):
         sp.rd_lasso(df, y="y", x="x", c=0, covs=None)
 
 
 def test_rd_cate_summary_method_subset():
     df = _rd_df()
-    out = sp.rd_cate_summary(df, y="y", x="x", c=0, covs=["cov1"],
-                             methods=["lasso"])
+    out = sp.rd_cate_summary(df, y="y", x="x", c=0, covs="cov1",
+                             methods="lasso")
     assert "lasso" in out
     assert "comparison" in out
     # Only the requested method ran -> exactly one comparison row, no others.
@@ -136,7 +137,7 @@ def test_rd_cate_summary_method_subset():
 
 def test_rd_cate_summary_unknown_method():
     df = _rd_df()
-    with pytest.raises(ValueError, match="Unknown methods"):
+    with pytest.raises(MethodIncompatibility, match="Unknown methods"):
         sp.rd_cate_summary(df, y="y", x="x", c=0, covs=["cov1"],
                            methods=["forest", "nope"])
 
@@ -195,5 +196,5 @@ def test_importance_plot_empty_raises():
     df = _rd_df()
     r = sp.rd_lasso(df, y="y", x="x", c=0, covs=["cov1"])
     # rd_lasso result has no variable_importance -> guard raises
-    with pytest.raises(ValueError, match="variable_importance"):
+    with pytest.raises(MethodIncompatibility, match="variable_importance"):
         _importance_plot(r)

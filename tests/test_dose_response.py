@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def _linear_dgp(n=1000, slope=1.5, seed=0):
@@ -95,3 +96,110 @@ def test_vcnet_curve_is_increasing_for_positive_slope():
     ci_hi = np.asarray(res.ci_hi, dtype=float)
     assert np.all(ci_lo <= mu_hat + 1e-8)
     assert np.all(mu_hat <= ci_hi + 1e-8)
+
+
+def test_vcnet_validates_inputs_and_accepts_covariate_string():
+    df = _linear_dgp(n=80, seed=4)
+
+    with pytest.raises(MethodIncompatibility, match="DataFrame"):
+        sp.vcnet([{"y": 1.0}], y="y", treatment="t", covariates=["x"])
+
+    with pytest.raises(MethodIncompatibility) as missing:
+        sp.vcnet(df, y="missing", treatment="t", covariates=["x"])
+    assert missing.value.diagnostics["missing_columns"] == ["missing"]
+
+    with pytest.raises(MethodIncompatibility, match="covariates"):
+        sp.vcnet(df, y="y", treatment="t", covariates=None)
+
+    bad = df.copy()
+    bad["x"] = "bad"
+    with pytest.raises(MethodIncompatibility, match="numeric"):
+        sp.vcnet(bad, y="y", treatment="t", covariates=["x"])
+
+    bad = df.copy()
+    bad.loc[bad.index[0], "t"] = np.inf
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        sp.vcnet(bad, y="y", treatment="t", covariates=["x"])
+
+    constant = df.copy()
+    constant["t"] = 1.0
+    with pytest.raises(DataInsufficient, match="distinct treatment"):
+        sp.vcnet(constant, y="y", treatment="t", covariates=["x"])
+
+    with pytest.raises(MethodIncompatibility, match="n_basis"):
+        sp.vcnet(df, y="y", treatment="t", covariates=["x"], n_basis=3)
+
+    with pytest.raises(MethodIncompatibility, match="ridge"):
+        sp.vcnet(df, y="y", treatment="t", covariates=["x"], ridge=np.nan)
+
+    with pytest.raises(MethodIncompatibility, match="n_bootstrap"):
+        sp.vcnet(df, y="y", treatment="t", covariates=["x"], n_bootstrap=1)
+
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.vcnet(df, y="y", treatment="t", covariates=["x"], alpha=1.0)
+
+    with pytest.raises(MethodIncompatibility, match="t_grid"):
+        sp.vcnet(df, y="y", treatment="t", covariates=["x"], t_grid=[])
+
+    res = sp.vcnet(
+        df,
+        y="y",
+        treatment="t",
+        covariates="x",
+        t_grid=[-1.0, 0.0, 1.0],
+        n_bootstrap=2,
+        random_state=5,
+    )
+    assert res.t_grid.tolist() == [-1.0, 0.0, 1.0]
+
+
+def test_scigan_validates_propensity_weights():
+    df = _linear_dgp(n=80, seed=5)
+
+    with pytest.raises(MethodIncompatibility) as wrong_len:
+        sp.scigan(
+            df,
+            y="y",
+            treatment="t",
+            covariates=["x"],
+            propensity_weights=np.ones(len(df) - 1),
+        )
+    assert wrong_len.value.diagnostics == {"n_weights": 79, "n_rows": 80}
+
+    with pytest.raises(MethodIncompatibility, match="numeric"):
+        sp.scigan(
+            df,
+            y="y",
+            treatment="t",
+            covariates=["x"],
+            propensity_weights=np.array(["bad"] * len(df)),
+        )
+
+    with pytest.raises(MethodIncompatibility, match="non-negative"):
+        sp.scigan(
+            df,
+            y="y",
+            treatment="t",
+            covariates=["x"],
+            propensity_weights=-np.ones(len(df)),
+        )
+
+    with pytest.raises(DataInsufficient, match="zero total mass"):
+        sp.scigan(
+            df,
+            y="y",
+            treatment="t",
+            covariates=["x"],
+            propensity_weights=np.zeros(len(df)),
+        )
+
+    res = sp.scigan(
+        df,
+        y="y",
+        treatment="t",
+        covariates=["x"],
+        propensity_weights=np.ones(len(df)),
+        n_bootstrap=2,
+        random_state=6,
+    )
+    assert len(res.t_grid) == 40

@@ -4,10 +4,10 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 warnings.filterwarnings("ignore")
-
-import statspai as sp
 
 
 def test_bcf_ordinal_recovers_monotone_effects():
@@ -16,7 +16,7 @@ def test_bcf_ordinal_recovers_monotone_effects():
     n = 300
     X = rng.normal(size=(n, 3))
     T = rng.integers(0, 4, size=n)
-    # Monotone treatment effect: 0 for T=0, 0.5 for T=1, 1.0 for T=2, 1.5 for T=3
+    # Monotone treatment effect: 0 for T=0, then +0.5 per level.
     y = 0.5 * T + X[:, 0] + rng.normal(0, 0.3, n)
     df = pd.DataFrame({
         "y": y, "t": T,
@@ -31,8 +31,11 @@ def test_bcf_ordinal_recovers_monotone_effects():
     attrs = [a for a in dir(r) if not a.startswith("_")]
     # BCFOrdinalResult exposes ate / cate / levels
     has_levels = any(
-        kw in attrs for kw in ("level_effects", "effects", "tau", "contrasts",
-                                "estimates", "ate", "cate", "levels")
+        kw in attrs
+        for kw in (
+            "level_effects", "effects", "tau", "contrasts",
+            "estimates", "ate", "cate", "levels",
+        )
     )
     assert has_levels, f"result has attrs {attrs[:12]}"
     # CATE is an n × (K-1) DataFrame of contrasts relative to the baseline level.
@@ -75,12 +78,20 @@ def test_bcf_factor_exposure_runs():
             r.total_mixture_ci[0],
             r.total_mixture_ci[1],
         ],
-        [-1.0601311768880428, 0.20188509123723858, -1.4558186847286132, -0.6644436690474723],
+        [
+            -1.0601311768880428,
+            0.20188509123723858,
+            -1.4558186847286132,
+            -0.6644436690474723,
+        ],
         atol=1e-12,
     )
     np.testing.assert_allclose(
         r.per_factor_ate[["explained_var_ratio", "ate", "se"]].to_numpy(),
-        np.array([[0.241991, 0.293275, 0.157422], [0.224799, -1.353406, 0.126396]]),
+        np.array([
+            [0.241991, 0.293275, 0.157422],
+            [0.224799, -1.353406, 0.126396],
+        ]),
         atol=5e-7,
     )
 
@@ -91,9 +102,25 @@ def test_bcf_ordinal_validates_inputs():
         "t": np.random.randint(0, 3, 50),
         "x": np.random.randn(50),
     })
-    # Missing covariates arg should raise OR use sensible default
-    with pytest.raises((TypeError, ValueError, KeyError)):
+    with pytest.raises(MethodIncompatibility, match="missing") as exc:
         sp.bcf_ordinal(df, y="nonexistent_col", treat="t", covariates=["x"])
+    assert exc.value.diagnostics["missing_columns"] == ["nonexistent_col"]
+
+
+def test_bcf_ordinal_validates_levels_and_baseline():
+    df = pd.DataFrame({
+        "y": np.random.randn(50),
+        "t": np.zeros(50, dtype=int),
+        "x": np.random.randn(50),
+    })
+    with pytest.raises(DataInsufficient, match=">=2 levels") as exc:
+        sp.bcf_ordinal(df, y="y", treat="t", covariates=["x"])
+    assert exc.value.diagnostics["levels"] == [0]
+
+    df["t"] = np.random.randint(0, 3, 50)
+    with pytest.raises(MethodIncompatibility, match="baseline") as exc:
+        sp.bcf_ordinal(df, y="y", treat="t", covariates=["x"], baseline=99)
+    assert exc.value.diagnostics["baseline"] == 99
 
 
 def test_bcf_ordinal_registered():

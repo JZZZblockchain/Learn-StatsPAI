@@ -16,8 +16,6 @@ panel test files (``test_panel.py``, ``test_panel_dynamic.py``,
 """
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -56,6 +54,11 @@ def test_classical_methods(panel_data, method):
     r = sp.panel(panel_data, "wage ~ exp + edu",
                  entity="id", time="year", method=method)
     assert isinstance(r, sp.PanelResults)
+
+
+def test_classical_methods_require_core_identifiers(panel_data):
+    with pytest.raises(ValueError, match="missing: entity, time"):
+        sp.panel(panel_data, "wage ~ exp + edu", method="fe")
 
 
 # ─── Aliases ────────────────────────────────────────────────────────────

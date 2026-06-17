@@ -11,13 +11,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-import numpy as np
-import pandas as pd
-import pytest
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import pytest  # noqa: E402
 
-import statspai as sp
-from statspai.panel import PanelResults, PanelRegression
-from statspai.panel.panel_reg import PanelCompareResults, panel_compare
+import statspai as sp  # noqa: E402
+from statspai.exceptions import DataInsufficient, MethodIncompatibility  # noqa: E402
+from statspai.panel import PanelResults, PanelRegression  # noqa: E402
+from statspai.panel.panel_reg import PanelCompareResults, panel_compare  # noqa: E402
 
 
 @pytest.fixture
@@ -88,18 +89,18 @@ def test_pesaran_cd_test_method(panel_df):
 def test_diagnostic_methods_raise_without_panel_data(panel_df):
     r = sp.panel(panel_df, "y ~ x1 + x2", entity="id", time="year", method="fe")
     r._panel_data = None
-    with pytest.raises(ValueError, match="Hausman"):
+    with pytest.raises(MethodIncompatibility, match="Hausman"):
         r.hausman_test()
-    with pytest.raises(ValueError, match="BP-LM"):
+    with pytest.raises(MethodIncompatibility, match="BP-LM"):
         r.bp_lm_test()
-    with pytest.raises(ValueError, match="F-test"):
+    with pytest.raises(MethodIncompatibility, match="F-test"):
         r.f_test_effects()
 
 
 def test_pesaran_cd_raises_without_lm_result(panel_df):
     r = sp.panel(panel_df, "y ~ x1 + x2", entity="id", time="year", method="fe")
     r._lm_result = None
-    with pytest.raises(ValueError, match="CD test"):
+    with pytest.raises(MethodIncompatibility, match="CD test"):
         r.pesaran_cd_test()
 
 
@@ -198,7 +199,7 @@ def test_balance_drops_all_raises():
         "id": [0, 1, 2], "year": [0, 1, 2],
         "y": [1.0, 2.0, 3.0], "x1": [0.1, 0.2, 0.3],
     })
-    with pytest.raises(ValueError, match="dropped all units"):
+    with pytest.raises(DataInsufficient, match="dropped all units"):
         sp.panel(df, "y ~ x1", entity="id", time="year",
                  method="fe", balance=True)
 
@@ -206,18 +207,18 @@ def test_balance_drops_all_raises():
 # ── error paths ─────────────────────────────────────────────────────────
 
 def test_unknown_method(panel_df):
-    with pytest.raises(ValueError, match="method must be one of"):
+    with pytest.raises(MethodIncompatibility, match="method must be one of"):
         sp.panel(panel_df, "y ~ x1", entity="id", time="year",
                  method="bogus")
 
 
 def test_formula_without_tilde(panel_df):
-    with pytest.raises(ValueError, match="must contain"):
+    with pytest.raises(MethodIncompatibility, match="must contain"):
         sp.panel(panel_df, "y x1", entity="id", time="year", method="fe")
 
 
 def test_missing_column(panel_df):
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(MethodIncompatibility, match="not found"):
         sp.panel(panel_df, "y ~ nope", entity="id", time="year", method="fe")
 
 
@@ -273,7 +274,7 @@ def test_plot_shortcut_methods(panel_df):
 
 def test_plot_unknown_type_raises(panel_df):
     r = sp.panel(panel_df, "y ~ x1 + x2", entity="id", time="year", method="fe")
-    with pytest.raises(ValueError, match="Unknown plot type"):
+    with pytest.raises(MethodIncompatibility, match="Unknown plot type"):
         r.plot(type="not_a_plot")
 
 

@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 from statspai.metalearners import AutoCATEResult, auto_cate_tuned
 
 optuna = pytest.importorskip(
@@ -80,6 +81,22 @@ def test_auto_cate_tuned_recovers_ate(constant_effect_data):
     )
 
 
+def test_auto_cate_tuned_accepts_scalar_covariate(constant_effect_data):
+    r = auto_cate_tuned(
+        constant_effect_data,
+        y='y',
+        treat='d',
+        covariates='x1',
+        learners='t',
+        n_trials=1,
+        n_folds=2,
+        n_bootstrap=10,
+        random_state=1,
+    )
+    assert isinstance(r, AutoCATEResult)
+    assert r.n_obs == len(constant_effect_data)
+
+
 # ---------------------------------------------------------------------------
 # Custom search space
 # ---------------------------------------------------------------------------
@@ -116,9 +133,52 @@ def test_auto_cate_tuned_invalid_treatment_raises():
         'd': rng.choice([0.0, 1.0, 2.0], size=100),
         'x1': rng.normal(size=100),
     })
-    with pytest.raises(ValueError, match='binary'):
+    with pytest.raises(MethodIncompatibility, match='binary') as exc:
         auto_cate_tuned(df, y='y', treat='d', covariates=['x1'],
                         learners=('t',), n_trials=2, n_folds=3)
+    assert exc.value.diagnostics['treat_values'] == [0.0, 1.0, 2.0]
+
+
+def test_auto_cate_tuned_missing_columns_have_taxonomy(constant_effect_data):
+    with pytest.raises(MethodIncompatibility, match='missing') as exc:
+        auto_cate_tuned(
+            constant_effect_data,
+            y='y',
+            treat='d',
+            covariates=['x1', 'missing_x'],
+            learners=('t',),
+            n_trials=2,
+            n_folds=3,
+        )
+    assert exc.value.diagnostics['missing_columns'] == ['missing_x']
+
+
+def test_auto_cate_tuned_invalid_budget_has_taxonomy(constant_effect_data):
+    with pytest.raises(MethodIncompatibility, match='n_trials') as exc:
+        auto_cate_tuned(
+            constant_effect_data,
+            y='y',
+            treat='d',
+            covariates=['x1'],
+            learners=('t',),
+            n_trials=0,
+            n_folds=3,
+        )
+    assert exc.value.diagnostics == {'n_trials': 0, 'tune': 'nuisance'}
+
+
+def test_auto_cate_tuned_invalid_learner_has_taxonomy(constant_effect_data):
+    with pytest.raises(MethodIncompatibility, match='Unknown learner') as exc:
+        auto_cate_tuned(
+            constant_effect_data,
+            y='y',
+            treat='d',
+            covariates=['x1'],
+            learners=('bogus',),
+            n_trials=1,
+            n_folds=3,
+        )
+    assert exc.value.diagnostics['learner'] == 'bogus'
 
 
 # ---------------------------------------------------------------------------
@@ -126,12 +186,13 @@ def test_auto_cate_tuned_invalid_treatment_raises():
 # ---------------------------------------------------------------------------
 
 def test_auto_cate_tuned_invalid_tune_mode_raises(constant_effect_data):
-    with pytest.raises(ValueError, match='tune'):
+    with pytest.raises(MethodIncompatibility, match='tune') as exc:
         auto_cate_tuned(
             constant_effect_data, y='y', treat='d',
             covariates=['x1', 'x2'],
             learners=('t',), tune='bogus', n_trials=2, n_folds=3,
         )
+    assert exc.value.diagnostics['tune'] == 'bogus'
 
 
 def test_auto_cate_tuned_per_learner_mode(constant_effect_data):

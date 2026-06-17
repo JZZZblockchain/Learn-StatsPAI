@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +95,80 @@ def test_within_accepts_multiple_fe_input_shapes():
         assert np.allclose(a, b, atol=1e-12)
 
 
+def test_within_accepts_single_fe_column_name():
+    df = _panel(seed=10)
+    wt_string = sp.fast.within(df, fe="i", drop_singletons=False)
+    wt_list = sp.fast.within(df, fe=["i"], drop_singletons=False)
+
+    a, _ = wt_string.transform(df["y"].to_numpy())
+    b, _ = wt_list.transform(df["y"].to_numpy())
+    assert np.allclose(a, b, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"max_iter": 0}, "max_iter"),
+        ({"max_iter": True}, "max_iter"),
+        ({"tol": -1e-8}, "tol"),
+        ({"tol_abs": np.nan}, "tol_abs"),
+        ({"accel_period": 0}, "accel_period"),
+        ({"accel": "bogus"}, "accel"),
+        ({"backend": "bogus"}, "backend"),
+    ],
+)
+def test_within_invalid_demean_controls_raise(kwargs, match):
+    df = _panel(seed=11)
+    with pytest.raises(MethodIncompatibility, match=match):
+        sp.fast.within(df, fe=["i", "t"], **kwargs)
+
+
+def test_within_missing_fe_column_raises_taxonomy_error():
+    df = _panel(seed=12)
+    with pytest.raises(MethodIncompatibility, match="not in data"):
+        sp.fast.within(df, fe=["i", "missing"])
+
+
+def test_within_empty_fe_spec_raises_taxonomy_error():
+    df = _panel(seed=13)
+    with pytest.raises(MethodIncompatibility, match="at least one"):
+        sp.fast.within(df, fe=[])
+    with pytest.raises(MethodIncompatibility, match="at least one"):
+        sp.fast.within(fe=df[[]])
+
+
+def test_within_all_singletons_raise_data_insufficient():
+    df = pd.DataFrame({"y": np.arange(5.0), "fe": np.arange(5)})
+    with pytest.raises(DataInsufficient, match="singleton"):
+        sp.fast.within(df, fe="fe")
+
+
+def test_within_transform_rejects_nonfinite_and_bad_shape():
+    df = _panel(seed=14)
+    wt = sp.fast.within(df, fe=["i", "t"], drop_singletons=False)
+
+    bad = df["y"].to_numpy()
+    bad[0] = np.inf
+    with pytest.raises(MethodIncompatibility, match="non-finite"):
+        wt.transform(bad)
+
+    with pytest.raises(MethodIncompatibility, match="1-D or 2-D"):
+        wt.transform(np.zeros((len(df), 1, 1)))
+
+    with pytest.raises(MethodIncompatibility, match="already_masked"):
+        wt.transform(np.zeros(len(df) - 1), already_masked=True)
+
+
+def test_within_transform_columns_validates_column_list():
+    df = _panel(seed=15)
+    wt = sp.fast.within(df, fe=["i", "t"], drop_singletons=False)
+
+    with pytest.raises(MethodIncompatibility, match="non-empty"):
+        wt.transform_columns(df, [])
+    with pytest.raises(MethodIncompatibility, match="not in data"):
+        wt.transform_columns(df, ["x1", "missing"])
+
+
 # ---------------------------------------------------------------------------
 # DSL: i()
 # ---------------------------------------------------------------------------
@@ -118,6 +193,17 @@ def test_i_with_unknown_ref_raises():
     s = pd.Series([2010, 2011, 2012], name="year")
     with pytest.raises(ValueError, match="ref"):
         sp.fast.i(s, ref=2099)
+
+
+def test_i_missing_values_raise():
+    s = pd.Series([2010, np.nan, 2012], name="year")
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.i(s)
+
+
+def test_i_non_1d_input_raises():
+    with pytest.raises(ValueError, match="1-D"):
+        sp.fast.i(np.array([[2010, 2011], [2012, 2013]]))
 
 
 def test_i_event_study_in_fepois():
@@ -170,6 +256,18 @@ def test_fe_interact_three_columns():
     assert codes.max() < 5
 
 
+def test_fe_interact_missing_values_raise():
+    a = np.array([0.0, 1.0, np.nan])
+    b = np.array([0.0, 1.0, 2.0])
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.fe_interact(a, b)
+
+
+def test_fe_interact_non_1d_input_raises():
+    with pytest.raises(ValueError, match="1-D"):
+        sp.fast.fe_interact(np.array([[0, 1], [1, 0]]))
+
+
 def test_fe_interact_passes_to_fepois():
     """End-to-end: i^j interacted FE used inside fepois."""
     rng = np.random.default_rng(7)
@@ -196,9 +294,17 @@ def test_sw_emits_separate_specs():
     assert out == [["x1"], ["x2"], ["x1", "x2"]]
 
 
+def test_sw_treats_string_as_single_spec():
+    assert sp.fast.sw("x1", "x2") == [["x1"], ["x2"]]
+
+
 def test_csw_cumulative():
     out = sp.fast.csw(["x1"], ["x2"], ["x3"])
     assert out == [["x1"], ["x1", "x2"], ["x1", "x2", "x3"]]
+
+
+def test_csw_treats_string_as_single_spec():
+    assert sp.fast.csw("x1", "x2") == [["x1"], ["x1", "x2"]]
 
 
 def test_sw_drives_multiple_regressions():

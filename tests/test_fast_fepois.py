@@ -17,6 +17,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +139,44 @@ def test_negative_y_rejected():
         sp.fast.fepois("y ~ x1 | fe1", df)
 
 
+def test_y_nonfinite_rejected():
+    df = _poisson_panel(seed=131, n=200, n_units=20, n_periods=10)
+    df.loc[df.index[3], "y"] = np.nan
+    with pytest.raises(ValueError, match="non-finite"):
+        sp.fast.fepois("y ~ x1 | fe1", df)
+
+
+def test_x_nonfinite_rejected():
+    df = _poisson_panel(seed=132, n=200, n_units=20, n_periods=10)
+    df.loc[df.index[4], "x1"] = np.inf
+    with pytest.raises(ValueError, match="non-finite"):
+        sp.fast.fepois("y ~ x1 | fe1", df)
+
+
+def test_empty_data_rejected():
+    df = _poisson_panel(seed=133, n=200, n_units=20, n_periods=10).iloc[0:0].copy()
+    with pytest.raises(ValueError, match="at least one row"):
+        sp.fast.fepois("y ~ x1 | fe1", df)
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"maxiter": 0}, "maxiter"),
+        ({"fe_maxiter": 0}, "fe_maxiter"),
+        ({"tol": -1.0}, "tol"),
+        ({"fe_tol": np.nan}, "fe_tol"),
+    ],
+)
+def test_invalid_irls_controls_rejected(kwargs, match):
+    df = _poisson_panel(seed=134, n=200, n_units=20, n_periods=10)
+    with pytest.raises(ValueError, match=match):
+        sp.fast.fepois("y ~ x1 | fe1", df, **kwargs)
+
+
 def test_missing_column_rejected():
     df = pd.DataFrame({"y": [1, 2], "fe1": [0, 1]})
-    with pytest.raises(KeyError, match="missing"):
+    with pytest.raises(MethodIncompatibility, match="missing"):
         sp.fast.fepois("y ~ nope | fe1", df)
 
 
@@ -176,6 +212,24 @@ def test_result_object_api():
     V = fit.vcov_matrix
     assert V.shape == (2, 2)
     assert np.allclose(V, V.T)
+
+
+def test_fepois_result_protocol_json_safe():
+    df = _poisson_panel(seed=25, n=800, n_units=40, n_periods=20)
+    fit = sp.fast.fepois("y ~ x1 + x2 | fe1 + fe2", df, vcov="hc1")
+
+    full = fit.to_dict()
+    agent = fit.to_agent_summary(max_terms=1)
+
+    assert full["kind"] == "fast_fepois_result"
+    assert full["model"] == "poisson_hdfe"
+    assert len(full["coefficients"]) == 2
+    assert full["vcov"]["terms"] == ["x1", "x2"]
+    assert agent["kind"] == "fast_fepois_agent_summary"
+    assert len(agent["coefficients"]) == 1
+    assert agent["truncated_terms"] == 1
+    json.dumps(full)
+    json.dumps(agent)
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +284,28 @@ def test_weights_nonfinite_rejected():
         sp.fast.fepois("y ~ x1 | fe1 + fe2", df, weights="w")
 
 
+def test_weights_all_zero_rejected():
+    df = _poisson_panel(seed=231)
+    df["w"] = 0.0
+    with pytest.raises(ValueError, match="no positive mass"):
+        sp.fast.fepois("y ~ x1 | fe1 + fe2", df, weights="w")
+
+
+def test_weights_kept_sample_all_zero_rejected():
+    df = _poisson_panel(seed=232, n=200, n_units=20, n_periods=10)
+    df["w"] = 0.0
+    extra = df.iloc[[0]].copy()
+    extra["fe1"] = 999
+    extra["w"] = 1.0
+    df_aug = pd.concat([df, extra], ignore_index=True)
+
+    with pytest.raises(ValueError, match="no positive mass"):
+        sp.fast.fepois("y ~ x1 | fe1 + fe2", df_aug, weights="w")
+
+
 def test_weights_missing_column_rejected():
     df = _poisson_panel(seed=24)
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing"):
         sp.fast.fepois("y ~ x1 | fe1 + fe2", df, weights="missing_col")
 
 
@@ -281,7 +354,7 @@ def test_fepois_cluster_validation():
     with pytest.raises(ValueError, match="vcov='hc1'"):
         sp.fast.fepois("y ~ x1 + x2 | fe1 + fe2", df, vcov="hc1", cluster="fe1")
     # missing cluster column
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing"):
         sp.fast.fepois(
             "y ~ x1 + x2 | fe1 + fe2", df, vcov="cr1", cluster="not_a_col",
         )

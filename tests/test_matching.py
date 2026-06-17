@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from statspai.matching import match, MatchEstimator, balance_diagnostics
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ==================================================================
@@ -390,7 +391,10 @@ class TestMethodSpecificInfo:
         assert 'n_matched_treated' in info
         assert 'n_unmatched_treated' in info
         assert info['n_matched_treated'] > 0
-        assert info['n_matched_treated'] + info['n_unmatched_treated'] == info['n_treated']
+        assert (
+            info['n_matched_treated'] + info['n_unmatched_treated']
+            == info['n_treated']
+        )
 
     def test_cem_info(self, selection_bias_data):
         result = match(
@@ -597,25 +601,65 @@ class TestMatchGeneral:
 
     # --- Error handling ---
 
-    def test_missing_column(self, selection_bias_data):
-        with pytest.raises(ValueError, match="not found"):
-            match(selection_bias_data, y='nonexistent', treat='treat',
+    def test_scalar_covariate_string(self, selection_bias_data):
+        result = match(
+            selection_bias_data, y='y', treat='treat',
+            covariates='x1',
+        )
+        assert isinstance(result, CausalResult)
+        assert result.model_info['n_treated'] > 0
+
+    def test_non_dataframe_input(self, selection_bias_data):
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            match(selection_bias_data.to_dict("list"), y='y', treat='treat',
                   covariates=['x1'])
 
+    def test_missing_column(self, selection_bias_data):
+        with pytest.raises(MethodIncompatibility) as exc:
+            match(selection_bias_data, y='nonexistent', treat='treat',
+                  covariates=['x1'])
+        assert exc.value.diagnostics["missing_columns"] == ["nonexistent"]
+
     def test_invalid_method(self, selection_bias_data):
-        with pytest.raises(ValueError, match="method must be"):
+        with pytest.raises(MethodIncompatibility, match="method must be"):
             match(selection_bias_data, y='y', treat='treat',
                   covariates=['x1'], method='invalid')
 
     def test_invalid_distance(self, selection_bias_data):
-        with pytest.raises(ValueError, match="distance must be"):
+        with pytest.raises(MethodIncompatibility, match="distance must be"):
             match(selection_bias_data, y='y', treat='treat',
                   covariates=['x1'], distance='cosine')
 
     def test_invalid_estimand(self, selection_bias_data):
-        with pytest.raises(ValueError, match="estimand must be"):
+        with pytest.raises(MethodIncompatibility, match="estimand must be"):
             match(selection_bias_data, y='y', treat='treat',
                   covariates=['x1'], estimand='INVALID')
+
+    @pytest.mark.parametrize(
+        "kwargs, match_text",
+        [
+            ({"n_matches": 0}, "n_matches"),
+            ({"alpha": 1.0}, "alpha"),
+            ({"ps_poly": 0}, "ps_poly"),
+            ({"bwidth": 0.0}, "bwidth"),
+        ],
+    )
+    def test_invalid_numeric_controls(
+        self, selection_bias_data, kwargs, match_text,
+    ):
+        with pytest.raises(MethodIncompatibility, match=match_text):
+            match(selection_bias_data, y='y', treat='treat',
+                  covariates=['x1'], **kwargs)
+
+    def test_exact_no_matches_is_data_insufficient(self):
+        df = pd.DataFrame({
+            'y': [1.0, 2.0, 3.0, 4.0],
+            'treat': [1, 1, 0, 0],
+            'x': [10.0, 11.0, 0.0, 1.0],
+        })
+        with pytest.raises(DataInsufficient, match="exact matching"):
+            match(df, y='y', treat='treat', covariates=['x'],
+                  distance='exact')
 
     def test_non_binary_treatment(self):
         df = pd.DataFrame({

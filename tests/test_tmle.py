@@ -5,11 +5,12 @@ Tests for TMLE and Super Learner.
 import pytest
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
 
-from statspai.tmle import tmle, TMLE, super_learner, SuperLearner
+from statspai.tmle import tmle, super_learner, SuperLearner
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -125,8 +126,10 @@ class TestSuperLearner:
         X = rng.normal(0, 1, (200, 3))
         y = X[:, 0] + rng.normal(0, 0.3, 200)
 
-        lib = [LinearRegression(), RandomForestRegressor(n_estimators=10,
-                                                          random_state=42)]
+        lib = [
+            LinearRegression(),
+            RandomForestRegressor(n_estimators=10, random_state=42),
+        ]
         sl = super_learner(X, y, library=lib, n_folds=3)
         assert len(sl.weights_) == 2
 
@@ -148,6 +151,80 @@ class TestSuperLearner:
         s = sl.summary()
         assert 'Weight' in s
         assert 'CV Risk' in s
+
+    def test_fit_rejects_invalid_controls_and_library(self):
+        X = np.ones((6, 2))
+        y = np.arange(6, dtype=float)
+
+        with pytest.raises(MethodIncompatibility, match="task"):
+            SuperLearner(task="bogus", n_folds=2).fit(X, y)
+
+        with pytest.raises(MethodIncompatibility, match="n_folds"):
+            SuperLearner(n_folds=1).fit(X, y)
+
+        with pytest.raises(MethodIncompatibility, match="non-empty"):
+            SuperLearner(library=[], n_folds=2).fit(X, y)
+
+    def test_fit_rejects_bad_numeric_inputs(self):
+        X = np.ones((6, 2))
+        y = np.arange(6, dtype=float)
+
+        bad_X = X.astype(object)
+        bad_X[0, 0] = "bad"
+        with pytest.raises(MethodIncompatibility, match="numeric"):
+            SuperLearner(n_folds=2).fit(bad_X, y)
+
+        X_nan = X.copy()
+        X_nan[0, 0] = np.nan
+        with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+            SuperLearner(n_folds=2).fit(X_nan, y)
+
+        with pytest.raises(MethodIncompatibility, match="same row count"):
+            SuperLearner(n_folds=2).fit(X, y[:-1])
+
+        with pytest.raises(DataInsufficient, match="at least n_folds"):
+            SuperLearner(n_folds=7).fit(X, y)
+
+    def test_classification_fit_contracts(self):
+        X = np.ones((8, 2))
+
+        with pytest.raises(MethodIncompatibility, match="binary"):
+            SuperLearner(task="classification", n_folds=2).fit(
+                X,
+                np.arange(8) % 3,
+            )
+
+        with pytest.raises(MethodIncompatibility, match="coded 0/1"):
+            SuperLearner(task="classification", n_folds=2).fit(
+                X,
+                np.array([1, 2, 1, 2, 1, 2, 1, 2], dtype=float),
+            )
+
+        with pytest.raises(DataInsufficient, match="n_folds"):
+            SuperLearner(task="classification", n_folds=3).fit(
+                X,
+                np.array([0, 0, 0, 0, 0, 0, 1, 1], dtype=float),
+            )
+
+    def test_predict_contracts_and_single_row_vector(self):
+        rng = np.random.default_rng(42)
+        X = rng.normal(0, 1, (40, 3))
+        y = X[:, 0] + rng.normal(0, 0.1, 40)
+
+        sl = SuperLearner(library=[LinearRegression()], n_folds=2)
+        with pytest.raises(MethodIncompatibility, match="fitted"):
+            sl.predict(X[:2])
+
+        sl.fit(X, y)
+        pred = sl.predict(np.array([0.0, 0.0, 0.0]))
+        assert pred.shape == (1,)
+
+        with pytest.raises(MethodIncompatibility) as wrong_shape:
+            sl.predict(np.ones((2, 2)))
+        assert wrong_shape.value.diagnostics["expected_features"] == 3
+
+        with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+            sl.predict(np.array([[np.nan, 0.0, 1.0]]))
 
 
 # ======================================================================

@@ -73,6 +73,68 @@ def test_core_result_classes_expose_full_agent_protocol() -> None:
             "brief",
             "plot",
         },
+        "src/statspai/bayes/_base.py:BayesianCausalResult": {
+            "summary",
+            "tidy",
+            "glance",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/output/regression_table.py:RegtableResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/inference.py:BootTestResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/inference.py:BootWaldResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/inference.py:WaldTestResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/feols.py:FeolsResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/fepois.py:FePoisResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/event_study.py:EventStudyResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/bench.py:HDFEBenchResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/fast/jax_feols.py:FeolsBootstrapResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/_auto_estimators.py:AutoDIDResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
+        "src/statspai/_auto_estimators.py:AutoIVResult": {
+            "summary",
+            "to_dict",
+            "to_agent_summary",
+        },
     }
     for key, methods in required.items():
         assert key in by_key

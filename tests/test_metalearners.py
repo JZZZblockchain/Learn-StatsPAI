@@ -16,6 +16,7 @@ from statspai.metalearners import (
     DRLearner,
 )
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -388,6 +389,53 @@ class TestDRLearner:
         dr.fit(X, Y, D)
         cate = dr.effect(X)
         assert abs(np.mean(cate) - 2.0) < 1.0
+
+
+# ======================================================================
+# Test: low-level effect() input contracts
+# ======================================================================
+
+def _low_level_metalearner_data(n=120):
+    rng = np.random.default_rng(123)
+    X = rng.normal(0, 1, (n, 2))
+    D = (np.arange(n) % 2).astype(float)
+    Y = 2.0 * D + X[:, 0] + rng.normal(0, 0.1, n)
+    return X, Y, D
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        SLearner,
+        TLearner,
+        XLearner,
+        lambda: RLearner(n_folds=2),
+        lambda: DRLearner(n_folds=2),
+    ],
+)
+def test_low_level_effect_validates_prediction_inputs(factory):
+    X, Y, D = _low_level_metalearner_data()
+    learner = factory()
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        learner.effect(X[:2])
+
+    learner.fit(X, Y, D)
+    one_row = learner.effect(np.array([0.0, 0.0]))
+    assert one_row.shape == (1,)
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        learner.effect(np.ones((2, 3)))
+    assert wrong_shape.value.diagnostics["expected_features"] == 2
+
+    with pytest.raises(MethodIncompatibility, match="numeric"):
+        learner.effect(np.array([["bad", "data"]], dtype=object))
+
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        learner.effect(np.array([[np.nan, 0.0]]))
+
+    with pytest.raises(DataInsufficient):
+        learner.effect(np.empty((0, 2)))
 
 
 # ======================================================================

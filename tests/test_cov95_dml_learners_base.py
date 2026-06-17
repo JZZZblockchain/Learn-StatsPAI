@@ -22,6 +22,7 @@ from statspai.dml._learners import (
 )
 from statspai.dml._base import _DoubleMLBase
 from statspai.dml import dml
+from statspai.exceptions import MethodIncompatibility
 
 
 _HAS_LGBM = importlib.util.find_spec("lightgbm") is not None
@@ -219,14 +220,14 @@ def test_sample_weight_column_name(plr_df):
 
 def test_sample_weight_unsupported_model_raises():
     # plr/irm/pliv/iivm support weights; nothing else is registered, so
-    # exercise the NotImplementedError guard via a subclass.
+    # exercise the typed unsupported-model guard via a subclass.
     class NoWeightModel(_DoubleMLBase):
         _MODEL_TAG = "FOO"
         _SUPPORTS_SAMPLE_WEIGHT = False
 
     df = pd.DataFrame({"y": [1.0, 2, 3], "d": [0.0, 1, 0],
                        "x1": [1.0, 2, 3]})
-    with pytest.raises(NotImplementedError, match="not yet supported"):
+    with pytest.raises(MethodIncompatibility, match="not yet supported"):
         NoWeightModel(df, y="y", treat="d", covariates=["x1"],
                       sample_weight=np.ones(3))
 

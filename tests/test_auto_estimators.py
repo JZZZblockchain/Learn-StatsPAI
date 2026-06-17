@@ -9,6 +9,8 @@ advertises but that are easy to regress on silently.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -42,6 +44,26 @@ def test_auto_did_returns_leaderboard(did_panel):
     # All methods must populate numeric columns
     for col in ["estimate", "std_error", "ci_lower", "ci_upper"]:
         assert result.leaderboard[col].notna().all(), f"{col} has NaN"
+
+
+def test_auto_did_result_protocol_json_safe(did_panel):
+    result = sp.auto_did(
+        did_panel, y="y", g="first_treat", t="time", i="unit",
+        methods=["cs", "sa"],
+    )
+
+    full = result.to_dict()
+    agent = result.to_agent_summary(max_methods=1)
+
+    assert full["kind"] == "auto_did_result"
+    assert full["winner_method"] in {"cs", "sa"}
+    assert len(full["leaderboard"]) == 2
+    assert len(full["candidate_status"]) == 2
+    assert agent["kind"] == "auto_did_agent_summary"
+    assert len(agent["leaderboard"]) == 1
+    assert agent["truncated_methods"] == 1
+    json.dumps(full)
+    json.dumps(agent)
 
 
 def test_auto_did_winner_points_into_candidates(did_panel):
@@ -99,6 +121,30 @@ def test_auto_did_rejects_unknown_method(did_panel):
         sp.auto_did(
             did_panel, y="y", g="first_treat", t="time", i="unit",
             methods=["cs", "mystery_did"],
+        )
+
+
+def test_auto_did_rejects_missing_required_column(did_panel):
+    with pytest.raises(ValueError, match="missing required columns"):
+        sp.auto_did(
+            did_panel.drop(columns=["first_treat"]),
+            y="y", g="first_treat", t="time", i="unit",
+        )
+
+
+def test_auto_did_rejects_empty_methods(did_panel):
+    with pytest.raises(ValueError, match="methods must not be empty"):
+        sp.auto_did(
+            did_panel, y="y", g="first_treat", t="time", i="unit",
+            methods=[],
+        )
+
+
+def test_auto_did_rejects_invalid_alpha(did_panel):
+    with pytest.raises(ValueError, match="alpha"):
+        sp.auto_did(
+            did_panel, y="y", g="first_treat", t="time", i="unit",
+            alpha=1.0,
         )
 
 
@@ -160,6 +206,27 @@ def test_auto_iv_returns_leaderboard(iv_df):
     assert (result.leaderboard["n_obs"] > 0).all()
 
 
+def test_auto_iv_result_protocol_json_safe(iv_df):
+    result = sp.auto_iv(
+        iv_df, y="y", endog="treatment",
+        instruments="instrument", exog=["x1", "x2"],
+        methods=["2sls", "liml"],
+    )
+
+    full = result.to_dict()
+    agent = result.to_agent_summary(max_methods=1)
+
+    assert full["kind"] == "auto_iv_result"
+    assert full["winner_method"] in {"2sls", "liml"}
+    assert len(full["leaderboard"]) == 2
+    assert len(full["candidate_status"]) == 2
+    assert agent["kind"] == "auto_iv_agent_summary"
+    assert len(agent["leaderboard"]) == 1
+    assert agent["truncated_methods"] == 1
+    json.dumps(full)
+    json.dumps(agent)
+
+
 def test_auto_iv_formula_accepts_scalar_instrument(iv_df):
     """Scalar `instruments='z'` must be promoted to a single-element list."""
     r_scalar = sp.auto_iv(
@@ -169,6 +236,20 @@ def test_auto_iv_formula_accepts_scalar_instrument(iv_df):
     r_list = sp.auto_iv(
         iv_df, y="y", endog="treatment",
         instruments=["instrument"], methods=["2sls"],
+    )
+    assert r_scalar.leaderboard.iloc[0]["estimate"] == pytest.approx(
+        r_list.leaderboard.iloc[0]["estimate"], rel=1e-10,
+    )
+
+
+def test_auto_iv_accepts_scalar_exog(iv_df):
+    r_scalar = sp.auto_iv(
+        iv_df, y="y", endog="treatment",
+        instruments="instrument", exog="x1", methods=["2sls"],
+    )
+    r_list = sp.auto_iv(
+        iv_df, y="y", endog="treatment",
+        instruments="instrument", exog=["x1"], methods=["2sls"],
     )
     assert r_scalar.leaderboard.iloc[0]["estimate"] == pytest.approx(
         r_list.leaderboard.iloc[0]["estimate"], rel=1e-10,
@@ -189,6 +270,29 @@ def test_auto_iv_rejects_unknown_method(iv_df):
         sp.auto_iv(
             iv_df, y="y", endog="treatment", instruments="instrument",
             methods=["2sls", "mystery_iv"],
+        )
+
+
+def test_auto_iv_rejects_missing_required_column(iv_df):
+    with pytest.raises(ValueError, match="missing required columns"):
+        sp.auto_iv(
+            iv_df.drop(columns=["instrument"]),
+            y="y", endog="treatment", instruments="instrument",
+        )
+
+
+def test_auto_iv_rejects_empty_instruments(iv_df):
+    with pytest.raises(ValueError, match="instruments must not be empty"):
+        sp.auto_iv(
+            iv_df, y="y", endog="treatment", instruments=[],
+        )
+
+
+def test_auto_iv_rejects_invalid_alpha(iv_df):
+    with pytest.raises(ValueError, match="alpha"):
+        sp.auto_iv(
+            iv_df, y="y", endog="treatment", instruments="instrument",
+            alpha=0.0,
         )
 
 

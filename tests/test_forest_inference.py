@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
+from statspai.forest.causal_forest import CausalForest
 from statspai.forest.forest_inference import (
     calibration_test,
     rate,
@@ -90,6 +92,64 @@ def test_rate_qini_variant_runs():
     )
 
 
+def test_calibration_and_rate_validate_inputs_and_subsamples():
+    cf, X, T, Y = _fit_forest()
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        calibration_test(CausalForest())
+
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        calibration_test(cf, X=X, Y=Y, T=T, alpha=np.nan)
+
+    with pytest.raises(MethodIncompatibility) as wrong_y:
+        calibration_test(cf, X=X[:5], Y=Y[:4], T=T[:5])
+    assert wrong_y.value.diagnostics == {"n_y": 4, "n_x": 5}
+
+    with pytest.raises(MethodIncompatibility, match="numeric"):
+        calibration_test(cf, X=X[:5], Y=Y[:5], T=np.array(["bad"] * 5))
+
+    with pytest.raises(DataInsufficient, match="at least 3 rows"):
+        calibration_test(cf, X=X[:2], Y=Y[:2], T=T[:2])
+
+    cal = calibration_test(cf, X=X[:20], Y=Y[:20], T=T[:20])
+    assert list(cal.index) == [
+        "mean_forest_prediction",
+        "differential_forest_prediction",
+    ]
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        rate(CausalForest())
+
+    with pytest.raises(MethodIncompatibility, match="target"):
+        rate(cf, X=X, Y=Y, T=T, target=object())
+
+    with pytest.raises(MethodIncompatibility, match="target"):
+        rate(cf, X=X, Y=Y, T=T, target="bad")
+
+    with pytest.raises(MethodIncompatibility, match="q_grid"):
+        rate(cf, X=X, Y=Y, T=T, q_grid=0)
+
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        rate(cf, X=X, Y=Y, T=T, alpha=np.inf)
+
+    with pytest.raises(MethodIncompatibility) as wrong_x:
+        rate(cf, X=np.ones((2, 2)), Y=Y[:2], T=T[:2])
+    assert wrong_x.value.diagnostics["expected_features"] == 3
+
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        bad_y = Y[:5].copy()
+        bad_y[0] = np.nan
+        rate(cf, X=X[:5], Y=bad_y, T=T[:5])
+
+    with pytest.raises(DataInsufficient, match="at least 2 rows"):
+        rate(cf, X=X[:1], Y=Y[:1], T=T[:1])
+
+    out = rate(cf, X=X[:20], Y=Y[:20], T=T[:20], target="autoc", q_grid=5)
+    assert out["target"] == "AUTOC"
+    assert out["n"] == 20
+    assert out["toc_curve"].shape == (5, 2)
+
+
 def test_honest_variance_reports_ci():
     cf, X, _, _ = _fit_forest()
     out = honest_variance(cf, X=X, n_splits=10, seed=0)
@@ -109,6 +169,23 @@ def test_honest_variance_reports_ci():
     )
 
 
+def test_honest_variance_validates_inputs():
+    cf, X, _, _ = _fit_forest()
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        honest_variance(CausalForest())
+
+    with pytest.raises(MethodIncompatibility, match="n_splits"):
+        honest_variance(cf, X=X, n_splits=1)
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        honest_variance(cf, X=np.ones((2, 2)), n_splits=2)
+    assert wrong_shape.value.diagnostics["expected_features"] == 3
+
+    with pytest.raises(DataInsufficient, match="at least 2 CATE rows"):
+        honest_variance(cf, X=X[:1], n_splits=2)
+
+
 def test_average_treatment_effect_targets_run():
     cf, X, T, _ = _fit_forest()
     ate = average_treatment_effect(cf, X=X, T=T, target_sample="all")
@@ -118,6 +195,47 @@ def test_average_treatment_effect_targets_run():
     assert att["estimand"] == "ATT"
     assert ato["effective_sample_size"] > 0
     assert ate["ci_low"] <= ate["estimate"] <= ate["ci_high"]
+
+
+def test_average_treatment_effect_validates_inputs():
+    cf, X, T, _ = _fit_forest()
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        average_treatment_effect(CausalForest())
+
+    with pytest.raises(MethodIncompatibility, match="target_sample"):
+        average_treatment_effect(cf, X=X, T=T, target_sample=object())
+
+    with pytest.raises(MethodIncompatibility, match="target_sample"):
+        average_treatment_effect(cf, X=X, T=T, target_sample="unsupported")
+
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        average_treatment_effect(cf, X=X, T=T, alpha=np.nan)
+
+    with pytest.raises(MethodIncompatibility, match="clip"):
+        average_treatment_effect(cf, X=X, T=T, clip=0.5)
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        average_treatment_effect(cf, X=np.ones((2, 2)), T=np.ones(2))
+    assert wrong_shape.value.diagnostics["expected_features"] == 3
+
+    with pytest.raises(MethodIncompatibility, match="numeric"):
+        average_treatment_effect(cf, X=np.array([["bad", "data", "x"]]), T=[1])
+
+    with pytest.raises(MethodIncompatibility) as wrong_t:
+        average_treatment_effect(cf, X=X[:3], T=np.ones(2))
+    assert wrong_t.value.diagnostics == {"n_t": 2, "n_effects": 3}
+
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        bad_t = T.astype(float)
+        bad_t[0] = np.nan
+        average_treatment_effect(cf, X=X, T=bad_t)
+
+    with pytest.raises(DataInsufficient, match="no treated"):
+        average_treatment_effect(cf, X=X, T=np.zeros(len(X)), target_sample="treated")
+
+    with pytest.raises(DataInsufficient, match="no control"):
+        average_treatment_effect(cf, X=X, T=np.ones(len(X)), target_sample="control")
 
 
 def test_forest_diagnostics_reports_overlap_and_warnings():
@@ -133,3 +251,36 @@ def test_forest_diagnostics_reports_overlap_and_warnings():
         [0.738347385601565, 1.2820330479236453, 1.0, 400],
         atol=1e-12,
     )
+
+
+def test_forest_diagnostics_validates_inputs_and_subsamples():
+    cf, X, T, _ = _fit_forest()
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        forest_diagnostics(CausalForest())
+
+    with pytest.raises(MethodIncompatibility, match="propensity_bounds"):
+        forest_diagnostics(cf, propensity_bounds=(0.8, 0.2))
+
+    with pytest.raises(MethodIncompatibility, match="propensity_bounds"):
+        forest_diagnostics(cf, propensity_bounds=(0.05,))
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        forest_diagnostics(cf, X=np.ones((2, 2)), T=np.ones(2))
+    assert wrong_shape.value.diagnostics["expected_features"] == 3
+
+    with pytest.raises(MethodIncompatibility, match="T is required"):
+        forest_diagnostics(cf, X=X[:5])
+
+    with pytest.raises(MethodIncompatibility) as wrong_t:
+        forest_diagnostics(cf, X=X[:5], T=T[:4])
+    assert wrong_t.value.diagnostics == {"n_t": 4, "n_x": 5}
+
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        bad_t = T[:5].astype(float)
+        bad_t[0] = np.inf
+        forest_diagnostics(cf, X=X[:5], T=bad_t)
+
+    out = forest_diagnostics(cf, X=X[:20], T=T[:20])
+    assert out["n"] == 20
+    assert out["n_treated"] + out["n_control"] == 20

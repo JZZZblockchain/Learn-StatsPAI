@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.synth.report import synth_report, synth_report_to_file
 from statspai.synth.bsts import causal_impact, bsts_synth
 
@@ -111,28 +111,28 @@ def _wide(n=20, seed=0):
 
 def test_causal_impact_missing_outcome_column_raises():
     wide = _wide()
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         causal_impact(wide, pre_period=(0, 9), post_period=(10, 19),
                       outcome="not_a_col")
 
 
 def test_causal_impact_missing_covariate_raises():
     wide = _wide()
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         causal_impact(wide, pre_period=(0, 9), post_period=(10, 19),
                       outcome="y", covariates=["nope"])
 
 
 def test_causal_impact_empty_period_raises():
     wide = _wide()
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         # pre-period outside the index -> no observations
         causal_impact(wide, pre_period=(100, 109), post_period=(10, 19))
 
 
 def test_causal_impact_overlapping_periods_raises():
     wide = _wide()
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         causal_impact(wide, pre_period=(0, 15), post_period=(10, 19))
 
 
@@ -147,26 +147,26 @@ def test_bsts_synth_runs():
 
 
 def test_bsts_synth_bad_data_type_raises():
-    with pytest.raises(TypeError):
+    with pytest.raises(MethodIncompatibility):
         bsts_synth([1, 2, 3], outcome="y", unit="unit", time="time",
                    treated_unit="treated", treatment_time=T_TREAT)
 
 
 def test_bsts_synth_missing_column_raises():
     df = _panel(1).drop(columns=["y"])
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         bsts_synth(df, outcome="y", unit="unit", time="time",
                    treated_unit="treated", treatment_time=T_TREAT)
 
 
 def test_bsts_synth_missing_treated_raises():
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         bsts_synth(_panel(2), outcome="y", unit="unit", time="time",
                    treated_unit="ghost", treatment_time=T_TREAT)
 
 
 def test_bsts_synth_missing_covariate_raises():
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         bsts_synth(_panel(3), outcome="y", unit="unit", time="time",
                    treated_unit="treated", treatment_time=T_TREAT,
                    covariates=["does_not_exist"])

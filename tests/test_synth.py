@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from statspai.synth import synth, SyntheticControl
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 @pytest.fixture
@@ -229,6 +230,61 @@ class TestSyntheticControl:
         with pytest.raises(ValueError, match="pre-treatment"):
             synth(panel_data, outcome='outcome', unit='unit',
                   time='time', treated_unit='unit_0', treatment_time=2)
+
+    def test_missing_column_uses_taxonomy(self, panel_data):
+        with pytest.raises(MethodIncompatibility, match="not found"):
+            synth(panel_data, outcome='nonexistent', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11)
+
+    def test_invalid_dispatch_inputs_use_taxonomy(self, panel_data):
+        with pytest.raises(MethodIncompatibility, match="DataFrame"):
+            synth([1, 2, 3], outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11)
+        with pytest.raises(MethodIncompatibility, match="method"):
+            synth(panel_data, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11,
+                  method=123)
+        with pytest.raises(MethodIncompatibility, match="backend"):
+            synth(panel_data, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11,
+                  backend='matlab')
+        with pytest.raises(MethodIncompatibility, match="staggered"):
+            synth(panel_data, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11,
+                  method='staggered')
+
+    def test_data_insufficient_paths_use_taxonomy(self, panel_data):
+        with pytest.raises(DataInsufficient, match="pre-treatment"):
+            synth(panel_data, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=2)
+        with pytest.raises(DataInsufficient, match="post-treatment"):
+            synth(panel_data, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=100)
+
+        df = panel_data.copy()
+        donor_pre = (df['unit'] != 'unit_0') & (df['time'] < 11)
+        df.loc[donor_pre, 'outcome'] = np.nan
+        with pytest.raises(DataInsufficient, match="No valid donor"):
+            synth(df, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11)
+
+    def test_special_predictor_errors_use_taxonomy(self, panel_data):
+        df = panel_data.assign(x1=np.arange(len(panel_data), dtype=float))
+        with pytest.raises(MethodIncompatibility, match="special_predictor"):
+            synth(df, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11,
+                  special_predictors=[('missing', [1, 2], 'mean')])
+        with pytest.raises(MethodIncompatibility, match="op"):
+            synth(df, outcome='outcome', unit='unit',
+                  time='time', treated_unit='unit_0', treatment_time=11,
+                  special_predictors=[('x1', [1, 2], 'median')])
+
+    def test_scalar_covariate_name_is_normalized(self, panel_data):
+        df = panel_data.assign(x1=np.arange(len(panel_data), dtype=float))
+        result = synth(df, outcome='outcome', unit='unit',
+                       time='time', treated_unit='unit_0',
+                       treatment_time=11, covariates='x1', placebo=False)
+        assert result.model_info['v_weights']['predictor'].tolist() == ['x1[mean]']
 
 
 if __name__ == "__main__":

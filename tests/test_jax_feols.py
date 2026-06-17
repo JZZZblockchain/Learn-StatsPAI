@@ -13,7 +13,11 @@ import pytest
 
 pytest.importorskip("jax")  # whole module skips if jax missing
 
-from statspai.fast import feols, feols_jax, jax_device_info
+from statspai.exceptions import (  # noqa: E402
+    MethodIncompatibility,
+    NumericalInstability,
+)
+from statspai.fast import feols, feols_jax, jax_device_info  # noqa: E402
 
 
 # Float64 + same RNG seed → bit-comparable parity to within QR vs
@@ -112,26 +116,92 @@ def test_within_r2_matches_numpy_feols():
 
 def test_invalid_vcov_raises():
     df = _make_panel()
-    with pytest.raises(ValueError, match="vcov="):
+    with pytest.raises(MethodIncompatibility, match="vcov="):
         feols_jax("y ~ x1", df, vcov="hc3")
 
 
 def test_cr1_without_cluster_raises():
     df = _make_panel()
-    with pytest.raises(ValueError, match="cr1"):
+    with pytest.raises(MethodIncompatibility, match="cr1"):
         feols_jax("y ~ x1", df, vcov="cr1")
 
 
 def test_cluster_without_cr1_raises():
     df = _make_panel()
-    with pytest.raises(ValueError, match="cluster="):
+    with pytest.raises(MethodIncompatibility, match="cluster="):
         feols_jax("y ~ x1", df, vcov="iid", cluster="cluster")
 
 
 def test_invalid_dtype_raises():
     df = _make_panel()
-    with pytest.raises(ValueError, match="dtype="):
+    with pytest.raises(MethodIncompatibility, match="dtype="):
         feols_jax("y ~ x1", df, dtype="bfloat16")
+
+
+def test_missing_columns_raise_method_incompatibility():
+    df = _make_panel()
+    with pytest.raises(MethodIncompatibility) as exc:
+        feols_jax("y ~ x1 + missing", df)
+    assert exc.value.diagnostics["missing_columns"] == ["missing"]
+
+
+def test_non_dataframe_input_raises_method_incompatibility():
+    df = _make_panel()
+    with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+        feols_jax("y ~ x1", df.to_dict("list"))
+
+
+def test_bad_formula_raises_method_incompatibility():
+    df = _make_panel()
+    with pytest.raises(MethodIncompatibility, match="missing '~'"):
+        feols_jax("y + x1", df)
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"fe_maxiter": 0}, "fe_maxiter"),
+        ({"fe_tol": -1.0}, "fe_tol"),
+        ({"fe_tol": np.nan}, "fe_tol"),
+    ],
+)
+def test_invalid_demean_controls_raise(kwargs, match):
+    df = _make_panel()
+    with pytest.raises(ValueError, match=match):
+        feols_jax("y ~ x1 | firm", df, **kwargs)
+
+
+def test_all_zero_weights_raise():
+    df = _make_panel(seed=8)
+    df["w0"] = 0.0
+    with pytest.raises(ValueError, match="no positive mass"):
+        feols_jax("y ~ x1 | firm", df, weights="w0")
+
+
+def test_cluster_nan_raises_method_incompatibility():
+    df = _make_panel(seed=81)
+    df.loc[df.index[3], "cluster"] = np.nan
+    with pytest.raises(MethodIncompatibility, match="cluster column"):
+        feols_jax("y ~ x1", df, vcov="cr1", cluster="cluster")
+
+
+def test_singular_jax_solve_raises_numerical_instability():
+    df = _make_panel(seed=82)
+    df["x_dup"] = df["x1"]
+    with pytest.raises(NumericalInstability):
+        feols_jax("y ~ x1 + x_dup", df)
+
+
+def test_kept_sample_all_zero_weights_raise():
+    df = _make_panel(seed=9, n=200, n_firm=20)
+    df["w0"] = 0.0
+    extra = df.iloc[[0]].copy()
+    extra["firm"] = 999
+    extra["w0"] = 1.0
+    df_aug = pd.concat([df, extra], ignore_index=True)
+
+    with pytest.raises(ValueError, match="no positive mass"):
+        feols_jax("y ~ x1 | firm", df_aug, weights="w0")
 
 
 def test_float32_runs_with_relaxed_tol():

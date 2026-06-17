@@ -11,6 +11,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from statspai import ivreg, regress
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.regression.iv import IVRegression
 
 
@@ -248,20 +249,131 @@ class TestIVRegression:
             'z1': np.random.normal(size=n),
         })
 
-        with pytest.raises(ValueError, match="Under-identified"):
+        with pytest.raises(MethodIncompatibility, match="Under-identified"):
             ivreg("y ~ (x1 + x2 ~ z1)", data=df)
 
     def test_missing_iv_formula_error(self):
         """Should raise error if formula has no IV syntax"""
         df = pd.DataFrame({'y': [1, 2, 3], 'x': [1, 2, 3]})
 
-        with pytest.raises(ValueError, match="IV formula must specify"):
+        with pytest.raises(MethodIncompatibility, match="IV formula must specify"):
             ivreg("y ~ x", data=df)
 
     def test_missing_variable_error(self, endogenous_data):
         """Should raise error if variable not found in data"""
-        with pytest.raises(ValueError, match="not found in data"):
+        with pytest.raises(MethodIncompatibility, match="not found in data") as excinfo:
             ivreg("y ~ (x_endog ~ z_nonexistent) + x_exog", data=endogenous_data)
+        assert excinfo.value.diagnostics["missing_columns"] == ["z_nonexistent"]
+
+    def test_model_input_errors_use_exception_taxonomy(self, endogenous_data):
+        with pytest.raises(MethodIncompatibility, match="Unknown IV method"):
+            IVRegression(
+                formula="y ~ (x_endog ~ z1 + z2) + x_exog",
+                data=endogenous_data,
+                method="bad",
+            )
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            IVRegression(
+                formula="y ~ (x_endog ~ z1 + z2) + x_exog",
+                data=[1, 2, 3],
+            )
+
+        with pytest.raises(MethodIncompatibility, match="Provide either"):
+            IVRegression().fit()
+
+        model = IVRegression(
+            formula="y ~ (x_endog ~ z1 + z2) + x_exog",
+            data=endogenous_data,
+        )
+        with pytest.raises(MethodIncompatibility, match="Model must be fitted"):
+            _ = model.first_stage
+        with pytest.raises(MethodIncompatibility, match="Model must be fitted"):
+            _ = model.sargan_test
+        with pytest.raises(MethodIncompatibility, match="Model must be fitted"):
+            _ = model.hausman_test
+
+        with pytest.raises(MethodIncompatibility, match="Unknown robust option"):
+            model.fit(robust="hc9")
+
+        with pytest.raises(MethodIncompatibility, match="Cluster variable"):
+            model.fit(cluster="not_a_cluster")
+
+    def test_formula_complete_rows_required(self, endogenous_data):
+        data = endogenous_data.copy()
+        data[["y", "x_endog", "x_exog", "z1", "z2"]] = np.nan
+        with pytest.raises(DataInsufficient, match="No rows remain"):
+            ivreg("y ~ (x_endog ~ z1 + z2) + x_exog", data=data)
+
+    def test_no_intercept_minus_one_formula(self, endogenous_data):
+        """R/Patsy-style ``- 1`` formulas should not become fake variables."""
+        model = IVRegression(
+            formula="y ~ (x_endog ~ z1 + z2) + x_exog - 1",
+            data=endogenous_data,
+        )
+        result = model.fit()
+
+        assert list(result.params.index) == ["x_exog", "x_endog"]
+        assert "Intercept" not in result.params.index
+
+        new_data = endogenous_data[["x_exog", "x_endog"]].head(10)
+        predictions = model.predict(new_data)
+        expected = (
+            result.params["x_exog"] * new_data["x_exog"].to_numpy()
+            + result.params["x_endog"] * new_data["x_endog"].to_numpy()
+        )
+        np.testing.assert_allclose(predictions, expected)
+
+    def test_no_intercept_minus_one_formula_without_exog(self, just_identified_data):
+        """The ``- 1`` intercept removal should also work with no exog terms."""
+        model = IVRegression(
+            formula="y ~ (x_endog ~ z) - 1",
+            data=just_identified_data,
+        )
+        result = model.fit()
+
+        assert list(result.params.index) == ["x_endog"]
+        predictions = model.predict(just_identified_data[["x_endog"]].head(10))
+        expected = result.params["x_endog"] * just_identified_data[
+            "x_endog"
+        ].head(10).to_numpy()
+        np.testing.assert_allclose(predictions, expected)
+
+    def test_predict_errors_use_exception_taxonomy(self, endogenous_data):
+        """Prediction misuse should expose structured, recoverable errors."""
+        unfitted = IVRegression(
+            formula="y ~ (x_endog ~ z1 + z2) + x_exog",
+            data=endogenous_data,
+        )
+        with pytest.raises(MethodIncompatibility, match="fitted before prediction"):
+            unfitted.predict(endogenous_data[["x_exog", "x_endog"]].head(2))
+
+        model = IVRegression(
+            formula="y ~ (x_endog ~ z1 + z2) + x_exog",
+            data=endogenous_data,
+        )
+        model.fit()
+        with pytest.raises(MethodIncompatibility, match="missing columns") as excinfo:
+            model.predict(endogenous_data[["x_endog"]].head(2))
+        assert excinfo.value.diagnostics["missing_columns"] == ["x_exog"]
+
+        nonnumeric = endogenous_data[["x_exog", "x_endog"]].head(2).copy()
+        nonnumeric["x_endog"] = ["bad", "values"]
+        with pytest.raises(MethodIncompatibility, match="must be numeric"):
+            model.predict(nonnumeric)
+
+        raw = IVRegression(
+            y=endogenous_data["y"].to_numpy(),
+            X_exog=np.column_stack([
+                np.ones(len(endogenous_data)),
+                endogenous_data["x_exog"].to_numpy(),
+            ]),
+            X_endog=endogenous_data[["x_endog"]].to_numpy(),
+            Z=endogenous_data[["z1", "z2"]].to_numpy(),
+        )
+        raw.fit()
+        with pytest.raises(MethodIncompatibility, match="fit with a formula"):
+            raw.predict(endogenous_data[["x_exog", "x_endog"]].head(2))
 
     # ----------------------------------------------------------------
     # Output

@@ -7,6 +7,7 @@ import pytest
 import statspai as sp
 from statspai.dml import DoubleMLPLR, DoubleMLIRM, DoubleMLPLIV, DoubleMLIIVM
 from statspai.core.results import CausalResult
+from statspai.exceptions import MethodIncompatibility
 
 
 def test_plr_class_matches_dispatcher():
@@ -80,7 +81,7 @@ def test_explicit_fold_indices_are_plr_only_for_now():
         'd': [0, 1, 0, 1, 0, 1, 0, 1],
         'x': np.arange(8.0),
     })
-    with pytest.raises(NotImplementedError, match='model=.plr. only'):
+    with pytest.raises(MethodIncompatibility, match='model=.plr. only'):
         sp.dml(
             df, y='y', d='d', X=['x'], model='irm',
             fold_indices=np.array([0, 0, 1, 1, 2, 2, 3, 3]),

@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp  # noqa: F401  (import-alias contract)
+from statspai.exceptions import MethodIncompatibility
 
 from statspai.decomposition._common import (
     add_constant,
@@ -151,13 +152,15 @@ def test_wild_bootstrap_default_rng_and_rademacher_symmetry():
 def test_wild_bootstrap_unknown_weights_raises():
     """Unknown multiplier scheme -> ValueError (line 315)."""
     n = 10
-    with pytest.raises(ValueError, match="unknown weights"):
+    with pytest.raises(MethodIncompatibility, match="unknown weights") as excinfo:
         wild_bootstrap_stat(
             lambda y: float(y.sum()),
             resid=np.ones(n), fitted=np.zeros(n),
             n_boot=3, weights="gaussian",
             rng=np.random.default_rng(0),
         )
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["weights"] == "gaussian"
 
 
 def test_wild_bootstrap_partial_failures_warn():
@@ -227,8 +230,10 @@ def test_bootstrap_ci_basic_and_normal_methods():
     assert np.allclose((lo_n + hi_n) / 2, point, atol=1e-9)
     assert lo_b[0] < hi_b[0]
 
-    with pytest.raises(ValueError, match="unknown method"):
+    with pytest.raises(MethodIncompatibility, match="unknown method") as excinfo:
         bootstrap_ci(boot, point, method="bca")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["method"] == "bca"
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -325,8 +330,10 @@ def test_statistic_value_full_menu_and_unknown_raises():
     )
     assert np.isfinite(statistic_value(y, w, "gini"))
     assert np.isfinite(statistic_value(y, w, "log_var"))
-    with pytest.raises(ValueError, match="unknown statistic"):
+    with pytest.raises(MethodIncompatibility, match="unknown statistic") as excinfo:
         statistic_value(y, w, "median_absolute_deviation")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["stat"] == "median_absolute_deviation"
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -361,8 +368,10 @@ def test_influence_function_mean_identity_and_unknown_raises():
     """IF of the mean is y itself; unknown stat raises (line 641)."""
     y = np.array([2.0, 4.0, 6.0])
     assert np.array_equal(influence_function(y, "mean"), y)
-    with pytest.raises(ValueError, match="unknown statistic"):
+    with pytest.raises(MethodIncompatibility, match="unknown statistic") as excinfo:
         influence_function(y, "kurtosis")
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics["stat"] == "kurtosis"
 
 
 def test_influence_function_quantile_recenters_to_quantile():
@@ -384,8 +393,10 @@ def test_prepare_frame_weight_length_mismatch_raises():
     raises (line 679)."""
     df = pd.DataFrame({"y": [1.0, 2.0, 3.0], "x": [0.1, 0.2, 0.3]})
     bad_w = np.ones(2)  # wrong length
-    with pytest.raises(ValueError, match="weights array length"):
+    with pytest.raises(MethodIncompatibility, match="weights array length") as excinfo:
         prepare_frame(df, ["y", "x"], weights=bad_w)
+    assert isinstance(excinfo.value, ValueError)
+    assert excinfo.value.diagnostics == {"n_weights": 2, "n_rows": 3}
 
 
 def test_prepare_frame_string_weights_and_dropna():
@@ -513,7 +524,7 @@ def test_to_word_empty_dataframe_panel(tmp_path):
                     "Full": pd.DataFrame({"a": [1], "b": [2.5]})}
 
     out = tmp_path / "doc.docx"
-    res = _WordRes().to_word(str(out))
+    _WordRes().to_word(str(out))
     assert out.exists()
     from docx import Document
     doc = Document(str(out))

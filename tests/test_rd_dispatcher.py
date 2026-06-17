@@ -10,13 +10,12 @@ per-method test files (``test_rd*.py``) and reference parity.
 """
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 # ─── Fixtures ───────────────────────────────────────────────────────────
@@ -161,10 +160,21 @@ def test_case_insensitive(rd_data):
 
 
 def test_unknown_method_raises(rd_data):
-    with pytest.raises(ValueError, match="Unknown method"):
+    with pytest.raises(MethodIncompatibility, match="Unknown method") as exc:
         sp.rd(rd_data, y="y", x="x", c=0, method="not_a_method")
+    assert exc.value.diagnostics["method"] == "not_a_method"
+    assert "rdrobust" in exc.value.diagnostics["valid_methods"]
 
 
 def test_non_string_method_raises(rd_data):
     with pytest.raises(TypeError, match="method must be a string"):
         sp.rd(rd_data, y="y", x="x", c=0, method=42)
+
+
+def test_bias_aware_requires_fuzzy_with_taxonomy(rd_data):
+    with pytest.raises(MethodIncompatibility, match="requires fuzzy") as exc:
+        sp.rd(rd_data, y="y", x="x", c=0, method="bias_aware_fuzzy")
+    assert exc.value.diagnostics == {
+        "method": "bias_aware_fuzzy",
+        "missing_argument": "fuzzy",
+    }

@@ -14,6 +14,7 @@ import pytest
 
 from statspai.dml import dml, dml_model_averaging, dml_panel
 from statspai.dml.model_averaging import _solve_cls_weights
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 @pytest.fixture
@@ -68,6 +69,14 @@ def test_averaging_default_candidates(avg_df):
     assert len(res.model_info["candidates"]) >= 1
 
 
+def test_averaging_accepts_scalar_covariate(avg_df):
+    res = dml_model_averaging(
+        avg_df, y="y", treat="d", covariates="x0",
+        candidates=_small_candidates(), n_folds=3, weight_rule="equal",
+    )
+    assert np.isfinite(res.estimate)
+
+
 def test_averaging_missing_column(avg_df):
     with pytest.raises(ValueError, match="not found"):
         dml_model_averaging(avg_df, y="nope", treat="d",
@@ -91,12 +100,55 @@ def test_averaging_empty_candidates(avg_df):
                             candidates=[])
 
 
+def test_averaging_rejects_invalid_controls(avg_df):
+    with pytest.raises(MethodIncompatibility, match="n_folds"):
+        dml_model_averaging(
+            avg_df, y="y", treat="d", covariates=["x0"],
+            candidates=_small_candidates(), n_folds=1,
+        )
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        dml_model_averaging(
+            avg_df, y="y", treat="d", covariates=["x0"],
+            candidates=_small_candidates(), alpha=1.0,
+        )
+    with pytest.raises(DataInsufficient, match="n_folds"):
+        dml_model_averaging(
+            avg_df.head(2), y="y", treat="d", covariates=["x0"],
+            candidates=_small_candidates(), n_folds=3,
+        )
+
+
+def test_averaging_rejects_bad_candidates(avg_df):
+    with pytest.raises(MethodIncompatibility, match="triple"):
+        dml_model_averaging(
+            avg_df, y="y", treat="d", covariates=["x0"],
+            candidates=[("bad",)], n_folds=3,
+        )
+    cand = _small_candidates()
+    cand[1] = (cand[1][0], cand[1][1], "ols")
+    with pytest.raises(MethodIncompatibility, match="unique"):
+        dml_model_averaging(
+            avg_df, y="y", treat="d", covariates=["x0"],
+            candidates=cand, n_folds=3,
+        )
+
+
 def test_averaging_all_nan_rows_raises():
     df = pd.DataFrame({"y": [np.nan, np.nan], "d": [np.nan, np.nan],
                        "x0": [np.nan, np.nan]})
     with pytest.raises(ValueError, match="No rows remain"):
         dml_model_averaging(df, y="y", treat="d", covariates=["x0"],
                             candidates=_small_candidates(), n_folds=2)
+
+
+def test_averaging_nonfinite_design_raises(avg_df):
+    df = avg_df.copy()
+    df.loc[0, "x0"] = np.inf
+    with pytest.raises(MethodIncompatibility, match="finite"):
+        dml_model_averaging(
+            df, y="y", treat="d", covariates=["x0"],
+            candidates=_small_candidates(), n_folds=3,
+        )
 
 
 def test_averaging_drops_missing(avg_df):
@@ -201,6 +253,15 @@ def test_solve_cls_weights_basic():
     assert abs(w.sum() - 1.0) < 1e-6
 
 
+def test_solve_cls_weights_validates_inputs():
+    with pytest.raises(MethodIncompatibility, match="predictions"):
+        _solve_cls_weights(np.arange(3.0), np.arange(3.0))
+    with pytest.raises(MethodIncompatibility, match="sample_weight"):
+        _solve_cls_weights(
+            np.arange(3.0), np.ones((3, 2)), sample_weight=np.zeros(3),
+        )
+
+
 # --------------------------------------------------------------------------
 # panel_dml
 # --------------------------------------------------------------------------
@@ -222,7 +283,7 @@ def panel_df():
 
 
 def test_panel_basic(panel_df):
-    res = dml_panel(panel_df, y="y", treat="d", covariates=["x1", "x2"],
+    res = dml_panel(panel_df, y="y", treat="d", covariates="x1",
                     unit="pid", n_folds=4)
     assert np.isfinite(res.estimate)
     assert res.n_units == 60
@@ -290,39 +351,39 @@ def test_panel_weighted_fit_fallback_warns(panel_df):
 
 
 def test_panel_n_folds_below_two(panel_df):
-    with pytest.raises(ValueError, match="n_folds must be"):
+    with pytest.raises(MethodIncompatibility, match="n_folds must be"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=1)
 
 
 def test_panel_time_fe_without_time(panel_df):
-    with pytest.raises(ValueError, match="time must be provided"):
+    with pytest.raises(MethodIncompatibility, match="time must be provided"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", include_time_fe=True)
 
 
 def test_panel_missing_column(panel_df):
-    with pytest.raises(ValueError, match="missing columns"):
+    with pytest.raises(MethodIncompatibility, match="missing columns"):
         dml_panel(panel_df, y="nope", treat="d", covariates=["x1"],
                   unit="pid")
 
 
 def test_panel_folds_exceed_units(panel_df):
     small = panel_df[panel_df["pid"] < 3]
-    with pytest.raises(ValueError, match="cannot exceed n_units"):
+    with pytest.raises(DataInsufficient, match="cannot exceed n_units"):
         dml_panel(small, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=5)
 
 
 def test_panel_weight_validations(panel_df):
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(MethodIncompatibility, match="non-negative"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=4,
                   sample_weight=-np.ones(len(panel_df)))
-    with pytest.raises(ValueError, match="1-D of length"):
+    with pytest.raises(MethodIncompatibility, match="1-D of length"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=4, sample_weight=np.ones(3))
-    with pytest.raises(ValueError, match="sample_weight column"):
+    with pytest.raises(MethodIncompatibility, match="sample_weight column"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=4, sample_weight="nope")
 
@@ -346,7 +407,7 @@ def test_panel_binary_treatment_deprecation():
 
 
 def test_panel_binary_treatment_nonbinary_raises(panel_df):
-    with pytest.raises(ValueError, match=r"requires D"):
+    with pytest.raises(MethodIncompatibility, match=r"requires D"):
         dml_panel(panel_df, y="y", treat="d", covariates=["x1"],
                   unit="pid", n_folds=4, binary_treatment=True)
 

@@ -11,6 +11,7 @@ from statspai.bcf import bcf, BayesianCausalForest
 from statspai.bunching import bunching, BunchingEstimator
 from statspai.matrix_completion import mc_panel, MCPanel
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -151,6 +152,39 @@ class TestBCF:
         est.fit()
         cate = est.effect()
         assert len(cate) == len(treatment_data)
+
+    def test_effect_validates_new_covariates(self, treatment_data):
+        est = BayesianCausalForest(
+            data=treatment_data, y='y', treat='d',
+            covariates=['x1', 'x2'],
+            n_bootstrap=20, n_trees_mu=50, n_trees_tau=20
+        )
+        est.fit()
+
+        one_row = est.effect(np.array([0.0, 0.0]))
+        assert one_row.shape == (1,)
+
+        with pytest.raises(MethodIncompatibility) as wrong_shape:
+            est.effect(np.ones((2, 3)))
+        assert wrong_shape.value.diagnostics["expected_features"] == 2
+
+        with pytest.raises(MethodIncompatibility, match="numeric"):
+            est.effect(np.array([["bad", "data"]], dtype=object))
+
+        with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+            est.effect(np.array([[np.inf, 0.0]]))
+
+        with pytest.raises(DataInsufficient):
+            est.effect(np.empty((0, 2)))
+
+    def test_unfitted_effect_raises_taxonomy(self, treatment_data):
+        est = BayesianCausalForest(
+            data=treatment_data, y='y', treat='d',
+            covariates=['x1', 'x2'],
+            n_bootstrap=20, n_trees_mu=50, n_trees_tau=20
+        )
+        with pytest.raises(MethodIncompatibility, match="fitted"):
+            est.effect(np.ones((1, 2)))
 
     def test_citation(self, treatment_data):
         result = bcf(treatment_data, y='y', treat='d',

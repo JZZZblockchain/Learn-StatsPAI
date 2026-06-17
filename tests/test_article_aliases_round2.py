@@ -17,6 +17,7 @@ import pytest
 
 import statspai as sp
 from statspai.core.results import CausalResult, EconometricResults
+from statspai.exceptions import MethodIncompatibility
 
 
 # =====================================================================
@@ -110,6 +111,12 @@ def test_causal_discovery_rejects_unknown_method():
         sp.causal_discovery(df, method="not_a_real_algorithm")
 
 
+def test_causal_discovery_rejects_non_string_method():
+    df = pd.DataFrame({"x1": [0, 1], "x2": [1, 0]})
+    with pytest.raises(MethodIncompatibility, match="method"):
+        sp.causal_discovery(df, method=None)
+
+
 def _make_cd_df(seed=0, n=150):
     rng = np.random.default_rng(seed)
     x1 = rng.normal(size=n)
@@ -169,22 +176,33 @@ def test_policy_tree_max_depth_kwarg_still_works():
     assert r is not None
 
 
+def test_policy_tree_accepts_scalar_covariate_alias():
+    rng = np.random.default_rng(14)
+    n = 300
+    x1 = rng.normal(size=n)
+    d = (rng.uniform(size=n) < 0.5).astype(int)
+    y = x1 * d + rng.normal(size=n) * 0.5
+    df = pd.DataFrame({"y": y, "d": d, "x1": x1})
+    r = sp.policy_tree(df, y="y", d="d", X="x1", max_depth=2)
+    assert r is not None
+
+
 def test_policy_tree_rejects_conflicting_depth():
     df = pd.DataFrame({"y": [0, 1], "d": [0, 1], "x1": [0.1, 0.2]})
-    with pytest.raises(TypeError, match="either `depth` or `max_depth`"):
+    with pytest.raises(MethodIncompatibility, match="either `depth` or `max_depth`"):
         sp.policy_tree(df, y="y", d="d", X=["x1"], depth=2, max_depth=3)
 
 
 def test_policy_tree_rejects_conflicting_treat():
     """Passing both `d=` and `treat=` with different values must error."""
     df = pd.DataFrame({"y": [0, 1], "d": [0, 1], "t2": [0, 1], "x1": [0.1, 0.2]})
-    with pytest.raises(TypeError, match="conflicting treatment"):
+    with pytest.raises(MethodIncompatibility, match="conflicting treatment"):
         sp.policy_tree(df, y="y", d="d", treat="t2", X=["x1"])
 
 
 def test_policy_tree_rejects_conflicting_covariates():
     df = pd.DataFrame({"y": [0, 1], "d": [0, 1], "x1": [0.1, 0.2]})
-    with pytest.raises(TypeError, match="conflicting covariate"):
+    with pytest.raises(MethodIncompatibility, match="conflicting covariate"):
         sp.policy_tree(df, y="y", d="d", X=["x1"], covariates=["d"])
 
 
@@ -194,7 +212,7 @@ def test_dml_rejects_conflicting_treat():
         "y": rng.normal(size=50), "d1": rng.integers(0, 2, 50),
         "d2": rng.integers(0, 2, 50), "x1": rng.normal(size=50),
     })
-    with pytest.raises(TypeError, match="conflicting treatment"):
+    with pytest.raises(MethodIncompatibility, match="conflicting treatment"):
         sp.dml(df, y="y", d="d1", treat="d2", X=["x1"])
 
 
@@ -290,7 +308,7 @@ def test_auto_did_bjs_rejects_cohort_string_g():
     df["cohort_str"] = df["first_treat"].astype("object").where(
         df["first_treat"].notna(), "never"
     ).astype(str)
-    with pytest.raises(TypeError, match="numeric first-treatment timing"):
+    with pytest.raises(MethodIncompatibility, match="numeric first-treatment timing"):
         sp.auto_did(
             df, y="y", g="cohort_str", t="time", i="unit",
             methods=["cs", "bjs"],

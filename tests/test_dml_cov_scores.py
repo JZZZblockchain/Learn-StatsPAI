@@ -18,6 +18,8 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.dml import dml
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 @pytest.fixture(scope="module")
@@ -120,3 +122,73 @@ def test_pliv_model_route(plr_data):
         n_folds=3,
     )
     assert np.isfinite(_coef(res))
+
+
+def test_dml_accepts_scalar_covariate_string(plr_data):
+    df, X = plr_data
+    res = dml(
+        df,
+        y="y",
+        treat="d",
+        covariates=X[0],
+        ml_g="linear",
+        ml_m="linear",
+        n_folds=2,
+    )
+    assert np.isfinite(_coef(res))
+
+
+def test_dml_invalid_model_uses_taxonomy(plr_data):
+    df, X = plr_data
+    with pytest.raises(MethodIncompatibility) as exc:
+        dml(df, y="y", treat="d", covariates=X, model="bogus")
+    assert exc.value.diagnostics["model"] == "bogus"
+
+
+def test_dml_missing_column_reports_diagnostics(plr_data):
+    df, X = plr_data
+    with pytest.raises(MethodIncompatibility) as exc:
+        dml(df, y="y", treat="d", covariates=X + ["not_a_column"])
+    assert exc.value.diagnostics["missing_columns"] == ["not_a_column"]
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"n_folds": 1}, "n_folds"),
+        ({"n_rep": 0}, "n_rep"),
+        ({"alpha": 1.0}, "alpha"),
+    ],
+)
+def test_dml_invalid_controls_use_taxonomy(plr_data, kwargs, match):
+    df, X = plr_data
+    with pytest.raises(MethodIncompatibility, match=match):
+        dml(df, y="y", treat="d", covariates=X, **kwargs)
+
+
+def test_dml_fold_indices_require_single_rep(plr_data):
+    df, X = plr_data
+    folds = np.arange(len(df)) % 2
+    with pytest.raises(MethodIncompatibility, match="n_rep=1"):
+        dml(
+            df,
+            y="y",
+            treat="d",
+            covariates=X,
+            fold_indices=folds,
+            n_folds=2,
+            n_rep=2,
+        )
+
+
+def test_dml_zero_sample_weight_is_data_insufficient(plr_data):
+    df, X = plr_data
+    weights = np.zeros(len(df))
+    with pytest.raises(DataInsufficient, match="zero total mass"):
+        dml(df, y="y", treat="d", covariates=X, sample_weight=weights)
+
+
+def test_dml_non_dataframe_input_uses_taxonomy(plr_data):
+    df, X = plr_data
+    with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+        dml(df.to_dict("list"), y="y", treat="d", covariates=X)

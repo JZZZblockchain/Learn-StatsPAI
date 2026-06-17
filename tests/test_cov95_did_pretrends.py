@@ -13,6 +13,7 @@ import pytest
 import statspai as sp
 from statspai.core.results import CausalResult
 from statspai.did import pretrends as ptmod
+from statspai.exceptions import MethodIncompatibility
 
 
 def _staggered_event_study(seed=0, window=(-3, 3)):
@@ -59,8 +60,13 @@ def test_pretrends_test_f(es_result):
 
 
 def test_pretrends_test_bad_type(es_result):
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         sp.pretrends_test(es_result, type="bogus")
+
+
+def test_pretrends_test_rejects_invalid_alpha(es_result):
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.pretrends_test(es_result, alpha=1.0)
 
 
 def test_pretrends_test_with_full_vcv(es_result):
@@ -139,9 +145,19 @@ def test_pretrends_power_full_length_delta(es_result):
 
 
 def test_pretrends_power_wrong_length_delta(es_result):
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         sp.pretrends_power(es_result, delta=np.array([1.0, 2.0, 3.0, 4.0,
                                                       5.0, 6.0, 7.0]))
+
+
+def test_pretrends_power_rejects_nonfinite_delta(es_result):
+    with pytest.raises(MethodIncompatibility, match="delta"):
+        sp.pretrends_power(es_result, delta=np.array([np.nan]))
+
+
+def test_pretrends_power_rejects_invalid_alpha(es_result):
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.pretrends_power(es_result, alpha=0.0)
 
 
 def test_pretrends_power_low_power_warning():
@@ -195,8 +211,19 @@ def test_sensitivity_rr_breakdown_finite():
 
 
 def test_sensitivity_rr_bad_method(es_result):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(MethodIncompatibility):
         sp.sensitivity_rr(es_result, method="FLCI")
+
+
+def test_sensitivity_rr_rejects_invalid_grid_controls(es_result):
+    with pytest.raises(MethodIncompatibility, match="n_grid"):
+        sp.sensitivity_rr(es_result, n_grid=0)
+    with pytest.raises(MethodIncompatibility, match="Mbar"):
+        sp.sensitivity_rr(es_result, Mbar=[])
+    with pytest.raises(MethodIncompatibility, match="non-negative"):
+        sp.sensitivity_rr(es_result, Mbar=[0.0, -0.1])
+    with pytest.raises(MethodIncompatibility, match="finite"):
+        sp.sensitivity_rr(es_result, Mbar=[0.0, np.inf])
 
 
 def test_sensitivity_rr_no_post_raises():
@@ -301,23 +328,23 @@ def test_extract_event_study_wrong_type_raises():
     r = CausalResult(method="x", estimand="ATT", estimate=0.0, se=0.1,
                      pvalue=0.5, ci=(0, 1), alpha=0.05, n_obs=10,
                      detail=None, model_info={"event_study": [1, 2, 3]})
-    with pytest.raises(TypeError):
+    with pytest.raises(MethodIncompatibility):
         ptmod._extract_event_study(r)
 
 
 def test_resolve_columns_missing_time():
     df = pd.DataFrame({"estimate": [1.0], "se": [0.1]})
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         ptmod._resolve_columns(df)
 
 
 def test_resolve_columns_missing_estimate():
     df = pd.DataFrame({"relative_time": [-1], "se": [0.1]})
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         ptmod._resolve_columns(df)
 
 
 def test_resolve_columns_missing_se():
     df = pd.DataFrame({"relative_time": [-1], "estimate": [1.0]})
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility):
         ptmod._resolve_columns(df)

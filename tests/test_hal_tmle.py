@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-warnings.filterwarnings("ignore")
-
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
+
+warnings.filterwarnings("ignore")
 
 
 def _tmle_data(n=300, p=4, tau=1.5, seed=0):
@@ -57,9 +58,13 @@ def test_hal_tmle_projection_variant_raises_notimplemented():
 def test_hal_tmle_rejects_invalid_variant():
     df = _tmle_data(n=100, seed=2)
     with pytest.raises(ValueError):
-        sp.hal_tmle(df, y="y", treat="a",
-                     covariates=[f"x{j}" for j in range(4)],
-                     variant="bogus")
+        sp.hal_tmle(
+            df,
+            y="y",
+            treat="a",
+            covariates=[f"x{j}" for j in range(4)],
+            variant="bogus",
+        )
 
 
 def test_hal_tmle_registry():
@@ -81,3 +86,60 @@ def test_hal_regressor_standalone():
     mse_hal = np.mean((y - y_pred) ** 2)
     mse_const = np.mean((y - y.mean()) ** 2)
     assert mse_hal < mse_const
+
+
+def test_hal_regressor_contract_errors_and_single_row_predict():
+    rng = np.random.default_rng(8)
+    X = rng.normal(size=(40, 2))
+    y = X[:, 0] + rng.normal(scale=0.1, size=40)
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        sp.HALRegressor(max_anchors_per_col=5, cv=2).predict(X[:2])
+
+    with pytest.raises(MethodIncompatibility, match="max_anchors_per_col"):
+        sp.HALRegressor(max_anchors_per_col=0, cv=2).fit(X, y)
+
+    with pytest.raises(MethodIncompatibility, match="lambda_"):
+        sp.HALRegressor(lambda_=np.nan, max_anchors_per_col=5, cv=2).fit(X, y)
+
+    bad = X.copy()
+    bad[0, 0] = np.inf
+    with pytest.raises(MethodIncompatibility, match="NaN or infinite"):
+        sp.HALRegressor(max_anchors_per_col=5, cv=2).fit(bad, y)
+
+    with pytest.raises(MethodIncompatibility, match="same row count"):
+        sp.HALRegressor(max_anchors_per_col=5, cv=2).fit(X, y[:-1])
+
+    reg = sp.HALRegressor(max_anchors_per_col=5, cv=2).fit(X, y)
+    pred = reg.predict(np.array([0.0, 0.0]))
+    assert pred.shape == (1,)
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        reg.predict(np.ones((2, 3)))
+    assert wrong_shape.value.diagnostics["expected_features"] == 2
+
+
+def test_hal_classifier_contract_errors_and_predict_proba():
+    rng = np.random.default_rng(9)
+    X = rng.normal(size=(60, 2))
+    y = (X[:, 0] > 0).astype(float)
+
+    with pytest.raises(MethodIncompatibility, match="fitted"):
+        sp.HALClassifier(max_anchors_per_col=5).predict_proba(X[:2])
+
+    with pytest.raises(MethodIncompatibility, match="C"):
+        sp.HALClassifier(C=0.0, max_anchors_per_col=5).fit(X, y)
+
+    with pytest.raises(DataInsufficient, match="both outcome classes"):
+        sp.HALClassifier(max_anchors_per_col=5).fit(X, np.zeros(len(y)))
+
+    with pytest.raises(MethodIncompatibility, match="0/1"):
+        sp.HALClassifier(max_anchors_per_col=5).fit(X, y + 1.0)
+
+    clf = sp.HALClassifier(max_anchors_per_col=5).fit(X, y)
+    proba = clf.predict_proba(np.array([0.0, 0.0]))
+    assert proba.shape == (1, 2)
+
+    with pytest.raises(MethodIncompatibility) as wrong_shape:
+        clf.predict(np.ones((2, 3)))
+    assert wrong_shape.value.diagnostics["expected_features"] == 2

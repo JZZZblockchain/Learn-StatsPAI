@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 from statspai.did.callaway_santanna import (
+    CallawayNotImplemented,
     callaway_santanna,
     _get_gt_pairs,
     _estimate_pscore,
@@ -26,6 +27,7 @@ from statspai.did.callaway_santanna import (
     _estimate_single_att_rcs,
     _rcs_residualise_on_controls,
 )
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def make_panel(seed=0, cohorts=(4, 6, 0), n_per=25, T=8, x=False, const_x=False):
@@ -81,10 +83,21 @@ def test_missing_covariate_raises():
         callaway_santanna(df, y="y", g="g", t="t", i="i", x=["missing_x"])
 
 
+def test_validation_errors_expose_taxonomy_and_scalar_x():
+    df = make_panel(x=True)
+    r = callaway_santanna(df, y="y", g="g", t="t", i="i", x="x1")
+    assert np.isfinite(r.estimate)
+    with pytest.raises(MethodIncompatibility, match="estimator must be"):
+        callaway_santanna(df, y="y", g="g", t="t", i="i", estimator="bogus")
+    with pytest.raises(CallawayNotImplemented, match="estimator='reg'"):
+        callaway_santanna(df, y="y", g="g", t="t", i="i",
+                          panel=False, estimator="dr")
+
+
 def test_no_cohorts_raises():
     # everyone never-treated
     df = make_panel(cohorts=(0, 0))
-    with pytest.raises(ValueError, match="No treatment cohorts"):
+    with pytest.raises(DataInsufficient, match="No treatment cohorts"):
         callaway_santanna(df, y="y", g="g", t="t", i="i")
 
 

@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def _staggered_panel(n_units=80, n_periods=20, treatment_effect=0.5, seed=0):
@@ -88,6 +89,31 @@ def test_event_study_custom_reference():
     assert -2 not in res.event_times
 
 
+def test_event_study_rejects_noninteger_reference():
+    df = _staggered_panel(seed=4)
+
+    with pytest.raises(ValueError, match="reference must be an integer"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=(-3, 3), reference=-1.5,
+        )
+
+
+def test_event_study_rejects_invalid_window():
+    df = _staggered_panel(seed=4)
+
+    with pytest.raises(ValueError, match="lower bound"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=(3, -3),
+        )
+    with pytest.raises(ValueError, match="window bounds"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=(-3.5, 3),  # type: ignore[arg-type]
+        )
+
+
 def test_event_study_clustered_se():
     df = _staggered_panel(seed=5)
     res_default = sp.fast.event_study(
@@ -101,10 +127,91 @@ def test_event_study_clustered_se():
 
 def test_event_study_missing_column_raises():
     df = _staggered_panel(seed=6)
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing columns"):
         sp.fast.event_study(
             df, y="nope", unit="unit", time="time",
             event_time="event_time",
+        )
+
+
+def test_event_study_validates_data_and_column_arguments():
+    df = _staggered_panel(seed=6)
+
+    with pytest.raises(MethodIncompatibility, match="DataFrame"):
+        sp.fast.event_study(
+            {"y": []}, y="y", unit="unit", time="time", event_time="event_time"
+        )
+    with pytest.raises(DataInsufficient, match="at least one row"):
+        sp.fast.event_study(
+            df.iloc[0:0], y="y", unit="unit", time="time", event_time="event_time"
+        )
+    with pytest.raises(MethodIncompatibility, match="column arguments"):
+        sp.fast.event_study(
+            df, y="", unit="unit", time="time", event_time="event_time"
+        )
+    with pytest.raises(MethodIncompatibility, match="cluster"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            cluster=123,  # type: ignore[arg-type]
+        )
+
+
+def test_event_study_rejects_malformed_window():
+    df = _staggered_panel(seed=6)
+
+    with pytest.raises(MethodIncompatibility, match="window must be"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=1,  # type: ignore[arg-type]
+        )
+    with pytest.raises(MethodIncompatibility, match="window must be"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=(1, 2, 3),  # type: ignore[arg-type]
+        )
+
+
+def test_event_study_nonfinite_outcome_raises():
+    df = _staggered_panel(seed=6)
+    df.loc[df.index[0], "y"] = np.nan
+
+    with pytest.raises(ValueError, match="outcome column"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+        )
+
+
+def test_event_study_fractional_event_time_raises():
+    df = _staggered_panel(seed=6)
+    treated_idx = df["event_time"].notna().idxmax()
+    df.loc[treated_idx, "event_time"] = 0.5
+
+    with pytest.raises(ValueError, match="integer event-time offsets"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+        )
+
+
+def test_event_study_infinite_event_time_raises():
+    df = _staggered_panel(seed=6)
+    treated_idx = df["event_time"].notna().idxmax()
+    df.loc[treated_idx, "event_time"] = np.inf
+
+    with pytest.raises(ValueError, match="infinite values"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+        )
+
+
+def test_event_study_missing_cluster_raises():
+    df = _staggered_panel(seed=6)
+    df["cluster"] = df["unit"].astype(float)
+    df.loc[df.index[0], "cluster"] = np.nan
+
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            cluster="cluster",
         )
 
 
@@ -117,6 +224,46 @@ def test_event_study_summary_string():
     s = res.summary()
     assert "event_study" in s
     assert "event_time" in s
+
+
+def test_event_study_result_protocol_json_safe():
+    df = _staggered_panel(seed=8)
+    res = sp.fast.event_study(
+        df, y="y", unit="unit", time="time", event_time="event_time",
+        window=(-2, 2),
+    )
+
+    full = res.to_dict()
+    agent = res.to_agent_summary(max_event_times=2)
+
+    assert full["kind"] == "fast_event_study_result"
+    assert full["model"] == "twfe_event_study"
+    assert full["reference_event_time"] == -1
+    assert len(full["tidy"]) == len(res.event_times)
+    assert agent["kind"] == "fast_event_study_agent_summary"
+    assert len(agent["event_times"]) == 2
+    assert agent["truncated_event_times"] == len(res.event_times) - 2
+    json.dumps(full)
+    json.dumps(agent)
+
+
+def test_event_study_collinear_dummies_raise_clear_error():
+    rows = []
+    for unit in range(8):
+        for time in range(5):
+            rows.append({
+                "unit": unit,
+                "time": time,
+                "event_time": time - 2,
+                "y": float(unit) + 0.1 * time,
+            })
+    df = pd.DataFrame(rows)
+
+    with pytest.raises(RuntimeError, match="perfectly collinear"):
+        sp.fast.event_study(
+            df, y="y", unit="unit", time="time", event_time="event_time",
+            window=(0, 0), reference=-1,
+        )
 
 
 # ---------------------------------------------------------------------------

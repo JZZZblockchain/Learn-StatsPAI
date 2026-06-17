@@ -32,6 +32,7 @@ from statspai.frontier import (
     te_rank,
 )
 from statspai.frontier import _core as _fc
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -241,8 +242,29 @@ class TestHeteroskedasticity:
     def test_emean_requires_truncated_normal(self):
         df = _simulate_hn_production(200, 0.2, 0.4, seed=5)
         df["z"] = np.random.default_rng(5).normal(0, 1, 200)
-        with pytest.raises(ValueError, match="emean"):
+        with pytest.raises(MethodIncompatibility, match="emean") as excinfo:
             frontier(df, y="y", x=["x1"], dist="half-normal", emean=["z"])
+        assert excinfo.value.diagnostics["dist"] == "half-normal"
+
+    def test_frontier_input_contract_taxonomy(self):
+        df = _simulate_hn_production(100, 0.2, 0.4, seed=6)
+
+        scalar_x = frontier(df, y="y", x="x1")
+        assert scalar_x.data_info["regressors"] == ["x1"]
+
+        with pytest.raises(MethodIncompatibility, match="missing") as excinfo:
+            frontier(df, y="y", x=["not_there"])
+        assert excinfo.value.diagnostics["missing_columns"] == ["not_there"]
+
+        with pytest.raises(DataInsufficient, match="Too few") as excinfo:
+            frontier(df.head(2), y="y", x=["x1"])
+        assert excinfo.value.diagnostics["n_complete"] == 2
+
+        with pytest.raises(
+            MethodIncompatibility,
+            match="start has wrong length",
+        ):
+            frontier(df, y="y", x=["x1"], start=np.zeros(1))
 
 
 # ---------------------------------------------------------------------------
@@ -538,14 +560,33 @@ class TestPredict:
     def test_predict_rejects_missing_columns(self):
         df = _simulate_hn_production(200, 0.2, 0.4, seed=205)
         res = frontier(df, y="y", x=["x1", "x2"], dist="half-normal")
-        with pytest.raises(KeyError, match="missing"):
+        with pytest.raises(MethodIncompatibility, match="missing") as excinfo:
             res.predict(pd.DataFrame({"x1": [0.0]}))  # missing x2
+        assert excinfo.value.diagnostics["missing_columns"] == ["x2"]
 
     def test_predict_rejects_unknown_what(self):
         df = _simulate_hn_production(100, 0.2, 0.4, seed=206)
         res = frontier(df, y="y", x=["x1"], dist="half-normal")
-        with pytest.raises(ValueError):
+        with pytest.raises(MethodIncompatibility, match="Unknown what"):
             res.predict(df, what="nonsense")
+
+    def test_predict_rejects_non_dataframe_and_nonnumeric_inputs(self):
+        df = _simulate_hn_production(100, 0.2, 0.4, seed=207)
+        res = frontier(df, y="y", x=["x1"], dist="half-normal")
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            res.predict([[1.0]], what="frontier")
+
+        bad = pd.DataFrame({"x1": ["bad"]})
+        with pytest.raises(MethodIncompatibility, match="must be numeric"):
+            res.predict(bad, what="frontier")
+
+    def test_predict_rejects_empty_complete_prediction_sample(self):
+        df = _simulate_hn_production(100, 0.2, 0.4, seed=208)
+        res = frontier(df, y="y", x=["x1"], dist="half-normal")
+
+        with pytest.raises(DataInsufficient, match="All rows dropped"):
+            res.predict(pd.DataFrame({"x1": [np.nan]}), what="frontier")
 
 
 class TestMarginalEffects:
@@ -582,15 +623,25 @@ class TestMarginalEffects:
         y = 1.0 + 0.5 * x1 + v - u
         df = pd.DataFrame({"y": y, "x1": x1})
         res = frontier(df, y="y", x=["x1"], dist="truncated-normal")
-        with pytest.raises(RuntimeError, match="emean"):
+        with pytest.raises(MethodIncompatibility, match="emean"):
             res.marginal_effects()
 
     def test_marginal_effects_requires_truncated_normal(self):
         """HN / exponential must raise — no mu to differentiate through."""
         df = _simulate_hn_production(100, 0.2, 0.4, seed=304)
         res = frontier(df, y="y", x=["x1"], dist="half-normal")
-        with pytest.raises(RuntimeError, match="truncated-normal"):
+        with pytest.raises(MethodIncompatibility, match="truncated-normal"):
             res.marginal_effects()
+
+    def test_marginal_effects_rejects_unknown_options(self):
+        df = _simulate_hn_production(100, 0.2, 0.4, seed=305)
+        res = frontier(df, y="y", x=["x1"], dist="half-normal")
+        with pytest.raises(MethodIncompatibility, match="kind"):
+            res.marginal_effects(kind="elasticity")
+        with pytest.raises(MethodIncompatibility, match="source"):
+            res.marginal_effects(source="vsigma")
+        with pytest.raises(MethodIncompatibility, match="evaluation"):
+            res.marginal_effects(source="usigma", at="median")
 
     def test_marginal_effects_ame_is_mean(self):
         rng = np.random.default_rng(303)
@@ -643,8 +694,9 @@ class TestVarianceEstimators:
 
     def test_unknown_vce_raises(self):
         df = _simulate_hn_production(100, 0.2, 0.4, seed=504)
-        with pytest.raises(ValueError, match="vce"):
+        with pytest.raises(MethodIncompatibility, match="vce") as excinfo:
             frontier(df, y="y", x=["x1"], vce="jackknife")
+        assert "bootstrap" in excinfo.value.diagnostics["valid"]
 
     def test_cluster_implies_robust(self):
         df = _simulate_hn_production(500, 0.2, 0.4, seed=505)
@@ -877,7 +929,7 @@ class TestConditionalPredict:
         df = _simulate_hn_production(300, 0.2, 0.4, seed=1002)
         res = frontier(df, y="y", x=["x1"], dist="half-normal")
         no_y = df[["x1"]]
-        with pytest.raises(KeyError, match="requires the dependent"):
+        with pytest.raises(MethodIncompatibility, match="requires the dependent"):
             res.predict(no_y, what="conditional_efficiency")
 
     def test_conditional_inefficiency_bounded(self):
@@ -944,7 +996,7 @@ class TestUsigmaMarginalEffects:
     def test_usigma_me_requires_usigma_model(self):
         df = _simulate_hn_production(200, 0.2, 0.4, seed=1202)
         res = frontier(df, y="y", x=["x1"], dist="half-normal")
-        with pytest.raises(RuntimeError, match="usigma"):
+        with pytest.raises(MethodIncompatibility, match="usigma"):
             res.marginal_effects(source="usigma")
 
 
@@ -1545,5 +1597,8 @@ class TestResultObject:
         bc1 = res.efficiency()  # default = 'bc'
         bc2 = res.efficiency("bc")
         assert np.allclose(bc1, bc2)
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            MethodIncompatibility,
+            match="Unknown TE method",
+        ):
             res.efficiency("unknown-method")

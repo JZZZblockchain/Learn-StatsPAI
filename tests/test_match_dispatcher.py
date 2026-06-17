@@ -16,13 +16,12 @@ back-compat of the standalone APIs, and clear error paths.
 """
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 @pytest.fixture(scope="module")
@@ -41,8 +40,9 @@ def match_data():
 # ─── Classical methods (back-compat) ────────────────────────────────────
 
 
-@pytest.mark.parametrize("method", ["nearest", "stratify", "cem",
-                                     "psm", "mahalanobis"])
+@pytest.mark.parametrize(
+    "method", ["nearest", "stratify", "cem", "psm", "mahalanobis"]
+)
 def test_classical_methods(match_data, method):
     r = sp.match(match_data, y="y", treat="treat",
                  covariates=["x1", "x2"], method=method)
@@ -210,6 +210,12 @@ def test_non_string_method_raises(match_data):
     with pytest.raises(TypeError, match="method must be a string"):
         sp.match(match_data, y="y", treat="treat",
                  covariates=["x1", "x2"], method=42)
+
+
+def test_missing_required_inputs_raise_taxonomy_error(match_data):
+    with pytest.raises(MethodIncompatibility) as excinfo:
+        sp.match(match_data, y="y", treat="treat", method="cardinality")
+    assert excinfo.value.diagnostics["missing"] == ["covariates"]
 
 
 def test_classical_kwarg_blocked_on_advanced(match_data):

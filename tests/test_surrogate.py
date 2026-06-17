@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # -------------------------------------------------------------------------
@@ -104,6 +105,40 @@ def test_surrogate_index_non_binary_treatment_errors():
         )
 
 
+def test_surrogate_index_validation_uses_taxonomy():
+    exp, obs = _make_surrogate_data()
+    with pytest.raises(MethodIncompatibility, match="DataFrame"):
+        sp.surrogate_index(
+            [1, 2], obs, treatment="T",
+            surrogates=["S"], long_term_outcome="Y",
+        )
+    with pytest.raises(MethodIncompatibility, match="experimental missing"):
+        sp.surrogate_index(
+            exp, obs, treatment="Tbogus",
+            surrogates=["S"], long_term_outcome="Y",
+        )
+    bad_t = exp.copy()
+    bad_t["T"] = bad_t["T"] * 3.0
+    with pytest.raises(MethodIncompatibility, match="binary"):
+        sp.surrogate_index(
+            bad_t, obs, treatment="T",
+            surrogates=["S"], long_term_outcome="Y",
+        )
+    one_arm = exp.copy()
+    one_arm["T"] = 1.0
+    with pytest.raises(DataInsufficient, match="overlap"):
+        sp.surrogate_index(
+            one_arm, obs, treatment="T",
+            surrogates=["S"], long_term_outcome="Y",
+        )
+    bad_model = object()
+    with pytest.raises(MethodIncompatibility, match="model"):
+        sp.surrogate_index(
+            exp, obs, treatment="T",
+            surrogates=["S"], long_term_outcome="Y", model=bad_model,
+        )
+
+
 # -------------------------------------------------------------------------
 # long_term_from_short
 # -------------------------------------------------------------------------
@@ -149,6 +184,30 @@ def test_long_term_from_short_two_waves():
     assert res.model_info["n_waves"] == 2
 
 
+def test_long_term_from_short_validation_uses_taxonomy():
+    exp, obs = _make_surrogate_data()
+    with pytest.raises(MethodIncompatibility, match="surrogates_waves"):
+        sp.long_term_from_short(
+            exp, obs, treatment="T",
+            surrogates_waves=[],
+            long_term_outcome="Y", n_boot=100,
+        )
+    with pytest.raises(MethodIncompatibility, match="n_boot"):
+        sp.long_term_from_short(
+            exp, obs, treatment="T",
+            surrogates_waves=[["S"]],
+            long_term_outcome="Y", n_boot=10,
+        )
+    one_arm = exp.copy()
+    one_arm["T"] = 1.0
+    with pytest.raises(DataInsufficient, match="overlap"):
+        sp.long_term_from_short(
+            one_arm, obs, treatment="T",
+            surrogates_waves=[["S"]],
+            long_term_outcome="Y", n_boot=100,
+        )
+
+
 # -------------------------------------------------------------------------
 # proximal_surrogate_index
 # -------------------------------------------------------------------------
@@ -192,10 +251,32 @@ def test_proximal_surrogate_index_runs_with_valid_proxy():
 
 def test_proximal_surrogate_no_proxy_errors():
     exp, obs = _make_surrogate_data()
-    with pytest.raises(ValueError, match="at least one proxy"):
+    with pytest.raises(MethodIncompatibility, match="at least one proxy"):
         sp.proximal_surrogate_index(
             exp, obs, treatment="T", surrogates=["S"], proxies=[],
             long_term_outcome="Y",
+        )
+
+
+def test_proximal_surrogate_validation_uses_taxonomy():
+    exp, obs = _make_surrogate_data()
+    obs = obs.assign(W=np.random.default_rng(41).normal(size=len(obs)))
+    with pytest.raises(MethodIncompatibility, match="observational missing"):
+        sp.proximal_surrogate_index(
+            exp, obs.drop(columns=["W"]), treatment="T",
+            surrogates=["S"], proxies=["W"], long_term_outcome="Y",
+        )
+    with pytest.raises(MethodIncompatibility, match="n_boot"):
+        sp.proximal_surrogate_index(
+            exp, obs, treatment="T", surrogates=["S"], proxies=["W"],
+            long_term_outcome="Y", n_boot=10,
+        )
+    one_arm = exp.copy()
+    one_arm["T"] = 0.0
+    with pytest.raises(DataInsufficient, match="overlap"):
+        sp.proximal_surrogate_index(
+            one_arm, obs, treatment="T", surrogates=["S"], proxies=["W"],
+            long_term_outcome="Y", n_boot=100,
         )
 
 

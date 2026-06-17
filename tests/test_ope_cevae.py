@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 # ---------- OPE ----------
@@ -40,8 +41,10 @@ def test_dr_returns_valid_estimate():
     X, a, r, pi_b, true_means = _bandit_logging(n=2000)
     pi_e = np.zeros_like(pi_b)
     pi_e[:, 0] = 1.0
+
     def rm(X_, k):
         return true_means[:, k][: len(X_)]
+
     res_dr = sp.ope.doubly_robust(X, a, r, pi_b, pi_e, reward_model=rm)
     # DR should be a finite, unbiased (in expectation) estimate close to 1.0
     assert np.isfinite(res_dr.value)
@@ -59,8 +62,10 @@ def test_snips_self_normalized():
 def test_direct_method_runs():
     X, a, r, pi_b, true_means = _bandit_logging(n=500)
     pi_e = np.full_like(pi_b, 1.0 / pi_b.shape[1])
+
     def rm(X_, k):
         return true_means[:, k][: len(X_)]
+
     res = sp.ope.direct_method(rm, X, pi_e)
     assert isinstance(res, sp.OPEResult)
     assert res.method == "DM"
@@ -70,8 +75,10 @@ def test_switch_dr_produces_valid_result():
     X, a, r, pi_b, true_means = _bandit_logging(n=1200)
     pi_e = np.zeros_like(pi_b)
     pi_e[:, 0] = 1.0
+
     def rm(X_, k):
         return true_means[:, k][: len(X_)]
+
     res = sp.ope.switch_dr(X, a, r, pi_b, pi_e, rm, tau=3.0)
     assert res.method == "Switch-DR"
     assert 0.0 <= res.diagnostics["switched_frac"] <= 1.0
@@ -80,18 +87,38 @@ def test_switch_dr_produces_valid_result():
 def test_evaluate_dispatches_all_methods():
     X, a, r, pi_b, true_means = _bandit_logging(n=500)
     pi_e = pi_b.copy()
-    def rm(X_, k): return true_means[:, k][: len(X_)]
+
+    def rm(X_, k):
+        return true_means[:, k][: len(X_)]
+
     for m in ("DM", "IPS", "SNIPS", "DR", "Switch-DR"):
-        kw = dict(X=X, actions=a, rewards=r, pi_b=pi_b, pi_e=pi_e, reward_model=rm)
+        kw = dict(
+            X=X,
+            actions=a,
+            rewards=r,
+            pi_b=pi_b,
+            pi_e=pi_e,
+            reward_model=rm,
+        )
         res = sp.ope.evaluate(m, **kw)
         assert res.method == m
         assert np.isfinite(res.value)
 
 
 def test_evaluate_rejects_unknown_method():
-    with pytest.raises(ValueError, match="Unknown"):
+    with pytest.raises(MethodIncompatibility, match="Unknown"):
         sp.ope.evaluate("XYZ", actions=np.array([0]), rewards=np.array([0.0]),
                         pi_b=np.array([[1.0]]), pi_e=np.array([[1.0]]))
+
+
+def test_evaluate_rejects_missing_required_arguments_with_taxonomy():
+    with pytest.raises(MethodIncompatibility, match="requires pi_e"):
+        sp.ope.evaluate(
+            "IPS",
+            actions=np.array([0]),
+            rewards=np.array([0.0]),
+            pi_b=np.array([[1.0]]),
+        )
 
 
 # ---------- CEVAE ----------

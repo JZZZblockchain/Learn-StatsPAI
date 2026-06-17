@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def test_sharp_ope_bounds_widen_with_gamma():
@@ -57,10 +58,32 @@ def test_sharp_ope_rejects_bad_gamma():
     df = pd.DataFrame({
         "a": [0, 1], "r": [0.1, 0.2], "e": [0.5, 0.5], "pi": [0.3, 0.7],
     })
-    with pytest.raises(ValueError, match="gamma must be"):
+    with pytest.raises(MethodIncompatibility, match="gamma must be"):
         sp.sharp_ope_unobserved(
             df, actions="a", rewards="r", logging_prob="e", target_prob="pi",
             gamma=0.5,
+        )
+
+
+def test_sharp_ope_rejects_bad_columns_and_probabilities_with_taxonomy():
+    df = pd.DataFrame({
+        "a": [0, 1], "r": [0.1, 0.2], "e": [0.5, 1.2], "pi": [0.3, 0.7],
+    })
+    with pytest.raises(MethodIncompatibility, match="Missing columns"):
+        sp.sharp_ope_unobserved(
+            df,
+            actions="a",
+            rewards="missing",
+            logging_prob="e",
+            target_prob="pi",
+        )
+    with pytest.raises(MethodIncompatibility, match="logging_prob"):
+        sp.sharp_ope_unobserved(
+            df,
+            actions="a",
+            rewards="r",
+            logging_prob="e",
+            target_prob="pi",
         )
 
 
@@ -96,6 +119,36 @@ def test_causal_policy_forest_prefers_correct_action():
     assert res.depth == 3
     assert res.policy_value > 0.2, res.policy_value
     assert res.policy_value_se >= 0
+
+
+def test_causal_policy_forest_rejects_contract_errors_with_taxonomy():
+    df = pd.DataFrame({
+        "a": [0, 1] * 20,
+        "r": np.linspace(0.0, 1.0, 40),
+        "x": np.linspace(-1.0, 1.0, 40),
+    })
+    with pytest.raises(MethodIncompatibility, match="Missing columns"):
+        sp.causal_policy_forest(
+            df,
+            actions="a",
+            rewards="r",
+            covariates=["missing"],
+        )
+    with pytest.raises(MethodIncompatibility, match="n_trees"):
+        sp.causal_policy_forest(
+            df,
+            actions="a",
+            rewards="r",
+            covariates="x",
+            n_trees=0,
+        )
+    with pytest.raises(DataInsufficient, match="at least 30"):
+        sp.causal_policy_forest(
+            df.iloc[:10],
+            actions="a",
+            rewards="r",
+            covariates="x",
+        )
 
 
 def test_ope_extensions_in_registry():

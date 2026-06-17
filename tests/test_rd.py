@@ -10,6 +10,7 @@ import pandas as pd
 
 from statspai.rd import rdrobust, rdplot
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ======================================================================
@@ -186,6 +187,41 @@ class TestSharpRD:
     def test_repr(self, data_sharp):
         result = rdrobust(data_sharp, y='y', x='x')
         assert 'CausalResult' in repr(result)
+
+
+# ======================================================================
+# Error taxonomy tests
+# ======================================================================
+
+class TestRDErrors:
+    """Tests for structured RD validation errors."""
+
+    def test_bad_data_type_uses_taxonomy(self):
+        with pytest.raises(MethodIncompatibility, match="DataFrame"):
+            rdrobust([1, 2, 3], y='y', x='x')
+
+    def test_invalid_options_use_taxonomy(self, data_sharp):
+        with pytest.raises(MethodIncompatibility, match="kernel"):
+            rdrobust(data_sharp, y='y', x='x', kernel='bad')
+        with pytest.raises(MethodIncompatibility, match="n_boot"):
+            rdrobust(data_sharp, y='y', x='x', bootstrap='rbc', n_boot=10)
+        with pytest.raises(MethodIncompatibility, match="mutually exclusive"):
+            rdrobust(data_sharp, y='y', x='x', h=0.5, b=0.6, rho=1.0)
+
+    def test_missing_columns_use_taxonomy(self, data_sharp):
+        with pytest.raises(MethodIncompatibility, match="not found"):
+            rdrobust(data_sharp, y='missing', x='x')
+        with pytest.raises(MethodIncompatibility, match="Covariate"):
+            rdrobust(data_sharp, y='y', x='x', covs=['missing'])
+
+    def test_insufficient_data_uses_taxonomy(self):
+        rng = np.random.default_rng(3)
+        df = pd.DataFrame({
+            'y': rng.normal(size=12),
+            'x': np.r_[rng.uniform(-1, -0.1, 2), rng.uniform(0.1, 1, 10)],
+        })
+        with pytest.raises(DataInsufficient, match="Not enough observations"):
+            rdrobust(df, y='y', x='x', p=2, h=1.0)
 
 
 # ======================================================================

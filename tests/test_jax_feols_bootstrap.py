@@ -21,7 +21,12 @@ import pytest
 
 pytest.importorskip("jax")
 
-from statspai.fast import (
+from statspai.exceptions import (  # noqa: E402
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
+from statspai.fast import (  # noqa: E402
     feols,
     feols_jax,
     feols_jax_bootstrap,
@@ -269,7 +274,7 @@ def test_wild_score_bootstrap_matches_literal_refit_on_pseudo_y():
     df = _make_panel(seed=46).drop(columns=["firm"])  # no FE
     # Same RNG seed for reproducibility on both paths.
     boot = feols_jax_bootstrap(
-        "y ~ x1 + x2", df, n_boot=1, seed=99, bootstrap="wild",
+        "y ~ x1 + x2", df, n_boot=2, seed=99, bootstrap="wild",
     )
     score_beta = boot.boot_betas.iloc[0].values
 
@@ -279,7 +284,7 @@ def test_wild_score_bootstrap_matches_literal_refit_on_pseudo_y():
     import jax
     import jax.numpy as jnp
     n = len(df)
-    key = jax.random.split(jax.random.PRNGKey(99), 1)[0]
+    key = jax.random.split(jax.random.PRNGKey(99), 2)[0]
     eta = (2 * jax.random.bernoulli(key, p=0.5, shape=(n,)).astype(jnp.float64) - 1)
     eta_np = np.asarray(eta)
     X = np.column_stack([np.ones(n), df["x1"].values, df["x2"].values])
@@ -296,35 +301,91 @@ def test_wild_score_bootstrap_matches_literal_refit_on_pseudo_y():
 
 def test_n_boot_below_one_raises():
     df = _make_panel(seed=22)
-    with pytest.raises(ValueError, match="n_boot"):
+    with pytest.raises(MethodIncompatibility, match="n_boot"):
         feols_jax_bootstrap("y ~ x1", df, n_boot=0)
+
+
+def test_n_boot_one_rejected_as_undefined_se():
+    df = _make_panel(seed=221)
+    with pytest.raises(DataInsufficient, match="n_boot"):
+        feols_jax_bootstrap("y ~ x1", df, n_boot=1)
 
 
 def test_chunk_below_one_raises():
     df = _make_panel(seed=23)
-    with pytest.raises(ValueError, match="vmap_chunk_size"):
+    with pytest.raises(MethodIncompatibility, match="vmap_chunk_size"):
         feols_jax_bootstrap("y ~ x1", df, n_boot=10, vmap_chunk_size=0)
 
 
 def test_invalid_ci_alpha_raises():
     df = _make_panel(seed=24)
-    with pytest.raises(ValueError, match="ci_alpha"):
+    with pytest.raises(MethodIncompatibility, match="ci_alpha"):
         feols_jax_bootstrap("y ~ x1", df, n_boot=10, ci_alpha=1.5)
 
 
 def test_invalid_dtype_raises():
     df = _make_panel(seed=25)
-    with pytest.raises(ValueError, match="dtype="):
+    with pytest.raises(MethodIncompatibility, match="dtype="):
         feols_jax_bootstrap("y ~ x1", df, n_boot=10, dtype="bfloat16")
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"fe_maxiter": 0}, "fe_maxiter"),
+        ({"fe_tol": -1.0}, "fe_tol"),
+        ({"ci_alpha": np.nan}, "ci_alpha"),
+    ],
+)
+def test_invalid_prep_controls_raise(kwargs, match):
+    df = _make_panel(seed=251)
+    with pytest.raises(ValueError, match=match):
+        feols_jax_bootstrap("y ~ x1 | firm", df, n_boot=10, **kwargs)
+
+
+def test_all_zero_weights_raise():
+    df = _make_panel(seed=252)
+    df["w0"] = 0.0
+    with pytest.raises(ValueError, match="no positive mass"):
+        feols_jax_bootstrap("y ~ x1 | firm", df, n_boot=10, weights="w0")
+
+
+def test_bootstrap_missing_columns_raise_method_incompatibility():
+    df = _make_panel(seed=253)
+    with pytest.raises(MethodIncompatibility) as exc:
+        feols_jax_bootstrap("y ~ x1 + missing", df, n_boot=10)
+    assert exc.value.diagnostics["missing_columns"] == ["missing"]
+
+
+def test_bootstrap_non_dataframe_input_raises_method_incompatibility():
+    df = _make_panel(seed=254)
+    with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+        feols_jax_bootstrap("y ~ x1", df.to_dict("list"), n_boot=10)
 
 
 def test_missing_cluster_column_raises():
     df = _make_panel(seed=26)
-    with pytest.raises(KeyError, match="not_a_column"):
+    with pytest.raises(MethodIncompatibility, match="not_a_column"):
         feols_jax_bootstrap(
             "y ~ x1", df, n_boot=10,
             bootstrap="cluster", cluster="not_a_column",
         )
+
+
+def test_one_cluster_after_pruning_raises_data_insufficient():
+    df = _make_panel(n=80, n_firm=1, seed=27)
+    with pytest.raises(DataInsufficient, match=">= 2 clusters"):
+        feols_jax_bootstrap(
+            "y ~ x1", df, n_boot=10,
+            bootstrap="cluster", cluster="cluster",
+        )
+
+
+def test_bootstrap_singular_solve_raises_numerical_instability():
+    df = _make_panel(seed=28)
+    df["x_dup"] = df["x1"]
+    with pytest.raises(NumericalInstability):
+        feols_jax_bootstrap("y ~ x1 + x_dup", df, n_boot=10)
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +140,31 @@ class TestRandomIntercept:
         # The residual of the marginal prediction should include the
         # random-intercept variance, hence be larger.
         assert np.var(df["y"] - p_marg) > np.var(df["y"] - p_cond)
+
+    def test_predict_marginal_does_not_require_group_column(self):
+        df = _random_intercept_panel()
+        r = sp.mixed(df, "y", ["x"], "g")
+
+        no_group = df[["x"]].head(10)
+        marginal = r.predict(no_group, include_random=False)
+        expected = r.predict(df.head(10), include_random=False)
+        np.testing.assert_allclose(marginal.values, expected.values)
+
+    def test_predict_errors_use_exception_taxonomy(self):
+        df = _random_intercept_panel()
+        r = sp.mixed(df, "y", ["x"], "g")
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            r.predict([[1.0]], include_random=False)
+
+        with pytest.raises(MethodIncompatibility, match="missing column") as excinfo:
+            r.predict(df[["x"]].head(2), include_random=True)
+        assert excinfo.value.diagnostics["missing_columns"] == ["g"]
+
+        bad = df[["x", "g"]].head(2).copy()
+        bad["x"] = ["bad", "values"]
+        with pytest.raises(MethodIncompatibility, match="fixed-effect"):
+            r.predict(bad)
 
     def test_r_squared(self):
         df = _random_intercept_panel()
@@ -311,6 +337,96 @@ class TestMELogit:
         assert (orr["lower"] < orr["OR"]).all()
         assert (orr["upper"] > orr["OR"]).all()
 
+    def test_irr_requires_count_family(self):
+        rng = np.random.default_rng(31)
+        n = 400
+        g = np.repeat(np.arange(20), 20)
+        x = rng.normal(0, 1, n)
+        p = 1 / (1 + np.exp(-(0.2 + 0.7 * x)))
+        df = pd.DataFrame({"y": rng.binomial(1, p), "x": x, "g": g})
+        r = sp.melogit(df, "y", ["x"], "g")
+        with pytest.raises(MethodIncompatibility, match="IRR"):
+            r.incidence_rate_ratios()
+
+    def test_predict_marginal_does_not_require_group_column(self):
+        rng = np.random.default_rng(4)
+        n = 500
+        g = np.repeat(np.arange(25), 20)
+        x = rng.normal(0, 1, n)
+        u = np.repeat(rng.normal(0, 0.5, 25), 20)
+        p = 1 / (1 + np.exp(-(0.2 + 0.7 * x + u)))
+        df = pd.DataFrame({"y": rng.binomial(1, p), "x": x, "g": g})
+        r = sp.melogit(df, "y", ["x"], "g")
+
+        no_group = df[["x"]].head(8)
+        marginal = r.predict(no_group, include_random=False, type="linear")
+        expected = r.predict(df.head(8), include_random=False, type="linear")
+        np.testing.assert_allclose(marginal.values, expected.values)
+
+    def test_predict_errors_use_exception_taxonomy(self):
+        rng = np.random.default_rng(5)
+        n = 400
+        g = np.repeat(np.arange(20), 20)
+        x = rng.normal(0, 1, n)
+        u = np.repeat(rng.normal(0, 0.5, 20), 20)
+        p = 1 / (1 + np.exp(-(0.2 + 0.7 * x + u)))
+        df = pd.DataFrame({"y": rng.binomial(1, p), "x": x, "g": g})
+        r = sp.melogit(df, "y", ["x"], "g")
+
+        with pytest.raises(MethodIncompatibility, match="requires a dataframe"):
+            r.predict()
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            r.predict([[1.0, 0]])
+
+        with pytest.raises(MethodIncompatibility, match="`type`"):
+            r.predict(df.head(2), type="bogus")
+
+        with pytest.raises(MethodIncompatibility, match="missing column") as excinfo:
+            r.predict(df[["g"]].head(2))
+        assert excinfo.value.diagnostics["missing_columns"] == ["x"]
+
+        bad = df[["x", "g"]].head(2).copy()
+        bad["x"] = ["bad", "values"]
+        with pytest.raises(MethodIncompatibility, match="fixed-effect"):
+            r.predict(bad)
+
+    def test_meglm_input_errors_use_exception_taxonomy(self):
+        rng = np.random.default_rng(6)
+        n = 40
+        df = pd.DataFrame({
+            "y": rng.binomial(1, 0.5, n),
+            "x": rng.normal(size=n),
+            "g": np.repeat(np.arange(8), 5),
+        })
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            sp.meglm([[1.0]], "y", ["x"], "g", family="binomial")
+
+        with pytest.raises(MethodIncompatibility, match="family"):
+            sp.meglm(df, "y", ["x"], "g", family="bogus")
+
+        with pytest.raises(MethodIncompatibility, match="cov_type"):
+            sp.meglm(df, "y", ["x"], "g", family="binomial", cov_type="bad")
+
+        with pytest.raises(MethodIncompatibility, match="single grouping"):
+            sp.meglm(df, "y", ["x"], ["g", "h"], family="binomial")
+
+        with pytest.raises(MethodIncompatibility, match="column name"):
+            sp.meglm(df, "y", ["x"], 123, family="binomial")
+
+        with pytest.raises(MethodIncompatibility, match="missing column") as excinfo:
+            sp.meglm(df, "y", ["not_x"], "g", family="binomial")
+        assert excinfo.value.diagnostics["missing_columns"] == ["not_x"]
+
+        empty = df.copy()
+        empty[["y", "x"]] = np.nan
+        with pytest.raises(DataInsufficient, match="No rows remain"):
+            sp.meglm(empty, "y", ["x"], "g", family="binomial")
+
+        with pytest.raises(MethodIncompatibility, match="x_fixed"):
+            sp.meglm(df, "y", [1], "g", family="binomial")
+
 
 class TestMEGLMResultContract:
     """Contract tests — every result class must expose the same surface."""
@@ -337,8 +453,12 @@ class TestMEGLMResultContract:
         assert fig is not None and ax is not None
 
     def test_plot_invalid_kind(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(MethodIncompatibility, match="plot kind"):
             self._fit().plot(kind="not-a-kind")
+
+    def test_plot_rejects_unknown_random_effect(self):
+        with pytest.raises(MethodIncompatibility, match="not in model"):
+            self._fit().plot(variable="not_in_model")
 
 
 class TestMEPoisson:
@@ -359,6 +479,43 @@ class TestMEPoisson:
         # Incidence rate ratio for x is about exp(0.4) ≈ 1.49.
         irr = r.incidence_rate_ratios()
         assert 1.3 < irr.loc["x", "IRR"] < 1.7
+
+    def test_odds_ratios_require_logit_family(self):
+        rng = np.random.default_rng(20261)
+        n_groups, n_per = 30, 8
+        n = n_groups * n_per
+        group = np.repeat(np.arange(n_groups), n_per)
+        x = rng.normal(0, 1, n)
+        mu = np.exp(0.2 + 0.3 * x)
+        df = pd.DataFrame({"y": rng.poisson(mu), "x": x, "g": group})
+        r = sp.mepoisson(df, "y", ["x"], "g")
+        with pytest.raises(MethodIncompatibility, match="odds_ratios"):
+            r.odds_ratios()
+
+    def test_predict_requires_fitted_offset_column(self):
+        rng = np.random.default_rng(2027)
+        n_groups, n_per = 30, 8
+        n = n_groups * n_per
+        group = np.repeat(np.arange(n_groups), n_per)
+        x = rng.normal(0, 1, n)
+        exposure = rng.uniform(0.7, 1.4, n)
+        u = np.repeat(rng.normal(0, 0.4, n_groups), n_per)
+        mu = np.exp(0.3 + 0.4 * x + np.log(exposure) + u)
+        y = rng.poisson(mu)
+        df = pd.DataFrame({
+            "y": y,
+            "x": x,
+            "g": group,
+            "log_exposure": np.log(exposure),
+        })
+        r = sp.mepoisson(df, "y", ["x"], "g", offset="log_exposure")
+
+        with pytest.raises(MethodIncompatibility, match="missing column") as excinfo:
+            r.predict(df[["x", "g"]].head(3))
+        assert excinfo.value.diagnostics["missing_columns"] == ["log_exposure"]
+
+        pred = r.predict(df[["x", "g", "log_exposure"]].head(3))
+        assert len(pred) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -426,12 +583,12 @@ class TestAGHQ:
         df = _random_slope_panel(n_groups=20, n_per=20)
         # Map y to binary so this exercises the GLMM path.
         df["yb"] = (df["y"] > df["y"].median()).astype(int)
-        with pytest.raises(ValueError, match="random-intercept"):
+        with pytest.raises(MethodIncompatibility, match="random-intercept"):
             sp.melogit(df, "yb", ["x"], "g", x_random=["x"], nAGQ=7)
 
     def test_invalid_nagq(self):
         df, _, _ = self._small_cluster_binary()
-        with pytest.raises(ValueError, match="nAGQ"):
+        with pytest.raises(MethodIncompatibility, match="nAGQ"):
             sp.melogit(df, "y", ["x"], "g", nAGQ=0)
 
 

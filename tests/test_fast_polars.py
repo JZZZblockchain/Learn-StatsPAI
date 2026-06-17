@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 pl = pytest.importorskip("polars")
 
@@ -67,7 +68,7 @@ def test_demean_polars_lazyframe_collected():
 def test_demean_polars_missing_column_raises():
     pdf = _panel_pandas(seed=3)
     polf = pl.from_pandas(pdf)
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing columns"):
         sp.fast.demean_polars(polf, X_cols=["nope"], fe_cols=["i"])
 
 
@@ -109,5 +110,5 @@ def test_fepois_polars_only_collects_needed_columns():
 def test_fepois_polars_missing_column_raises():
     pdf = _panel_pandas(seed=7)
     polf = pl.from_pandas(pdf)
-    with pytest.raises(KeyError):
+    with pytest.raises(MethodIncompatibility, match="missing columns"):
         sp.fast.fepois_polars(polf, "y ~ nope | i + t")

@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def _data_2x2(seed=0, n=1500):
@@ -35,27 +36,45 @@ def _staggered(seed=0, n_units=90, n_periods=8):
 # ----------------------------------------------------------------------
 
 def test_did_not_dataframe():
-    with pytest.raises(TypeError):
+    with pytest.raises((TypeError, MethodIncompatibility)):
         sp.did([1, 2, 3], y="y", treat="t", time="p")
 
 
 def test_did_empty_dataframe():
-    with pytest.raises(ValueError):
+    with pytest.raises(DataInsufficient):
         sp.did(pd.DataFrame({"y": [], "treat": [], "post": []}),
                y="y", treat="treat", time="post")
 
 
 def test_did_missing_columns():
     df = _data_2x2()
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility, match="Column"):
         sp.did(df, y="nope", treat="treat", time="post")
 
 
 def test_did_auto_nonbinary_no_id_raises():
     df = _data_2x2()
     df["treat"] = np.arange(len(df)) % 5
-    with pytest.raises(ValueError):
+    with pytest.raises(MethodIncompatibility, match="auto-detect"):
         sp.did(df, y="y", treat="treat", time="post")
+
+
+def test_did_scalar_covariate_and_invalid_controls():
+    df = _data_2x2()
+    r = sp.did(df, y="y", treat="treat", time="post", covariates="x1")
+    assert r.estimate is not None
+    with pytest.raises(MethodIncompatibility, match="alpha"):
+        sp.did(df, y="y", treat="treat", time="post", alpha=1.0)
+    with pytest.raises(MethodIncompatibility, match="aggregation"):
+        sp.did(
+            df, y="y", treat="treat", time="post",
+            method="2x2", aggregation="simple",
+        )
+    with pytest.raises(MethodIncompatibility, match="panel=False"):
+        sp.did(
+            df, y="y", treat="treat", time="post",
+            method="2x2", panel=False,
+        )
 
 
 # ----------------------------------------------------------------------
@@ -190,6 +209,20 @@ def test_did_sdid_missing_id_raises():
     df = _staggered()
     with pytest.raises(ValueError):
         sp.did(df, y="y", treat="g", time="t", method="sdid")
+
+
+def test_did_sdid_invalid_se_method_raises_taxonomy():
+    df = _staggered()
+    with pytest.raises(MethodIncompatibility, match="se_method"):
+        sp.did(
+            df,
+            y="y",
+            treat="g",
+            time="t",
+            id="i",
+            method="sdid",
+            se_method="bogus",
+        )
 
 
 def test_did_unknown_method_raises():

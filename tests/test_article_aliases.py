@@ -18,6 +18,7 @@ import pytest
 
 import statspai as sp
 from statspai.core.results import CausalResult
+from statspai.exceptions import MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -100,9 +101,16 @@ def test_xlearner_matches_metalearner_x():
     assert a.estimate == pytest.approx(b.estimate, rel=1e-10)
 
 
+def test_xlearner_accepts_scalar_X():
+    df = _make_xlearner_df(seed=43)
+    a = sp.xlearner(df, y="y", d="d", X="x1")
+    b = sp.metalearner(df, y="y", treat="d", covariates=["x1"], learner="x")
+    assert a.estimate == pytest.approx(b.estimate, rel=1e-10)
+
+
 def test_xlearner_rejects_learner_kwarg():
     df = _make_xlearner_df(seed=1)
-    with pytest.raises(TypeError, match="fixed to learner='x'"):
+    with pytest.raises(MethodIncompatibility, match="fixed to learner='x'"):
         sp.xlearner(df, y="y", d="d", X=["x1", "x2"], learner="t")
 
 
@@ -266,6 +274,12 @@ def test_partial_identification_rejects_unknown_method():
     df = sp.dgp_observational(n=100, seed=1)
     with pytest.raises(ValueError, match="Unknown partial_identification method"):
         sp.partial_identification(df, y="y", d="treatment", method="does_not_exist")
+
+
+def test_partial_identification_rejects_non_string_method():
+    df = sp.dgp_observational(n=100, seed=1)
+    with pytest.raises(MethodIncompatibility, match="method"):
+        sp.partial_identification(df, y="y", d="treatment", method=None)
 
 
 # ---------------------------------------------------------------------------

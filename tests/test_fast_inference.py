@@ -1,6 +1,8 @@
 """Tests for ``sp.fast.crve`` and ``sp.fast.boottest`` (Phase 4)."""
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -74,6 +76,150 @@ def test_crve_too_few_clusters_raises():
     resid = np.random.default_rng(0).normal(size=20)
     with pytest.raises(ValueError, match="2 clusters"):
         sp.fast.crve(X, resid, np.zeros(20))   # G=1
+
+
+def test_crve_missing_cluster_labels_raise():
+    X = np.random.default_rng(1).normal(size=(20, 2))
+    resid = np.random.default_rng(2).normal(size=20)
+    cluster = np.repeat(np.arange(4, dtype=float), 5)
+    cluster[3] = np.nan
+
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.crve(X, resid, cluster)
+
+
+def test_crve_cluster_length_mismatch_raises():
+    X = np.random.default_rng(3).normal(size=(20, 2))
+    resid = np.random.default_rng(4).normal(size=20)
+
+    with pytest.raises(ValueError, match="cluster length"):
+        sp.fast.crve(X, resid, np.arange(19))
+
+
+def test_crve_residual_length_mismatch_raises():
+    X = np.random.default_rng(5).normal(size=(20, 2))
+    resid = np.random.default_rng(6).normal(size=19)
+    cluster = np.repeat(np.arange(4), 5)
+
+    with pytest.raises(ValueError, match="residuals length"):
+        sp.fast.crve(X, resid, cluster)
+
+
+def test_crve_nonfinite_residuals_raise():
+    X = np.random.default_rng(7).normal(size=(20, 2))
+    resid = np.random.default_rng(8).normal(size=20)
+    resid[0] = np.nan
+    cluster = np.repeat(np.arange(4), 5)
+
+    with pytest.raises(ValueError, match="residuals contain non-finite"):
+        sp.fast.crve(X, resid, cluster)
+
+
+def test_crve_negative_or_bad_weights_raise():
+    X = np.random.default_rng(9).normal(size=(20, 2))
+    resid = np.random.default_rng(10).normal(size=20)
+    cluster = np.repeat(np.arange(4), 5)
+
+    with pytest.raises(ValueError, match="weights must be non-negative"):
+        sp.fast.crve(X, resid, cluster, weights=np.r_[[-1.0], np.ones(19)])
+    with pytest.raises(ValueError, match="weights length"):
+        sp.fast.crve(X, resid, cluster, weights=np.ones(19))
+    bad_weights = np.ones(20)
+    bad_weights[2] = np.nan
+    with pytest.raises(ValueError, match="weights contain non-finite"):
+        sp.fast.crve(X, resid, cluster, weights=bad_weights)
+
+
+def test_boottest_missing_cluster_labels_raise():
+    df = _ols_panel(n_clusters=4, m=8, seed=13)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    cluster = df["g"].to_numpy(dtype=float)
+    cluster[0] = np.nan
+
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.boottest(X, y, cluster, null_coef=0, B=19, seed=0)
+
+
+def test_boottest_invalid_obs_weights_raise():
+    df = _ols_panel(n_clusters=4, m=8, seed=13)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    cluster = df["g"].to_numpy()
+
+    with pytest.raises(ValueError, match="weights length"):
+        sp.fast.boottest(
+            X, y, cluster, null_coef=0, B=19, seed=0,
+            obs_weights=np.ones(len(y) - 1),
+        )
+    bad_weights = np.ones(len(y))
+    bad_weights[0] = np.inf
+    with pytest.raises(ValueError, match="weights contain non-finite"):
+        sp.fast.boottest(
+            X, y, cluster, null_coef=0, B=19, seed=0,
+            obs_weights=bad_weights,
+        )
+    bad_weights = np.ones(len(y))
+    bad_weights[0] = -1.0
+    with pytest.raises(ValueError, match="weights must be non-negative"):
+        sp.fast.boottest(
+            X, y, cluster, null_coef=0, B=19, seed=0,
+            obs_weights=bad_weights,
+        )
+
+
+def test_boottest_wald_cluster_length_mismatch_raises():
+    df = _ols_panel(n_clusters=4, m=8, seed=14)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    cluster = df["g"].to_numpy()[:-1]
+
+    with pytest.raises(ValueError, match="cluster length"):
+        sp.fast.boottest_wald(X, y, cluster, R=np.eye(2), B=19, seed=0)
+
+
+def test_boottest_wald_invalid_obs_weights_raise():
+    df = _ols_panel(n_clusters=4, m=8, seed=14)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    cluster = df["g"].to_numpy()
+    bad_weights = np.ones(len(y))
+    bad_weights[0] = np.nan
+
+    with pytest.raises(ValueError, match="weights contain non-finite"):
+        sp.fast.boottest_wald(
+            X, y, cluster, R=np.eye(2), B=19, seed=0,
+            obs_weights=bad_weights,
+        )
+
+
+def test_cluster_dof_bm_missing_cluster_labels_raise():
+    df = _ols_panel(n_clusters=4, m=8, seed=15)
+    X = df[["x1", "x2"]].to_numpy()
+    cluster = df["g"].to_numpy(dtype=float)
+    cluster[0] = np.nan
+
+    with pytest.raises(ValueError, match="missing values"):
+        sp.fast.cluster_dof_bm(X, cluster, contrast=np.array([1.0, 0.0]))
+
+
+def test_cluster_dof_bm_invalid_weights_raise():
+    df = _ols_panel(n_clusters=4, m=8, seed=16)
+    X = df[["x1", "x2"]].to_numpy()
+    cluster = df["g"].to_numpy()
+
+    with pytest.raises(ValueError, match="weights length"):
+        sp.fast.cluster_dof_bm(
+            X, cluster, contrast=np.array([1.0, 0.0]),
+            weights=np.ones(len(df) - 1),
+        )
+    bad_weights = np.ones(len(df))
+    bad_weights[0] = -1.0
+    with pytest.raises(ValueError, match="weights must be non-negative"):
+        sp.fast.cluster_dof_bm(
+            X, cluster, contrast=np.array([1.0, 0.0]),
+            weights=bad_weights,
+        )
 
 
 def test_crve_extra_df_matches_manual_formula():
@@ -321,6 +467,24 @@ def test_boottest_summary_string():
     assert "rademacher" in s
 
 
+def test_boottest_result_agent_protocol_json_safe():
+    df = _ols_panel(seed=12)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    g = df["g"].to_numpy()
+    res = sp.fast.boottest(X, y, g, null_coef=0, B=99, seed=1)
+
+    full = res.to_dict()
+    agent = res.to_agent_summary()
+
+    assert full["kind"] == "fast_boottest_result"
+    assert len(full["boot_t_dist"]) == 99
+    assert agent["kind"] == "fast_boottest_agent_summary"
+    assert agent["bootstrap_distribution"]["n"] == 99
+    json.dumps(full)
+    json.dumps(agent)
+
+
 # ---------------------------------------------------------------------------
 # Multi-coefficient joint Wald wild bootstrap
 # ---------------------------------------------------------------------------
@@ -406,3 +570,48 @@ def test_boottest_wald_summary_string():
     s = res.summary()
     assert "Wald" in s
     assert "q=2" in s
+
+
+def test_boottest_wald_result_agent_protocol_json_safe():
+    df = _ols_panel(seed=26)
+    X = df[["x1", "x2"]].to_numpy()
+    y = df["y"].to_numpy()
+    g = df["g"].to_numpy()
+    res = sp.fast.boottest_wald(X, y, g, np.eye(2), B=99, seed=1)
+
+    full = res.to_dict()
+    agent = res.to_agent_summary()
+
+    assert full["kind"] == "fast_boottest_wald_result"
+    assert len(full["boot_wald_dist"]) == 99
+    assert agent["kind"] == "fast_boottest_wald_agent_summary"
+    assert agent["bootstrap_distribution"]["n"] == 99
+    json.dumps(full)
+    json.dumps(agent)
+
+
+def test_wald_test_result_agent_summary_json_safe():
+    res = sp.fast.WaldTestResult(
+        test="HTZ",
+        q=2,
+        eta=15.0,
+        F_stat=3.5,
+        p_value=0.04,
+        Q=7.0,
+        R=np.eye(2),
+        r=np.zeros(2),
+        V_R=np.eye(2),
+    )
+
+    payload = res.to_agent_summary()
+
+    assert payload == {
+        "kind": "fast_wald_test_agent_summary",
+        "test": "HTZ",
+        "q": 2,
+        "eta": 15.0,
+        "F_stat": 3.5,
+        "p_value": 0.04,
+        "Q": 7.0,
+    }
+    json.dumps(payload)

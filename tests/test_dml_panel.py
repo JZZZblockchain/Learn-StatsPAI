@@ -28,6 +28,7 @@ import pytest
 
 import statspai as sp
 from statspai.dml import dml_panel, DMLPanelResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 
 def _sim_panel(
@@ -59,7 +60,7 @@ class TestRecovery:
 
     def test_result_type_and_summary(self):
         df = _sim_panel(N=40, T=6, seed=0)
-        res = dml_panel(df, y="y", treat="d", covariates=["x1"],
+        res = dml_panel(df, y="y", treat="d", covariates="x1",
                         unit="pid", n_folds=3)
         assert isinstance(res, DMLPanelResult)
         s = res.summary()
@@ -156,25 +157,25 @@ class TestValidation:
 
     def test_missing_column_raises(self):
         df = _sim_panel(N=20, T=5, seed=0)
-        with pytest.raises(ValueError, match="missing columns"):
+        with pytest.raises(MethodIncompatibility, match="missing columns"):
             dml_panel(df, y="y", treat="d", covariates=["nonexistent"],
                       unit="pid")
 
     def test_folds_exceed_units_raises(self):
         df = _sim_panel(N=5, T=5, seed=0)
-        with pytest.raises(ValueError, match="cannot exceed n_units"):
+        with pytest.raises(DataInsufficient, match="cannot exceed n_units"):
             dml_panel(df, y="y", treat="d", covariates=["x1"],
                       unit="pid", n_folds=10)
 
     def test_n_folds_below_two_raises(self):
         df = _sim_panel(N=20, T=5, seed=0)
-        with pytest.raises(ValueError, match="n_folds must be >= 2"):
+        with pytest.raises(MethodIncompatibility, match="n_folds must be >= 2"):
             dml_panel(df, y="y", treat="d", covariates=["x1"],
                       unit="pid", n_folds=1)
 
     def test_include_time_fe_without_time_raises(self):
         df = _sim_panel(N=20, T=5, seed=0)
-        with pytest.raises(ValueError, match="time must be provided"):
+        with pytest.raises(MethodIncompatibility, match="time must be provided"):
             dml_panel(df, y="y", treat="d", covariates=["x1"],
                       unit="pid", include_time_fe=True)
 

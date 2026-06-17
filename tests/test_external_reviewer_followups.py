@@ -15,6 +15,7 @@ import pytest
 
 import statspai as sp
 from statspai.core.results import EconometricResults
+from statspai.exceptions import MethodIncompatibility
 
 
 def _linear_result(
@@ -57,16 +58,30 @@ class TestEconometricResultsPredict:
             pd.Series({"Intercept": 1.0, "x": 2.0, "z": -1.0})
         )
 
-        with pytest.raises(ValueError, match="missing column"):
+        with pytest.raises(MethodIncompatibility, match="missing column") as excinfo:
             result.predict(pd.DataFrame({"x": [1.0]}))
+        assert excinfo.value.diagnostics["missing_columns"] == ["z"]
 
     def test_predict_rejects_formula_derived_terms_out_of_sample(self):
         result = _linear_result(
             pd.Series({"Intercept": 1.0, "x": 2.0, "z": -1.0, "x:z": 0.5})
         )
 
-        with pytest.raises(ValueError, match="formula transforms"):
+        with pytest.raises(MethodIncompatibility, match="formula transforms") as excinfo:
             result.predict(pd.DataFrame({"x": [1.0], "z": [2.0]}))
+        assert excinfo.value.diagnostics["derived_terms"] == ["x:z"]
+
+    def test_predict_rejects_non_dataframe_out_of_sample_data(self):
+        result = _linear_result(pd.Series({"Intercept": 1.0, "x": 2.0}))
+
+        with pytest.raises(MethodIncompatibility, match="pandas DataFrame"):
+            result.predict([[1.0]])
+
+    def test_predict_rejects_nonnumeric_prediction_columns(self):
+        result = _linear_result(pd.Series({"Intercept": 1.0, "x": 2.0}))
+
+        with pytest.raises(MethodIncompatibility, match="must be numeric"):
+            result.predict(pd.DataFrame({"x": ["bad"]}))
 
 
 class TestDAGReasoningHelpers:

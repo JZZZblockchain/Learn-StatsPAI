@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 @pytest.fixture
@@ -30,7 +31,7 @@ def data():
 
 def test_evalue_from_result_rejects_non_causal_result(data):
     reg = sp.regress("y ~ x1", data)  # EconometricResults, no .estimate
-    with pytest.raises(TypeError, match="CausalResult"):
+    with pytest.raises(MethodIncompatibility, match="CausalResult"):
         sp.evalue_from_result(reg)
 
 

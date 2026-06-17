@@ -19,6 +19,7 @@ import pytest
 
 import statspai as sp
 from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.matching._matched_frame import (
     build_matched_frame,
     common_support_mask,
@@ -347,15 +348,15 @@ class TestPSMatch2Surface:
         assert "_y" not in m.matched_data.columns  # no outcome -> no _y
 
     def test_outcome_in_covariates_raises(self, psm_data):
-        with pytest.raises(ValueError, match="covariates"):
+        with pytest.raises(MethodIncompatibility, match="covariates"):
             sp.psmatch2(psm_data, treat="d", outcome="x1", covariates=["x1", "x2"])
 
     def test_requires_treat_and_covariates(self, psm_data):
-        with pytest.raises(ValueError, match="treat"):
+        with pytest.raises(MethodIncompatibility, match="treat"):
             sp.psmatch2(psm_data, covariates=["x1", "x2"])
 
     def test_invalid_se_raises(self, psm_data):
-        with pytest.raises(ValueError, match="se"):
+        with pytest.raises(MethodIncompatibility, match="se"):
             sp.psmatch2(
                 psm_data,
                 treat="d",
@@ -363,6 +364,21 @@ class TestPSMatch2Surface:
                 covariates=["x1", "x2"],
                 se="bogus",
             )
+
+    def test_invalid_method_raises_taxonomy(self, psm_data):
+        with pytest.raises(MethodIncompatibility, match="method"):
+            sp.psmatch2(
+                psm_data,
+                treat="d",
+                outcome="y",
+                covariates=["x1", "x2"],
+                method="bad",
+            )
+
+    def test_scalar_covariate_name_is_one_column(self, psm_data):
+        m = sp.psmatch2(psm_data, treat="d", outcome="y", covariates="x1")
+        assert m.covariates == ["x1"]
+        assert "_weight" in m.matched_data.columns
 
     def test_neighbor_alias(self, psm_data):
         m1 = sp.psmatch2(
@@ -548,7 +564,7 @@ class TestPSMDID:
     def test_invalid_psm_did_weight_raises(self, psm_panel):
         base, panel = psm_panel
         m = sp.psmatch2(base, treat="d", covariates=["x1", "x2"])
-        with pytest.raises(ValueError, match="weight"):
+        with pytest.raises(MethodIncompatibility, match="weight"):
             m.psm_did(
                 panel,
                 id="id",
@@ -562,14 +578,29 @@ class TestPSMDID:
     def test_missing_post_and_time_raises(self, psm_panel):
         base, panel = psm_panel
         m = sp.psmatch2(base, treat="d", covariates=["x1", "x2"])
-        with pytest.raises(ValueError, match="post"):
+        with pytest.raises(MethodIncompatibility, match="post"):
             m.psm_did(panel, id="id", y="y", treat="d")
 
     def test_missing_id_in_matching_data_raises(self, psm_panel):
         base, panel = psm_panel
         m = sp.psmatch2(base.drop(columns=["id"]), treat="d", covariates=["x1", "x2"])
-        with pytest.raises(ValueError, match="id"):
+        with pytest.raises(MethodIncompatibility, match="id"):
             m.psm_did(panel, id="id", y="y", time="time", treat_time=1, treat="d")
+
+    def test_psm_did_no_matched_panel_rows_raises_taxonomy(self, psm_panel):
+        base, panel = psm_panel
+        m = sp.psmatch2(base, treat="d", covariates=["x1", "x2"])
+        shifted = panel.copy()
+        shifted["id"] += 10_000
+        with pytest.raises(DataInsufficient, match="No matched panel rows"):
+            m.psm_did(
+                shifted,
+                id="id",
+                y="y",
+                time="time",
+                treat_time=1,
+                treat="d",
+            )
 
 
 # ======================================================================
@@ -803,7 +834,7 @@ class TestKernelRadius:
         assert abs(m.att - 2.0) < 0.5
 
     def test_radius_requires_caliper(self, psm_data):
-        with pytest.raises(ValueError, match="caliper"):
+        with pytest.raises(MethodIncompatibility, match="caliper"):
             sp.psmatch2(
                 psm_data,
                 treat="d",

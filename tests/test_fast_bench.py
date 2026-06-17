@@ -1,6 +1,8 @@
 """Tests for ``statspai.fast.hdfe_bench`` — HDFE kernel benchmark harness."""
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -57,3 +59,43 @@ def test_hdfe_bench_summary_string():
     assert 'numpy' in s
     # Each backend should show either AVAILABLE or unavailable
     assert ('AVAILABLE' in s) or ('unavailable' in s)
+
+
+def test_hdfe_bench_result_protocol_json_safe():
+    r = hdfe_bench(n_list=(100,), n_groups=5, repeat=1, seed=0)
+
+    full = r.to_dict()
+    agent = r.to_agent_summary(max_rows=2)
+
+    assert full["kind"] == "fast_hdfe_bench_result"
+    assert full["reference"] == "numpy"
+    assert set(full["backends"]).issuperset({"numpy", "numba", "rust"})
+    assert len(full["results"]) >= 3
+    assert agent["kind"] == "fast_hdfe_bench_agent_summary"
+    assert len(agent["results"]) == 2
+    assert agent["truncated_rows"] == len(full["results"]) - 2
+    assert agent["best_by_n"]
+    json.dumps(full)
+    json.dumps(agent)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"n_list": (0,)}, "n_list"),
+        ({"n_list": ()}, "n_list"),
+        ({"n_list": "100"}, "n_list"),
+        ({"n_list": 100}, "n_list"),
+        ({"n_groups": 0}, "n_groups"),
+        ({"n_groups": True}, "n_groups"),
+        ({"repeat": 0}, "repeat"),
+        ({"repeat": True}, "repeat"),
+        ({"atol": -1.0}, "atol"),
+        ({"atol": np.nan}, "atol"),
+    ],
+)
+def test_hdfe_bench_rejects_invalid_config(kwargs, message):
+    params = {"n_list": (100,), "n_groups": 5, "repeat": 1, "seed": 0}
+    params.update(kwargs)
+    with pytest.raises(ValueError, match=message):
+        hdfe_bench(**params)

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import statspai as sp
+from statspai.exceptions import MethodIncompatibility
 
 
 @pytest.fixture
@@ -148,6 +149,52 @@ def test_estimate_aipw_confounded(confounded_data):
     # True ATE = 1.0
     assert abs(r.estimate - 1.0) < 0.3
     assert r.estimator == "aipw"
+
+
+def test_estimate_regression_discontinuity_dispatch():
+    rng = np.random.default_rng(31)
+    n = 900
+    x = rng.uniform(-1, 1, n)
+    y = 0.4 * x + 2.0 * (x >= 0) + rng.normal(0, 0.3, n)
+    df = pd.DataFrame({"x": x, "y": y})
+    q = sp.causal_question(
+        treatment="treated",
+        outcome="y",
+        design="regression_discontinuity",
+        running_variable="x",
+        cutoff=0.0,
+        data=df,
+    )
+    r = q.estimate(h=0.8)
+    assert r.estimator == "rdrobust"
+    assert abs(r.estimate - 2.0) < 0.6
+
+
+def test_estimate_synthetic_control_dispatch():
+    rng = np.random.default_rng(37)
+    rows = []
+    n_periods = 14
+    treatment_time = 9
+    for u in range(7):
+        alpha = rng.normal(5, 0.3)
+        for t in range(1, n_periods + 1):
+            y = alpha + 0.2 * t + rng.normal(0, 0.1)
+            if u == 0 and t >= treatment_time:
+                y += 2.5
+            rows.append({"unit": f"u{u}", "time": t, "y": y})
+    df = pd.DataFrame(rows)
+    q = sp.causal_question(
+        treatment="u0",
+        outcome="y",
+        design="synthetic_control",
+        id="unit",
+        time="time",
+        cutoff=treatment_time,
+        data=df,
+    )
+    r = q.estimate(placebo=False)
+    assert r.estimator == "synth"
+    assert r.estimate > 0
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +431,6 @@ def test_causal_forest_aipw_coverage():
     ATE = 1.0, the AIPW-IF 95% CI must cover the truth at >=85% (loose
     bound for stability; nominal is 95% but small n + nuisance noise
     makes the empirical rate jump around)."""
-    rng = np.random.default_rng(2026)
     nsim = 30
     n = 400
     ate_pop = 1.0
@@ -562,7 +608,7 @@ def test_bug8_longitudinal_with_cate_warns():
 
 def test_bug10_kwargs_collision_with_reserved_args():
     """Reserved kwargs (y/treat/covariates/data) must raise a clear
-    TypeError instead of being silently forwarded to sp.dml etc.
+    method incompatibility instead of being silently forwarded to sp.dml etc.
     """
     df = pd.DataFrame({"d": [0, 1, 0, 1], "y": [1.0, 2.0, 1.5, 2.5],
                        "x": [0.1, 0.2, 0.3, 0.4]})
@@ -570,11 +616,11 @@ def test_bug10_kwargs_collision_with_reserved_args():
         treatment="d", outcome="y", design="dml",
         covariates=["x"], data=df,
     )
-    with pytest.raises(TypeError, match="collide"):
+    with pytest.raises(MethodIncompatibility, match="collide"):
         q.estimate(y="other_outcome")
-    with pytest.raises(TypeError, match="collide"):
+    with pytest.raises(MethodIncompatibility, match="collide"):
         q.estimate(treat="other")
-    with pytest.raises(TypeError, match="collide"):
+    with pytest.raises(MethodIncompatibility, match="collide"):
         q.estimate(covariates=["other"])
 
 
