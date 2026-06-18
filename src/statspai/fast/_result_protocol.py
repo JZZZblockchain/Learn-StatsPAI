@@ -38,16 +38,28 @@ def jsonable(value: Any) -> Any:
 
 def tidy_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     """Return JSON-safe tidy records from a result table."""
-    return jsonable(df.reset_index().rename(columns={"index": "term"}))
+    records = df.reset_index().rename(columns={"index": "term"}).to_dict(
+        orient="records"
+    )
+    return [
+        {str(key): jsonable(value) for key, value in record.items()}
+        for record in records
+    ]
 
 
 def distribution_summary(values: Any) -> dict[str, Any]:
     """Compact finite-value summary for bootstrap/simulation draws."""
     arr = np.asarray(values, dtype=float).ravel()
     finite = arr[np.isfinite(arr)]
-    out = {"n": int(arr.size)}
+    out: dict[str, Any] = {"n": int(arr.size)}
     if finite.size == 0:
-        out.update({"mean": None, "sd": None, "q025": None, "q50": None, "q975": None})
+        out.update({
+            "mean": None,
+            "sd": None,
+            "q025": None,
+            "q50": None,
+            "q975": None,
+        })
         return out
     out.update({
         "mean": float(np.mean(finite)),
@@ -56,4 +68,4 @@ def distribution_summary(values: Any) -> dict[str, Any]:
         "q50": float(np.quantile(finite, 0.5)),
         "q975": float(np.quantile(finite, 0.975)),
     })
-    return jsonable(out)
+    return out

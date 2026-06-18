@@ -20,7 +20,7 @@ QJE / RES regression tables.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional
 
 # OOXML border eighths-of-a-point sizes (sz attribute):
 #  - 4 = 0.5pt (thin)
@@ -41,8 +41,15 @@ NOTE_PT = 8
 # ---------------------------------------------------------------------------
 
 
-def _docx_border_xml(*, top=None, bottom=None, left=None, right=None,
-                     insideH=None, insideV=None):
+def _docx_border_xml(
+    *,
+    top: Optional[dict[str, str]] = None,
+    bottom: Optional[dict[str, str]] = None,
+    left: Optional[dict[str, str]] = None,
+    right: Optional[dict[str, str]] = None,
+    insideH: Optional[dict[str, str]] = None,
+    insideV: Optional[dict[str, str]] = None,
+) -> Any:
     """Build a ``<w:tcBorders>`` element overriding the four cell edges.
 
     Each kwarg, when supplied, is a dict like ``{"sz": "12", "val": "single",
@@ -70,7 +77,7 @@ def _docx_border_xml(*, top=None, bottom=None, left=None, right=None,
     return tc_borders
 
 
-def _set_cell_borders(cell, **edges):
+def _set_cell_borders(cell: Any, **edges: Optional[dict[str, str]]) -> None:
     """Replace a cell's ``tcBorders`` element. Edges not passed → ``nil``."""
     from docx.oxml.ns import qn
 
@@ -81,7 +88,7 @@ def _set_cell_borders(cell, **edges):
     tc_pr.append(_docx_border_xml(**edges))
 
 
-def _clear_table_borders(table) -> None:
+def _clear_table_borders(table: Any) -> None:
     """Strip every cell of every border (book-tab default state)."""
     for row in table.rows:
         for cell in row.cells:
@@ -89,7 +96,7 @@ def _clear_table_borders(table) -> None:
 
 
 def apply_word_booktab_rules(
-    table,
+    table: Any,
     *,
     header_top_idx: int = 0,
     header_bot_idx: int = 0,
@@ -127,7 +134,7 @@ def apply_word_booktab_rules(
     for cell in rows[header_top_idx].cells:
         _set_cell_borders(cell, top=top)
     for cell in rows[header_bot_idx].cells:
-        # Preserve top rule on the same row when header_top_idx == header_bot_idx
+        # Preserve top rule when top and bottom header rows coincide.
         kwargs = {"bottom": mid}
         if header_top_idx == header_bot_idx:
             kwargs["top"] = top
@@ -139,14 +146,17 @@ def apply_word_booktab_rules(
         # _set_cell_borders call replaces the entire tcBorders element.
         if body_last_idx == header_top_idx:
             kwargs["top"] = top
-        elif body_last_idx == header_bot_idx and header_top_idx == header_bot_idx:
+        elif (
+            body_last_idx == header_bot_idx
+            and header_top_idx == header_bot_idx
+        ):
             kwargs["top"] = top
             kwargs["bottom"] = mid
         _set_cell_borders(cell, **kwargs)
 
 
 def style_word_table_typography(
-    table,
+    table: Any,
     *,
     header_rows: Iterable[int] = (0,),
     font_name: str = DEFAULT_FONT,
@@ -189,8 +199,13 @@ def style_word_table_typography(
                         run.font.bold = True
 
 
-def add_word_notes_paragraph(doc, text: str, *, font_name: str = DEFAULT_FONT,
-                             pt_size: int = NOTE_PT) -> None:
+def add_word_notes_paragraph(
+    doc: Any,
+    text: str,
+    *,
+    font_name: str = DEFAULT_FONT,
+    pt_size: int = NOTE_PT,
+) -> None:
     """Append an italic small-font notes paragraph below the table."""
     from docx.shared import Pt
 
@@ -208,8 +223,8 @@ def add_word_notes_paragraph(doc, text: str, *, font_name: str = DEFAULT_FONT,
 # ---------------------------------------------------------------------------
 
 
-def excel_booktab_borders():
-    """Return ``(top_rule, mid_rule, bottom_rule, no_border)`` ``Border`` instances."""
+def excel_booktab_borders() -> tuple[Any, Any, Any, Any]:
+    """Return ``(top_rule, mid_rule, bottom_rule, no_border)`` borders."""
     from openpyxl.styles import Border, Side
 
     medium = Side(style="medium")

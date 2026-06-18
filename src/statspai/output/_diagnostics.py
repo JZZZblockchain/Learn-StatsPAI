@@ -39,7 +39,7 @@ import numpy as np
 # Result-object adapters
 # ---------------------------------------------------------------------------
 
-def _is_causal(result) -> bool:
+def _is_causal(result: Any) -> bool:
     """Match :class:`statspai.core.results.CausalResult` duck-style."""
     return (
         hasattr(result, "estimand")
@@ -49,7 +49,7 @@ def _is_causal(result) -> bool:
     )
 
 
-def _is_econometric(result) -> bool:
+def _is_econometric(result: Any) -> bool:
     """Match :class:`statspai.core.results.EconometricResults` duck-style."""
     return (
         hasattr(result, "params")
@@ -58,15 +58,15 @@ def _is_econometric(result) -> bool:
     )
 
 
-def _model_info(result) -> Dict[str, Any]:
+def _model_info(result: Any) -> Dict[str, Any]:
     return getattr(result, "model_info", {}) or {}
 
 
-def _data_info(result) -> Dict[str, Any]:
+def _data_info(result: Any) -> Dict[str, Any]:
     return getattr(result, "data_info", {}) or {}
 
 
-def _diagnostics(result) -> Dict[str, Any]:
+def _diagnostics(result: Any) -> Dict[str, Any]:
     return getattr(result, "diagnostics", {}) or {}
 
 
@@ -78,7 +78,7 @@ def _yes_no_cell(present: bool) -> str:
     return "Yes" if present else "No"
 
 
-def _fmt_num(val, fmt: str = "%.2f") -> str:
+def _fmt_num(val: Any, fmt: str = "%.2f") -> str:
     """Format a number, returning ``""`` for None/NaN/non-numeric input."""
     if val is None:
         return ""
@@ -91,7 +91,7 @@ def _fmt_num(val, fmt: str = "%.2f") -> str:
     return fmt % f
 
 
-def _fmt_int(val) -> str:
+def _fmt_int(val: Any) -> str:
     if val is None:
         return ""
     try:
@@ -104,7 +104,7 @@ def _fmt_int(val) -> str:
 # Per-row extractors
 # ---------------------------------------------------------------------------
 
-def _fe_cell(result) -> str:
+def _fe_cell(result: Any) -> str:
     """Return ``"Yes"`` if the model absorbs at least one fixed effect.
 
     Looks for the canonical ``model_info['fixed_effects']`` field that the
@@ -122,7 +122,7 @@ def _fe_cell(result) -> str:
     return "Yes"
 
 
-def _fe_raw(result):
+def _fe_raw(result: Any) -> Any:
     """Return the raw ``fixed_effects`` metadata for the result, if any."""
     if _is_causal(result):
         return None
@@ -130,7 +130,7 @@ def _fe_raw(result):
     return mi.get("fixed_effects") or mi.get("absorbed_fe") or mi.get("fe")
 
 
-def _parse_fe_tokens(fe_value) -> List[str]:
+def _parse_fe_tokens(fe_value: Any) -> List[str]:
     """Split a ``fixed_effects`` metadata value into individual FE tokens.
 
     Pyfixest encodes additive FEs as ``"firm+year"`` and interactions as
@@ -178,7 +178,7 @@ def _fe_token_label(token: str) -> str:
     return f"{pretty} FE"
 
 
-def _cluster_cell(result) -> str:
+def _cluster_cell(result: Any) -> str:
     """Return the cluster variable name (or ``"Yes"`` / ``"No"``).
 
     A common Top-5 convention is to label the row ``"Cluster SE"`` and put
@@ -197,7 +197,7 @@ def _cluster_cell(result) -> str:
 
 # ---- IV diagnostics --------------------------------------------------------
 
-def _iv_first_stage_F_cell(result) -> str:
+def _iv_first_stage_F_cell(result: Any) -> str:
     """Return the first-stage F-stat for IV models, or ``""`` if not IV.
 
     Probe order favours the inference-quality F (Olea-Pflueger effective F)
@@ -220,13 +220,13 @@ def _iv_first_stage_F_cell(result) -> str:
     return ""
 
 
-def _iv_kp_F_cell(result) -> str:
+def _iv_kp_F_cell(result: Any) -> str:
     diag = _diagnostics(result)
     val = diag.get("KP rk Wald F")
     return _fmt_num(val, "%.2f") if val is not None else ""
 
 
-def _iv_hansen_J_p_cell(result) -> str:
+def _iv_hansen_J_p_cell(result: Any) -> str:
     """Return Hansen-J / Sargan p-value (overid test) when applicable."""
     diag = _diagnostics(result)
     for key in ("Hansen J p-value", "Sargan p-value", "Hansen-J p-value"):
@@ -235,7 +235,7 @@ def _iv_hansen_J_p_cell(result) -> str:
     return ""
 
 
-def _is_iv_result(result) -> bool:
+def _is_iv_result(result: Any) -> bool:
     """Detect IV: result has any IV-specific diagnostic key."""
     if _is_causal(result):
         return False
@@ -259,7 +259,7 @@ def _is_iv_result(result) -> bool:
 
 # ---- DiD diagnostics -------------------------------------------------------
 
-def _is_did_result(result) -> bool:
+def _is_did_result(result: Any) -> bool:
     """Detect a DiD/event-study result via ``method`` only.
 
     The earlier version also matched ``estimand in {"ATT", "ATET"}`` but
@@ -273,7 +273,7 @@ def _is_did_result(result) -> bool:
     return "did" in method or "diff-in-diff" in method or "staggered" in method
 
 
-def _did_pretrend_p_cell(result) -> str:
+def _did_pretrend_p_cell(result: Any) -> str:
     if not _is_did_result(result):
         return ""
     mi = _model_info(result)
@@ -288,7 +288,7 @@ def _did_pretrend_p_cell(result) -> str:
     return _fmt_num(pt, "%.3f")
 
 
-def _did_n_groups_cell(result) -> str:
+def _did_n_groups_cell(result: Any) -> str:
     if not _is_did_result(result):
         return ""
     mi = _model_info(result)
@@ -298,7 +298,7 @@ def _did_n_groups_cell(result) -> str:
 
 # ---- RD diagnostics --------------------------------------------------------
 
-def _is_rd_result(result) -> bool:
+def _is_rd_result(result: Any) -> bool:
     if not _is_causal(result):
         return False
     method = (getattr(result, "method", "") or "").lower()
@@ -308,7 +308,7 @@ def _is_rd_result(result) -> bool:
     return "bandwidth_h" in mi or "bandwidth" in mi or "kernel" in mi
 
 
-def _rd_bandwidth_cell(result) -> str:
+def _rd_bandwidth_cell(result: Any) -> str:
     if not _is_rd_result(result):
         return ""
     mi = _model_info(result)
@@ -329,7 +329,7 @@ def _rd_bandwidth_cell(result) -> str:
     return _fmt_num(bw, "%.3f")
 
 
-def _rd_kernel_cell(result) -> str:
+def _rd_kernel_cell(result: Any) -> str:
     if not _is_rd_result(result):
         return ""
     mi = _model_info(result)
@@ -339,7 +339,7 @@ def _rd_kernel_cell(result) -> str:
     return str(k).capitalize()
 
 
-def _rd_polyorder_cell(result) -> str:
+def _rd_polyorder_cell(result: Any) -> str:
     if not _is_rd_result(result):
         return ""
     mi = _model_info(result)

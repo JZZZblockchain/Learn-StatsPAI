@@ -3,14 +3,14 @@ Unified results class for all econometric models
 """
 
 from html import escape as _html_escape
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, cast
 import pandas as pd
 import numpy as np
 
 from ..exceptions import MethodIncompatibility
 
 
-def _scipy_stats():
+def _scipy_stats() -> Any:
     """Lazily import ``scipy.stats`` for result-time inference only."""
     from scipy import stats as _stats
     return _stats
@@ -31,7 +31,7 @@ class SummaryText(str):
 
     __slots__ = ()
 
-    def _repr_pretty_(self, p, cycle):  # IPython terminal & notebook
+    def _repr_pretty_(self, p: Any, cycle: Any) -> None:  # IPython terminal & notebook
         p.text(str(self))
 
     def _repr_html_(self) -> str:  # Jupyter HTML rendering
@@ -153,7 +153,7 @@ class EconometricResults:
         model_info: Dict[str, Any],
         data_info: Optional[Dict[str, Any]] = None,
         diagnostics: Optional[Dict[str, Any]] = None
-    ):
+    ) -> None:
         """
         Initialize results object
         
@@ -179,7 +179,7 @@ class EconometricResults:
         # Compute derived statistics
         self._compute_statistics()
     
-    def _compute_statistics(self):
+    def _compute_statistics(self) -> None:
         """Compute t-statistics, p-values, and confidence intervals"""
         stats = _scipy_stats()
         index = self.params.index
@@ -328,8 +328,8 @@ class EconometricResults:
         lo = self.params - t_crit * self.std_errors
         hi = self.params + t_crit * self.std_errors
 
-        def _arr(x):
-            return x.values if hasattr(x, 'values') else np.asarray(x)
+        def _arr(x: Any) -> np.ndarray:
+            return np.asarray(x.values if hasattr(x, 'values') else x)
 
         return pd.DataFrame({
             'term': list(self.params.index),
@@ -409,7 +409,7 @@ class EconometricResults:
         if data is None:
             fv = self.data_info.get('fitted_values')
             if fv is not None:
-                return fv
+                return np.asarray(fv)
             raise NotImplementedError(
                 "In-sample fitted values not stored. "
                 "Pass data= for out-of-sample prediction."
@@ -479,7 +479,7 @@ class EconometricResults:
             else:
                 ordered = X_cols
             beta = np.array([self.params[v] for v in ordered])
-            return X @ beta
+            return np.asarray(X @ beta)
 
         raise NotImplementedError(
             "Prediction not available for this model type."
@@ -599,7 +599,7 @@ class EconometricResults:
         from ._agent_summary import econometric_agent_summary
         return econometric_agent_summary(self)
 
-    def to_docx(self, filename: str, title: Optional[str] = None):
+    def to_docx(self, filename: str, title: Optional[str] = None) -> None:
         """
         Export results to a Word (.docx) document.
 
@@ -629,7 +629,7 @@ class EconometricResults:
     # ``stars``, ``fmt``, ``template``, ``notes`` …) passes straight through,
     # so a single-model export gets the full power of the multi-model builder.
 
-    def _as_regtable(self, *, title: Optional[str] = None, **kwargs: Any):
+    def _as_regtable(self, *, title: Optional[str] = None, **kwargs: Any) -> Any:
         """Build a one-column ``RegtableResult`` wrapping this result.
 
         The import is local because :mod:`statspai.output` imports the
@@ -715,10 +715,13 @@ class EconometricResults:
         ...                  coef_labels={"x": "Treatment"}, template="aer")
         >>> tex = r.to_latex(siunitx=True, threeparttable=True)  # journal style
         """
-        latex = self._as_regtable(title=caption, **kwargs).to_latex(
-            siunitx=siunitx,
-            threeparttable=threeparttable,
-            siunitx_preamble=siunitx_preamble,
+        latex = cast(
+            str,
+            self._as_regtable(title=caption, **kwargs).to_latex(
+                siunitx=siunitx,
+                threeparttable=threeparttable,
+                siunitx_preamble=siunitx_preamble,
+            ),
         )
         if label:
             latex = self._inject_latex_label(latex, label)
@@ -734,7 +737,7 @@ class EconometricResults:
         HTML string; also writes it to ``path`` when given.  See
         :meth:`to_latex` for the forwarded ``**kwargs``.
         """
-        html = self._as_regtable(**kwargs).to_html()
+        html = cast(str, self._as_regtable(**kwargs).to_html())
         if path is not None:
             from pathlib import Path
             Path(path).write_text(html, encoding="utf-8")
@@ -754,7 +757,7 @@ class EconometricResults:
         string; also writes it to ``path`` when given.  See :meth:`to_latex`
         for the forwarded ``**kwargs``.
         """
-        md = self._as_regtable(**kwargs).to_markdown(quarto=quarto)
+        md = cast(str, self._as_regtable(**kwargs).to_markdown(quarto=quarto))
         if path is not None:
             from pathlib import Path
             Path(path).write_text(md, encoding="utf-8")
@@ -1025,8 +1028,6 @@ class EconometricResults:
         n_obs = self.data_info.get('nobs', '?')
         r2 = self.diagnostics.get('R-squared', None)
         f_stat = self.diagnostics.get('F-statistic', None)
-        f_pv = self.diagnostics.get('F p-value', self.diagnostics.get('Prob (F-statistic)', None))
-
         def _safe(v: Any) -> str:
             return _html_escape(str(v))
 
@@ -1035,14 +1036,18 @@ class EconometricResults:
                 return format(v, spec)
             return _safe(v)
 
-        def _s(pv):
-            if pd.isna(pv): return ''
-            if pv < 0.01: return '<span style="color:#E74C3C;">***</span>'
-            if pv < 0.05: return '<span style="color:#E67E22;">**</span>'
-            if pv < 0.1: return '<span style="color:#F39C12;">*</span>'
+        def _s(pv: Any) -> str:
+            if pd.isna(pv):
+                return ''
+            if pv < 0.01:
+                return '<span style="color:#E74C3C;">***</span>'
+            if pv < 0.05:
+                return '<span style="color:#E67E22;">**</span>'
+            if pv < 0.1:
+                return '<span style="color:#F39C12;">*</span>'
             return ''
 
-        def _val(v):
+        def _val(v: Any) -> str:
             if isinstance(v, (int, float, np.integer, np.floating)) and not pd.isna(v):
                 return f'{v:.4f}'
             return _safe(v)
@@ -1148,7 +1153,7 @@ class EconometricResults:
         n_obs = self.data_info.get('nobs', 'Unknown')
         return f"<EconometricResults: {model_type}, {n_params} parameters, {n_obs} observations>"
 
-    def sensitivity(self, **kwargs):
+    def sensitivity(self, **kwargs: Any) -> Any:
         """Run the unified sensitivity dashboard on this result.
 
         See :func:`statspai.robustness.unified_sensitivity`.
@@ -1156,7 +1161,11 @@ class EconometricResults:
         from ..robustness.unified_sensitivity import unified_sensitivity
         # Expose a 1-entry "estimate" view for compatibility
         class _View:
-            pass
+            estimate: float
+            se: float
+            ci: tuple[float, float]
+            params: pd.Series
+            std_errors: pd.Series
         view = _View()
         view.estimate = float(self.params.iloc[0])
         view.se = float(self.std_errors.iloc[0])
@@ -1704,13 +1713,13 @@ class CausalResult:
 
     def event_study_plot(
         self,
-        ax=None,
+        ax: Any = None,
         title: Optional[str] = None,
         color: str = '#2C3E50',
         ci_alpha: float = 0.15,
-        figsize: tuple = (10, 6),
-        **kwargs,
-    ):
+        figsize: tuple[float, float] = (10, 6),
+        **kwargs: Any,
+    ) -> Any:
         """
         Plot event study coefficients with confidence intervals.
 
@@ -1776,7 +1785,7 @@ class CausalResult:
         fig.tight_layout()
         return fig, ax
 
-    def plot(self, type: str = 'auto', **kwargs):
+    def plot(self, type: str = 'auto', **kwargs: Any) -> Any:
         """
         Generate appropriate visualisation based on model type.
 
@@ -1891,7 +1900,12 @@ class CausalResult:
             'de-trended', 'unconstrained', 'factor',
         ))
 
-    def _coefplot(self, ax=None, figsize=(8, 5), **kwargs):
+    def _coefplot(
+        self,
+        ax: Any = None,
+        figsize: tuple[float, float] = (8, 5),
+        **kwargs: Any,
+    ) -> Any:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
@@ -2127,18 +2141,18 @@ class CausalResult:
             if 'att' in self.detail.columns:
                 cols = [c for c in ['group', 'time', 'att', 'se', 'pvalue']
                         if c in self.detail.columns]
-                coef_col, star_col = 'att', 'att'
+                star_col = 'att'
             elif 'method' in self.detail.columns and 'estimate' in self.detail.columns:
                 cols = [c for c in ['method', 'estimate', 'se', 'pvalue']
                         if c in self.detail.columns]
-                coef_col, star_col = 'estimate', 'estimate'
+                star_col = 'estimate'
             elif 'coefficient' in self.detail.columns:
                 cols = [c for c in ['variable', 'coefficient', 'se', 'pvalue']
                         if c in self.detail.columns]
-                coef_col, star_col = 'coefficient', 'coefficient'
+                star_col = 'coefficient'
             else:
                 cols = list(self.detail.columns)
-                coef_col, star_col = None, None
+                star_col = None
 
             n_cols = len(cols)
             spec = 'l' + 'c' * (n_cols - 1)
@@ -2244,7 +2258,7 @@ class CausalResult:
         """Return pre-trend test results (DID methods)."""
         if 'pretrend_test' not in self.model_info:
             raise ValueError("Pre-trend test not available for this method.")
-        return self.model_info['pretrend_test']
+        return cast(Dict[str, Any], self.model_info['pretrend_test'])
 
     def next_steps(self, print_result: bool = True) -> List[Dict[str, str]]:
         """
@@ -2488,7 +2502,7 @@ class CausalResult:
             default=_to_jsonable,
         )
 
-    def to_docx(self, filename: str, title: Optional[str] = None):
+    def to_docx(self, filename: str, title: Optional[str] = None) -> None:
         """
         Export results to a Word (.docx) document.
 
@@ -2520,11 +2534,15 @@ class CausalResult:
                 return f'<td>{v:.4f}</td>'
             return f'<td>{_safe(v)}</td>'
 
-        def _s(pv):
-            if pd.isna(pv): return ''
-            if pv < 0.01: return '<span style="color:#DC2626">***</span>'
-            if pv < 0.05: return '<span style="color:#EA580C">**</span>'
-            if pv < 0.1: return '<span style="color:#D97706">*</span>'
+        def _s(pv: Any) -> str:
+            if pd.isna(pv):
+                return ''
+            if pv < 0.01:
+                return '<span style="color:#DC2626">***</span>'
+            if pv < 0.05:
+                return '<span style="color:#EA580C">**</span>'
+            if pv < 0.1:
+                return '<span style="color:#D97706">*</span>'
             return ''
 
         # Significance-based accent color
@@ -2588,10 +2606,10 @@ class CausalResult:
         sig_label = '< 0.01' if self.pvalue < 0.01 else ('< 0.05' if self.pvalue < 0.05 else ('< 0.10' if self.pvalue < 0.1 else f'= {self.pvalue:.3f}'))
         h.append(f'<div class="sp-effect" style="background:{accent_bg};">')
         h.append(f'<div class="sp-effect-num" style="color:{accent};">{self.estimate:.4f}</div>')
-        h.append(f'<div class="sp-effect-meta">')
+        h.append('<div class="sp-effect-meta">')
         h.append(f'<span class="sp-effect-badge" style="background:{accent};color:white;">{stars_raw or "n.s."}</span> &nbsp; p {sig_label}<br>')
         h.append(f'SE = {self.se:.4f} &nbsp;&nbsp; {pct}% CI [{self.ci[0]:.4f}, {self.ci[1]:.4f}]')
-        h.append(f'</div></div>')
+        h.append('</div></div>')
 
         # ── Model-Specific Metric Bars ──
         h.append('<div class="sp-metrics">')
@@ -2814,7 +2832,7 @@ class CausalResult:
     def __str__(self) -> str:
         return self.summary()
 
-    def sensitivity(self, **kwargs):
+    def sensitivity(self, **kwargs: Any) -> Any:
         """Run the unified sensitivity dashboard on this result.
 
         See :func:`statspai.robustness.unified_sensitivity`.
@@ -2827,7 +2845,11 @@ class CausalResult:
 # Shared Word export helper
 # ======================================================================
 
-def _result_to_docx(result, filename: str, title: Optional[str] = None):
+def _result_to_docx(
+    result: Any,
+    filename: str,
+    title: Optional[str] = None,
+) -> None:
     """
     Export a single EconometricResults or CausalResult to Word (.docx).
 
@@ -2839,8 +2861,6 @@ def _result_to_docx(result, filename: str, title: Optional[str] = None):
         from docx.shared import Pt
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
     except ImportError:
         raise ImportError(
             "python-docx required for Word export. "
@@ -2866,12 +2886,15 @@ def _result_to_docx(result, filename: str, title: Optional[str] = None):
     std_errors = result.std_errors
     pvalues = result.pvalues if hasattr(result, 'pvalues') else None
 
-    def _stars(pv):
+    def _stars(pv: Any) -> str:
         if pv is None or (isinstance(pv, float) and np.isnan(pv)):
             return ''
-        if pv < 0.01: return '***'
-        if pv < 0.05: return '**'
-        if pv < 0.1: return '*'
+        if pv < 0.01:
+            return '***'
+        if pv < 0.05:
+            return '**'
+        if pv < 0.1:
+            return '*'
         return ''
 
     # Table: Variable | Coefficient | SE
@@ -2886,7 +2909,6 @@ def _result_to_docx(result, filename: str, title: Optional[str] = None):
                 pv = np.nan
             rows_data.append((str(var), f'{coef:.4f}{_stars(pv)}', f'({se:.4f})'))
 
-    n_rows = len(rows_data) * 2 + 1  # coef rows + SE rows + header
     # Actually: each variable gets 2 rows (coef, SE)
     table = doc.add_table(rows=1 + len(rows_data) * 2, cols=2)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER

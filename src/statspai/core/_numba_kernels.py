@@ -14,8 +14,12 @@ Usage inside StatsPAI
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Callable, TypeVar, cast
 
 import numpy as np
+
+
+_DecoratedFn = TypeVar("_DecoratedFn", bound=Callable[..., Any])
 
 # --------------------------------------------------------------------------- #
 #  Numba availability detection
@@ -30,20 +34,20 @@ except ImportError:  # pragma: no cover
 
     # Transparent no-op decorator so the pure-Python definitions below
     # compile without any change in call signature.
-    def njit(*args, **kwargs):  # type: ignore[misc]
+    def njit(
+        *args: Any,
+        **kwargs: Any,
+    ) -> Callable[[_DecoratedFn], _DecoratedFn] | _DecoratedFn:
         """Identity decorator when numba is absent."""
-        def _wrap(fn):
+        def _wrap(fn: _DecoratedFn) -> _DecoratedFn:
             return fn
         if args and callable(args[0]):
-            return args[0]
+            return cast(_DecoratedFn, args[0])
         return _wrap
 
-    class _FakePrange:
+    def prange(*args: Any, **kwargs: Any) -> range:
         """Mimic ``numba.prange`` as a plain ``range``."""
-        def __new__(cls, *a, **kw):
-            return range(*a, **kw)
-
-    prange = _FakePrange  # type: ignore[assignment,misc]
+        return range(*args, **kwargs)
 
 
 _NUMBA_CACHE = HAS_NUMBA and Path(__file__).exists()
@@ -164,7 +168,7 @@ def sandwich_hc(
     else:
         raise ValueError(f"Unknown hc_type: {hc_type}")
 
-    return XtX_inv @ meat @ XtX_inv
+    return cast(np.ndarray, XtX_inv @ meat @ XtX_inv)
 
 
 # --------------------------------------------------------------------------- #
@@ -247,13 +251,16 @@ def cluster_meat(
 
     if _HAS_RUST_CLUSTER:
         # Rust kernel takes int64 cluster boundaries.
-        return _rust_hdfe.cluster_meat(
-            X_s,
-            r_s,
-            starts.astype(np.int64),
-            ends.astype(np.int64),
+        return cast(
+            np.ndarray,
+            _rust_hdfe.cluster_meat(
+                X_s,
+                r_s,
+                starts.astype(np.int64),
+                ends.astype(np.int64),
+            ),
         )
-    return _cluster_meat_sorted(X_s, r_s, starts, ends)
+    return cast(np.ndarray, _cluster_meat_sorted(X_s, r_s, starts, ends))
 
 
 # --------------------------------------------------------------------------- #
@@ -301,4 +308,4 @@ def hac_meat(
         w = 1 - j / (max_lags + 1)
         total += w * (gamma_j + gamma_j.T)
 
-    return total
+    return cast(np.ndarray, total)

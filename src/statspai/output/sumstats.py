@@ -8,7 +8,7 @@ Provides:
 Equivalent to Stata's ``summarize``, ``tabstat``, ``balancetable``.
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Callable
 import numpy as np
 import pandas as pd
 
@@ -115,15 +115,25 @@ def sumstats(
     return _format_output(df_result, output, title, stats)
 
 
-def _compute_stats(data, vars, stats, stat_funcs, fmt, labels):
+_StatFunc = tuple[str, Callable[[pd.Series], Any]]
+
+
+def _compute_stats(
+    data: pd.DataFrame,
+    vars: List[str],
+    stats: List[str],
+    stat_funcs: Dict[str, _StatFunc],
+    fmt: str,
+    labels: Optional[Dict[str, str]],
+) -> pd.DataFrame:
     """Compute statistics for each variable."""
-    rows = {}
+    rows: Dict[str, Dict[str, str]] = {}
     for var in vars:
         if var not in data.columns:
             continue
         s = data[var].dropna()
         display = labels.get(var, var) if labels else var
-        row = {}
+        row: Dict[str, str] = {}
         for stat in stats:
             if stat in stat_funcs:
                 label, fn = stat_funcs[stat]
@@ -187,7 +197,9 @@ def balance_table(
     >>> bool(isinstance(bal, pd.DataFrame))
     True
     >>> cov = ['education', 'experience', 'tenure']
-    >>> sp.balance_table(df, treat='union', covariates=cov, output='balance.docx')  # doctest: +SKIP
+    >>> sp.balance_table(  # doctest: +SKIP
+    ...     df, treat='union', covariates=cov, output='balance.docx'
+    ... )
     """
     from scipy import stats as sp_stats
 
@@ -252,7 +264,12 @@ def balance_table(
 # Output formatting
 # ======================================================================
 
-def _format_output(df, output, title, stats_list):
+def _format_output(
+    df: pd.DataFrame,
+    output: str,
+    title: str,
+    stats_list: Optional[List[str]],
+) -> Union[str, pd.DataFrame]:
     """Route to the appropriate output format."""
     if output == 'dataframe':
         return df
@@ -270,7 +287,7 @@ def _format_output(df, output, title, stats_list):
         return _sumstats_to_text(df, title)
 
 
-def _sumstats_to_text(df, title):
+def _sumstats_to_text(df: pd.DataFrame, title: str) -> str:
     """Plain text table."""
     lines = []
     if title:
@@ -281,20 +298,19 @@ def _sumstats_to_text(df, title):
     return '\n'.join(lines)
 
 
-def _sumstats_to_latex(df, title):
+def _sumstats_to_latex(df: pd.DataFrame, title: str) -> str:
     """LaTeX table."""
-    latex = df.to_latex(caption=title, label='tab:sumstats')
-    return latex
+    return str(df.to_latex(caption=title, label='tab:sumstats'))
 
 
-def _sumstats_to_html(df, title):
+def _sumstats_to_html(df: pd.DataFrame, title: str) -> str:
     """HTML table."""
     html = f'<h3>{title}</h3>\n' if title else ''
-    html += df.to_html()
+    html += str(df.to_html())
     return html
 
 
-def _sumstats_to_excel(df, filename, title):
+def _sumstats_to_excel(df: pd.DataFrame, filename: str, title: str) -> None:
     """Export sumstats DataFrame as a book-tab Excel table.
 
     Delegates layout + borders to ``_excel_style.render_dataframe_to_xlsx``
@@ -313,7 +329,7 @@ def _sumstats_to_excel(df, filename, title):
     )
 
 
-def _sumstats_to_word(df, filename, title):
+def _sumstats_to_word(df: pd.DataFrame, filename: str, title: str) -> None:
     """Export to Word (.docx) in AER/QJE book-tab style."""
     try:
         from docx import Document
@@ -321,7 +337,9 @@ def _sumstats_to_word(df, filename, title):
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
     except ImportError:
-        raise ImportError("python-docx required. Install: pip install python-docx")
+        raise ImportError(
+            "python-docx required. Install: pip install python-docx"
+        )
 
     from ._aer_style import (
         apply_word_booktab_rules,

@@ -486,7 +486,7 @@ def write_bib(
                 continue
             entries.append(c)
             seen_keys.add(c["key"])
-        elif c is not None:
+        elif isinstance(c, str):
             for entry in citations_to_bib_entries([c]):
                 if entry["key"] in seen_keys:
                     continue

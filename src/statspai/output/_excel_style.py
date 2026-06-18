@@ -17,7 +17,7 @@ By centralizing here we keep ``sumstats``, ``tab``, ``collection``,
 """
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
 import pandas as pd
 
@@ -36,7 +36,7 @@ BODY_PT = 11
 NOTES_PT = 9
 
 
-def _styles():
+def _styles() -> dict[str, Any]:
     """Return a dict of pre-built style objects (lazy openpyxl import)."""
     from openpyxl.styles import Alignment, Border, Font, Side
 
@@ -68,7 +68,7 @@ def _styles():
 # ---------------------------------------------------------------------------
 
 
-def write_title(ws, row: int, n_cols: int, title: str) -> int:
+def write_title(ws: Any, row: int, n_cols: int, title: str) -> int:
     """Write a centered, bold, merged title row. Returns next row to write."""
     if not title:
         return row
@@ -84,12 +84,12 @@ def write_title(ws, row: int, n_cols: int, title: str) -> int:
 
 
 def write_header(
-    ws,
+    ws: Any,
     row: int,
     df: pd.DataFrame,
     *,
     index_label: str = "",
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Write column headers (single- or multi-level), merging panel labels.
 
     Returns ``(panel_top_row, stat_row)`` — the row where the top-level
@@ -104,7 +104,7 @@ def write_header(
         panel_top = row
         col_idx = 2
         # Use ordered unique panel labels (preserve column order)
-        seen: List[object] = []
+        seen: list[object] = []
         for c in df.columns:
             if c[0] not in seen:
                 seen.append(c[0])
@@ -145,13 +145,13 @@ def write_header(
 
 
 def write_body(
-    ws,
+    ws: Any,
     row: int,
     df: pd.DataFrame,
     *,
     align_first_col: str = "left",
     align_data_cols: str = "center",
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Write the data body. Returns ``(body_top, body_bot)`` row indices."""
     s = _styles()
     align_map = {"left": s["left"], "center": s["center"]}
@@ -161,7 +161,8 @@ def write_body(
         c0.font = s["body_font"]
         c0.alignment = align_map.get(align_first_col, s["left"])
         for j, val in enumerate(data_row, 2):
-            cell = ws.cell(row=row, column=j, value="" if pd.isna(val) else str(val))
+            value = "" if pd.isna(val) else str(val)
+            cell = ws.cell(row=row, column=j, value=value)
             cell.font = s["body_font"]
             cell.alignment = align_map.get(align_data_cols, s["center"])
         row += 1
@@ -169,7 +170,7 @@ def write_body(
 
 
 def apply_booktab_borders(
-    ws,
+    ws: Any,
     *,
     header_top_row: int,
     header_bot_row: int,
@@ -219,7 +220,12 @@ def apply_booktab_borders(
         )
 
 
-def write_notes(ws, row: int, notes: Sequence[str], n_cols: int = 1) -> int:
+def write_notes(
+    ws: Any,
+    row: int,
+    notes: Sequence[str],
+    n_cols: int = 1,
+) -> int:
     """Write italic note rows at the bottom. Returns next row."""
     if not notes:
         return row
@@ -236,13 +242,22 @@ def write_notes(ws, row: int, notes: Sequence[str], n_cols: int = 1) -> int:
     return row
 
 
-def autofit_columns(ws, n_cols: int, max_width: int = 28, min_width: int = 8) -> None:
+def autofit_columns(
+    ws: Any,
+    n_cols: int,
+    max_width: int = 28,
+    min_width: int = 8,
+) -> None:
     """Pick column widths from cell contents, clipped to ``[min, max]``."""
     from openpyxl.utils import get_column_letter
 
     for col in range(1, n_cols + 1):
         max_len = 0
-        for row_cells in ws.iter_rows(min_col=col, max_col=col, values_only=True):
+        for row_cells in ws.iter_rows(
+            min_col=col,
+            max_col=col,
+            values_only=True,
+        ):
             v = row_cells[0]
             if v is not None:
                 max_len = max(max_len, len(str(v)))

@@ -51,7 +51,7 @@ def _python_version() -> str:
 MAX_HASH_ROWS = 1_000_000
 
 
-def _hash_dataframe(df, length: int = 10) -> Optional[str]:
+def _hash_dataframe(df: Any, length: int = 10) -> Optional[str]:
     """Return a short SHA-256 fingerprint of *df* (or ``None`` on failure).
 
     We hash the byte representation of ``pd.util.hash_pandas_object`` which

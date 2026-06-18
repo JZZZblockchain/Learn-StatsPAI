@@ -22,6 +22,7 @@ This follows the loud-failure templates already used by
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 import numpy as np
 
@@ -29,7 +30,7 @@ __all__ = ["bootstrap_se"]
 
 
 def bootstrap_se(
-    boot,
+    boot: Any,
     n_attempted: int | None = None,
     label: str = "bootstrap",
     *,

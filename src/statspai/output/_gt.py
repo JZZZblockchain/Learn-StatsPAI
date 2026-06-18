@@ -43,7 +43,7 @@ custom :meth:`tab_style` rules the StatsPAI primitives don't surface.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
 
 import pandas as pd
 
@@ -77,7 +77,7 @@ def is_great_tables_available() -> bool:
         return False
 
 
-def _require_gt():
+def _require_gt() -> Any:
     try:
         import great_tables as gt
     except ImportError as exc:  # pragma: no cover
@@ -140,14 +140,13 @@ _JOURNAL_GT_STYLE = {
 }
 
 
-def _apply_journal_theme(g, template: str):
+def _apply_journal_theme(g: Any, template: str) -> "gt_pkg.GT":
     """Mutate ``g`` (a ``GT`` instance) with the journal's preset."""
     if not template:
-        return g
+        return cast("gt_pkg.GT", g)
     style = _JOURNAL_GT_STYLE.get(template.strip().lower())
     if not style:
-        return g
-    gt = _require_gt()
+        return cast("gt_pkg.GT", g)
     # Footnote marks. ``opt_footnote_marks`` accepts predefined symbol
     # sequences ("standard", "letters", or a list of marks).
     if "footnote_marks" in style:
@@ -164,7 +163,7 @@ def _apply_journal_theme(g, template: str):
             g = g.tab_options(table_font_names=style["font_family"])
         except Exception:
             pass
-    return g
+    return cast("gt_pkg.GT", g)
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +179,8 @@ def to_gt(
     template: Optional[str] = None,
     rowname_col: Optional[str] = None,
     apply_theme: bool = True,
-) -> "gt_pkg.GT | list":
-    """Convert a StatsPAI table / DataFrame / Collection into a ``great_tables.GT``.
+) -> "gt_pkg.GT | list[gt_pkg.GT]":
+    """Convert StatsPAI table / DataFrame / Collection into ``GT``.
 
     Dispatches on the input type:
 
@@ -247,7 +246,9 @@ def to_gt(
     Plain DataFrame path — promote a column to row labels:
 
     >>> df = pd.DataFrame({'var': ['x', 'y'], 'M1': ['0.5***', '0.3']})
-    >>> g2 = sp.gt(df, rowname_col='var', title='Custom table')  # doctest: +SKIP
+    >>> g2 = sp.gt(  # doctest: +SKIP
+    ...     df, rowname_col='var', title='Custom table'
+    ... )
     >>> type(g2).__name__  # doctest: +SKIP
     'GT'
 
@@ -282,8 +283,8 @@ def to_gt(
         )
 
     if isinstance(result, Collection):
-        # Collection bundles heterogeneous items; convert each and return a list.
-        gts: list = []
+        # Collection bundles heterogeneous items; convert each item.
+        gts: list[gt_pkg.GT] = []
         for item in result.items:
             try:
                 gt_item = to_gt(
@@ -304,8 +305,8 @@ def to_gt(
         if not gts:
             raise TypeError(
                 "Collection has no convertible items for great_tables. "
-                "Ensure items include RegtableResult, DataFrame, or "
-                "objects with a .to_dataframe() method."
+                "Ensure items include RegtableResult, DataFrame, or objects "
+                "with a .to_dataframe() method."
             )
         return gts
 
@@ -339,8 +340,9 @@ def to_gt(
 
     raise TypeError(
         f"sp.gt() does not know how to convert {type(result).__name__}. "
-        "Pass a RegtableResult, PaperTables, Collection, MeanComparisonResult, "
-        "DataFrame, or any object with a .to_dataframe() method."
+        "Pass a RegtableResult, PaperTables, Collection, "
+        "MeanComparisonResult, DataFrame, or any object with a "
+        ".to_dataframe() method."
     )
 
 
@@ -348,8 +350,16 @@ def to_gt(
 # Per-source-type implementations
 # ---------------------------------------------------------------------------
 
-def _from_regtable(rt, *, gt, title, subtitle, notes, template,
-                    apply_theme):
+def _from_regtable(
+    rt: Any,
+    *,
+    gt: Any,
+    title: Optional[str],
+    subtitle: Optional[str],
+    notes: Optional[Sequence[str]],
+    template: Optional[str],
+    apply_theme: bool,
+) -> "gt_pkg.GT":
     df = rt.to_dataframe().reset_index().rename(columns={"index": ""})
     # The first column is the variable label (empty header in to_dataframe).
     # Rename to a placeholder so GT can target it as a rowname column.
@@ -367,21 +377,29 @@ def _from_regtable(rt, *, gt, title, subtitle, notes, template,
     eff_template = template if template is not None else rt.template
     if apply_theme and eff_template:
         g = _apply_journal_theme(g, eff_template)
-    return g
+    return cast("gt_pkg.GT", g)
 
 
-def _from_paper_tables(pt, *, gt, title, subtitle, notes, template,
-                        apply_theme):
+def _from_paper_tables(
+    pt: Any,
+    *,
+    gt: Any,
+    title: Optional[str],
+    subtitle: Optional[str],
+    notes: Optional[Sequence[str]],
+    template: Optional[str],
+    apply_theme: bool,
+) -> "gt_pkg.GT":
     """Flatten multi-panel PaperTables into a row-grouped GT."""
     panels = pt.panels()  # ordered dict-like
     if not panels:
         # Nothing to render — return an empty GT for predictability.
-        return gt.GT(pd.DataFrame())
+        return cast("gt_pkg.GT", gt.GT(pd.DataFrame()))
 
     # Build a long DataFrame with a "_panel" column that GT will
     # promote to row groups. PaperTables panels can have different
     # column sets — we union them, fill missing with empty strings.
-    frames: List[pd.DataFrame] = []
+    frames: list[pd.DataFrame] = []
     for panel_name, panel in panels.items():
         sub = panel.copy()
         sub.insert(0, "_panel", panel_name)
@@ -401,18 +419,29 @@ def _from_paper_tables(pt, *, gt, title, subtitle, notes, template,
                 g = g.tab_source_note(source_note=str(n))
     if apply_theme and template:
         g = _apply_journal_theme(g, template)
-    return g
+    return cast("gt_pkg.GT", g)
 
 
-def _from_dataframe(df, *, gt, title, subtitle, notes, template,
-                     apply_theme, rowname_col):
+def _from_dataframe(
+    df: Any,
+    *,
+    gt: Any,
+    title: Optional[str],
+    subtitle: Optional[str],
+    notes: Optional[Sequence[str]],
+    template: Optional[str],
+    apply_theme: bool,
+    rowname_col: Optional[str],
+) -> "gt_pkg.GT":
     if not isinstance(df, pd.DataFrame):
         raise TypeError(
             f"Expected DataFrame, got {type(df).__name__}"
         )
     g = (
-        gt.GT(df.reset_index(drop=False) if rowname_col is None else df,
-              rowname_col=rowname_col)
+        gt.GT(
+            df.reset_index(drop=False) if rowname_col is None else df,
+            rowname_col=rowname_col,
+        )
     )
     if title:
         g = g.tab_header(title=title, subtitle=subtitle)
@@ -422,4 +451,4 @@ def _from_dataframe(df, *, gt, title, subtitle, notes, template,
                 g = g.tab_source_note(source_note=str(n))
     if apply_theme and template:
         g = _apply_journal_theme(g, template)
-    return g
+    return cast("gt_pkg.GT", g)
