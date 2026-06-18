@@ -45,6 +45,7 @@ def test_rdit_numeric_basic_properties():
     assert 0.0 <= res.pvalue <= 1.0
     assert res.ci[0] < res.ci[1]
     assert res.model_info["bandwidth"] > 0
+    assert res.model_info["bandwidth_auto"] is True
     assert res.model_info["n_eff"] > 0
     assert res.model_info["max_lag_hac"] >= 1
     assert abs(res.estimate - 2.0) < 2.0
@@ -54,6 +55,7 @@ def test_rdit_manual_bandwidth_and_quadratic():
     df = _make_numeric_rdit()
     res = sp.rdit(df, y="y", time="t", cutoff=200.0, h=60.0, p=2)
     assert res.model_info["bandwidth"] == pytest.approx(60.0)
+    assert res.model_info["bandwidth_auto"] is False
     assert res.model_info["polynomial_order"] == 2
     assert res.detail is not None and len(res.detail) == 200
 

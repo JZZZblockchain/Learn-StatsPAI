@@ -307,3 +307,76 @@ class TestBiprobitRho:
         r = biprobit(self._make(99, False), y1="y1", y2="y2", x1=["x1"], x2=["x2"])
         assert abs(r.model_info["rho"]) < 0.1
         assert r.model_info["rho_test_p"] > 0.05  # independence not rejected
+
+
+# --------------------------------------------------------------------------
+# Parametric AFT survival: result must expose the standard accessors
+# (regression test: AFTResult.params was None, scale SE was discarded).
+# --------------------------------------------------------------------------
+class TestAFTAccessors:
+    def _df(self, seed=20260617, n=2000):
+        rng = np.random.default_rng(seed)
+        x = rng.normal(size=n)
+        ev = np.log(-np.log(rng.uniform(size=n)))
+        t = np.exp(1.0 + 0.5 * x + 0.8 * ev)
+        return pd.DataFrame({"t": t, "x": x, "event": np.ones(n, dtype=int)})
+
+    def test_params_exposed(self):
+        r = sp.aft(formula="t + event ~ x", data=self._df(), family="weibull")
+        assert r.params is not None
+        assert list(r.params.index) == ["Intercept", "x", "log(sigma)"]
+        assert r.params["x"] == pytest.approx(0.5, abs=0.1)
+
+    def test_std_errors_and_pvalues(self):
+        r = sp.aft(formula="t + event ~ x", data=self._df(), family="weibull")
+        assert list(r.std_errors.index) == list(r.params.index)
+        assert (r.std_errors > 0).all()  # incl. the recovered log(sigma) SE
+        assert r.pvalues["x"] < 1e-3
+
+    def test_exponential_has_no_log_sigma(self):
+        r = sp.aft(formula="t + event ~ x", data=self._df(), family="exponential")
+        assert "log(sigma)" not in r.params.index
+        assert list(r.params.index) == ["Intercept", "x"]
+
+    def test_matches_survreg(self):
+        df = self._df()
+        ra = sp.aft(formula="t + event ~ x", data=df, family="weibull")
+        rs = sp.survreg(
+            formula="t ~ x",
+            data=df,
+            duration="t",
+            event="event",
+            dist="weibull",
+        )
+        # two independent Weibull AFT implementations must agree
+        assert ra.params["x"] == pytest.approx(float(rs.params["x"]), abs=1e-3)
+        assert ra.std_errors["x"] == pytest.approx(float(rs.std_errors["x"]), abs=1e-3)
+
+
+# --------------------------------------------------------------------------
+# Cox frailty: result must expose the standard accessors too
+# (regression test: FrailtyResult.params was not exposed).
+# --------------------------------------------------------------------------
+class TestFrailtyAccessors:
+    def _df(self, seed=20260617, n=1500, g=40):
+        rng = np.random.default_rng(seed)
+        x = rng.normal(size=n)
+        grp = rng.integers(0, g, size=n)
+        b = rng.normal(0, 0.5, g)
+        t = rng.exponential(np.exp(-(0.5 * x + b[grp])))
+        c = rng.exponential(2.0, n)
+        return pd.DataFrame(
+            {"t": np.minimum(t, c), "x": x, "event": (t <= c).astype(int), "grp": grp}
+        )
+
+    def test_params_exposed(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            r = sp.cox_frailty(formula="t + event ~ x", data=self._df(), cluster="grp")
+        assert r.params is not None
+        assert "x" in r.params.index
+        assert list(r.std_errors.index) == list(r.params.index)
+        assert (r.std_errors > 0).all()
+        assert r.pvalues["x"] < 0.05
