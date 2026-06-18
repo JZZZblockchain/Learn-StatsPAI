@@ -561,10 +561,7 @@
         },
         "covariates": {
           "description": "Covariate matrix, DataFrame, or column names.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "string"
         },
         "learners": {
           "default": [
@@ -574,11 +571,8 @@
             "r",
             "dr"
           ],
-          "description": "learners parameter (Sequence[str]).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "learners parameter (LearnersArg).",
+          "type": "string"
         },
         "n_bootstrap": {
           "default": 200,
@@ -1000,7 +994,7 @@
           "type": "number"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         }
       },
@@ -8998,18 +8992,15 @@
             12,
             9
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (tuple[float, float]).",
+          "type": "number"
         },
         "result": {
           "description": "Result from ``causal_impact()``.",
           "type": "string"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "type": {
@@ -14916,7 +14907,7 @@
           "type": "integer"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "treat": {

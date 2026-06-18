@@ -6,7 +6,7 @@ envelopes, result-handle caching, output enrichment, manifest merge).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -140,13 +140,13 @@ def tool_manifest(*, curated_only: bool = False) -> List[Dict[str, Any]]:
 # Dispatch
 # ---------------------------------------------------------------------------
 
-def _resolve_fn(fn_name: str) -> Callable:
+def _resolve_fn(fn_name: str) -> Callable[..., Any]:
     """Import and return the statspai callable for the given name."""
     import statspai as sp
     fn = getattr(sp, fn_name, None)
     if fn is None:
         raise ValueError(f"Tool {fn_name!r} not found on statspai.")
-    return fn
+    return cast(Callable[..., Any], fn)
 
 
 def execute_tool(name: str,
@@ -249,7 +249,7 @@ def execute_tool(name: str,
     if data is not None:
         kwargs['data'] = data
 
-    def _serialize(result_obj):
+    def _serialize(result_obj: Any) -> Any:
         """Invoke ``serialize`` with ``detail=`` when supported.
 
         Custom serializers in TOOL_REGISTRY (e.g. for ``causal``,
@@ -285,8 +285,9 @@ def execute_tool(name: str,
             'tool': name,
             'arguments': {k: v for k, v in arguments.items()
                           if not isinstance(v, pd.DataFrame)},
-            'remediation': _remediate(e, context={'tool': name,
-                                                   'arguments': arguments}),
+            'remediation': _remediate(
+                e, context={'tool': name, 'arguments': arguments},
+            ),
         }
         # Surface the structured StatsPAIError payload alongside the
         # legacy fields so MCP-mediated agents can branch on

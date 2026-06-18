@@ -70,7 +70,47 @@ import os
 import traceback
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, TextIO, cast
+
+from ._data_loader import (
+    DEFAULT_MAX_DATA_BYTES as _DEFAULT_MAX_DATA_BYTES,
+    max_data_bytes as _max_data_bytes,
+    is_remote_url as _is_remote_url,
+    load_dataframe as _load_dataframe,
+)
+from ._errors import (
+    RpcError as _RpcError,
+    InvalidParamsError as _InvalidParamsError,
+    ResourceNotFoundError as _ResourceNotFoundError,
+)
+from ._prompts import (
+    PROMPTS as _PROMPTS,
+    SafeDict as _SafeDict,
+    handle_prompts_list as _prompts_list_impl,
+    handle_prompts_get as _prompts_get_impl,
+)
+from ._resources import (
+    FUNCTION_URI_PREFIX as _FUNCTION_URI_PREFIX,
+    RESULT_URI_PREFIX as _RESULT_URI_PREFIX,
+    catalog_text as _catalog_text_impl,
+    functions_index as _functions_index,
+    function_detail as _function_detail,
+    handle_resources_list as _handle_resources_list,
+    handle_resources_read as _resources_read_impl,
+    handle_resources_templates_list as _handle_resources_templates_list,
+)
+
+_PRIVATE_COMPAT_EXPORTS = (
+    _DEFAULT_MAX_DATA_BYTES,
+    _max_data_bytes,
+    _is_remote_url,
+    _FUNCTION_URI_PREFIX,
+    _RESULT_URI_PREFIX,
+    _functions_index,
+    _function_detail,
+    _PROMPTS,
+    _SafeDict,
+)
 
 
 #: Protocol revision this server *prefers* (the latest it implements).
@@ -110,11 +150,6 @@ SERVER_NAME = "statspai"
 # without forming a circular import through ``mcp_server``. The
 # underscore-prefixed aliases preserve the v1.x private surface for
 # tests / agents that subclass.
-from ._errors import (
-    RpcError as _RpcError,
-    InvalidParamsError as _InvalidParamsError,
-    ResourceNotFoundError as _ResourceNotFoundError,
-)
 
 
 def _resolve_server_version() -> str:
@@ -137,7 +172,7 @@ def _resolve_server_version() -> str:
 SERVER_VERSION = _resolve_server_version()
 
 
-def tool_manifest(*args, **kwargs):
+def tool_manifest(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     """Lazy proxy for the agent tool manifest.
 
     Keeping this import lazy matters for MCP cold start: the live
@@ -148,7 +183,7 @@ def tool_manifest(*args, **kwargs):
     return _tool_manifest(*args, **kwargs)
 
 
-def execute_tool(*args, **kwargs):
+def execute_tool(*args: Any, **kwargs: Any) -> Dict[str, Any]:
     """Lazy proxy for runtime tool dispatch."""
     from .tools import execute_tool as _execute_tool
     return _execute_tool(*args, **kwargs)
@@ -356,14 +391,19 @@ _DETAIL_LEVELS = ("minimal", "standard", "agent")
 #: hand-curated list only carries entries the registry can't reach
 #: (e.g. tools backed by an auto-generated stub or whose dataframe
 #: dependency was added after the schema was frozen).
-_DATALESS_OVERRIDES = frozenset({"honest_did", "sensitivity",
-                                  "audit_result", "brief_result",
-                                  "interpret_result",
-                                  "sensitivity_from_result",
-                                  "honest_did_from_result",
-                                  "plot_from_result",
-                                  "bibtex",
-                                  "from_stata", "from_r"})
+_DATALESS_OVERRIDES = frozenset({
+    "honest_did",
+    "sensitivity",
+    "audit_result",
+    "brief_result",
+    "interpret_result",
+    "sensitivity_from_result",
+    "honest_did_from_result",
+    "plot_from_result",
+    "bibtex",
+    "from_stata",
+    "from_r",
+})
 
 
 #: Backwards-compatible alias for the old hand-curated set. New code
@@ -526,7 +566,7 @@ def _schema_snapshot_dirs() -> List[Path]:
 
 
 @lru_cache(maxsize=1)
-def _load_schema_snapshot() -> Optional[Dict[str, Any]]:
+def _load_schema_snapshot() -> Optional[Dict[str, List[Dict[str, Any]]]]:
     """Load the committed import-free schema bundle when it is available.
 
     The source tree ships ``schemas/tools.json`` + ``schemas/functions.json``
@@ -553,7 +593,10 @@ def _load_schema_snapshot() -> Optional[Dict[str, Any]]:
         except (OSError, json.JSONDecodeError, TypeError):
             continue
         if isinstance(tools, list) and isinstance(functions, list):
-            return {"tools": tools, "functions": functions}
+            return {
+                "tools": cast(List[Dict[str, Any]], tools),
+                "functions": cast(List[Dict[str, Any]], functions),
+            }
     return None
 
 
@@ -580,10 +623,11 @@ def _snapshot_dataless_tool_names() -> Optional["frozenset[str]"]:
         props = params.get("properties") or {}
         if "data" in required and "data" in props:
             data_bound.add(name)
-    tool_names = {
-        t.get("name") for t in snapshot["tools"]
-        if isinstance(t, dict) and isinstance(t.get("name"), str)
-    }
+    tool_names: "set[str]" = set()
+    for tool in snapshot["tools"]:
+        name = tool.get("name")
+        if isinstance(name, str):
+            tool_names.add(name)
     return frozenset(
         name for name in tool_names
         if name in _DATALESS_OVERRIDES or name not in data_bound
@@ -781,16 +825,9 @@ def _clear_mcp_caches() -> None:
             clear()
 
 
-
 # Data-file loading moved to ``_data_loader``. The shim below
 # preserves the v1.x private names tests + downstream callers
 # reach for.
-from ._data_loader import (
-    DEFAULT_MAX_DATA_BYTES as _DEFAULT_MAX_DATA_BYTES,
-    max_data_bytes as _max_data_bytes,
-    is_remote_url as _is_remote_url,
-    load_dataframe as _load_dataframe,
-)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -814,23 +851,13 @@ from ._data_loader import (
 # Resource catalog / function detail / templates moved to
 # ``_resources``. The shim below preserves the v1.x private names
 # the test suite + downstream callers reach for.
-from ._resources import (
-    FUNCTION_URI_PREFIX as _FUNCTION_URI_PREFIX,
-    RESULT_URI_PREFIX as _RESULT_URI_PREFIX,
-    catalog_text as _catalog_text_impl,
-    functions_index as _functions_index,
-    function_detail as _function_detail,
-    handle_resources_list as _handle_resources_list,
-    handle_resources_read as _resources_read_impl,
-    handle_resources_templates_list as _handle_resources_templates_list,
-)
 
 
-def _catalog_text():
+def _catalog_text() -> str:
     return _catalog_text_impl(SERVER_VERSION)
 
 
-def _handle_resources_read(params):
+def _handle_resources_read(params: Dict[str, Any]) -> Dict[str, Any]:
     return _resources_read_impl(
         params,
         json_default=_json_default,
@@ -914,17 +941,20 @@ def _handle_tools_list(params: Dict[str, Any]) -> Dict[str, Any]:
 #: by a unit test calling ``handle_request`` directly) — in that case
 #: progress notifications are dropped silently, which is the right
 #: thing for in-process tests.
-_PROGRESS_SINK = None
+_PROGRESS_SINK: Optional[TextIO] = None
 
 
-def _make_progress_drain():
+def _make_progress_drain() -> Callable[[Dict[str, Any]], None]:
     """Return a callable that writes a progress notification to the
     active stdio sink. Returns a no-op if no sink is registered."""
     sink = _PROGRESS_SINK
     if sink is None:
-        return lambda payload: None
+        def _noop(payload: Dict[str, Any]) -> None:
+            return None
 
-    def _drain(payload):
+        return _noop
+
+    def _drain(payload: Dict[str, Any]) -> None:
         msg = json.dumps(_clean_floats({
             "jsonrpc": "2.0",
             "method": "notifications/progress",
@@ -967,9 +997,11 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     df = None
     if data_path:
         try:
-            df = _load_dataframe(data_path,
-                                  columns=data_columns,
-                                  sample_n=data_sample_n)
+            df = _load_dataframe(
+                data_path,
+                columns=data_columns,
+                sample_n=data_sample_n,
+            )
         except (FileNotFoundError, ValueError) as e:
             # Surface as -32602 rather than a generic -32000 — a
             # bad/missing path is a caller-supplied params problem.
@@ -989,14 +1021,17 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     # see no behaviour change.
     from ._runner import run_with_progress, tool_timeout
 
-    def _do():
-        return execute_tool(name, arguments,
-                             data=df,
-                             detail=detail,
-                             result_id=result_id,
-                             as_handle=as_handle)
+    def _do() -> Dict[str, Any]:
+        return execute_tool(
+            name,
+            arguments,
+            data=df,
+            detail=detail,
+            result_id=result_id,
+            as_handle=as_handle,
+        )
 
-    drain = _make_progress_drain() if progress_token is not None else None
+    drain = _make_progress_drain()
 
     ok, payload = run_with_progress(
         _do,
@@ -1061,8 +1096,6 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════
 #  Prompts: canned workflow templates
 # ═══════════════════════════════════════════════════════════════════════
@@ -1077,21 +1110,13 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
 # - ``prompts/get`` takes {name, arguments} and returns
 #   {description, messages: [{role, content}]}
 
-from ._prompts import (
-    PROMPTS as _PROMPTS,
-    SafeDict as _SafeDict,
-    handle_prompts_list as _prompts_list_impl,
-    handle_prompts_get as _prompts_get_impl,
-)
 
-
-def _handle_prompts_list(params):
+def _handle_prompts_list(params: Dict[str, Any]) -> Dict[str, Any]:
     return _prompts_list_impl(params)
 
 
-def _handle_prompts_get(params):
+def _handle_prompts_get(params: Dict[str, Any]) -> Dict[str, Any]:
     return _prompts_get_impl(params, _InvalidParamsError, _ResourceNotFoundError)
-
 
 
 _METHODS = {
@@ -1168,8 +1193,12 @@ def handle_request(line: str) -> Optional[str]:
         # ``"<class>: <msg>"`` is enough for the agent to remediate in
         # the common case.
         data = None
-        if os.environ.get("STATSPAI_MCP_DEBUG", "").strip() in {"1", "true",
-                                                                  "True", "yes"}:
+        if os.environ.get("STATSPAI_MCP_DEBUG", "").strip() in {
+            "1",
+            "true",
+            "True",
+            "yes",
+        }:
             data = {"traceback": traceback.format_exc()}
         return _jsonrpc_error(
             request_id, -32000, f"{type(exc).__name__}: {exc}",
@@ -1184,7 +1213,7 @@ def handle_request(line: str) -> Optional[str]:
 
 def serve_stdio(
     stdin: Optional[Iterable[str]] = None,
-    stdout=None,
+    stdout: Optional[TextIO] = None,
 ) -> None:
     """Run the JSON-RPC loop on stdio until stdin closes.
 

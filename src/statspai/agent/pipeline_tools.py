@@ -36,7 +36,7 @@ more useful than a hard crash midway.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -62,18 +62,30 @@ PIPELINE_TOOL_SPECS: List[Dict[str, Any]] = [
             'type': 'object',
             'properties': {
                 'y': {'type': 'string', 'description': 'Outcome column.'},
-                'treat': {'type': 'string',
-                          'description': 'Binary treatment indicator.'},
+                'treat': {
+                    'type': 'string',
+                    'description': 'Binary treatment indicator.',
+                },
                 'time': {'type': 'string', 'description': 'Time column.'},
-                'id': {'type': 'string',
-                       'description': 'Unit id (panel) — required for staggered-DID.'},
-                'cohort': {'type': 'string',
-                           'description': ('First-treatment cohort column. '
-                                            'When supplied, dispatches '
-                                            'callaway_santanna instead of '
-                                            'classic 2x2 did.')},
-                'covariates': {'type': 'array',
-                                'items': {'type': 'string'}},
+                'id': {
+                    'type': 'string',
+                    'description': (
+                        'Unit id (panel) — required for staggered-DID.'
+                    ),
+                },
+                'cohort': {
+                    'type': 'string',
+                    'description': (
+                        'First-treatment cohort column. '
+                        'When supplied, dispatches '
+                        'callaway_santanna instead of '
+                        'classic 2x2 did.'
+                    ),
+                },
+                'covariates': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
             },
             'required': ['y', 'treat', 'time'],
         },
@@ -132,14 +144,22 @@ def pipeline_tool_manifest() -> List[Dict[str, Any]]:
 # ----------------------------------------------------------------------
 
 
-def _stage(name: str, status: str = "ok", summary: str = "",
-           **extra) -> Dict[str, Any]:
+def _stage(
+    name: str,
+    status: str = "ok",
+    summary: str = "",
+    **extra: Any,
+) -> Dict[str, Any]:
     out = {"name": name, "status": status, "summary": summary}
     out.update(extra)
     return out
 
 
-def _safe_call(fn, *args, **kwargs):
+def _safe_call(
+    fn: Callable[..., Any],
+    *args: Any,
+    **kwargs: Any,
+) -> Tuple[Any, Optional[str]]:
     """Invoke ``fn`` and return ``(result, error_msg_or_none)``."""
     try:
         return fn(*args, **kwargs), None
@@ -174,10 +194,13 @@ def _short_estimate(obj: Any) -> str:
 # pipeline_did
 # ----------------------------------------------------------------------
 
-def _pipeline_did(arguments: Dict[str, Any],
-                   data: Optional[pd.DataFrame],
-                   *, detail: str,
-                   as_handle: bool) -> Dict[str, Any]:
+def _pipeline_did(
+    arguments: Dict[str, Any],
+    data: Optional[pd.DataFrame],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     if data is None:
         return {'error': 'pipeline_did requires data_path'}
     import statspai as sp
@@ -207,13 +230,17 @@ def _pipeline_did(arguments: Dict[str, Any],
         else:
             verdict = getattr(result, 'verdict', None) or (
                 result.get('verdict') if isinstance(result, dict) else None)
-            stages.append(_stage('preflight',
-                                   'ok' if verdict in {'PASS', 'WARN', None}
-                                   else 'failed',
-                                   f"verdict={verdict}"))
+            stages.append(
+                _stage(
+                    'preflight',
+                    'ok' if verdict in {'PASS', 'WARN', None} else 'failed',
+                    f"verdict={verdict}",
+                )
+            )
     else:
-        stages.append(_stage('preflight', 'skipped',
-                              'sp.preflight not available'))
+        stages.append(
+            _stage('preflight', 'skipped', 'sp.preflight not available')
+        )
 
     # Stage 2: estimator dispatch
     if cohort and unit_id:
@@ -244,14 +271,19 @@ def _pipeline_did(arguments: Dict[str, Any],
         }
 
     primary_summary = _short_estimate(primary)
-    stages.append(_stage('estimate', 'ok',
-                          f"{method}: {primary_summary}",
-                          method=method))
+    stages.append(
+        _stage('estimate', 'ok', f"{method}: {primary_summary}", method=method)
+    )
 
     # Cache the primary result so follow-up tools chain via result_id
-    primary_rid = RESULT_CACHE.put(primary, tool=method,
-                                     arguments={k: v for k, v in arguments.items()
-                                                 if not isinstance(v, pd.DataFrame)})
+    primary_rid = RESULT_CACHE.put(
+        primary,
+        tool=method,
+        arguments={
+            k: v for k, v in arguments.items()
+            if not isinstance(v, pd.DataFrame)
+        },
+    )
 
     # Stage 3: audit
     audit_fn = getattr(sp, 'audit', None)
@@ -263,8 +295,13 @@ def _pipeline_did(arguments: Dict[str, Any],
         else:
             audit_payload = _audit_to_dict(report)
             n_missing = _count_missing(audit_payload)
-            stages.append(_stage('audit', 'ok',
-                                   f"{n_missing} missing high-importance checks"))
+            stages.append(
+                _stage(
+                    'audit',
+                    'ok',
+                    f"{n_missing} missing high-importance checks",
+                )
+            )
     else:
         stages.append(_stage('audit', 'skipped', 'sp.audit not available'))
 
@@ -277,35 +314,57 @@ def _pipeline_did(arguments: Dict[str, Any],
         if betas is not None and sigma is not None:
             honest, err = _safe_call(
                 honest_fn,
-                betas=list(betas), sigma=_listify_sigma(sigma),
-                num_pre_periods=int(n_pre), num_post_periods=int(n_post),
+                betas=list(betas),
+                sigma=_listify_sigma(sigma),
+                num_pre_periods=int(n_pre),
+                num_post_periods=int(n_post),
                 method='SD',
             )
             if err:
                 stages.append(_stage('honest_did', 'failed', err))
             else:
                 honest_payload = _light_serialize(honest)
-                stages.append(_stage('honest_did', 'ok',
-                                       _short_estimate(honest) or 'computed'))
+                stages.append(
+                    _stage(
+                        'honest_did',
+                        'ok',
+                        _short_estimate(honest) or 'computed',
+                    )
+                )
         else:
-            stages.append(_stage('honest_did', 'skipped',
-                                   'no event-study betas in primary result'))
+            stages.append(
+                _stage(
+                    'honest_did',
+                    'skipped',
+                    'no event-study betas in primary result',
+                )
+            )
 
     # Stage 5: Bacon decomposition (only meaningful for staggered TWFE)
     if cohort and unit_id:
         bacon_fn = getattr(sp, 'bacon_decomposition', None)
         if bacon_fn is not None:
-            bacon, err = _safe_call(bacon_fn, data,
-                                      y=y, treat=treat,
-                                      time=time, id=unit_id)
+            bacon, err = _safe_call(
+                bacon_fn, data, y=y, treat=treat, time=time, id=unit_id,
+            )
             if err:
                 stages.append(_stage('bacon_decomposition', 'failed', err))
             else:
-                stages.append(_stage('bacon_decomposition', 'ok',
-                                       'computed weight decomposition'))
+                stages.append(
+                    _stage(
+                        'bacon_decomposition',
+                        'ok',
+                        'computed weight decomposition',
+                    )
+                )
         else:
-            stages.append(_stage('bacon_decomposition', 'skipped',
-                                   'sp.bacon_decomposition not available'))
+            stages.append(
+                _stage(
+                    'bacon_decomposition',
+                    'skipped',
+                    'sp.bacon_decomposition not available',
+                )
+            )
 
     # Stage 6: brief
     brief_fn = getattr(sp, 'brief', None)
@@ -319,12 +378,14 @@ def _pipeline_did(arguments: Dict[str, Any],
             stages.append(_stage('brief', 'skipped', err or 'no brief'))
 
     # Compose narrative
-    narrative = _did_narrative(method=method,
-                                primary_summary=primary_summary,
-                                stages=stages,
-                                audit_payload=audit_payload,
-                                honest_payload=honest_payload,
-                                brief_text=brief_text)
+    narrative = _did_narrative(
+        method=method,
+        primary_summary=primary_summary,
+        stages=stages,
+        audit_payload=audit_payload,
+        honest_payload=honest_payload,
+        brief_text=brief_text,
+    )
 
     out: Dict[str, Any] = {
         'pipeline': 'pipeline_did',
@@ -348,11 +409,16 @@ def _pipeline_did(arguments: Dict[str, Any],
         {'tool': 'sensitivity_from_result',
          'arguments': {'result_id': primary_rid, 'method': 'evalue'},
          'rationale': 'E-value bound on omitted-confounder strength.'},
-        {'tool': 'spec_curve',
-         'arguments': {'y': y, 'treatment': treat,
-                        'covariates': covariates,
-                        'model_family': 'did'},
-         'rationale': 'Specification curve over researcher degrees of freedom.'},
+        {
+            'tool': 'spec_curve',
+            'arguments': {
+                'y': y,
+                'treatment': treat,
+                'covariates': covariates,
+                'model_family': 'did',
+            },
+            'rationale': 'Specification curve over researcher degrees of freedom.',
+        },
     ]
 
     # Citations from the enrichment layer
@@ -370,7 +436,7 @@ def _pipeline_did(arguments: Dict[str, Any],
     return out
 
 
-def _audit_to_dict(report) -> Dict[str, Any]:
+def _audit_to_dict(report: Any) -> Dict[str, Any]:
     if isinstance(report, dict):
         return dict(report)
     to_dict = getattr(report, 'to_dict', None)
@@ -394,7 +460,7 @@ def _count_missing(audit_payload: Dict[str, Any]) -> int:
                and it.get('importance') in {'high', 'critical'})
 
 
-def _light_serialize(obj) -> Dict[str, Any]:
+def _light_serialize(obj: Any) -> Dict[str, Any]:
     try:
         from .tools import _default_serializer
         d = _default_serializer(obj, detail="standard")
@@ -405,12 +471,15 @@ def _light_serialize(obj) -> Dict[str, Any]:
     return {'value': str(obj)[:200]}
 
 
-def _did_narrative(*, method: str,
-                    primary_summary: str,
-                    stages: List[Dict[str, Any]],
-                    audit_payload: Dict[str, Any],
-                    honest_payload: Optional[Dict[str, Any]],
-                    brief_text: str) -> str:
+def _did_narrative(
+    *,
+    method: str,
+    primary_summary: str,
+    stages: List[Dict[str, Any]],
+    audit_payload: Dict[str, Any],
+    honest_payload: Optional[Dict[str, Any]],
+    brief_text: str,
+) -> str:
     lines: List[str] = []
     lines.append(f"# DID workflow ({method})")
     lines.append("")
@@ -428,13 +497,15 @@ def _did_narrative(*, method: str,
     lines.append("")
     n_missing = _count_missing(audit_payload)
     if n_missing:
-        lines.append(f"## Robustness gaps")
-        lines.append(f"{n_missing} high-importance checks flagged as missing. "
-                     f"See the `audit` field for details and the `next_calls` "
-                     f"list for ready-to-dispatch follow-ups.")
+        lines.append("## Robustness gaps")
+        lines.append(
+            f"{n_missing} high-importance checks flagged as missing. "
+            "See the `audit` field for details and the `next_calls` "
+            "list for ready-to-dispatch follow-ups."
+        )
         lines.append("")
     if honest_payload:
-        lines.append(f"## Honest-DID sensitivity")
+        lines.append("## Honest-DID sensitivity")
         est = _short_estimate_dict(honest_payload)
         if est:
             lines.append(f"Rambachan-Roth (2023) SD-bounded CI: {est}")
@@ -458,10 +529,13 @@ def _short_estimate_dict(d: Dict[str, Any]) -> str:
 # pipeline_iv
 # ----------------------------------------------------------------------
 
-def _pipeline_iv(arguments: Dict[str, Any],
-                  data: Optional[pd.DataFrame],
-                  *, detail: str,
-                  as_handle: bool) -> Dict[str, Any]:
+def _pipeline_iv(
+    arguments: Dict[str, Any],
+    data: Optional[pd.DataFrame],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     if data is None:
         return {'error': 'pipeline_iv requires data_path'}
     formula = arguments.get('formula')
@@ -494,12 +568,26 @@ def _pipeline_iv(arguments: Dict[str, Any],
         if err:
             stages.append(_stage('effective_f_test', 'failed', err))
         else:
-            fF = float(getattr(ftest, 'F', getattr(ftest, 'statistic',
-                                                      getattr(ftest, 'value', float('nan')))))
+            fF = float(
+                getattr(
+                    ftest,
+                    'F',
+                    getattr(
+                        ftest,
+                        'statistic',
+                        getattr(ftest, 'value', float('nan')),
+                    ),
+                )
+            )
             stages.append(_stage('effective_f_test', 'ok', f"F={fF:.2f}"))
     else:
-        stages.append(_stage('effective_f_test', 'skipped',
-                              'sp.effective_f_test unavailable'))
+        stages.append(
+            _stage(
+                'effective_f_test',
+                'skipped',
+                'sp.effective_f_test unavailable',
+            )
+        )
 
     # Anderson-Rubin
     ar_fn = getattr(sp, 'anderson_rubin_test', None)
@@ -512,8 +600,13 @@ def _pipeline_iv(arguments: Dict[str, Any],
             ar_payload = _light_serialize(ar)
             stages.append(_stage('anderson_rubin_test', 'ok', 'computed'))
     else:
-        stages.append(_stage('anderson_rubin_test', 'skipped',
-                              'sp.anderson_rubin_test unavailable'))
+        stages.append(
+            _stage(
+                'anderson_rubin_test',
+                'skipped',
+                'sp.anderson_rubin_test unavailable',
+            )
+        )
 
     # E-value
     ev_fn = getattr(sp, 'evalue_from_result', None) or getattr(sp, 'evalue', None)
@@ -524,11 +617,15 @@ def _pipeline_iv(arguments: Dict[str, Any],
             stages.append(_stage('evalue', 'failed', err))
         else:
             ev_payload = _light_serialize(ev)
-            stages.append(_stage('evalue', 'ok',
-                                   _short_estimate_dict(ev_payload) or 'computed'))
+            stages.append(
+                _stage(
+                    'evalue',
+                    'ok',
+                    _short_estimate_dict(ev_payload) or 'computed',
+                )
+            )
 
-    narrative_lines = [f"# IV workflow", "",
-                        f"**Primary estimate**: {summary}", ""]
+    narrative_lines = ["# IV workflow", "", f"**Primary estimate**: {summary}", ""]
     if fF is not None:
         narrative_lines.append(f"First-stage effective F = {fF:.2f}")
         if fF < 10:
@@ -580,10 +677,13 @@ def _pipeline_iv(arguments: Dict[str, Any],
 # pipeline_rd
 # ----------------------------------------------------------------------
 
-def _pipeline_rd(arguments: Dict[str, Any],
-                  data: Optional[pd.DataFrame],
-                  *, detail: str,
-                  as_handle: bool) -> Dict[str, Any]:
+def _pipeline_rd(
+    arguments: Dict[str, Any],
+    data: Optional[pd.DataFrame],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     if data is None:
         return {'error': 'pipeline_rd requires data_path'}
     y = arguments.get('y')
@@ -623,12 +723,20 @@ def _pipeline_rd(arguments: Dict[str, Any],
             p = getattr(dens, 'p_value', getattr(dens, 'pvalue', None))
             if p is None and isinstance(dens, dict):
                 p = dens.get('p_value') or dens.get('pvalue')
-            stages.append(_stage('rddensity', 'ok',
-                                   f"density-discontinuity p={p:.3g}"
-                                   if p is not None else "computed"))
+            stages.append(
+                _stage(
+                    'rddensity',
+                    'ok',
+                    (
+                        f"density-discontinuity p={p:.3g}"
+                        if p is not None else "computed"
+                    ),
+                )
+            )
     else:
-        stages.append(_stage('rddensity', 'skipped',
-                              'sp.rddensity unavailable'))
+        stages.append(
+            _stage('rddensity', 'skipped', 'sp.rddensity unavailable')
+        )
 
     # rdsensitivity (bandwidth/kernel)
     sens_fn = getattr(sp, 'rdbwsensitivity', None)
@@ -657,28 +765,39 @@ def _pipeline_rd(arguments: Dict[str, Any],
                                 bbox_inches="tight")
                     plt.close(fig)
                     plot_png = buf.getvalue()
-                    stages.append(_stage('rdplot', 'ok',
-                                           f"PNG ({len(plot_png)} bytes)"))
+                    stages.append(
+                        _stage('rdplot', 'ok', f"PNG ({len(plot_png)} bytes)")
+                    )
                 else:
-                    stages.append(_stage('rdplot', 'skipped',
-                                           'plot helper returned no figure'))
+                    stages.append(
+                        _stage(
+                            'rdplot',
+                            'skipped',
+                            'plot helper returned no figure',
+                        )
+                    )
             else:
                 stages.append(_stage('rdplot', 'failed', err))
         except Exception as e:
-            stages.append(_stage('rdplot', 'skipped',
-                                   f'matplotlib unavailable: {e}'))
+            stages.append(
+                _stage('rdplot', 'skipped', f'matplotlib unavailable: {e}')
+            )
     else:
         stages.append(_stage('rdplot', 'skipped', 'sp.rdplot unavailable'))
 
     narrative_lines = [
-        f"# RD workflow", "",
-        f"**Primary estimate**: {summary}", "",
+        "# RD workflow",
+        "",
+        f"**Primary estimate**: {summary}",
+        "",
         "## Stages",
     ]
     for s in stages:
         bullet = "✓" if s['status'] == 'ok' else (
             "·" if s['status'] == 'skipped' else "✗")
-        narrative_lines.append(f"- {bullet} **{s['name']}** — {s.get('summary', '')}")
+        narrative_lines.append(
+            f"- {bullet} **{s['name']}** — {s.get('summary', '')}"
+        )
 
     out: Dict[str, Any] = {
         'pipeline': 'pipeline_rd',
@@ -722,11 +841,17 @@ def execute_pipeline_tool(
     as_handle: bool = False,
 ) -> Dict[str, Any]:
     if name == 'pipeline_did':
-        return _pipeline_did(arguments, data, detail=detail, as_handle=as_handle)
+        return _pipeline_did(
+            arguments, data, detail=detail, as_handle=as_handle,
+        )
     if name == 'pipeline_iv':
-        return _pipeline_iv(arguments, data, detail=detail, as_handle=as_handle)
+        return _pipeline_iv(
+            arguments, data, detail=detail, as_handle=as_handle,
+        )
     if name == 'pipeline_rd':
-        return _pipeline_rd(arguments, data, detail=detail, as_handle=as_handle)
+        return _pipeline_rd(
+            arguments, data, detail=detail, as_handle=as_handle,
+        )
     return {
         'error': f"unknown pipeline tool: {name!r}",
         'available_pipelines': sorted(PIPELINE_TOOL_NAMES),

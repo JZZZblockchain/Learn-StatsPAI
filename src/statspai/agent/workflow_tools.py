@@ -21,7 +21,7 @@ the MCP layer doesn't need to special-case their content blocks.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -167,9 +167,11 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
                     'type': 'string',
                     'enum': ['SD', 'RM'],
                     'default': 'SD',
-                    'description': ('SD = smoothness deviation '
-                                     '(Rambachan-Roth default); '
-                                     'RM = relative magnitude.'),
+                    'description': (
+                        'SD = smoothness deviation '
+                        '(Rambachan-Roth default); '
+                        'RM = relative magnitude.'
+                    ),
                 },
                 'e': {
                     'type': 'integer',
@@ -202,10 +204,12 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
             'properties': {
                 'result_id': {
                     'type': 'string',
-                    'description': ("Result handle. Required unless "
-                                     "you also pass a fitted result via "
-                                     "the result kwarg (programmatic "
-                                     "use)."),
+                    'description': (
+                        "Result handle. Required unless "
+                        "you also pass a fitted result via "
+                        "the result kwarg (programmatic "
+                        "use)."
+                    ),
                 },
             },
             'required': [],
@@ -225,8 +229,10 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
             'properties': {
                 'method': {
                     'type': 'string',
-                    'description': ("Estimator name: 'did', 'rd', 'iv', "
-                                     "'synth', 'matching', 'dml', …"),
+                    'description': (
+                        "Estimator name: 'did', 'rd', 'iv', "
+                        "'synth', 'matching', 'dml', …"
+                    ),
                 },
                 'y': {'type': 'string', 'description': "Outcome column."},
                 'treatment': {'type': 'string'},
@@ -235,8 +241,10 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
                 'cohort': {'type': 'string'},
                 'running_var': {'type': 'string'},
                 'instrument': {'type': 'string'},
-                'covariates': {'type': 'array',
-                                'items': {'type': 'string'}},
+                'covariates': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
             },
             'required': ['method'],
         },
@@ -294,10 +302,12 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
             'properties': {
                 'command': {
                     'type': 'string',
-                    'description': ("One Stata command, e.g. "
-                                     "'reghdfe y x, absorb(id year) "
-                                     "cluster(id)'. Multi-command lines "
-                                     "must be split by the caller."),
+                    'description': (
+                        "One Stata command, e.g. "
+                        "'reghdfe y x, absorb(id year) "
+                        "cluster(id)'. Multi-command lines "
+                        "must be split by the caller."
+                    ),
                 },
             },
             'required': ['command'],
@@ -316,9 +326,11 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
             'properties': {
                 'expression': {
                     'type': 'string',
-                    'description': ("One R expression, e.g. "
-                                     "'feols(y ~ x | id^year, "
-                                     "data=df, cluster=\"id\")'."),
+                    'description': (
+                        "One R expression, e.g. "
+                        "'feols(y ~ x | id^year, "
+                        "data=df, cluster=\"id\")'."
+                    ),
                 },
             },
             'required': ['expression'],
@@ -375,9 +387,11 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
                 'keys': {
                     'type': 'array',
                     'items': {'type': 'string'},
-                    'description': ("Bib keys to look up. Most "
-                                     "estimators advertise their key "
-                                     "in agent_card.reference."),
+                    'description': (
+                        "Bib keys to look up. Most "
+                        "estimators advertise their key "
+                        "in agent_card.reference."
+                    ),
                 },
             },
             'required': ['keys'],
@@ -442,12 +456,14 @@ def execute_workflow_tool(
         return _tool_from_r(arguments)
 
     if name == 'detect_design':
-        return _tool_detect_design(arguments, data, detail=detail,
-                                     as_handle=as_handle)
+        return _tool_detect_design(
+            arguments, data, detail=detail, as_handle=as_handle,
+        )
 
     if name == 'preflight':
-        return _tool_preflight(arguments, data, detail=detail,
-                                 as_handle=as_handle)
+        return _tool_preflight(
+            arguments, data, detail=detail, as_handle=as_handle,
+        )
 
     if name in {'audit_result', 'audit'}:
         return _tool_audit(rid_arg, detail=detail)
@@ -736,10 +752,13 @@ def _tool_interpret_result(rid: Optional[str],
     return out
 
 
-def _tool_sensitivity_from_result(rid: Optional[str],
-                                   arguments: Dict[str, Any],
-                                   *, detail: str,
-                                   as_handle: bool) -> Dict[str, Any]:
+def _tool_sensitivity_from_result(
+    rid: Optional[str],
+    arguments: Dict[str, Any],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     obj = _need_result(rid)
     if isinstance(obj, dict) and 'error' in obj:
         return obj
@@ -749,7 +768,9 @@ def _tool_sensitivity_from_result(rid: Optional[str],
     import statspai as sp
     try:
         if method == 'evalue':
-            fn = getattr(sp, 'evalue_from_result', None) or getattr(sp, 'evalue', None)
+            fn = getattr(sp, 'evalue_from_result', None) or getattr(
+                sp, 'evalue', None,
+            )
             result = fn(obj) if fn else None
         elif method == 'oster':
             fn = getattr(sp, 'oster_bounds', None)
@@ -765,11 +786,14 @@ def _tool_sensitivity_from_result(rid: Optional[str],
         from .remediation import remediate
         return {
             'error': f"{type(e).__name__}: {e}",
-            'remediation': remediate(e, context={'tool': 'sensitivity_from_result'}),
+            'remediation': remediate(
+                e, context={'tool': 'sensitivity_from_result'},
+            ),
         }
     if result is None:
-        return {'error': f"sensitivity method {method!r} not available "
-                          "in this build"}
+        return {
+            'error': f"sensitivity method {method!r} not available in this build",
+        }
 
     from .tools import _default_serializer
     out = _default_serializer(result, detail=detail)
@@ -778,16 +802,22 @@ def _tool_sensitivity_from_result(rid: Optional[str],
     out['source_result_id'] = rid
     new_rid: Optional[str] = None
     if as_handle:
-        new_rid = RESULT_CACHE.put(result, tool='sensitivity_from_result',
-                                     arguments={'source': rid, 'method': method})
+        new_rid = RESULT_CACHE.put(
+            result,
+            tool='sensitivity_from_result',
+            arguments={'source': rid, 'method': method},
+        )
         out['result_id'] = new_rid
         out['result_uri'] = f"statspai://result/{new_rid}"
     from ._enrichment import enrich_payload
     # Enrichment uses the underlying sensitivity method as the tool key
     # (evalue / oster / cinelli_hazlett / sensitivity) so citations point
     # to the correct paper.
-    enrich_key = method if method in {'evalue', 'oster_bounds',
-                                       'sensemakr', 'sensitivity'} else 'sensitivity'
+    enrich_key = (
+        method
+        if method in {'evalue', 'oster_bounds', 'sensemakr', 'sensitivity'}
+        else 'sensitivity'
+    )
     if method == 'oster':
         enrich_key = 'oster_bounds'
     elif method == 'cinelli_hazlett':
@@ -796,10 +826,13 @@ def _tool_sensitivity_from_result(rid: Optional[str],
     return out
 
 
-def _tool_honest_did_from_result(rid: Optional[str],
-                                  arguments: Dict[str, Any],
-                                  *, detail: str,
-                                  as_handle: bool) -> Dict[str, Any]:
+def _tool_honest_did_from_result(
+    rid: Optional[str],
+    arguments: Dict[str, Any],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     obj = _need_result(rid)
     if isinstance(obj, dict) and 'error' in obj:
         return obj
@@ -840,20 +873,27 @@ def _tool_honest_did_from_result(rid: Optional[str],
         betas, sigma, n_pre, n_post = _extract_event_study(obj)
         if betas is None or sigma is None:
             return {
-                'error': ("could not extract event-study coefficients + "
-                          "covariance from the cached result"),
-                'hint': ("honest_did_from_result expects a result fitted by "
-                         "sp.event_study / sp.callaway_santanna / "
-                         "sp.did_imputation / sp.sun_abraham. Run one of "
-                         "those with as_handle=true first."),
+                'error': (
+                    "could not extract event-study coefficients + "
+                    "covariance from the cached result"
+                ),
+                'hint': (
+                    "honest_did_from_result expects a result fitted by "
+                    "sp.event_study / sp.callaway_santanna / "
+                    "sp.did_imputation / sp.sun_abraham. Run one of "
+                    "those with as_handle=true first."
+                ),
                 'upstream_error': (
                     f"{type(current_api_failed).__name__}: {current_api_failed}"
                 ),
             }
-        kwargs = dict(betas=list(betas), sigma=_listify_sigma(sigma),
-                      num_pre_periods=int(n_pre),
-                      num_post_periods=int(n_post),
-                      method=legacy_method)
+        kwargs = dict(
+            betas=list(betas),
+            sigma=_listify_sigma(sigma),
+            num_pre_periods=int(n_pre),
+            num_post_periods=int(n_post),
+            method=legacy_method,
+        )
         if m_bar is not None:
             kwargs['m_bar'] = float(m_bar)
         try:
@@ -862,7 +902,9 @@ def _tool_honest_did_from_result(rid: Optional[str],
             from .remediation import remediate
             return {
                 'error': f"{type(e).__name__}: {e}",
-                'remediation': remediate(e, context={'tool': 'honest_did_from_result'}),
+                'remediation': remediate(
+                    e, context={'tool': 'honest_did_from_result'},
+                ),
             }
 
     if isinstance(result, pd.DataFrame):
@@ -885,9 +927,11 @@ def _tool_honest_did_from_result(rid: Optional[str],
     out['source_result_id'] = rid
     new_rid: Optional[str] = None
     if as_handle:
-        new_rid = RESULT_CACHE.put(result, tool='honest_did_from_result',
-                                   arguments={'source': rid, 'method': method,
-                                              'e': event_time})
+        new_rid = RESULT_CACHE.put(
+            result,
+            tool='honest_did_from_result',
+            arguments={'source': rid, 'method': method, 'e': event_time},
+        )
         out['result_id'] = new_rid
         out['result_uri'] = f"statspai://result/{new_rid}"
     from ._enrichment import enrich_payload
@@ -898,7 +942,10 @@ def _tool_honest_did_from_result(rid: Optional[str],
 def _coerce_event_study_result(obj: Any) -> Any:
     """Return an object shaped for the current ``sp.honest_did`` API."""
     detail = getattr(obj, 'detail', None)
-    if isinstance(detail, pd.DataFrame) and {'relative_time', 'att', 'se'} <= set(detail.columns):
+    if (
+        isinstance(detail, pd.DataFrame)
+        and {'relative_time', 'att', 'se'} <= set(detail.columns)
+    ):
         return obj
 
     method = str(getattr(obj, 'method', '')).lower()
@@ -911,20 +958,28 @@ def _coerce_event_study_result(obj: Any) -> Any:
     return obj
 
 
-def _extract_event_study(obj: Any):
+def _extract_event_study(obj: Any) -> Tuple[Any, Any, Any, Any]:
     """Best-effort extraction of (betas, sigma, n_pre, n_post)."""
     import numpy as np
     # Direct attribute lookup
-    betas = getattr(obj, 'event_study_betas', None) or \
-            getattr(obj, 'betas', None) or \
-            getattr(obj, 'coefficients', None)
-    sigma = getattr(obj, 'event_study_sigma', None) or \
-            getattr(obj, 'sigma', None) or \
-            getattr(obj, 'vcov', None)
-    n_pre = getattr(obj, 'num_pre_periods', None) or \
-            getattr(obj, 'n_pre', None)
-    n_post = getattr(obj, 'num_post_periods', None) or \
-             getattr(obj, 'n_post', None)
+    betas = (
+        getattr(obj, 'event_study_betas', None)
+        or getattr(obj, 'betas', None)
+        or getattr(obj, 'coefficients', None)
+    )
+    sigma = (
+        getattr(obj, 'event_study_sigma', None)
+        or getattr(obj, 'sigma', None)
+        or getattr(obj, 'vcov', None)
+    )
+    n_pre = (
+        getattr(obj, 'num_pre_periods', None)
+        or getattr(obj, 'n_pre', None)
+    )
+    n_post = (
+        getattr(obj, 'num_post_periods', None)
+        or getattr(obj, 'n_post', None)
+    )
     # Common nested shape: result.event_study has its own betas / sigma
     if betas is None or sigma is None:
         es = getattr(obj, 'event_study', None)
@@ -952,7 +1007,7 @@ def _extract_event_study(obj: Any):
     return betas_arr, sigma_arr, n_pre, n_post
 
 
-def _listify_sigma(sigma) -> List[List[float]]:
+def _listify_sigma(sigma: Any) -> List[List[float]]:
     return [[float(x) for x in row] for row in sigma]
 
 
@@ -960,10 +1015,13 @@ def _listify_sigma(sigma) -> List[List[float]]:
 # Workflow primitives that take a DataFrame
 # ----------------------------------------------------------------------
 
-def _tool_detect_design(arguments: Dict[str, Any],
-                          data: Optional[pd.DataFrame],
-                          *, detail: str,
-                          as_handle: bool) -> Dict[str, Any]:
+def _tool_detect_design(
+    arguments: Dict[str, Any],
+    data: Optional[pd.DataFrame],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     if data is None:
         return {'error': "detect_design requires data_path"}
     import statspai as sp
@@ -992,10 +1050,13 @@ def _tool_detect_design(arguments: Dict[str, Any],
     return result_dict
 
 
-def _tool_preflight(arguments: Dict[str, Any],
-                     data: Optional[pd.DataFrame],
-                     *, detail: str,
-                     as_handle: bool) -> Dict[str, Any]:
+def _tool_preflight(
+    arguments: Dict[str, Any],
+    data: Optional[pd.DataFrame],
+    *,
+    detail: str,
+    as_handle: bool,
+) -> Dict[str, Any]:
     if data is None:
         return {'error': "preflight requires data_path"}
     import statspai as sp
@@ -1034,7 +1095,7 @@ def _tool_preflight(arguments: Dict[str, Any],
 
 #: Map from result class-name patterns → plot kind. Highest-priority
 #: match wins, so order matters: more-specific patterns first.
-_PLOT_KIND_BY_CLASS: List = [
+_PLOT_KIND_BY_CLASS: List[Tuple[str, str]] = [
     ("CallawaySantannaResult", "event_study"),
     ("EventStudyResult", "event_study"),
     ("DIDResult", "event_study"),
@@ -1062,8 +1123,11 @@ def _detect_plot_kind(obj: Any) -> str:
     return "coef_plot"
 
 
-def _render_plot_png(obj: Any, kind: str,
-                      figsize=(8, 5)) -> Optional[bytes]:
+def _render_plot_png(
+    obj: Any,
+    kind: str,
+    figsize: Any = (8, 5),
+) -> Optional[bytes]:
     """Best-effort rendering of ``obj`` to a PNG byte string.
 
     Returns ``None`` when matplotlib isn't installed or the result
@@ -1099,9 +1163,11 @@ def _render_plot_png(obj: Any, kind: str,
             import statspai as sp
             helper = None
             if kind == "event_study":
-                helper = (getattr(sp, "event_study_table", None)
-                          or getattr(sp, "enhanced_event_study_plot", None)
-                          or getattr(sp, "cohort_event_study_plot", None))
+                helper = (
+                    getattr(sp, "event_study_table", None)
+                    or getattr(sp, "enhanced_event_study_plot", None)
+                    or getattr(sp, "cohort_event_study_plot", None)
+                )
             elif kind == "rdplot":
                 helper = getattr(sp, "rdplot", None)
             elif kind == "rddensity":
@@ -1109,7 +1175,9 @@ def _render_plot_png(obj: Any, kind: str,
             elif kind == "synth_gap":
                 helper = getattr(sp, "synthdid_plot", None)
             elif kind == "love_plot":
-                helper = getattr(sp, "love_plot", None) or getattr(sp, "balanceplot", None)
+                helper = getattr(sp, "love_plot", None) or getattr(
+                    sp, "balanceplot", None,
+                )
             elif kind == "cate_plot":
                 helper = getattr(sp, "cate_plot", None)
             elif kind == "bacon":
@@ -1137,7 +1205,7 @@ def _render_plot_png(obj: Any, kind: str,
         return None
 
 
-def _coerce_to_fig(ret: Any):
+def _coerce_to_fig(ret: Any) -> Any:
     """Best-effort: turn whatever a plot helper returned into a Figure."""
     try:
         import matplotlib.pyplot as plt
@@ -1158,8 +1226,10 @@ def _coerce_to_fig(ret: Any):
     return plt.gcf() if plt.get_fignums() else None
 
 
-def _tool_plot_from_result(rid: Optional[str],
-                            arguments: Dict[str, Any]) -> Dict[str, Any]:
+def _tool_plot_from_result(
+    rid: Optional[str],
+    arguments: Dict[str, Any],
+) -> Dict[str, Any]:
     obj = _need_result(rid)
     if isinstance(obj, dict) and 'error' in obj:
         return obj

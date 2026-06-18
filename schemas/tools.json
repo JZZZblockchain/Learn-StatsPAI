@@ -994,7 +994,7 @@
           "type": "number"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         }
       },
@@ -14907,7 +14907,7 @@
           "type": "integer"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "treat": {

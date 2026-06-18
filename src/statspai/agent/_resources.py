@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 
 
 FUNCTION_URI_PREFIX = "statspai://function/"
@@ -216,8 +216,8 @@ def handle_resources_read(
     *,
     json_default: Callable[[Any], Any],
     server_version: str,
-    InvalidParamsError,
-    ResourceNotFoundError,
+    InvalidParamsError: Type[Exception],
+    ResourceNotFoundError: Type[Exception],
     clean_for_json: Optional[Callable[[Any], Any]] = None,
 ) -> Dict[str, Any]:
     """Dispatch a ``resources/read`` URI to its renderer.

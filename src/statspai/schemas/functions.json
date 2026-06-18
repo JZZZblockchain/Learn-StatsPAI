@@ -15914,7 +15914,7 @@
           "type": "number"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         }
       },
@@ -15983,7 +15983,7 @@
           "type": "integer"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "treat": {
@@ -24425,10 +24425,7 @@
         },
         "covariates": {
           "description": "Covariate matrix, DataFrame, or column names.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "string"
         },
         "data": {
           "description": "pandas DataFrame containing the variables used by the estimator.",
@@ -24442,11 +24439,8 @@
             "r",
             "dr"
           ],
-          "description": "learners parameter (Sequence[str]).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "learners parameter (LearnersArg).",
+          "type": "string"
         },
         "n_bootstrap": {
           "default": 200,
@@ -26948,8 +26942,8 @@
           "type": "string"
         },
         "elasticity": {
-          "description": "elasticity parameter.",
-          "type": "string"
+          "description": "elasticity parameter (Optional[float]).",
+          "type": "number"
         },
         "excess_bunching": {
           "description": "excess_bunching parameter (float).",
@@ -26972,8 +26966,8 @@
           "type": "number"
         },
         "notch_size": {
-          "description": "notch_size parameter.",
-          "type": "string"
+          "description": "notch_size parameter (Optional[float]).",
+          "type": "number"
         },
         "observed": {
           "description": "observed parameter (ndarray).",
@@ -26988,8 +26982,8 @@
           "type": "number"
         },
         "se_elasticity": {
-          "description": "se_elasticity parameter.",
-          "type": "string"
+          "description": "se_elasticity parameter (Optional[float]).",
+          "type": "number"
         }
       },
       "required": [
@@ -35499,6 +35493,7 @@
     "parameters": {
       "properties": {
         "_G": {
+          "default": null,
           "description": "_G parameter (np.ndarray).",
           "type": "string"
         },
@@ -35521,6 +35516,7 @@
           "type": "boolean"
         },
         "_cov_fixed": {
+          "default": null,
           "description": "_cov_fixed parameter (np.ndarray).",
           "type": "string"
         },
@@ -36976,18 +36972,15 @@
             12,
             9
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (tuple[float, float]).",
+          "type": "number"
         },
         "result": {
           "description": "Result from ``causal_impact()``.",
           "type": "string"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "type": {

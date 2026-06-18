@@ -15914,7 +15914,7 @@
           "type": "number"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         }
       },
@@ -15983,7 +15983,7 @@
           "type": "integer"
         },
         "title": {
-          "description": "title parameter (str).",
+          "description": "title parameter (Optional[str]).",
           "type": "string"
         },
         "treat": {
@@ -35493,6 +35493,7 @@
     "parameters": {
       "properties": {
         "_G": {
+          "default": null,
           "description": "_G parameter (np.ndarray).",
           "type": "string"
         },
@@ -35515,6 +35516,7 @@
           "type": "boolean"
         },
         "_cov_fixed": {
+          "default": null,
           "description": "_cov_fixed parameter (np.ndarray).",
           "type": "string"
         },
