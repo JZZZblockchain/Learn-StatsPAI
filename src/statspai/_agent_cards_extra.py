@@ -3943,4 +3943,356 @@ EXTRA_AGENT_CARDS: Dict[str, Dict[str, Any]] = {
         "alternatives": ["nbreg", "poisson"],
         "typical_n_min": 300,
     },
+    # ------------------------------------------------------------------ #
+    # Proximal / negative-control identification family.  These ship on
+    # sp.<name> and were added to __all__ in the 2026-06 registry-drift
+    # repair; cards below give agents the identifying assumptions and the
+    # failure modes that distinguish a clean run from a silent violation.
+    # ------------------------------------------------------------------ #
+    "double_negative_control": {
+        "assumptions": [
+            "Two valid proxies of the hidden confounder U: a "
+            "treatment-confounding proxy and an outcome-confounding proxy",
+            "Negative-control exposure has no causal effect on Y given "
+            "(U, X) — exclusion restriction on the NCE arm",
+            "Negative-control outcome is not caused by the treatment D " "given (U, X)",
+            "Completeness / bridge conditions hold so the just-identified "
+            "2SLS de-biases U (Miao et al. 2018; Shi et al. 2020)",
+        ],
+        "pre_conditions": [
+            "data has columns for outcome, treatment, a negative-control "
+            "exposure (nce) and a negative-control outcome (nco)",
+            "nce and nco share the unmeasured confounder but satisfy the "
+            "respective exclusion restrictions",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Weak proxy: NCE barely correlated with NCO "
+                "(weak-instrument analogue) — unstable ATE",
+                "exception": "NumericalInstability",
+                "remedy": "Use stronger proxies or the doubly-robust "
+                "regression-based estimator instead of just-identified 2SLS",
+                "alternative": "proximal_regression",
+            },
+            {
+                "symptom": "A proxy violates its exclusion restriction "
+                "(direct effect on Y or caused by D) — biased ATE",
+                "exception": "IdentificationFailure",
+                "remedy": "Validate the negative controls separately or fall "
+                "back to a sensitivity analysis",
+                "alternative": "sensemakr",
+            },
+        ],
+        "alternatives": ["proximal", "proximal_regression", "frontdoor"],
+        "typical_n_min": 200,
+    },
+    "proximal_regression": {
+        "assumptions": [
+            "A treatment-inducing confounding proxy Z and an "
+            "outcome-inducing confounding proxy W are observed",
+            "Outcome and treatment confounding bridge functions exist "
+            "(proximal-g and proximal-h completeness conditions)",
+            "Latent confounding is fully captured by (Z, W, X) — no "
+            "residual unmeasured confounding outside the proxy span",
+        ],
+        "pre_conditions": [
+            "data has outcome, binary treatment, z_proxy and w_proxy columns",
+            "treatment is binary for the bridge logistic step",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Treatment-bridge logistic regression fails to "
+                "converge; propensity collapses to the marginal P(D=1)",
+                "exception": "ConvergenceWarning",
+                "remedy": "Check detail['propensity_fallback']; the DR "
+                "correction is neutralised — improve proxies or covariates",
+                "alternative": "double_negative_control",
+            },
+        ],
+        "alternatives": ["proximal", "double_negative_control", "frontdoor"],
+        "typical_n_min": 200,
+    },
+    "negative_control_exposure": {
+        "assumptions": [
+            "The negative-control exposure has no causal effect on the "
+            "outcome by design (Lipsitch et al. 2010)",
+            "It shares the same confounding structure as the real exposure",
+        ],
+        "pre_conditions": [
+            "data has the outcome and a negative-control exposure column",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Significant coefficient on the negative-control "
+                "exposure signals residual confounding, not an effect",
+                "exception": "AssumptionWarning",
+                "remedy": "Treat a non-zero coefficient as a confounding "
+                "alarm; add covariates or run a sensitivity analysis",
+                "alternative": "negative_control_outcome",
+            },
+        ],
+        "alternatives": ["negative_control_outcome", "sensemakr", "evalue"],
+        "typical_n_min": 100,
+    },
+    "negative_control_outcome": {
+        "assumptions": [
+            "The negative-control outcome is not caused by the treatment "
+            "(Lipsitch-style calibration)",
+            "It shares confounders with the real outcome",
+        ],
+        "pre_conditions": [
+            "data has a negative-control outcome and a treatment column",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Coefficient on treatment differs significantly "
+                "from zero — residual confounding detected",
+                "exception": "AssumptionWarning",
+                "remedy": "Condition on more covariates or quantify the "
+                "implied bias with a sensitivity analysis",
+                "alternative": "negative_control_exposure",
+            },
+        ],
+        "alternatives": ["negative_control_exposure", "sensemakr", "evalue"],
+        "typical_n_min": 100,
+    },
+    # ------------------------------------------------------------------ #
+    # Off-policy evaluation estimators (policy_learning.ope).
+    # ------------------------------------------------------------------ #
+    "ips": {
+        "assumptions": [
+            "Logging (behaviour) policy propensities are known or "
+            "correctly estimated",
+            "Positivity / common support: the logging policy assigns "
+            "positive probability to every action the target policy takes",
+            "No unmeasured confounding in the logged data",
+        ],
+        "pre_conditions": [
+            "X (context), A (logged action), R (reward) and logging "
+            "propensities are available",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "High-variance estimate from extreme importance "
+                "weights when the target policy diverges from logging",
+                "exception": "NumericalInstability",
+                "remedy": "Use self-normalised IPS (snips) or the "
+                "doubly-robust estimator to reduce variance",
+                "alternative": "snips",
+            },
+        ],
+        "alternatives": ["snips", "doubly_robust", "direct_method"],
+        "typical_n_min": 500,
+    },
+    "snips": {
+        "assumptions": [
+            "Same identification conditions as IPS (known propensities, "
+            "positivity, no unmeasured confounding)",
+            "Self-normalisation trades a small bias for large variance "
+            "reduction under heavy importance weights",
+        ],
+        "pre_conditions": [
+            "X (context), A (logged action), R (reward) and logging "
+            "propensities are available",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Residual bias when effective sample size is tiny "
+                "(few logged actions overlap the target policy)",
+                "exception": "DataInsufficient",
+                "remedy": "Collect more on-support logged data or switch to "
+                "the doubly-robust estimator",
+                "alternative": "doubly_robust",
+            },
+        ],
+        "alternatives": ["ips", "doubly_robust", "direct_method"],
+        "typical_n_min": 500,
+    },
+    "doubly_robust": {
+        "assumptions": [
+            "Doubly robust: consistent if EITHER the outcome (Q) model OR "
+            "the logging propensity model is correctly specified",
+            "Positivity / common support holds",
+            "No unmeasured confounding in the logged data",
+        ],
+        "pre_conditions": [
+            "X, A, R, logging propensities and a fitted Q-model (or its "
+            "predictions) are available",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Both nuisance models misspecified — DR guarantee "
+                "is lost and the estimate is biased",
+                "exception": "AssumptionWarning",
+                "remedy": "Cross-fit the nuisances or validate the Q-model "
+                "and propensity fit separately",
+                "alternative": "snips",
+            },
+        ],
+        "alternatives": ["ips", "snips", "direct_method"],
+        "typical_n_min": 500,
+    },
+    "direct_method": {
+        "assumptions": [
+            "Plug-in outcome regression (Q-model) is correctly specified",
+            "No unmeasured confounding in the logged data",
+        ],
+        "pre_conditions": [
+            "X (context), A (logged action), R (reward) are available to "
+            "fit the outcome model",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Model misspecification bias — the Q-model "
+                "extrapolates outside the logged action support",
+                "exception": "AssumptionWarning",
+                "remedy": "Prefer the doubly-robust estimator, which is "
+                "robust to Q-model misspecification",
+                "alternative": "doubly_robust",
+            },
+        ],
+        "alternatives": ["doubly_robust", "ips", "snips"],
+        "typical_n_min": 500,
+    },
+    # ------------------------------------------------------------------ #
+    # Longitudinal TMLE and neural dose-response estimators.
+    # ------------------------------------------------------------------ #
+    "ltmle": {
+        "assumptions": [
+            "Sequential exchangeability (no unmeasured time-varying "
+            "confounding) at every treatment time point",
+            "Positivity at each time point conditional on the past",
+            "Correctly specified outcome (Q) and treatment (g) models, "
+            "though TMLE is doubly robust to one of them",
+            "Consistency / SUTVA across the longitudinal regime",
+        ],
+        "pre_conditions": [
+            "Long-format data with time-varying treatment, confounders and "
+            "the static regime contrast of interest",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Near-positivity violation: estimated treatment "
+                "probabilities approach 0 or 1, inflating variance",
+                "exception": "NumericalInstability",
+                "remedy": "Bound (truncate) the cumulative weights or use a "
+                "marginal structural model with stabilised weights",
+                "alternative": "msm",
+            },
+        ],
+        "alternatives": ["tmle", "g_computation", "msm"],
+        "typical_n_min": 500,
+    },
+    "vcnet": {
+        "assumptions": [
+            "Unconfoundedness given covariates X (no hidden confounding of "
+            "the continuous treatment)",
+            "Positivity over the dose: every dose has support across X",
+            "The dose-response curve is smooth (varying-coefficient prior)",
+        ],
+        "pre_conditions": [
+            "data with a continuous treatment (dose), outcome and covariates",
+            "torch is installed (neural extra) — imported lazily",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Sparse support at extreme doses yields an "
+                "unreliable dose-response curve there",
+                "exception": "DataInsufficient",
+                "remedy": "Restrict the reported dose range to the supported "
+                "region or compare against scigan",
+                "alternative": "scigan",
+            },
+        ],
+        "alternatives": ["scigan", "dose_response"],
+        "typical_n_min": 500,
+    },
+    "scigan": {
+        "assumptions": [
+            "Unconfoundedness given covariates X for the continuous " "treatment",
+            "Positivity over the dose support",
+            "The adversarial generator recovers the counterfactual dose "
+            "distribution (Bica et al. 2020)",
+        ],
+        "pre_conditions": [
+            "data with a continuous treatment (dose), outcome and covariates",
+            "torch is installed (neural extra) — imported lazily",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Unstable adversarial training — dose-response "
+                "estimates vary across seeds",
+                "exception": "ConvergenceWarning",
+                "remedy": "Average across seeds or use the smoother "
+                "varying-coefficient estimator",
+                "alternative": "vcnet",
+            },
+        ],
+        "alternatives": ["vcnet", "dose_response"],
+        "typical_n_min": 500,
+    },
+    # ------------------------------------------------------------------ #
+    # Network-interference orthogonal estimators (interference.orthogonal).
+    # ------------------------------------------------------------------ #
+    "network_hte": {
+        "assumptions": [
+            "Partial / network interference: unit i's outcome depends on its "
+            "own treatment and a correctly-specified scalar summary of "
+            "neighbourhood exposure (e.g. share of neighbours treated)",
+            "No unmeasured confounding of the direct and spillover effects "
+            "given covariates X",
+            "Overlap in both own-treatment and neighbourhood exposure given X",
+            "Cross-fit nuisances are consistently estimated (the moment is "
+            "Neyman-orthogonal, so first-order insensitive to nuisance error)",
+        ],
+        "pre_conditions": [
+            "data has outcome, unit treatment, a precomputed neighbour-exposure "
+            "column and covariates",
+            "enough rows for n_folds-fold cross-fitting (>= 10*n_folds)",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Too few complete rows for n_folds cross-fitting",
+                "exception": "DataInsufficient",
+                "remedy": "Add observations or lower n_folds.",
+                "alternative": "spillover",
+            },
+            {
+                "symptom": "Mis-specified exposure mapping biases the spillover "
+                "estimate (the scalar summary omits the true interference "
+                "structure)",
+                "exception": "AssumptionViolation",
+                "remedy": "Validate the exposure mapping or use the "
+                "design-based Aronow-Samii estimator.",
+                "alternative": "network_exposure",
+            },
+        ],
+        "alternatives": ["spillover", "network_exposure", "interference"],
+        "typical_n_min": 200,
+    },
+    "inward_outward_spillover": {
+        "assumptions": [
+            "Directed-network inward and outward exposure summaries are "
+            "correctly constructed (incoming vs outgoing treated-neighbour "
+            "shares)",
+            "The partially-linear spillover model is correctly specified",
+            "No unmeasured confounding of treatment and exposures given X",
+        ],
+        "pre_conditions": [
+            "data has outcome, unit treatment, an inward-exposure and an "
+            "outward-exposure column",
+        ],
+        "failure_modes": [
+            {
+                "symptom": "Inward and outward exposures are near-collinear, so "
+                "the in/out ratio is unstable",
+                "exception": "NumericalInstability",
+                "remedy": "Check the correlation of the two exposure summaries; "
+                "report the components rather than the ratio.",
+                "alternative": "network_hte",
+            },
+        ],
+        "alternatives": ["network_hte", "spillover", "interference"],
+        "typical_n_min": 200,
+    },
 }

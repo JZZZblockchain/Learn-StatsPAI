@@ -11962,10 +11962,7 @@
         },
         "var_names": {
           "description": "Alternative to formula interface.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "object"
         },
         "y": {
           "description": "Alternative to formula interface.",
@@ -13292,7 +13289,7 @@
     "parameters": {
       "properties": {
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "binselect": {
@@ -13331,11 +13328,8 @@
             10,
             7
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "h": {
           "description": "Bandwidth to display.",
@@ -13414,7 +13408,7 @@
     "parameters": {
       "properties": {
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "c": {
@@ -13436,11 +13430,8 @@
             10,
             7
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "h": {
           "description": "Bandwidth. If None, side-specific Silverman pilot.",
@@ -13568,7 +13559,7 @@
           "type": "number"
         },
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "bw_grid": {
@@ -13581,10 +13572,7 @@
             2.0
           ],
           "description": "Range of multipliers for the optimal bandwidth.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "number"
         },
         "c": {
           "default": 0,
@@ -13600,11 +13588,8 @@
             10,
             6
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "fuzzy": {
           "description": "Treatment variable for fuzzy RD.",
@@ -13705,7 +13690,7 @@
           "type": "number"
         },
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "c": {
@@ -13722,11 +13707,8 @@
             10,
             6
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "fuzzy": {
           "description": "Treatment variable for fuzzy RD.",
@@ -13932,7 +13914,7 @@
         },
         "h": {
           "description": "Bandwidth in the same units as the numeric time axis (days if datetime). If None, an MSE-optimal bandwidth is selected automatically.",
-          "type": "integer"
+          "type": "number"
         },
         "kernel": {
           "default": "triangular",
@@ -20778,7 +20760,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -20848,7 +20830,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -20913,7 +20895,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -30961,7 +30943,7 @@
           "type": "array"
         },
         "x_exog": {
-          "description": "x_exog parameter (List[str]).",
+          "description": "x_exog parameter (Optional[List[str]]).",
           "items": {
             "type": "string"
           },
@@ -31023,7 +31005,7 @@
           "type": "array"
         },
         "x_exog": {
-          "description": "x_exog parameter (List[str]).",
+          "description": "x_exog parameter (Optional[List[str]]).",
           "items": {
             "type": "string"
           },
@@ -31694,34 +31676,34 @@
       "properties": {
         "bandwidth": {
           "description": "Bandwidth used for local smoothing or kernel weighting.",
-          "type": "string"
+          "type": "number"
         },
         "ci_lower": {
-          "description": "ci_lower parameter.",
+          "description": "ci_lower parameter (ndarray).",
           "type": "string"
         },
         "ci_upper": {
-          "description": "ci_upper parameter.",
+          "description": "ci_upper parameter (ndarray).",
           "type": "string"
         },
         "data_x": {
-          "description": "data_x parameter.",
+          "description": "data_x parameter (ndarray).",
           "type": "string"
         },
         "data_y": {
-          "description": "data_y parameter.",
+          "description": "data_y parameter (ndarray).",
           "type": "string"
         },
         "degree": {
-          "description": "degree parameter.",
-          "type": "string"
+          "description": "degree parameter (int).",
+          "type": "integer"
         },
         "fitted": {
-          "description": "fitted parameter.",
+          "description": "fitted parameter (ndarray).",
           "type": "string"
         },
         "grid": {
-          "description": "grid parameter.",
+          "description": "grid parameter (ndarray).",
           "type": "string"
         },
         "kernel": {
@@ -31729,11 +31711,11 @@
           "type": "string"
         },
         "n": {
-          "description": "n parameter.",
-          "type": "string"
+          "description": "n parameter (int).",
+          "type": "integer"
         },
         "se": {
-          "description": "se parameter.",
+          "description": "se parameter (ndarray).",
           "type": "string"
         }
       },
@@ -33051,8 +33033,11 @@
     "parameters": {
       "properties": {
         "cutoff_results": {
-          "description": "cutoff_results parameter.",
-          "type": "string"
+          "description": "cutoff_results parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "method": {
           "description": "Estimator or algorithm variant to use.",
@@ -33060,23 +33045,23 @@
         },
         "n_cutoffs": {
           "description": "Number of cutoffs.",
-          "type": "string"
+          "type": "integer"
         },
         "n_total": {
           "description": "Number of total.",
-          "type": "string"
+          "type": "integer"
         },
         "pooled_ci": {
-          "description": "pooled_ci parameter.",
-          "type": "string"
+          "description": "pooled_ci parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "pooled_estimate": {
-          "description": "pooled_estimate parameter.",
-          "type": "string"
+          "description": "pooled_estimate parameter (float).",
+          "type": "number"
         },
         "pooled_se": {
-          "description": "pooled_se parameter.",
-          "type": "string"
+          "description": "pooled_se parameter (float).",
+          "type": "number"
         }
       },
       "required": [
@@ -35122,12 +35107,12 @@
     "parameters": {
       "properties": {
         "breusch_pagan": {
-          "description": "breusch_pagan parameter.",
-          "type": "string"
+          "description": "breusch_pagan parameter (Optional[Dict[str, Any]]).",
+          "type": "object"
         },
         "equations": {
-          "description": "equations parameter.",
-          "type": "string"
+          "description": "equations parameter (Dict[str, Dict[str, Any]]).",
+          "type": "object"
         },
         "method": {
           "description": "Estimator or algorithm variant to use.",
@@ -35135,22 +35120,22 @@
         },
         "n_equations": {
           "description": "Number of equations.",
-          "type": "string"
+          "type": "integer"
         },
         "n_obs": {
           "description": "Number of obs.",
-          "type": "string"
+          "type": "integer"
         },
         "params_all": {
-          "description": "params_all parameter.",
+          "description": "params_all parameter (ndarray).",
           "type": "string"
         },
         "se_all": {
-          "description": "se_all parameter.",
+          "description": "se_all parameter (ndarray).",
           "type": "string"
         },
         "sigma": {
-          "description": "sigma parameter.",
+          "description": "sigma parameter (DataFrame).",
           "type": "string"
         }
       },
@@ -39517,10 +39502,7 @@
             8
           ],
           "description": "Figure size.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "number"
         },
         "plot_type": {
           "default": "scatter",
@@ -42130,6 +42112,10 @@
           "description": "coef parameter (np.ndarray).",
           "type": "string"
         },
+        "coef_sd": {
+          "description": "coef_sd parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
         "fitted": {
           "description": "fitted parameter (np.ndarray).",
           "type": "string"
@@ -42232,6 +42218,10 @@
           "description": "bic parameter (float).",
           "type": "number"
         },
+        "coef": {
+          "description": "coef parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
         "log_likelihood": {
           "description": "log_likelihood parameter (float).",
           "type": "number"
@@ -42252,12 +42242,23 @@
           "description": "p parameter (int).",
           "type": "integer"
         },
+        "param_names": {
+          "description": "param_names parameter (Optional[List[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "q": {
           "description": "Quantile level.",
           "type": "integer"
         },
         "residuals": {
           "description": "residuals parameter (np.ndarray).",
+          "type": "string"
+        },
+        "se_vec": {
+          "description": "se_vec parameter (Optional[np.ndarray]).",
           "type": "string"
         },
         "sigma2": {
@@ -49560,6 +49561,2117 @@
         "upper",
         "point",
         "alpha"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`bcf_factor_exposure`.",
+    "name": "BCFFactorExposureResult",
+    "parameters": {
+      "properties": {
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "factor_loadings": {
+          "description": "factor_loadings parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "factor_scores": {
+          "description": "factor_scores parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "method": {
+          "default": "bcf_factor_exposure",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "per_factor_ate": {
+          "description": "per_factor_ate parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "total_mixture_ate": {
+          "description": "total_mixture_ate parameter (float).",
+          "type": "number"
+        },
+        "total_mixture_ci": {
+          "description": "total_mixture_ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_mixture_se": {
+          "description": "total_mixture_se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "factor_loadings",
+        "factor_scores",
+        "per_factor_ate",
+        "total_mixture_ate",
+        "total_mixture_se",
+        "total_mixture_ci"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Longitudinal BCF output container.",
+    "name": "BCFLongResult",
+    "parameters": {
+      "properties": {
+        "average_ate": {
+          "description": "average_ate parameter (float).",
+          "type": "number"
+        },
+        "average_ci": {
+          "description": "average_ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "average_se": {
+          "description": "average_se parameter (float).",
+          "type": "number"
+        },
+        "individual_cate": {
+          "description": "individual_cate parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "model_info": {
+          "default": null,
+          "description": "model_info parameter (Dict).",
+          "type": "object"
+        },
+        "per_time_ate": {
+          "description": "per_time_ate parameter (pd.DataFrame).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "per_time_ate",
+        "average_ate",
+        "average_se",
+        "average_ci",
+        "individual_cate"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`bcf_ordinal`.",
+    "name": "BCFOrdinalResult",
+    "parameters": {
+      "properties": {
+        "ate": {
+          "description": "ate parameter (pd.Series).",
+          "type": "string"
+        },
+        "ate_ci": {
+          "description": "ate_ci parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "ate_se": {
+          "description": "ate_se parameter (pd.Series).",
+          "type": "string"
+        },
+        "cate": {
+          "description": "cate parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "cate_se": {
+          "description": "cate_se parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "levels": {
+          "description": "levels parameter (List[Any]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "method": {
+          "default": "bcf_ordinal",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cate",
+        "cate_se",
+        "ate",
+        "ate_se",
+        "ate_ci",
+        "levels"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Double negative control estimator (Miao et al. 2018; Shi et al. 2020).",
+    "name": "double_negative_control",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "nce": {
+          "description": "nce parameter (str).",
+          "type": "string"
+        },
+        "nco": {
+          "description": "nco parameter (str).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "nce",
+        "nco"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Regress outcome on a *negative-control exposure*.",
+    "name": "negative_control_exposure",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "nce": {
+          "description": "nce parameter (str).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "nce"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Lipsitch-style NCO calibration.",
+    "name": "negative_control_outcome",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Measured confounders to condition on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "nco": {
+          "description": "Negative-control outcome -- a variable plausibly unaffected by the true treatment but sharing confounders with the real Y.",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or exposure variable.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "nco",
+        "treat"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Doubly-robust regression-based PCI estimator for the ATE.",
+    "name": "proximal_regression",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Measured covariates X.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.02,
+            0.98
+          ],
+          "description": "propensity_bounds parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "treat": {
+          "description": "Binary treatment column.",
+          "type": "string"
+        },
+        "w_proxy": {
+          "description": "Outcome-inducing confounding proxy W.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        },
+        "z_proxy": {
+          "description": "Treatment-inducing confounding proxy Z.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "z_proxy",
+        "w_proxy"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Unified result for negative-control procedures.",
+    "name": "NegativeControlResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "estimate": {
+          "description": "estimate parameter (float).",
+          "type": "number"
+        },
+        "interpretation": {
+          "default": "",
+          "description": "interpretation parameter (str).",
+          "type": "string"
+        },
+        "method": {
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_obs": {
+          "default": 0,
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "pvalue": {
+          "description": "pvalue parameter (float).",
+          "type": "number"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "method",
+        "estimate",
+        "se",
+        "pvalue",
+        "ci"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "ProximalRegResult(ate: 'float', se: 'float', ci: 'tuple', pvalue: 'float', bridge_coefs: 'Dict[str, float]', propensity_coefs: 'Dict[str, float]', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "name": "ProximalRegResult",
+    "parameters": {
+      "properties": {
+        "ate": {
+          "description": "ate parameter (float).",
+          "type": "number"
+        },
+        "bridge_coefs": {
+          "description": "bridge_coefs parameter (Dict[str, float]).",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "propensity_coefs": {
+          "description": "propensity_coefs parameter (Dict[str, float]).",
+          "type": "number"
+        },
+        "pvalue": {
+          "description": "pvalue parameter (float).",
+          "type": "number"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "ate",
+        "se",
+        "ci",
+        "pvalue",
+        "bridge_coefs",
+        "propensity_coefs",
+        "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Direct outcome regression (plug-in Q-model) OPE.",
+    "name": "direct_method",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "n_actions": {
+          "description": "Number of actions.",
+          "type": "integer"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "A",
+        "R",
+        "pi_target"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Doubly-robust OPE (Dudik et al. 2011).",
+    "name": "doubly_robust",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "n_actions": {
+          "description": "Number of actions.",
+          "type": "integer"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "A",
+        "R",
+        "pi_target"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Inverse propensity score OPE.",
+    "name": "ips",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "A",
+        "R",
+        "pi_target"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Self-normalised IPS (bias-reduction for large IS weights).",
+    "name": "snips",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "A",
+        "R",
+        "pi_target"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Parametric four-way decomposition of TE = CDE + INT_ref + INT_med + PIE.",
+    "name": "four_way_decomposition",
+    "parameters": {
+      "properties": {
+        "a0": {
+          "default": 0.0,
+          "description": "Reference and comparison levels of the treatment (default 0, 1).",
+          "type": "number"
+        },
+        "a1": {
+          "default": 1.0,
+          "description": "Reference and comparison levels of the treatment (default 0, 1).",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "m0": {
+          "default": 0.0,
+          "description": "Mediator reference level at which CDE is evaluated.",
+          "type": "number"
+        },
+        "mediator": {
+          "description": "mediator parameter (str).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "mediator"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "FourWayResult(cde: 'float', int_ref: 'float', int_med: 'float', pie: 'float', total_effect: 'float', proportions: 'Dict[str, float]', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "name": "FourWayResult",
+    "parameters": {
+      "properties": {
+        "cde": {
+          "description": "cde parameter (float).",
+          "type": "number"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "int_med": {
+          "description": "int_med parameter (float).",
+          "type": "number"
+        },
+        "int_ref": {
+          "description": "int_ref parameter (float).",
+          "type": "number"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "pie": {
+          "description": "pie parameter (float).",
+          "type": "number"
+        },
+        "proportions": {
+          "description": "proportions parameter (Dict[str, float]).",
+          "type": "number"
+        },
+        "total_effect": {
+          "description": "total_effect parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cde",
+        "int_ref",
+        "int_med",
+        "pie",
+        "total_effect",
+        "proportions",
+        "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Segmented regression for interrupted time series.",
+    "name": "its",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "data": {
+          "description": "Observed series, sorted in time.",
+          "type": "string"
+        },
+        "hac_lag": {
+          "default": 4,
+          "description": "Newey-West truncation lag.",
+          "type": "integer"
+        },
+        "intervention": {
+          "description": "Time index (integer row position) at which the intervention begins. Required.",
+          "type": "integer"
+        },
+        "seasonality_harmonics": {
+          "default": 2,
+          "description": "seasonality_harmonics parameter (int).",
+          "type": "integer"
+        },
+        "seasonality_period": {
+          "description": "Period P of Fourier seasonal terms (e.g. 12 for monthly data with annual cycle). If None, no seasonality is added.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Time column. If None, uses row index 0..n-1.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "ITSResult(level_change: 'float', slope_change: 'float', se_level: 'float', se_slope: 'float', ci_level: 'tuple', ci_slope: 'tuple', pvalue_level: 'float', pvalue_slope: 'float', coefficients: 'pd.DataFrame', n_obs: 'int', intervention_time: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "name": "ITSResult",
+    "parameters": {
+      "properties": {
+        "ci_level": {
+          "description": "ci_level parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ci_slope": {
+          "description": "ci_slope parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "coefficients": {
+          "description": "coefficients parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "intervention_time": {
+          "description": "intervention_time parameter (int).",
+          "type": "integer"
+        },
+        "level_change": {
+          "description": "level_change parameter (float).",
+          "type": "number"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "pvalue_level": {
+          "description": "pvalue_level parameter (float).",
+          "type": "number"
+        },
+        "pvalue_slope": {
+          "description": "pvalue_slope parameter (float).",
+          "type": "number"
+        },
+        "se_level": {
+          "description": "se_level parameter (float).",
+          "type": "number"
+        },
+        "se_slope": {
+          "description": "se_slope parameter (float).",
+          "type": "number"
+        },
+        "slope_change": {
+          "description": "slope_change parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "level_change",
+        "slope_change",
+        "se_level",
+        "se_slope",
+        "ci_level",
+        "ci_slope",
+        "pvalue_level",
+        "pvalue_slope",
+        "coefficients",
+        "n_obs",
+        "intervention_time"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Longitudinal TMLE for static regime contrasts.",
+    "name": "ltmle",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "baseline": {
+          "description": "Baseline time-invariant covariates.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "censoring": {
+          "description": "Censoring indicator column per time point (``1=observed``, ``0=censored``). If None, no censoring is modeled.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "covariates_time": {
+          "description": "``covariates_time[k]`` lists time-k covariate columns (may be empty). Length ``K``.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "Wide-format panel: one row per unit.",
+          "type": "string"
+        },
+        "outcome_type": {
+          "default": "auto",
+          "description": "``auto`` detects from unique values of ``y``.",
+          "enum": [
+            "auto",
+            "binary",
+            "continuous"
+          ],
+          "type": "string"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.01,
+            0.99
+          ],
+          "description": "Clip propensity to this range for stability.",
+          "type": "number"
+        },
+        "regime_control": {
+          "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        },
+        "regime_treated": {
+          "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        },
+        "treatments": {
+          "description": "Treatment column per time point, length ``K``.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treatments",
+        "covariates_time"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "LTMLEResult(psi_treated: 'float', psi_control: 'float', ate: 'float', se: 'float', ci: 'tuple[float, float]', pvalue: 'float', K: 'int', n_obs: 'int', regime_treated: 'Sequence[int]', regime_control: 'Sequence[int]', detail: 'Dict[str, Any]' = <factory>)",
+    "name": "LTMLEResult",
+    "parameters": {
+      "properties": {
+        "K": {
+          "description": "K parameter (int).",
+          "type": "integer"
+        },
+        "ate": {
+          "description": "ate parameter (float).",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple[float, float]).",
+          "type": "number"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "psi_control": {
+          "description": "psi_control parameter (float).",
+          "type": "number"
+        },
+        "psi_treated": {
+          "description": "psi_treated parameter (float).",
+          "type": "number"
+        },
+        "pvalue": {
+          "description": "pvalue parameter (float).",
+          "type": "number"
+        },
+        "regime_control": {
+          "description": "regime_control parameter (Sequence[int]).",
+          "type": "integer"
+        },
+        "regime_treated": {
+          "description": "regime_treated parameter (Sequence[int]).",
+          "type": "integer"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "psi_treated",
+        "psi_control",
+        "ate",
+        "se",
+        "ci",
+        "pvalue",
+        "K",
+        "n_obs",
+        "regime_treated",
+        "regime_control"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Full diagnostic output of :func:`harvest_did`.",
+    "name": "HarvestDIDResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "comparisons": {
+          "description": "comparisons parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "estimate": {
+          "description": "estimate parameter (float).",
+          "type": "number"
+        },
+        "event_study": {
+          "description": "event_study parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "method": {
+          "default": "harvest_did",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_comparisons": {
+          "description": "Number of comparisons.",
+          "type": "integer"
+        },
+        "pretrend_test": {
+          "description": "pretrend_test parameter (Dict[str, float]).",
+          "type": "number"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "estimate",
+        "se",
+        "ci",
+        "alpha",
+        "n_comparisons",
+        "comparisons",
+        "event_study",
+        "pretrend_test"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`inward_outward_spillover`.",
+    "name": "InwardOutwardResult",
+    "parameters": {
+      "properties": {
+        "inward_effect": {
+          "description": "inward_effect parameter (float).",
+          "type": "number"
+        },
+        "inward_se": {
+          "description": "inward_se parameter (float).",
+          "type": "number"
+        },
+        "outward_effect": {
+          "description": "outward_effect parameter (float).",
+          "type": "number"
+        },
+        "outward_se": {
+          "description": "outward_se parameter (float).",
+          "type": "number"
+        },
+        "ratio_in_out": {
+          "description": "ratio_in_out parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "inward_effect",
+        "outward_effect",
+        "inward_se",
+        "outward_se",
+        "ratio_in_out"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`network_hte`.",
+    "name": "NetworkHTEResult",
+    "parameters": {
+      "properties": {
+        "ci_alpha": {
+          "description": "ci_alpha parameter (float).",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct_effect": {
+          "description": "direct_effect parameter (float).",
+          "type": "number"
+        },
+        "direct_se": {
+          "description": "direct_se parameter (float).",
+          "type": "number"
+        },
+        "individual_direct": {
+          "description": "individual_direct parameter (np.ndarray).",
+          "type": "string"
+        },
+        "individual_spillover": {
+          "description": "individual_spillover parameter (np.ndarray).",
+          "type": "string"
+        },
+        "spillover_effect": {
+          "description": "spillover_effect parameter (float).",
+          "type": "number"
+        },
+        "spillover_se": {
+          "description": "spillover_se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "direct_effect",
+        "direct_se",
+        "spillover_effect",
+        "spillover_se",
+        "individual_direct",
+        "individual_spillover",
+        "covariates",
+        "ci_alpha"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Structured output of :func:`shift_share_political`.",
+    "name": "ShiftSharePoliticalResult",
+    "parameters": {
+      "properties": {
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "iv_result": {
+          "description": "iv_result parameter (CausalResult).",
+          "type": "string"
+        },
+        "method": {
+          "default": "shift_share_political",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_industries": {
+          "description": "Number of industries.",
+          "type": "integer"
+        },
+        "n_periods": {
+          "description": "Number of periods.",
+          "type": "integer"
+        },
+        "n_units": {
+          "description": "Number of units.",
+          "type": "integer"
+        },
+        "rotemberg_top": {
+          "description": "rotemberg_top parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "share_balance": {
+          "description": "share_balance parameter (pd.DataFrame).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "iv_result",
+        "rotemberg_top",
+        "share_balance",
+        "n_units",
+        "n_periods",
+        "n_industries"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Structured output of :func:`shift_share_political_panel`.",
+    "name": "ShiftSharePoliticalPanelResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "estimate": {
+          "description": "estimate parameter (float).",
+          "type": "number"
+        },
+        "method": {
+          "default": "shift_share_political_panel",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "model_info": {
+          "default": null,
+          "description": "model_info parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "n_industries": {
+          "description": "Number of industries.",
+          "type": "integer"
+        },
+        "n_periods": {
+          "description": "Number of periods.",
+          "type": "integer"
+        },
+        "n_units": {
+          "description": "Number of units.",
+          "type": "integer"
+        },
+        "per_period": {
+          "description": "per_period parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "rotemberg_panel": {
+          "description": "rotemberg_panel parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        },
+        "share_balance": {
+          "description": "share_balance parameter (pd.DataFrame).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "estimate",
+        "se",
+        "ci",
+        "per_period",
+        "rotemberg_panel",
+        "share_balance",
+        "n_units",
+        "n_periods",
+        "n_industries"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Adversarial dose-response estimator (Bica et al. 2020).",
+    "name": "scigan",
+    "parameters": {
+      "properties": {
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "propensity_weights": {
+          "description": "propensity_weights parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "t_grid": {
+          "description": "Grid of t values to evaluate.",
+          "type": "number"
+        },
+        "treatment": {
+          "description": "Treatment indicator, treatment variable, or treatment array.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treatment",
+        "covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Varying-coefficient dose-response estimator.",
+    "name": "vcnet",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "n_basis": {
+          "default": 6,
+          "description": "Number of B-spline basis functions for the t-axis.",
+          "type": "integer"
+        },
+        "n_bootstrap": {
+          "default": 200,
+          "description": "Number of bootstrap replications.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "ridge": {
+          "default": 0.01,
+          "description": "Tikhonov regularisation on the coefficient matrix.",
+          "type": "number"
+        },
+        "spline_degree": {
+          "default": 3,
+          "description": "spline_degree parameter (int).",
+          "type": "integer"
+        },
+        "t_grid": {
+          "description": "Treatment values at which to evaluate the dose-response curve. Defaults to 40 equally-spaced points between the observed min/max.",
+          "type": "number"
+        },
+        "treatment": {
+          "description": "Continuous treatment / dose column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treatment",
+        "covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "VCNetResult(t_grid: 'np.ndarray', mu_hat: 'np.ndarray', se: 'np.ndarray', ci_lo: 'np.ndarray', ci_hi: 'np.ndarray', coef_matrix: 'np.ndarray', n_obs: 'int', n_basis: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "name": "VCNetResult",
+    "parameters": {
+      "properties": {
+        "ci_hi": {
+          "description": "ci_hi parameter (np.ndarray).",
+          "type": "string"
+        },
+        "ci_lo": {
+          "description": "ci_lo parameter (np.ndarray).",
+          "type": "string"
+        },
+        "coef_matrix": {
+          "description": "coef_matrix parameter (np.ndarray).",
+          "type": "string"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "mu_hat": {
+          "description": "mu_hat parameter (np.ndarray).",
+          "type": "string"
+        },
+        "n_basis": {
+          "description": "Number of basis.",
+          "type": "integer"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "se": {
+          "description": "se parameter (np.ndarray).",
+          "type": "string"
+        },
+        "t_grid": {
+          "description": "Grid of t values to evaluate.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t_grid",
+        "mu_hat",
+        "se",
+        "ci_lo",
+        "ci_hi",
+        "coef_matrix",
+        "n_obs",
+        "n_basis"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Merge an LLM-proposed DAG with a data-driven CI-test skeleton.",
+    "name": "llm_dag",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci_test": {
+          "default": "fisherz",
+          "description": "ci_test parameter (str).",
+          "type": "string"
+        },
+        "data": {
+          "description": "Observational data used for CI-test skeleton construction. Required for merge_strategy in {\"intersection\", \"union_with_ci\"}.",
+          "type": "string"
+        },
+        "descriptions": {
+          "description": "Human-readable description per variable (passed to the oracle).",
+          "type": "object"
+        },
+        "merge_strategy": {
+          "default": "intersection",
+          "description": "How to combine oracle and CI-test results.",
+          "enum": [
+            "oracle_only",
+            "intersection",
+            "union_with_ci"
+          ],
+          "type": "string"
+        },
+        "oracle": {
+          "description": "A callable ``f(variables, descriptions) -> list[(from, to)]``. If ``None``, this function runs a **data-only** pipeline.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "variables": {
+          "description": "Variable names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "variables"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "LLMDAGResult(edges: 'List[Tuple[str, str]]', oracle_edges: 'List[Tuple[str, str]]', ci_rejects: 'List[Tuple[str, str]]', ci_asserts: 'List[Tuple[str, str]]', disagreements: 'List[Tuple[str, str, str]]', provenance: 'Dict[str, Any]' = <factory>)",
+    "name": "LLMDAGResult",
+    "parameters": {
+      "properties": {
+        "ci_asserts": {
+          "description": "ci_asserts parameter (List[Tuple[str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ci_rejects": {
+          "description": "ci_rejects parameter (List[Tuple[str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disagreements": {
+          "description": "disagreements parameter (List[Tuple[str, str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "description": "edges parameter (List[Tuple[str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "oracle_edges": {
+          "description": "oracle_edges parameter (List[Tuple[str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "provenance": {
+          "default": null,
+          "description": "provenance parameter (Dict[str, Any]).",
+          "type": "object"
+        }
+      },
+      "required": [
+        "edges",
+        "oracle_edges",
+        "ci_rejects",
+        "ci_asserts",
+        "disagreements"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`llm_causal_assess`.",
+    "name": "LLMCausalAssessResult",
+    "parameters": {
+      "properties": {
+        "level1_accuracy": {
+          "description": "level1_accuracy parameter (Optional[float]).",
+          "type": "number"
+        },
+        "level2_accuracy": {
+          "description": "level2_accuracy parameter (Optional[float]).",
+          "type": "number"
+        },
+        "llm_identifier": {
+          "description": "llm_identifier parameter (str).",
+          "type": "string"
+        },
+        "per_item": {
+          "description": "per_item parameter (pd.DataFrame).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level1_accuracy",
+        "level2_accuracy",
+        "per_item",
+        "llm_identifier"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Holds state across the diagnose -> estimate -> report pipeline.",
+    "name": "CausalWorkflow",
+    "parameters": {
+      "properties": {
+        "allow_experimental": {
+          "default": false,
+          "description": "allow_experimental parameter (bool).",
+          "type": "boolean"
+        },
+        "cate_summary_table": {
+          "description": "cate_summary_table parameter (Optional[pd.DataFrame]).",
+          "type": "string"
+        },
+        "cluster": {
+          "description": "Cluster identifier column for clustered standard errors.",
+          "type": "string"
+        },
+        "cohort": {
+          "description": "Treatment cohort or group identifier.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cutoff": {
+          "description": "cutoff parameter (Optional[float]).",
+          "type": "number"
+        },
+        "dag": {
+          "description": "dag parameter (Optional[Any]).",
+          "type": "string"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "degradations": {
+          "default": null,
+          "description": "degradations parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "design": {
+          "description": "design parameter (Optional[str]).",
+          "type": "string"
+        },
+        "diagnostics": {
+          "description": "diagnostics parameter (Optional[Any]).",
+          "type": "string"
+        },
+        "estimator_comparison": {
+          "description": "estimator_comparison parameter (Optional[pd.DataFrame]).",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unit, subject, or panel identifier column.",
+          "type": "string"
+        },
+        "instrument": {
+          "description": "instrument parameter (Optional[str]).",
+          "type": "string"
+        },
+        "mediator": {
+          "description": "mediator parameter (Optional[str]).",
+          "type": "string"
+        },
+        "pipeline_notes": {
+          "default": null,
+          "description": "pipeline_notes parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "post_treat_strata": {
+          "description": "post_treat_strata parameter (Optional[str]).",
+          "type": "string"
+        },
+        "proxy_w": {
+          "description": "proxy_w parameter (Optional[List[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "proxy_z": {
+          "description": "proxy_z parameter (Optional[List[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recommendation": {
+          "description": "recommendation parameter (Optional[Any]).",
+          "type": "string"
+        },
+        "result": {
+          "description": "result parameter (Optional[Any]).",
+          "type": "string"
+        },
+        "robustness_findings": {
+          "default": null,
+          "description": "robustness_findings parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "running_var": {
+          "description": "running_var parameter (Optional[str]).",
+          "type": "string"
+        },
+        "sensitivity_panel_result": {
+          "description": "sensitivity_panel_result parameter (Optional[pd.DataFrame]).",
+          "type": "string"
+        },
+        "stages_completed": {
+          "default": null,
+          "description": "stages_completed parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "strict": {
+          "description": "strict parameter (bool).",
+          "type": "boolean"
+        },
+        "time": {
+          "description": "Time period column.",
+          "type": "string"
+        },
+        "treatment": {
+          "description": "Treatment indicator, treatment variable, or treatment array.",
+          "type": "string"
+        },
+        "tv_confounders": {
+          "description": "tv_confounders parameter (Optional[List[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treatment",
+        "covariates",
+        "id",
+        "time",
+        "running_var",
+        "instrument",
+        "cutoff",
+        "cohort",
+        "cluster",
+        "design",
+        "dag",
+        "strict"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Structured output of :func:`synth_experimental_design`.",
+    "name": "SynthExperimentalDesignResult",
+    "parameters": {
+      "properties": {
+        "baseline_variance": {
+          "description": "baseline_variance parameter (float).",
+          "type": "number"
+        },
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "donor_units": {
+          "description": "donor_units parameter (List[Any]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_variance": {
+          "description": "expected_variance parameter (float).",
+          "type": "number"
+        },
+        "method": {
+          "default": "abadie_zhao_2025",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "ranking": {
+          "description": "ranking parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "selected": {
+          "description": "selected parameter (List[Any]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "weights": {
+          "description": "Observation weights.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "selected",
+        "ranking",
+        "weights",
+        "donor_units",
+        "expected_variance",
+        "baseline_variance"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`pairwise_causal_benchmark`.",
+    "name": "PairwiseBenchmarkResult",
+    "parameters": {
+      "properties": {
+        "accuracy": {
+          "description": "accuracy parameter (float).",
+          "type": "number"
+        },
+        "per_pair": {
+          "description": "per_pair parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "precision_forward": {
+          "description": "precision_forward parameter (float).",
+          "type": "number"
+        },
+        "recall_forward": {
+          "description": "recall_forward parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "accuracy",
+        "precision_forward",
+        "recall_forward",
+        "per_pair"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Draft causal-analysis report assembled by :func:`sp.paper`.",
+    "name": "PaperDraft",
+    "parameters": {
+      "properties": {
+        "citations": {
+          "default": null,
+          "description": "citations parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dag": {
+          "description": "dag parameter.",
+          "type": "string"
+        },
+        "dag_outcome": {
+          "description": "dag_outcome parameter (Optional[str]).",
+          "type": "string"
+        },
+        "dag_treatment": {
+          "description": "dag_treatment parameter (Optional[str]).",
+          "type": "string"
+        },
+        "degradations": {
+          "default": null,
+          "description": "degradations parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fmt": {
+          "description": "fmt parameter (str).",
+          "type": "string"
+        },
+        "parsed_hints": {
+          "default": null,
+          "description": "parsed_hints parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "question": {
+          "description": "question parameter (str).",
+          "type": "string"
+        },
+        "sections": {
+          "description": "sections parameter (Dict[str, str]).",
+          "type": "object"
+        },
+        "workflow": {
+          "description": "workflow parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "sections",
+        "workflow",
+        "fmt"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute Rosenbaum bounds on a paired observational study.",
+    "name": "rosenbaum_bounds",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level used to report ``gamma_critical``.",
+          "type": "number"
+        },
+        "alternative": {
+          "default": "greater",
+          "description": "Direction of the alternative hypothesis for the treatment effect.",
+          "enum": [
+            "greater",
+            "less",
+            "two-sided"
+          ],
+          "type": "string"
+        },
+        "control": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "data": {
+          "description": "Long-format data. Must contain exactly two rows per ``pair_id``, one with ``treat=1`` and one with ``treat=0``.",
+          "type": "string"
+        },
+        "gamma_grid": {
+          "description": "Gamma values (>= 1) over which to compute bounding p-values.",
+          "type": "number"
+        },
+        "method": {
+          "default": "wilcoxon",
+          "description": "Wilcoxon signed-rank bound (continuous) or binomial sign test (robust / binary).",
+          "enum": [
+            "wilcoxon",
+            "sign"
+          ],
+          "type": "string"
+        },
+        "pair_id": {
+          "description": "pair_id parameter (Optional[str]).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "treated": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute Rosenbaum bounds on a paired observational study.",
+    "name": "rosenbaum_gamma",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level used to report ``gamma_critical``.",
+          "type": "number"
+        },
+        "alternative": {
+          "default": "greater",
+          "description": "Direction of the alternative hypothesis for the treatment effect.",
+          "enum": [
+            "greater",
+            "less",
+            "two-sided"
+          ],
+          "type": "string"
+        },
+        "control": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "data": {
+          "description": "Long-format data. Must contain exactly two rows per ``pair_id``, one with ``treat=1`` and one with ``treat=0``.",
+          "type": "string"
+        },
+        "gamma_grid": {
+          "description": "Gamma values (>= 1) over which to compute bounding p-values.",
+          "type": "number"
+        },
+        "method": {
+          "default": "wilcoxon",
+          "description": "Wilcoxon signed-rank bound (continuous) or binomial sign test (robust / binary).",
+          "enum": [
+            "wilcoxon",
+            "sign"
+          ],
+          "type": "string"
+        },
+        "pair_id": {
+          "description": "pair_id parameter (Optional[str]).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "treated": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result container for :func:`rosenbaum_bounds`.",
+    "name": "RosenbaumResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "alternative": {
+          "description": "alternative parameter (str).",
+          "type": "string"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "string"
+        },
+        "gamma_critical": {
+          "description": "gamma_critical parameter (float).",
+          "type": "number"
+        },
+        "gamma_grid": {
+          "description": "Grid of gamma values to evaluate.",
+          "type": "string"
+        },
+        "method": {
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_pairs": {
+          "description": "Number of pairs.",
+          "type": "integer"
+        },
+        "pvalue_lower": {
+          "description": "pvalue_lower parameter (np.ndarray).",
+          "type": "string"
+        },
+        "pvalue_upper": {
+          "description": "pvalue_upper parameter (np.ndarray).",
+          "type": "string"
+        },
+        "statistic": {
+          "description": "statistic parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "gamma_grid",
+        "pvalue_lower",
+        "pvalue_upper",
+        "gamma_critical",
+        "method",
+        "alpha",
+        "n_pairs",
+        "statistic",
+        "alternative"
       ],
       "type": "object"
     }

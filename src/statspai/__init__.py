@@ -2150,6 +2150,82 @@ __all__ = [
     "orthogonal_to_bias",
     "surrogate_index",
     "synthesise_evidence",
+    # ---- __all__ / registry drift repair (agent-native discoverability) ----
+    # These estimators + their result objects were eagerly imported into the
+    # ``statspai`` namespace (so ``sp.xxx`` already worked) but were absent
+    # from ``__all__``.  The auto-registration pass in ``registry.py`` walks
+    # ``__all__``, so every name below was invisible to ``sp.list_functions``,
+    # ``sp.describe_function`` and ``sp.function_schema`` — a direct violation
+    # of the agent-native design contract ("help tools must resolve for every
+    # public symbol").  All run cleanly and build valid schemas; listing them
+    # here closes the drift and makes ``from statspai import *`` complete.
+    # BCF extensions
+    "bcf_factor_exposure",
+    "bcf_longitudinal",
+    "bcf_ordinal",
+    "BCFFactorExposureResult",
+    "BCFLongResult",
+    "BCFOrdinalResult",
+    # Proximal / negative-control identification
+    "double_negative_control",
+    "negative_control_exposure",
+    "negative_control_outcome",
+    "proximal_regression",
+    "NegativeControlResult",
+    "ProximalRegResult",
+    # Off-policy evaluation estimators
+    "direct_method",
+    "doubly_robust",
+    "ips",
+    "snips",
+    # Mediation
+    "four_way_decomposition",
+    "FourWayResult",
+    # Interrupted time series
+    "its",
+    "ITSResult",
+    # Longitudinal TMLE
+    "ltmle",
+    "LTMLEResult",
+    # DiD-family extras
+    "harvest_did",
+    "overlap_weighted_did",
+    "HarvestDIDResult",
+    # Spillover / network heterogeneity
+    "inward_outward_spillover",
+    "network_hte",
+    "InwardOutwardResult",
+    "NetworkHTEResult",
+    # Shift-share (Bartik) political-economy designs
+    "shift_share_political",
+    "shift_share_political_panel",
+    "ShiftSharePoliticalResult",
+    "ShiftSharePoliticalPanelResult",
+    # Dose-response (neural)
+    "scigan",
+    "vcnet",
+    "VCNetResult",
+    # DAG / LLM-causal helpers
+    "llm_dag",
+    "llm_causal_assess",
+    "LLMDAGResult",
+    "LLMCausalAssessResult",
+    # Workflow / design helpers
+    # NB: ``causal`` is intentionally *not* listed — the bare name collides
+    # with the ``causal`` category and the ``statspai.causal`` submodule, so
+    # registering it as a function would shadow ``sp.help("causal")``'s
+    # category listing.  The workflow stays reachable as ``sp.causal(...)``.
+    "dl_propensity_score",
+    "synth_experimental_design",
+    "pairwise_causal_benchmark",
+    "CausalWorkflow",
+    "SynthExperimentalDesignResult",
+    "PairwiseBenchmarkResult",
+    "PaperDraft",
+    # Rosenbaum sensitivity bounds
+    "rosenbaum_bounds",
+    "rosenbaum_gamma",
+    "RosenbaumResult",
 ]
 
 

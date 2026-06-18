@@ -2973,7 +2973,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -5483,6 +5483,46 @@
     "name": "did_timevarying_covariates"
   },
   {
+    "description": "Direct outcome regression (plug-in Q-model) OPE. Assumptions: Plug-in outcome regression (Q-model) is correctly specified; No unmeasured confounding in the logged data. Pre-conditions: X (context), A (logged action), R (reward) are available to fit the outcome model. Failure modes: Model misspecification bias -- the Q-model extrapolates outside the logged action support -> Prefer the doubly-robust estimator, which is robust to Q-model misspecification. Alternatives: sp.doubly_robust, sp.ips, sp.snips. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "n_actions": {
+          "description": "Number of actions.",
+          "type": "integer"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "A",
+        "R",
+        "X",
+        "pi_target"
+      ],
+      "type": "object"
+    },
+    "name": "direct_method"
+  },
+  {
     "description": "Distributional Synthetic Controls (Gunsilius 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: A convex (or regularized) combination of donor units reproduces the treated unit's pre-treatment outcome path; No interference: the treatment does not affect the donor units (SUTVA); No anticipation before the treatment date. Pre-conditions: Panel of one or more treated units plus an untreated donor pool, observed over time; Pre-treatment window long enough to fit donor weights (rule of thumb: more pre-periods than donors used); Outcome observed for every unit in every period. Failure modes: Large pre-treatment RMSPE -- the synthetic unit fails to track the treated unit before treatment -> Add donors / predictors, lengthen the pre-period, or use a bias-corrected estimator (sdid, augsynth); Placebo / permutation inference shows the estimate is not extreme relative to donors -> Report the placebo distribution honestly; the effect may not be distinguishable from noise. Alternatives: sp.sdid, sp.augsynth, sp.gsynth, sp.callaway_santanna. Typical minimum N: 15.",
     "input_schema": {
       "properties": {
@@ -6125,6 +6165,98 @@
       "type": "object"
     },
     "name": "dose_response"
+  },
+  {
+    "description": "Double negative control estimator (Miao et al. 2018; Shi et al. 2020). Assumptions: Two valid proxies of the hidden confounder U: a treatment-confounding proxy and an outcome-confounding proxy; Negative-control exposure has no causal effect on Y given (U, X) -- exclusion restriction on the NCE arm; Negative-control outcome is not caused by the treatment D given (U, X). Pre-conditions: data has columns for outcome, treatment, a negative-control exposure (nce) and a negative-control outcome (nco); nce and nco share the unmeasured confounder but satisfy the respective exclusion restrictions. Failure modes: Weak proxy: NCE barely correlated with NCO (weak-instrument analogue) -- unstable ATE -> Use stronger proxies or the doubly-robust regression-based estimator instead of just-identified 2SLS; A proxy violates its exclusion restriction (direct effect on Y or caused by D) -- biased ATE -> Validate the negative controls separately or fall back to a sensitivity analysis. Alternatives: sp.proximal, sp.proximal_regression, sp.frontdoor. Typical minimum N: 200.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "nce": {
+          "description": "nce parameter (str).",
+          "type": "string"
+        },
+        "nco": {
+          "description": "nco parameter (str).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nce",
+        "nco",
+        "treat",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "double_negative_control"
+  },
+  {
+    "description": "Doubly-robust OPE (Dudik et al. 2011). Assumptions: Doubly robust: consistent if EITHER the outcome (Q) model OR the logging propensity model is correctly specified; Positivity / common support holds; No unmeasured confounding in the logged data. Pre-conditions: X, A, R, logging propensities and a fitted Q-model (or its predictions) are available. Failure modes: Both nuisance models misspecified -- DR guarantee is lost and the estimate is biased -> Cross-fit the nuisances or validate the Q-model and propensity fit separately. Alternatives: sp.ips, sp.snips, sp.direct_method. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "n_actions": {
+          "description": "Number of actions.",
+          "type": "integer"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "A",
+        "R",
+        "X",
+        "pi_target"
+      ],
+      "type": "object"
+    },
+    "name": "doubly_robust"
   },
   {
     "description": "Doubly-robust DiD (Sant'Anna & Zhao 2020). Combines outcome regression with IPW; consistent if either model is correct. Primary estimator for 2x2 DiD with covariates. Validation: certified parity evidence. Assumptions: Conditional parallel trends given X; Overlap / positivity: 0 < P(D=1|X) < 1; Correct specification of at least one nuisance model. Pre-conditions: panel or repeated cross-section with 2 periods; group is a binary unit-level treatment indicator; covariates have non-zero variance and overlap. Failure modes: Propensity score near 0/1 (overlap violation) -> Trim extreme propensity scores or use sp.ipw_trim. Alternatives: sp.did_2x2, sp.callaway_santanna, sp.wooldridge_did. Typical minimum N: 100.",
@@ -9160,6 +9292,51 @@
     "name": "interpret_result"
   },
   {
+    "description": "Inverse propensity score OPE. Assumptions: Logging (behaviour) policy propensities are known or correctly estimated; Positivity / common support: the logging policy assigns positive probability to every action the target policy takes; No unmeasured confounding in the logged data. Pre-conditions: X (context), A (logged action), R (reward) and logging propensities are available. Failure modes: High-variance estimate from extreme importance weights when the target policy diverges from logging -> Use self-normalised IPS (snips) or the doubly-robust estimator to reduce variance. Alternatives: sp.snips, sp.doubly_robust, sp.direct_method. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "A",
+        "R",
+        "X",
+        "pi_target"
+      ],
+      "type": "object"
+    },
+    "name": "ips"
+  },
+  {
     "description": "Inverse Probability Weighting for ATE/ATT/ATC with propensity score trimming. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Sequential exchangeability / no unmeasured confounding at each time point; Positivity: every treatment level is possible given the past; Correct specification of the treatment and/or outcome models. Pre-conditions: Sequentially measured covariates, (time-varying) treatment, and outcome; Models for the treatment process and the outcome (or weights). Failure modes: Stabilized weights have extreme values (positivity near-violation) -> Truncate weights, simplify the treatment model, or use a doubly-robust estimator (TMLE). Alternatives: sp.tmle, sp.g_computation, sp.ipw. Typical minimum N: 300.",
     "input_schema": {
       "properties": {
@@ -9236,6 +9413,49 @@
       "type": "object"
     },
     "name": "irf"
+  },
+  {
+    "description": "Segmented regression for interrupted time series.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "hac_lag": {
+          "default": 4,
+          "description": "Newey-West truncation lag.",
+          "type": "integer"
+        },
+        "intervention": {
+          "description": "Time index (integer row position) at which the intervention begins. Required.",
+          "type": "integer"
+        },
+        "seasonality_harmonics": {
+          "default": 2,
+          "description": "seasonality_harmonics parameter (int).",
+          "type": "integer"
+        },
+        "seasonality_period": {
+          "description": "Period P of Fourier seasonal terms (e.g. 12 for monthly data with annual cycle). If None, no seasonality is added.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Time column. If None, uses row index 0..n-1.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "its"
   },
   {
     "description": "Unified IV estimation: 2SLS, LIML, Fuller, GMM, JIVE. Includes first-stage F, Sargan/Hansen J, and Hausman diagnostics. Validation: certified parity evidence. Assumptions: Relevance: instruments predict the endogenous regressor (first-stage F >= 10 rule of thumb); Exclusion: instruments affect outcome only through the endogenous regressor; Monotonicity (for LATE interpretation under heterogeneous effects). Pre-conditions: formula includes the (endog ~ instruments) parenthesised block; at least as many instruments as endogenous regressors (order condition); instruments are not themselves endogenous in the outcome equation. Failure modes: First-stage F < 10 (Stock-Yogo 5% bias) -> Use weak-IV-robust inference (Anderson-Rubin) or LIML; Over-identification test rejects (sp.estat 'overid') -> At least one instrument is invalid; drop instruments or switch to just-identified LIML; Hausman endogeneity test fails to reject -> OLS may be consistent and more efficient; report both. Alternatives: sp.deepiv, sp.bartik, sp.proximal, sp.regress. Typical minimum N: 100.",
@@ -9632,7 +9852,7 @@
           "type": "array"
         },
         "x_exog": {
-          "description": "x_exog parameter (List[str]).",
+          "description": "x_exog parameter (Optional[List[str]]).",
           "items": {
             "type": "string"
           },
@@ -9989,7 +10209,7 @@
           "type": "array"
         },
         "x_exog": {
-          "description": "x_exog parameter (List[str]).",
+          "description": "x_exog parameter (Optional[List[str]]).",
           "items": {
             "type": "string"
           },
@@ -10430,7 +10650,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -10661,6 +10881,91 @@
       "type": "object"
     },
     "name": "lrtest"
+  },
+  {
+    "description": "Longitudinal TMLE for static regime contrasts. Assumptions: Sequential exchangeability (no unmeasured time-varying confounding) at every treatment time point; Positivity at each time point conditional on the past; Correctly specified outcome (Q) and treatment (g) models, though TMLE is doubly robust to one of them. Pre-conditions: Long-format data with time-varying treatment, confounders and the static regime contrast of interest. Failure modes: Near-positivity violation: estimated treatment probabilities approach 0 or 1, inflating variance -> Bound (truncate) the cumulative weights or use a marginal structural model with stabilised weights. Alternatives: sp.tmle, sp.g_computation, sp.msm. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "baseline": {
+          "description": "Baseline time-invariant covariates.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "censoring": {
+          "description": "Censoring indicator column per time point (``1=observed``, ``0=censored``). If None, no censoring is modeled.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "covariates_time": {
+          "description": "``covariates_time[k]`` lists time-k covariate columns (may be empty). Length ``K``.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outcome_type": {
+          "default": "auto",
+          "description": "``auto`` detects from unique values of ``y``.",
+          "enum": [
+            "auto",
+            "binary",
+            "continuous"
+          ],
+          "type": "string"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.01,
+            0.99
+          ],
+          "description": "Clip propensity to this range for stability.",
+          "type": "number"
+        },
+        "regime_control": {
+          "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        },
+        "regime_treated": {
+          "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        },
+        "treatments": {
+          "description": "Treatment column per time point, length ``K``.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "covariates_time",
+        "treatments",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "ltmle"
   },
   {
     "description": "LTMLE for a discrete-time survival outcome under dynamic regimes. Assumptions: Unconfoundedness (sequential exchangeability for longitudinal/LTMLE); Positivity / overlap of treatment given history; At least one nuisance (outcome or treatment) is estimated consistently; the targeting step gives double robustness. Pre-conditions: Covariates, treatment, and outcome (for survival/longitudinal variants: time-to-event and time-varying covariates); Enough data to fit a Super Learner / HAL nuisance library. Failure modes: Near-positivity violations create extreme clever-covariate weights -> Truncate weights, restrict the estimand, or report a positivity diagnostic. Alternatives: sp.dml, sp.ipw, sp.g_computation. Typical minimum N: 400.",
@@ -12601,6 +12906,72 @@
       "type": "object"
     },
     "name": "nbreg"
+  },
+  {
+    "description": "Regress outcome on a *negative-control exposure*. Assumptions: The negative-control exposure has no causal effect on the outcome by design (Lipsitch et al. 2010); It shares the same confounding structure as the real exposure. Pre-conditions: data has the outcome and a negative-control exposure column. Failure modes: Significant coefficient on the negative-control exposure signals residual confounding, not an effect -> Treat a non-zero coefficient as a confounding alarm; add covariates or run a sensitivity analysis. Alternatives: sp.negative_control_outcome, sp.sensemakr, sp.evalue. Typical minimum N: 100.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "nce": {
+          "description": "nce parameter (str).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nce",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "negative_control_exposure"
+  },
+  {
+    "description": "Lipsitch-style NCO calibration. Assumptions: The negative-control outcome is not caused by the treatment (Lipsitch-style calibration); It shares confounders with the real outcome. Pre-conditions: data has a negative-control outcome and a treatment column. Failure modes: Coefficient on treatment differs significantly from zero -- residual confounding detected -> Condition on more covariates or quantify the implied bias with a sensitivity analysis. Alternatives: sp.negative_control_exposure, sp.sensemakr, sp.evalue. Typical minimum N: 100.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Measured confounders to condition on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "nco": {
+          "description": "Negative-control outcome -- a variable plausibly unaffected by the true treatment but sharing confounders with the real Y.",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or exposure variable.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nco",
+        "treat"
+      ],
+      "type": "object"
+    },
+    "name": "negative_control_outcome"
   },
   {
     "description": "Aronow-Samii Horvitz-Thompson estimator for arbitrary interference via a user-supplied exposure mapping. Handles Bernoulli randomisation designs with simulated conservative variance. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Known limitations: design='complete' is reserved but not implemented; passing it raises NotImplementedError. Use design='bernoulli' with p_treat=K/N as an approximation only if that matches the assignment mechanism you are willing to assume. Assumptions: Exposure mapping is correctly specified (as4 / as3 / as2 -- Aronow-Samii hierarchy); Positivity: every exposure level has positive probability under the design; Network adjacency is fixed / known (measurement error in ties introduces bias). Pre-conditions: adjacency is a binary n x n matrix encoding network ties; Y, Z have same length n; randomisation design is known (bernoulli with p_treat, or complete). Failure modes: Some exposure level has < 5 observed units -> Switch to a coarser mapping (as4 -> as3) or increase sample size; Variance estimate extremely conservative (wide CI) -> HT-style variance is conservative by design -- use sp.spillover for...",
@@ -14553,7 +14924,7 @@
         },
         "at_values": {
           "description": "Variable values for ``marginal_effects='at'``.",
-          "type": "object"
+          "type": "number"
         },
         "cluster": {
           "description": "Column name for clustered standard errors.",
@@ -14697,6 +15068,60 @@
       "type": "object"
     },
     "name": "proximal"
+  },
+  {
+    "description": "Doubly-robust regression-based PCI estimator for the ATE. Assumptions: A treatment-inducing confounding proxy Z and an outcome-inducing confounding proxy W are observed; Outcome and treatment confounding bridge functions exist (proximal-g and proximal-h completeness conditions); Latent confounding is fully captured by (Z, W, X) -- no residual unmeasured confounding outside the proxy span. Pre-conditions: data has outcome, binary treatment, z_proxy and w_proxy columns; treatment is binary for the bridge logistic step. Failure modes: Treatment-bridge logistic regression fails to converge; propensity collapses to the marginal P(D=1) -> Check detail['propensity_fallback']; the DR correction is neutralised -- improve proxies or covariates. Alternatives: sp.proximal, sp.double_negative_control, sp.frontdoor. Typical minimum N: 200.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Measured covariates X.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.02,
+            0.98
+          ],
+          "description": "propensity_bounds parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "treat": {
+          "description": "Binary treatment column.",
+          "type": "string"
+        },
+        "w_proxy": {
+          "description": "Outcome-inducing confounding proxy W.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        },
+        "z_proxy": {
+          "description": "Treatment-inducing confounding proxy Z.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "treat",
+        "w_proxy",
+        "y",
+        "z_proxy"
+      ],
+      "type": "object"
+    },
+    "name": "proximal_regression"
   },
   {
     "description": "Compute comprehensive propensity score balance table.",
@@ -15451,10 +15876,7 @@
             8
           ],
           "description": "Figure size.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "number"
         },
         "plot_type": {
           "default": "scatter",
@@ -16700,7 +17122,7 @@
           "type": "number"
         },
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "bw_grid": {
@@ -16713,10 +17135,7 @@
             2.0
           ],
           "description": "Range of multipliers for the optimal bandwidth.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "type": "number"
         },
         "c": {
           "default": 0,
@@ -16728,11 +17147,8 @@
             10,
             6
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "fuzzy": {
           "description": "Treatment variable for fuzzy RD.",
@@ -16969,7 +17385,7 @@
         },
         "h": {
           "description": "Bandwidth in the same units as the numeric time axis (days if datetime). If None, an MSE-optimal bandwidth is selected automatically.",
-          "type": "integer"
+          "type": "number"
         },
         "kernel": {
           "default": "triangular",
@@ -17108,7 +17524,7 @@
           "type": "number"
         },
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "c": {
@@ -17121,11 +17537,8 @@
             10,
             6
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "fuzzy": {
           "description": "Treatment variable for fuzzy RD.",
@@ -17177,7 +17590,7 @@
     "input_schema": {
       "properties": {
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "binselect": {
@@ -17212,11 +17625,8 @@
             10,
             7
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "h": {
           "description": "Bandwidth to display.",
@@ -17294,7 +17704,7 @@
     "input_schema": {
       "properties": {
         "ax": {
-          "description": "ax parameter.",
+          "description": "ax parameter (Optional[Any]).",
           "type": "string"
         },
         "c": {
@@ -17312,11 +17722,8 @@
             10,
             7
           ],
-          "description": "figsize parameter (tuple).",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "description": "figsize parameter (Tuple[float, float]).",
+          "type": "number"
         },
         "h": {
           "description": "Bandwidth. If None, side-specific Silverman pilot.",
@@ -18326,6 +18733,122 @@
     "name": "romano_wolf"
   },
   {
+    "description": "Compute Rosenbaum bounds on a paired observational study.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level used to report ``gamma_critical``.",
+          "type": "number"
+        },
+        "alternative": {
+          "default": "greater",
+          "description": "Direction of the alternative hypothesis for the treatment effect.",
+          "enum": [
+            "greater",
+            "less",
+            "two-sided"
+          ],
+          "type": "string"
+        },
+        "control": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "gamma_grid": {
+          "description": "Gamma values (>= 1) over which to compute bounding p-values.",
+          "type": "number"
+        },
+        "method": {
+          "default": "wilcoxon",
+          "description": "Wilcoxon signed-rank bound (continuous) or binomial sign test (robust / binary).",
+          "enum": [
+            "wilcoxon",
+            "sign"
+          ],
+          "type": "string"
+        },
+        "pair_id": {
+          "description": "pair_id parameter (Optional[str]).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "treated": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "rosenbaum_bounds"
+  },
+  {
+    "description": "Compute Rosenbaum bounds on a paired observational study.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level used to report ``gamma_critical``.",
+          "type": "number"
+        },
+        "alternative": {
+          "default": "greater",
+          "description": "Direction of the alternative hypothesis for the treatment effect.",
+          "enum": [
+            "greater",
+            "less",
+            "two-sided"
+          ],
+          "type": "string"
+        },
+        "control": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "gamma_grid": {
+          "description": "Gamma values (>= 1) over which to compute bounding p-values.",
+          "type": "number"
+        },
+        "method": {
+          "default": "wilcoxon",
+          "description": "Wilcoxon signed-rank bound (continuous) or binomial sign test (robust / binary).",
+          "enum": [
+            "wilcoxon",
+            "sign"
+          ],
+          "type": "string"
+        },
+        "pair_id": {
+          "description": "pair_id parameter (Optional[str]).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "treated": {
+          "description": "Outcome in the treated / control unit of each matched pair (same length). Ignored if ``data`` is provided.",
+          "type": "number"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "rosenbaum_gamma"
+  },
+  {
     "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE Assumptions: Unconfoundedness: treatment is as-good-as-random given the measured covariates; Overlap / common support: every unit has a non-degenerate probability of each treatment; The covariate set blocks all back-door paths. Pre-conditions: Pre-treatment covariates measured for treated and control units; A binary (or low-cardinality) treatment indicator; Sufficient covariate overlap between treatment arms. Failure modes: Poor overlap -- extreme propensity scores or few acceptable matches -> Trim or restrict to the common-support region and report the discarded units; Covariate imbalance remains after matching/weighting -> Re-specify the balancing model (CBPS, entropy balancing) and re-check standardized mean differences. Alternatives: sp.propensity_score, sp.cbps, sp.ebalance, sp.dml. Typical minimum N: 200.",
     "input_schema": {
       "properties": {
@@ -18522,6 +19045,43 @@
       "type": "object"
     },
     "name": "scest"
+  },
+  {
+    "description": "Adversarial dose-response estimator (Bica et al. 2020). Assumptions: Unconfoundedness given covariates X for the continuous treatment; Positivity over the dose support; The adversarial generator recovers the counterfactual dose distribution (Bica et al. 2020). Pre-conditions: data with a continuous treatment (dose), outcome and covariates; torch is installed (neural extra) -- imported lazily. Failure modes: Unstable adversarial training -- dose-response estimates vary across seeds -> Average across seeds or use the smoother varying-coefficient estimator. Alternatives: sp.vcnet, sp.dose_response. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "propensity_weights": {
+          "description": "propensity_weights parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "t_grid": {
+          "description": "Grid of t values to evaluate.",
+          "type": "number"
+        },
+        "treatment": {
+          "description": "Treatment indicator, treatment variable, or treatment array.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "covariates",
+        "treatment",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "scigan"
   },
   {
     "description": "Prediction intervals for synthetic control methods. Assumptions: A convex (or regularized) combination of donor units reproduces the treated unit's pre-treatment outcome path; No interference: the treatment does not affect the donor units (SUTVA); No anticipation before the treatment date. Pre-conditions: Panel of one or more treated units plus an untreated donor pool, observed over time; Pre-treatment window long enough to fit donor weights (rule of thumb: more pre-periods than donors used); Outcome observed for every unit in every period. Failure modes: Large pre-treatment RMSPE -- the synthetic unit fails to track the treated unit before treatment -> Add donors / predictors, lengthen the pre-period, or use a bias-corrected estimator (sdid, augsynth); Placebo / permutation inference shows the estimate is not extreme relative to donors -> Report the placebo distribution honestly; the effect may not be distinguishable from noise. Alternatives: sp.sdid, sp.augsynth, sp.gsynth, sp.callaway_santanna. Typical minimum N: 15.",
@@ -19140,6 +19700,51 @@
       "type": "object"
     },
     "name": "shapley_inequality"
+  },
+  {
+    "description": "Self-normalised IPS (bias-reduction for large IS weights). Assumptions: Same identification conditions as IPS (known propensities, positivity, no unmeasured confounding); Self-normalisation trades a small bias for large variance reduction under heavy importance weights. Pre-conditions: X (context), A (logged action), R (reward) and logging propensities are available. Failure modes: Residual bias when effective sample size is tiny (few logged actions overlap the target policy) -> Collect more on-support logged data or switch to the doubly-robust estimator. Alternatives: sp.ips, sp.doubly_robust, sp.direct_method. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "R": {
+          "description": "R parameter (np.ndarray).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "clip": {
+          "default": 50.0,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "pi_behavior": {
+          "description": "pi_behavior parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "pi_target": {
+          "description": "pi_target parameter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "A",
+        "R",
+        "X",
+        "pi_target"
+      ],
+      "type": "object"
+    },
+    "name": "snips"
   },
   {
     "description": "Lerman-Yitzhaki (1985) Gini source decomposition.",
@@ -21650,6 +22255,69 @@
       "type": "object"
     },
     "name": "var"
+  },
+  {
+    "description": "Varying-coefficient dose-response estimator. Assumptions: Unconfoundedness given covariates X (no hidden confounding of the continuous treatment); Positivity over the dose: every dose has support across X; The dose-response curve is smooth (varying-coefficient prior). Pre-conditions: data with a continuous treatment (dose), outcome and covariates; torch is installed (neural extra) -- imported lazily. Failure modes: Sparse support at extreme doses yields an unreliable dose-response curve there -> Restrict the reported dose range to the supported region or compare against scigan. Alternatives: sp.scigan, sp.dose_response. Typical minimum N: 500.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_basis": {
+          "default": 6,
+          "description": "Number of B-spline basis functions for the t-axis.",
+          "type": "integer"
+        },
+        "n_bootstrap": {
+          "default": 200,
+          "description": "Number of bootstrap replications.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "ridge": {
+          "default": 0.01,
+          "description": "Tikhonov regularisation on the coefficient matrix.",
+          "type": "number"
+        },
+        "spline_degree": {
+          "default": 3,
+          "description": "spline_degree parameter (int).",
+          "type": "integer"
+        },
+        "t_grid": {
+          "description": "Treatment values at which to evaluate the dose-response curve. Defaults to 40 equally-spaced points between the observed min/max.",
+          "type": "number"
+        },
+        "treatment": {
+          "description": "Continuous treatment / dose column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "covariates",
+        "treatment",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "vcnet"
   },
   {
     "description": "Empirically verify a single recommendation.",

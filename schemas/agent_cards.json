@@ -10374,41 +10374,39 @@
   },
   {
     "alternatives": [
-      "inward_outward_spillover",
-      "cluster_cross_interference",
       "spillover",
+      "network_exposure",
       "interference"
     ],
     "assumptions": [
-      "Partially-linear network model with scalar neighbourhood exposure E_i (e.g. share treated)",
-      "Conditional exogeneity: residual mean zero given covariates, own treatment, and exposure",
-      "Exposure mapping E_i correctly summarises neighbourhood treatment",
-      "Cross-fitting nuisances are consistently estimated"
+      "Partial / network interference: unit i's outcome depends on its own treatment and a correctly-specified scalar summary of neighbourhood exposure (e.g. share of neighbours treated)",
+      "No unmeasured confounding of the direct and spillover effects given covariates X",
+      "Overlap in both own-treatment and neighbourhood exposure given X",
+      "Cross-fit nuisances are consistently estimated (the moment is Neyman-orthogonal, so first-order insensitive to nuisance error)"
     ],
     "category": "interference",
     "description": "Orthogonal learning of direct + spillover effects under network interference via cross-fitted double-residualisation (Wu & Yuan 2025, arXiv:2509.18484).",
     "example": "",
     "failure_modes": [
       {
-        "alternative": "inward_outward_spillover",
-        "exception": "ConvergenceFailure",
-        "remedy": "Reduce model complexity or n_folds, or supply richer covariates.",
-        "symptom": "Nuisance models overfit or fail to converge in cross-fitting"
+        "alternative": "spillover",
+        "exception": "DataInsufficient",
+        "remedy": "Add observations or lower n_folds.",
+        "symptom": "Too few complete rows for n_folds cross-fitting"
       },
       {
-        "alternative": "cluster_cross_interference",
-        "exception": "DataInsufficient",
-        "remedy": "Lower n_folds or collect more units.",
-        "symptom": "Sample too small to split into n_folds cross-fit folds"
+        "alternative": "network_exposure",
+        "exception": "AssumptionViolation",
+        "remedy": "Validate the exposure mapping or use the design-based Aronow-Samii estimator.",
+        "symptom": "Mis-specified exposure mapping biases the spillover estimate (the scalar summary omits the true interference structure)"
       }
     ],
     "inherits_from": null,
     "limitations": [],
     "name": "network_hte",
     "pre_conditions": [
-      "Outcome, own-treatment, and scalar neighbor_exposure columns",
-      "Covariate set sufficient to satisfy the orthogonality (conditional mean) condition",
-      "Enough observations to support n_folds cross-fitting"
+      "data has outcome, unit treatment, a precomputed neighbour-exposure column and covariates",
+      "enough rows for n_folds-fold cross-fitting (>= 10*n_folds)"
     ],
     "reference": "Wu & Yuan (arXiv:2509.18484, 2025).",
     "signature": {
@@ -10456,7 +10454,7 @@
       }
     },
     "stability": "stable",
-    "typical_n_min": 500,
+    "typical_n_min": 200,
     "validation_notes": [
       "API/unit contract evidence: tests/test_interference_extensions.py"
     ],
@@ -10465,15 +10463,13 @@
   {
     "alternatives": [
       "network_hte",
-      "cluster_cross_interference",
       "spillover",
       "interference"
     ],
     "assumptions": [
-      "Directed-network interference separable into inward (incoming edges) and outward (outgoing edges) channels",
-      "Exposure summaries E_in and E_out correctly constructed from the directed adjacency",
-      "Linear partially-additive model in own treatment and the two directed exposures",
-      "Known directed network structure used to build the two exposure columns"
+      "Directed-network inward and outward exposure summaries are correctly constructed (incoming vs outgoing treated-neighbour shares)",
+      "The partially-linear spillover model is correctly specified",
+      "No unmeasured confounding of treatment and exposures given X"
     ],
     "category": "interference",
     "description": "Decompose network spillover into inward (incoming edges to unit i) and outward (from i to neighbours) components.",
@@ -10482,22 +10478,15 @@
       {
         "alternative": "network_hte",
         "exception": "NumericalInstability",
-        "remedy": "Check that the directed network actually distinguishes incoming from outgoing edges.",
-        "symptom": "inward and outward exposure nearly collinear, unstable tau_in/tau_out"
-      },
-      {
-        "alternative": "network_exposure",
-        "exception": "ValueError",
-        "remedy": "Build numeric directed inward/outward exposure shares before calling.",
-        "symptom": "Exposure column missing or non-numeric"
+        "remedy": "Check the correlation of the two exposure summaries; report the components rather than the ratio.",
+        "symptom": "Inward and outward exposures are near-collinear, so the in/out ratio is unstable"
       }
     ],
     "inherits_from": null,
     "limitations": [],
     "name": "inward_outward_spillover",
     "pre_conditions": [
-      "Outcome and unit-level treatment columns",
-      "User-constructed inward_exposure and outward_exposure columns from a directed network"
+      "data has outcome, unit treatment, an inward-exposure and an outward-exposure column"
     ],
     "reference": "Fang, Airoldi & Forastiere (arXiv:2506.06615, 2025).",
     "signature": {
@@ -22069,7 +22058,7 @@
           },
           "h": {
             "description": "Bandwidth in the same units as the numeric time axis (days if datetime). If None, an MSE-optimal bandwidth is selected automatically.",
-            "type": "integer"
+            "type": "number"
           },
           "kernel": {
             "default": "triangular",
@@ -30086,7 +30075,7 @@
             "type": "array"
           },
           "x_exog": {
-            "description": "x_exog parameter (List[str]).",
+            "description": "x_exog parameter (Optional[List[str]]).",
             "items": {
               "type": "string"
             },
@@ -35580,6 +35569,948 @@
           "data",
           "y",
           "running"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "proximal",
+      "proximal_regression",
+      "frontdoor"
+    ],
+    "assumptions": [
+      "Two valid proxies of the hidden confounder U: a treatment-confounding proxy and an outcome-confounding proxy",
+      "Negative-control exposure has no causal effect on Y given (U, X) -- exclusion restriction on the NCE arm",
+      "Negative-control outcome is not caused by the treatment D given (U, X)",
+      "Completeness / bridge conditions hold so the just-identified 2SLS de-biases U (Miao et al. 2018; Shi et al. 2020)"
+    ],
+    "category": "causal",
+    "description": "Double negative control estimator (Miao et al. 2018; Shi et al. 2020).",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "proximal_regression",
+        "exception": "NumericalInstability",
+        "remedy": "Use stronger proxies or the doubly-robust regression-based estimator instead of just-identified 2SLS",
+        "symptom": "Weak proxy: NCE barely correlated with NCO (weak-instrument analogue) -- unstable ATE"
+      },
+      {
+        "alternative": "sensemakr",
+        "exception": "IdentificationFailure",
+        "remedy": "Validate the negative controls separately or fall back to a sensitivity analysis",
+        "symptom": "A proxy violates its exclusion restriction (direct effect on Y or caused by D) -- biased ATE"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "double_negative_control",
+    "pre_conditions": [
+      "data has columns for outcome, treatment, a negative-control exposure (nce) and a negative-control outcome (nco)",
+      "nce and nco share the unmeasured confounder but satisfy the respective exclusion restrictions"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Double negative control estimator (Miao et al. 2018; Shi et al. 2020).",
+      "name": "double_negative_control",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "covariates": {
+            "description": "Covariate matrix, DataFrame, or column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "nce": {
+            "description": "nce parameter (str).",
+            "type": "string"
+          },
+          "nco": {
+            "description": "nco parameter (str).",
+            "type": "string"
+          },
+          "treat": {
+            "description": "Treatment indicator or first-treatment-period column.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treat",
+          "nce",
+          "nco"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "negative_control_outcome",
+      "sensemakr",
+      "evalue"
+    ],
+    "assumptions": [
+      "The negative-control exposure has no causal effect on the outcome by design (Lipsitch et al. 2010)",
+      "It shares the same confounding structure as the real exposure"
+    ],
+    "category": "causal",
+    "description": "Regress outcome on a *negative-control exposure*.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "negative_control_outcome",
+        "exception": "AssumptionWarning",
+        "remedy": "Treat a non-zero coefficient as a confounding alarm; add covariates or run a sensitivity analysis",
+        "symptom": "Significant coefficient on the negative-control exposure signals residual confounding, not an effect"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "negative_control_exposure",
+    "pre_conditions": [
+      "data has the outcome and a negative-control exposure column"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Regress outcome on a *negative-control exposure*.",
+      "name": "negative_control_exposure",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "covariates": {
+            "description": "Covariate matrix, DataFrame, or column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "nce": {
+            "description": "nce parameter (str).",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "nce"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 100,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "negative_control_exposure",
+      "sensemakr",
+      "evalue"
+    ],
+    "assumptions": [
+      "The negative-control outcome is not caused by the treatment (Lipsitch-style calibration)",
+      "It shares confounders with the real outcome"
+    ],
+    "category": "causal",
+    "description": "Lipsitch-style NCO calibration.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "negative_control_exposure",
+        "exception": "AssumptionWarning",
+        "remedy": "Condition on more covariates or quantify the implied bias with a sensitivity analysis",
+        "symptom": "Coefficient on treatment differs significantly from zero -- residual confounding detected"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "negative_control_outcome",
+    "pre_conditions": [
+      "data has a negative-control outcome and a treatment column"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Lipsitch-style NCO calibration.",
+      "name": "negative_control_outcome",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "covariates": {
+            "description": "Measured confounders to condition on.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "nco": {
+            "description": "Negative-control outcome -- a variable plausibly unaffected by the true treatment but sharing confounders with the real Y.",
+            "type": "string"
+          },
+          "treat": {
+            "description": "Treatment indicator or exposure variable.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "nco",
+          "treat"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 100,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "proximal",
+      "double_negative_control",
+      "frontdoor"
+    ],
+    "assumptions": [
+      "A treatment-inducing confounding proxy Z and an outcome-inducing confounding proxy W are observed",
+      "Outcome and treatment confounding bridge functions exist (proximal-g and proximal-h completeness conditions)",
+      "Latent confounding is fully captured by (Z, W, X) -- no residual unmeasured confounding outside the proxy span"
+    ],
+    "category": "causal",
+    "description": "Doubly-robust regression-based PCI estimator for the ATE.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "double_negative_control",
+        "exception": "ConvergenceWarning",
+        "remedy": "Check detail['propensity_fallback']; the DR correction is neutralised -- improve proxies or covariates",
+        "symptom": "Treatment-bridge logistic regression fails to converge; propensity collapses to the marginal P(D=1)"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "proximal_regression",
+    "pre_conditions": [
+      "data has outcome, binary treatment, z_proxy and w_proxy columns",
+      "treatment is binary for the bridge logistic step"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Doubly-robust regression-based PCI estimator for the ATE.",
+      "name": "proximal_regression",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "covariates": {
+            "description": "Measured covariates X.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "propensity_bounds": {
+            "default": [
+              0.02,
+              0.98
+            ],
+            "description": "propensity_bounds parameter (tuple).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "treat": {
+            "description": "Binary treatment column.",
+            "type": "string"
+          },
+          "w_proxy": {
+            "description": "Outcome-inducing confounding proxy W.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome column.",
+            "type": "string"
+          },
+          "z_proxy": {
+            "description": "Treatment-inducing confounding proxy Z.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treat",
+          "z_proxy",
+          "w_proxy"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "doubly_robust",
+      "ips",
+      "snips"
+    ],
+    "assumptions": [
+      "Plug-in outcome regression (Q-model) is correctly specified",
+      "No unmeasured confounding in the logged data"
+    ],
+    "category": "causal",
+    "description": "Direct outcome regression (plug-in Q-model) OPE.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "doubly_robust",
+        "exception": "AssumptionWarning",
+        "remedy": "Prefer the doubly-robust estimator, which is robust to Q-model misspecification",
+        "symptom": "Model misspecification bias -- the Q-model extrapolates outside the logged action support"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "direct_method",
+    "pre_conditions": [
+      "X (context), A (logged action), R (reward) are available to fit the outcome model"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Direct outcome regression (plug-in Q-model) OPE.",
+      "name": "direct_method",
+      "parameters": {
+        "properties": {
+          "A": {
+            "description": "A parameter (np.ndarray).",
+            "type": "string"
+          },
+          "R": {
+            "description": "R parameter (np.ndarray).",
+            "type": "string"
+          },
+          "X": {
+            "description": "Feature matrix or covariate DataFrame.",
+            "type": "string"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "n_actions": {
+            "description": "Number of actions.",
+            "type": "integer"
+          },
+          "pi_target": {
+            "description": "pi_target parameter.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "X",
+          "A",
+          "R",
+          "pi_target"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "ips",
+      "snips",
+      "direct_method"
+    ],
+    "assumptions": [
+      "Doubly robust: consistent if EITHER the outcome (Q) model OR the logging propensity model is correctly specified",
+      "Positivity / common support holds",
+      "No unmeasured confounding in the logged data"
+    ],
+    "category": "causal",
+    "description": "Doubly-robust OPE (Dudik et al. 2011).",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "snips",
+        "exception": "AssumptionWarning",
+        "remedy": "Cross-fit the nuisances or validate the Q-model and propensity fit separately",
+        "symptom": "Both nuisance models misspecified -- DR guarantee is lost and the estimate is biased"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "doubly_robust",
+    "pre_conditions": [
+      "X, A, R, logging propensities and a fitted Q-model (or its predictions) are available"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Doubly-robust OPE (Dudik et al. 2011).",
+      "name": "doubly_robust",
+      "parameters": {
+        "properties": {
+          "A": {
+            "description": "A parameter (np.ndarray).",
+            "type": "string"
+          },
+          "R": {
+            "description": "R parameter (np.ndarray).",
+            "type": "string"
+          },
+          "X": {
+            "description": "Feature matrix or covariate DataFrame.",
+            "type": "string"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "clip": {
+            "default": 50.0,
+            "description": "clip parameter (float).",
+            "type": "number"
+          },
+          "n_actions": {
+            "description": "Number of actions.",
+            "type": "integer"
+          },
+          "pi_behavior": {
+            "description": "pi_behavior parameter (Optional[np.ndarray]).",
+            "type": "string"
+          },
+          "pi_target": {
+            "description": "pi_target parameter.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "X",
+          "A",
+          "R",
+          "pi_target"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "snips",
+      "doubly_robust",
+      "direct_method"
+    ],
+    "assumptions": [
+      "Logging (behaviour) policy propensities are known or correctly estimated",
+      "Positivity / common support: the logging policy assigns positive probability to every action the target policy takes",
+      "No unmeasured confounding in the logged data"
+    ],
+    "category": "causal",
+    "description": "Inverse propensity score OPE.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "snips",
+        "exception": "NumericalInstability",
+        "remedy": "Use self-normalised IPS (snips) or the doubly-robust estimator to reduce variance",
+        "symptom": "High-variance estimate from extreme importance weights when the target policy diverges from logging"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "ips",
+    "pre_conditions": [
+      "X (context), A (logged action), R (reward) and logging propensities are available"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Inverse propensity score OPE.",
+      "name": "ips",
+      "parameters": {
+        "properties": {
+          "A": {
+            "description": "A parameter (np.ndarray).",
+            "type": "string"
+          },
+          "R": {
+            "description": "R parameter (np.ndarray).",
+            "type": "string"
+          },
+          "X": {
+            "description": "Feature matrix or covariate DataFrame.",
+            "type": "string"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "clip": {
+            "default": 50.0,
+            "description": "clip parameter (float).",
+            "type": "number"
+          },
+          "pi_behavior": {
+            "description": "pi_behavior parameter (Optional[np.ndarray]).",
+            "type": "string"
+          },
+          "pi_target": {
+            "description": "pi_target parameter.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "X",
+          "A",
+          "R",
+          "pi_target"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "ips",
+      "doubly_robust",
+      "direct_method"
+    ],
+    "assumptions": [
+      "Same identification conditions as IPS (known propensities, positivity, no unmeasured confounding)",
+      "Self-normalisation trades a small bias for large variance reduction under heavy importance weights"
+    ],
+    "category": "causal",
+    "description": "Self-normalised IPS (bias-reduction for large IS weights).",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "doubly_robust",
+        "exception": "DataInsufficient",
+        "remedy": "Collect more on-support logged data or switch to the doubly-robust estimator",
+        "symptom": "Residual bias when effective sample size is tiny (few logged actions overlap the target policy)"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "snips",
+    "pre_conditions": [
+      "X (context), A (logged action), R (reward) and logging propensities are available"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Self-normalised IPS (bias-reduction for large IS weights).",
+      "name": "snips",
+      "parameters": {
+        "properties": {
+          "A": {
+            "description": "A parameter (np.ndarray).",
+            "type": "string"
+          },
+          "R": {
+            "description": "R parameter (np.ndarray).",
+            "type": "string"
+          },
+          "X": {
+            "description": "Feature matrix or covariate DataFrame.",
+            "type": "string"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "clip": {
+            "default": 50.0,
+            "description": "clip parameter (float).",
+            "type": "number"
+          },
+          "pi_behavior": {
+            "description": "pi_behavior parameter (Optional[np.ndarray]).",
+            "type": "string"
+          },
+          "pi_target": {
+            "description": "pi_target parameter.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "X",
+          "A",
+          "R",
+          "pi_target"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "tmle",
+      "g_computation",
+      "msm"
+    ],
+    "assumptions": [
+      "Sequential exchangeability (no unmeasured time-varying confounding) at every treatment time point",
+      "Positivity at each time point conditional on the past",
+      "Correctly specified outcome (Q) and treatment (g) models, though TMLE is doubly robust to one of them",
+      "Consistency / SUTVA across the longitudinal regime"
+    ],
+    "category": "causal",
+    "description": "Longitudinal TMLE for static regime contrasts.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "msm",
+        "exception": "NumericalInstability",
+        "remedy": "Bound (truncate) the cumulative weights or use a marginal structural model with stabilised weights",
+        "symptom": "Near-positivity violation: estimated treatment probabilities approach 0 or 1, inflating variance"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "ltmle",
+    "pre_conditions": [
+      "Long-format data with time-varying treatment, confounders and the static regime contrast of interest"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Longitudinal TMLE for static regime contrasts.",
+      "name": "ltmle",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "baseline": {
+            "description": "Baseline time-invariant covariates.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "censoring": {
+            "description": "Censoring indicator column per time point (``1=observed``, ``0=censored``). If None, no censoring is modeled.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "covariates_time": {
+            "description": "``covariates_time[k]`` lists time-k covariate columns (may be empty). Length ``K``.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "Wide-format panel: one row per unit.",
+            "type": "string"
+          },
+          "outcome_type": {
+            "default": "auto",
+            "description": "``auto`` detects from unique values of ``y``.",
+            "enum": [
+              "auto",
+              "binary",
+              "continuous"
+            ],
+            "type": "string"
+          },
+          "propensity_bounds": {
+            "default": [
+              0.01,
+              0.99
+            ],
+            "description": "Clip propensity to this range for stability.",
+            "type": "number"
+          },
+          "regime_control": {
+            "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+            "enum": [
+              "0",
+              "1"
+            ],
+            "type": "string"
+          },
+          "regime_treated": {
+            "description": "Regimes to contrast. Default: all-1 vs all-0. A regime may also be a **callable** ``regime(k, history)`` for *dynamic regimes* that depend on the simulated / observed history of baseline and time-varying covariates. The callable receives ``k`` (int 0..K-1) and ``history`` -- a dict mapping column name to the length-``n`` numpy array observed up to that timepoint -- and must return a length-``n`` numpy array of 0/1 treatment assignments.",
+            "enum": [
+              "0",
+              "1"
+            ],
+            "type": "string"
+          },
+          "treatments": {
+            "description": "Treatment column per time point, length ``K``.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Final outcome column.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treatments",
+          "covariates_time"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "vcnet",
+      "dose_response"
+    ],
+    "assumptions": [
+      "Unconfoundedness given covariates X for the continuous treatment",
+      "Positivity over the dose support",
+      "The adversarial generator recovers the counterfactual dose distribution (Bica et al. 2020)"
+    ],
+    "category": "causal",
+    "description": "Adversarial dose-response estimator (Bica et al. 2020).",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "vcnet",
+        "exception": "ConvergenceWarning",
+        "remedy": "Average across seeds or use the smoother varying-coefficient estimator",
+        "symptom": "Unstable adversarial training -- dose-response estimates vary across seeds"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "scigan",
+    "pre_conditions": [
+      "data with a continuous treatment (dose), outcome and covariates",
+      "torch is installed (neural extra) -- imported lazily"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Adversarial dose-response estimator (Bica et al. 2020).",
+      "name": "scigan",
+      "parameters": {
+        "properties": {
+          "covariates": {
+            "description": "Covariate matrix, DataFrame, or column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "propensity_weights": {
+            "description": "propensity_weights parameter (Optional[np.ndarray]).",
+            "type": "string"
+          },
+          "t_grid": {
+            "description": "Grid of t values to evaluate.",
+            "type": "number"
+          },
+          "treatment": {
+            "description": "Treatment indicator, treatment variable, or treatment array.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treatment",
+          "covariates"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 500,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "scigan",
+      "dose_response"
+    ],
+    "assumptions": [
+      "Unconfoundedness given covariates X (no hidden confounding of the continuous treatment)",
+      "Positivity over the dose: every dose has support across X",
+      "The dose-response curve is smooth (varying-coefficient prior)"
+    ],
+    "category": "causal",
+    "description": "Varying-coefficient dose-response estimator.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "scigan",
+        "exception": "DataInsufficient",
+        "remedy": "Restrict the reported dose range to the supported region or compare against scigan",
+        "symptom": "Sparse support at extreme doses yields an unreliable dose-response curve there"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "vcnet",
+    "pre_conditions": [
+      "data with a continuous treatment (dose), outcome and covariates",
+      "torch is installed (neural extra) -- imported lazily"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Varying-coefficient dose-response estimator.",
+      "name": "vcnet",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "covariates": {
+            "description": "Covariate matrix, DataFrame, or column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "n_basis": {
+            "default": 6,
+            "description": "Number of B-spline basis functions for the t-axis.",
+            "type": "integer"
+          },
+          "n_bootstrap": {
+            "default": 200,
+            "description": "Number of bootstrap replications.",
+            "type": "integer"
+          },
+          "random_state": {
+            "default": 42,
+            "description": "Random seed or RandomState for reproducible stochastic steps.",
+            "type": "integer"
+          },
+          "ridge": {
+            "default": 0.01,
+            "description": "Tikhonov regularisation on the coefficient matrix.",
+            "type": "number"
+          },
+          "spline_degree": {
+            "default": 3,
+            "description": "spline_degree parameter (int).",
+            "type": "integer"
+          },
+          "t_grid": {
+            "description": "Treatment values at which to evaluate the dose-response curve. Defaults to 40 equally-spaced points between the observed min/max.",
+            "type": "number"
+          },
+          "treatment": {
+            "description": "Continuous treatment / dose column.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treatment",
+          "covariates"
         ],
         "type": "object"
       }

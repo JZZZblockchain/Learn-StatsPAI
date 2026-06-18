@@ -21,7 +21,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Tuple, Union
 
 from .question import CausalQuestion, causal_question
 
@@ -90,7 +90,7 @@ def _yaml_loads(text: str) -> Any:
     except ImportError:
         pass
 
-    def _parse_scalar(s: str):
+    def _parse_scalar(s: str) -> Any:
         s = s.strip()
         if s.startswith('"') and s.endswith('"'):
             return s[1:-1].replace('\\"', '"')
@@ -108,7 +108,7 @@ def _yaml_loads(text: str) -> Any:
     lines = [ln for ln in text.splitlines() if ln.strip()]
     root: Any = None
 
-    def _consume_block(idx: int, base_indent: int):
+    def _consume_block(idx: int, base_indent: int) -> Tuple[Any, int]:
         """Return (value, next_idx)."""
         out: Any = None
         while idx < len(lines):

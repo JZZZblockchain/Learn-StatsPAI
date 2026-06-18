@@ -6,6 +6,39 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **Agent-native `.to_dict()` serialization on the domain result objects.**
+  The flagship `CausalResult` / `EconometricResults` already serialised to a
+  JSON-safe dict, but the lighter result dataclasses only had `.summary()`.
+  Ten more now expose `.to_dict()` — `NegativeControlResult`,
+  `ProximalRegResult`, `FourWayResult`, `NetworkHTEResult`,
+  `InwardOutwardResult`, `ITSResult`, `RosenbaumResult`,
+  `BCFFactorExposureResult`, `BCFLongResult` and `BCFOrdinalResult` — so an
+  agent gets the same structured, `json.dumps`-safe payload (numpy / pandas /
+  NaN-aware) from every estimator's result, not just the regression families.
+  The conversion reuses the existing `core.results._to_jsonable` through a new
+  one-line shared helper (`statspai._result_serialize.result_to_dict`), so the
+  logic lives in exactly one place. Pinned by `tests/test_result_to_dict.py`.
+- **29 estimators made agent-discoverable (`__all__` / registry drift repair).**
+  A family of estimators — the proximal / negative-control identification
+  methods (`sp.double_negative_control`, `sp.proximal_regression`,
+  `sp.negative_control_outcome`, `sp.negative_control_exposure`), the
+  off-policy-evaluation estimators (`sp.ips`, `sp.snips`, `sp.doubly_robust`,
+  `sp.direct_method`), `sp.four_way_decomposition`, `sp.its`, `sp.ltmle`,
+  `sp.harvest_did`, `sp.overlap_weighted_did`, `sp.network_hte`,
+  `sp.inward_outward_spillover`, the shift-share political-economy designs,
+  the neural dose-response estimators (`sp.vcnet`, `sp.scigan`),
+  `sp.rosenbaum_bounds` / `sp.rosenbaum_gamma`, the BCF extensions, and more
+  — already shipped on `sp.<name>` but were missing from `__all__`. Because the
+  registry auto-pass walks `__all__`, every one of them was invisible to
+  `sp.list_functions()`, `sp.describe_function()` and `sp.function_schema()`,
+  violating the agent-native contract that the help tools resolve for *every*
+  public symbol. They (plus their result classes) are now in `__all__`, so they
+  appear in the registry (1033 → 1070 functions), `from statspai import *` is
+  complete, and the MCP schema bundle covers them. Eleven of them additionally
+  gained hand-written agent-native cards (identifying assumptions, failure
+  modes, alternatives). The `__all__`↔registry drift guard baseline shrank from
+  44 → 25, locking the gain in. Pinned by `tests/test_registry_drift_repair.py`
+  (discoverability + correctness-by-construction on a known-truth DGP).
 - **Full coefficient table on limited-dependent-variable models.** `sp.tobit`
   and `sp.heckman` now expose the *entire* coefficient vector through
   `.params` / `.std_errors` / `.tvalues` / `.pvalues` (plus a new
@@ -19,9 +52,112 @@ All notable changes to StatsPAI will be documented in this file.
   table. Implemented via a small `LimitedDepResult` subclass — the shared
   `CausalResult` base is untouched. Pinned in
   `tests/test_limited_dep_lane.py`.
+- **Standard result accessors on parametric survival models.** `sp.aft`
+  (`AFTResult`) and `sp.cox_frailty` (`FrailtyResult`) now expose
+  `.params` / `.std_errors` / `.tvalues` / `.pvalues` like every other
+  estimator. Previously the coefficient vector was reachable only through
+  raw `.beta` / `.se` arrays and `AFTResult.params` was literally `None`, so
+  an agent calling the documented accessor got nothing. `sp.aft` additionally
+  now reports the scale standard error (`log(sigma)` SE was computed in the
+  Hessian and then discarded by a `[:k]` slice). The two independent Weibull
+  AFT implementations (`sp.aft` and `sp.survreg`) are cross-validated to agree
+  on coefficients (~1e-5) and standard errors (~1e-7). Pinned in
+  `tests/test_limited_dep_lane.py`.
+- **`sp.garch` now reports parameter standard errors / inference.** The
+  GARCH(p,q) fit previously returned only point estimates (`omega`, `alpha`,
+  `beta`, `mu`) with no standard errors, so the volatility parameters could
+  not be tested or given confidence intervals. SEs now come from the inverse
+  observed information (numerical Hessian at the MLE) and are exposed through
+  the standard `.params` / `.std_errors` / `.tvalues` / `.pvalues` accessors,
+  with a coef/std-err/z/p table in `.summary()`. Monte-Carlo coverage tracks
+  the empirical SD of α̂/β̂ to ratio ~0.96. Pinned in
+  `tests/test_garch_inference.py`.
+- **`sp.bvar` now reports posterior uncertainty (SD + credible intervals).**
+  The Bayesian VAR previously returned only the posterior-mean coefficient
+  matrix, so credible intervals could not be formed. The marginal posterior
+  standard deviation is now available in closed form from the matrix-normal
+  posterior `B ~ MN(B_post, (X'X + V⁻¹)⁻¹, Σ)` as
+  `sd[i,k] = sqrt([(X'X+V⁻¹)⁻¹]ᵢᵢ · Σ_kk)`, exposed via the new `coef_sd`
+  attribute and a `credible_interval(level)` method, with a posterior-SD block
+  added to `.summary()`. Validated against statsmodels VAR: in the loose-prior
+  limit the posterior SD equals the OLS VAR standard error (to the n vs n-k df
+  factor), and the Minnesota prior correctly shrinks it. Pinned in
+  `tests/test_bvar_posterior_se.py`.
+- **`gwr` (geographically weighted regression) now reports local standard
+  errors and t-values.** GWR previously returned only the local coefficient
+  matrix `params (n, k)`, so a user could not tell *where* a covariate's
+  effect is significant — the core purpose of GWR. Local SEs now follow
+  Fotheringham, Brunsdon & Charlton (2002, §2.4),
+  `Var(β̂ᵢ) = σ̂² CᵢCᵢ'` with `Cᵢ = (X'WᵢX)⁻¹X'Wᵢ` and
+  `σ̂² = RSS / (n − 2 tr(S) + tr(S'S))`, exposed via the new `se` and `tvals`
+  attributes. Verified against the global limit: at a very large bandwidth the
+  per-location SE collapses to the OLS standard error (to ~0.5%, identical
+  across locations). Pinned in `tests/spatial/test_gwr_local_se.py`.
+  (Multiscale GWR / `mgwr` local SEs remain a known follow-up — their
+  back-fitting variance is materially more involved.)
 
 ### Fixed
 
+- **Fail-loud input validation on the proximal / negative-control / mediation
+  / network-interference estimators.** `sp.double_negative_control`,
+  `sp.proximal_regression`, `sp.negative_control_outcome`,
+  `sp.negative_control_exposure`, `sp.four_way_decomposition`,
+  `sp.network_hte` and `sp.inward_outward_spillover` previously sliced
+  `data[[cols]]` (often without even `dropna`) with no checks, so a typo'd
+  column name surfaced as a cryptic `KeyError`/`LinAlgError` and an empty,
+  all-NaN, or too-small frame produced a **silent NaN / silent garbage
+  estimate** from the downstream linear algebra (the "吞异常返回 NaN"
+  anti-pattern — `inward_outward_spillover` happily decomposed 3 data points).
+  They now validate up front through a new package-level
+  `statspai._input_validation` helper (one shared primitive, not
+  re-implemented per estimator): a non-DataFrame raises `sp.StatsPAIError`, a
+  missing column raises `DataInsufficient` (both a `StatsPAIError` and a
+  `ValueError`, message keeps the conventional "Missing columns" phrasing), and
+  too few complete rows to identify the model raises `DataInsufficient`, each
+  with an agent-native `recovery_hint`. The happy-path numerics are
+  byte-identical (the four-way decomposition still satisfies
+  TE = CDE + INT_ref + INT_med + PIE exactly; the network estimators recover
+  their direct/spillover/inward/outward coefficients on a known DGP). Also
+  fixes a latent `NameError` in `sp.proximal_regression`'s documented
+  graceful-degradation path: when the treatment-bridge logistic fit failed
+  (e.g. sklearn absent), the fallback branch then referenced an unbound `lr`,
+  so the "degrade gracefully" promise itself crashed. The two network
+  estimators additionally gained agent-native cards (assumptions / failure
+  modes / alternatives). Pinned by `tests/test_input_validation.py`,
+  `tests/test_proximal_input_validation.py` and
+  `tests/test_interference_orthogonal.py`.
+- **Fail-loud input validation on the DiD / time-series / shift-share /
+  sensitivity estimators.** A second hardening sweep closes the same
+  silent-failure class in five more estimators that an investigation surfaced:
+  `sp.its` returned a **silent 0.0 / NaN** segmented-regression on an empty,
+  single-row, or all-NaN series (and a bare `KeyError` on a typo'd column);
+  `sp.overlap_weighted_did` returned a **silent `estimate=0.0`** on an all-NaN
+  outcome (the overlap-weighted cell mean NaN-sums to zero);
+  `sp.dl_propensity_score` returned a **silent degenerate `[0.02]`** score on a
+  single row and a bare `KeyError` on a typo'd column; `sp.shift_share_political`
+  returned a **silent `estimate=nan`** on an all-NaN outcome (its panel sibling
+  already guarded this); and `sp.rosenbaum_bounds` / `sp.rosenbaum_gamma` leaked
+  a cryptic pandas `KeyError` on a missing column in the DataFrame interface.
+  All now raise a `StatsPAIError` subclass (`DataInsufficient` /
+  `NumericalInstability`, both also `ValueError`) with an agent-native
+  `recovery_hint`, while happy-path numerics are unchanged. `sp.its` also gained
+  a min-observations floor (n > parameters) and an intervention-in-range check;
+  `sp.dl_propensity_score` validates ≥2 rows spanning both treatment classes
+  without dropping rows (the returned score stays row-aligned). Pinned by
+  `tests/test_estimator_input_hardening.py`. Separately, the long-standing
+  `test_dl_propensity_score_returns_valid_probs` pinned a non-converging
+  `MLPClassifier`'s output to `atol=1e-12` (sklearn/BLAS-version fragile); it now
+  asserts environment-robust invariants instead. The same sweep also clarifies
+  four estimators that already failed loudly but with a *confusing* message on
+  an all-NaN outcome: `sp.ltmle` raised a raw sklearn `Input y contains NaN`,
+  and `sp.bcf_factor_exposure` / `sp.bcf_longitudinal` / `sp.bcf_ordinal` raised
+  `Treatment must be binary (0/1)` (the real cause — an empty frame after the
+  inner BCF's `dropna` — was mislabelled). All four now raise an error naming
+  the *outcome* column before any model fit. Likewise `sp.synth_experimental_design`
+  reported a misleading `k must be in [1, -1]` on an empty / fully-missing /
+  single-unit panel; it now raises `DataInsufficient` naming the collapsed
+  panel (and an unbalanced panel raises a clear balance hint), via the shared
+  `require_columns` guard.
 - **⚠️ Correctness — `sp.regress(..., weights=)` was silently ignored.** The
   OLS estimator accepted a `weights=` argument via `**kwargs` and then dropped
   it, returning the *unweighted* OLS fit with no warning. It now fits weighted
@@ -45,20 +181,35 @@ All notable changes to StatsPAI will be documented in this file.
 - **⚠️ Correctness — `sp.biprobit` always reported zero error correlation.**
   The bivariate-probit MLE estimated `rho` via a per-observation
   `scipy.stats.multivariate_normal.cdf` loop whose ~1e-8 precision floor
-  corrupted BFGS's finite-difference gradient. BFGS died at the starting
-  point on its very first step (status 2), so `rho` was pinned at its initial
+  corrupted BFGS's finite-difference gradient, so BFGS died at the starting
+  point on its first step (status 2) and `rho` stayed pinned at its initial
   value of **0** for *every* dataset — the model silently claimed the two
   equations' errors were uncorrelated no matter how correlated they actually
   were (a researcher would wrongly conclude "no cross-equation selection").
   The bivariate-normal CDF is now a smooth, fully vectorised Drezner–Wesolowsky
   (1990) Gauss–Legendre quadrature (matches SciPy to ~8e-6, ~280× faster), so
-  the optimiser recovers `rho` correctly: on simulated data with true ρ≈0.45
-  it returns ρ̂≈0.47 (p<0.001) and on independent errors ρ̂≈0 (p≈0.97). It now
+  the optimiser recovers `rho`: on simulated data with true ρ≈0.45 it returns
+  ρ̂≈0.47 (p<0.001), and on independent errors ρ̂≈0 (p≈0.97). `biprobit` now
   also reports `model_info['converged']`. Marginal coefficients match separate
   univariate probits and reproduce the pre-regression reference values
   (`tests/test_v06_round2.py::TestSelectionModels::test_biprobit`, previously
   failing, now green). Behavioural regression test added in
-  `tests/test_limited_dep_lane.py`.
+  `tests/test_limited_dep_lane.py`. Reference: Drezner & Wesolowsky (1990),
+  *J. Stat. Comput. Simul.* 35(1–2), 101–107 (verified via Taylor & Francis +
+  Semantic Scholar).
+- **⚠️ Correctness — `sp.sar` / `sp.sem` spatial-parameter standard errors
+  were overstated ~40-50%.** The maximum-likelihood SE for the spatial-lag
+  coefficient `rho` (SAR, also `sp.sdm`) and the spatial-error coefficient
+  `lambda` (SEM) dropped the `tr(G'G)` term from the information matrix
+  (`G = W(I-ρW)^{-1}`) and, for SAR, used a projection of `X` in place of
+  `(G Xβ)`. The reported SE came out ~1.5× (SAR) / ~1.4× (SEM) too large, so
+  spatial dependence was systematically *under*-detected (t-statistics ~33%
+  too small). The information matrix is now the textbook Ord (1975) / Anselin
+  (1988) form. Verified two ways: (i) the reported SE now equals the inverse
+  numerical Hessian of the exact log-likelihood (`slogdet` Jacobian) to <5%,
+  and (ii) Monte-Carlo coverage matches the empirical SD of ρ̂/λ̂ (ratio
+  0.89/0.94, vs 1.51/1.39 before). Point estimates are unchanged. Pinned in
+  `tests/spatial/test_ml_se_information.py`.
 - **Reliability — spurious `converged: False` on the BFGS-based MLEs.**
   `sp.tobit`, `sp.heckman`'s selection probit, `sp.truncreg`, `sp.zip` /
   `sp.zinb`, `sp.betareg` and `sp.biprobit` reported
