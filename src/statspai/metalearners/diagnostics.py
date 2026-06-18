@@ -9,7 +9,7 @@ effect estimates:
 - ``cate_importance``: variable importance for CATE heterogeneity
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -161,12 +161,12 @@ def cate_by_group(
 def cate_plot(
     result: CausalResult,
     kind: str = 'hist',
-    ax=None,
+    ax: Any = None,
     figsize: tuple = (8, 5),
     color: str = '#2C3E50',
     title: Optional[str] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Plot the CATE distribution.
 
@@ -241,11 +241,11 @@ def cate_plot(
 
 def cate_group_plot(
     group_df: pd.DataFrame,
-    ax=None,
+    ax: Any = None,
     figsize: tuple = (8, 5),
     color: str = '#2C3E50',
     title: Optional[str] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Plot group-level CATEs with confidence intervals.
 
@@ -328,7 +328,8 @@ def blp_test(
     Treatment Effects." Equivalent to ``grf::test_calibration()`` in R.
 
     Fits via OLS:
-        Y_i = alpha + beta_1 * (D_i - e(X_i)) + beta_2 * (D_i - e(X_i)) * (S(X_i) - mean(S)) + eps
+        Y_i = alpha + beta_1 * (D_i - e(X_i))
+              + beta_2 * (D_i - e(X_i)) * (S(X_i) - mean(S)) + eps
 
     where S(X) is the CATE proxy from the meta-learner and e(X) the
     propensity score (estimated via cross-fitting).
@@ -364,7 +365,8 @@ def blp_test(
     ----------
     Chernozhukov, V., Demirer, M., Duflo, E., & Fernandez-Val, I. (2018).
     Generic Machine Learning Inference on Heterogeneous Treatment Effects
-    in Randomized Experiments. *Econometrica* (forthcoming as of 2018 NBER WP). [@chernozhukov2018double]
+    in Randomized Experiments. *Econometrica* (forthcoming as of 2018 NBER
+    WP). [@chernozhukov2018double]
 
     Examples
     --------
@@ -405,12 +407,12 @@ def blp_test(
         n_estimators=100, max_depth=3, random_state=42,
     )
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-    e_hat = np.zeros(n)
+    e_hat: np.ndarray = np.zeros(n, dtype=float)
     for train_idx, test_idx in kf.split(X):
         m = clone(prop_model)
         m.fit(X[train_idx], D[train_idx])
         e_hat[test_idx] = m.predict_proba(X[test_idx])[:, 1]
-    e_hat = np.clip(e_hat, 0.01, 0.99)
+    e_hat = np.asarray(np.clip(e_hat, 0.01, 0.99), dtype=float)
 
     # BLP regression
     D_centered = D - e_hat
@@ -544,7 +546,7 @@ def compare_metalearners(
     treat: str,
     covariates: List[str],
     learners: Optional[List[str]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     """
     Fit multiple meta-learners and compare their ATE estimates.
@@ -679,13 +681,14 @@ def predict_cate(
     covariates = result.model_info.get('covariates')
     if covariates is None:
         raise ValueError("Result does not contain covariate names.")
-    for c in covariates:
+    covariate_names = list(covariates)
+    for c in covariate_names:
         if c not in new_data.columns:
             raise ValueError(f"Column '{c}' not found in new_data")
 
-    X_new = new_data[covariates].values.astype(float)
+    X_new = new_data[covariate_names].values.astype(float)
     est = result.model_info['_estimator']
-    return est.effect(X_new)
+    return np.asarray(est.effect(X_new), dtype=float)
 
 
 # ======================================================================

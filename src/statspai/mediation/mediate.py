@@ -23,7 +23,7 @@ confounders affected by treatment.
 """
 
 import warnings
-from typing import Optional, List, Dict, Any
+from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -188,7 +188,7 @@ class MediationAnalysis:
         inference: str = 'bootstrap',
         pvalue_method: str = 'bootstrap_sign',
         seed: int = 42,
-    ):
+    ) -> None:
         if inference not in ('bootstrap', 'delta'):
             raise ValueError(
                 f"inference must be 'bootstrap' or 'delta'; got {inference!r}"
@@ -211,7 +211,7 @@ class MediationAnalysis:
 
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         for col in [self.y, self.treat, self.mediator] + self.covariates:
             if col not in self.data.columns:
                 raise ValueError(f"Column '{col}' not found in data")
@@ -306,33 +306,36 @@ class MediationAnalysis:
                     RuntimeWarning, stacklevel=3,
                 )
 
-            boot_acme = np.asarray(boot_acme, dtype=float)
-            boot_ade = np.asarray(boot_ade, dtype=float)
-            boot_total = np.asarray(boot_total, dtype=float)
+            boot_acme_arr = np.asarray(boot_acme, dtype=float)
+            boot_ade_arr = np.asarray(boot_ade, dtype=float)
+            boot_total_arr = np.asarray(boot_total, dtype=float)
 
             # Standard errors and CIs
-            se_acme = float(np.std(boot_acme, ddof=1))
-            se_ade = float(np.std(boot_ade, ddof=1))
-            se_total = float(np.std(boot_total, ddof=1))
+            se_acme = float(np.std(boot_acme_arr, ddof=1))
+            se_ade = float(np.std(boot_ade_arr, ddof=1))
+            se_total = float(np.std(boot_total_arr, ddof=1))
 
-            ci_acme = (float(np.percentile(boot_acme, lo * 100)),
-                       float(np.percentile(boot_acme, hi * 100)))
-            ci_ade = (float(np.percentile(boot_ade, lo * 100)),
-                      float(np.percentile(boot_ade, hi * 100)))
-            ci_total = (float(np.percentile(boot_total, lo * 100)),
-                        float(np.percentile(boot_total, hi * 100)))
+            ci_acme = (float(np.percentile(boot_acme_arr, lo * 100)),
+                       float(np.percentile(boot_acme_arr, hi * 100)))
+            ci_ade = (float(np.percentile(boot_ade_arr, lo * 100)),
+                      float(np.percentile(boot_ade_arr, hi * 100)))
+            ci_total = (float(np.percentile(boot_total_arr, lo * 100)),
+                        float(np.percentile(boot_total_arr, hi * 100)))
 
             # P-values. Dispatch on the user's declared convention so a
             # single mediate()/mediate_interventional() study can report
             # consistent p-values regardless of which family member is used.
             pvalue_method_used = self.pvalue_method
-            pv_acme = self._pvalue(boot_acme, acme, se_acme)
-            pv_ade = self._pvalue(boot_ade, ade, se_ade)
-            pv_total = self._pvalue(boot_total, total, se_total)
+            pv_acme = self._pvalue(boot_acme_arr, acme, se_acme)
+            pv_ade = self._pvalue(boot_ade_arr, ade, se_ade)
+            pv_total = self._pvalue(boot_total_arr, total, se_total)
 
         # Detail table
         detail = pd.DataFrame({
-            'effect': ['ACME (indirect)', 'ADE (direct)', 'Total Effect', 'Prop. Mediated'],
+            'effect': [
+                'ACME (indirect)', 'ADE (direct)',
+                'Total Effect', 'Prop. Mediated',
+            ],
             'estimate': [acme, ade, total, prop_mediated],
             'se': [se_acme, se_ade, se_total, np.nan],
             'ci_lower': [ci_acme[0], ci_ade[0], ci_total[0], np.nan],
@@ -373,7 +376,13 @@ class MediationAnalysis:
             _citation_key='mediation',
         )
 
-    def _estimate_effects(self, Y, T, M, X):
+    def _estimate_effects(
+        self,
+        Y: np.ndarray,
+        T: np.ndarray,
+        M: np.ndarray,
+        X: Optional[np.ndarray],
+    ) -> Tuple[float, float, float]:
         """
         Estimate ACME, ADE, and total effect using the product method
         with OLS mediator and outcome models.
@@ -397,16 +406,16 @@ class MediationAnalysis:
 
         # Mediator model: M ~ T + X
         try:
-            a = np.linalg.lstsq(Z_med, M, rcond=None)[0]
+            a = np.asarray(np.linalg.lstsq(Z_med, M, rcond=None)[0], dtype=float)
         except np.linalg.LinAlgError:
-            a = np.zeros(Z_med.shape[1])
+            a = np.zeros(Z_med.shape[1], dtype=float)
         a1 = a[1]  # coefficient on T
 
         # Outcome model: Y ~ T + M + X
         try:
-            b = np.linalg.lstsq(Z_out, Y, rcond=None)[0]
+            b = np.asarray(np.linalg.lstsq(Z_out, Y, rcond=None)[0], dtype=float)
         except np.linalg.LinAlgError:
-            b = np.zeros(Z_out.shape[1])
+            b = np.zeros(Z_out.shape[1], dtype=float)
         b1 = b[1]  # direct effect (T coefficient)
         b2 = b[2]  # mediator coefficient
 
@@ -416,7 +425,13 @@ class MediationAnalysis:
 
         return float(acme), float(ade), float(total)
 
-    def _delta_standard_errors(self, Y, T, M, X):
+    def _delta_standard_errors(
+        self,
+        Y: np.ndarray,
+        T: np.ndarray,
+        M: np.ndarray,
+        X: Optional[np.ndarray],
+    ) -> Tuple[float, float, float]:
         """
         Sobel/delta SEs for the linear no-interaction mediation model.
 
@@ -450,31 +465,39 @@ class MediationAnalysis:
         )
 
     @staticmethod
-    def _ols_with_cov(X, y):
-        beta = np.linalg.lstsq(X, y, rcond=None)[0]
+    def _ols_with_cov(
+        X: np.ndarray,
+        y: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        beta = np.asarray(np.linalg.lstsq(X, y, rcond=None)[0], dtype=float)
         resid = y - X @ beta
         df_resid = len(y) - X.shape[1]
         if df_resid <= 0:
             raise DataInsufficient("Not enough residual degrees of freedom")
         xtx_inv = np.linalg.pinv(X.T @ X)
         sigma2 = float(resid @ resid / df_resid)
-        return beta, sigma2 * xtx_inv
+        return beta, np.asarray(sigma2 * xtx_inv, dtype=float)
 
-    def _pvalue(self, boot_samples, point, se):
+    def _pvalue(
+        self,
+        boot_samples: np.ndarray,
+        point: float,
+        se: float,
+    ) -> float:
         """Per-effect p-value using the convention declared by self.pvalue_method."""
         if self.pvalue_method == 'wald':
             return self._wald_pvalue(point, se)
         return self._boot_pvalue(boot_samples)
 
     @staticmethod
-    def _wald_pvalue(point, se):
+    def _wald_pvalue(point: float, se: float) -> float:
         if se and se > 0 and np.isfinite(point):
             z = point / se
             return float(2 * (1 - stats.norm.cdf(abs(z))))
         return float('nan')
 
     @staticmethod
-    def _boot_pvalue(boot_samples):
+    def _boot_pvalue(boot_samples: np.ndarray) -> float:
         """Two-sided bootstrap-CI-inversion p-value."""
         n = len(boot_samples)
         # Proportion of bootstrap samples with sign opposite to point estimate
@@ -617,7 +640,8 @@ def mediate_interventional(
     ----------
     VanderWeele, T.J., Vansteelandt, S. and Robins, J.M. (2014).
     "Effect decomposition in the presence of an exposure-induced
-    mediator-outcome confounder." *Epidemiology*, 25(2), 300-306. [@vanderweele2014effect]
+    mediator-outcome confounder." *Epidemiology*, 25(2), 300-306.
+    [@vanderweele2014effect]
     """
     if pvalue_method not in ('bootstrap_sign', 'wald'):
         raise ValueError(
@@ -637,10 +661,23 @@ def mediate_interventional(
     if not set(np.unique(D)).issubset({0, 1}):
         raise ValueError("treat must be binary (0/1).")
 
-    X_base = df[covariates].values.astype(float) if covariates else np.zeros((n, 0))
-    X_tv = df[tv_confounders].values.astype(float) if tv_confounders else np.zeros((n, 0))
+    X_base = (
+        df[covariates].values.astype(float) if covariates
+        else np.zeros((n, 0))
+    )
+    X_tv = (
+        df[tv_confounders].values.astype(float) if tv_confounders
+        else np.zeros((n, 0))
+    )
 
-    def _compute(Y_, D_, M_, Xb_, Xtv_, rng):
+    def _compute(
+        Y_: np.ndarray,
+        D_: np.ndarray,
+        M_: np.ndarray,
+        Xb_: np.ndarray,
+        Xtv_: np.ndarray,
+        rng: np.random.Generator,
+    ) -> Tuple[float, float, float]:
         n_ = len(Y_)
         p_base = Xb_.shape[1]
         p_tv = Xtv_.shape[1]
@@ -679,7 +716,7 @@ def mediate_interventional(
         tv_contrib = float(b_tv @ Xtv_.mean(axis=0)) if p_tv else 0.0
         base_mean_pool = Xb_pool @ b_base                           # (n_mc,)
 
-        def _EY(d_val, m_draws):
+        def _EY(d_val: float, m_draws: np.ndarray) -> float:
             # b0 + bD*d + bM*m + b_base·x_base + b_tv·mean(X_tv)
             inner = b0 + bD * d_val + bM * m_draws + base_mean_pool
             return float(np.mean(inner)) + tv_contrib
@@ -732,7 +769,10 @@ def mediate_interventional(
             stacklevel=2,
         )
 
-    def _ci_pv(boot, point):
+    def _ci_pv(
+        boot: np.ndarray,
+        point: float,
+    ) -> Tuple[float, Tuple[float, float], float]:
         se = float(np.nanstd(boot, ddof=1))
         lo = float(np.nanpercentile(boot, 100 * alpha / 2))
         hi = float(np.nanpercentile(boot, 100 * (1 - alpha / 2)))

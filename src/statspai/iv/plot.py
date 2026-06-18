@@ -18,7 +18,7 @@ headless environments without matplotlib.
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,7 @@ from .mte import MTEResult
 from .plausibly_exogenous import PlausiblyExogenousResult
 
 
-def _mpl():
+def _mpl() -> Any:
     import matplotlib.pyplot as plt  # lazy
     return plt
 
@@ -42,9 +42,9 @@ def plot_first_stage(
     exog: Optional[Union[np.ndarray, pd.DataFrame, List[str]]] = None,
     data: Optional[pd.DataFrame] = None,
     endog_name: Optional[str] = None,
-    ax=None,
+    ax: Any = None,
     bins: int = 25,
-):
+) -> Any:
     """
     First-stage fit plot: ŷ_1 = Z π̂ vs observed D, with binscatter.
 
@@ -53,11 +53,15 @@ def plot_first_stage(
     """
     plt = _mpl()
 
-    def grab(v, cols=False):
+    def grab(v: Any, cols: bool = False) -> np.ndarray:
         if isinstance(v, str):
-            return data[v].values.astype(float)
+            if data is None:
+                raise ValueError("data must be provided when using column names")
+            return np.asarray(data[v].values, dtype=float)
         if cols and isinstance(v, list) and all(isinstance(x, str) for x in v):
-            return data[v].values.astype(float)
+            if data is None:
+                raise ValueError("data must be provided when using column names")
+            return np.asarray(data[v].values, dtype=float)
         return np.asarray(v, dtype=float)
 
     D = grab(endog).reshape(-1)
@@ -74,9 +78,9 @@ def plot_first_stage(
         W = np.column_stack([np.ones(n), Wx])
 
     # Partial out controls, then first-stage projection
-    def _resid(M, X):
+    def _resid(M: np.ndarray, X: np.ndarray) -> np.ndarray:
         b, *_ = np.linalg.lstsq(X, M, rcond=None)
-        return M - X @ b
+        return np.asarray(M - X @ b, dtype=float)
     Dt = _resid(D, W)
     Zt = _resid(Z, W)
     pi, *_ = np.linalg.lstsq(Zt, Dt, rcond=None)
@@ -87,7 +91,11 @@ def plot_first_stage(
     rss_red = float(Dt @ Dt)
     k = Z.shape[1]
     df_d = n - W.shape[1] - k
-    f_stat = ((rss_red - rss_full) / k) / (rss_full / max(df_d, 1)) if rss_full > 0 else np.nan
+    f_stat = (
+        ((rss_red - rss_full) / k) / (rss_full / max(df_d, 1))
+        if rss_full > 0
+        else np.nan
+    )
 
     own_ax = ax is None
     if own_ax:
@@ -98,15 +106,26 @@ def plot_first_stage(
     d_hat_s = d_hat[order]
     Dt_s = Dt[order]
     edges = np.linspace(d_hat_s.min(), d_hat_s.max(), bins + 1)
-    idx = np.clip(np.searchsorted(edges, d_hat_s, side="right") - 1, 0, bins - 1)
-    xb = np.array([d_hat_s[idx == b].mean() if (idx == b).any() else np.nan for b in range(bins)])
-    yb = np.array([Dt_s[idx == b].mean() if (idx == b).any() else np.nan for b in range(bins)])
+    idx = np.clip(
+        np.searchsorted(edges, d_hat_s, side="right") - 1,
+        0,
+        bins - 1,
+    )
+    xb = np.array([
+        d_hat_s[idx == b].mean() if (idx == b).any() else np.nan
+        for b in range(bins)
+    ])
+    yb = np.array([
+        Dt_s[idx == b].mean() if (idx == b).any() else np.nan
+        for b in range(bins)
+    ])
 
     ax.scatter(d_hat, Dt, s=6, alpha=0.15, color="0.6")
     ax.scatter(xb, yb, s=36, color="#d62728", zorder=3, label="binned mean")
     ax.axline((0, 0), slope=1, linestyle="--", color="0.3", lw=1)
     ax.set_xlabel(r"First-stage fitted $\hat{D}$ (partialled out)")
-    ax.set_ylabel(fr"Observed $D$ (partialled out){' — ' + endog_name if endog_name else ''}")
+    suffix = f" — {endog_name}" if endog_name else ""
+    ax.set_ylabel(fr"Observed $D$ (partialled out){suffix}")
     ax.set_title(f"First-stage fit   F = {f_stat:.1f}")
     ax.legend(loc="best", framealpha=0.9)
     ax.grid(alpha=0.3)
@@ -128,8 +147,8 @@ def plot_ar_confidence_set(
     data: Optional[pd.DataFrame] = None,
     beta_grid: Optional[np.ndarray] = None,
     level: float = 0.95,
-    ax=None,
-):
+    ax: Any = None,
+) -> Any:
     """
     Anderson-Rubin (1949) confidence set for β by grid inversion.
 
@@ -140,11 +159,15 @@ def plot_ar_confidence_set(
     plt = _mpl()
     from scipy import stats as sstats
 
-    def grab(v, cols=False):
+    def grab(v: Any, cols: bool = False) -> np.ndarray:
         if isinstance(v, str):
-            return data[v].values.astype(float)
+            if data is None:
+                raise ValueError("data must be provided when using column names")
+            return np.asarray(data[v].values, dtype=float)
         if cols and isinstance(v, list) and all(isinstance(x, str) for x in v):
-            return data[v].values.astype(float)
+            if data is None:
+                raise ValueError("data must be provided when using column names")
+            return np.asarray(data[v].values, dtype=float)
         return np.asarray(v, dtype=float)
 
     Y = grab(y).reshape(-1)
@@ -162,9 +185,9 @@ def plot_ar_confidence_set(
             Wx = Wx.reshape(-1, 1)
         W = np.column_stack([np.ones(n), Wx])
 
-    def _resid(M, X):
+    def _resid(M: np.ndarray, X: np.ndarray) -> np.ndarray:
         b, *_ = np.linalg.lstsq(X, M, rcond=None)
-        return M - X @ b
+        return np.asarray(M - X @ b, dtype=float)
 
     Dt = _resid(D, W)
     Yt = _resid(Y, W)
@@ -185,7 +208,11 @@ def plot_ar_confidence_set(
         u_hat = Zt @ pi
         rss_full = float((u - u_hat) @ (u - u_hat))
         rss_red = float(u @ u)
-        ar_f[i] = ((rss_red - rss_full) / k) / (rss_full / max(df_d, 1)) if rss_full > 0 else np.nan
+        ar_f[i] = (
+            ((rss_red - rss_full) / k) / (rss_full / max(df_d, 1))
+            if rss_full > 0
+            else np.nan
+        )
 
     crit = sstats.f.ppf(level, k, df_d)
     in_set = ar_f <= crit
@@ -225,7 +252,12 @@ def plot_ar_confidence_set(
 #  MTE curve
 # ═══════════════════════════════════════════════════════════════════════
 
-def plot_mte_curve(result: MTEResult, ax=None, show_ci: bool = True, show_ate: bool = True):
+def plot_mte_curve(
+    result: MTEResult,
+    ax: Any = None,
+    show_ci: bool = True,
+    show_ate: bool = True,
+) -> Any:
     """Plot the marginal treatment effect curve with 95 % CI band."""
     plt = _mpl()
     own_ax = ax is None
@@ -261,9 +293,9 @@ def plot_mte_curve(result: MTEResult, ax=None, show_ci: bool = True, show_ate: b
 
 def plot_plausibly_exogenous(
     result: PlausiblyExogenousResult,
-    ax=None,
+    ax: Any = None,
     show_bounds: bool = True,
-):
+) -> Any:
     """
     Plot β̂(γ) across the γ grid with per-γ CI whiskers + union envelope.
 
@@ -331,11 +363,11 @@ def plot_iv_forest(
     hi_col: str = "CI upper",
     label_col: str = "method",
     *,
-    ax=None,
+    ax: Any = None,
     sort_by: Optional[str] = None,
     reference: Optional[float] = None,
     title: Optional[str] = None,
-):
+) -> Any:
     """
     Forest plot of point estimates and CIs across IV estimators.
 
@@ -389,7 +421,11 @@ def plot_iv_forest(
 #  Forest plot built directly from an IVDiagResult bundle
 # ═══════════════════════════════════════════════════════════════════════
 
-def plot_iv_forest_from_diag(result, ax=None, title: Optional[str] = None):
+def plot_iv_forest_from_diag(
+    result: Any,
+    ax: Any = None,
+    title: Optional[str] = None,
+) -> Any:
     """Forest plot of all CIs reported by :func:`sp.iv.iv_diag`."""
     df = result.to_frame()
     return plot_iv_forest(
@@ -408,7 +444,11 @@ def plot_iv_forest_from_diag(result, ax=None, title: Optional[str] = None):
 #  Weak-IV-robust CI overlay (AR / CLR / K)
 # ═══════════════════════════════════════════════════════════════════════
 
-def plot_weak_iv_ci_overlay(result, ax=None, title: Optional[str] = None):
+def plot_weak_iv_ci_overlay(
+    result: Any,
+    ax: Any = None,
+    title: Optional[str] = None,
+) -> Any:
     """Compact panel showing analytic, tF, AR (and optional CLR/K) sets."""
     plt = _mpl()
     rows: List[Tuple[str, float, float, float, str]] = []
@@ -449,9 +489,11 @@ def plot_weak_iv_ci_overlay(result, ax=None, title: Optional[str] = None):
     ax.set_yticklabels([r[0] for r in rows])
     ax.axvline(result.beta_2sls, color="0.4", linestyle=":", lw=1)
     ax.set_xlabel(r"$\beta$")
-    ax.set_title(title or
-                 f"IV confidence sets — F = {result.first_stage_F:.1f}, "
-                 f"effective F = {result.effective_F:.1f}")
+    title_text = title or (
+        f"IV confidence sets — F = {result.first_stage_F:.1f}, "
+        f"effective F = {result.effective_F:.1f}"
+    )
+    ax.set_title(title_text)
     ax.grid(axis="x", alpha=0.3)
     if own_ax:
         fig.tight_layout()
@@ -462,7 +504,11 @@ def plot_weak_iv_ci_overlay(result, ax=None, title: Optional[str] = None):
 #  2x2 diagnostic panel built from an IVDiagResult
 # ═══════════════════════════════════════════════════════════════════════
 
-def plot_iv_diagnostics(result, fig=None, suptitle: Optional[str] = None):
+def plot_iv_diagnostics(
+    result: Any,
+    fig: Any = None,
+    suptitle: Optional[str] = None,
+) -> Any:
     """A four-panel ``IVDiagResult`` summary:
 
     (top-left)  first-stage fit / instrument strength
@@ -508,7 +554,7 @@ def plot_iv_diagnostics(result, fig=None, suptitle: Optional[str] = None):
 
     # 4) leverage / residual scatter — compute the diagonal of the hat
     # matrix only; the explicit n × n form is OOM-unsafe at n ≥ 50k.
-    Y, D, Z, W = raw["Y"], raw["D"], raw["Z"], raw["W"]
+    Z, W = raw["Z"], raw["W"]
     Z_full = np.column_stack([Z, W])
     V = np.linalg.pinv(Z_full.T @ Z_full)
     leverage = np.einsum("ij,jk,ik->i", Z_full, V, Z_full)

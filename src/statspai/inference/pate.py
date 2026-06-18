@@ -32,7 +32,7 @@ randomized trials: counterfactual and graphical identification."
 *Biometrics*, 75(3), 685-694. [@dahabreh2019generalizing]
 """
 
-from typing import Optional, List
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -200,7 +200,7 @@ class PATEEstimator:
         alpha: float = 0.05,
         seed: Optional[int] = None,
         trim: float = 0.01,
-    ):
+    ) -> None:
         self.data_exp = data_experiment.copy()
         self.data_tgt = data_target.copy()
         self.y = y
@@ -217,7 +217,7 @@ class PATEEstimator:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
-    def _validate(self):
+    def _validate(self) -> None:
         if self.method not in self._METHODS:
             raise ValueError(
                 f"method must be one of {self._METHODS}, got '{self.method}'"
@@ -240,7 +240,11 @@ class PATEEstimator:
     # ------------------------------------------------------------------
     # Participation propensity  P(S=1 | X)
     # ------------------------------------------------------------------
-    def _estimate_participation(self, X_exp: np.ndarray, X_tgt: np.ndarray):
+    def _estimate_participation(
+        self,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Logistic regression for P(S=1|X) on the pooled sample."""
         n_exp = X_exp.shape[0]
         n_tgt = X_tgt.shape[0]
@@ -254,17 +258,17 @@ class PATEEstimator:
         p = X_pool_c.shape[1]
         beta0 = np.zeros(p)
 
-        def neg_loglik(beta):
+        def neg_loglik(beta: np.ndarray) -> float:
             z = X_pool_c @ beta
             z = np.clip(z, -30, 30)
             ll = S * z - np.log1p(np.exp(z))
-            return -np.sum(ll)
+            return float(-np.sum(ll))
 
-        def grad(beta):
+        def grad(beta: np.ndarray) -> np.ndarray:
             z = X_pool_c @ beta
             z = np.clip(z, -30, 30)
             prob = 1 / (1 + np.exp(-z))
-            return -X_pool_c.T @ (S - prob)
+            return np.asarray(-X_pool_c.T @ (S - prob), dtype=float)
 
         res = minimize(neg_loglik, beta0, jac=grad, method="L-BFGS-B")
         beta_hat = res.x
@@ -280,27 +284,47 @@ class PATEEstimator:
     # Outcome model  E[Y|X, D]  (linear)
     # ------------------------------------------------------------------
     @staticmethod
-    def _fit_outcome_model(Y, D, X):
+    def _fit_outcome_model(
+        Y: np.ndarray,
+        D: np.ndarray,
+        X: np.ndarray,
+    ) -> np.ndarray:
         """Linear regression of Y on (1, X, D, D*X)."""
         n = len(Y)
-        X_c = np.column_stack([np.ones(n), X, D.reshape(-1, 1),
-                                D.reshape(-1, 1) * X])
-        beta = np.linalg.lstsq(X_c, Y, rcond=None)[0]
+        X_c = np.column_stack([
+            np.ones(n),
+            X,
+            D.reshape(-1, 1),
+            D.reshape(-1, 1) * X,
+        ])
+        beta = np.asarray(np.linalg.lstsq(X_c, Y, rcond=None)[0], dtype=float)
         return beta
 
     @staticmethod
-    def _predict_outcome(beta, X, d_val):
+    def _predict_outcome(
+        beta: np.ndarray,
+        X: np.ndarray,
+        d_val: float,
+    ) -> np.ndarray:
         """Predict E[Y|X, D=d_val] from the linear model."""
         n = X.shape[0]
         d = np.full(n, d_val)
-        X_c = np.column_stack([np.ones(n), X, d.reshape(-1, 1),
-                                d.reshape(-1, 1) * X])
-        return X_c @ beta
+        X_c = np.column_stack([
+            np.ones(n),
+            X,
+            d.reshape(-1, 1),
+            d.reshape(-1, 1) * X,
+        ])
+        return np.asarray(X_c @ beta, dtype=float)
 
     # ------------------------------------------------------------------
     # Entropy balancing weights
     # ------------------------------------------------------------------
-    def _entropy_balance(self, X_exp: np.ndarray, X_tgt: np.ndarray):
+    def _entropy_balance(
+        self,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> np.ndarray:
         """
         Compute entropy-balancing weights so that reweighted experimental
         covariate means match target population means.
@@ -309,37 +333,48 @@ class PATEEstimator:
         n_exp = X_exp.shape[0]
         p = X_exp.shape[1]
 
-        # Solve dual: min sum exp(lambda' x_i) s.t. sum w_i x_i / sum w_i = target_means
+        # Solve dual so reweighted experimental means match target means.
         lam0 = np.zeros(p)
 
-        def objective(lam):
+        def objective(lam: np.ndarray) -> float:
             raw = X_exp @ lam
             raw = np.clip(raw, -30, 30)
             w = np.exp(raw)
             w_sum = np.sum(w)
             loss = np.log(w_sum) - lam @ target_means
-            return loss
+            return float(loss)
 
-        def obj_grad(lam):
+        def obj_grad(lam: np.ndarray) -> np.ndarray:
             raw = X_exp @ lam
             raw = np.clip(raw, -30, 30)
             w = np.exp(raw)
             w_sum = np.sum(w)
             weighted_mean = (w @ X_exp) / w_sum
-            return weighted_mean - target_means
+            return np.asarray(weighted_mean - target_means, dtype=float)
 
-        res = minimize(objective, lam0, jac=obj_grad, method="L-BFGS-B",
-                       options={"maxiter": 2000})
+        res = minimize(
+            objective,
+            lam0,
+            jac=obj_grad,
+            method="L-BFGS-B",
+            options={"maxiter": 2000},
+        )
         raw = X_exp @ res.x
         raw = np.clip(raw, -30, 30)
         weights = np.exp(raw)
         weights = weights / np.sum(weights)  # normalise to sum to 1
-        return weights * n_exp  # scale so mean weight = 1
+        return np.asarray(weights * n_exp, dtype=float)  # scale so mean weight = 1
 
     # ------------------------------------------------------------------
     # Point estimators
     # ------------------------------------------------------------------
-    def _pate_ipw(self, Y, D, X_exp, X_tgt):
+    def _pate_ipw(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> float:
         """IPW estimator for PATE."""
         p_s, _ = self._estimate_participation(X_exp, X_tgt)
         w = (1 - p_s) / p_s  # odds weight
@@ -351,9 +386,15 @@ class PATEEstimator:
             return np.nan
         mu1 = np.sum(w1 * Y) / np.sum(w1)
         mu0 = np.sum(w0 * Y) / np.sum(w0)
-        return mu1 - mu0
+        return float(mu1 - mu0)
 
-    def _pate_aipw(self, Y, D, X_exp, X_tgt):
+    def _pate_aipw(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> float:
         """Augmented IPW (doubly robust) estimator for PATE."""
         p_s, _ = self._estimate_participation(X_exp, X_tgt)
         w = (1 - p_s) / p_s
@@ -375,17 +416,21 @@ class PATEEstimator:
         # IPW augmentation component (on experimental sample)
         w_sum = np.sum(w)
         if w_sum == 0:
-            return om_component
+            return float(om_component)
 
         aug1 = np.sum(w * D * (Y - mu1_exp)) / w_sum
         aug0 = np.sum(w * (1 - D) * (Y - mu0_exp)) / w_sum
         n_exp = len(Y)
-        # Scale augmentation by relative sample size
-        scale = n_exp / (n_exp + n_tgt)
 
-        return om_component + (aug1 - aug0) * (n_exp / n_tgt)
+        return float(om_component + (aug1 - aug0) * (n_exp / n_tgt))
 
-    def _pate_calibration(self, Y, D, X_exp, X_tgt):
+    def _pate_calibration(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> float:
         """Entropy-balancing (calibration) estimator for PATE."""
         w = self._entropy_balance(X_exp, X_tgt)
 
@@ -395,9 +440,15 @@ class PATEEstimator:
             return np.nan
         mu1 = np.sum(w1 * Y) / np.sum(w1)
         mu0 = np.sum(w0 * Y) / np.sum(w0)
-        return mu1 - mu0
+        return float(mu1 - mu0)
 
-    def _point_estimate(self, Y, D, X_exp, X_tgt):
+    def _point_estimate(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> float:
         """Dispatch to the chosen method."""
         if self.method == "ipw":
             return self._pate_ipw(Y, D, X_exp, X_tgt)
@@ -405,11 +456,18 @@ class PATEEstimator:
             return self._pate_aipw(Y, D, X_exp, X_tgt)
         elif self.method == "calibration":
             return self._pate_calibration(Y, D, X_exp, X_tgt)
+        raise ValueError(f"Unsupported PATE method '{self.method}'")
 
     # ------------------------------------------------------------------
     # Bootstrap
     # ------------------------------------------------------------------
-    def _bootstrap(self, Y, D, X_exp, X_tgt):
+    def _bootstrap(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X_exp: np.ndarray,
+        X_tgt: np.ndarray,
+    ) -> np.ndarray:
         """Paired bootstrap over both datasets."""
         n_exp = len(Y)
         n_tgt = X_tgt.shape[0]
@@ -426,7 +484,7 @@ class PATEEstimator:
             except Exception:
                 estimates[b] = np.nan
 
-        return estimates[~np.isnan(estimates)]
+        return np.asarray(estimates[~np.isnan(estimates)], dtype=float)
 
     # ------------------------------------------------------------------
     # Fit
@@ -444,8 +502,16 @@ class PATEEstimator:
         # Bootstrap SE and CI
         boot_ests = self._bootstrap(Y, D, X_exp, X_tgt)
         se = float(np.std(boot_ests, ddof=1)) if len(boot_ests) > 1 else np.nan
-        ci_lo = float(np.percentile(boot_ests, 100 * self.alpha / 2)) if len(boot_ests) > 1 else np.nan
-        ci_hi = float(np.percentile(boot_ests, 100 * (1 - self.alpha / 2))) if len(boot_ests) > 1 else np.nan
+        ci_lo = (
+            float(np.percentile(boot_ests, 100 * self.alpha / 2))
+            if len(boot_ests) > 1
+            else np.nan
+        )
+        ci_hi = (
+            float(np.percentile(boot_ests, 100 * (1 - self.alpha / 2)))
+            if len(boot_ests) > 1
+            else np.nan
+        )
 
         # p-value (Wald)
         if se > 0:
@@ -469,13 +535,21 @@ class PATEEstimator:
             ci=(ci_lo, ci_hi),
             alpha=self.alpha,
             n_obs=len(Y),
-            detail=pd.DataFrame({
-                "bootstrap_mean": [float(np.mean(boot_ests))] if len(boot_ests) else [np.nan],
-                "bootstrap_median": [float(np.median(boot_ests))] if len(boot_ests) else [np.nan],
-                "n_boot_valid": [len(boot_ests)],
-                "n_experiment": [len(Y)],
-                "n_target": [X_tgt.shape[0]],
-            }),
+            detail=pd.DataFrame(
+                {
+                    "bootstrap_mean": (
+                        [float(np.mean(boot_ests))] if len(boot_ests) else [np.nan]
+                    ),
+                    "bootstrap_median": (
+                        [float(np.median(boot_ests))]
+                        if len(boot_ests)
+                        else [np.nan]
+                    ),
+                    "n_boot_valid": [len(boot_ests)],
+                    "n_experiment": [len(Y)],
+                    "n_target": [X_tgt.shape[0]],
+                }
+            ),
             model_info={
                 "method": self.method,
                 "covariates": self.covariates,

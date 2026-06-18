@@ -67,7 +67,7 @@ Epidemiology*, 168(6), 656-664. [@cole2008constructing]
 """
 
 import warnings
-from typing import Optional, List, Union
+from typing import Any, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -201,7 +201,10 @@ def msm(
         raise ValueError("No rows remain after dropping missing values.")
 
     if treat_type == 'auto':
-        treat_type = 'binary' if set(df[treat].unique()).issubset({0, 1}) else 'continuous'
+        treat_type = (
+            'binary' if set(df[treat].unique()).issubset({0, 1})
+            else 'continuous'
+        )
 
     if exposure == 'ever' and treat_type != 'binary':
         raise ValueError("exposure='ever' requires binary treatment.")
@@ -359,7 +362,7 @@ class MarginalStructuralModel:
     [@robins2000marginal]
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         self._kwargs = kwargs
         self.result_: Optional[CausalResult] = None
 
@@ -453,10 +456,16 @@ def stabilized_weights(
     df = data.sort_values([id, time]).reset_index(drop=True)
 
     if treat_type == 'auto':
-        treat_type = 'binary' if set(df[treat].unique()).issubset({0, 1}) else 'continuous'
+        treat_type = (
+            'binary' if set(df[treat].unique()).issubset({0, 1})
+            else 'continuous'
+        )
 
     A = df[treat].values.astype(float)
-    L = df[time_varying].values.astype(float) if time_varying else np.zeros((len(df), 0))
+    L = (
+        df[time_varying].values.astype(float) if time_varying
+        else np.zeros((len(df), 0))
+    )
     V = df[baseline].values.astype(float) if baseline else np.zeros((len(df), 0))
 
     # Lagged treatment — 0 at first period within each unit
@@ -491,10 +500,10 @@ def stabilized_weights(
     df['_ratio'] = ratio
     sw = df.groupby(id, sort=False)['_ratio'].cumprod().values
 
-    return sw
+    return np.asarray(sw, dtype=float)
 
 
-def _logit_proba(X, y):
+def _logit_proba(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Logistic regression predicted ``P(Y=1|X)``.
 
     Zero-variance columns (e.g. the all-zero lagged-treatment column in a
@@ -516,7 +525,8 @@ def _logit_proba(X, y):
         import statsmodels.api as sm
         design = sm.add_constant(X, has_constant='add')
         fit = sm.Logit(y, design).fit(disp=0, maxiter=200, warn_convergence=False)
-        return np.clip(fit.predict(design), 1e-6, 1 - 1e-6)
+        return np.asarray(np.clip(fit.predict(design), 1e-6, 1 - 1e-6),
+                          dtype=float)
     except Exception as exc:
         warnings.warn(
             "MSM treatment model failed to fit "
@@ -527,10 +537,10 @@ def _logit_proba(X, y):
             stacklevel=2,
         )
         mean = float(np.clip(np.mean(y), 1e-6, 1 - 1e-6))
-        return np.full(len(y), mean)
+        return np.full(len(y), mean, dtype=float)
 
 
-def _gauss_density(X, y):
+def _gauss_density(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
     Gaussian conditional density p(y | X) from OLS residuals.
     Returns the density evaluated at the observed y_i.
@@ -546,14 +556,22 @@ def _gauss_density(X, y):
         sigma = float(np.sqrt(np.sum(resid**2) / denom))
         sigma = max(sigma, 1e-6)
         dens = stats.norm.pdf(y, loc=fitted, scale=sigma)
-        return np.clip(dens, 1e-12, None)
+        return np.asarray(np.clip(dens, 1e-12, None), dtype=float)
     except Exception:
         mean = float(np.mean(y))
         sigma = max(float(np.std(y, ddof=1)), 1e-6)
-        return np.clip(stats.norm.pdf(y, loc=mean, scale=sigma), 1e-12, None)
+        return np.asarray(
+            np.clip(stats.norm.pdf(y, loc=mean, scale=sigma), 1e-12, None),
+            dtype=float,
+        )
 
 
-def _wls_cluster(X, y, w, cluster_ids):
+def _wls_cluster(
+    X: np.ndarray,
+    y: np.ndarray,
+    w: np.ndarray,
+    cluster_ids: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Weighted least squares with cluster-robust (CR1) variance.
 
@@ -563,7 +581,7 @@ def _wls_cluster(X, y, w, cluster_ids):
     W = np.sqrt(w).reshape(-1, 1)
     Xw = X * W
     yw = y * w**0.5  # y * sqrt(w)
-    beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
+    beta = np.asarray(np.linalg.lstsq(Xw, yw, rcond=None)[0], dtype=float)
     resid = y - X @ beta
     # Score contributions u_i = w_i * x_i * resid_i
     u = (w * resid)[:, None] * X
@@ -572,7 +590,7 @@ def _wls_cluster(X, y, w, cluster_ids):
     G = len(clusters)
     p = X.shape[1]
     n = len(y)
-    u_cluster = np.zeros((G, p))
+    u_cluster = np.zeros((G, p), dtype=float)
     for g, c in enumerate(clusters):
         mask = cluster_ids == c
         u_cluster[g] = u[mask].sum(axis=0)
@@ -583,10 +601,15 @@ def _wls_cluster(X, y, w, cluster_ids):
     adj = (G / (G - 1)) * ((n - 1) / (n - p)) if G > 1 and n > p else 1.0
     vcov = adj * (bread_inv @ meat @ bread_inv)
     se = np.sqrt(np.maximum(np.diag(vcov), 0.0))
-    return beta, se
+    return beta, np.asarray(se, dtype=float)
 
 
-def _weighted_logit_cluster(X, y, w, cluster_ids):
+def _weighted_logit_cluster(
+    X: np.ndarray,
+    y: np.ndarray,
+    w: np.ndarray,
+    cluster_ids: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Probability-weighted (IPTW) logistic regression with cluster-robust SE.
 
@@ -604,7 +627,7 @@ def _weighted_logit_cluster(X, y, w, cluster_ids):
     semantics unambiguous and the sandwich coherent.
     """
     n, p = X.shape
-    beta = np.zeros(p)
+    beta = np.zeros(p, dtype=float)
     # Initialize the intercept at the weighted log-odds of y so IRLS has
     # a reasonable starting point. Other coefficients start at 0.
     y_bar_w = float(np.sum(w * y) / max(np.sum(w), 1e-12))
@@ -629,9 +652,12 @@ def _weighted_logit_cluster(X, y, w, cluster_ids):
         XtWX = (X * W_diag[:, None]).T @ X
         XtWz = (X * W_diag[:, None]).T @ z
         try:
-            beta_new = np.linalg.solve(XtWX, XtWz)
+            beta_new = np.asarray(np.linalg.solve(XtWX, XtWz), dtype=float)
         except np.linalg.LinAlgError:
-            beta_new = np.linalg.lstsq(XtWX, XtWz, rcond=None)[0]
+            beta_new = np.asarray(
+                np.linalg.lstsq(XtWX, XtWz, rcond=None)[0],
+                dtype=float,
+            )
         if np.max(np.abs(beta_new - beta)) < tol:
             beta = beta_new
             break
@@ -646,7 +672,7 @@ def _weighted_logit_cluster(X, y, w, cluster_ids):
     u = (w * resid)[:, None] * X
     clusters = np.unique(cluster_ids)
     G = len(clusters)
-    u_cluster = np.zeros((G, p))
+    u_cluster = np.zeros((G, p), dtype=float)
     for g, c in enumerate(clusters):
         mask = cluster_ids == c
         u_cluster[g] = u[mask].sum(axis=0)
@@ -656,7 +682,7 @@ def _weighted_logit_cluster(X, y, w, cluster_ids):
     adj = (G / (G - 1)) * ((n - 1) / (n - p)) if G > 1 and n > p else 1.0
     vcov = adj * (bread_inv @ meat @ bread_inv)
     se = np.sqrt(np.maximum(np.diag(vcov), 0.0))
-    return beta, se
+    return beta, np.asarray(se, dtype=float)
 
 
 # Citation

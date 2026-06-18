@@ -21,7 +21,7 @@ Robins, J. M. (2004). "Optimal Structural Nested Models."
 Murphy, S. A. (2003). "Optimal Dynamic Treatment Regimes." [@robins2004optimal]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -158,7 +158,7 @@ class GEstimation:
         alpha: float = 0.05,
         n_bootstrap: int = 500,
         random_state: int = 42,
-    ):
+    ) -> None:
         self.data = data
         self.y = y
         self.treatments = treatments
@@ -256,7 +256,13 @@ class GEstimation:
             _citation_key='g_estimation',
         )
 
-    def _backward_induction(self, Y, A, X_stages, n):
+    def _backward_induction(
+        self,
+        Y: np.ndarray,
+        A: List[np.ndarray],
+        X_stages: List[np.ndarray],
+        n: int,
+    ) -> Tuple[np.ndarray, List[str]]:
         """Backward induction for G-estimation."""
         psi_estimates = np.zeros(self.n_stages)
         optimal_rules = []

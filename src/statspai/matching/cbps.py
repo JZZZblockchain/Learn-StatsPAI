@@ -119,7 +119,10 @@ def cbps(
         X = np.column_stack([np.ones(len(df)), X])
     n, p = X.shape
 
-    def _solve(X_, T_):
+    def _solve(
+        X_: np.ndarray,
+        T_: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, bool, float]:
         return _fit_cbps(X_, T_, estimand=estimand, variant=variant)
 
     beta_hat, ps, converged_pt, obj_pt = _solve(X, T)
@@ -158,21 +161,35 @@ def cbps(
         except Exception:
             retries += 1
             continue
-    boot = boot[:b]
-    boot_converged = boot_converged[:b]
+    boot_used = boot[:b]
+    boot_converged_used = boot_converged[:b]
     n_boot_success = b
-    n_boot_nonconv = int((~boot_converged).sum())
-    se = float(np.std(boot, ddof=1)) if boot.size > 1 else np.nan
+    n_boot_nonconv = int((~boot_converged_used).sum())
+    se = float(np.std(boot_used, ddof=1)) if boot_used.size > 1 else np.nan
     z = sp_stats.norm.ppf(1 - alpha / 2)
     ci = (est - z * se, est + z * se) if np.isfinite(se) else (np.nan, np.nan)
-    pval = float(2 * (1 - sp_stats.norm.cdf(abs(est) / se))) if se and se > 0 else np.nan
+    pval = (
+        float(2 * (1 - sp_stats.norm.cdf(abs(est) / se)))
+        if se and se > 0
+        else np.nan
+    )
 
     # Balance diagnostics: std mean difference after weighting
-    w_overall = np.where(T == 1, w1, w0)
-    mean_t = (X[T == 1] * w1[T == 1, None]).sum(axis=0) / max(w1[T == 1].sum(), 1e-12)
-    mean_c = (X[T == 0] * w0[T == 0, None]).sum(axis=0) / max(w0[T == 0].sum(), 1e-12)
-    pooled_sd = np.sqrt(0.5 * (X[T == 1].var(axis=0) + X[T == 0].var(axis=0)) + 1e-12)
+    mean_t = (
+        (X[T == 1] * w1[T == 1, None]).sum(axis=0)
+        / max(w1[T == 1].sum(), 1e-12)
+    )
+    mean_c = (
+        (X[T == 0] * w0[T == 0, None]).sum(axis=0)
+        / max(w0[T == 0].sum(), 1e-12)
+    )
+    pooled_sd = np.sqrt(
+        0.5 * (X[T == 1].var(axis=0) + X[T == 0].var(axis=0)) + 1e-12
+    )
     smd = (mean_t - mean_c) / pooled_sd
+    balance_labels = (
+        ["_intercept"] + list(covariates) if add_intercept else list(covariates)
+    )
 
     model_info = {
         "model_type": f"CBPS ({variant})",
@@ -182,10 +199,7 @@ def cbps(
         "n_control": int((1 - T).sum()),
         "pscore_min": float(ps.min()),
         "pscore_max": float(ps.max()),
-        "std_mean_diff_after": dict(
-            zip(["_intercept"] + list(covariates) if add_intercept else list(covariates),
-                smd.tolist())
-        ),
+        "std_mean_diff_after": dict(zip(balance_labels, smd.tolist())),
         "converged": converged_pt,
         "gmm_objective": obj_pt,
         "n_bootstrap": n_bootstrap,
@@ -213,7 +227,7 @@ def cbps(
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-np.clip(z, -35, 35)))
+    return np.asarray(1.0 / (1.0 + np.exp(-np.clip(z, -35, 35))), dtype=float)
 
 
 def _score_and_balance(
@@ -234,7 +248,7 @@ def _score_and_balance(
         g1 = (T - ps)[:, None] * X
         w = T - (1 - T) * ps / (1 - ps)
         g2 = w[:, None] * X
-    return np.concatenate([g1.mean(axis=0), g2.mean(axis=0)])
+    return np.asarray(np.concatenate([g1.mean(axis=0), g2.mean(axis=0)]), dtype=float)
 
 
 def _balance_only(
@@ -247,7 +261,7 @@ def _balance_only(
         w = (T - ps) / (ps * (1 - ps))
     else:
         w = T - (1 - T) * ps / (1 - ps)
-    return (w[:, None] * X).mean(axis=0)
+    return np.asarray((w[:, None] * X).mean(axis=0), dtype=float)
 
 
 def _fit_cbps(
@@ -285,7 +299,7 @@ def _fit_cbps(
             g = _balance_only(b, X, T, estimand)
             return float(g @ g)
         res = optimize.minimize(obj, beta0, method="BFGS", options={"maxiter": 200})
-        beta = res.x
+        beta = np.asarray(res.x, dtype=float)
         converged = bool(res.success)
         obj_value = float(res.fun)
     else:
@@ -294,7 +308,7 @@ def _fit_cbps(
             g = _score_and_balance(b, X, T, estimand)
             return float(g @ g)
         res1 = optimize.minimize(obj1, beta0, method="BFGS", options={"maxiter": 200})
-        beta1 = res1.x
+        beta1 = np.asarray(res1.x, dtype=float)
 
         # Step 2: efficient weighting W = (E[g g'])^{-1}
         ps1 = _sigmoid(X @ beta1)
@@ -320,13 +334,13 @@ def _fit_cbps(
             g = _score_and_balance(b, X, T, estimand)
             return float(g @ W @ g)
         res2 = optimize.minimize(obj2, beta1, method="BFGS", options={"maxiter": 200})
-        beta = res2.x
+        beta = np.asarray(res2.x, dtype=float)
         converged = bool(res2.success)
         obj_value = float(res2.fun)
 
     ps_final = _sigmoid(X @ beta)
     ps_final = np.clip(ps_final, 1e-8, 1 - 1e-8)
-    return beta, ps_final, converged, obj_value
+    return beta, np.asarray(ps_final, dtype=float), converged, obj_value
 
 
 def _warm_start_logit(X: np.ndarray, T: np.ndarray) -> np.ndarray:
@@ -350,9 +364,14 @@ def _warm_start_logit(X: np.ndarray, T: np.ndarray) -> np.ndarray:
     try:
         from sklearn.linear_model import LogisticRegression
 
-        m = LogisticRegression(max_iter=1000, solver="lbfgs", C=1e6, fit_intercept=False)
+        m = LogisticRegression(
+            max_iter=1000,
+            solver="lbfgs",
+            C=1e6,
+            fit_intercept=False,
+        )
         m.fit(X, T)
-        return m.coef_[0].astype(np.float64)
+        return np.asarray(m.coef_[0], dtype=np.float64)
     except Exception:
         return np.zeros(X.shape[1], dtype=np.float64)
 
@@ -373,7 +392,7 @@ def _cbps_weights(
         w1 = w1 / s1
     if s0 > 0:
         w0 = w0 / s0
-    return w1, w0
+    return np.asarray(w1, dtype=float), np.asarray(w0, dtype=float)
 
 
 __all__ = ["cbps"]

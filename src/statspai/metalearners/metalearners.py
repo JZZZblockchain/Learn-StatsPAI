@@ -22,7 +22,7 @@ Supported learners
 - **DR-Learner**: doubly robust pseudo-outcome regression (Kennedy)
 """
 
-from typing import Optional, List, Dict, Any, Union, Tuple
+from typing import Any, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -39,7 +39,7 @@ from ..exceptions import DataInsufficient, MethodIncompatibility
 # Helpers
 # ======================================================================
 
-def _default_outcome_model():
+def _default_outcome_model() -> Any:
     from sklearn.ensemble import GradientBoostingRegressor
     return GradientBoostingRegressor(
         n_estimators=200, max_depth=4, learning_rate=0.05,
@@ -47,7 +47,7 @@ def _default_outcome_model():
     )
 
 
-def _default_propensity_model():
+def _default_propensity_model() -> Any:
     from sklearn.ensemble import GradientBoostingClassifier
     return GradientBoostingClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.05,
@@ -55,7 +55,7 @@ def _default_propensity_model():
     )
 
 
-def _default_cate_model():
+def _default_cate_model() -> Any:
     from sklearn.ensemble import GradientBoostingRegressor
     return GradientBoostingRegressor(
         n_estimators=200, max_depth=3, learning_rate=0.05,
@@ -63,13 +63,17 @@ def _default_cate_model():
     )
 
 
-def _get_propensity(model, X, clip=(0.01, 0.99)):
+def _get_propensity(
+    model: Any,
+    X: np.ndarray,
+    clip: Tuple[float, float] = (0.01, 0.99),
+) -> np.ndarray:
     """Return P(D=1|X), clipped for stability."""
     if hasattr(model, 'predict_proba'):
         p = model.predict_proba(X)[:, 1]
     else:
         p = model.predict(X)
-    return np.clip(p, clip[0], clip[1])
+    return np.asarray(np.clip(p, clip[0], clip[1]), dtype=float)
 
 
 def _prepare_effect_matrix(estimator: Any, X: Any, *, context: str) -> np.ndarray:
@@ -130,12 +134,18 @@ def _prepare_effect_matrix(estimator: Any, X: Any, *, context: str) -> np.ndarra
     return X_arr
 
 
-def _cross_fit_predict(model, X, y, n_folds, method='predict'):
+def _cross_fit_predict(
+    model: Any,
+    X: np.ndarray,
+    y: np.ndarray,
+    n_folds: int,
+    method: str = 'predict',
+) -> np.ndarray:
     """Out-of-fold predictions via cross-fitting."""
     from sklearn.base import clone
     from sklearn.model_selection import KFold
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-    preds = np.zeros(len(y))
+    preds = np.zeros(len(y), dtype=float)
     for train_idx, test_idx in kf.split(X):
         m = clone(model)
         m.fit(X[train_idx], y[train_idx])
@@ -143,10 +153,15 @@ def _cross_fit_predict(model, X, y, n_folds, method='predict'):
             preds[test_idx] = m.predict_proba(X[test_idx])[:, 1]
         else:
             preds[test_idx] = m.predict(X[test_idx])
-    return preds
+    return np.asarray(preds, dtype=float)
 
 
-def _prepare_data(data, y, treat, covariates):
+def _prepare_data(
+    data: pd.DataFrame,
+    y: str,
+    treat: str,
+    covariates: List[str],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Extract and validate arrays from DataFrame."""
     cols = [y, treat] + covariates
     for c in cols:
@@ -160,9 +175,15 @@ def _prepare_data(data, y, treat, covariates):
 
 
 def _cross_fit_aipw_phi(
-    X, Y, D, outcome_model, propensity_model, n_folds=5, clip=(0.01, 0.99),
-    seed=42,
-):
+    X: np.ndarray,
+    Y: np.ndarray,
+    D: np.ndarray,
+    outcome_model: Any,
+    propensity_model: Any,
+    n_folds: int = 5,
+    clip: Tuple[float, float] = (0.01, 0.99),
+    seed: int = 42,
+) -> Tuple[np.ndarray, dict[str, Any]]:
     """Cross-fit AIPW (DR) pseudo-outcome :math:`\\varphi_i`.
 
     Returns
@@ -186,9 +207,9 @@ def _cross_fit_aipw_phi(
     from sklearn.base import clone
     from sklearn.model_selection import KFold
     n = len(Y)
-    mu1_hat = np.zeros(n)
-    mu0_hat = np.zeros(n)
-    e_hat = np.zeros(n)
+    mu1_hat = np.zeros(n, dtype=float)
+    mu0_hat = np.zeros(n, dtype=float)
+    e_hat = np.zeros(n, dtype=float)
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
     for tr, te in kf.split(X):
         X_tr, Y_tr, D_tr = X[tr], Y[tr], D[tr]
@@ -214,7 +235,7 @@ def _cross_fit_aipw_phi(
         prop = clone(propensity_model)
         prop.fit(X_tr, D_tr)
         e_hat[te] = _get_propensity(prop, X_te, clip=clip)
-    e_clip = np.clip(e_hat, clip[0], clip[1])
+    e_clip = np.asarray(np.clip(e_hat, clip[0], clip[1]), dtype=float)
     n_clip_lo = int(np.sum(e_hat < clip[0]))
     n_clip_hi = int(np.sum(e_hat > clip[1]))
     phi = (
@@ -230,7 +251,7 @@ def _cross_fit_aipw_phi(
         "n_clipped_above": n_clip_hi,
         "clip": clip,
     }
-    return phi, diag
+    return np.asarray(phi, dtype=float), diag
 
 
 # ======================================================================
@@ -271,11 +292,11 @@ class SLearner:
     kunzel2019metalearners
     """
 
-    def __init__(self, model=None):
+    def __init__(self, model: Any = None) -> None:
         self.model = model if model is not None else _default_outcome_model()
         self._fitted = False
 
-    def fit(self, X, Y, D):
+    def fit(self, X: Any, Y: Any, D: Any) -> "SLearner":
         """Fit mu(X, D)."""
         from sklearn.base import clone
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
@@ -286,12 +307,13 @@ class SLearner:
         self._fitted = True
         return self
 
-    def effect(self, X):
+    def effect(self, X: Any) -> np.ndarray:
         """Estimate CATE: mu(X,1) - mu(X,0)."""
         X = _prepare_effect_matrix(self, X, context="SLearner.effect()")
         X1 = np.column_stack([X, np.ones(len(X))])
         X0 = np.column_stack([X, np.zeros(len(X))])
-        return self._model.predict(X1) - self._model.predict(X0)
+        return np.asarray(self._model.predict(X1) - self._model.predict(X0),
+                          dtype=float)
 
 
 # ======================================================================
@@ -334,13 +356,13 @@ class TLearner:
     kunzel2019metalearners
     """
 
-    def __init__(self, model_0=None, model_1=None):
+    def __init__(self, model_0: Any = None, model_1: Any = None) -> None:
         from sklearn.base import clone
         self.model_0 = model_0 if model_0 is not None else _default_outcome_model()
         self.model_1 = model_1 if model_1 is not None else clone(self.model_0)
         self._fitted = False
 
-    def fit(self, X, Y, D):
+    def fit(self, X: Any, Y: Any, D: Any) -> "TLearner":
         from sklearn.base import clone
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
         mask1 = D == 1
@@ -354,9 +376,10 @@ class TLearner:
         self._fitted = True
         return self
 
-    def effect(self, X):
+    def effect(self, X: Any) -> np.ndarray:
         X = _prepare_effect_matrix(self, X, context="TLearner.effect()")
-        return self._mu1.predict(X) - self._mu0.predict(X)
+        return np.asarray(self._mu1.predict(X) - self._mu0.predict(X),
+                          dtype=float)
 
 
 # ======================================================================
@@ -414,21 +437,29 @@ class XLearner:
 
     def __init__(
         self,
-        model_0=None,
-        model_1=None,
-        cate_model_0=None,
-        cate_model_1=None,
-        propensity_model=None,
-    ):
+        model_0: Any = None,
+        model_1: Any = None,
+        cate_model_0: Any = None,
+        cate_model_1: Any = None,
+        propensity_model: Any = None,
+    ) -> None:
         from sklearn.base import clone
         self.model_0 = model_0 if model_0 is not None else _default_outcome_model()
         self.model_1 = model_1 if model_1 is not None else clone(self.model_0)
-        self.cate_model_0 = cate_model_0 if cate_model_0 is not None else _default_cate_model()
-        self.cate_model_1 = cate_model_1 if cate_model_1 is not None else clone(self.cate_model_0)
-        self.propensity_model = propensity_model if propensity_model is not None else _default_propensity_model()
+        self.cate_model_0 = (
+            cate_model_0 if cate_model_0 is not None else _default_cate_model()
+        )
+        self.cate_model_1 = (
+            cate_model_1 if cate_model_1 is not None
+            else clone(self.cate_model_0)
+        )
+        self.propensity_model = (
+            propensity_model if propensity_model is not None
+            else _default_propensity_model()
+        )
         self._fitted = False
 
-    def fit(self, X, Y, D):
+    def fit(self, X: Any, Y: Any, D: Any) -> "XLearner":
         from sklearn.base import clone
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
         mask1 = D == 1
@@ -457,12 +488,12 @@ class XLearner:
         self._fitted = True
         return self
 
-    def effect(self, X):
+    def effect(self, X: Any) -> np.ndarray:
         X = _prepare_effect_matrix(self, X, context="XLearner.effect()")
         e = _get_propensity(self._prop, X)
         tau0 = self._tau0.predict(X)
         tau1 = self._tau1.predict(X)
-        return e * tau0 + (1 - e) * tau1
+        return np.asarray(e * tau0 + (1 - e) * tau1, dtype=float)
 
 
 # ======================================================================
@@ -515,18 +546,26 @@ class RLearner:
 
     def __init__(
         self,
-        outcome_model=None,
-        propensity_model=None,
-        cate_model=None,
-        n_folds=5,
-    ):
-        self.outcome_model = outcome_model if outcome_model is not None else _default_outcome_model()
-        self.propensity_model = propensity_model if propensity_model is not None else _default_propensity_model()
-        self.cate_model = cate_model if cate_model is not None else _default_cate_model()
+        outcome_model: Any = None,
+        propensity_model: Any = None,
+        cate_model: Any = None,
+        n_folds: int = 5,
+    ) -> None:
+        self.outcome_model = (
+            outcome_model if outcome_model is not None
+            else _default_outcome_model()
+        )
+        self.propensity_model = (
+            propensity_model if propensity_model is not None
+            else _default_propensity_model()
+        )
+        self.cate_model = (
+            cate_model if cate_model is not None else _default_cate_model()
+        )
         self.n_folds = n_folds
         self._fitted = False
 
-    def fit(self, X, Y, D):
+    def fit(self, X: Any, Y: Any, D: Any) -> "RLearner":
         from sklearn.base import clone
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
 
@@ -535,7 +574,7 @@ class RLearner:
         e_hat = _cross_fit_predict(
             self.propensity_model, X, D, self.n_folds, method='predict_proba'
         )
-        e_hat = np.clip(e_hat, 0.01, 0.99)
+        e_hat = np.asarray(np.clip(e_hat, 0.01, 0.99), dtype=float)
 
         # Residuals
         Y_res = Y - m_hat
@@ -555,9 +594,9 @@ class RLearner:
         self._fitted = True
         return self
 
-    def effect(self, X):
+    def effect(self, X: Any) -> np.ndarray:
         X = _prepare_effect_matrix(self, X, context="RLearner.effect()")
-        return self._cate.predict(X)
+        return np.asarray(self._cate.predict(X), dtype=float)
 
 
 # ======================================================================
@@ -611,30 +650,36 @@ class DRLearner:
 
     def __init__(
         self,
-        outcome_model=None,
-        propensity_model=None,
-        cate_model=None,
-        n_folds=5,
-    ):
-        self.outcome_model = outcome_model if outcome_model is not None else _default_outcome_model()
-        self.propensity_model = propensity_model if propensity_model is not None else _default_propensity_model()
-        self.cate_model = cate_model if cate_model is not None else _default_cate_model()
+        outcome_model: Any = None,
+        propensity_model: Any = None,
+        cate_model: Any = None,
+        n_folds: int = 5,
+    ) -> None:
+        self.outcome_model = (
+            outcome_model if outcome_model is not None
+            else _default_outcome_model()
+        )
+        self.propensity_model = (
+            propensity_model if propensity_model is not None
+            else _default_propensity_model()
+        )
+        self.cate_model = (
+            cate_model if cate_model is not None else _default_cate_model()
+        )
         self.n_folds = n_folds
         self._fitted = False
 
-    def fit(self, X, Y, D):
+    def fit(self, X: Any, Y: Any, D: Any) -> "DRLearner":
         from sklearn.base import clone
         from sklearn.model_selection import KFold
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
         n = len(Y)
-        mask1 = D == 1
-        mask0 = D == 0
 
         kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=42)
 
-        mu1_hat = np.zeros(n)
-        mu0_hat = np.zeros(n)
-        e_hat = np.zeros(n)
+        mu1_hat = np.zeros(n, dtype=float)
+        mu0_hat = np.zeros(n, dtype=float)
+        e_hat = np.zeros(n, dtype=float)
 
         for train_idx, test_idx in kf.split(X):
             X_tr, D_tr, Y_tr = X[train_idx], D[train_idx], Y[train_idx]
@@ -678,7 +723,7 @@ class DRLearner:
         # Store pseudo-outcomes + diagnostics so the high-level
         # ``metalearner`` wrapper can reuse them for ATE / SE without
         # re-running cross-fitting.
-        self._pseudo_outcomes = phi
+        self._pseudo_outcomes = np.asarray(phi, dtype=float)
         self._pseudo_diag = {
             "mu1_hat": mu1_hat,
             "mu0_hat": mu0_hat,
@@ -692,9 +737,9 @@ class DRLearner:
         self._fitted = True
         return self
 
-    def effect(self, X):
+    def effect(self, X: Any) -> np.ndarray:
         X = _prepare_effect_matrix(self, X, context="DRLearner.effect()")
-        return self._cate.predict(X)
+        return np.asarray(self._cate.predict(X), dtype=float)
 
 
 # ======================================================================
@@ -821,6 +866,7 @@ def metalearner(
         )
 
     # Build and fit the learner
+    est: Any
     if learner == 's':
         est = SLearner(model=outcome_model)
     elif learner == 't':
@@ -852,7 +898,7 @@ def metalearner(
         )
 
     est.fit(X, Y, D)
-    cate = est.effect(X)
+    cate = np.asarray(est.effect(X), dtype=float)
 
     # ATE estimation + SE — unified AIPW (DR pseudo-outcome) path for ALL
     # learners.  Rationale: the chosen learner determines τ̂(X) (CATE),
@@ -865,15 +911,21 @@ def metalearner(
     # outcomes when available (avoids a second cross-fit) and otherwise
     # build them via :func:`_cross_fit_aipw_phi`.
     if learner == 'dr' and hasattr(est, '_pseudo_outcomes'):
-        phi = est._pseudo_outcomes
-        aipw_diag = getattr(est, '_pseudo_diag', None)
+        phi = np.asarray(est._pseudo_outcomes, dtype=float)
+        aipw_diag: dict[str, Any] = getattr(est, '_pseudo_diag', {}) or {}
     else:
         # Use the user-supplied or default outcome / propensity models
         # for a clean, learner-independent AIPW fit.  Without explicit
         # user models this matches the DR-Learner default exactly so
         # results are reproducible across learner= choices.
-        _outcome = outcome_model if outcome_model is not None else _default_outcome_model()
-        _prop = propensity_model if propensity_model is not None else _default_propensity_model()
+        _outcome = (
+            outcome_model if outcome_model is not None
+            else _default_outcome_model()
+        )
+        _prop = (
+            propensity_model if propensity_model is not None
+            else _default_propensity_model()
+        )
         phi, aipw_diag = _cross_fit_aipw_phi(
             X, Y, D, _outcome, _prop, n_folds=n_folds,
         )
@@ -898,8 +950,8 @@ def metalearner(
     # Overlap diagnostics + warning when many propensities were clipped
     # (the AIPW score blows up at e≈0 or e≈1, so a heavy clip share is
     # a red flag for identification, not a noise issue).
-    n_clip_lo = int(aipw_diag.get("n_clipped_below", 0)) if aipw_diag else 0
-    n_clip_hi = int(aipw_diag.get("n_clipped_above", 0)) if aipw_diag else 0
+    n_clip_lo = int(aipw_diag.get("n_clipped_below", 0))
+    n_clip_hi = int(aipw_diag.get("n_clipped_above", 0))
     clip_share = (n_clip_lo + n_clip_hi) / n if n > 0 else 0.0
     if clip_share > 0.05:
         import warnings
@@ -940,7 +992,7 @@ def metalearner(
             'n_clipped_below': n_clip_lo,
             'n_clipped_above': n_clip_hi,
             'clip_share': float(clip_share),
-            'clip': aipw_diag.get('clip', (0.01, 0.99)) if aipw_diag else (0.01, 0.99),
+            'clip': aipw_diag.get('clip', (0.01, 0.99)),
         },
     }
 
@@ -959,6 +1011,16 @@ def metalearner(
     )
     try:
         from ..output._lineage import attach_provenance as _attach_prov
+        outcome_model_name = (
+            type(outcome_model).__name__ if outcome_model is not None else None
+        )
+        propensity_model_name = (
+            type(propensity_model).__name__
+            if propensity_model is not None else None
+        )
+        cate_model_name = (
+            type(cate_model).__name__ if cate_model is not None else None
+        )
         _attach_prov(
             _result,
             function="sp.metalearner",
@@ -968,12 +1030,9 @@ def metalearner(
                 "learner": learner,
                 "n_folds": n_folds, "n_bootstrap": n_bootstrap,
                 "alpha": alpha,
-                "outcome_model": type(outcome_model).__name__
-                                  if outcome_model is not None else None,
-                "propensity_model": type(propensity_model).__name__
-                                     if propensity_model is not None else None,
-                "cate_model": type(cate_model).__name__
-                               if cate_model is not None else None,
+                "outcome_model": outcome_model_name,
+                "propensity_model": propensity_model_name,
+                "cate_model": cate_model_name,
             },
             data=data,
             overwrite=False,

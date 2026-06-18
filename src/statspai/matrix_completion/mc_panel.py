@@ -22,7 +22,7 @@ Athey, S., Bayati, M., Doudchenko, N., Imbens, G., & Khosravi, K. (2021).
 JASA, 116(536), 1716-1730. [@athey2021matrix]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -225,7 +225,6 @@ class MCPanel:
         ).fillna(0)
 
         units = Y_mat.index.tolist()
-        times = Y_mat.columns.tolist()
         N, T = Y_mat.shape
 
         Y = Y_mat.values.astype(np.float64)
@@ -338,7 +337,13 @@ class MCPanel:
             _citation_key='mc_panel',
         )
 
-    def _soft_impute(self, Y, Omega, N, T):
+    def _soft_impute(
+        self,
+        Y: np.ndarray,
+        Omega: np.ndarray,
+        N: int,
+        T: int,
+    ) -> np.ndarray:
         """
         Soft-impute algorithm for nuclear norm regularised completion.
 
@@ -347,7 +352,7 @@ class MCPanel:
         2. Compute SVD.
         3. Soft-threshold singular values.
         """
-        L = np.zeros((N, T))
+        L: np.ndarray = np.zeros((N, T), dtype=float)
 
         for iteration in range(self.max_iter):
             # Fill in: use observed controls, impute treated
@@ -364,7 +369,7 @@ class MCPanel:
                 s_thresh[self.max_rank:] = 0
 
             # Reconstruct
-            L_new = U * s_thresh @ Vt
+            L_new = np.asarray(U * s_thresh @ Vt, dtype=float)
 
             # Check convergence
             diff = np.linalg.norm(L_new - L, 'fro')
@@ -375,7 +380,7 @@ class MCPanel:
             if diff / norm_L < self.tol:
                 break
 
-        return L
+        return np.asarray(L, dtype=float)
 
 
 # ======================================================================

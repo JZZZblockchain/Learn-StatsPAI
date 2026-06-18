@@ -18,7 +18,7 @@ Heckman, J.J. (1979).
 *Econometrica*, 47(1), 153-161. [@heckman1979sample]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -109,8 +109,9 @@ def heckman(
     n_total = len(df)
 
     # --- Step 1: Probit selection equation ---
-    Z = np.column_stack([np.ones(n_total)] +
-                        [df[v].values.astype(float) for v in z])
+    Z = np.column_stack(
+        [np.ones(n_total)] + [df[v].values.astype(float) for v in z]
+    )
     valid_s = np.all(np.isfinite(Z), axis=1) & np.isfinite(D)
     D_v = D[valid_s]
     Z_v = Z[valid_s]
@@ -135,9 +136,11 @@ def heckman(
     n_sel = selected.sum()
 
     Y_sel = df_sel[y].values.astype(float)
-    X_sel = np.column_stack([np.ones(n_sel)] +
-                            [df_sel[v].values.astype(float) for v in x] +
-                            [imr_sel])
+    X_sel = np.column_stack(
+        [np.ones(n_sel)]
+        + [df_sel[v].values.astype(float) for v in x]
+        + [imr_sel]
+    )
 
     valid_o = np.all(np.isfinite(X_sel), axis=1) & np.isfinite(Y_sel)
     Y_v = Y_sel[valid_o]
@@ -146,7 +149,6 @@ def heckman(
     Zg_v = Z_gamma_sel[valid_o]
     imr_v = imr_sel[valid_o]
     n_eff = len(Y_v)
-    k = X_v.shape[1]
 
     beta = np.linalg.lstsq(X_v, Y_v, rcond=None)[0]
     resid = Y_v - X_v @ beta
@@ -248,7 +250,11 @@ def heckman(
     )
 
 
-def _probit_fit(D, Z, max_iter=50):
+def _probit_fit(
+    D: np.ndarray,
+    Z: np.ndarray,
+    max_iter: int = 50,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Probit MLE via Newton–Raphson.
 
     Returns
@@ -264,7 +270,7 @@ def _probit_fit(D, Z, max_iter=50):
     n, k = Z.shape
     gamma = np.zeros(k)
     H = None
-    w = None
+    w = np.ones(n, dtype=float)
 
     for _ in range(max_iter):
         Zg = Z @ gamma

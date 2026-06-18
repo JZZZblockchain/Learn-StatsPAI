@@ -37,14 +37,14 @@ Zubizarreta, J.R. (2015).
 Outcome Data." *Journal of the American Statistical Association*,
 110(511), 910-922. [@zubizarreta2015stable]
 
-Wang, Y. and Zubizarreta, J.R. (2020).
-"Minimal dispersion approximately balancing weights: asymptotic
-properties and practical considerations." *Biometrika*, 107(1), 93-105. [@wang2019minimal]
+Wang, Y. and Zubizarreta, J.R. (2020). "Minimal dispersion approximately
+balancing weights: asymptotic properties and practical considerations."
+*Biometrika*, 107(1), 93-105. [@wang2019minimal]
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -210,10 +210,11 @@ def sbw(
     sd = np.where(sd < 1e-12, 1.0, sd)
 
     # ── Broadcast delta ───────────────────────────────────────────────
-    if np.isscalar(delta):
-        delta_vec = np.full(X.shape[1], float(delta))
+    delta_vec: np.ndarray
+    if isinstance(delta, (int, float, np.floating)):
+        delta_vec = np.full(X.shape[1], float(delta), dtype=float)
     else:
-        delta_vec = np.asarray(delta, dtype=float)
+        delta_vec = np.asarray(delta, dtype=float).reshape(-1)
         if delta_vec.size != X.shape[1]:
             raise ValueError(
                 f"delta must be scalar or length {X.shape[1]}"
@@ -281,6 +282,10 @@ def sbw(
     )
     try:
         from ..output._lineage import attach_provenance as _attach_prov
+        if isinstance(delta, (int, float, np.floating)):
+            lineage_delta: Union[float, List[float]] = float(delta)
+        else:
+            lineage_delta = [float(v) for v in delta]
         _attach_prov(
             _result,
             function="sp.matching.sbw",
@@ -289,8 +294,7 @@ def sbw(
                 "covariates": list(covariates),
                 "y": y,
                 "estimand": estimand,
-                "delta": delta if isinstance(delta, (int, float))
-                         else list(delta),
+                "delta": lineage_delta,
                 "objective": objective,
                 "tolerance_scale": tolerance_scale,
                 "include_squares": include_squares,
@@ -322,33 +326,33 @@ def _solve_sbw(
 
     if objective == "variance":
         # Quadratic objective with linear constraints → SLSQP is fine.
-        def fn(w):
+        def fn(w: np.ndarray) -> float:
             return float(np.sum(w * w))
 
-        def grad(w):
-            return 2.0 * w
+        def grad(w: np.ndarray) -> np.ndarray:
+            return np.asarray(2.0 * w, dtype=float)
 
     else:  # entropy (KL from uniform 1/m)
         eps_log = 1e-12
 
-        def fn(w):
+        def fn(w: np.ndarray) -> float:
             w_safe = np.maximum(w, eps_log)
             return float(np.sum(w_safe * np.log(m * w_safe)))
 
-        def grad(w):
+        def grad(w: np.ndarray) -> np.ndarray:
             w_safe = np.maximum(w, eps_log)
-            return np.log(m * w_safe) + 1.0
+            return np.asarray(np.log(m * w_safe) + 1.0, dtype=float)
 
     # Constraints as a single vector function (SLSQP handles vector inequalities)
-    def ineq_pos(w):
+    def ineq_pos(w: np.ndarray) -> np.ndarray:
         # tol_j + (X_arm' w)_j - target_j ≥ 0
-        return tol + (X_arm.T @ w) - target
+        return np.asarray(tol + (X_arm.T @ w) - target, dtype=float)
 
-    def ineq_neg(w):
+    def ineq_neg(w: np.ndarray) -> np.ndarray:
         # tol_j - (X_arm' w)_j + target_j ≥ 0
-        return tol - (X_arm.T @ w) + target
+        return np.asarray(tol - (X_arm.T @ w) + target, dtype=float)
 
-    def eq_sum(w):
+    def eq_sum(w: np.ndarray) -> float:
         return float(np.sum(w)) - 1.0
 
     w0 = np.full(m, 1.0 / m)
@@ -407,9 +411,11 @@ def _balance_table(
     sd_pooled = np.sqrt(0.5 * (X_t.var(axis=0, ddof=0) + X_c.var(axis=0, ddof=0)))
     sd_pooled = np.where(sd_pooled < 1e-12, 1.0, sd_pooled)
 
-    def _mean(x, ww):
+    def _mean(x: np.ndarray, ww: np.ndarray) -> np.ndarray:
         s = ww.sum()
-        return (x * ww[:, None]).sum(axis=0) / s if s > 0 else x.mean(axis=0)
+        if s > 0:
+            return np.asarray((x * ww[:, None]).sum(axis=0) / s, dtype=float)
+        return np.asarray(x.mean(axis=0), dtype=float)
 
     m_t_raw = X_t.mean(axis=0)
     m_c_raw = X_c.mean(axis=0)
@@ -430,7 +436,7 @@ def _balance_table(
 def _weighted_treatment_effect(
     Y: np.ndarray, T: np.ndarray, w: np.ndarray,
     estimand: str, alpha: float,
-):
+) -> Tuple[float, float, float, float, float]:
     """Point estimate + *conditional-on-weights* SE for the target estimand.
 
     Uses a Horvitz-Thompson variance that treats the SBW weights as
@@ -442,7 +448,6 @@ def _weighted_treatment_effect(
     """
     from scipy import stats as _stats
 
-    n = len(Y)
     w = np.asarray(w, dtype=float)
 
     if estimand == "att":
@@ -452,7 +457,7 @@ def _weighted_treatment_effect(
         mu_t = float(np.sum(w_t * Y[T == 1]) / w_t.sum())
         mu_c = float(np.sum(w_c * Y[T == 0]) / w_c.sum())
         ate = mu_t - mu_c
-        # Sandwich-type SE: Var(mu_t) via iid + Var(mu_c) via Σ w_i² · (Y_i - mu_c)²
+        # Sandwich-type SE combines iid treated and weighted-control variance.
         var_t = float(np.var(Y[T == 1], ddof=1) / (T == 1).sum())
         resid_c = Y[T == 0] - mu_c
         var_c = float(np.sum((w_c ** 2) * (resid_c ** 2)))

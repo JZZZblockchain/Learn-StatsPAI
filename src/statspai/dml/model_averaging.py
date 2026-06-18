@@ -334,7 +334,12 @@ def _fit_candidate_plr(
     yhat = np.zeros(n)
     dhat = np.zeros(n)
 
-    def _fit(learner, Xfit, yfit, wfit):
+    def _fit(
+        learner: Any,
+        Xfit: np.ndarray,
+        yfit: np.ndarray,
+        wfit: Optional[np.ndarray],
+    ) -> Any:
         clf = clone(learner)
         if wfit is None:
             clf.fit(Xfit, yfit)
@@ -427,13 +432,13 @@ def _solve_cls_weights(
             },
         )
 
-    def loss(w):
+    def loss(w: np.ndarray) -> float:
         r = target - predictions @ w
         return float(np.sum(sw * r * r))
 
-    def grad(w):
+    def grad(w: np.ndarray) -> np.ndarray:
         r = target - predictions @ w
-        return -2.0 * predictions.T @ (sw * r)
+        return np.asarray(-2.0 * predictions.T @ (sw * r), dtype=float)
 
     w0 = np.full(K, 1.0 / K)
     bounds = [(0.0, 1.0)] * K
@@ -446,7 +451,9 @@ def _solve_cls_weights(
     )
     if not res.success:
         # Fallback: pick the column with lowest weighted MSE.
-        weighted_sse = np.sum(sw[:, None] * (target[:, None] - predictions) ** 2, axis=0)
+        weighted_sse = np.sum(
+            sw[:, None] * (target[:, None] - predictions) ** 2, axis=0,
+        )
         w = np.zeros(K)
         w[int(np.argmin(weighted_sse))] = 1.0
         return w

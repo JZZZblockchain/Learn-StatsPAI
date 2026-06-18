@@ -18,7 +18,7 @@ Cattaneo, M. D. (2010).
 Journal of Econometrics, 155(2), 138-154. [@cattaneo2010efficient]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -255,7 +255,8 @@ class MultiTreatment:
         for j, row in enumerate(detail_rows):
             se = float(np.std(boot_ates[:, j], ddof=1))
             row['se'] = se
-            pv = float(2 * (1 - sp_stats.norm.cdf(abs(row['estimate'] / max(se, 1e-10)))))
+            z_stat = row['estimate'] / max(se, 1e-10)
+            pv = float(2 * (1 - sp_stats.norm.cdf(abs(z_stat))))
             row['pvalue'] = pv
             row['ci_lower'] = row['estimate'] - z_crit * se
             row['ci_upper'] = row['estimate'] + z_crit * se
@@ -293,7 +294,12 @@ class MultiTreatment:
             _citation_key='multi_treatment',
         )
 
-    def _estimate_gps(self, X, D, levels):
+    def _estimate_gps(
+        self,
+        X: np.ndarray,
+        D: np.ndarray,
+        levels: np.ndarray,
+    ) -> np.ndarray:
         """Estimate generalized propensity scores via multinomial logit."""
         from sklearn.linear_model import LogisticRegression
         lr = LogisticRegression(
@@ -304,7 +310,7 @@ class MultiTreatment:
         probs = lr.predict_proba(X)
 
         # Align columns with levels
-        gps = np.zeros((len(D), len(levels)))
+        gps = np.zeros((len(D), len(levels)), dtype=float)
         for j, k in enumerate(levels):
             if k in lr.classes_:
                 col_idx = list(lr.classes_).index(k)
@@ -312,7 +318,7 @@ class MultiTreatment:
             else:
                 gps[:, j] = 1e-6
 
-        return gps
+        return np.asarray(gps, dtype=float)
 
 
 CausalResult._CITATIONS['multi_treatment'] = (

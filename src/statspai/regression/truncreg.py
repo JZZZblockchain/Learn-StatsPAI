@@ -20,6 +20,7 @@ from scipy import stats
 from scipy.optimize import minimize
 
 from ..core.results import EconometricResults
+from ._optim_helpers import robust_convergence
 
 
 def truncreg(
@@ -128,17 +129,9 @@ def truncreg(
 
     result = minimize(neg_log_lik, theta0, method='BFGS',
                       options={'maxiter': maxiter, 'gtol': tol})
-    # BFGS often returns ``success=False`` with status 2 ("precision loss")
-    # at a perfectly good optimum of the truncated-regression log-likelihood
-    # — a line-search artefact, not a real convergence failure. Trust a small
-    # gradient norm at the optimum instead of the raw flag (estimates are
-    # unchanged; only the reported ``converged`` boolean is made robust).
-    _grad = getattr(result, 'jac', None)
-    grad_norm = (float(np.linalg.norm(_grad))
-                 if _grad is not None else float('inf'))
-    converged = bool(result.success) or (
-        np.isfinite(result.fun) and grad_norm < 1e-3
-    )
+    # BFGS often reports status-2 ("precision loss") at a good optimum;
+    # derive ``converged`` from the gradient norm (see robust_convergence).
+    converged, grad_norm = robust_convergence(result)
     theta_hat = result.x
 
     beta_hat = theta_hat[:k]

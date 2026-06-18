@@ -92,18 +92,23 @@ class DIDAnalysis:
         if self.bacon is not None:
             lines.append("--- Bacon Decomposition ---")
             neg_wt = self.bacon.get('negative_weight_share', 0)
-            lines.append(f"  TWFE estimate          = {self.bacon.get('beta_twfe', 'N/A'):.6f}")
+            lines.append(
+                f"  TWFE estimate          = {self.bacon.get('beta_twfe', 'N/A'):.6f}"
+            )
             lines.append(f"  Negative weight share  = {neg_wt:.1%}")
             if neg_wt > 0.1:
                 lines.append("  ⚠ Substantial negative weights — TWFE may be biased.")
                 lines.append("    Recommended: Callaway-Sant'Anna or Sun-Abraham.")
             else:
-                lines.append("  ✓ Negative weight share is small — TWFE likely reliable.")
+                lines.append(
+                    "  ✓ Negative weight share is small — TWFE likely reliable."
+                )
             lines.append("")
 
         # Event study
         if self.event_study_result is not None:
-            mi = self.event_study_result.model_info or {}
+            raw_mi = self.event_study_result.model_info
+            mi = raw_mi if isinstance(raw_mi, dict) else {}
             lines.append("--- Event Study ---")
             pretrend_p = mi.get('pretrend_pvalue')
             if pretrend_p is None and isinstance(mi.get('pretrend_test'), dict):
@@ -111,7 +116,9 @@ class DIDAnalysis:
             if pretrend_p is not None:
                 lines.append(f"  Pre-trend test p-value = {pretrend_p:.4f}")
                 if pretrend_p < 0.05:
-                    lines.append("  ⚠ Pre-trend test rejects at 5% — parallel trends concern.")
+                    lines.append(
+                        "  ⚠ Pre-trend test rejects at 5% — parallel trends concern."
+                    )
                 else:
                     lines.append("  ✓ No evidence of pre-trend violation.")
             lines.append("")
@@ -124,7 +131,9 @@ class DIDAnalysis:
             if len(breakdown) > 0:
                 m_star = breakdown.iloc[0]['M']
                 lines.append(f"  Breakdown M* = {m_star:.4f}")
-                lines.append("  (Largest violation magnitude where effect remains significant)")
+                lines.append(
+                    "  (Largest violation magnitude where effect remains significant)"
+                )
             else:
                 lines.append("  Effect not significant even at M=0.")
             lines.append("")
@@ -138,7 +147,7 @@ class DIDAnalysis:
         lines.append("=" * 65)
         return "\n".join(lines)
 
-    def plot(self, **kwargs):
+    def plot(self, **kwargs: Any) -> Any:
         """Plot event study if available, else main result."""
         if self.event_study_result is not None:
             return self.event_study_result.plot(**kwargs)
@@ -158,11 +167,11 @@ def did_analysis(
     run_bacon: bool = True,
     run_event_study: bool = True,
     run_sensitivity: bool = True,
-    event_window: Optional[tuple] = None,
+    event_window: Optional[tuple[int, int]] = None,
     cluster: Optional[str] = None,
     robust: bool = True,
     alpha: float = 0.05,
-    **kwargs,
+    **kwargs: Any,
 ) -> DIDAnalysis:
     """
     Comprehensive DID analysis workflow.
@@ -262,11 +271,11 @@ def did_analysis(
     from .honest_did import honest_did
     from .event_study import event_study
 
-    steps = []
+    steps: List[str] = []
     bacon_result = None
     es_result = None
     sens_result = None
-    diag = {}
+    diag: Dict[str, Any] = {}
 
     # ── Step 1: Detect design ──────────────────────────────────────── #
     if method == 'auto':
@@ -429,7 +438,8 @@ def did_analysis(
                 data, y=y, treat_time=treat, time=time, unit=id,
                 window=window, cluster=cluster, alpha=alpha,
             )
-            mi = es_result.model_info or {}
+            raw_mi = es_result.model_info
+            mi = raw_mi if isinstance(raw_mi, dict) else {}
             pretrend_p = mi.get('pretrend_pvalue')
             if pretrend_p is not None:
                 steps.append(
@@ -442,7 +452,8 @@ def did_analysis(
         except Exception as e:
             steps.append(f"Event study skipped: {e}")
     elif run_event_study and es_result is not None:
-        mi = es_result.model_info or {}
+        raw_mi = es_result.model_info
+        mi = raw_mi if isinstance(raw_mi, dict) else {}
         pt = mi.get('pretrend_test')
         pretrend_p = pt.get('pvalue') if isinstance(pt, dict) else None
         if pretrend_p is not None:

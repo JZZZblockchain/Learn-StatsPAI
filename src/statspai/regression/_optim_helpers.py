@@ -23,9 +23,52 @@ covariance matrix.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Tuple
 
 import numpy as np
+
+
+def robust_convergence(opt_result, grad_tol: float = 1e-3) -> Tuple[bool, float]:
+    """Robust convergence flag for a ``scipy.optimize.minimize`` MLE fit.
+
+    SciPy's BFGS frequently returns ``success=False`` with status 2
+    ("Desired error not necessarily achieved due to precision loss") at a
+    perfectly good optimum of a flat log-likelihood — a line-search
+    artefact, not a real failure (Nelder-Mead reaches the identical
+    objective and coefficients). Trusting ``success`` alone makes MLE
+    estimators (``tobit``, ``truncreg``, ``zip``/``zinb``, ...) report
+    ``converged=False`` on correct fits.
+
+    This treats a small gradient norm at the optimum as convergence:
+    ``success`` **or** ``norm(grad) < grad_tol`` with a finite objective. It
+    only ever relaxes a *false negative* — a genuinely non-converged run
+    leaves a large gradient and still reports ``False``, so the flag never
+    wrongly claims convergence.
+
+    Parameters
+    ----------
+    opt_result : scipy.optimize.OptimizeResult
+        Object returned by ``scipy.optimize.minimize``. Only its
+        ``success``, ``jac`` and ``fun`` attributes are read.
+    grad_tol : float, default 1e-3
+        Gradient-norm threshold below which a non-``success`` optimum is
+        accepted as converged.
+
+    Returns
+    -------
+    (converged, gradient_norm) : tuple of (bool, float)
+        ``gradient_norm`` is ``inf`` when no gradient is available.
+    """
+    grad = getattr(opt_result, "jac", None)
+    grad_norm = (
+        float(np.linalg.norm(np.asarray(grad, dtype=float)))
+        if grad is not None
+        else float("inf")
+    )
+    success = bool(getattr(opt_result, "success", False))
+    fun = getattr(opt_result, "fun", np.inf)
+    converged = bool(success or (np.isfinite(fun) and grad_norm < grad_tol))
+    return converged, grad_norm
 
 
 def numerical_hessian(

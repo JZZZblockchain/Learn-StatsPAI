@@ -13,7 +13,7 @@ Cengiz, D., Dube, A., Lindner, A. and Zipperer, B. (2019).
 *Quarterly Journal of Economics*, 134(3), 1405-1454. [@cengiz2019effect]
 """
 
-from typing import Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -246,7 +246,10 @@ def stacked_did(
         att_se = 0.0
 
     z_crit = stats.norm.ppf(1 - alpha / 2)
-    att_pval = float(2 * (1 - stats.norm.cdf(abs(att) / att_se))) if att_se > 0 else np.nan
+    att_pval = (
+        float(2 * (1 - stats.norm.cdf(abs(att) / att_se)))
+        if att_se > 0 else np.nan
+    )
     att_ci = (att - z_crit * att_se, att + z_crit * att_se)
 
     # ── Build event study detail DataFrame ───────────────────────── #
@@ -339,20 +342,17 @@ def _twoway_demean(
     group2: np.ndarray,
     max_iter: int = 100,
     tol: float = 1e-8,
-) -> tuple:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Iterative two-way demeaning (alternating projection) for Y and X.
 
     Returns demeaned (y_dm, X_dm).
     """
-    n = len(y)
-    k = X.shape[1]
-
     # Build group index arrays for fast lookup
-    g1_map = {}
+    g1_map: Dict[object, List[int]] = {}
     for i, g in enumerate(group1):
         g1_map.setdefault(g, []).append(i)
-    g2_map = {}
+    g2_map: Dict[object, List[int]] = {}
     for i, g in enumerate(group2):
         g2_map.setdefault(g, []).append(i)
 
@@ -433,4 +433,4 @@ def _cluster_robust_se(
     V = _cluster_robust_vcov(X, residuals, cluster_ids)
     if V.size == 0:
         return np.array([])
-    return np.sqrt(np.maximum(np.diag(V), 0.0))
+    return np.asarray(np.sqrt(np.maximum(np.diag(V), 0.0)), dtype=float)

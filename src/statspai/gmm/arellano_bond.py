@@ -413,9 +413,11 @@ def xtabond(
         vcov = V1_robust if robust else sigma2 * Minv1
     elif robust:
         # two-step robust: Windmeijer (2005) finite-sample correction
+        assert W2 is not None and Minv2 is not None
         vcov = _windmeijer(W, Z, WZ, resid1, resid, W2, Minv2, V1_robust, unit_rows)
     else:
         # two-step conventional: efficient-GMM VCE = (W'Z W2 Z'W)⁻¹
+        assert Minv2 is not None
         vcov = Minv2
 
     var_diag = np.diag(vcov)
@@ -553,7 +555,17 @@ def _safe_inv(M: np.ndarray, what: str) -> np.ndarray:
         return np.linalg.pinv(M)
 
 
-def _windmeijer(W, Z, WZ, resid1, resid2, W2, Minv2, V1_robust, unit_rows):
+def _windmeijer(
+    W: np.ndarray,
+    Z: np.ndarray,
+    WZ: np.ndarray,
+    resid1: np.ndarray,
+    resid2: np.ndarray,
+    W2: np.ndarray,
+    Minv2: np.ndarray,
+    V1_robust: np.ndarray,
+    unit_rows: List[np.ndarray],
+) -> np.ndarray:
     """Windmeijer (2005) finite-sample correction for two-step robust SEs.
 
     ``V_corr = V₂ + D V₂ + V₂ D' + D V₁ᵣ D'`` where ``V₂ = Minv2`` is the
@@ -577,12 +589,21 @@ def _windmeijer(W, Z, WZ, resid1, resid2, W2, Minv2, V1_robust, unit_rows):
             gw = Z[r].T @ Wj[r]
             dOmega -= np.outer(ge, gw) + np.outer(gw, ge)
         D[:, j] = -(bread2 @ dOmega @ W2 @ g2)
-    return Minv2 + D @ Minv2 + Minv2 @ D.T + D @ V1_robust @ D.T
+    return np.asarray(Minv2 + D @ Minv2 + Minv2 @ D.T + D @ V1_robust @ D.T)
 
 
 def _ab_ar_test(
-    resid, unit_rows, eq_positions, order, Z, W, weight, Minv, robust, sigma2
-):
+    resid: np.ndarray,
+    unit_rows: List[np.ndarray],
+    eq_positions: np.ndarray,
+    order: int,
+    Z: np.ndarray,
+    W: np.ndarray,
+    weight: np.ndarray,
+    Minv: np.ndarray,
+    robust: bool,
+    sigma2: float,
+) -> dict:
     """Arellano-Bond (1991) test for AR(``order``) in the differenced errors.
 
     ``m = (q'ê) / sqrt(Var)`` where ``q`` holds, for each row at period

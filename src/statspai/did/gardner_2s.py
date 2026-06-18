@@ -67,7 +67,7 @@ def _cluster_vcov(
         dof = G / (G - 1) * (n - 1) / (n - k)
     else:
         dof = 1.0
-    return dof * xtx_inv @ meat @ xtx_inv
+    return np.asarray(dof * xtx_inv @ meat @ xtx_inv, dtype=float)
 
 
 def _build_fe_design(
@@ -292,7 +292,6 @@ def gardner_did(
             uniq = np.unique(cl_k)
             G = len(uniq)
             if G > 1:
-                group_means = np.array([y_k[cl_k == g].mean() for g in uniq])
                 # SE of the unweighted mean over n rows, allowing cluster
                 # correlation: Var(mean) ≈ (1/n²) Σ_g (Σ_{i∈g} (y_ki - coef))²
                 sq = 0.0

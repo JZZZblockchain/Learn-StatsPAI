@@ -75,7 +75,8 @@ class HarvestDIDResult:
             f"  {100 * (1 - self.alpha):.0f}% CI                 : "
             f"[{lo:+.6f}, {hi:+.6f}]",
             f"  # 2x2 comparisons      : {self.n_comparisons}",
-            f"  Pre-trend joint p-value: {self.pretrend_test.get('pvalue', float('nan')):.4f}",
+            "  Pre-trend joint p-value: "
+            f"{self.pretrend_test.get('pvalue', float('nan')):.4f}",
         ]
         if not self.event_study.empty:
             lines.append("")
@@ -415,9 +416,12 @@ def harvest_did(
 
 def _weights(sub: pd.DataFrame, scheme: str) -> np.ndarray:
     if scheme == "precision":
-        return 1.0 / np.maximum(sub["se"].to_numpy() ** 2, 1e-12)
+        return np.asarray(
+            1.0 / np.maximum(sub["se"].to_numpy() ** 2, 1e-12),
+            dtype=float,
+        )
     if scheme == "equal":
-        return np.ones(len(sub))
+        return np.ones(len(sub), dtype=float)
     if scheme == "n_treated":
-        return sub["n_treated"].to_numpy(dtype=float)
+        return np.asarray(sub["n_treated"].to_numpy(dtype=float), dtype=float)
     raise ValueError(scheme)

@@ -28,6 +28,7 @@ from scipy.optimize import minimize
 from scipy.special import gammaln, digamma
 
 from ..core.results import EconometricResults
+from ._optim_helpers import robust_convergence
 
 
 def fracreg(
@@ -304,7 +305,7 @@ def betareg(
         result = minimize(neg_log_lik, theta0, method='BFGS',
                           options={'maxiter': maxiter, 'gtol': tol})
         theta_hat = result.x
-        converged = result.success
+        converged, _ = robust_convergence(result)
     except Exception:
         theta_hat = theta0
         converged = False

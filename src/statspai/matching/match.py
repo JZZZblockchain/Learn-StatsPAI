@@ -33,7 +33,7 @@ Cunningham, S. (2021). *Causal Inference: The Mixtape*. Yale University Press.
 """
 
 import operator
-from typing import Any, Optional, List
+from typing import Any, List, Optional, Tuple
 import warnings
 
 import numpy as np
@@ -464,7 +464,7 @@ class MatchEstimator:
         )
         self.alpha = _open_unit_float(alpha, name="alpha", context=context)
         # Filled by _fit_nearest so fit() can build the matched-sample frame.
-        self._assignment = None
+        self._assignment: Optional[dict[str, Any]] = None
 
         # Resolve legacy method names
         method_lower = str(method).lower()
@@ -608,7 +608,7 @@ class MatchEstimator:
             )
 
         # Dispatch — each returns (att, se, balance, extra_info)
-        extra_info = {}
+        extra_info: dict[str, Any] = {}
         if self.method == 'cem':
             att, se, balance, extra_info = self._fit_cem(Y, X, T, idx_t, idx_c)
             method_label = 'Matching (CEM)'
@@ -736,7 +736,7 @@ class MatchEstimator:
         )
         # Expose the matched frame both as a convenience attribute and in
         # model_info (the latter survives serialisation / provenance).
-        result.matched_data = matched_data
+        setattr(result, "matched_data", matched_data)
         if matched_data is not None:
             result.model_info['matched_data'] = matched_data
         return result
@@ -745,7 +745,15 @@ class MatchEstimator:
     # Nearest-neighbor matching (propensity / mahalanobis / euclidean)
     # ==================================================================
 
-    def _fit_nearest(self, Y, X, T, idx_t, idx_c, row_order=None):
+    def _fit_nearest(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+        row_order: Optional[np.ndarray] = None,
+    ) -> Tuple[float, float, pd.DataFrame]:
         """Nearest-neighbor matching with configurable distance metric."""
         if row_order is None:
             row_order = np.arange(len(T), dtype=float)
@@ -853,7 +861,14 @@ class MatchEstimator:
     # Kernel / radius matching (Heckman-Ichimura-Todd 1997; psmatch2)
     # ==================================================================
 
-    def _fit_kernel(self, Y, X, T, idx_t, idx_c):
+    def _fit_kernel(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+    ) -> Tuple[float, float, pd.DataFrame, dict[str, Any]]:
         """Kernel / radius propensity-score matching (Stata psmatch2).
 
         Each treated unit is matched to *all* on-support controls, weighted
@@ -877,7 +892,11 @@ class MatchEstimator:
         support = common_support_mask(pscore, T, rule=self.common_support)
 
         kerneltype = 'uniform' if self.method == 'radius' else self.kernel
-        bw = float(self.caliper) if self.method == 'radius' else float(self.bwidth)
+        if self.method == 'radius':
+            assert self.caliper is not None
+            bw = float(self.caliper)
+        else:
+            bw = float(self.bwidth)
 
         ps_c = pscore[idx_c]
         Y_c = Y[idx_c]
@@ -945,7 +964,7 @@ class MatchEstimator:
         return att, se, balance, extra
 
     @staticmethod
-    def _stable_index_order(index):
+    def _stable_index_order(index: Any) -> np.ndarray:
         """Numeric rank of DataFrame index labels for deterministic tie-breaking."""
         labels = np.asarray(pd.Index(index))
         n = len(labels)
@@ -965,18 +984,28 @@ class MatchEstimator:
             )
         ranks = np.empty(n, dtype=float)
         ranks[order] = np.arange(n, dtype=float)
-        return ranks
+        return np.asarray(ranks, dtype=float)
 
-    def _compute_distance_matrix(self, X, idx_from, idx_to, pscore=None):
+    def _compute_distance_matrix(
+        self,
+        X: np.ndarray,
+        idx_from: np.ndarray,
+        idx_to: np.ndarray,
+        pscore: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
         """Compute distance matrix between two groups."""
         X_from = X[idx_from]
         X_to = X[idx_to]
 
         if self.distance == 'propensity':
             # Use pre-estimated propensity scores (estimated once with actual T)
+            if pscore is None:
+                raise ValueError(
+                    "pscore is required when distance='propensity'"
+                )
             ps_from = pscore[idx_from].reshape(-1, 1)
             ps_to = pscore[idx_to].reshape(-1, 1)
-            return cdist(ps_from, ps_to, metric='euclidean')
+            return np.asarray(cdist(ps_from, ps_to, metric='euclidean'), dtype=float)
 
         elif self.distance == 'mahalanobis':
             cov = np.cov(X.T)
@@ -986,25 +1015,38 @@ class MatchEstimator:
                 VI = np.linalg.inv(cov)
             except np.linalg.LinAlgError:
                 VI = np.linalg.pinv(cov)
-            return cdist(X_from, X_to, metric='mahalanobis', VI=VI)
+            return np.asarray(
+                cdist(X_from, X_to, metric='mahalanobis', VI=VI),
+                dtype=float,
+            )
 
         else:  # euclidean (normalized)
             sd = np.std(X, axis=0, ddof=1)
             sd[sd == 0] = 1.0
-            return cdist(X_from / sd, X_to / sd, metric='euclidean')
+            return np.asarray(
+                cdist(X_from / sd, X_to / sd, metric='euclidean'),
+                dtype=float,
+            )
 
     # ==================================================================
     # Exact matching
     # ==================================================================
 
-    def _fit_exact(self, Y, X, T, idx_t, idx_c):
+    def _fit_exact(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+    ) -> Tuple[float, float, pd.DataFrame, dict[str, Any]]:
         """Exact matching: only match units with identical covariate values."""
         # Build string keys for each observation
         keys_t = self._covariate_keys(X, idx_t)
         keys_c = self._covariate_keys(X, idx_c)
 
         # Index control units by key
-        control_map = {}
+        control_map: dict[Tuple[Any, ...], List[int]] = {}
         for i, key in enumerate(keys_c):
             control_map.setdefault(key, []).append(i)
 
@@ -1043,7 +1085,10 @@ class MatchEstimator:
         return att, se, balance, extra
 
     @staticmethod
-    def _covariate_keys(X, indices):
+    def _covariate_keys(
+        X: np.ndarray,
+        indices: np.ndarray,
+    ) -> List[Tuple[Any, ...]]:
         """Create hashable keys for exact matching."""
         return [tuple(X[i]) for i in indices]
 
@@ -1051,7 +1096,14 @@ class MatchEstimator:
     # Subclassification / propensity score stratification
     # ==================================================================
 
-    def _fit_stratify(self, Y, X, T, idx_t, idx_c):
+    def _fit_stratify(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+    ) -> Tuple[float, float, pd.DataFrame, dict[str, Any]]:
         """
         Propensity score stratification (Rosenbaum & Rubin 1984).
 
@@ -1123,7 +1175,14 @@ class MatchEstimator:
     # CEM
     # ==================================================================
 
-    def _fit_cem(self, Y, X, T, idx_t, idx_c):
+    def _fit_cem(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+    ) -> Tuple[float, float, pd.DataFrame, dict[str, Any]]:
         """Coarsened Exact Matching (Iacus, King & Porro 2012)."""
         n, k = X.shape
 
@@ -1190,7 +1249,7 @@ class MatchEstimator:
     # ==================================================================
 
     @staticmethod
-    def _expand_poly(X, degree):
+    def _expand_poly(X: np.ndarray, degree: int) -> np.ndarray:
         """
         Expand covariate matrix with polynomial and interaction terms.
 
@@ -1216,10 +1275,14 @@ class MatchEstimator:
         # Cubic terms
         if degree >= 3:
             cols.append(X ** 3)
-        return np.column_stack(cols)
+        return np.asarray(np.column_stack(cols), dtype=float)
 
     @staticmethod
-    def _logit_propensity(X, T, poly=1):
+    def _logit_propensity(
+        X: np.ndarray,
+        T: np.ndarray,
+        poly: int = 1,
+    ) -> np.ndarray:
         """
         Logistic regression propensity score via Newton-Raphson (IRLS).
 
@@ -1257,15 +1320,19 @@ class MatchEstimator:
 
         linear = np.clip(X_aug @ beta, -500, 500)
         pscore = 1 / (1 + np.exp(-linear))
-        return np.clip(pscore, 1e-6, 1 - 1e-6)
+        return np.asarray(np.clip(pscore, 1e-6, 1 - 1e-6), dtype=float)
 
     # ==================================================================
     # NN matching helpers
     # ==================================================================
 
     def _nn_match_from_dist(
-        self, dist, caliper=None, target_order=None, pool_order=None,
-    ):
+        self,
+        dist: np.ndarray,
+        caliper: Optional[float] = None,
+        target_order: Optional[np.ndarray] = None,
+        pool_order: Optional[np.ndarray] = None,
+    ) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         """
         k-NN matching from a precomputed distance matrix.
 
@@ -1284,25 +1351,27 @@ class MatchEstimator:
         without-replacement matching and the bias–variance trade-off.
         """
         n_target = dist.shape[0]
-        matches = [None] * n_target
-        weights = [None] * n_target
+        matches: List[np.ndarray] = [np.array([], dtype=int) for _ in range(n_target)]
+        weights: List[np.ndarray] = [
+            np.array([], dtype=float) for _ in range(n_target)
+        ]
         if target_order is None:
             target_order = np.arange(n_target, dtype=float)
         if pool_order is None:
             pool_order = np.arange(dist.shape[1], dtype=float)
 
-        def _nearest_indices(d, k):
+        def _nearest_indices(d: np.ndarray, k: int) -> np.ndarray:
             finite = np.isfinite(d)
             if not np.any(finite):
                 return np.array([], dtype=int)
             candidates = np.where(finite)[0]
             order = np.lexsort((pool_order[candidates], d[candidates]))
-            return candidates[order[:k]]
+            return np.asarray(candidates[order[:k]], dtype=int)
 
         # Without replacement: process treated units greedily by best
         # minimum distance so each control is used at most once.
         if not self.replace:
-            used = set()
+            used: set[int] = set()
             # Sort treated units by their minimum distance to any control
             min_dists = np.min(dist, axis=1)
             order = np.lexsort((target_order, min_dists))
@@ -1318,12 +1387,12 @@ class MatchEstimator:
                 k = min(self.n_matches, int(np.sum(np.isfinite(d))))
                 if k == 0:
                     matches[i] = np.array([], dtype=int)
-                    weights[i] = np.array([])
+                    weights[i] = np.array([], dtype=float)
                     continue
 
                 idx = _nearest_indices(d, k)
                 matches[i] = idx
-                weights[i] = np.ones(k) / k
+                weights[i] = np.ones(k, dtype=float) / k
                 used.update(idx.tolist())
 
             return matches, weights
@@ -1337,12 +1406,12 @@ class MatchEstimator:
             k = min(self.n_matches, int(np.sum(np.isfinite(d))))
             if k == 0:
                 matches[i] = np.array([], dtype=int)
-                weights[i] = np.array([])
+                weights[i] = np.array([], dtype=float)
                 continue
 
             idx = _nearest_indices(d, k)
             matches[i] = idx
-            weights[i] = np.ones(k) / k
+            weights[i] = np.ones(k, dtype=float) / k
 
         return matches, weights
 
@@ -1350,7 +1419,15 @@ class MatchEstimator:
     # Effect computation (with optional bias correction)
     # ==================================================================
 
-    def _compute_effect(self, Y, idx_target, idx_pool, X, matches, weights):
+    def _compute_effect(
+        self,
+        Y: np.ndarray,
+        idx_target: np.ndarray,
+        idx_pool: np.ndarray,
+        X: np.ndarray,
+        matches: List[np.ndarray],
+        weights: List[np.ndarray],
+    ) -> float:
         """
         Compute matching estimate, optionally with Abadie-Imbens (2011)
         bias correction.
@@ -1359,7 +1436,7 @@ class MatchEstimator:
         group, then adjusts each matched pair:
             tau_i^BC = (Y_i - Y_j) - (mu_hat(X_i) - mu_hat(X_j))
         """
-        effects = []
+        effects: List[float] = []
         for i, (m, w) in enumerate(zip(matches, weights)):
             if len(m) == 0:
                 continue
@@ -1407,7 +1484,16 @@ class MatchEstimator:
     # Standard errors
     # ==================================================================
 
-    def _ai_se(self, Y, X, T, idx_t, idx_c, matches, weights):
+    def _ai_se(
+        self,
+        Y: np.ndarray,
+        X: np.ndarray,
+        T: np.ndarray,
+        idx_t: np.ndarray,
+        idx_c: np.ndarray,
+        matches: List[np.ndarray],
+        weights: List[np.ndarray],
+    ) -> float:
         """
         Abadie-Imbens (2006) standard error for matching estimator.
         Uses conditional variance estimation from matched pairs.
@@ -1418,20 +1504,25 @@ class MatchEstimator:
                 continue
             y_t = Y[idx_t[i]]
             y_c = Y[idx_c[m]]
-            effects.append(y_t - np.average(y_c, weights=w))
+            effects.append(float(y_t - np.average(y_c, weights=w)))
 
         if len(effects) < 2:
             return 0.0
 
-        effects = np.array(effects)
-        n_eff = len(effects)
-        return float(np.std(effects, ddof=1) / np.sqrt(n_eff))
+        effects_arr = np.asarray(effects, dtype=float)
+        n_eff = len(effects_arr)
+        return float(np.std(effects_arr, ddof=1) / np.sqrt(n_eff))
 
     # ==================================================================
     # Balance diagnostics
     # ==================================================================
 
-    def _balance_table(self, X, T, pscore=None) -> pd.DataFrame:
+    def _balance_table(
+        self,
+        X: np.ndarray,
+        T: np.ndarray,
+        pscore: Optional[np.ndarray] = None,
+    ) -> pd.DataFrame:
         """Standardized mean differences (SMD) before matching."""
         idx_t = T == 1
         idx_c = T == 0
@@ -1477,10 +1568,10 @@ class MatchEstimator:
 def balanceplot(
     result: CausalResult,
     threshold: float = 0.1,
-    ax=None,
+    ax: Any = None,
     figsize: tuple = (8, None),
-    title: str = None,
-):
+    title: Optional[str] = None,
+) -> Tuple[Any, Any]:
     """
     Love plot: covariate balance visualization (SMD dot plot).
 
@@ -1576,13 +1667,13 @@ def psplot(
     covariates: List[str],
     *,
     n_bins: int = 40,
-    ax=None,
+    ax: Any = None,
     figsize: tuple = (8, 5),
-    title: str = None,
+    title: Optional[str] = None,
     labels: tuple = ('Control', 'Treated'),
     colors: tuple = ('#3498DB', '#E74C3C'),
     trim: Optional[float] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Propensity score distribution plot (common support diagnostic).
 

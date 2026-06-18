@@ -33,7 +33,7 @@ Chapman & Hall/CRC. Chapter 13.
 """
 
 import warnings
-from typing import Optional, List, Any, Sequence
+from typing import Any, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -180,7 +180,12 @@ def g_computation(
             )
         grid = np.asarray(treat_values, dtype=float)
 
-    def _fit_and_predict(Y_, D_, X_, grid_):
+    def _fit_and_predict(
+        Y_: np.ndarray,
+        D_: np.ndarray,
+        X_: np.ndarray,
+        grid_: np.ndarray,
+    ) -> np.ndarray:
         """Fit Q(D,X) on (Y_, D_, X_), return n_obs × len(grid_) predictions."""
         design = np.column_stack([D_.reshape(-1, 1), X_])
         if ml_Q is None:
@@ -190,7 +195,9 @@ def g_computation(
             for k, d_val in enumerate(grid_):
                 d_col = np.full((X_.shape[0], 1), d_val)
                 new_design = np.column_stack([d_col, X_])
-                preds[:, k] = fit.predict(sm.add_constant(new_design, has_constant='add'))
+                preds[:, k] = fit.predict(
+                    sm.add_constant(new_design, has_constant='add')
+                )
             return preds
         else:
             from sklearn.base import clone
@@ -203,7 +210,11 @@ def g_computation(
                 preds[:, k] = model.predict(new_design)
             return preds
 
-    def _point_estimates(Y_, D_, X_):
+    def _point_estimates(
+        Y_: np.ndarray,
+        D_: np.ndarray,
+        X_: np.ndarray,
+    ) -> np.ndarray:
         preds = _fit_and_predict(Y_, D_, X_, grid)
         if estimand == 'ATE':
             return np.array([float(np.mean(preds[:, 1] - preds[:, 0]))])
@@ -215,7 +226,7 @@ def g_computation(
                 float(np.mean(preds[treated_mask, 1] - preds[treated_mask, 0]))
             ])
         # dose_response
-        return preds.mean(axis=0)
+        return np.asarray(preds.mean(axis=0), dtype=float)
 
     point = _point_estimates(Y, D, X)
 
@@ -321,8 +332,9 @@ def g_computation(
                 "y": y, "treat": treat,
                 "covariates": list(covariates),
                 "estimand": estimand,
-                "treat_values": list(treat_values) if treat_values
-                                else None,
+                "treat_values": (
+                    list(treat_values) if treat_values else None
+                ),
                 "ml_Q": type(ml_Q).__name__ if ml_Q is not None else None,
                 "n_boot": n_boot,
                 "alpha": alpha, "seed": seed,

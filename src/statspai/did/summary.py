@@ -30,7 +30,7 @@ Example
 >>> print(summary.detail)
 """
 
-from typing import Optional, List, Union
+from typing import Callable, Optional, List, Union
 
 import numpy as np
 import pandas as pd
@@ -97,6 +97,20 @@ class DIDSummaryResult(CausalResult):
 
 _DEFAULT_METHODS: List[str] = ["cs", "sa", "bjs", "etwfe", "stacked"]
 
+_Runner = Callable[
+    [
+        pd.DataFrame,
+        str,
+        str,
+        str,
+        str,
+        Optional[List[str]],
+        Optional[str],
+        float,
+    ],
+    CausalResult,
+]
+
 _METHOD_LABELS = {
     "cs": "Callaway & Sant'Anna (2021)",
     "sa": "Sun & Abraham (2021)",
@@ -106,7 +120,16 @@ _METHOD_LABELS = {
 }
 
 
-def _run_cs(data, y, group, time, first_treat, controls, cluster, alpha):
+def _run_cs(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: Optional[str],
+    alpha: float,
+) -> CausalResult:
     from .callaway_santanna import callaway_santanna
     from .aggte import aggte
 
@@ -117,7 +140,16 @@ def _run_cs(data, y, group, time, first_treat, controls, cluster, alpha):
     return aggte(cs, type="simple", alpha=alpha, bstrap=False)
 
 
-def _run_sa(data, y, group, time, first_treat, controls, cluster, alpha):
+def _run_sa(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: Optional[str],
+    alpha: float,
+) -> CausalResult:
     from .sun_abraham import sun_abraham
 
     return sun_abraham(
@@ -126,7 +158,16 @@ def _run_sa(data, y, group, time, first_treat, controls, cluster, alpha):
     )
 
 
-def _run_bjs(data, y, group, time, first_treat, controls, cluster, alpha):
+def _run_bjs(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: Optional[str],
+    alpha: float,
+) -> CausalResult:
     from .did_imputation import did_imputation
 
     return did_imputation(
@@ -135,7 +176,16 @@ def _run_bjs(data, y, group, time, first_treat, controls, cluster, alpha):
     )
 
 
-def _run_etwfe(data, y, group, time, first_treat, controls, cluster, alpha):
+def _run_etwfe(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: Optional[str],
+    alpha: float,
+) -> CausalResult:
     from .wooldridge_did import etwfe
 
     return etwfe(
@@ -144,7 +194,16 @@ def _run_etwfe(data, y, group, time, first_treat, controls, cluster, alpha):
     )
 
 
-def _run_stacked(data, y, group, time, first_treat, controls, cluster, alpha):
+def _run_stacked(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: Optional[str],
+    alpha: float,
+) -> CausalResult:
     from .stacked_did import stacked_did
 
     return stacked_did(
@@ -153,7 +212,7 @@ def _run_stacked(data, y, group, time, first_treat, controls, cluster, alpha):
     )
 
 
-_DISPATCH = {
+_DISPATCH: dict[str, _Runner] = {
     "cs": _run_cs,
     "sa": _run_sa,
     "bjs": _run_bjs,
@@ -318,9 +377,7 @@ def did_summary(
                 res = _aggte(cs_raw, type="simple", alpha=alpha, bstrap=False)
             else:
                 res = _DISPATCH[name](
-                    data, y=y, group=group, time=time,
-                    first_treat=first_treat, controls=controls,
-                    cluster=cluster, alpha=alpha,
+                    data, y, group, time, first_treat, controls, cluster, alpha,
                 )
             vals = _extract(res)
             rows.append(dict(method=name, estimator=label, note="", **vals))
@@ -470,7 +527,8 @@ def did_summary_to_markdown(
         header_cells.append("Breakdown M*")
     header_cells.append("Notes")
     lines.append("| " + " | ".join(header_cells) + " |")
-    lines.append("|" + "|".join([":---"] + ["---:"] * (len(header_cells) - 2) + [":---"]) + "|")
+    align_cells = [":---"] + ["---:"] * (len(header_cells) - 2) + [":---"]
+    lines.append("|" + "|".join(align_cells) + "|")
 
     fmt = f"{{:.{digits}f}}"
     for _, row in det.iterrows():
@@ -706,6 +764,7 @@ def did_report(
         methods=methods, controls=controls, cluster=cluster, alpha=alpha,
         include_sensitivity=include_sensitivity, verbose=verbose,
     )
+    detail = _ensure_did_summary(result)
 
     # TXT
     (out_dir / "did_summary.txt").write_text(result.summary(), encoding="utf-8")
@@ -739,7 +798,7 @@ def did_report(
         "method": result.method,
         "estimate": None if pd.isna(result.estimate) else float(result.estimate),
         "cross_method_sd": None if pd.isna(result.se) else float(result.se),
-        "detail": result.detail.replace({np.nan: None}).to_dict(orient="records"),
+        "detail": detail.replace({np.nan: None}).to_dict(orient="records"),
         "model_info": {
             k: (list(v) if isinstance(v, (set, tuple)) else v)
             for k, v in result.model_info.items()

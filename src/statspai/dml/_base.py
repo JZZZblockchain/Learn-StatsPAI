@@ -9,7 +9,7 @@ validation, default learners, repeat-split aggregation, and
 """
 
 import operator
-from typing import Optional, List, Any, Union
+from typing import Optional, List, Any, Union, Dict, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -224,7 +224,7 @@ class _DoubleMLBase:
             )
         )
 
-    def _validate(self):
+    def _validate(self) -> None:
         context = f"dml.{self._MODEL_TAG.lower() or 'base'}"
         required = [self.y, self.treat] + self.covariates
         if self.instrument is not None:
@@ -268,14 +268,14 @@ class _DoubleMLBase:
                 f"{context}: n_folds must be >= 2, got {self.n_folds}"
             )
 
-    def _default_ml_g(self):
+    def _default_ml_g(self) -> Any:
         from sklearn.ensemble import GradientBoostingRegressor
         return GradientBoostingRegressor(
             n_estimators=100, max_depth=3, learning_rate=0.1,
             random_state=42,
         )
 
-    def _default_ml_m(self):
+    def _default_ml_m(self) -> Any:
         if self._ML_M_TARGET_BINARY:
             from sklearn.ensemble import GradientBoostingClassifier
             return GradientBoostingClassifier(
@@ -284,7 +284,7 @@ class _DoubleMLBase:
             )
         return self._default_ml_g()
 
-    def _default_ml_r(self):
+    def _default_ml_r(self) -> Any:
         if self._ML_R_TARGET_BINARY:
             from sklearn.ensemble import GradientBoostingClassifier
             return GradientBoostingClassifier(
@@ -302,12 +302,22 @@ class _DoubleMLBase:
     # ``_SUPPORTS_SAMPLE_WEIGHT = True`` and use ``sample_weight`` in
     # both the nuisance fits and the moment equation.
     def _fit_one_rep(
-        self, Y, D, X, Z, n, rng_seed, sample_weight=None, fold_indices=None
-    ):
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X: np.ndarray,
+        Z: Any,
+        n: int,
+        rng_seed: int,
+        sample_weight: Optional[np.ndarray] = None,
+        fold_indices: Optional[np.ndarray] = None,
+    ) -> Tuple[float, float]:
         raise NotImplementedError  # pragma: no cover
 
     @staticmethod
-    def _validate_fold_indices(fold_indices, n: int, n_folds: int) -> np.ndarray:
+    def _validate_fold_indices(
+        fold_indices: Any, n: int, n_folds: int,
+    ) -> np.ndarray:
         raw = np.asarray(fold_indices)
         if raw.ndim != 1 or len(raw) != n:
             raise MethodIncompatibility(
@@ -328,11 +338,16 @@ class _DoubleMLBase:
             raise DataInsufficient(
                 "fold_indices must assign at least one row per fold"
             )
-        return codes.astype(int)
+        return np.asarray(codes, dtype=int)
 
     # ----- Sample-weight helpers (used by subclasses) -----------------
     @staticmethod
-    def _fit_weighted(learner, X, y, weights):
+    def _fit_weighted(
+        learner: Any,
+        X: np.ndarray,
+        y: np.ndarray,
+        weights: Optional[np.ndarray],
+    ) -> Any:
         """Fit ``learner`` on (X, y); pass ``weights`` if supported.
 
         sklearn estimators almost universally accept ``sample_weight``
@@ -460,11 +475,11 @@ class _DoubleMLBase:
 
         thetas: List[float] = []
         ses: List[float] = []
-        per_rep_diags: List[dict] = []
-        last_residuals: dict = {}
+        per_rep_diags: List[Dict[str, Any]] = []
+        last_residuals: Dict[str, np.ndarray] = {}
         for rep in range(self.n_rep):
-            self._last_rep_diagnostics = {}
-            self._last_rep_residuals = {}
+            self._last_rep_diagnostics: Dict[str, Any] = {}
+            self._last_rep_residuals: Dict[str, np.ndarray] = {}
             theta_r, se_r = self._fit_one_rep(
                 Y, D, X, Z, n, rng_seed=self.random_state + rep,
                 sample_weight=sample_weight,
@@ -508,6 +523,10 @@ class _DoubleMLBase:
             'fold_source': fold_source,
         }
         if self._REQUIRES_INSTRUMENT:
+            if self.instrument is None:  # pragma: no cover
+                raise MethodIncompatibility(
+                    f"dml.{self._MODEL_TAG.lower()}: instrument is required"
+                )
             model_info['ml_r'] = type(self.ml_r).__name__
             model_info['instrument'] = self.instrument[0]
         if self.n_rep > 1:

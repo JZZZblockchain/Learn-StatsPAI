@@ -38,6 +38,7 @@ import pandas as pd
 from scipy import stats, optimize, special
 
 from ..core.results import EconometricResults
+from ._optim_helpers import robust_convergence
 from ..core.utils import parse_formula, create_design_matrices, prepare_data
 
 
@@ -408,7 +409,7 @@ def zip_model(
         'bic': -2 * ll_zip + np.log(n) * k_total,
         'vuong_stat': vuong['vuong_stat'],
         'vuong_p': vuong['vuong_p'],
-        'converged': result.success,
+        'converged': robust_convergence(result)[0],
         'robust': robust if cluster is None else f'cluster({cluster})',
         'n_zeros': int((Y == 0).sum()),
         'pct_zeros': float((Y == 0).mean() * 100),
@@ -695,7 +696,7 @@ def zinb(
         'alpha_dispersion': float(alpha_hat),
         'vuong_stat': vuong['vuong_stat'],
         'vuong_p': vuong['vuong_p'],
-        'converged': result.success,
+        'converged': robust_convergence(result)[0],
         'robust': robust if cluster is None else f'cluster({cluster})',
         'n_zeros': int((Y == 0).sum()),
         'pct_zeros': float((Y == 0).mean() * 100),
@@ -981,7 +982,7 @@ def hurdle(
         'll': ll_hurdle,
         'aic': -2 * ll_hurdle + 2 * k_total,
         'bic': -2 * ll_hurdle + np.log(n) * k_total,
-        'converged': result.success,
+        'converged': robust_convergence(result)[0],
         'robust': robust if cluster is None else f'cluster({cluster})',
         'n_zeros': int(zero_mask.sum()),
         'pct_zeros': float(zero_mask.mean() * 100),

@@ -1,9 +1,11 @@
 """
-Modern staggered DID estimators: Wooldridge (2021), DR-DID, and TWFE decomposition.
+Modern staggered DID estimators: Wooldridge (2021), DR-DID, and TWFE
+decomposition.
 
 Implements three cutting-edge methods for DID with staggered treatment adoption:
 
-1. **wooldridge_did()** — Wooldridge (2021) extended TWFE with cohort × time interactions.
+1. **wooldridge_did()** — Wooldridge (2021) extended TWFE with cohort × time
+   interactions.
    Shows that a properly saturated TWFE regression recovers valid ATT even with
    heterogeneous treatment effects, without specialised estimators.
 
@@ -262,7 +264,6 @@ def wooldridge_did(
 
     # Add constant (absorbed into demeaning but keep for numerical stability)
     X = np.column_stack([np.ones(len(y_vec)), X])
-    col_names = ["const"] + X_cols
 
     cl_arr = None
     if cluster is not None:
@@ -308,9 +309,10 @@ def wooldridge_did(
     # ── Aggregate ATT (cohort-size weighted) ────────────────────────
     sizes = np.array(cohort_sizes, dtype=float)
     atts = np.array(cohort_atts)
-    ses = np.array(cohort_ses)
-
-    weights = sizes / sizes.sum() if sizes.sum() > 0 else np.ones(len(sizes)) / len(sizes)
+    weights = (
+        sizes / sizes.sum()
+        if sizes.sum() > 0 else np.ones(len(sizes)) / len(sizes)
+    )
     att_overall = float(weights @ atts)
 
     # Delta-method SE for weighted average (assuming independent cohort estimates)
@@ -405,7 +407,7 @@ def wooldridge_did(
             _result,
             function="sp.did.wooldridge_did",
             params={
-                    "y": y, "group": group, "time": time, "id": id,
+                "y": y, "group": group, "time": time, "id": id,
                 "first_treat": first_treat,
                 "controls": controls,
                 "cluster": cluster, "alpha": alpha,
@@ -1235,7 +1237,9 @@ def drdid(
         wide = pre_df.merge(post_df, on=id, suffixes=("_pre", "_post"))
         if wide.empty:
             raise DataInsufficient("No complete pre/post unit pairs for panel DR-DID")
-        if not np.all(wide[f"{group}_pre"].to_numpy() == wide[f"{group}_post"].to_numpy()):
+        if not np.all(
+            wide[f"{group}_pre"].to_numpy() == wide[f"{group}_post"].to_numpy()
+        ):
             raise MethodIncompatibility(
                 f"'{group}' must be time-invariant within id"
             )
@@ -1259,11 +1263,13 @@ def drdid(
         t_stat = att_hat / att_se if att_se > 0 else np.nan
         pvalue = float(2 * (1 - stats.norm.cdf(abs(t_stat))))
         detail = pd.DataFrame({
-            "statistic": ["ATT", "SE (influence function)", "z-stat", "p-value",
-                           "CI lower", "CI upper", "N units"],
+            "statistic": [
+                "ATT", "SE (influence function)", "z-stat", "p-value",
+                "CI lower", "CI upper", "N units",
+            ],
             "value": [att_hat, att_se, t_stat, pvalue, ci[0], ci[1], len(wide)],
         })
-        model_info: Dict[str, Any] = {
+        panel_model_info: Dict[str, Any] = {
             "method": "improved",
             "panel": True,
             "id": id,
@@ -1290,7 +1296,7 @@ def drdid(
             alpha=alpha,
             n_obs=int(len(panel_df)),
             detail=detail,
-            model_info=model_info,
+            model_info=panel_model_info,
             _citation_key="drdid",
         )
         try:
@@ -1332,10 +1338,13 @@ def drdid(
     G, T, Y, X = G[valid], T[valid], Y[valid], X[valid]
     n = len(Y)
 
-    def _estimate_att(G_b, T_b, Y_b, X_b):
+    def _estimate_att(
+        G_b: np.ndarray,
+        T_b: np.ndarray,
+        Y_b: np.ndarray,
+        X_b: np.ndarray,
+    ) -> float:
         """Core DR-DID estimator for one sample."""
-        n_b = len(Y_b)
-
         # Share treated
         p_hat = G_b.mean()
         if p_hat <= 0 or p_hat >= 1:
@@ -1357,11 +1366,13 @@ def drdid(
         # control-post and control-pre
         if ctrl_post.sum() < X_b.shape[1] or ctrl_pre.sum() < X_b.shape[1]:
             # Not enough data; fall back to simple DID
-            return (
-                Y_b[(G_b == 1) & (T_b == 1)].mean()
-                - Y_b[(G_b == 1) & (T_b == 0)].mean()
-                - Y_b[(G_b == 0) & (T_b == 1)].mean()
-                + Y_b[(G_b == 0) & (T_b == 0)].mean()
+            return float(
+                (
+                    Y_b[(G_b == 1) & (T_b == 1)].mean()
+                    - Y_b[(G_b == 1) & (T_b == 0)].mean()
+                    - Y_b[(G_b == 0) & (T_b == 1)].mean()
+                    + Y_b[(G_b == 0) & (T_b == 0)].mean()
+                )
             )
 
         # OLS for E[Y|X, G=0, T=1]
@@ -1378,8 +1389,6 @@ def drdid(
 
         m1_x = X_b @ beta_post  # predicted E[Y|X, G=0, T=1]
         m0_x = X_b @ beta_pre   # predicted E[Y|X, G=0, T=0]
-        delta_m = m1_x - m0_x   # predicted DeltaY for controls
-
         # ── DR-DID estimator ────────────────────────────────────────
         if method == "imp":
             # Improved (locally efficient) DR-DID
@@ -1392,9 +1401,6 @@ def drdid(
             # Normalise weights
             eta_1 = w_treat_post.mean()
             eta_0 = w_treat_pre.mean()
-            gamma_1 = w_ctrl_post.mean()
-            gamma_0 = w_ctrl_pre.mean()
-
             if eta_1 == 0 or eta_0 == 0:
                 return np.nan
 
@@ -1430,7 +1436,7 @@ def drdid(
 
             att = (att_1 - att_0) - (ctrl_1 - ctrl_0)
 
-        return att
+        return float(att)
 
     # ── Point estimate ──────────────────────────────────────────────
     att_hat = _estimate_att(G, T, Y, X)
@@ -1451,8 +1457,10 @@ def drdid(
 
     # ── Detail DataFrame ────────────────────────────────────────────
     detail = pd.DataFrame({
-        "statistic": ["ATT", "SE (bootstrap)", "z-stat", "p-value",
-                       "CI lower", "CI upper", "N boot valid"],
+        "statistic": [
+            "ATT", "SE (bootstrap)", "z-stat", "p-value",
+            "CI lower", "CI upper", "N boot valid",
+        ],
         "value": [att_hat, att_se, t_stat, pvalue, ci[0], ci[1], len(boot_valid)],
     })
 
@@ -1461,7 +1469,7 @@ def drdid(
     n_treated = int(G.sum())
     n_control = int((1 - G).sum())
 
-    model_info: Dict[str, Any] = {
+    rcs_model_info: Dict[str, Any] = {
         "method": "improved" if method == "imp" else "traditional",
         "n_treated": n_treated,
         "n_control": n_control,
@@ -1485,7 +1493,7 @@ def drdid(
         alpha=alpha,
         n_obs=n,
         detail=detail,
-        model_info=model_info,
+        model_info=rcs_model_info,
         _citation_key="drdid",
     )
     try:
@@ -1509,7 +1517,11 @@ def drdid(
     return _result
 
 
-def _logistic_coefficients(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarray:
+def _logistic_coefficients(
+    X: np.ndarray,
+    y: np.ndarray,
+    max_iter: int = 50,
+) -> np.ndarray:
     """Fit logistic regression via IRLS, return coefficients."""
     n, k = X.shape
     beta = np.zeros(k)
@@ -1537,7 +1549,7 @@ def _logistic_fit(X: np.ndarray, y: np.ndarray, max_iter: int = 50) -> np.ndarra
     beta = _logistic_coefficients(X, y, max_iter=max_iter)
     z = X @ beta
     z = np.clip(z, -20, 20)
-    return 1.0 / (1.0 + np.exp(-z))
+    return np.asarray(1.0 / (1.0 + np.exp(-z)), dtype=float)
 
 
 def _weighted_lstsq(X: np.ndarray, y: np.ndarray, weights: np.ndarray) -> np.ndarray:
@@ -1545,9 +1557,12 @@ def _weighted_lstsq(X: np.ndarray, y: np.ndarray, weights: np.ndarray) -> np.nda
     weights = np.asarray(weights, dtype=float)
     sw = np.sqrt(np.clip(weights, 0.0, np.inf))
     try:
-        return np.linalg.lstsq(X * sw[:, None], y * sw, rcond=None)[0]
+        return np.asarray(
+            np.linalg.lstsq(X * sw[:, None], y * sw, rcond=None)[0],
+            dtype=float,
+        )
     except np.linalg.LinAlgError:
-        return np.linalg.pinv(X * sw[:, None]) @ (y * sw)
+        return np.asarray(np.linalg.pinv(X * sw[:, None]) @ (y * sw), dtype=float)
 
 
 def _calibrated_pscore(
@@ -1557,8 +1572,9 @@ def _calibrated_pscore(
 ) -> tuple[np.ndarray, int]:
     """DRDID::pscore.cal translation for the improved panel estimator."""
     n = len(D)
+    iw: np.ndarray
     if i_weights is None:
-        iw = np.ones(n)
+        iw = np.ones(n, dtype=float)
     else:
         iw = np.asarray(i_weights, dtype=float)
         if np.any(iw < 0):
@@ -1568,7 +1584,7 @@ def _calibrated_pscore(
     init = _logistic_coefficients(X, D, max_iter=100)
 
     def _eta(gamma: np.ndarray) -> np.ndarray:
-        return np.clip(X @ gamma, -700, 700)
+        return np.asarray(np.clip(X @ gamma, -700, 700), dtype=float)
 
     def objective(gamma: np.ndarray) -> float:
         eta = _eta(gamma)
@@ -1576,7 +1592,7 @@ def _calibrated_pscore(
 
     def gradient(gamma: np.ndarray) -> np.ndarray:
         eta = _eta(gamma)
-        return (iw * ((1.0 - D) * np.exp(eta) - D)) @ X / n
+        return np.asarray((iw * ((1.0 - D) * np.exp(eta) - D)) @ X / n, dtype=float)
 
     opt = optimize.minimize(
         objective,
@@ -1714,7 +1730,14 @@ def twfe_decomposition(
     # Enumerate all 2×2 comparisons
     comparisons: List[Dict[str, Any]] = []
 
-    def _did_2x2_simple(df_sub, unit_col, time_col, y_col, g1_units, g2_units):
+    def _did_2x2_simple(
+        df_sub: pd.DataFrame,
+        unit_col: str,
+        time_col: str,
+        y_col: str,
+        g1_units: List[Any],
+        g2_units: List[Any],
+    ) -> Tuple[float, float]:
         """Simple 2x2 DID between two groups over their overlapping periods."""
         sub = df_sub[df_sub[unit_col].isin(set(g1_units) | set(g2_units))].copy()
         if len(sub) == 0:
@@ -1729,7 +1752,10 @@ def twfe_decomposition(
         # Simple 2x2 DID
         yt = sub.groupby(["_g", "_post"])[y_col].mean()
         try:
-            est = (yt[(1.0, 1.0)] - yt[(1.0, 0.0)]) - (yt[(0.0, 1.0)] - yt[(0.0, 0.0)])
+            est = (
+                (yt[(1.0, 1.0)] - yt[(1.0, 0.0)])
+                - (yt[(0.0, 1.0)] - yt[(0.0, 0.0)])
+            )
         except KeyError:
             return np.nan, 0.0
         n_comp = len(sub[unit_col].unique())
@@ -1740,7 +1766,9 @@ def twfe_decomposition(
         for g_late in cohorts[i + 1:]:
             early_units = df.loc[df["_ft"] == g_early, group].unique()
             late_units = df.loc[df["_ft"] == g_late, group].unique()
-            est, n_comp = _did_2x2_simple(df, group, time, "_y", early_units, late_units)
+            est, n_comp = _did_2x2_simple(
+                df, group, time, "_y", early_units, late_units
+            )
             if not np.isnan(est):
                 comparisons.append({
                     "type": "Earlier vs Later",
@@ -1755,7 +1783,9 @@ def twfe_decomposition(
         for g_early in cohorts[:i]:
             late_units = df.loc[df["_ft"] == g_late, group].unique()
             early_units = df.loc[df["_ft"] == g_early, group].unique()
-            est, n_comp = _did_2x2_simple(df, group, time, "_y", late_units, early_units)
+            est, n_comp = _did_2x2_simple(
+                df, group, time, "_y", late_units, early_units
+            )
             if not np.isnan(est):
                 comparisons.append({
                     "type": "Later vs Earlier",
@@ -1801,7 +1831,6 @@ def twfe_decomposition(
     n_total = len(df)
     for g in cohorts:
         g_mask = df["_ft"] == g
-        n_g = g_mask.sum()
         for t_val in periods:
             if t_val < g:
                 continue  # only post-treatment cells
@@ -1821,7 +1850,9 @@ def twfe_decomposition(
             w_gt = (n_gt / n_total) * (e_d_gt - e_d_t) / var_d_t
             dcdh_rows.append({
                 "cohort": int(g),
-                "period": int(t_val) if isinstance(t_val, (int, np.integer)) else t_val,
+                "period": (
+                    int(t_val) if isinstance(t_val, (int, np.integer)) else t_val
+                ),
                 "dcdh_weight": float(w_gt),
                 "n_cell": int(n_gt),
             })
@@ -1830,7 +1861,10 @@ def twfe_decomposition(
 
     n_negative = int((comp_df["weight"] < -1e-10).sum())
     bacon_att = float(comp_df["weighted_est"].sum())
-    n_negative_dcdh = int((dcdh_df["dcdh_weight"] < -1e-10).sum()) if len(dcdh_df) > 0 else 0
+    n_negative_dcdh = (
+        int((dcdh_df["dcdh_weight"] < -1e-10).sum())
+        if len(dcdh_df) > 0 else 0
+    )
 
     model_info: Dict[str, Any] = {
         "twfe_beta": twfe_beta,
@@ -1855,9 +1889,15 @@ def twfe_decomposition(
     else:
         att_se = 0.0
 
-    pvalue = float(2 * (1 - stats.norm.cdf(abs(bacon_att / att_se)))) if att_se > 0 else np.nan
+    pvalue = (
+        float(2 * (1 - stats.norm.cdf(abs(bacon_att / att_se))))
+        if att_se > 0 else np.nan
+    )
     z_crit = stats.norm.ppf(1 - alpha / 2)
-    ci = (bacon_att - z_crit * att_se, bacon_att + z_crit * att_se) if att_se > 0 else (np.nan, np.nan)
+    ci = (
+        (bacon_att - z_crit * att_se, bacon_att + z_crit * att_se)
+        if att_se > 0 else (np.nan, np.nan)
+    )
 
     return CausalResult(
         method="TWFE Decomposition (Bacon 2021 + dCDH 2020)",
@@ -1973,7 +2013,15 @@ def etwfe_emfx(
 
     mi = result.model_info
     cohorts = mi["cohorts"]
-    event_study = mi.get("event_study")
+    event_study_raw = mi.get("event_study")
+    event_study = event_study_raw if isinstance(event_study_raw, pd.DataFrame) else None
+
+    def _detail_frame() -> pd.DataFrame:
+        if not isinstance(result.detail, pd.DataFrame):
+            raise MethodIncompatibility(
+                "etwfe_emfx requires a result with cohort-level detail."
+            )
+        return result.detail.copy()
 
     def _weighted_headline(
         use_event_cells: bool = False,
@@ -1983,8 +2031,11 @@ def etwfe_emfx(
             es = es.loc[es["rel_time"] >= 0].copy()
             if len(es) > 0 and "n_treated_obs" in es.columns:
                 w_raw = es["n_treated_obs"].astype(float).to_numpy()
-                w = w_raw / float(w_raw.sum()) if float(w_raw.sum()) > 0 else \
-                    np.full(len(es), 1.0 / len(es))
+                w = (
+                    w_raw / float(w_raw.sum())
+                    if float(w_raw.sum()) > 0
+                    else np.full(len(es), 1.0 / len(es))
+                )
                 est_vec = es["estimate"].astype(float).to_numpy()
                 est = float(w @ est_vec)
                 event_vcov = mi.get("event_vcov")
@@ -2013,7 +2064,7 @@ def etwfe_emfx(
                 }
                 return est, se, p, ci, info
 
-        det = result.detail.copy()
+        det = _detail_frame()
         if "att_at_xmean" in det.columns:
             est_col = "att_at_xmean"
         elif "att" in det.columns:
@@ -2064,13 +2115,13 @@ def etwfe_emfx(
             int(c): float(w_i)
             for c, w_i in zip(det["cohort"].astype(int).tolist(), w.tolist())
         } if "cohort" in det.columns else {}
-        info = {
+        detail_info: Dict[str, Any] = {
             "weighting": weighting,
             "weight_column": weight_col,
             "weights": weight_map,
             "se_method": se_method,
         }
-        return est, se, p, ci, info
+        return est, se, p, ci, detail_info
 
     # ── simple ──
     if type == "simple":
@@ -2095,16 +2146,21 @@ def etwfe_emfx(
 
     # ── group ──
     if type == "group":
-        det = result.detail.copy()
+        det = _detail_frame()
         df_resid = max(result.n_obs - len(cohorts), 1)
         t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
         if "att_at_xmean" in det.columns:
-            est_col = "att_at_xmean"; se_col = "att_se"; p_col = "att_pvalue"
+            est_col = "att_at_xmean"
+            se_col = "att_se"
+            p_col = "att_pvalue"
         else:
-            est_col = "att"; se_col = "se"; p_col = "pvalue"
+            est_col = "att"
+            se_col = "se"
+            p_col = "pvalue"
         rows = []
         for _, r in det.iterrows():
-            est = float(r[est_col]); se = float(r[se_col])
+            est = float(r[est_col])
+            se = float(r[se_col])
             rows.append({
                 "cohort": int(r["cohort"]),
                 "estimate": est, "se": se,
@@ -2135,12 +2191,13 @@ def etwfe_emfx(
             "in result.model_info['event_study']."
         )
     es = event_study.copy()
-    det = result.detail
+    det = _detail_frame()
     weight_by_cohort: Dict[int, float] = {}
     weight_col = "n_obs" if weighting == "cohort" else "n_treated_obs"
     if weight_col in det.columns:
-        weight_by_cohort = dict(zip(det["cohort"].astype(int),
-                                    det[weight_col].astype(float)))
+        weight_by_cohort = dict(
+            zip(det["cohort"].astype(int), det[weight_col].astype(float))
+        )
 
     df_resid = max(result.n_obs - len(cohorts), 1)
     t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
@@ -2152,28 +2209,42 @@ def etwfe_emfx(
         es = es.loc[es["rel_time"] >= 0].copy()
 
     if type == "event":
-        key_col = "rel_time"; label_col = "event_time"
+        key_col = "rel_time"
+        label_col = "event_time"
     else:
         es["calendar_time"] = es["cohort"].astype(int) + es["rel_time"].astype(int)
-        key_col = "calendar_time"; label_col = "calendar_time"
+        key_col = "calendar_time"
+        label_col = "calendar_time"
 
     # H1 fix: use the stored event-study vcov when available so SE is correct
-    event_vcov = mi.get("event_vcov")
-    has_vcov = (event_vcov is not None and "_vcov_idx" in es.columns)
-    se_method = "vcov-based (delta method)" if has_vcov else \
-        "independent-coefficient approximation (fallback — vcov unavailable)"
+    event_vcov_raw = mi.get("event_vcov")
+    event_vcov = (
+        np.asarray(event_vcov_raw, dtype=float)
+        if event_vcov_raw is not None else None
+    )
+    has_vcov = event_vcov is not None and "_vcov_idx" in es.columns
+    se_method = (
+        "vcov-based (delta method)"
+        if has_vcov
+        else "independent-coefficient approximation (fallback — vcov unavailable)"
+    )
 
     rows = []
     for k, sub in es.groupby(key_col):
-        w_raw = np.array([weight_by_cohort.get(int(c), 1.0)
-                          for c in sub["cohort"].values], dtype=float)
-        w = w_raw / w_raw.sum() if w_raw.sum() > 0 else \
-            np.ones(len(w_raw)) / len(w_raw)
+        w_raw = np.array(
+            [weight_by_cohort.get(int(c), 1.0) for c in sub["cohort"].values],
+            dtype=float,
+        )
+        w = (
+            w_raw / w_raw.sum()
+            if w_raw.sum() > 0 else np.ones(len(w_raw)) / len(w_raw)
+        )
         est = float(np.sum(w * sub["estimate"].values))
         if has_vcov:
+            assert event_vcov is not None
             # Build a weight vector over the full event-coefficient space
             # and compute sqrt(w' V w) using the right submatrix.
-            idx = sub["_vcov_idx"].astype(int).values - 1  # 0-indexed in event_vcov
+            idx = sub["_vcov_idx"].astype(int).values - 1
             V_sub = event_vcov[np.ix_(idx, idx)]
             se = float(np.sqrt(max(w @ V_sub @ w, 0.0)))
         else:

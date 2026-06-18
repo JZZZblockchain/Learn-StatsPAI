@@ -60,6 +60,8 @@ from ._core import (
     _unpack_G,
 )
 
+ThreeLevelBlock = Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -105,8 +107,10 @@ class MixedResult:
 
     # internal bookkeeping --------------------------------------------------
     _se_fixed: pd.Series = field(default=None, repr=False)
-    _cov_fixed: np.ndarray = field(default=None, repr=False)
-    _G: np.ndarray = field(default=None, repr=False)
+    _cov_fixed: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 0)), repr=False
+    )
+    _G: np.ndarray = field(default_factory=lambda: np.empty((0, 0)), repr=False)
     _sigma2: float = field(default=np.nan, repr=False)
     _blocks: List[_GroupBlock] = field(default_factory=list, repr=False)
     _group_cols: List[str] = field(default_factory=list, repr=False)
@@ -166,7 +170,7 @@ class MixedResult:
 
     @property
     def bic(self) -> float:
-        return self.n_params * np.log(self.n_obs) - 2.0 * self.log_likelihood
+        return float(self.n_params * np.log(self.n_obs) - 2.0 * self.log_likelihood)
 
     def conf_int(self, alpha: Optional[float] = None) -> pd.DataFrame:
         """Wald confidence intervals for the fixed effects."""
@@ -359,7 +363,9 @@ class MixedResult:
     # Inference helpers
     # ------------------------------------------------------------------
 
-    def wald_test(self, restrictions: "Sequence[str] | np.ndarray | pd.DataFrame") -> Dict[str, float]:
+    def wald_test(
+        self, restrictions: "Sequence[str] | np.ndarray | pd.DataFrame"
+    ) -> Dict[str, float]:
         """
         Wald joint test of linear restrictions on the fixed effects.
 
@@ -377,7 +383,7 @@ class MixedResult:
             isinstance(r, str) for r in restrictions
         ):
             idx = [names.index(r) for r in restrictions]
-            R = np.zeros((len(idx), len(beta)))
+            R: np.ndarray = np.zeros((len(idx), len(beta)))
             for row, col in enumerate(idx):
                 R[row, col] = 1.0
         elif isinstance(restrictions, pd.DataFrame):
@@ -422,7 +428,11 @@ class MixedResult:
         # Fixed effects table
         z_crit = stats.norm.ppf(1 - self._alpha / 2)
         lines.append("Fixed effects:")
-        hdr = f"{'':>18s} {'Coef':>10s} {'Std.Err':>10s} {'z':>8s} {'P>|z|':>8s}  [{100*(1-self._alpha):.0f}% CI]"
+        hdr = (
+            f"{'':>18s} {'Coef':>10s} {'Std.Err':>10s} "
+            f"{'z':>8s} {'P>|z|':>8s}  "
+            f"[{100 * (1 - self._alpha):.0f}% CI]"
+        )
         lines.append(hdr)
         lines.append("-" * w)
         for var in self.fixed_effects.index:
@@ -432,7 +442,8 @@ class MixedResult:
             p = 2 * (1 - stats.norm.cdf(abs(z))) if z == z else np.nan
             lo, hi = b - z_crit * se, b + z_crit * se
             lines.append(
-                f"{var:>18s} {b:10.4f} {se:10.4f} {z:8.3f} {p:8.4f}  [{lo:8.4f}, {hi:8.4f}]"
+                f"{var:>18s} {b:10.4f} {se:10.4f} {z:8.3f} "
+                f"{p:8.4f}  [{lo:8.4f}, {hi:8.4f}]"
             )
 
         lines.append("-" * w)
@@ -467,7 +478,11 @@ class MixedResult:
     # ------------------------------------------------------------------
 
     def to_markdown(self) -> str:
-        r2 = self.r_squared() if len(self._blocks) > 0 else {"marginal": np.nan, "conditional": np.nan}
+        r2 = (
+            self.r_squared()
+            if len(self._blocks) > 0
+            else {"marginal": np.nan, "conditional": np.nan}
+        )
         out = ["# Linear Mixed Model\n"]
         out.append(
             f"**Method:** {self._method.upper()}   "
@@ -521,7 +536,8 @@ class MixedResult:
             lines.append(f"{safe} & \\multicolumn{{4}}{{r}}{{{val:.6f}}} \\\\")
         lines.append(r"\bottomrule")
         lines.append(
-            rf"\multicolumn{{5}}{{l}}{{\footnotesize $N={self.n_obs}$, groups $={self.n_groups}$, "
+            rf"\multicolumn{{5}}{{l}}{{\footnotesize $N={self.n_obs}$, "
+            rf"groups $={self.n_groups}$, "
             rf"LogL $={self.log_likelihood:.3f}$, AIC $={self.aic:.2f}$.}} \\"
         )
         lines.append(r"\end{tabular}")
@@ -529,7 +545,11 @@ class MixedResult:
         return "\n".join(lines)
 
     def _repr_html_(self) -> str:
-        r2 = self.r_squared() if len(self._blocks) > 0 else {"marginal": float("nan"), "conditional": float("nan")}
+        r2 = (
+            self.r_squared()
+            if len(self._blocks) > 0
+            else {"marginal": float("nan"), "conditional": float("nan")}
+        )
         rows_fixed = "".join(
             f"<tr><td>{v}</td><td>{self.fixed_effects[v]:.4f}</td>"
             f"<td>{self._se_fixed[v]:.4f}</td>"
@@ -549,9 +569,11 @@ class MixedResult:
             f"R² marginal = {r2['marginal']:.3f}, "
             f"R² conditional = {r2['conditional']:.3f}, "
             f"AIC = {self.aic:.2f}, BIC = {self.bic:.2f}</p>"
-            "<table><thead><tr><th>Variable</th><th>Coef</th><th>SE</th><th>z</th></tr></thead>"
+            "<table><thead><tr><th>Variable</th><th>Coef</th>"
+            "<th>SE</th><th>z</th></tr></thead>"
             f"<tbody>{rows_fixed}</tbody></table>"
-            "<table><thead><tr><th>Variance component</th><th>Estimate</th></tr></thead>"
+            "<table><thead><tr><th>Variance component</th>"
+            "<th>Estimate</th></tr></thead>"
             f"<tbody>{rows_vc}</tbody></table>"
             "</div>"
         )
@@ -560,7 +582,8 @@ class MixedResult:
         return (
             "@book{mcculloch2008,\n"
             "  title   = {Generalized, Linear, and Mixed Models},\n"
-            "  author  = {McCulloch, Charles E. and Searle, Shayle R. and Neuhaus, John M.},\n"
+            "  author  = {McCulloch, Charles E. and Searle, Shayle R. "
+            "and Neuhaus, John M.},\n"
             "  edition = {2nd},\n"
             "  publisher = {Wiley},\n"
             "  year    = {2008}\n"
@@ -618,8 +641,8 @@ class MixedResult:
         self,
         kind: str = "caterpillar",
         variable: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> Any:
         """
         Quick diagnostic plots.
 
@@ -640,8 +663,6 @@ class MixedResult:
                 if self._ranef_se is not None
                 else pd.Series(np.nan, index=u.index)
             )
-            lo = u - 1.96 * se
-            hi = u + 1.96 * se
 
             fig, ax = plt.subplots(**{"figsize": (6, 0.2 * len(u) + 1), **kwargs})
             y_pos = np.arange(len(u))
@@ -675,11 +696,14 @@ class MixedResult:
 # ---------------------------------------------------------------------------
 
 
-def _compose_group_key(data: pd.DataFrame, group_cols: Sequence[str]):
+def _compose_group_key(data: pd.DataFrame, group_cols: Sequence[str]) -> List[Any]:
     """Return an iterable of hashable keys identical to the one used at fit."""
     if len(group_cols) == 1:
         return list(data[group_cols[0]].values)
-    return [tuple(r) for r in data[list(group_cols)].itertuples(index=False, name=None)]
+    return [
+        tuple(r)
+        for r in data[list(group_cols)].itertuples(index=False, name=None)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -689,7 +713,7 @@ def _compose_group_key(data: pd.DataFrame, group_cols: Sequence[str]):
 
 def _three_level_nll(
     theta: np.ndarray,
-    blocks_outer,
+    blocks_outer: Sequence[ThreeLevelBlock],
     p_fixed: int,
     n_total: int,
     reml: bool,
@@ -756,7 +780,7 @@ def _three_level_nll(
             return 1e12
         nll += 0.5 * logdet_xtvinvx
         nll -= 0.5 * p_fixed * np.log(2 * np.pi)
-    return nll
+    return float(nll)
 
 
 def _fit_three_level_intercept(
@@ -780,10 +804,10 @@ def _fit_three_level_intercept(
     reml = method == "reml"
 
     # Build outer blocks.
-    blocks_outer = []
+    blocks_outer: List[ThreeLevelBlock] = []
     singleton_outers = 0
     positions = np.arange(len(df))
-    for key, sub in df.groupby(outer_col, sort=False):
+    for _key, sub in df.groupby(outer_col, sort=False):
         row_idx = positions[df.index.get_indexer(sub.index)]
         y_s = sub[y].to_numpy(dtype=float)
         X_s = sub[["__intercept__"] + list(x_fixed)].to_numpy(dtype=float)
@@ -811,7 +835,9 @@ def _fit_three_level_intercept(
     ols_beta, *_ = np.linalg.lstsq(X_all, y_all, rcond=None)
     resid = y_all - X_all @ ols_beta
     s2_ols = float(np.var(resid, ddof=p_fixed))
-    theta0 = np.array([np.log(0.1 * s2_ols), np.log(0.1 * s2_ols), np.log(0.8 * s2_ols)])
+    theta0 = np.array(
+        [np.log(0.1 * s2_ols), np.log(0.1 * s2_ols), np.log(0.8 * s2_ols)]
+    )
 
     res = minimize(
         _three_level_nll,
@@ -827,7 +853,7 @@ def _fit_three_level_intercept(
     # Recompute GLS β and Cov(β) at the MLE, plus BLUPs.
     XtVinvX = np.zeros((p_fixed, p_fixed))
     XtVinvy = np.zeros(p_fixed)
-    V_list = []
+    V_list: List[np.ndarray] = []
     for y_s, X_s, inner_ids, inner_unique, _row_idx in blocks_outer:
         n_s = len(y_s)
         V = sigma2_e * np.eye(n_s) + sigma2_s * np.ones((n_s, n_s))
@@ -844,10 +870,9 @@ def _fit_three_level_intercept(
     # For random-intercept-only 3-level LMM the BLUPs are:
     #   û_school = σ²_s · 1' V_s⁻¹ r_s
     #   û_class  = σ²_c · 1' V_s⁻¹ r_s  (restricted to class indicator)
-    school_blups = []
-    class_blups = []
-    class_blup_keys = []
-    class_blup_school = []
+    school_blups: List[float] = []
+    class_blups: List[float] = []
+    class_blup_keys: List[Any] = []
     for (y_s, X_s, inner_ids, inner_unique, _rix), V in zip(blocks_outer, V_list):
         r = y_s - X_s @ beta_hat
         Vinv_r = np.linalg.solve(V, r)
@@ -884,16 +909,10 @@ def _fit_three_level_intercept(
         "var(Residual)": sigma2_e,
     }
 
-    # Log-likelihood.  R lme4::logLik and Stata mixed e(ll) report the
-    # fitted criterion: REML for REML fits, ML for ML fits.  Keep a separate
-    # ML conversion only for LR diagnostics.
+    # Log-likelihood. R lme4::logLik and Stata mixed e(ll) report the fitted
+    # criterion: REML for REML fits, ML for ML fits.
     nll = float(res.fun)
     ll_report = -nll
-    if reml:
-        sign, logdet = np.linalg.slogdet(XtVinvX)
-        ll_ml = -(nll - 0.5 * logdet - (-0.5 * p_fixed * np.log(2 * np.pi)))
-    else:
-        ll_ml = ll_report
 
     total_var = sigma2_s + sigma2_c + sigma2_e
     icc_outer = sigma2_s / total_var if total_var > 0 else np.nan
@@ -907,7 +926,7 @@ def _fit_three_level_intercept(
     # The ``_G`` slot is normally a q×q random-effect covariance; in the
     # three-level path we store a marker NaN matrix so downstream code
     # doesn't mistake it for a genuine single-level G.
-    blocks_proxy = []
+    blocks_proxy: List[_GroupBlock] = []
     for y_s, X_s, inner_ids, inner_unique, row_idx in blocks_outer:
         Z_s = np.ones((len(y_s), 1))
         blocks_proxy.append(
@@ -974,8 +993,6 @@ def _profiled_nll(
     logdet_sum = 0.0
 
     # Pass 1: build XtVinvX / XtVinvy & accumulate log|V_j|.
-    VinvX_cache = [None] * len(blocks)
-    Vinvy_cache = [None] * len(blocks)
     for idx, b in enumerate(blocks):
         V = b.V(G, sigma2)
         try:
@@ -983,8 +1000,6 @@ def _profiled_nll(
             Vinvy, _ = _solve_V(V, b.y)
         except np.linalg.LinAlgError:
             return 1e12
-        VinvX_cache[idx] = VinvX
-        Vinvy_cache[idx] = Vinvy
         XtVinvX += b.X.T @ VinvX
         XtVinvy += b.X.T @ Vinvy
         logdet_sum += logdet
@@ -1015,7 +1030,7 @@ def _profiled_nll(
         nll += 0.5 * logdet_xtvinvx
         nll -= 0.5 * p_fixed * np.log(2 * np.pi)
 
-    return nll
+    return float(nll)
 
 
 # ---------------------------------------------------------------------------
@@ -1092,7 +1107,8 @@ def mixed(
         raise ValueError("method must be 'reml' or 'ml'")
     if cov_type not in ("unstructured", "diagonal", "identity"):
         raise ValueError(
-            f"cov_type must be 'unstructured', 'diagonal' or 'identity', got {cov_type!r}"
+            "cov_type must be 'unstructured', 'diagonal' or 'identity', "
+            f"got {cov_type!r}"
         )
 
     group_cols = _as_str_list(group)
@@ -1129,7 +1145,6 @@ def mixed(
             alpha=alpha,
         )
 
-    outer_col = None
     group_fit_col = group_cols[0]
 
     blocks, fixed_names, random_names = _group_blocks(
@@ -1245,7 +1260,11 @@ def mixed(
 
     # ICC -----------------------------------------------------------------
     sigma2_u0 = float(G_hat[0, 0])
-    icc = sigma2_u0 / (sigma2_u0 + sigma2_hat) if (sigma2_u0 + sigma2_hat) > 0 else np.nan
+    icc = (
+        sigma2_u0 / (sigma2_u0 + sigma2_hat)
+        if (sigma2_u0 + sigma2_hat) > 0
+        else np.nan
+    )
 
     # LR test vs. pooled OLS (ML likelihood basis) ---------------------------
     resid_ols = y_all - X_all @ ols_beta

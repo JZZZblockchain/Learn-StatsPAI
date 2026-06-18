@@ -29,7 +29,7 @@ import subprocess
 import tempfile
 from numbers import Real
 from pathlib import Path
-from typing import Any, Optional, List, Sequence
+from typing import Any, Optional, List, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -231,7 +231,10 @@ def honest_did(
     if backend_norm not in {"native", "statspai"}:
         raise MethodIncompatibility(
             "backend must be 'native', 'honestdid', or 'r'.",
-            recovery_hint="Use backend='native' unless exact R HonestDiD parity is required.",
+            recovery_hint=(
+                "Use backend='native' unless exact R HonestDiD parity is "
+                "required."
+            ),
             diagnostics={"backend": backend},
         )
 
@@ -356,7 +359,10 @@ def _honest_did_r_backend(
             raise MethodIncompatibility(
                 "honestdid_method must be one of 'C-LF', 'Conditional', "
                 "'FLCI', or 'C-F'.",
-                recovery_hint="Use an HonestDiD solver method supported by the selected restriction.",
+                recovery_hint=(
+                    "Use an HonestDiD solver method supported by the selected "
+                    "restriction."
+                ),
                 diagnostics={"honestdid_method": honestdid_method},
             )
         honestdid_method_arg = method_aliases[key]
@@ -396,7 +402,10 @@ def _honest_did_r_backend(
     if len(pre) == 0:
         raise DataInsufficient(
             "backend='honestdid' requires at least one pre-treatment period.",
-            recovery_hint="Use an event study with at least one pre-treatment coefficient.",
+            recovery_hint=(
+                "Use an event study with at least one pre-treatment "
+                "coefficient."
+            ),
             diagnostics={"backend": "honestdid"},
         )
     if len(post) == 0 or e not in set(post["relative_time"].astype(int)):
@@ -505,7 +514,10 @@ cat(jsonlite::toJSON(out, dataframe = "rows", auto_unbox = TRUE,
         raise ConvergenceFailure(
             "backend='honestdid' failed while running the R HonestDiD package: "
             f"{proc.stderr.strip() or proc.stdout.strip()}",
-            recovery_hint="Check the local R HonestDiD/jsonlite installation or use backend='native'.",
+            recovery_hint=(
+                "Check the local R HonestDiD/jsonlite installation or use "
+                "backend='native'."
+            ),
             diagnostics={"backend": "honestdid", "returncode": proc.returncode},
         )
 
@@ -623,7 +635,7 @@ def breakdown_m(
 
     # M* such that |θ̂| - M* × n_drift - z × SE = 0
     m_star = (abs(theta) - z_crit * se) / n_drift
-    return max(m_star, 0.0)
+    return float(max(m_star, 0.0))
 
 
 # ======================================================================
@@ -650,17 +662,23 @@ def _extract_event_study(result: CausalResult) -> pd.DataFrame:
         If no event study can be found.
     """
     info = result.model_info or {}
-    es = info.get("event_study")
+    es = cast(Optional[pd.DataFrame], info.get("event_study"))
     if es is None and getattr(result, "detail", None) is not None:
         det = result.detail
-        if {"relative_time", "att", "se"}.issubset(det.columns):
+        if (
+            isinstance(det, pd.DataFrame)
+            and {"relative_time", "att", "se"}.issubset(det.columns)
+        ):
             es = det
     if es is None:
         raise MethodIncompatibility(
             "Result does not expose an event-study table.  Supported "
             "inputs: callaway_santanna(), sun_abraham(), did_multiplegt(), "
             "or aggte(result, type='dynamic').",
-            recovery_hint="Pass a DID/event-study result with relative_time, att, and se columns.",
+            recovery_hint=(
+                "Pass a DID/event-study result with relative_time, att, and se "
+                "columns."
+            ),
             diagnostics={"result_type": type(result).__name__},
         )
     # Defensive copy — callers mutate / filter it.
@@ -671,7 +689,10 @@ def _extract_event_study(result: CausalResult) -> pd.DataFrame:
     if missing:
         raise MethodIncompatibility(
             f"Event-study table is missing required columns: {missing}",
-            recovery_hint="Provide an event-study table with relative_time, att, and se columns.",
+            recovery_hint=(
+                "Provide an event-study table with relative_time, att, and se "
+                "columns."
+            ),
             diagnostics={"missing_columns": sorted(missing)},
         )
     return es

@@ -17,7 +17,7 @@ Hansen, L.P., Heaton, J. & Yaron, A. (1996).
 *Journal of Business & Economic Statistics*, 14(3), 262-280. [@hansen1996finite]
 """
 
-from typing import Optional, List, Dict, Any, Callable
+from typing import Any, Callable, List, Optional
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -27,15 +27,15 @@ from ..core.results import EconometricResults
 
 
 def gmm(
-    moment_fn: Callable,
+    moment_fn: Callable[[np.ndarray, Optional[pd.DataFrame]], Any],
     theta0: np.ndarray,
-    data: pd.DataFrame = None,
-    W: np.ndarray = None,
+    data: Optional[pd.DataFrame] = None,
+    W: Optional[np.ndarray] = None,
     method: str = "twostep",
     se: str = "robust",
     maxiter: int = 200,
     tol: float = 1e-8,
-    param_names: List[str] = None,
+    param_names: Optional[List[str]] = None,
     alpha: float = 0.05,
 ) -> EconometricResults:
     """
@@ -94,28 +94,28 @@ def gmm(
     >>> bool(result is not None)
     True
     """
-    n = len(data) if data is not None else None
     k = len(theta0)
+    G0 = np.asarray(moment_fn(theta0, data), dtype=float)
+    n = int(G0.shape[0])
+    q = int(G0.shape[1])
 
-    def g_bar(theta):
+    def g_bar(theta: np.ndarray) -> np.ndarray:
         """Average moment conditions."""
-        G = moment_fn(theta, data)
-        return G.mean(axis=0)
+        G = G_mat(theta)
+        return np.asarray(G.mean(axis=0), dtype=float)
 
-    def G_mat(theta):
+    def G_mat(theta: np.ndarray) -> np.ndarray:
         """Individual moment conditions (n x q)."""
-        return moment_fn(theta, data)
+        return np.asarray(moment_fn(theta, data), dtype=float)
 
-    q = len(g_bar(theta0))
-
-    def objective(theta, W_mat):
+    def objective(theta: np.ndarray, W_mat: np.ndarray) -> float:
         """GMM objective function."""
         gb = g_bar(theta)
         return float(gb @ W_mat @ gb)
 
     if method == 'cue':
         # Continuously Updated Estimator
-        def cue_objective(theta):
+        def cue_objective(theta: np.ndarray) -> float:
             G = G_mat(theta)
             gb = G.mean(axis=0)
             S = G.T @ G / n
@@ -178,7 +178,6 @@ def gmm(
 
     # Standard errors
     G_hat = G_mat(theta_hat)
-    gb_hat = G_hat.mean(axis=0)
 
     # Jacobian: D = (1/n) Σ ∂g_i/∂θ' (numerical)
     eps = 1e-6

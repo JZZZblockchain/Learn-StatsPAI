@@ -1,5 +1,6 @@
-"""
-DiD-BCF — Forests for Differences (Wüthrich-Zhu 2025, arXiv 2505.09706). [@wuthrich2025forests]
+"""DiD-BCF -- Forests for Differences.
+
+Wuthrich-Zhu (2025, arXiv 2505.09706). [@wuthrich2025forests]
 
 Non-parametric DiD via Bayesian Causal Forests (Hahn-Murray-Carvalho
 2020) applied to the differenced outcome ΔY = Y_post - Y_pre.
@@ -21,7 +22,7 @@ Implementation
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
@@ -71,7 +72,7 @@ def did_bcf(
     >>> rng = np.random.default_rng(0)
     >>> rows = []
     >>> for i in range(30):
-    ...     g = 0 if i < 15 else 3          # cohort: never-treated vs first-treated at t=3
+    ...     g = 0 if i < 15 else 3
     ...     for t in range(1, 6):
     ...         post = int(g > 0 and t >= g)
     ...         y = 1.0 + 0.2 * t + 1.5 * post + rng.normal(0, 0.5)
@@ -131,6 +132,8 @@ def did_bcf(
     # Fit BCF on the differenced outcome via the existing module
     from ..bcf import bcf as bcf_fit
 
+    fallback_reason: Optional[str] = None
+    catt_by_cohort: dict[float, float] = {}
     if X.shape[1] == 0:
         # Degenerate: no covariates → ATT = mean(treated ΔY) - mean(control ΔY)
         att = float(Y[D == 1].mean() - Y[D == 0].mean())
@@ -148,7 +151,6 @@ def did_bcf(
             except Exception:
                 pass
         se = _bootstrap_se(boot, label="did.did_bcf")
-        catt_by_cohort = {}
         for c in np.unique(cohort_arr[D == 1]):
             mask = (cohort_arr == c) & (D == 1)
             ctrl_mask = D == 0
@@ -175,9 +177,12 @@ def did_bcf(
                 bcf_res.model_info.get('cate_sd', np.zeros(n)), dtype=float
             )
             # ATT SE via average per-unit posterior SD on treated
-            se = float(np.sqrt((cate_sd[D == 1] ** 2).mean() / max((D == 1).sum(), 1))) \
-                or float(bcf_res.se) or 1e-6
-            catt_by_cohort = {}
+            treated_count = max((D == 1).sum(), 1)
+            se = (
+                float(np.sqrt((cate_sd[D == 1] ** 2).mean() / treated_count))
+                or float(bcf_res.se)
+                or 1e-6
+            )
             for c in np.unique(cohort_arr[D == 1]):
                 mask = (cohort_arr == c) & (D == 1)
                 if mask.sum() > 0:
@@ -185,14 +190,26 @@ def did_bcf(
         except Exception as e:
             # Fallback to OLS-style DiD per cohort
             att = float(Y[D == 1].mean() - Y[D == 0].mean())
-            se = float(np.std(Y[D == 1], ddof=1) / np.sqrt(max((D == 1).sum(), 1)))
-            catt_by_cohort = {"_fallback_reason": f"{type(e).__name__}: {e}"}
+            se = float(
+                np.std(Y[D == 1], ddof=1) / np.sqrt(max((D == 1).sum(), 1))
+            )
+            fallback_reason = f"{type(e).__name__}: {e}"
 
     from scipy import stats
     z_crit = float(stats.norm.ppf(1 - alpha / 2))
     ci = (att - z_crit * se, att + z_crit * se)
     z = att / se if se > 0 else 0.0
     pvalue = float(2 * (1 - stats.norm.cdf(abs(z))))
+
+    model_info: dict[str, Any] = {
+        'estimator': 'DiD-BCF',
+        'n_trees': n_trees,
+        'n_covariates': len(cov),
+        'catt_by_cohort': catt_by_cohort,
+        'reference': 'Souto & Neto (2025), arXiv 2505.09706',
+    }
+    if fallback_reason is not None:
+        model_info["fallback_reason"] = fallback_reason
 
     _result = CausalResult(
         method="DiD-BCF (Forests for Differences)",
@@ -203,13 +220,7 @@ def did_bcf(
         ci=ci,
         alpha=alpha,
         n_obs=n,
-        model_info={
-            'estimator': 'DiD-BCF',
-            'n_trees': n_trees,
-            'n_covariates': len(cov),
-            'catt_by_cohort': catt_by_cohort,
-            'reference': 'Souto & Neto (2025), arXiv 2505.09706',
-        },
+        model_info=model_info,
         _citation_key='did_bcf',
     )
     try:

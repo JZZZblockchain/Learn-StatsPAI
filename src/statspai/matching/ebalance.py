@@ -16,7 +16,7 @@ Method to Produce Balanced Samples in Observational Studies."
 *Political Analysis*, 20(1), 25-46. [@hainmueller2012entropy]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -191,11 +191,16 @@ def ebalance(
     )
 
 
-def _build_constraints(X_t, X_c, covariates, moments):
+def _build_constraints(
+    X_t: np.ndarray,
+    X_c: np.ndarray,
+    covariates: List[str],
+    moments: int,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Build moment targets and constraint matrix."""
     k = len(covariates)
-    targets = []
-    C_cols = []
+    targets: List[float] = []
+    C_cols: List[np.ndarray] = []
 
     # First moments (means)
     for j in range(k):
@@ -214,13 +219,18 @@ def _build_constraints(X_t, X_c, covariates, moments):
             targets.append(np.mean(X_t[:, j] ** 3))
             C_cols.append(X_c[:, j] ** 3)
 
-    C_matrix = np.column_stack(C_cols)
-    targets = np.array(targets)
+    C_matrix = np.asarray(np.column_stack(C_cols), dtype=float)
+    targets_arr = np.asarray(targets, dtype=float)
 
-    return targets, C_matrix
+    return targets_arr, C_matrix
 
 
-def _solve_ebalance(C, targets, n_c, max_iter=200):
+def _solve_ebalance(
+    C: np.ndarray,
+    targets: np.ndarray,
+    n_c: int,
+    max_iter: int = 200,
+) -> Tuple[np.ndarray, bool]:
     """Solve entropy balancing via Lagrange dual (Newton's method).
 
     Returns ``(weights, fallback)`` where ``fallback=True`` means the
@@ -229,18 +239,18 @@ def _solve_ebalance(C, targets, n_c, max_iter=200):
     m = len(targets)
 
     # Dual: maximize L(λ) = -log(Σ exp(C λ)) + λ' targets
-    def neg_dual(lam):
+    def neg_dual(lam: np.ndarray) -> float:
         Cl = C @ lam
         Cl = np.clip(Cl, -500, 500)  # prevent overflow
         log_sum_exp = np.log(np.sum(np.exp(Cl)))
-        return -(lam @ targets - log_sum_exp)
+        return float(-(lam @ targets - log_sum_exp))
 
-    def grad(lam):
+    def grad(lam: np.ndarray) -> np.ndarray:
         Cl = C @ lam
         Cl = np.clip(Cl, -500, 500)
         exp_Cl = np.exp(Cl)
         w = exp_Cl / np.sum(exp_Cl)
-        return -(targets - C.T @ w)
+        return np.asarray(-(targets - C.T @ w), dtype=float)
 
     lam0 = np.zeros(m)
 
@@ -264,7 +274,7 @@ def _solve_ebalance(C, targets, n_c, max_iter=200):
             ),
             stacklevel=4,
         )
-        return np.ones(n_c) / n_c, True
+        return np.ones(n_c, dtype=float) / n_c, True
 
     # Recover weights
     Cl = C @ lam
@@ -272,10 +282,15 @@ def _solve_ebalance(C, targets, n_c, max_iter=200):
     w = np.exp(Cl)
     w = w / np.sum(w)
 
-    return w, False
+    return np.asarray(w, dtype=float), False
 
 
-def _balance_check(X_t, X_c, weights, covariates):
+def _balance_check(
+    X_t: np.ndarray,
+    X_c: np.ndarray,
+    weights: np.ndarray,
+    covariates: List[str],
+) -> pd.DataFrame:
     """Check balance before/after reweighting."""
     rows = []
     for j, cov in enumerate(covariates):

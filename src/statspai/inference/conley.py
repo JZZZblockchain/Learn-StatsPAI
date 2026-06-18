@@ -20,16 +20,14 @@ Conley, T.G. (1999).
 "GMM Estimation with Cross Sectional Dependence."
 *Journal of Econometrics*, 92(1), 1-45. [@conley1999estimation]
 
-Conley, T.G. (2008).
-"Spatial Econometrics." In *The New Palgrave Dictionary of Economics*. [@conley2008spatial]
+Conley, T.G. (2008). "Spatial Econometrics." In *The New Palgrave Dictionary
+of Economics*. [@conley2008spatial]
 
 Hsiang, S.M. (2010).
 "Temperatures and Cyclones Strongly Associated with Economic
 Production in the Caribbean and Central America."
 *PNAS*, 107(35), 15367-15372. [@hsiang2010temperatures]
 """
-
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -53,8 +51,11 @@ def _haversine_km(lat1: np.ndarray, lon1: np.ndarray,
     lat1, lon1, lat2, lon2 = (np.radians(x) for x in (lat1, lon1, lat2, lon2))
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
-    return 2 * _EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
+    a = (
+        np.sin(dlat / 2) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    )
+    return np.asarray(2 * _EARTH_RADIUS_KM * np.arcsin(np.sqrt(a)), dtype=float)
 
 
 def _latlon_to_cartesian(lat_deg: np.ndarray, lon_deg: np.ndarray) -> np.ndarray:

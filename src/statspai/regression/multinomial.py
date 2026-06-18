@@ -32,6 +32,7 @@ import pandas as pd
 from scipy import stats, optimize
 
 from ..core.results import EconometricResults
+from ._optim_helpers import robust_convergence
 from ..core.utils import parse_formula
 
 
@@ -428,7 +429,7 @@ def mlogit(
         'pseudo_r2': float(pseudo_r2),
         'aic': float(aic),
         'bic': float(bic),
-        'converged': res.success,
+        'converged': robust_convergence(res)[0],
         'rrr': rrr,
         'robust': robust if cluster is None else f'cluster({cluster})',
         'iia_skipped': iia_skipped,
@@ -799,7 +800,7 @@ def _ordered_model(
         'pseudo_r2': float(pseudo_r2),
         'aic': float(aic),
         'bic': float(bic),
-        'converged': res.success,
+        'converged': robust_convergence(res)[0],
         'robust': robust if cluster is None else f'cluster({cluster})',
         'brant_skipped': brant_skipped,
         'brant_error': brant_error,
@@ -1205,7 +1206,7 @@ def clogit(
         'pseudo_r2': float(pseudo_r2),
         'aic': float(aic),
         'bic': float(bic),
-        'converged': res.success,
+        'converged': robust_convergence(res)[0],
         'robust': robust if cluster is None else f'cluster({cluster})',
     }
 

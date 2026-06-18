@@ -18,7 +18,7 @@ Hudgens, M. G. & Halloran, M. E. (2008).
 JASA, 103(482), 832-842. [@hudgens2008toward]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -144,7 +144,7 @@ class SpilloverEstimator:
         n_bootstrap: int = 500,
         alpha: float = 0.05,
         random_state: int = 42,
-    ):
+    ) -> None:
         self.data = data
         self.y = y
         self.treat = treat
@@ -269,7 +269,12 @@ class SpilloverEstimator:
             _citation_key='spillover',
         )
 
-    def _compute_exposure(self, df, D, G):
+    def _compute_exposure(
+        self,
+        df: pd.DataFrame,
+        D: np.ndarray,
+        G: np.ndarray,
+    ) -> np.ndarray:
         """Compute peer treatment exposure for each unit."""
         exposure = np.zeros(len(D))
         clusters = np.unique(G)
@@ -298,7 +303,11 @@ class SpilloverEstimator:
         return exposure
 
 
-def _safe_diff(Y, mask_a, mask_b):
+def _safe_diff(
+    Y: np.ndarray,
+    mask_a: np.ndarray,
+    mask_b: np.ndarray,
+) -> float:
     """Safe mean difference."""
     if mask_a.sum() > 0 and mask_b.sum() > 0:
         return float(np.mean(Y[mask_a]) - np.mean(Y[mask_b]))

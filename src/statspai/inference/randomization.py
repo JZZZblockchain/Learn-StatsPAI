@@ -24,13 +24,16 @@ Hodges, J.L. and Lehmann, E.L. (1963).
 *Annals of Mathematical Statistics*, 34(2), 598-611. [@hodges1963estimates]
 """
 
-from typing import Optional, List, Dict, Any, Callable, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+
+StatFn = Callable[[np.ndarray, np.ndarray], float]
+Permuter = Callable[[], np.ndarray]
 
 
 # ======================================================================
@@ -92,7 +95,7 @@ class FisherResult:
         n_perm: int,
         n_obs: int,
         n_treated: int,
-    ):
+    ) -> None:
         self.statistic = statistic
         self.p_value = p_value
         self.p_one_sided = p_one_sided
@@ -121,7 +124,11 @@ class FisherResult:
         ]
         return "\n".join(lines)
 
-    def plot(self, ax=None, figsize=(8, 5)):
+    def plot(
+        self,
+        ax: Optional[Any] = None,
+        figsize: Tuple[int, int] = (8, 5),
+    ) -> Tuple[Any, Any]:
         """
         Plot the permutation distribution with observed value.
 
@@ -186,25 +193,47 @@ class FisherResult:
     def _repr_html_(self) -> str:
         """Rich HTML representation for Jupyter notebooks."""
         sig_color = '#d32f2f' if self.p_value < 0.05 else '#388e3c'
-        return f"""
-        <div style="font-family: monospace; padding: 10px; border: 1px solid #ddd; border-radius: 5px; max-width: 500px;">
-        <h3 style="margin-top: 0;">Fisher's Exact Randomization Test</h3>
-        <table style="border-collapse: collapse; width: 100%;">
-        <tr><td style="padding: 4px 8px;"><b>Test statistic ({self.statistic_type})</b></td>
-            <td style="padding: 4px 8px; text-align: right;">{self.statistic:.6f}</td></tr>
-        <tr><td style="padding: 4px 8px;"><b>p-value (two-sided)</b></td>
-            <td style="padding: 4px 8px; text-align: right; color: {sig_color}; font-weight: bold;">{self.p_value:.4f}</td></tr>
-        <tr><td style="padding: 4px 8px;"><b>p-value (one-sided)</b></td>
-            <td style="padding: 4px 8px; text-align: right;">{self.p_one_sided:.4f}</td></tr>
-        <tr><td style="padding: 4px 8px;"><b>95% CI</b></td>
-            <td style="padding: 4px 8px; text-align: right;">[{self.ci[0]:.4f}, {self.ci[1]:.4f}]</td></tr>
-        <tr><td style="padding: 4px 8px;"><b>Permutations</b></td>
-            <td style="padding: 4px 8px; text-align: right;">{self.n_perm:,}</td></tr>
-        <tr><td style="padding: 4px 8px;"><b>N</b></td>
-            <td style="padding: 4px 8px; text-align: right;">{self.n_obs:,} (treated: {self.n_treated:,})</td></tr>
-        </table>
-        </div>
-        """
+        box_style = (
+            "font-family: monospace; padding: 10px; border: 1px solid #ddd; "
+            "border-radius: 5px; max-width: 500px;"
+        )
+        cell_style = "padding: 4px 8px;"
+        right_style = f"{cell_style} text-align: right;"
+        p_style = f"{right_style} color: {sig_color}; font-weight: bold;"
+        return "\n".join([
+            f'<div style="{box_style}">',
+            '<h3 style="margin-top: 0;">Fisher\'s Exact Randomization Test</h3>',
+            '<table style="border-collapse: collapse; width: 100%;">',
+            (
+                f'<tr><td style="{cell_style}"><b>Test statistic '
+                f'({self.statistic_type})</b></td>'
+                f'<td style="{right_style}">{self.statistic:.6f}</td></tr>'
+            ),
+            (
+                f'<tr><td style="{cell_style}"><b>p-value (two-sided)</b></td>'
+                f'<td style="{p_style}">{self.p_value:.4f}</td></tr>'
+            ),
+            (
+                f'<tr><td style="{cell_style}"><b>p-value (one-sided)</b></td>'
+                f'<td style="{right_style}">{self.p_one_sided:.4f}</td></tr>'
+            ),
+            (
+                f'<tr><td style="{cell_style}"><b>95% CI</b></td>'
+                f'<td style="{right_style}">'
+                f'[{self.ci[0]:.4f}, {self.ci[1]:.4f}]</td></tr>'
+            ),
+            (
+                f'<tr><td style="{cell_style}"><b>Permutations</b></td>'
+                f'<td style="{right_style}">{self.n_perm:,}</td></tr>'
+            ),
+            (
+                f'<tr><td style="{cell_style}"><b>N</b></td>'
+                f'<td style="{right_style}">{self.n_obs:,} '
+                f'(treated: {self.n_treated:,})</td></tr>'
+            ),
+            '</table>',
+            '</div>',
+        ])
 
     def __repr__(self) -> str:
         return (
@@ -337,12 +366,16 @@ def fisher_exact(
     obs_stat = float(stat_fn(Y, D))
 
     # Build the permutation function
+    perm_fn: Permuter
     if cluster is not None:
         perm_fn = _make_cluster_permuter(df, treatment, cluster, rng)
     elif stratify is not None:
         perm_fn = _make_stratified_permuter(df, treatment, stratify, rng)
     else:
-        perm_fn = lambda: rng.permutation(D)
+        def unrestricted_permute() -> np.ndarray:
+            return np.asarray(rng.permutation(D), dtype=float)
+
+        perm_fn = unrestricted_permute
 
     # Permutation distribution
     perm_stats = np.zeros(n_perm)
@@ -488,16 +521,25 @@ def ri_test(
     n = len(Y)
 
     # Select test statistic function
+    stat_fn: StatFn
     if callable(stat):
-        stat_fn = stat
+        stat_fn = cast(StatFn, stat)
     elif stat == 'diff_means':
-        stat_fn = lambda y, d: np.mean(y[d == 1]) - np.mean(y[d == 0])
+        def diff_means_stat(y_: np.ndarray, d_: np.ndarray) -> float:
+            return float(np.mean(y_[d_ == 1]) - np.mean(y_[d_ == 0]))
+
+        stat_fn = diff_means_stat
     elif stat == 't':
-        stat_fn = lambda y, d: _t_stat(y, d)
+        stat_fn = _t_stat
     elif stat == 'ks':
-        stat_fn = lambda y, d: stats.ks_2samp(y[d == 1], y[d == 0]).statistic
+        def ks_stat(y_: np.ndarray, d_: np.ndarray) -> float:
+            return float(stats.ks_2samp(y_[d_ == 1], y_[d_ == 0]).statistic)
+
+        stat_fn = ks_stat
     else:
-        raise ValueError(f"Unknown stat: '{stat}'. Use 'diff_means', 't', 'ks', or callable.")
+        raise ValueError(
+            f"Unknown stat: '{stat}'. Use 'diff_means', 't', 'ks', or callable."
+        )
 
     # Observed statistic
     obs_stat = float(stat_fn(Y, D))
@@ -551,14 +593,23 @@ def _t_stat(y: np.ndarray, d: np.ndarray) -> float:
     return mean_diff / se if se > 0 else 0.0
 
 
-def _get_stat_fn(statistic: str) -> Callable:
+def _get_stat_fn(statistic: str) -> StatFn:
     """Return the test statistic function by name."""
     if statistic == 'ate':
-        return lambda y, d: np.mean(y[d == 1]) - np.mean(y[d == 0])
+        def ate_stat(y: np.ndarray, d: np.ndarray) -> float:
+            return float(np.mean(y[d == 1]) - np.mean(y[d == 0]))
+
+        return ate_stat
     elif statistic == 'ks':
-        return lambda y, d: stats.ks_2samp(y[d == 1], y[d == 0]).statistic
+        def ks_stat(y: np.ndarray, d: np.ndarray) -> float:
+            return float(stats.ks_2samp(y[d == 1], y[d == 0]).statistic)
+
+        return ks_stat
     elif statistic == 'rank_sum':
-        return lambda y, d: float(stats.ranksums(y[d == 1], y[d == 0]).statistic)
+        def rank_sum_stat(y: np.ndarray, d: np.ndarray) -> float:
+            return float(stats.ranksums(y[d == 1], y[d == 0]).statistic)
+
+        return rank_sum_stat
     else:
         raise ValueError(
             f"Unknown statistic: '{statistic}'. "
@@ -571,7 +622,7 @@ def _make_cluster_permuter(
     treatment: str,
     cluster: str,
     rng: np.random.Generator,
-) -> Callable:
+) -> Permuter:
     """Create a function that permutes treatment at the cluster level."""
     cl = df[cluster].values
     D = df[treatment].values.astype(float)
@@ -580,7 +631,7 @@ def _make_cluster_permuter(
     # Get treatment per cluster (first obs)
     cl_treat = np.array([D[cl == c][0] for c in unique_cl])
 
-    def permute():
+    def permute() -> np.ndarray:
         cl_perm = rng.permutation(cl_treat)
         D_perm = np.zeros(n)
         for i, c in enumerate(unique_cl):
@@ -595,7 +646,7 @@ def _make_stratified_permuter(
     treatment: str,
     stratify: str,
     rng: np.random.Generator,
-) -> Callable:
+) -> Permuter:
     """Create a function that permutes treatment within strata."""
     D = df[treatment].values.astype(float)
     strata = df[stratify].values
@@ -605,7 +656,7 @@ def _make_stratified_permuter(
     # Pre-compute indices for each stratum
     strata_indices = {s: np.where(strata == s)[0] for s in unique_strata}
 
-    def permute():
+    def permute() -> np.ndarray:
         D_perm = np.zeros(n)
         for s in unique_strata:
             idx = strata_indices[s]
@@ -618,8 +669,8 @@ def _make_stratified_permuter(
 def _hodges_lehmann_ci(
     Y: np.ndarray,
     D: np.ndarray,
-    stat_fn: Callable,
-    perm_fn: Callable,
+    stat_fn: StatFn,
+    perm_fn: Permuter,
     n_perm: int,
     alpha: float,
     rng: np.random.Generator,

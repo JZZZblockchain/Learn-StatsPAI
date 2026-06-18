@@ -49,7 +49,7 @@ the generalized front-door criterion." *JRSS-B*, 82(1), 199-214. [@fulcher2020ro
 """
 
 import warnings
-from typing import Optional, List, Any
+from typing import Any, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -196,7 +196,12 @@ def front_door(
 
     rng = np.random.default_rng(seed)
 
-    def _point(Y_, D_, M_, X_):
+    def _point(
+        Y_: np.ndarray,
+        D_: np.ndarray,
+        M_: np.ndarray,
+        X_: Optional[np.ndarray],
+    ) -> Tuple[float, int]:
         return _front_door_ate(
             Y_, D_, M_, X_, mediator_type, n_mc, rng, integrate_by
         )
@@ -324,7 +329,9 @@ def front_door(
     return _result
 
 
-def _ols_fit(y, X):
+def _ols_fit(
+    y: np.ndarray, X: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Minimal OLS with intercept; returns (beta, residuals)."""
     design = np.column_stack([np.ones(len(y)), X])
     beta, *_ = np.linalg.lstsq(design, y, rcond=None)
@@ -332,12 +339,12 @@ def _ols_fit(y, X):
     return beta, resid, design
 
 
-def _ols_predict(beta, X):
+def _ols_predict(beta: np.ndarray, X: np.ndarray) -> np.ndarray:
     design = np.column_stack([np.ones(X.shape[0]), X])
-    return design @ beta
+    return np.asarray(design @ beta, dtype=float)
 
 
-def _logit_fit(y, X):
+def _logit_fit(y: np.ndarray, X: np.ndarray) -> Any:
     """Logistic regression — falls back to empirical mean on singular design.
 
     Thin wrapper over the shared ``core._glm_fit.safe_logit_fit`` primitive
@@ -347,12 +354,21 @@ def _logit_fit(y, X):
     return safe_logit_fit(y, X)
 
 
-def _logit_predict(fit, X, fallback):
+def _logit_predict(fit: Any, X: np.ndarray, fallback: float) -> np.ndarray:
     from ..core._glm_fit import safe_logit_predict
-    return safe_logit_predict(fit, X, fallback)
+    return np.asarray(safe_logit_predict(fit, X, fallback), dtype=float)
 
 
-def _front_door_ate(Y, D, M, X, mediator_type, n_mc, rng, integrate_by='marginal'):
+def _front_door_ate(
+    Y: np.ndarray,
+    D: np.ndarray,
+    M: np.ndarray,
+    X: Optional[np.ndarray],
+    mediator_type: str,
+    n_mc: int,
+    rng: np.random.Generator,
+    integrate_by: str = 'marginal',
+) -> Tuple[float, int]:
     """
     Compute front-door ATE on a single (bootstrap or original) sample.
     """
@@ -363,25 +379,31 @@ def _front_door_ate(Y, D, M, X, mediator_type, n_mc, rng, integrate_by='marginal
     p_d0 = 1.0 - p_d1
 
     # Build feature matrices for outcome and mediator regressions.
+    feat_ym: np.ndarray
     if X is None:
         feat_ym = M.reshape(-1, 1)            # outcome regression features: M
-        feat_d_only = np.zeros((n, 0))        # no X
     else:
         feat_ym = np.column_stack([M, X])     # outcome regression: M, X
-        feat_d_only = X                       # mediator/treatment regression: X
 
     # Outcome model: Y ~ M (+ X) separately for D=0 and D=1, so we can
     # evaluate E[Y|D=d', M=m, X] at each (d', m, x).
     mask1 = D == 1
     mask0 = D == 0
     if mask1.sum() < 2 or mask0.sum() < 2:
-        raise RuntimeError("Insufficient support on D=0 or D=1 for outcome regression.")
+        raise RuntimeError(
+            "Insufficient support on D=0 or D=1 for outcome regression."
+        )
 
     beta_y1, _, _ = _ols_fit(Y[mask1], feat_ym[mask1])
     beta_y0, _, _ = _ols_fit(Y[mask0], feat_ym[mask0])
 
     # Helper: E[Y | D=d', M=m_grid, X=x_row] for each obs
-    def mu_dprime(d_prime_beta, m_vec, X_):
+    def mu_dprime(
+        d_prime_beta: np.ndarray,
+        m_vec: np.ndarray,
+        X_: Optional[np.ndarray],
+    ) -> np.ndarray:
+        feat: np.ndarray
         if X_ is None:
             feat = m_vec.reshape(-1, 1)
         else:
@@ -457,7 +479,8 @@ def _front_door_ate(Y, D, M, X, mediator_type, n_mc, rng, integrate_by='marginal
     mean_m1 = _ols_predict(beta_m1, feat_m)
     mean_m0 = _ols_predict(beta_m0, feat_m)
 
-    # Monte-Carlo integrate E[Y|do(D=d)] = E_x E_{m|D=d,(·)} [ Σ_{d'} P(d') E[Y|d',m,x] ]
+    # Monte-Carlo integrate E[Y|do(D=d)] =
+    # E_x E_{m|D=d,(·)} [Σ_{d'} P(d') E[Y|d',m,x]]
     # Two variants:
     #   'conditional'  — per-unit: m ~ N(μ_d(x_i), σ_d^2), X held at x_i.
     #                    Matches Fulcher et al. (2020) generalized front-door.

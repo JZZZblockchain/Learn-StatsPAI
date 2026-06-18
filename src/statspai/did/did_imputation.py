@@ -14,7 +14,7 @@ Borusyak, K., Jaravel, X. and Spiess, J. (2024).
 *Review of Economic Studies*, 91(6), 3253-3285. [@borusyak2024revisiting]
 """
 
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
@@ -118,13 +118,13 @@ def did_imputation(
     """
     # ── Input validation ─────────────────────────────────────────── #
     df = data.copy()
+    control_names = list(controls or [])
     for col in [y, group, time, first_treat]:
         if col not in df.columns:
             raise ValueError(f"Column '{col}' not found in data.")
-    if controls:
-        for col in controls:
-            if col not in df.columns:
-                raise ValueError(f"Control column '{col}' not found in data.")
+    for col in control_names:
+        if col not in df.columns:
+            raise ValueError(f"Control column '{col}' not found in data.")
 
     if cluster is None:
         cluster = group
@@ -162,7 +162,7 @@ def did_imputation(
 
     untreated = df[df["_untreated_obs"]].copy()
 
-    has_controls = controls is not None and len(controls) > 0
+    has_controls = len(control_names) > 0
     uid_u = untreated["_uid"].values
     tid_u = untreated["_tid"].values
 
@@ -199,7 +199,7 @@ def did_imputation(
         df=df,
         untreated=untreated,
         y=y,
-        controls=controls if has_controls else None,
+        controls=control_names if has_controls else None,
         uid_col="_uid",
         tid_col="_tid",
         n_units=n_units,
@@ -346,8 +346,8 @@ def did_imputation(
     }
 
     if has_controls:
-        model_info["controls"] = controls
-        model_info["beta_controls"] = dict(zip(controls, beta.tolist()))
+        model_info["controls"] = control_names
+        model_info["beta_controls"] = dict(zip(control_names, beta.tolist()))
 
     if event_study_df is not None and len(event_study_df) > 0:
         model_info["event_study"] = event_study_df
@@ -403,7 +403,7 @@ def _ols_coef(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     if X.shape[1] == 0:
         return np.array([])
     try:
-        return np.linalg.lstsq(X, y, rcond=None)[0]
+        return np.asarray(np.linalg.lstsq(X, y, rcond=None)[0], dtype=float)
     except np.linalg.LinAlgError:
         return np.zeros(X.shape[1])
 
@@ -457,9 +457,9 @@ def _fit_untreated_twfe_sparse(
 
     def _design(frame: pd.DataFrame) -> sparse.csr_matrix:
         n = len(frame)
-        rows_parts = [np.arange(n, dtype=int)]
-        cols_parts = [np.zeros(n, dtype=int)]
-        data_parts = [np.ones(n, dtype=float)]
+        rows_parts: List[np.ndarray] = [np.arange(n, dtype=int)]
+        cols_parts: List[np.ndarray] = [np.zeros(n, dtype=int)]
+        data_parts: List[np.ndarray] = [np.ones(n, dtype=float)]
 
         uid = frame[uid_col].values.astype(int)
         ucols = unit_cols[uid]

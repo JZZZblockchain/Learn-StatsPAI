@@ -87,7 +87,11 @@ def _pyfixest_to_econometric_results(
     model_type = model_type_map.get(class_name, f"{class_name} (pyfixest)")
 
     # --- estimation method label ---
-    method = "High-Dimensional Fixed Effects" if fe_info and fe_info != "None" else "OLS"
+    method = (
+        "High-Dimensional Fixed Effects"
+        if fe_info and fe_info != "None"
+        else "OLS"
+    )
 
     model_info: Dict[str, Any] = {
         "model_type": model_type,
@@ -133,7 +137,7 @@ def _pyfixest_to_econometric_results(
         result.pvalues = pval
 
     # Keep reference to original fit for power users
-    result._pyfixest_fit = fit
+    setattr(result, "_pyfixest_fit", fit)
 
     return result
 

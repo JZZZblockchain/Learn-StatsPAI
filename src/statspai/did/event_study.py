@@ -143,8 +143,11 @@ def event_study(
     never_treated = df["__treat_time_num__"].isna()
 
     # --- Bin endpoints ---
-    df.loc[~never_treated, "__rel_time_binned__"] = df.loc[~never_treated, "__rel_time__"].clip(
-        lower=min_lag, upper=max_lag
+    df.loc[~never_treated, "__rel_time_binned__"] = df.loc[
+        ~never_treated, "__rel_time__"
+    ].clip(
+        lower=min_lag,
+        upper=max_lag,
     )
 
     # --- Create dummies ---
@@ -203,8 +206,7 @@ def event_study(
     # --- Standard errors (clustered by default) ---
     cluster_var = cluster or unit
     cluster_ids = df_clean[cluster_var].values
-    se = _cluster_se(Xw, resid, XtX_inv, cluster_ids,
-                     w=w_arr)
+    se = _cluster_se(Xw, resid, XtX_inv, cluster_ids, w=w_arr)
 
     # --- Build event study table ---
     es_rows = []
@@ -223,7 +225,10 @@ def event_study(
             "se": se_i,
             "ci_lower": coef - t_crit * se_i,
             "ci_upper": coef + t_crit * se_i,
-            "pvalue": float(2 * (1 - sp_stats.norm.cdf(abs(coef / se_i)))) if se_i > 0 else 1.0,
+            "pvalue": (
+                float(2 * (1 - sp_stats.norm.cdf(abs(coef / se_i))))
+                if se_i > 0 else 1.0
+            ),
         })
 
     # Add reference period (zero by definition)
@@ -236,19 +241,30 @@ def event_study(
         "ci_upper": 0.0,
         "pvalue": 1.0,
     })
-    event_study_df = pd.DataFrame(es_rows).sort_values("relative_time").reset_index(drop=True)
+    event_study_df = (
+        pd.DataFrame(es_rows)
+        .sort_values("relative_time")
+        .reset_index(drop=True)
+    )
 
     # --- Pre-trend test (joint F-test on pre-treatment coefficients) ---
     pre_indices = [i for i, k_val in enumerate(rel_periods) if k_val < 0]
-    pretrend_result = _joint_f_test(beta, XtX_inv, pre_indices, resid, n, k,
-                                     w=w_arr)
+    pretrend_result = _joint_f_test(
+        beta, XtX_inv, pre_indices, resid, n, k, w=w_arr,
+    )
 
     # --- Overall ATT (average of post-treatment coefficients) ---
     post = event_study_df[event_study_df["relative_time"] >= 0]
     post_nonref = post[post["relative_time"] != ref_period]
     att = float(post_nonref["estimate"].mean()) if len(post_nonref) > 0 else 0.0
-    att_se = float(np.sqrt(np.mean(post_nonref["se"] ** 2) / len(post_nonref))) if len(post_nonref) > 0 else 0.0
-    att_p = float(2 * (1 - sp_stats.norm.cdf(abs(att / att_se)))) if att_se > 0 else 1.0
+    att_se = (
+        float(np.sqrt(np.mean(post_nonref["se"] ** 2) / len(post_nonref)))
+        if len(post_nonref) > 0 else 0.0
+    )
+    att_p = (
+        float(2 * (1 - sp_stats.norm.cdf(abs(att / att_se))))
+        if att_se > 0 else 1.0
+    )
 
     n_clusters = len(np.unique(cluster_ids))
 
@@ -372,14 +388,16 @@ def _cluster_se(
     for c in unique_clusters:
         mask = cluster_ids == c
         if w is not None:
-            score_c = (X[mask] * (np.sqrt(w[mask]) * resid[mask])[:, None]).sum(axis=0)
+            score_c = (
+                X[mask] * (np.sqrt(w[mask]) * resid[mask])[:, None]
+            ).sum(axis=0)
         else:
             score_c = (X[mask] * resid[mask, None]).sum(axis=0)
         meat += np.outer(score_c, score_c)
 
     correction = (G / (G - 1)) * ((n - 1) / (n - k))
     vcov = correction * XtX_inv @ meat @ XtX_inv
-    return np.sqrt(np.maximum(np.diag(vcov), 0))
+    return np.asarray(np.sqrt(np.maximum(np.diag(vcov), 0)), dtype=float)
 
 
 def _joint_f_test(

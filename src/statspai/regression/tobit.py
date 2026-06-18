@@ -18,7 +18,7 @@ Amemiya, T. (1984).
 *Journal of Econometrics*, 24(1-2), 3-61. [@amemiya1984tobit]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from scipy import stats, optimize
 
 from ..core.results import CausalResult
 from ._limited_dep_result import LimitedDepResult
+from ._optim_helpers import robust_convergence
 from ..exceptions import DataInsufficient
 
 
@@ -102,8 +103,9 @@ def tobit(
     """
     df = data[[y] + x].dropna()
     Y = df[y].values.astype(float)
-    X = np.column_stack([np.ones(len(df))] +
-                        [df[v].values.astype(float) for v in x])
+    X = np.column_stack(
+        [np.ones(len(df))] + [df[v].values.astype(float) for v in x]
+    )
     n, k = X.shape
 
     if ul is None:
@@ -130,7 +132,7 @@ def tobit(
     theta0 = np.concatenate([beta_init, [log_sigma_init]])
 
     # MLE
-    def neg_loglik(theta):
+    def neg_loglik(theta: np.ndarray) -> float:
         beta = theta[:k]
         sigma = np.exp(theta[k])
         sigma = max(sigma, 1e-6)
@@ -159,20 +161,10 @@ def tobit(
     result = optimize.minimize(neg_loglik, theta0, method='BFGS',
                                options={'maxiter': 1000, 'gtol': 1e-6})
 
-    # BFGS frequently returns ``success=False`` with status 2 ("Desired
-    # error not necessarily achieved due to precision loss") at a perfectly
-    # good optimum of the Tobit log-likelihood — a line-search artefact, not
-    # a real convergence failure (Nelder-Mead reaches the identical objective
-    # and coefficients). Trust a small gradient norm at the optimum instead of
-    # the raw flag so the reported ``converged`` does not spuriously distrust
-    # correct estimates. The estimates themselves are unchanged; only the
-    # boolean flag is made robust.
-    _grad = getattr(result, 'jac', None)
-    grad_norm = (float(np.linalg.norm(_grad))
-                 if _grad is not None else float('inf'))
-    converged = bool(result.success) or (
-        np.isfinite(result.fun) and grad_norm < 1e-3
-    )
+    # BFGS often reports status-2 ("precision loss") at a good Tobit optimum;
+    # derive ``converged`` from the gradient norm so the flag does not
+    # spuriously distrust correct estimates (see robust_convergence).
+    converged, grad_norm = robust_convergence(result)
 
     theta_hat = result.x
     beta = theta_hat[:k]

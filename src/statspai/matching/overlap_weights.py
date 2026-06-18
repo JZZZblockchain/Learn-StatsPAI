@@ -30,7 +30,7 @@ Scores via the Overlap Weights." American Journal of Epidemiology,
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -115,7 +115,11 @@ def overlap_weights(
     if not set(np.unique(T)).issubset({0, 1}):
         raise ValueError(f"Treatment '{treat}' must be binary.")
 
-    def _estimate(X_b, T_b, Y_b):
+    def _estimate(
+        X_b: np.ndarray,
+        T_b: np.ndarray,
+        Y_b: np.ndarray,
+    ) -> Tuple[float, np.ndarray, np.ndarray]:
         ps = _logit_pscore(X_b, T_b)
         if trim > 0:
             ps = np.clip(ps, trim, 1 - trim)
@@ -147,7 +151,9 @@ def overlap_weights(
         ps=pd.Series(ps, index=df.index),
     )
     model_info = {
-        "model_type": "OverlapWeights" if estimand == "ATO" else f"PSWeights_{estimand}",
+        "model_type": (
+            "OverlapWeights" if estimand == "ATO" else f"PSWeights_{estimand}"
+        ),
         "estimand": estimand,
         "n_treated": int(T.sum()),
         "n_control": int((1 - T).sum()),
@@ -178,7 +184,7 @@ def _logit_pscore(X: np.ndarray, T: np.ndarray) -> np.ndarray:
     m = LogisticRegression(max_iter=1000, solver="lbfgs", C=1e6)
     m.fit(X, T)
     p = m.predict_proba(X)[:, 1]
-    return np.clip(p, 1e-8, 1 - 1e-8)
+    return np.asarray(np.clip(p, 1e-8, 1 - 1e-8), dtype=float)
 
 
 def _tilt(e: np.ndarray, estimand: str) -> np.ndarray:
@@ -186,17 +192,21 @@ def _tilt(e: np.ndarray, estimand: str) -> np.ndarray:
     (Li-Morgan-Zaslavsky 2018, Table 1).
     """
     if estimand == "ATE":
-        return np.ones_like(e)
+        return np.asarray(np.ones_like(e), dtype=float)
     if estimand == "ATT":
-        return e
+        return np.asarray(e, dtype=float)
     if estimand == "ATC":
-        return 1.0 - e
+        return np.asarray(1.0 - e, dtype=float)
     if estimand == "ATO":
-        return e * (1.0 - e)  # overlap weight
+        return np.asarray(e * (1.0 - e), dtype=float)  # overlap weight
     if estimand == "MATCHING":
-        return np.minimum(e, 1.0 - e)
+        return np.asarray(np.minimum(e, 1.0 - e), dtype=float)
     if estimand == "ENTROPY":
-        return -(e * np.log(np.clip(e, 1e-12, 1)) + (1 - e) * np.log(np.clip(1 - e, 1e-12, 1)))
+        entropy = (
+            e * np.log(np.clip(e, 1e-12, 1))
+            + (1 - e) * np.log(np.clip(1 - e, 1e-12, 1))
+        )
+        return np.asarray(-entropy, dtype=float)
     raise ValueError(estimand)
 
 

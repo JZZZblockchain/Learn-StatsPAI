@@ -316,7 +316,7 @@ def sun_abraham(
                 W_event[interact_meta.index((g_val, e))] += share
             event_total += 1.0
         if event_total > 0:
-            W_event = W_event / event_total
+            W_event /= event_total
         att_event = float(W_event @ beta_int)
         se_event = float(np.sqrt(max(W_event @ V_int @ W_event, 0.0)))
         summary_stats['event_time'] = (att_event, se_event, W_event)
@@ -338,7 +338,7 @@ def sun_abraham(
                 W_fixest[interact_meta.index((g_val, e))] += count
                 cell_total += count
         if cell_total > 0:
-            W_fixest = W_fixest / cell_total
+            W_fixest /= cell_total
         att_fixest = float(W_fixest @ beta_int)
         se_fixest = float(np.sqrt(max(W_fixest @ V_int @ W_fixest, 0.0)))
         summary_stats['fixest_att'] = (att_fixest, se_fixest, W_fixest)
@@ -420,22 +420,24 @@ def _two_way_demean(
     n_units = len(unit_idx.categories)
     n_times = len(time_idx.categories)
     if n_units <= 1 or n_times <= 1:
-        return x - np.nanmean(x)
+        return np.asarray(x - np.nanmean(x), dtype=float)
 
     u_codes = unit_idx.codes
     t_codes = time_idx.codes
 
     for _ in range(max_iter):
-        u_mean = np.bincount(u_codes, weights=x, minlength=n_units) / \
-                 np.bincount(u_codes, minlength=n_units).clip(min=1)
+        u_count = np.bincount(u_codes, minlength=n_units).clip(min=1)
+        u_mean = np.bincount(u_codes, weights=x, minlength=n_units) / u_count
         x = x - u_mean[u_codes]
-        t_mean = np.bincount(t_codes, weights=x, minlength=n_times) / \
-                 np.bincount(t_codes, minlength=n_times).clip(min=1)
+        t_count = np.bincount(t_codes, minlength=n_times).clip(min=1)
+        t_mean = np.bincount(t_codes, weights=x, minlength=n_times) / t_count
         x = x - t_mean[t_codes]
-        if (np.nanmax(np.abs(u_mean)) < tol and
-                np.nanmax(np.abs(t_mean)) < tol):
+        if (
+            np.nanmax(np.abs(u_mean)) < tol
+            and np.nanmax(np.abs(t_mean)) < tol
+        ):
             break
-    return x
+    return np.asarray(x, dtype=float)
 
 
 # ----------------------------------------------------------------------

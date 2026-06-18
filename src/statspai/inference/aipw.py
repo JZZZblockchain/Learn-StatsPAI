@@ -11,11 +11,12 @@ References
 Robins, J.M., Rotnitzky, A. and Zhao, L.P. (1994).
 "Estimation of Regression Coefficients When Some Regressors Are Not
 Always Observed."
-*Journal of the American Statistical Association*, 89(427), 846-866. [@robins1994estimation]
+*Journal of the American Statistical Association*, 89(427), 846-866.
+[@robins1994estimation]
 
-Glynn, A.N. and Quinn, K.M. (2010).
-"An Introduction to the Augmented Inverse Propensity Weighted Estimator."
-*Political Analysis*, 18(1), 36-56. [@glynn2010introduction]
+Glynn, A.N. and Quinn, K.M. (2010). "An Introduction to the Augmented Inverse
+Propensity Weighted Estimator." *Political Analysis*, 18(1), 36-56.
+[@glynn2010introduction]
 
 Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E.,
 Hansen, C., Newey, W. and Robins, J. (2018).
@@ -23,7 +24,7 @@ Hansen, C., Newey, W. and Robins, J. (2018).
 *The Econometrics Journal*, 21(1), C1-C68. [@chernozhukov2018double]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -124,7 +125,7 @@ def aipw(
     n = len(Y)
 
     if not set(np.unique(D)).issubset({0, 1}):
-        raise ValueError(f"Treatment must be binary (0/1)")
+        raise ValueError("Treatment must be binary (0/1)")
 
     # Cross-fitted predictions
     mu1_hat = np.zeros(n)  # E[Y|X, D=1]
@@ -150,7 +151,7 @@ def aipw(
             X_tr[D_tr == 0], Y_tr[D_tr == 0], X_te)
 
     # Clip propensity scores
-    e_hat = np.clip(e_hat, 0.01, 0.99)
+    np.clip(e_hat, 0.01, 0.99, out=e_hat)
 
     # AIPW influence function
     if estimand == 'ATE':
@@ -216,7 +217,11 @@ def aipw(
     return _result
 
 
-def _fit_propensity(X_train, D_train, X_test):
+def _fit_propensity(
+    X_train: np.ndarray,
+    D_train: np.ndarray,
+    X_test: np.ndarray,
+) -> np.ndarray:
     """Logistic regression propensity score."""
     try:
         import statsmodels.api as sm
@@ -224,12 +229,16 @@ def _fit_propensity(X_train, D_train, X_test):
         X_te = sm.add_constant(X_test)
         logit = sm.Logit(D_train, X_tr)
         res = logit.fit(disp=0, maxiter=300, warn_convergence=False)
-        return np.clip(res.predict(X_te), 0.01, 0.99)
+        return np.asarray(np.clip(res.predict(X_te), 0.01, 0.99), dtype=float)
     except Exception:
         return np.full(len(X_test), np.mean(D_train))
 
 
-def _fit_outcome(X_train, Y_train, X_test):
+def _fit_outcome(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_test: np.ndarray,
+) -> np.ndarray:
     """OLS outcome regression."""
     if len(X_train) < 3:
         return np.full(len(X_test), np.mean(Y_train) if len(Y_train) > 0 else 0)
@@ -239,7 +248,7 @@ def _fit_outcome(X_train, Y_train, X_test):
         X_te = sm.add_constant(X_test)
         ols = sm.OLS(Y_train, X_tr)
         res = ols.fit()
-        return res.predict(X_te)
+        return np.asarray(res.predict(X_te), dtype=float)
     except Exception:
         return np.full(len(X_test), np.mean(Y_train))
 

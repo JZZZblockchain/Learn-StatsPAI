@@ -25,7 +25,7 @@ Kennedy, E. H., Ma, Z., McHugh, M. D., & Small, D. S. (2017).
 treatment effects." JRSS-B, 79(4), 1229-1245. [@kennedy2017parametric]
 """
 
-from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -178,7 +178,7 @@ class DoseResponse:
         n_bootstrap: int = 200,
         alpha: float = 0.05,
         random_state: int = 42,
-    ):
+    ) -> None:
         from sklearn.ensemble import GradientBoostingRegressor
         self.data = data
         self.y = y
@@ -293,7 +293,14 @@ class DoseResponse:
             _citation_key='dose_response',
         )
 
-    def _estimate_curve(self, Y, T, X, dose_grid, n):
+    def _estimate_curve(
+        self,
+        Y: np.ndarray,
+        T: np.ndarray,
+        X: np.ndarray,
+        dose_grid: np.ndarray,
+        n: int,
+    ) -> np.ndarray:
         """Estimate E[Y(t)] at each dose level."""
         from sklearn.base import clone
         # Step 1: Treatment model E[T|X]

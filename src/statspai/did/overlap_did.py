@@ -20,7 +20,6 @@ entry points:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import numpy as np
@@ -263,4 +262,4 @@ def dl_propensity_score(
     )
     clf.fit(X, T)
     probs = clf.predict_proba(X)[:, 1]
-    return np.clip(probs, 0.02, 0.98)
+    return np.asarray(np.clip(probs, 0.02, 0.98), dtype=float)
