@@ -75,7 +75,7 @@ def dgp_did(
 
     if staggered:
         # Group 0 = never-treated (~20% of units); groups 1..n_groups = treated
-        group = rng.integers(0, n_groups + 1, size=n_units)
+        group[:] = rng.integers(0, n_groups + 1, size=n_units)
         treat_times = np.linspace(
             int(n_periods * 0.4), n_periods - 1, n_groups, dtype=int
         )

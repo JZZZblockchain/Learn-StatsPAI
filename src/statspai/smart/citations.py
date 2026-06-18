@@ -23,7 +23,7 @@ Supported formats
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ def bib_for(result: Any) -> Dict[str, Any]:
     # fall back to bibtex-string parsing for legacy result types.
     import inspect
     try:
-        params = inspect.signature(cite_fn).parameters
+        params: Any = inspect.signature(cite_fn).parameters
     except (TypeError, ValueError):
         params = {}
     if "format" in params or "fmt" in params:
@@ -434,7 +434,7 @@ def bib_for(result: Any) -> Dict[str, Any]:
         except Exception:
             pass
     bibtex = cite_fn()
-    return render_citation(bibtex, fmt="json")
+    return cast(Dict[str, Any], render_citation(bibtex, fmt="json"))
 
 
 __all__ = ["render_citation", "bib_for"]

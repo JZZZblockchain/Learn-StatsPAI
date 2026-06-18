@@ -13,7 +13,7 @@ This addresses the #1 pain point for Stata → Python migration:
 pandas' ``read_stata()`` loses variable labels silently.
 """
 
-from typing import Optional, Dict
+from typing import Any, Optional
 from pathlib import Path
 
 import pandas as pd
@@ -22,7 +22,7 @@ import pandas as pd
 def read_data(
     path: str,
     encoding: Optional[str] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     """
     Read data from any common format, preserving variable labels.
@@ -84,7 +84,7 @@ def read_data(
     return df
 
 
-def _read_stata(path, **kwargs):
+def _read_stata(path: str, **kwargs: Any) -> pd.DataFrame:
     """Read .dta with variable labels preserved."""
     import pyreadstat
 
@@ -111,7 +111,7 @@ def _read_stata(path, **kwargs):
         return pd.read_stata(path, **kwargs)
 
 
-def _read_sas(path, **kwargs):
+def _read_sas(path: str, **kwargs: Any) -> pd.DataFrame:
     """Read SAS .sas7bdat with labels."""
     try:
         import pyreadstat
@@ -125,7 +125,7 @@ def _read_sas(path, **kwargs):
         return pd.read_sas(path, **kwargs)
 
 
-def _read_spss(path, **kwargs):
+def _read_spss(path: str, **kwargs: Any) -> pd.DataFrame:
     """Read SPSS .sav with labels."""
     try:
         import pyreadstat

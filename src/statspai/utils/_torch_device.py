@@ -26,12 +26,12 @@ free).
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Any, Optional
 
 _ENV_VAR = "STATSPAI_TORCH_DEVICE"
 
 
-def resolve_torch_device(prefer: Optional[str] = None):
+def resolve_torch_device(prefer: Optional[str] = None) -> Any:
     """Return a ``torch.device`` honouring StatsPAI's opt-in policy.
 
     Parameters
@@ -125,7 +125,7 @@ def torch_device_info() -> str:
     return " | ".join(parts)
 
 
-def _mps_available(torch_mod) -> bool:
+def _mps_available(torch_mod: Any) -> bool:
     """torch.backends.mps was added in 1.12; guard for older builds."""
     backends = getattr(torch_mod, "backends", None)
     mps = getattr(backends, "mps", None) if backends is not None else None

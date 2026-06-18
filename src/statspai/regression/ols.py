@@ -2,7 +2,7 @@
 OLS regression implementation with comprehensive features
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Callable, Dict, List, Optional, cast
 import pandas as pd
 import numpy as np
 from scipy import stats
@@ -20,6 +20,14 @@ from ..exceptions import (
 
 _NORMAL_EQUATION_COND_MAX = 1e8
 _LOW_ORDER_DEP_MAX_WORK = 50_000
+
+_OlsKernel = Callable[
+    [np.ndarray, np.ndarray],
+    tuple[np.ndarray, np.ndarray, np.ndarray],
+]
+_SandwichKernel = Callable[[np.ndarray, np.ndarray, np.ndarray, str], np.ndarray]
+_ClusterMeatKernel = Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]
+_HacMeatKernel = Callable[[np.ndarray, np.ndarray, Optional[int]], np.ndarray]
 
 
 def _validate_analytic_weights(
@@ -292,7 +300,12 @@ def _detect_low_order_linear_dependence(
                     )
 
 
-def _numba_kernels():
+def _numba_kernels() -> tuple[
+    _OlsKernel,
+    _SandwichKernel,
+    _ClusterMeatKernel,
+    _HacMeatKernel,
+]:
     """Load accelerated kernels only when OLS is actually estimated."""
     from ..core._numba_kernels import (
         cluster_meat,
@@ -301,7 +314,12 @@ def _numba_kernels():
         sandwich_hc,
     )
 
-    return ols_fit, sandwich_hc, cluster_meat, hac_meat
+    return (
+        cast(_OlsKernel, ols_fit),
+        cast(_SandwichKernel, sandwich_hc),
+        cast(_ClusterMeatKernel, cluster_meat),
+        cast(_HacMeatKernel, hac_meat),
+    )
 
 
 class OLSEstimator(BaseEstimator):
@@ -315,7 +333,7 @@ class OLSEstimator(BaseEstimator):
         X: np.ndarray,
         robust: str = "nonrobust",
         cluster: Optional[pd.Series] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Estimate OLS parameters
@@ -586,7 +604,7 @@ class OLSEstimator(BaseEstimator):
 
         # Sandwich estimator
         meat = X.T @ np.diag(weights) @ X
-        return XtX_inv @ meat @ XtX_inv
+        return np.asarray(XtX_inv @ meat @ XtX_inv, dtype=float)
 
     def _hac_cov_matrix(
         self,
@@ -617,7 +635,7 @@ class OLSEstimator(BaseEstimator):
             weight = 1 - j / (lags + 1)  # Bartlett kernel
             gamma_sum += weight * (gamma_j + gamma_j.T)
 
-        return XtX_inv @ gamma_sum @ XtX_inv
+        return np.asarray(XtX_inv @ gamma_sum @ XtX_inv, dtype=float)
 
     def _cluster_cov_matrix(
         self,
@@ -645,7 +663,7 @@ class OLSEstimator(BaseEstimator):
         # Finite sample correction
         correction = (n_clusters / (n_clusters - 1)) * ((n - 1) / (n - k))
 
-        return correction * XtX_inv @ meat @ XtX_inv
+        return np.asarray(correction * XtX_inv @ meat @ XtX_inv, dtype=float)
 
 
 class OLSRegression(BaseModel):
@@ -660,7 +678,7 @@ class OLSRegression(BaseModel):
         y: Optional[np.ndarray] = None,
         X: Optional[np.ndarray] = None,
         var_names: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """
         Initialize OLS regression
 
@@ -687,7 +705,11 @@ class OLSRegression(BaseModel):
         self._design_info = None
         self.estimator = OLSEstimator()
 
-    def _resolve_weights(self, weights, design_index):
+    def _resolve_weights(
+        self,
+        weights: Any,
+        design_index: Optional[pd.Index],
+    ) -> np.ndarray:
         """Resolve and validate analytic regression weights (Stata ``aweight``).
 
         Accepts a column name (resolved against ``self.data`` and aligned to the
@@ -706,12 +728,19 @@ class OLSRegression(BaseModel):
             wv = np.asarray(col, dtype=float).ravel()
         else:
             wv = np.asarray(weights, dtype=float).ravel()
+        if self.y is None:
+            raise MethodIncompatibility(
+                "OLS analytic weights cannot be resolved before y is prepared."
+            )
         return _validate_analytic_weights(
             wv, self.y.shape[0], context="OLS analytic weights",
         )
 
     def fit(
-        self, robust: str = "nonrobust", cluster: Optional[str] = None, **kwargs
+        self,
+        robust: str = "nonrobust",
+        cluster: Optional[str] = None,
+        **kwargs: Any,
     ) -> EconometricResults:
         """
         Fit the OLS model
@@ -731,7 +760,7 @@ class OLSRegression(BaseModel):
             Fitted model results
         """
         # Prepare data
-        design_index = None
+        design_index: Optional[pd.Index] = None
         if self.formula is not None and self.data is not None:
             y_df, X_df = create_design_matrices(self.formula, self.data)
             self._design_info = getattr(X_df, "design_info", None)
@@ -768,7 +797,7 @@ class OLSRegression(BaseModel):
             kwargs["weights"] = self._resolve_weights(kwargs["weights"], design_index)
 
         # Handle clustering
-        cluster_var = None
+        cluster_var: Optional[pd.Series] = None
         if cluster and self.data is not None:
             if cluster not in self.data.columns:
                 raise MethodIncompatibility(
@@ -840,7 +869,7 @@ class OLSRegression(BaseModel):
             "BIC": bic,
         }
 
-        self._results = EconometricResults(
+        fitted_result = EconometricResults(
             params=params,
             std_errors=std_errors,
             model_info=model_info,
@@ -848,8 +877,9 @@ class OLSRegression(BaseModel):
             diagnostics=diagnostics,
         )
 
+        self._results = fitted_result
         self.is_fitted = True
-        return self._results
+        return fitted_result
 
     def predict(
         self,
@@ -924,7 +954,13 @@ class OLSRegression(BaseModel):
             if what == "mean" and not return_df:
                 return yhat
             # Fall through to interval machinery using the training design X.
-            X_new = self.X
+            if self.X is None:
+                raise MethodIncompatibility(
+                    "Model design matrix is unavailable for prediction.",
+                    recovery_hint="Refit the model before calling predict().",
+                    diagnostics={"missing_state": "X"},
+                )
+            X_new = np.asarray(self.X, dtype=float)
         else:
             if self.formula is None:
                 raise MethodIncompatibility(
@@ -981,7 +1017,7 @@ class OLSRegression(BaseModel):
                     ),
                     diagnostics={"missing_columns": missing},
                 )
-            X_new = X_df[var_names].values
+            X_new = np.asarray(X_df[var_names].values, dtype=float)
             params = np.asarray(self._results.params)
             yhat = X_new @ params
 
@@ -1056,7 +1092,7 @@ def regress(
     data: pd.DataFrame,
     robust: str = "nonrobust",
     cluster: Optional[str] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> EconometricResults:
     """
     Convenient function for OLS regression

@@ -22,13 +22,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 # ---------------------------------------------------------------------------
 # Result class
 # ---------------------------------------------------------------------------
 
 @dataclass
-class SelectionResult:
+class SelectionResult(ResultProtocolMixin):
     """Result container for variable selection procedures.
 
     Attributes
@@ -63,6 +65,7 @@ class SelectionResult:
     ['adj_r_squared', 'aic', 'bic', 'k', 'n', 'r_squared']
     """
 
+    _citation_keys = ("hastie2009elements",)
     selected: List[str]
     dropped: List[str]
     history: pd.DataFrame

@@ -25,7 +25,7 @@ Usage
 ['variable', 'type', 'n', 'n_missing', 'label']
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, cast
 
 import pandas as pd
 
@@ -117,7 +117,7 @@ def get_label(df: pd.DataFrame, var: str) -> str:
     >>> sp.get_label(df, 'edu')   # unlabeled -> falls back to column name
     'edu'
     """
-    labels = df.attrs.get('_labels', {})
+    labels = cast(Dict[str, str], df.attrs.get('_labels', {}))
     return labels.get(var, var)
 
 
@@ -140,7 +140,7 @@ def get_labels(df: pd.DataFrame) -> Dict[str, str]:
     >>> sp.get_labels(df)
     {'wage': 'Monthly wage (CNY)', 'edu': 'edu'}
     """
-    labels = df.attrs.get('_labels', {})
+    labels = cast(Dict[str, str], df.attrs.get('_labels', {}))
     return {col: labels.get(col, col) for col in df.columns}
 
 
@@ -177,7 +177,7 @@ def describe(
     ['Monthly wage (CNY)', '']
     """
     cols = columns or list(df.columns)
-    labels = df.attrs.get('_labels', {})
+    labels = cast(Dict[str, str], df.attrs.get('_labels', {}))
 
     rows = []
     for col in cols:

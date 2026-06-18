@@ -16,7 +16,7 @@ This is the "is my score of 78/100 good or bad?" answer.
 from __future__ import annotations
 
 import warnings
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, TypedDict, cast
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,22 @@ from .verify import _run_method
 __all__ = ["verify_benchmark"]
 
 
-_SCENARIOS = {
+class _ScenarioSpec(TypedDict, total=False):
+    dgp: str
+    dgp_kwargs: Dict[str, Any]
+    y: str
+    treatment: str
+    design: str
+    true_effect: float
+    id: str
+    time: str
+    running_var: str
+    cutoff: float
+    instrument: str
+    covariates: List[str]
+
+
+_SCENARIOS: Dict[str, _ScenarioSpec] = {
     "rct": {
         "dgp": "dgp_rct",
         "dgp_kwargs": {"n": 500, "effect": 0.5, "n_covariates": 2},
@@ -146,7 +161,7 @@ def verify_benchmark(
     if scenarios is None:
         scenarios = list(_SCENARIOS.keys())
 
-    rows: List[Dict] = []
+    rows: List[Dict[str, object]] = []
 
     for name in scenarios:
         if name not in _SCENARIOS:
@@ -155,7 +170,8 @@ def verify_benchmark(
                 f"Available: {list(_SCENARIOS.keys())}"
             )
         spec = _SCENARIOS[name]
-        dgp_fn = getattr(sp, spec["dgp"])
+        spec_values: Mapping[str, object] = spec
+        dgp_fn = cast(Callable[..., pd.DataFrame], getattr(sp, spec["dgp"]))
 
         if verbose:
             print(f"[verify_benchmark] {name}: {spec['dgp']} "
@@ -164,18 +180,19 @@ def verify_benchmark(
         for rep in range(n_reps):
             df = dgp_fn(**spec["dgp_kwargs"], seed=seed + rep)
 
-            rec_kwargs = {
+            rec_kwargs: Dict[str, object] = {
                 "data": df, "y": spec["y"], "design": spec["design"],
                 "verify": True, "verify_B": verify_B,
                 "verify_budget_s": verify_budget_s, "verify_top_k": 2,
             }
             for k in ("treatment", "id", "time", "running_var", "cutoff",
                       "instrument", "covariates"):
-                if k in spec:
-                    rec_kwargs[k] = spec[k]
+                if k in spec_values:
+                    rec_kwargs[k] = spec_values[k]
 
             try:
-                rec = sp.recommend(**rec_kwargs)
+                recommend_fn = cast(Callable[..., Any], sp.recommend)
+                rec = recommend_fn(**rec_kwargs)
             except Exception as e:
                 rows.append({
                     "scenario": name, "rep": rep, "method": "ERROR",
