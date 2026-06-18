@@ -27,11 +27,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
 from ..exceptions import ConvergenceWarning
 
 
 @dataclass
-class ProxyScoreResult:
+class ProxyScoreResult(ResultProtocolMixin):
     """Per-candidate proxy score for PCI.
 
     Returned by :func:`select_pci_proxies`. Holds the ranked Z- and

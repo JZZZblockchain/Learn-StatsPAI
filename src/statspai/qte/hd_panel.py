@@ -16,9 +16,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class HDPanelQTEResult:
+class HDPanelQTEResult(ResultProtocolMixin):
     """QTE at multiple quantiles with high-dim control selection.
 
     Returned by :func:`sp.qte_hd_panel`. Holds the evaluated

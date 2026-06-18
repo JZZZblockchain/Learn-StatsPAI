@@ -36,9 +36,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class CATEEvalResult:
+class CATEEvalResult(ResultProtocolMixin):
     """Output of :func:`cate_eval`.
 
     Attributes

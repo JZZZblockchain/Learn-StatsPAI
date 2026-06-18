@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, TypeVar
 import numpy as np
 
+from .._result_serialize import ResultProtocolMixin
 from ..exceptions import MethodIncompatibility
 
 RewardModel = Callable[[np.ndarray, Any], Any]
@@ -70,7 +71,7 @@ def _require(value: _T | None, name: str, method: str) -> _T:
 
 
 @dataclass
-class OPEResult:
+class OPEResult(ResultProtocolMixin):
     """Canonical Off-Policy Evaluation result.
 
     All `sp.ope.*` and `sp.direct_method/ips/snips/doubly_robust` estimators

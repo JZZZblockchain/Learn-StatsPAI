@@ -33,13 +33,14 @@ import numpy as np
 import pandas as pd
 
 from .bcf import bcf as _bcf_binary
+from .._result_serialize import ResultProtocolMixin
 
 
 __all__ = ["bcf_factor_exposure", "BCFFactorExposureResult"]
 
 
 @dataclass
-class BCFFactorExposureResult:
+class BCFFactorExposureResult(ResultProtocolMixin):
     """Output of :func:`bcf_factor_exposure`."""
 
     factor_loadings: pd.DataFrame

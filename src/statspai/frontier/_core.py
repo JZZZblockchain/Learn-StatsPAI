@@ -80,7 +80,7 @@ _PHI_FLOOR = 1e-300        # floor for Phi denominator in Jondrow
 def _log_phi_cdf(x: np.ndarray) -> np.ndarray:
     """Numerically-stable log Phi(x)."""
     # scipy's logcdf is accurate in the left tail.
-    return stats.norm.logcdf(x)
+    return np.asarray(stats.norm.logcdf(x), dtype=float)
 
 
 def _phi_over_Phi(x: np.ndarray) -> np.ndarray:
@@ -132,12 +132,13 @@ def loglik_halfnormal(
     sigma = np.sqrt(sigma2)
     lam = sigma_u / sigma_v
     z = sign * eps * lam / sigma
-    return (
+    return np.asarray(
         _LOG_TWO
         - np.log(sigma)
         - 0.5 * _LN_2PI
         - 0.5 * (eps / sigma) ** 2
-        + _log_phi_cdf(z)
+        + _log_phi_cdf(z),
+        dtype=float,
     )
 
 
@@ -159,11 +160,12 @@ def loglik_exponential(
     sigma_v = np.asarray(sigma_v, dtype=float)
     sigma_u = np.asarray(sigma_u, dtype=float)
     arg = sign * eps / sigma_v - sigma_v / sigma_u
-    return (
+    return np.asarray(
         -np.log(sigma_u)
         - sign * eps / sigma_u
         + 0.5 * (sigma_v / sigma_u) ** 2
-        + _log_phi_cdf(arg)
+        + _log_phi_cdf(arg),
+        dtype=float,
     )
 
 
@@ -197,12 +199,13 @@ def loglik_truncated_normal(
     mu_star = (mu * sigma_v**2 + sign * eps * sigma_u**2) / sigma2
     sigma_star = sigma_v * sigma_u / sigma
 
-    return (
+    return np.asarray(
         -0.5 * _LN_2PI
         - np.log(sigma)
         - 0.5 * centered**2
         + _log_phi_cdf(mu_star / sigma_star)
-        - _log_phi_cdf(mu / sigma_u)
+        - _log_phi_cdf(mu / sigma_u),
+        dtype=float,
     )
 
 
@@ -291,7 +294,10 @@ def _posterior_truncnormal_mean(mu: np.ndarray, sigma: np.ndarray) -> np.ndarray
     We clamp to ``>= 0`` to preserve the theoretical support.
     """
     ratio = mu / sigma
-    return np.maximum(mu + sigma * _phi_over_Phi(ratio), 0.0)
+    return np.asarray(
+        np.maximum(mu + sigma * _phi_over_Phi(ratio), 0.0),
+        dtype=float,
+    )
 
 
 def _battese_coelli_te(mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
@@ -312,7 +318,7 @@ def _battese_coelli_te(mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
     # any numerical drift above 1.0 from leaking past the final clip.
     log_te = np.minimum(log_te, 0.0)
     te = np.exp(log_te)
-    return np.clip(te, 0.0, 1.0)
+    return np.asarray(np.clip(te, 0.0, 1.0), dtype=float)
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +423,7 @@ def robust_vcov(
         np.add.at(cluster_scores, cluster_idx, scores)
         B = cluster_scores.T @ cluster_scores
     H_inv = safe_invert_hessian(H)
-    return H_inv @ B @ H_inv
+    return np.asarray(H_inv @ B @ H_inv, dtype=float)
 
 
 def safe_invert_hessian(H: np.ndarray) -> np.ndarray:
@@ -506,8 +512,8 @@ def evaluate_sigma(
     to length n.  Otherwise returns ``exp(design @ gamma)``.
     """
     if design is None:
-        return np.full(n, np.exp(fallback_log_sigma))
-    return np.exp(design @ gamma)
+        return np.full(n, np.exp(fallback_log_sigma), dtype=float)
+    return np.asarray(np.exp(design @ gamma), dtype=float)
 
 
 # ---------------------------------------------------------------------------
@@ -529,9 +535,9 @@ def mixed_chi_bar_pvalue(lr_stat: float, df_boundary: int = 1) -> float:
     if lr_stat <= 0:
         return 1.0
     if df_boundary == 1:
-        return 0.5 * (1.0 - stats.chi2.cdf(lr_stat, df=1))
+        return float(0.5 * (1.0 - stats.chi2.cdf(lr_stat, df=1)))
     # Simpler fallback: use chi2(df_boundary).
-    return 1.0 - stats.chi2.cdf(lr_stat, df=df_boundary)
+    return float(1.0 - stats.chi2.cdf(lr_stat, df=df_boundary))
 
 
 def chi2_pvalue(lr_stat: float, df: int) -> float:

@@ -191,8 +191,13 @@ def many_weak_ar(
         # OLS anchor ± 4 SEs
         b0 = float((D @ Y) / max(D @ D, 1e-6))
         se0 = float(np.std(Y - b0 * D) / np.sqrt(max(n - 1, 1)))
-        beta_grid = np.linspace(b0 - 5 * max(se0, 0.1), b0 + 5 * max(se0, 0.1), 101)
-    beta_grid = np.asarray(beta_grid, dtype=float)
+        beta_values = np.linspace(
+            b0 - 5 * max(se0, 0.1),
+            b0 + 5 * max(se0, 0.1),
+            101,
+        )
+    else:
+        beta_values = np.asarray(beta_grid, dtype=float)
 
     def ar_stat(b: float) -> float:
         resid = Y - b * D
@@ -204,14 +209,14 @@ def many_weak_ar(
         stat = float(ZtEps @ ZtZ_inv @ ZtEps) / max(sigma2, 1e-12)
         return stat
 
-    stats_grid = np.array([ar_stat(b) for b in beta_grid])
+    stats_grid = np.array([ar_stat(float(b)) for b in beta_values])
     crit = float(stats.chi2.ppf(1 - alpha, df=K))
-    accepted = beta_grid[stats_grid <= crit]
+    accepted = beta_values[stats_grid <= crit]
     if accepted.size > 0:
         lo, hi = float(accepted.min()), float(accepted.max())
-        point = float(beta_grid[int(np.argmin(stats_grid))])
+        point = float(beta_values[int(np.argmin(stats_grid))])
     else:
-        lo = hi = point = float(beta_grid[int(np.argmin(stats_grid))])
+        lo = hi = point = float(beta_values[int(np.argmin(stats_grid))])
 
     _result = ManyWeakIVResult(
         estimator="Jackknife AR (grid CS)",
@@ -220,7 +225,7 @@ def many_weak_ar(
         ci=(lo, hi),
         n_obs=n,
         n_instruments=K,
-        detail={"n_grid": int(len(beta_grid))},
+        detail={"n_grid": int(len(beta_values))},
     )
     try:
         from ..output._lineage import attach_provenance as _attach_prov

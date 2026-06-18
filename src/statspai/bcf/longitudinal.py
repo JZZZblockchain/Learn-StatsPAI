@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Sequence
 import numpy as np
 import pandas as pd
 
+from .._result_serialize import ResultProtocolMixin
+
 # sklearn is imported lazily inside the helpers that need it so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
 # file when the user never touches bcf_longitudinal.
@@ -37,8 +39,11 @@ __all__ = ["bcf_longitudinal", "BCFLongResult"]
 
 
 @dataclass
-class BCFLongResult:
+class BCFLongResult(ResultProtocolMixin):
     """Longitudinal BCF output container."""
+
+    _citation_keys = ("prevot2025hierarchical",)
+
     per_time_ate: pd.DataFrame   # columns: time, ate, se, ci_low, ci_high
     average_ate: float
     average_se: float

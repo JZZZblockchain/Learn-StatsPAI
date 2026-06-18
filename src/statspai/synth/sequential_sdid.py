@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 from ..core.results import CausalResult
+from .._result_serialize import ResultProtocolMixin
 from .sdid import sdid as _sdid_base
 
 
@@ -33,7 +34,7 @@ __all__ = ["sequential_sdid", "SequentialSDIDResult"]
 
 
 @dataclass
-class SequentialSDIDResult:
+class SequentialSDIDResult(ResultProtocolMixin):
     """Per-cohort and aggregated output of :func:`sequential_sdid`.
 
     Dataclass container bundling the aggregate ATT / SE / CI with a
@@ -56,6 +57,7 @@ class SequentialSDIDResult:
     >>> summary_text = res.summary()
     """
 
+    _citation_keys = ("arkhangelsky2024sequential",)
     aggregate_att: float
     aggregate_se: float
     aggregate_ci: tuple

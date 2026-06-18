@@ -47,6 +47,7 @@ import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
 
+from .._result_serialize import ResultProtocolMixin
 from ..core.results import EconometricResults
 from ..exceptions import MethodIncompatibility
 from ._core import (
@@ -69,7 +70,7 @@ ThreeLevelBlock = Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarr
 
 
 @dataclass
-class MixedResult:
+class MixedResult(ResultProtocolMixin):
     """
     Container for ``sp.mixed()`` estimation results.
 

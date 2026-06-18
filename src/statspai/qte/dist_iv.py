@@ -19,9 +19,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class DistIVResult:
+class DistIVResult(ResultProtocolMixin):
     """Distributional IV LATE per quantile.
 
     Returned by :func:`dist_iv` (and :func:`kan_dlate`). Holds the local

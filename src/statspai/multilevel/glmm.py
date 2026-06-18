@@ -65,6 +65,7 @@ import pandas as pd
 from scipy import special, stats
 from scipy.optimize import minimize
 
+from .._result_serialize import ResultProtocolMixin
 from ..exceptions import DataInsufficient, MethodIncompatibility
 from ._core import (
     _GroupBlock,
@@ -478,7 +479,7 @@ def _resolve_family(name: str) -> _Family:
 
 
 @dataclass
-class MEGLMResult:
+class MEGLMResult(ResultProtocolMixin):
     """Container for GLMM fits (``meglm``, ``melogit``, ``mepoisson``,
     ``megamma``, ``menbreg``, ``meologit``).
 

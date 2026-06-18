@@ -38,7 +38,6 @@ from typing import Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 
 # ======================================================================
@@ -905,7 +904,7 @@ def rdbwselect(
     )
 
     # --- Count effective observations for each bandwidth ---
-    def _count_effective(h_l, h_r):
+    def _count_effective(h_l: float, h_r: float) -> Tuple[int, int]:
         n_eff_l = int(np.sum((X_c[left] >= -h_l)))
         n_eff_r = int(np.sum((X_c[right] <= h_r)))
         return n_eff_l, n_eff_r

@@ -49,11 +49,14 @@ import pandas as pd
 from scipy import stats
 
 from .._input_validation import clean_frame
+from .._result_serialize import ResultProtocolMixin
 
 
 @dataclass
-class NegativeControlResult:
+class NegativeControlResult(ResultProtocolMixin):
     """Unified result for negative-control procedures."""
+
+    _citation_keys = ("shi2020selective", "miao2018identifying")
 
     method: str
     estimate: float

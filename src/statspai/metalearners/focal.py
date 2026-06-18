@@ -15,9 +15,11 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class FunctionalCATEResult:
+class FunctionalCATEResult(ResultProtocolMixin):
     """Output of FOCaL functional CATE estimator.
 
     Returned by :func:`focal_cate`. Holds the estimated CATE surface

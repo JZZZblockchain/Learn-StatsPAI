@@ -64,6 +64,7 @@ from scipy import stats
 from scipy.special import expit, logit
 
 from ..exceptions import ConvergenceWarning, DataInsufficient, MethodIncompatibility
+from .._result_serialize import ResultProtocolMixin
 
 _LTMLE_ALTERNATIVES = ["sp.ltmle", "sp.tmle.ltmle", "sp.ltmle_survival"]
 
@@ -94,7 +95,9 @@ Regime = Union[
 
 
 @dataclass
-class LTMLEResult:
+class LTMLEResult(ResultProtocolMixin):
+    _citation_keys = ("lendle2017ltmle", "vanderlaan2012targeted")
+
     psi_treated: float
     psi_control: float
     ate: float

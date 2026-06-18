@@ -34,6 +34,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 __all__ = [
     "HeterogeneityResult",
@@ -57,7 +59,13 @@ __all__ = [
 
 
 @dataclass
-class HeterogeneityResult:
+class HeterogeneityResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for Cochran's Q / Rücker's Q' heterogeneity diagnostics.
 
     Returned by :func:`mr_heterogeneity`.  Holds the Q statistic, its
@@ -187,7 +195,13 @@ def mr_heterogeneity(
 
 
 @dataclass
-class PleiotropyResult:
+class PleiotropyResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for the MR-Egger intercept (directional-pleiotropy) test.
 
     Returned by :func:`mr_pleiotropy_egger`.  Holds the fitted Egger
@@ -284,7 +298,13 @@ def mr_pleiotropy_egger(
 
 
 @dataclass
-class LeaveOneOutResult:
+class LeaveOneOutResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for leave-one-out IVW estimates.
 
     Returned by :func:`mr_leave_one_out`.  Wraps a :class:`pandas.DataFrame`
@@ -384,7 +404,13 @@ def mr_leave_one_out(
 
 
 @dataclass
-class SteigerResult:
+class SteigerResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for the Steiger directionality test.
 
     Returned by :func:`mr_steiger`.  Reports whether the assumed causal
@@ -536,7 +562,13 @@ def mr_steiger(
 
 
 @dataclass
-class MRPressoResult:
+class MRPressoResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for MR-PRESSO global test and outlier-corrected estimates.
 
     Returned by :func:`mr_presso`.  Holds the raw IVW estimate, the
@@ -739,7 +771,13 @@ def mr_presso(
 
 
 @dataclass
-class RadialResult:
+class RadialResult(ResultProtocolMixin):
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
     """Container for radial-MR diagnostics.
 
     Returned by :func:`mr_radial`.  Wraps a per-SNP ``table`` (columns

@@ -33,6 +33,7 @@ import pandas as pd
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient
 from .._input_validation import clean_frame
+from .._result_serialize import ResultProtocolMixin
 
 
 __all__ = [
@@ -42,8 +43,11 @@ __all__ = [
 
 
 @dataclass
-class NetworkHTEResult:
+class NetworkHTEResult(ResultProtocolMixin):
     """Output of :func:`network_hte`."""
+
+    _citation_keys = ("wu2025estimating",)
+
     direct_effect: float
     direct_se: float
     spillover_effect: float
@@ -81,8 +85,11 @@ class NetworkHTEResult:
 
 
 @dataclass
-class InwardOutwardResult:
+class InwardOutwardResult(ResultProtocolMixin):
     """Output of :func:`inward_outward_spillover`."""
+
+    _citation_keys = ("fang2025inward",)
+
     inward_effect: float
     outward_effect: float
     inward_se: float

@@ -79,9 +79,9 @@ def _parse_toml(text: str) -> Dict[str, Any]:
             continue
         if "=" not in line:
             continue
-        key, value = line.split("=", 1)
+        key, raw_value = line.split("=", 1)
         key = key.strip()
-        value = value.strip()
+        value: Any = raw_value.strip()
         # Strip inline comment.
         if "#" in value and not (value.startswith('"') or value.startswith("'")):
             value = value.split("#", 1)[0].strip()

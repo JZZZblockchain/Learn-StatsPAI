@@ -35,6 +35,7 @@ import pandas as pd
 
 from ..exceptions import DataInsufficient, MethodIncompatibility
 from .bcf import bcf as _bcf_binary
+from .._result_serialize import ResultProtocolMixin
 
 
 __all__ = ["bcf_ordinal", "BCFOrdinalResult"]
@@ -91,7 +92,7 @@ def _normalize_covariates(raw: CovariatesArg) -> List[str]:
 
 
 @dataclass
-class BCFOrdinalResult:
+class BCFOrdinalResult(ResultProtocolMixin):
     """Output of :func:`bcf_ordinal`.
 
     Attributes
@@ -112,6 +113,8 @@ class BCFOrdinalResult:
     method : str
     diagnostics : dict
     """
+
+    _citation_keys = ("hahn2020bayesian",)
 
     cate: pd.DataFrame
     cate_se: pd.DataFrame

@@ -17,13 +17,14 @@ import pandas as pd
 from scipy import stats
 
 from ._common import as_float_arrays, harmonize_signs
+from ..._result_serialize import ResultProtocolMixin
 
 
 __all__ = ["MRClustResult", "mr_clust"]
 
 
 @dataclass
-class MRClustResult:
+class MRClustResult(ResultProtocolMixin):
     """Output of :func:`mr_clust`.
 
     Attributes

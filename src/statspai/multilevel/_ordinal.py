@@ -260,7 +260,7 @@ def _ordinal_nll(
     nAGQ: int,
     gh_nodes: Optional[np.ndarray],
     gh_log_weights: Optional[np.ndarray],
-):
+) -> float:
     n_thr = K - 1
     beta = theta[:p_fixed]
     delta = theta[p_fixed : p_fixed + n_thr]
@@ -277,7 +277,6 @@ def _ordinal_nll(
         return 1e12
 
     use_aghq = nAGQ > 1
-    sigma2 = float(G[0, 0]) if use_aghq else None
 
     nll = 0.0
     for j, block in enumerate(blocks):
@@ -289,9 +288,14 @@ def _ordinal_nll(
         u_cache[j] = u_hat
 
         if use_aghq:
+            if gh_nodes is None or gh_log_weights is None:
+                return 1e12
+            aghq_nodes = gh_nodes
+            aghq_log_weights = gh_log_weights
+            sigma2 = float(G[0, 0])
             sigma_hat = 1.0 / np.sqrt(max(float(H_j[0, 0]), _EPS))
-            u_grid = float(u_hat[0]) + np.sqrt(2.0) * sigma_hat * gh_nodes
-            log_lik_vals = np.empty(gh_nodes.shape[0])
+            u_grid = float(u_hat[0]) + np.sqrt(2.0) * sigma_hat * aghq_nodes
+            log_lik_vals = np.empty(aghq_nodes.shape[0])
             for k, u_k in enumerate(u_grid):
                 eta_k = block.X @ beta + block.Z[:, 0] * u_k + off
                 log_lik_vals[k] = _ordinal_log_lik(y_c, eta_k, kappa)
@@ -302,8 +306,8 @@ def _ordinal_nll(
             log_terms = (
                 log_lik_vals
                 + log_prior
-                + gh_nodes ** 2
-                + gh_log_weights
+                + aghq_nodes ** 2
+                + aghq_log_weights
                 + 0.5 * (np.log(2.0) + 2.0 * np.log(sigma_hat))
             )
             ll_j = float(special.logsumexp(log_terms))
@@ -313,7 +317,7 @@ def _ordinal_nll(
             quad = float(u_hat @ Ginv @ u_hat)
             ll_j = ll_data - 0.5 * logdet_G - 0.5 * quad - 0.5 * logdet_H
         nll -= ll_j
-    return nll
+    return float(nll)
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +333,6 @@ def _ordinal_glm_init(
     p = X.shape[1]
     beta = np.zeros(p)
     delta = _initial_delta(y_codes, K)
-    n_thr = K - 1
     theta = np.concatenate([beta, delta])
 
     def _nll(th: np.ndarray) -> float:

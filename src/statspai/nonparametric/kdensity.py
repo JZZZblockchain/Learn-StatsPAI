@@ -13,10 +13,12 @@ Silverman, B.W. (1986).
 *Chapman & Hall/CRC*.
 """
 
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+from ..exceptions import MethodIncompatibility
 
 
 class KDensityResult:
@@ -37,7 +39,15 @@ class KDensityResult:
     True
     """
 
-    def __init__(self, grid, density, bandwidth, kernel, n, data):
+    def __init__(
+        self,
+        grid: np.ndarray,
+        density: np.ndarray,
+        bandwidth: float,
+        kernel: str,
+        n: int,
+        data: np.ndarray,
+    ) -> None:
         self.grid = grid
         self.density = density
         self.bandwidth = bandwidth
@@ -57,7 +67,13 @@ class KDensityResult:
         ]
         return "\n".join(lines)
 
-    def plot(self, ax=None, hist=False, rug=False, **kwargs):
+    def plot(
+        self,
+        ax: Any = None,
+        hist: bool = False,
+        rug: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         """Plot the kernel density estimate."""
         try:
             import matplotlib.pyplot as plt
@@ -85,10 +101,10 @@ class KDensityResult:
         return ax
 
 
-def _kernel_fn(u, kernel='gaussian'):
+def _kernel_fn(u: np.ndarray, kernel: str = "gaussian") -> np.ndarray:
     """Evaluate kernel function at u."""
     if kernel == 'gaussian':
-        return stats.norm.pdf(u)
+        return np.asarray(stats.norm.pdf(u), dtype=float)
     elif kernel == 'epanechnikov':
         return np.where(np.abs(u) <= 1, 0.75 * (1 - u**2), 0.0)
     elif kernel == 'uniform':
@@ -103,42 +119,40 @@ def _kernel_fn(u, kernel='gaussian'):
         raise ValueError(f"Unknown kernel: {kernel}")
 
 
-def _silverman_bw(x):
+def _silverman_bw(x: np.ndarray) -> float:
     """Silverman's rule-of-thumb bandwidth."""
     n = len(x)
-    iqr_val = stats.iqr(x)
-    std_val = np.std(x, ddof=1)
+    iqr_val = float(stats.iqr(x))
+    std_val = float(np.std(x, ddof=1))
     sigma = min(std_val, iqr_val / 1.349) if iqr_val > 0 else std_val
     if sigma == 0:
         sigma = 1.0  # constant data fallback
-    return 0.9 * sigma * n**(-1/5)
+    return float(0.9 * sigma * n**(-1/5))
 
 
-def _sheather_jones_bw(x):
+def _sheather_jones_bw(x: np.ndarray) -> float:
     """Sheather-Jones (1991) plug-in bandwidth (simplified)."""
-    from scipy.optimize import brentq
-
     n = len(x)
-    sigma = np.std(x, ddof=1)
-    iqr = stats.iqr(x)
+    sigma = float(np.std(x, ddof=1))
+    iqr = float(stats.iqr(x))
     a = min(sigma, iqr / 1.349) if iqr > 0 else sigma
 
     # Use Silverman as fallback
     if a == 0:
         return _silverman_bw(x)
 
-    return 0.9 * a * n**(-1/5)
+    return float(0.9 * a * n**(-1/5))
 
 
 def kdensity(
-    data: pd.DataFrame = None,
-    x: str = None,
-    bandwidth: float = None,
+    data: Optional[pd.DataFrame] = None,
+    x: Optional[str] = None,
+    bandwidth: Optional[float] = None,
     kernel: str = "gaussian",
     bw_method: str = "silverman",
     n_grid: int = 512,
-    grid: np.ndarray = None,
-    weights: str = None,
+    grid: Optional[np.ndarray] = None,
+    weights: Optional[str] = None,
 ) -> KDensityResult:
     """
     Kernel density estimation.
@@ -189,6 +203,11 @@ def kdensity(
     """
     if data is None:
         raise ValueError("data is required")
+    if x is None:
+        raise MethodIncompatibility(
+            "x is required",
+            recovery_hint="Pass the column name to estimate with x='column'.",
+        )
     if n_grid <= 0:
         raise ValueError("n_grid must be positive")
     if bandwidth is not None and (bandwidth <= 0 or not np.isfinite(bandwidth)):
@@ -220,6 +239,7 @@ def kdensity(
             bandwidth = _sheather_jones_bw(x_data)
         else:
             raise ValueError("bw_method must be one of 'silverman' or 'sheather-jones'")
+    assert bandwidth is not None
 
     if grid is None:
         pad = 3 * bandwidth

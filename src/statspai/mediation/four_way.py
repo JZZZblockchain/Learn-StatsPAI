@@ -39,6 +39,7 @@ import pandas as pd
 from scipy import stats
 
 from .._input_validation import clean_frame
+from .._result_serialize import ResultProtocolMixin
 
 # sklearn is imported lazily inside ``four_way_decomposition`` so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
@@ -46,7 +47,9 @@ from .._input_validation import clean_frame
 
 
 @dataclass
-class FourWayResult:
+class FourWayResult(ResultProtocolMixin):
+    _citation_keys = ("vanderweele2014effect",)
+
     cde: float
     int_ref: float
     int_med: float

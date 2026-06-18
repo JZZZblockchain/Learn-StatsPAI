@@ -30,9 +30,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class SubgroupResult:
+class SubgroupResult(ResultProtocolMixin):
     """Container for subgroup heterogeneity analysis.
 
     Returned by :func:`sp.subgroup_analysis`. Holds one row per subgroup

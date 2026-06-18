@@ -37,9 +37,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class RobustnessResult:
+class RobustnessResult(ResultProtocolMixin):
     """Container for robustness report results.
 
     Returned by :func:`robustness_report`. Holds one row per robustness check

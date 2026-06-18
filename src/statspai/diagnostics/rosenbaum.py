@@ -34,10 +34,14 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class RosenbaumResult:
+class RosenbaumResult(ResultProtocolMixin):
     """Result container for :func:`rosenbaum_bounds`."""
+
+    _citation_keys = ("rosenbaum2002observational",)
 
     gamma_grid: np.ndarray
     pvalue_lower: np.ndarray

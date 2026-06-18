@@ -18,13 +18,14 @@ from scipy import stats
 from scipy.optimize import minimize
 
 from ._common import as_float_arrays, harmonize_signs
+from ..._result_serialize import ResultProtocolMixin
 
 
 __all__ = ["GrappleResult", "grapple"]
 
 
 @dataclass
-class GrappleResult:
+class GrappleResult(ResultProtocolMixin):
     """Output of :func:`grapple`.
 
     Attributes

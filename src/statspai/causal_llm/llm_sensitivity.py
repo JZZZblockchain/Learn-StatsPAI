@@ -10,10 +10,10 @@ outcome). This module proposes domain-aware default values.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 
-_DOMAIN_PRIORS = {
+_DOMAIN_PRIORS: Dict[str, Dict[str, Any]] = {
     "health": {"rho_max": 0.3, "r2": 0.04, "comment":
                "Health behaviours and unmeasured biomarkers typically "
                "leave residual confounding around 30%."},
@@ -134,9 +134,9 @@ def llm_sensitivity_priors(
          "comment": "Generic default for unspecified domain."}
     )
     return SensitivityPriorProposal(
-        rho_max=prior['rho_max'],
-        r2=prior['r2'],
-        rationale=prior['comment'],
+        rho_max=float(prior['rho_max']),
+        r2=float(prior['r2']),
+        rationale=str(prior['comment']),
         domain=domain,
         backend="heuristic",
     )

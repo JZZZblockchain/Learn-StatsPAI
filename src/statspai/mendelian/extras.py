@@ -32,6 +32,8 @@ from typing import List, Optional
 import numpy as np
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 __all__ = [
     "ModeBasedResult",
@@ -49,7 +51,8 @@ __all__ = [
 
 
 @dataclass
-class ModeBasedResult:
+class ModeBasedResult(ResultProtocolMixin):
+    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
     """Result container returned by :func:`mr_mode`.
 
     Holds the mode-based MR point estimate, bootstrap standard error,
@@ -236,7 +239,8 @@ def mr_mode(
 
 
 @dataclass
-class FStatisticResult:
+class FStatisticResult(ResultProtocolMixin):
+    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
     """Result container returned by :func:`mr_f_statistic`.
 
     Summarises instrument strength across SNPs: the mean / min / max

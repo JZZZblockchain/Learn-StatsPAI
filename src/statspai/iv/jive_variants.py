@@ -31,7 +31,7 @@ Hansen, C. and Kozbur, D. (2014). "Instrumental variables estimation
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -74,17 +74,26 @@ class JIVEResult:
         return "\n".join(lines)
 
 
-def _as_matrix(x) -> np.ndarray:
+def _as_matrix(x: Any) -> np.ndarray:
     a = np.asarray(x, dtype=float)
     return a.reshape(-1, 1) if a.ndim == 1 else a
 
 
-def _prep(y, endog, instruments, exog, data, add_const):
-    def grab(v, cols=False):
+def _prep(
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any,
+    data: Optional[pd.DataFrame],
+    add_const: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def grab(v: Any, cols: bool = False) -> np.ndarray:
         if isinstance(v, str):
-            return data[v].values.astype(float)
+            assert data is not None
+            return np.asarray(data[v], dtype=float)
         if cols and isinstance(v, list) and all(isinstance(x, str) for x in v):
-            return data[v].values.astype(float)
+            assert data is not None
+            return np.asarray(data[v].to_numpy(dtype=float), dtype=float)
         return np.asarray(v, dtype=float)
 
     Y = grab(y).reshape(-1)
@@ -106,7 +115,7 @@ def _prep(y, endog, instruments, exog, data, add_const):
     return Y, D, Z, W
 
 
-def _names(obj, prefix, n):
+def _names(obj: Any, prefix: str, n: int) -> list[str]:
     if isinstance(obj, pd.DataFrame):
         return list(obj.columns)
     if isinstance(obj, pd.Series):
@@ -131,8 +140,8 @@ def _first_stage_f(D: np.ndarray, Z: np.ndarray, W: np.ndarray) -> float:
     k = Z.shape[1]
     dfd = max(len(d) - ZW.shape[1], 1)
     if rss_full <= 0 or k <= 0:
-        return np.nan  # pragma: no cover
-    return ((rss_r - rss_full) / k) / (rss_full / dfd)
+        return float("nan")  # pragma: no cover
+    return float(((rss_r - rss_full) / k) / (rss_full / dfd))
 
 
 def _jive_estimate(
@@ -141,7 +150,6 @@ def _jive_estimate(
 ) -> dict:
     n = len(Y)
     p = D.shape[1]
-    k = Z.shape[1]
 
     ZW = np.column_stack([Z, W]) if W.size else Z
     X = np.column_stack([D, W]) if W.size else D
@@ -169,7 +177,6 @@ def _jive_estimate(
         # Kolesár 2013 UJIVE: partial out W first, then JIVE on Z residualised
         if W.size:
             Hw = W @ np.linalg.solve(W.T @ W, W.T)
-            hw = np.clip(np.diag(Hw).copy(), 0, 1 - 1e-8)
             Z_tilde = Z - Hw @ Z
             D_tilde = D - Hw @ D
             Pz = Z_tilde @ np.linalg.solve(Z_tilde.T @ Z_tilde, Z_tilde.T)
@@ -227,7 +234,16 @@ def _jive_estimate(
     )
 
 
-def _run(method, y, endog, instruments, exog, data, add_const, ridge):
+def _run(
+    method: str,
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any,
+    data: Optional[pd.DataFrame],
+    add_const: bool,
+    ridge: float,
+) -> JIVEResult:
     Y, D, Z, W = _prep(y, endog, instruments, exog, data, add_const)
     endog_names = _names(endog, "endog", D.shape[1])
     exog_names = []
@@ -289,22 +305,51 @@ def _run(method, y, endog, instruments, exog, data, add_const, ridge):
     return _result
 
 
-def jive1(y, endog, instruments, exog=None, data=None, add_const=True):
+def jive1(
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any = None,
+    data: Optional[pd.DataFrame] = None,
+    add_const: bool = True,
+) -> JIVEResult:
     """Angrist-Imbens-Krueger (1999) JIVE1."""
     return _run("jive1", y, endog, instruments, exog, data, add_const, ridge=0.0)
 
 
-def ujive(y, endog, instruments, exog=None, data=None, add_const=True):
+def ujive(
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any = None,
+    data: Optional[pd.DataFrame] = None,
+    add_const: bool = True,
+) -> JIVEResult:
     """Kolesár (2013) UJIVE."""
     return _run("ujive", y, endog, instruments, exog, data, add_const, ridge=0.0)
 
 
-def ijive(y, endog, instruments, exog=None, data=None, add_const=True):
+def ijive(
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any = None,
+    data: Optional[pd.DataFrame] = None,
+    add_const: bool = True,
+) -> JIVEResult:
     """Ackerberg-Devereux (2009) IJIVE."""
     return _run("ijive", y, endog, instruments, exog, data, add_const, ridge=0.0)
 
 
-def rjive(y, endog, instruments, exog=None, data=None, add_const=True, ridge: float = 1.0):
+def rjive(
+    y: Any,
+    endog: Any,
+    instruments: Any,
+    exog: Any = None,
+    data: Optional[pd.DataFrame] = None,
+    add_const: bool = True,
+    ridge: float = 1.0,
+) -> JIVEResult:
     """Hansen-Kozbur (2014) Ridge JIVE."""
     return _run("rjive", y, endog, instruments, exog, data, add_const, ridge=float(ridge))
 

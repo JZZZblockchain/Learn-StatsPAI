@@ -17,9 +17,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class BeyondAverageResult:
+class BeyondAverageResult(ResultProtocolMixin):
     """Distributional LATE on compliers.
 
     Returned by :func:`beyond_average_late`; holds the per-quantile complier

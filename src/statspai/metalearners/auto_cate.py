@@ -49,6 +49,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from .._result_serialize import ResultProtocolMixin
 
 # sklearn imports moved to function bodies — keeps ``import statspai``
 # from pulling sklearn.model_selection / sklearn.ensemble through this
@@ -78,7 +79,7 @@ _LEARNER_NAMES = {
 # ---------------------------------------------------------------------------
 
 @dataclass
-class AutoCATEResult:
+class AutoCATEResult(ResultProtocolMixin):
     """Leaderboard + winner from ``sp.auto_cate``.
 
     Attributes

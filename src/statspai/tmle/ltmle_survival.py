@@ -49,6 +49,8 @@ import pandas as pd
 from scipy import stats
 from scipy.special import expit, logit
 
+from .._result_serialize import ResultProtocolMixin
+
 # sklearn is imported lazily inside ``_fit_logit`` so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
 # file when the user never touches ltmle_survival.
@@ -58,7 +60,7 @@ Regime = Union[Sequence[int], Callable[[int, Dict[str, np.ndarray]], np.ndarray]
 
 
 @dataclass
-class LTMLESurvivalResult:
+class LTMLESurvivalResult(ResultProtocolMixin):
     """Counterfactual survival curves and contrasts.
 
     Produced by :func:`ltmle_survival`. Holds the treated/control
@@ -96,6 +98,12 @@ class LTMLESurvivalResult:
     >>> len(res.times)
     3
     """
+
+    _citation_keys = (
+        "vanderlaan2012targeted",
+        "stitelman2010collaborative",
+        "cai2020step",
+    )
 
     times: np.ndarray
     survival_treated: np.ndarray

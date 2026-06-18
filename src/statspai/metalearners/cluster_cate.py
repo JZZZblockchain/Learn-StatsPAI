@@ -16,9 +16,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class ClusterCATEResult:
+class ClusterCATEResult(ResultProtocolMixin):
     """Per-cluster CATE table.
 
     Returned by :func:`cluster_cate`; holds the within-cluster CATE table

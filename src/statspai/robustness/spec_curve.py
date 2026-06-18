@@ -35,13 +35,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 # ---------------------------------------------------------------------------
 # Result container
 # ---------------------------------------------------------------------------
 
 @dataclass
-class SpecCurveResult:
+class SpecCurveResult(ResultProtocolMixin):
     """Holds all specification curve outputs.
 
     Returned by :func:`sp.spec_curve`. Carries one row per specification

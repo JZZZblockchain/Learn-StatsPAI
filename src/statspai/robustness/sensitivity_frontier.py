@@ -32,6 +32,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 __all__ = [
     "copula_sensitivity",
@@ -42,7 +44,7 @@ __all__ = [
 
 
 @dataclass
-class FrontierSensitivityResult:
+class FrontierSensitivityResult(ResultProtocolMixin):
     """Container for frontier sensitivity analysis.
 
     Returned by :func:`copula_sensitivity`, :func:`survival_sensitivity`,
@@ -57,6 +59,11 @@ class FrontierSensitivityResult:
     >>> res.method
     'copula_gaussian'
     """
+    _citation_keys = (
+        "balgi2025sensitivity",
+        "hu2025nonparametric",
+        "baitairian2025calibrating",
+    )
     method: str
     estimate: float
     se: float

@@ -45,13 +45,14 @@ from scipy import stats
 from scipy.optimize import minimize
 
 from ._common import as_float_arrays, harmonize_signs
+from ..._result_serialize import ResultProtocolMixin
 
 
 __all__ = ["MRRapsResult", "mr_raps"]
 
 
 @dataclass
-class MRRapsResult:
+class MRRapsResult(ResultProtocolMixin):
     """Output of :func:`mr_raps`.
 
     Attributes

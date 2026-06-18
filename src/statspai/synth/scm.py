@@ -38,7 +38,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Literal, cast
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -193,7 +193,7 @@ def synth(
     alpha: float = 0.05,
     inference: Optional[str] = None,
     treatment: Optional[str] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> CausalResult:
     """Public ``sp.synth`` entry point — see ``_dispatch_synth_impl`` for
     the full docstring on methods and parameters.
@@ -305,7 +305,7 @@ def _dispatch_synth_impl(
     alpha: float = 0.05,
     inference: Optional[str] = None,
     treatment: Optional[str] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> CausalResult:
     """
     Unified Synthetic Control estimator with multiple method variants.
@@ -555,7 +555,7 @@ def _dispatch_synth_impl(
             treated_unit=treated_unit,
             treatment_time=treatment_time,
             covariates=covariates,
-            variant=method,
+            variant=cast(Literal["demeaned", "detrended"], method),
             penalization=penalization,
             placebo=placebo,
             alpha=alpha,
@@ -573,7 +573,7 @@ def _dispatch_synth_impl(
             treated_unit=treated_unit,
             treatment_time=treatment_time,
             covariates=covariates,
-            variant=method,
+            variant=cast(Literal["unconstrained", "elastic_net"], method),
             placebo=placebo,
             alpha=alpha,
             **kwargs,
@@ -597,7 +597,10 @@ def _dispatch_synth_impl(
     if method == "sdid":
         from .sdid import sdid as _sdid
 
-        se_method = inference or "placebo"
+        se_method = cast(
+            Literal["placebo", "bootstrap", "jackknife"],
+            inference or "placebo",
+        )
         return _sdid(
             data=data,
             outcome=outcome,
@@ -1190,7 +1193,7 @@ class SyntheticControl:
     # Validation & data prep
     # ------------------------------------------------------------------
 
-    def _validate(self):
+    def _validate(self) -> None:
         for col in [self.outcome, self.unit, self.time] + self.covariates:
             if col not in self.data.columns:
                 raise MethodIncompatibility(
@@ -1210,7 +1213,7 @@ class SyntheticControl:
                 },
             )
 
-    def _prepare_matrices(self):
+    def _prepare_matrices(self) -> None:
         """Pivot data into (T x J) outcome matrix and build predictor tables."""
         pivot = self.data.pivot_table(
             index=self.time,
@@ -1442,7 +1445,7 @@ class SyntheticControl:
             return True
         # 'auto': run nested iff predictors come from covariates /
         # special predictors, not purely pre-outcome lags.
-        return self._has_predictors
+        return bool(self._has_predictors)
 
     def fit(self, placebo: bool = True) -> CausalResult:
         """
@@ -1814,10 +1817,10 @@ class SyntheticControl:
 def synthplot(
     result: CausalResult,
     type: str = "trajectory",
-    ax=None,
-    figsize: tuple = (10, 7),
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 7),
     title: Optional[str] = None,
-):
+) -> tuple[Any, Any]:
     """
     Standard synthetic control plots.
 
@@ -1894,7 +1897,14 @@ def synthplot(
     return fig, ax
 
 
-def _trajectory_panel(ax, times, treated, synthetic, treatment_time, treated_unit):
+def _trajectory_panel(
+    ax: Any,
+    times: Any,
+    treated: Any,
+    synthetic: Any,
+    treatment_time: Any,
+    treated_unit: Any,
+) -> None:
     ax.plot(times, treated, color="#2C3E50", linewidth=2, label=str(treated_unit))
     ax.plot(
         times,
@@ -1919,7 +1929,7 @@ def _trajectory_panel(ax, times, treated, synthetic, treatment_time, treated_uni
     ax.spines["right"].set_visible(False)
 
 
-def _gap_panel(ax, times, gap, treatment_time):
+def _gap_panel(ax: Any, times: Any, gap: Any, treatment_time: Any) -> None:
     ax.plot(times, gap, color="#2C3E50", linewidth=2)
     ax.fill_between(times, 0, gap, alpha=0.15, color="#3498DB")
     ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8)

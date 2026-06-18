@@ -46,6 +46,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Classical (non-resampling) adjustments
@@ -253,7 +255,7 @@ def _resample_indices(
 
 
 @dataclass
-class RomanoWolfResult:
+class RomanoWolfResult(ResultProtocolMixin):
     """
     Container for Romano-Wolf multiple hypothesis testing results.
 
@@ -286,6 +288,12 @@ class RomanoWolfResult:
     True
     """
 
+    _citation_keys = (
+        "romano2005exact",
+        "romano2016efficient",
+        "benjamini1995controlling",
+        "clarke2020romano",
+    )
     table: pd.DataFrame
     n_outcomes: int
     n_boot: int

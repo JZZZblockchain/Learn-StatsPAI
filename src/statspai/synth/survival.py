@@ -40,12 +40,14 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from .._result_serialize import ResultProtocolMixin
+
 
 __all__ = ["synth_survival", "SyntheticSurvivalResult"]
 
 
 @dataclass
-class SyntheticSurvivalResult:
+class SyntheticSurvivalResult(ResultProtocolMixin):
     """Output of :func:`synth_survival`.
 
     Exposes the fitted counterfactual survival curve (``s_synth``), the
@@ -78,6 +80,7 @@ class SyntheticSurvivalResult:
     >>> int(len(r.time_grid))
     13
     """
+    _citation_keys = ("han2025synthetic",)
     treated_unit: str
     time_grid: np.ndarray
     s_treated: np.ndarray

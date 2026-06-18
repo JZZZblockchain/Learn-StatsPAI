@@ -57,13 +57,16 @@ from scipy import stats
 
 from ..exceptions import ConvergenceWarning
 from .._input_validation import clean_frame
+from .._result_serialize import ResultProtocolMixin
 # sklearn is imported lazily inside the functions that need it so that
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
 # file when the user never touches proximal_regression.
 
 
 @dataclass
-class ProximalRegResult:
+class ProximalRegResult(ResultProtocolMixin):
+    _citation_keys = ("tchetgentchetgen2024introduction", "cui2024semiparametric")
+
     ate: float
     se: float
     ci: tuple
