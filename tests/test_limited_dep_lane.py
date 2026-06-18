@@ -233,3 +233,77 @@ class TestTruncregConvergence:
     def test_recovers_slope(self, trunc_df):
         r = sp.truncreg(trunc_df, y="y", x=["x1", "x2"], ll=0)
         assert r.params["x1"] == pytest.approx(0.8, abs=0.2)
+
+
+# --------------------------------------------------------------------------
+# Count / proportion MLEs: convergence-flag reliability (shared helper)
+# --------------------------------------------------------------------------
+class TestCountModelConvergence:
+    def _df(self, seed=20260617, n=600):
+        rng = np.random.default_rng(seed)
+        x = rng.normal(size=n)
+        z = rng.normal(size=n)
+        lam = np.exp(0.3 + 0.4 * x)
+        pi = 1.0 / (1.0 + np.exp(-(-0.2 + 0.5 * z)))
+        nb = rng.poisson(rng.gamma(2.0, lam / 2.0))
+        y = np.where(rng.random(n) < pi, 0, nb)
+        return pd.DataFrame({"y": y, "x": x, "z": z})
+
+    def test_zip_converged(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            r = sp.zip_model(formula="y ~ x", data=self._df(), inflate=["z"])
+        assert r.model_info["converged"] is True
+
+    def test_zinb_converged(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            r = sp.zinb(formula="y ~ x", data=self._df(), inflate=["z"])
+        assert r.model_info["converged"] is True
+
+    def test_betareg_converged(self):
+        rng = np.random.default_rng(20260617)
+        n = 600
+        x = rng.normal(size=n)
+        p = 1.0 / (1.0 + np.exp(-(0.5 + 0.8 * x)))
+        y = np.clip(rng.beta(2 * p, 2 * (1 - p)), 1e-4, 1 - 1e-4)
+        r = sp.betareg(pd.DataFrame({"y": y, "x": x}), y="y", x=["x"])
+        assert r.model_info["converged"] is True
+        assert r.params["x"] == pytest.approx(0.8, abs=0.25)
+
+
+# --------------------------------------------------------------------------
+# Bivariate probit: error-correlation rho must actually be estimated
+# (regression test: rho was previously pinned at 0 by a noisy BVN CDF).
+# --------------------------------------------------------------------------
+class TestBiprobitRho:
+    def _make(self, seed, correlated):
+        rng = np.random.default_rng(seed)
+        n = 800
+        x1 = rng.normal(size=n)
+        x2 = rng.normal(size=n)
+        u = rng.normal(size=n)
+        v = (0.5 * u if correlated else 0.0) + rng.normal(size=n)
+        y1 = ((0.3 + 0.6 * x1 + u) > 0).astype(int)
+        y2 = ((-0.2 + 0.5 * x2 + v) > 0).astype(int)
+        return pd.DataFrame({"y1": y1, "y2": y2, "x1": x1, "x2": x2})
+
+    def test_rho_recovered_when_correlated(self):
+        from statspai.regression.selection import biprobit
+
+        r = biprobit(self._make(0, True), y1="y1", y2="y2", x1=["x1"], x2=["x2"])
+        # true corr(u, v) = 0.5 / sqrt(1.25) ~= 0.447
+        assert r.model_info["rho"] == pytest.approx(0.447, abs=0.12)
+        assert r.model_info["rho_test_p"] < 0.01  # correlation detected
+        assert r.model_info["converged"] is True
+
+    def test_rho_near_zero_when_independent(self):
+        from statspai.regression.selection import biprobit
+
+        r = biprobit(self._make(99, False), y1="y1", y2="y2", x1=["x1"], x2=["x2"])
+        assert abs(r.model_info["rho"]) < 0.1
+        assert r.model_info["rho_test_p"] > 0.05  # independence not rejected
