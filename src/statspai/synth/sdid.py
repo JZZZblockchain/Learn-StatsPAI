@@ -598,7 +598,15 @@ jsonlite::write_json(
 # ======================================================================
 
 
-def synthdid_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
+def synthdid_estimate(
+    data: pd.DataFrame,
+    y: str,
+    unit: str,
+    time: str,
+    treat_unit: Any,
+    treat_time: Any,
+    **kw: Any,
+) -> CausalResult:
     """R-style alias: ``synthdid::synthdid_estimate``.
 
     Examples
@@ -624,7 +632,15 @@ def synthdid_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
     return sdid(data, y, unit, time, treat_unit, treat_time, method="sdid", **kw)
 
 
-def sc_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
+def sc_estimate(
+    data: pd.DataFrame,
+    y: str,
+    unit: str,
+    time: str,
+    treat_unit: Any,
+    treat_time: Any,
+    **kw: Any,
+) -> CausalResult:
     """R-style alias: ``synthdid::sc_estimate``.
 
     Examples
@@ -650,7 +666,15 @@ def sc_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
     return sdid(data, y, unit, time, treat_unit, treat_time, method="sc", **kw)
 
 
-def did_estimate(data, y, unit, time, treat_unit, treat_time, **kw):
+def did_estimate(
+    data: pd.DataFrame,
+    y: str,
+    unit: str,
+    time: str,
+    treat_unit: Any,
+    treat_time: Any,
+    **kw: Any,
+) -> CausalResult:
     """R-style alias: ``synthdid::did_estimate``.
 
     Examples
@@ -689,7 +713,7 @@ def synthdid_placebo(
     treat_unit: Any,
     treat_time: Any,
     method: Literal["sdid", "sc", "did"] = "sdid",
-    **kw,
+    **kw: Any,
 ) -> pd.DataFrame:
     """
     Run placebo estimates assigning treatment to each control unit.
@@ -737,10 +761,10 @@ def synthdid_placebo(
     control_data = data[~data[unit].isin(treat_unit)]
 
     # Merge defaults with caller overrides
-    placebo_kw = {"n_reps": 50}
+    placebo_kw: dict[str, Any] = {"n_reps": 50}
     placebo_kw.update(kw)
 
-    rows = []
+    rows: list[dict[str, Any]] = []
     for cu in control_units:
         try:
             r = sdid(
@@ -774,13 +798,13 @@ def synthdid_placebo(
 
 def synthdid_plot(
     result: CausalResult,
-    ax=None,
-    figsize: tuple = (10, 6),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     treated_color: str = "#2C3E50",
     synth_color: str = "#E74C3C",
     ci_alpha: float = 0.15,
     title: Optional[str] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Plot observed vs synthetic trajectory.
 
@@ -873,7 +897,7 @@ def synthdid_plot(
             )
 
     ax.set_xlabel("Time", fontsize=11)
-    ax.set_ylabel(f"Outcome", fontsize=11)
+    ax.set_ylabel("Outcome", fontsize=11)
     label = mi.get("estimator_label", result.method)
     ax.set_title(title or f"{label}: ATT = {result.estimate:.3f}", fontsize=13)
     ax.legend(fontsize=9, frameon=False)
@@ -886,9 +910,9 @@ def synthdid_plot(
 def synthdid_units_plot(
     result: CausalResult,
     top_n: int = 10,
-    ax=None,
-    figsize: tuple = (8, 5),
-):
+    ax: Any = None,
+    figsize: Tuple[float, float] = (8, 5),
+) -> Tuple[Any, Any]:
     """
     Horizontal bar chart of unit weight contributions.
 
@@ -951,9 +975,9 @@ def synthdid_units_plot(
 
 def synthdid_rmse_plot(
     result: CausalResult,
-    ax=None,
-    figsize: tuple = (8, 5),
-):
+    ax: Any = None,
+    figsize: Tuple[float, float] = (8, 5),
+) -> Tuple[Any, Any]:
     """
     Pre-treatment RMSE of treated vs synthetic trajectory.
 
@@ -1223,7 +1247,10 @@ def _estimate_tau(
     y_tr_pre_lam = float(Y_tr_pre.mean(axis=0) @ lam)
     y_co_pre_omega_lam = float(omega @ (Y_co_pre @ lam))
 
-    return (y_tr_post_mean - y_co_post_omega) - (y_tr_pre_lam - y_co_pre_omega_lam)
+    return float(
+        (y_tr_post_mean - y_co_post_omega)
+        - (y_tr_pre_lam - y_co_pre_omega_lam)
+    )
 
 
 def _solve_unit_weights(
@@ -1345,13 +1372,13 @@ def _sparsify_function(weights: np.ndarray) -> np.ndarray:
 
 
 def _se_placebo(
-    Y_co_pre,
-    Y_co_post,
-    Y_tr_pre,
-    Y_tr_post,
-    method,
-    n_co,
-    T_pre,
+    Y_co_pre: np.ndarray,
+    Y_co_post: np.ndarray,
+    Y_tr_pre: np.ndarray,
+    Y_tr_post: np.ndarray,
+    method: str,
+    n_co: int,
+    T_pre: int,
 ) -> Tuple[float, np.ndarray]:
     """
     Deterministic placebo SE: assign treatment to each control unit in turn.
@@ -1361,7 +1388,7 @@ def _se_placebo(
     comparison therefore treats the SE as a small Monte Carlo/convention
     tolerance while holding the ATT itself to strict reference parity.
     """
-    taus = []
+    taus: list[float] = []
     for i in range(n_co):
         Y_pl_tr_pre = Y_co_pre[i : i + 1, :]
         Y_pl_tr_post = Y_co_post[i : i + 1, :]
@@ -1391,28 +1418,26 @@ def _se_placebo(
         except Exception:
             continue
 
-    taus = np.array(taus)
-    se = float(np.std(taus, ddof=1)) if len(taus) > 1 else 0.0
-    return se, taus
+    taus_arr = np.asarray(taus, dtype=float)
+    se = float(np.std(taus_arr, ddof=1)) if len(taus_arr) > 1 else 0.0
+    return se, taus_arr
 
 
 def _se_bootstrap(
-    Y_co_pre,
-    Y_co_post,
-    Y_tr_pre,
-    Y_tr_post,
-    method,
-    n_co,
-    T_pre,
-    n_reps,
-    rng,
+    Y_co_pre: np.ndarray,
+    Y_co_post: np.ndarray,
+    Y_tr_pre: np.ndarray,
+    Y_tr_post: np.ndarray,
+    method: str,
+    n_co: int,
+    T_pre: int,
+    n_reps: int,
+    rng: np.random.Generator,
 ) -> Tuple[float, np.ndarray]:
     """
     Bootstrap SE: resample control units with replacement.
     """
     taus = np.zeros(n_reps)
-    y_tr_pre_mean = Y_tr_pre.mean(axis=0)
-
     for b in range(n_reps):
         idx = rng.choice(n_co, size=n_co, replace=True)
         Y_co_pre_b = Y_co_pre[idx]
@@ -1444,18 +1469,18 @@ def _se_bootstrap(
 
 
 def _se_jackknife(
-    Y_co_pre,
-    Y_co_post,
-    Y_tr_pre,
-    Y_tr_post,
-    method,
-    n_co,
-    T_pre,
+    Y_co_pre: np.ndarray,
+    Y_co_post: np.ndarray,
+    Y_tr_pre: np.ndarray,
+    Y_tr_post: np.ndarray,
+    method: str,
+    n_co: int,
+    T_pre: int,
 ) -> Tuple[float, np.ndarray]:
     """
     Jackknife SE: leave-one-control-unit-out.
     """
-    taus = []
+    taus: list[float] = []
     for i in range(n_co):
         idx = [j for j in range(n_co) if j != i]
         Y_co_pre_j = Y_co_pre[idx]
@@ -1483,14 +1508,14 @@ def _se_jackknife(
         except Exception:
             continue
 
-    taus = np.array(taus)
-    n = len(taus)
+    taus_arr = np.asarray(taus, dtype=float)
+    n = len(taus_arr)
     if n > 1:
-        tau_bar = taus.mean()
-        se = float(np.sqrt((n - 1) / n * np.sum((taus - tau_bar) ** 2)))
+        tau_bar = float(taus_arr.mean())
+        se = float(np.sqrt((n - 1) / n * np.sum((taus_arr - tau_bar) ** 2)))
     else:
         se = 0.0
-    return se, taus
+    return se, taus_arr
 
 
 # ======================================================================

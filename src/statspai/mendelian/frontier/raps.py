@@ -20,7 +20,8 @@ Same structural model as GRAPPLE:
 .. math::
 
    \\beta_{y,i} = \\beta \\beta_{x,i} + u_i,
-   \\qquad u_i \\sim \\mathcal{N}(0, s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2).
+   \\qquad u_i \\sim \\mathcal{N}(
+   0, s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2).
 
 MR-RAPS replaces the sum of log-Gaussian contributions with a sum of
 Tukey biweight contributions on the standardised residual:
@@ -28,7 +29,8 @@ Tukey biweight contributions on the standardised residual:
 .. math::
 
    \\ell_i(\\beta,\\tau^2) = \\rho_c\\!\\Big(
-     \\frac{\\beta_{y,i} - \\beta\\beta_{x,i}}{\\sqrt{s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2}}
+     \\frac{\\beta_{y,i} - \\beta\\beta_{x,i}}
+     {\\sqrt{s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2}}
      \\Big)
 
 with :math:`\\rho_c(r)` the Tukey biweight with tuning constant c.
@@ -264,7 +266,10 @@ def mr_raps(
     # ∂r/∂β at fixed τ²:
     #   r = (by - β bx) / sqrt(vy + β² vx + τ²)
     #   dr/dβ = [-bx * sigma - (by - β bx) * (β vx / sigma)] / sigma²
-    drdb = (-bx * sigma - (by - beta_hat * bx) * (beta_hat * vx / sigma)) / sigma2
+    drdb = (
+        -bx * sigma
+        - (by - beta_hat * bx) * (beta_hat * vx / sigma)
+    ) / sigma2
     psi = _tukey_psi(r, tuning_c)
     psi_prime = _tukey_psi_prime(r, tuning_c)
     J = float(np.sum(psi_prime * drdb ** 2))

@@ -125,7 +125,8 @@ def grapple(
     .. math::
 
        \\beta_{y,i} = \\beta \\, \\beta_{x,i} + u_i,
-       \\qquad u_i \\sim \\mathcal{N}(0,\\ s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2)
+       \\qquad u_i \\sim \\mathcal{N}(
+       0,\\ s_{y,i}^2 + \\beta^2 s_{x,i}^2 + \\tau^2)
 
     The variance term :math:`\\beta^2 s_{x,i}^2` is the weak-instrument
     measurement-error correction (cf. Bowden 2019 "MR with measurement
@@ -199,7 +200,7 @@ def grapple(
     # Observed Fisher info at MLE (numerical second derivative)
     h = max(abs(beta_hat) * 1e-4, 1e-6)
 
-    def _nll_beta(b):
+    def _nll_beta(b: float) -> float:
         return _grapple_nll(np.array([b, np.log(tau2_hat)]), bx, by, vx, vy)
 
     d2 = (

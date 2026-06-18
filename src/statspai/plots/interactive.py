@@ -29,11 +29,11 @@ GUI with editing controls.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from enum import Enum, auto
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
-from enum import Enum, auto
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ def _get_chinese_sans() -> List[str]:
     return result
 
 
-FONT_PRESETS = {
+FONT_PRESETS: Dict[str, Dict[str, Any]] = {
     # --- Serif fonts ---
     'Times New Roman': {
         'family': 'serif',
@@ -169,7 +169,7 @@ FONT_PRESETS = {
 
 # Size presets — independent of font choice.
 # Users pick a font, then pick a size context.
-SIZE_PRESETS = {
+SIZE_PRESETS: Dict[str, Dict[str, Any]] = {
     'Journal (compact)': {
         'title_size': 9, 'label_size': 8, 'tick_size': 7,
         'desc': 'Nature / Science / small figures',
@@ -197,7 +197,7 @@ SIZE_PRESETS = {
 }
 
 # Backward compatibility aliases (old keys → new keys)
-_PRESET_ALIASES = {
+_PRESET_ALIASES: Dict[str, str] = {
     'AER / Econometrica': 'Times New Roman',
     'APA (7th ed.)': 'Times New Roman',
     'Nature / Science': 'Helvetica',
@@ -211,10 +211,11 @@ _PRESET_ALIASES = {
 }
 
 
-def _resolve_preset_fonts(preset: Dict) -> List[str]:
+def _resolve_preset_fonts(preset: Dict[str, Any]) -> List[str]:
     """Resolve None font lists to auto-detected Chinese fonts."""
-    if preset['fonts'] is not None:
-        return preset['fonts']
+    fonts = preset['fonts']
+    if fonts is not None:
+        return list(fonts)
     if preset['family'] == 'serif':
         return _get_chinese_serif()
     return _get_chinese_sans()
@@ -226,7 +227,7 @@ def _build_font_choices() -> Dict[str, List[str]]:
     detected = _detect_chinese_fonts()
 
     # Build Chinese choices with display names
-    cn_fonts = []
+    cn_fonts: List[str] = []
     _cn_display = {
         'Songti SC': 'Songti SC (宋体)',
         'SimSun': 'SimSun (宋体)',
@@ -246,7 +247,7 @@ def _build_font_choices() -> Dict[str, List[str]]:
         'Noto Sans CJK SC': 'Noto Sans CJK SC (思源黑体)',
         'WenQuanYi Micro Hei': 'WenQuanYi Micro Hei (文泉驿)',
     }
-    seen = set()
+    seen: set[str] = set()
     for f in detected['serif'] + detected['sans-serif']:
         if f not in seen:
             seen.add(f)
@@ -272,7 +273,7 @@ def _build_font_choices() -> Dict[str, List[str]]:
 
 
 # Lazy-initialized on first access
-_font_choices_cache = None
+_font_choices_cache: Optional[Dict[str, List[str]]] = None
 
 
 def get_font_choices() -> Dict[str, List[str]]:
@@ -309,7 +310,7 @@ class EditRecord:
     new_value: Any
     code_line: str       # Reproducible matplotlib code
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
         return {
             'target': self.target_desc,
@@ -320,7 +321,7 @@ class EditRecord:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> 'EditRecord':
+    def from_dict(cls, d: Dict[str, Any]) -> 'EditRecord':
         """Deserialize from a dictionary."""
         return cls(
             target_desc=d['target'],
@@ -375,10 +376,10 @@ class FigureEditor:
     edits: List[EditRecord] = field(default_factory=list)
     artist_roles: Dict[int, ArtistRole] = field(default_factory=dict)
     _original_state: Dict[str, Any] = field(default_factory=dict)
-    _on_refresh_callbacks: List = field(default_factory=list)
+    _on_refresh_callbacks: List[Any] = field(default_factory=list)
     _redo_stack: List[EditRecord] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._classify_artists()
         self._snapshot_state()
 
@@ -386,10 +387,8 @@ class FigureEditor:
     # Artist classification
     # ------------------------------------------------------------------
 
-    def _classify_artists(self):
+    def _classify_artists(self) -> None:
         """Classify all artists in the figure by their role."""
-        import matplotlib.collections as mcoll
-
         for ax in self.fig.get_axes():
             # Title and labels -> LABEL
             self.artist_roles[id(ax.title)] = ArtistRole.LABEL
@@ -427,7 +426,7 @@ class FigureEditor:
         if self.fig._suptitle is not None:
             self.artist_roles[id(self.fig._suptitle)] = ArtistRole.LABEL
 
-    def _classify_line(self, line, ax) -> ArtistRole:
+    def _classify_line(self, line: Any, ax: Any) -> ArtistRole:
         """
         Classify a Line2D artist using label hints, then heuristics.
 
@@ -477,7 +476,7 @@ class FigureEditor:
         # 5. Default: treat as DATA (safe — locks it)
         return ArtistRole.DATA
 
-    def _classify_collection(self, coll, ax) -> ArtistRole:
+    def _classify_collection(self, coll: Any, ax: Any) -> ArtistRole:
         """Classify a Collection artist (scatter, fill_between, etc.)."""
         import matplotlib.collections as mcoll
 
@@ -495,7 +494,7 @@ class FigureEditor:
 
         return ArtistRole.COSMETIC
 
-    def is_editable(self, artist) -> bool:
+    def is_editable(self, artist: Any) -> bool:
         """Check if an artist's data/position can be modified."""
         role = self.artist_roles.get(id(artist), ArtistRole.COSMETIC)
         if not self.protect_data:
@@ -506,9 +505,9 @@ class FigureEditor:
     # State snapshot (for diffing / undo)
     # ------------------------------------------------------------------
 
-    def _snapshot_state(self):
+    def _snapshot_state(self) -> None:
         """Capture the initial state of all editable properties."""
-        state = {}
+        state: Dict[str, Any] = {}
         for i, ax in enumerate(self.fig.get_axes()):
             prefix = f'ax{i}' if i > 0 else 'ax'
             state[f'{prefix}.title.text'] = ax.get_title()
@@ -580,7 +579,7 @@ class FigureEditor:
     # Edit recording (clears redo stack on new edits)
     # ------------------------------------------------------------------
 
-    def _record_edit(self, edit: EditRecord):
+    def _record_edit(self, edit: EditRecord) -> None:
         """Append an edit and clear the redo stack (new edit invalidates redo)."""
         self._redo_stack.clear()
         self.edits.append(edit)
@@ -589,7 +588,8 @@ class FigureEditor:
     # Edit operations (all record history)
     # ------------------------------------------------------------------
 
-    def set_title(self, text: str, ax_index: int = 0, **kwargs):
+    def set_title(self, text: str, ax_index: int = 0,
+                  **kwargs: Any) -> None:
         """Set axis title with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -605,7 +605,8 @@ class FigureEditor:
             f'{prefix}.title', 'text', old, text, code))
         self._refresh()
 
-    def set_xlabel(self, text: str, ax_index: int = 0, **kwargs):
+    def set_xlabel(self, text: str, ax_index: int = 0,
+                   **kwargs: Any) -> None:
         """Set x-axis label with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -621,7 +622,8 @@ class FigureEditor:
             f'{prefix}.xlabel', 'text', old, text, code))
         self._refresh()
 
-    def set_ylabel(self, text: str, ax_index: int = 0, **kwargs):
+    def set_ylabel(self, text: str, ax_index: int = 0,
+                   **kwargs: Any) -> None:
         """Set y-axis label with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -637,14 +639,15 @@ class FigureEditor:
             f'{prefix}.ylabel', 'text', old, text, code))
         self._refresh()
 
-    def set_xlim(self, left: float, right: float, ax_index: int = 0):
+    def set_xlim(self, left: float, right: float,
+                 ax_index: int = 0) -> None:
         """Set x-axis limits with tracking and data protection."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
 
         if self.protect_data:
             data_min, data_max = self._get_data_range(ax, 'x')
-            if data_min is not None:
+            if data_min is not None and data_max is not None:
                 # Add 2% margin so edge points aren't clipped by markers
                 margin = (data_max - data_min) * 0.02
                 safe_min = data_min - margin
@@ -670,14 +673,15 @@ class FigureEditor:
             f"{prefix}.set_xlim({l_str}, {r_str})"))
         self._refresh()
 
-    def set_ylim(self, bottom: float, top: float, ax_index: int = 0):
+    def set_ylim(self, bottom: float, top: float,
+                 ax_index: int = 0) -> None:
         """Set y-axis limits with tracking and data protection."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
 
         if self.protect_data:
             data_min, data_max = self._get_data_range(ax, 'y')
-            if data_min is not None:
+            if data_min is not None and data_max is not None:
                 margin = (data_max - data_min) * 0.02
                 safe_min = data_min - margin
                 safe_max = data_max + margin
@@ -701,7 +705,8 @@ class FigureEditor:
             f"{prefix}.set_ylim({b_str}, {t_str})"))
         self._refresh()
 
-    def set_fontsize(self, target: str, size: float, ax_index: int = 0):
+    def set_fontsize(self, target: str, size: float,
+                     ax_index: int = 0) -> None:
         """Set font size for a named target."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -731,7 +736,7 @@ class FigureEditor:
         self._refresh()
 
     def set_font(self, font_family: str, font_name: Optional[str] = None,
-                 ax_index: int = 0):
+                 ax_index: int = 0) -> None:
         """
         Set font family for an axis (title, labels, ticks).
 
@@ -807,7 +812,8 @@ class FigureEditor:
             code))
         self._refresh()
 
-    def apply_font_preset(self, preset_name: str, ax_index: int = 0):
+    def apply_font_preset(self, preset_name: str,
+                          ax_index: int = 0) -> None:
         """
         Apply a font preset for a specific journal/thesis style.
 
@@ -878,7 +884,8 @@ class FigureEditor:
             f'{prefix}.font_preset', 'preset', None, preset_name, code))
         self._refresh()
 
-    def apply_size_preset(self, preset_name: str, ax_index: int = 0):
+    def apply_size_preset(self, preset_name: str,
+                          ax_index: int = 0) -> None:
         """
         Apply a size-only preset (does NOT change font family/name).
 
@@ -905,7 +912,8 @@ class FigureEditor:
         self.set_fontsize('ylabel', sp['label_size'], ax_index)
         self.set_fontsize('ticks', sp['tick_size'], ax_index)
 
-    def set_color(self, target: str, color: str, ax_index: int = 0):
+    def set_color(self, target: str, color: str,
+                  ax_index: int = 0) -> None:
         """Set color for a named target."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -936,7 +944,7 @@ class FigureEditor:
         self._refresh()
 
     def set_spine_visible(self, spine_name: str, visible: bool,
-                          ax_index: int = 0):
+                          ax_index: int = 0) -> None:
         """Toggle spine visibility."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -947,7 +955,8 @@ class FigureEditor:
             f"{prefix}.spines[{spine_name!r}].set_visible({visible})"))
         self._refresh()
 
-    def set_grid(self, visible: bool, ax_index: int = 0, **kwargs):
+    def set_grid(self, visible: bool, ax_index: int = 0,
+                 **kwargs: Any) -> None:
         """Toggle grid with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -962,7 +971,7 @@ class FigureEditor:
             f'{prefix}.grid', 'visible', not visible, visible, code))
         self._refresh()
 
-    def set_figsize(self, width: float, height: float):
+    def set_figsize(self, width: float, height: float) -> None:
         """Set figure size with tracking."""
         old = tuple(self.fig.get_size_inches())
         self.fig.set_size_inches(width, height)
@@ -973,7 +982,7 @@ class FigureEditor:
             f"fig.set_size_inches({w_str}, {h_str})"))
         self._refresh()
 
-    def set_legend(self, ax_index: int = 0, **kwargs):
+    def set_legend(self, ax_index: int = 0, **kwargs: Any) -> None:
         """Update legend properties."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -996,7 +1005,7 @@ class FigureEditor:
         self._refresh()
 
     def set_linewidth(self, line_index: int, width: float,
-                      ax_index: int = 0):
+                      ax_index: int = 0) -> None:
         """Set line width with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1009,7 +1018,7 @@ class FigureEditor:
         self._refresh()
 
     def set_linestyle(self, line_index: int, style: str,
-                      ax_index: int = 0):
+                      ax_index: int = 0) -> None:
         """Set line style with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1022,7 +1031,8 @@ class FigureEditor:
             f'{prefix}.line{line_index}', 'linestyle', old, style, code))
         self._refresh()
 
-    def set_alpha(self, target: str, alpha: float, ax_index: int = 0):
+    def set_alpha(self, target: str, alpha: float,
+                  ax_index: int = 0) -> None:
         """Set alpha (transparency) for a target element."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1056,7 +1066,7 @@ class FigureEditor:
         self._refresh()
 
     def set_scatter_color(self, scatter_index: int, color: str,
-                          ax_index: int = 0):
+                          ax_index: int = 0) -> None:
         """Set scatter (PathCollection) facecolor with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1071,7 +1081,7 @@ class FigureEditor:
         self._refresh()
 
     def set_marker(self, line_index: int, marker: str,
-                   ax_index: int = 0):
+                   ax_index: int = 0) -> None:
         """Set line marker with tracking."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1084,7 +1094,7 @@ class FigureEditor:
             f'{prefix}.line{line_index}', 'marker', old, marker, code))
         self._refresh()
 
-    def set_dpi(self, dpi: int):
+    def set_dpi(self, dpi: int) -> None:
         """Set figure DPI with tracking."""
         old = self.fig.dpi
         self.fig.set_dpi(dpi)
@@ -1094,7 +1104,7 @@ class FigureEditor:
         self._refresh()
 
     def set_background_color(self, color: str, target: str = 'figure',
-                             ax_index: int = 0):
+                             ax_index: int = 0) -> None:
         """Set background color for figure or axes."""
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
         if target == 'figure':
@@ -1112,7 +1122,7 @@ class FigureEditor:
         self._refresh()
 
     def set_tick_rotation(self, axis: str, angle: float,
-                          ax_index: int = 0):
+                          ax_index: int = 0) -> None:
         """Set tick label rotation."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1130,7 +1140,7 @@ class FigureEditor:
             f'{prefix}.{axis}ticks', 'rotation', old, angle, code))
         self._refresh()
 
-    def set_title_weight(self, weight: str, ax_index: int = 0):
+    def set_title_weight(self, weight: str, ax_index: int = 0) -> None:
         """Set title font weight (normal/bold)."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1141,7 +1151,7 @@ class FigureEditor:
             f'{prefix}.title', 'fontweight', old, weight, code))
         self._refresh()
 
-    def set_legend_visible(self, visible: bool, ax_index: int = 0):
+    def set_legend_visible(self, visible: bool, ax_index: int = 0) -> None:
         """Show or hide the legend."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
@@ -1162,11 +1172,11 @@ class FigureEditor:
     def set_grid_style(self, color: Optional[str] = None,
                        alpha: Optional[float] = None,
                        linestyle: Optional[str] = None,
-                       ax_index: int = 0):
+                       ax_index: int = 0) -> None:
         """Customize grid appearance."""
         ax = self.fig.get_axes()[ax_index]
         prefix = f'ax{ax_index}' if ax_index > 0 else 'ax'
-        kwargs = {}
+        kwargs: Dict[str, Any] = {}
         if color is not None:
             kwargs['color'] = color
         if alpha is not None:
@@ -1180,7 +1190,7 @@ class FigureEditor:
             f'{prefix}.grid', 'style', None, kwargs, code))
         self._refresh()
 
-    def tight_layout(self):
+    def tight_layout(self) -> None:
         """Apply tight_layout to fix overlapping labels."""
         self.fig.tight_layout()
         self._record_edit(EditRecord(
@@ -1189,7 +1199,7 @@ class FigureEditor:
         self._refresh()
 
     def save(self, filename: str, dpi: int = 300,
-             fmt: Optional[str] = None, **kwargs):
+             fmt: Optional[str] = None, **kwargs: Any) -> None:
         """Save the figure to a file with tracking.
 
         Parameters
@@ -1221,7 +1231,7 @@ class FigureEditor:
 
     def add_annotation(self, text: str, xy: Tuple[float, float],
                        ax_index: int = 0, draggable: bool = False,
-                       **kwargs):
+                       **kwargs: Any) -> None:
         """Add a text annotation (non-data element).
 
         Parameters
@@ -1256,7 +1266,7 @@ class FigureEditor:
             {'text': text, 'xy': xy, 'kwargs': kwargs}, code))
         self._refresh()
 
-    def _apply_theme_to_artists(self, theme_name: str):
+    def _apply_theme_to_artists(self, theme_name: str) -> None:
         """Apply rcParams from a theme to existing figure artists.
 
         Called by both ``apply_theme()`` (public, records edit) and
@@ -1326,7 +1336,7 @@ class FigureEditor:
             for txt_obj in [ax.title, ax.xaxis.label, ax.yaxis.label]:
                 txt_obj.set_fontfamily(font_family)
 
-    def apply_theme(self, theme_name: str):
+    def apply_theme(self, theme_name: str) -> None:
         """Apply a theme (StatsPAI, matplotlib, or seaborn) to the live figure.
 
         Unlike ``set_theme()`` alone (which only sets global rcParams for
@@ -1340,7 +1350,7 @@ class FigureEditor:
             f"sp.set_theme({theme_name!r})"))
         self._refresh()
 
-    def undo(self):
+    def undo(self) -> None:
         """Undo the last edit by restoring original state and replaying."""
         if not self.edits:
             return
@@ -1354,7 +1364,7 @@ class FigureEditor:
             self.edits.append(e)
         self._refresh()
 
-    def redo(self):
+    def redo(self) -> None:
         """Redo the last undone edit."""
         if not self._redo_stack:
             return
@@ -1363,14 +1373,14 @@ class FigureEditor:
         self.edits.append(edit)
         self._refresh()
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset all edits back to original state."""
         self.edits.clear()
         self._redo_stack.clear()
         self._restore_original()
         self._refresh()
 
-    def _replay_edit(self, edit: EditRecord):
+    def _replay_edit(self, edit: EditRecord) -> None:
         """Replay a single edit using safe method dispatch (no exec)."""
         td = edit.target_desc
         prop = edit.property_name
@@ -1529,12 +1539,12 @@ class FigureEditor:
     # Data protection helpers
     # ------------------------------------------------------------------
 
-    def _get_data_range(self, ax, axis: str
+    def _get_data_range(self, ax: Any, axis: str
                         ) -> Tuple[Optional[float], Optional[float]]:
         """Get the min/max of all locked (DATA/FIT/CI) artists on an axis."""
         import numpy as np
         locked_roles = (ArtistRole.DATA, ArtistRole.FIT, ArtistRole.CI)
-        vals = []
+        vals: List[float] = []
 
         for line in ax.get_lines():
             role = self.artist_roles.get(id(line), ArtistRole.COSMETIC)
@@ -1557,7 +1567,7 @@ class FigureEditor:
             return None, None
         return float(np.nanmin(vals)), float(np.nanmax(vals))
 
-    def _restore_original(self):
+    def _restore_original(self) -> None:
         """Restore figure to its original state (all snapshotted props)."""
         s = self._original_state
         for i, ax in enumerate(self.fig.get_axes()):
@@ -1638,11 +1648,11 @@ class FigureEditor:
         if 'fig.dpi' in s:
             self.fig.set_dpi(s['fig.dpi'])
 
-    def on_refresh(self, callback):
+    def on_refresh(self, callback: Any) -> None:
         """Register a callback to be called after every edit refresh."""
         self._on_refresh_callbacks.append(callback)
 
-    def _refresh(self):
+    def _refresh(self) -> None:
         """Redraw the figure canvas and notify callbacks."""
         try:
             self.fig.canvas.draw()
@@ -1708,7 +1718,7 @@ class FigureEditor:
 
         return '\n'.join(lines)
 
-    def copy_code(self):
+    def copy_code(self) -> None:
         """Print reproducible code to stdout."""
         code = self.generate_code()
         print(code)
@@ -1732,7 +1742,7 @@ class FigureEditor:
             ensure_ascii=False,
         )
 
-    def apply_edits_json(self, json_str: str):
+    def apply_edits_json(self, json_str: str) -> None:
         """Apply edits from a JSON string onto this figure.
 
         Parameters
@@ -1747,11 +1757,11 @@ class FigureEditor:
             self.edits.append(edit)
         self._refresh()
 
-    def to_edits_list(self) -> list:
+    def to_edits_list(self) -> List[Dict[str, Any]]:
         """Return edits as a list of dicts (for direct API use)."""
         return [e.to_dict() for e in self.edits]
 
-    def apply_edits_list(self, edits: list):
+    def apply_edits_list(self, edits: List[Dict[str, Any]]) -> None:
         """Apply edits from a list of dicts onto this figure.
 
         Parameters
@@ -1793,7 +1803,7 @@ class FigureEditor:
         buf.seek(0)
         return base64.b64encode(buf.read()).decode('ascii')
 
-    def get_editable_schema(self) -> dict:
+    def get_editable_schema(self) -> Dict[str, Any]:
         """Export schema of all editable properties and current values.
 
         Returns a dict that a web frontend can use to dynamically
@@ -1921,7 +1931,7 @@ class FigureEditor:
             'protect_data': self.protect_data,
         }
 
-    def apply_actions(self, actions: list):
+    def apply_actions(self, actions: List[Dict[str, Any]]) -> None:
         """Apply a list of action-based edit commands.
 
         This is the primary API for web frontends. Each action is a
@@ -1994,6 +2004,10 @@ class FigureEditor:
 
         for action in actions:
             name = action.get('action')
+            if not isinstance(name, str):
+                raise ValueError(
+                    f"Unknown action: {name!r}. "
+                    f"Supported: {sorted(_dispatch.keys())}")
             handler = _dispatch.get(name)
             if handler is None:
                 raise ValueError(
@@ -2001,7 +2015,7 @@ class FigureEditor:
                     f"Supported: {sorted(_dispatch.keys())}")
             handler(action)
 
-    def export_state(self) -> dict:
+    def export_state(self) -> Dict[str, Any]:
         """Export the full editor state for persistence.
 
         Returns a dict containing edits and figure metadata,
@@ -2025,7 +2039,7 @@ class FigureEditor:
             'code': self.generate_code(include_comment=False),
         }
 
-    def import_state(self, state: dict):
+    def import_state(self, state: Dict[str, Any]) -> None:
         """Restore editor state from a previously exported dict.
 
         Parameters
@@ -2062,7 +2076,7 @@ class FigureEditor:
 # Public API
 # ------------------------------------------------------------------
 
-def interactive(fig, protect_data: bool = True) -> FigureEditor:
+def interactive(fig: Any, protect_data: bool = True) -> FigureEditor:
     """
     Open an interactive editor for a matplotlib figure.
 
@@ -2111,7 +2125,7 @@ def interactive(fig, protect_data: bool = True) -> FigureEditor:
     return editor
 
 
-def get_code(fig) -> str:
+def get_code(fig: Any) -> str:
     """
     Get reproducible code for all interactive edits made to a figure.
 
@@ -2137,7 +2151,7 @@ def get_code(fig) -> str:
     True
     """
     editor = getattr(fig, '_statspai_editor', None)
-    if editor is None:
+    if not isinstance(editor, FigureEditor):
         return "# No interactive edits found for this figure"
     return editor.generate_code()
 

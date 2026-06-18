@@ -129,7 +129,7 @@ def bradford_hill(
     ... )
     >>> print(res.summary())
     """
-    kw_scores = dict(
+    kw_scores: Dict[str, Optional[float]] = dict(
         strength=strength,
         consistency=consistency,
         specificity=specificity,
@@ -149,9 +149,9 @@ def bradford_hill(
                     f"Unknown viewpoint {k!r}; valid names: {VIEWPOINTS}"
                 )
             scores[k] = float(v)
-    for k, v in kw_scores.items():
-        if v is not None:
-            scores[k] = float(v)
+    for k, score in kw_scores.items():
+        if score is not None:
+            scores[k] = float(score)
 
     for k, v in scores.items():
         if not 0.0 <= v <= 1.0:

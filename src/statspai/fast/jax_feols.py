@@ -123,7 +123,7 @@ def _require_finite_outputs(context: str, **arrays: Any) -> None:
 # JIT-compiled core: WLS solve + iid/HC1 sandwich
 # ---------------------------------------------------------------------------
 
-def _make_jax_kernels():
+def _make_jax_kernels() -> tuple[Any, Any, Any]:
     """Build JIT-compiled solvers lazily so module import is jax-free."""
     if not _HAS_JAX:
         raise ImportError(
@@ -132,7 +132,7 @@ def _make_jax_kernels():
         )
 
     @jit
-    def _wls_solve(X, y, w):
+    def _wls_solve(X: Any, y: Any, w: Any) -> Any:
         """QR-based weighted-least-squares solve.
 
         Returns (beta, residuals, rss, XtWX_inv).
@@ -156,13 +156,13 @@ def _make_jax_kernels():
         return beta, resid, rss, XtWX_inv
 
     @jit
-    def _hc1_meat(X, resid, w):
+    def _hc1_meat(X: Any, resid: Any, w: Any) -> Any:
         """HC1 meat: sum_i (w_i u_i)² x_i x_i^T."""
         u = (resid * w)[:, None] * X  # (n, p)
         return u.T @ u
 
     @jit
-    def _y_centered_ss(y, w):
+    def _y_centered_ss(y: Any, w: Any) -> Any:
         """Weighted total sum of squares around the weighted mean."""
         wsum = jnp.sum(w)
         ybar = jnp.sum(w * y) / wsum
@@ -370,7 +370,7 @@ def feols_jax(
             n_dropped_singletons = n_obs - n_kept
             fe_codes_kept: List[np.ndarray] = []
             counts_list: List[np.ndarray] = []
-            fe_card: List[int] = []
+            fe_card = []
             for codes_k in fe_codes_raw:
                 ck = codes_k[keep_mask]
                 dense, uniq = pd.factorize(ck, sort=False)
@@ -555,7 +555,9 @@ class FeolsBootstrapResult:
             f"sp.fast.feols_jax_bootstrap  |  bootstrap={self.bootstrap_type}  |  "
             f"n_boot={self.n_boot}"
         )
-        return header + "\n" + df.to_string(float_format=lambda x: f"{x:.6f}")
+        return header + "\n" + str(
+            df.to_string(float_format=lambda x: f"{x:.6f}")
+        )
 
     def tidy(self) -> pd.DataFrame:
         """Coefficient-level bootstrap table."""
@@ -573,14 +575,14 @@ class FeolsBootstrapResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Lossless JSON-safe payload for JAX bootstrap results."""
-        return _jsonable({
+        return dict(_jsonable({
             "kind": "fast_feols_jax_bootstrap_result",
             "n_boot": self.n_boot,
             "bootstrap_type": self.bootstrap_type,
             "backend": self.backend,
             "coefficients": _tidy_records(self.tidy()),
             "boot_betas": self.boot_betas.to_dict(orient="records"),
-        })
+        }))
 
     def to_agent_summary(self, *, max_terms: int = 10) -> Dict[str, Any]:
         """Bounded agent-facing summary for JAX bootstrap results."""
@@ -590,7 +592,7 @@ class FeolsBootstrapResult:
             str(term): _distribution_summary(self.boot_betas[term].to_numpy())
             for term in self.boot_betas.columns[:limit]
         }
-        return _jsonable({
+        return dict(_jsonable({
             "kind": "fast_feols_jax_bootstrap_agent_summary",
             "n_boot": self.n_boot,
             "bootstrap_type": self.bootstrap_type,
@@ -599,13 +601,13 @@ class FeolsBootstrapResult:
             "bootstrap_distributions": boot_summaries,
             "n_terms": n_terms,
             "truncated_terms": max(n_terms - limit, 0),
-        })
+        }))
 
     def __repr__(self) -> str:  # pragma: no cover - cosmetic
         return self.summary()
 
 
-def _make_bootstrap_kernels():
+def _make_bootstrap_kernels() -> tuple[Any, Any, Any, Any]:
     """Build JIT-compiled single-iteration bootstrap solvers."""
     if not _HAS_JAX:
         raise ImportError(
@@ -614,7 +616,7 @@ def _make_bootstrap_kernels():
         )
 
     @jit
-    def _wls_beta_only(X, y, w):
+    def _wls_beta_only(X: Any, y: Any, w: Any) -> Any:
         """QR-based WLS that returns only the coefficient vector.
 
         Same algorithm as ``_wls_solve`` but skips the residuals / RSS /
@@ -629,21 +631,27 @@ def _make_bootstrap_kernels():
         return beta
 
     @jit
-    def _one_pairs_boot(key, X, y, w_base):
+    def _one_pairs_boot(key: Any, X: Any, y: Any, w_base: Any) -> Any:
         """One pairs-bootstrap iteration: multinomial counts as weights."""
         n = X.shape[0]
         idx = jax.random.choice(key, n, shape=(n,), replace=True)
         boot_w = jnp.bincount(idx, length=n).astype(X.dtype)
         return _wls_beta_only(X, y, w_base * boot_w)
 
-    def _build_cluster_boot(n_clusters: int):
+    def _build_cluster_boot(n_clusters: int) -> Any:
         """Build a JIT-compiled cluster-bootstrap kernel for a fixed
         ``n_clusters``. Closing over the integer keeps it concrete
         inside the JIT trace, so ``jax.random.choice`` accepts it."""
         n_clusters_int = int(n_clusters)
 
         @jit
-        def _one_cluster_boot(key, X, y, w_base, cluster_codes):
+        def _one_cluster_boot(
+            key: Any,
+            X: Any,
+            y: Any,
+            w_base: Any,
+            cluster_codes: Any,
+        ) -> Any:
             idx = jax.random.choice(
                 key, n_clusters_int,
                 shape=(n_clusters_int,), replace=True,
@@ -668,7 +676,14 @@ def _make_bootstrap_kernels():
     # arrived in jax >= 0.4.x).
 
     @jit
-    def _one_wild_boot(key, X, w_base, residuals, beta_hat, XtWX_inv):
+    def _one_wild_boot(
+        key: Any,
+        X: Any,
+        w_base: Any,
+        residuals: Any,
+        beta_hat: Any,
+        XtWX_inv: Any,
+    ) -> Any:
         """One row-level wild-bootstrap iteration (score form)."""
         n = X.shape[0]
         eta = (2 * jax.random.bernoulli(key, p=0.5, shape=(n,))
@@ -676,7 +691,7 @@ def _make_bootstrap_kernels():
         score = X.T @ (w_base * eta * residuals)        # (p,)
         return beta_hat + XtWX_inv @ score
 
-    def _build_wild_cluster_boot(n_clusters: int):
+    def _build_wild_cluster_boot(n_clusters: int) -> Any:
         """Build a JIT-compiled wild-cluster-bootstrap kernel for a fixed
         ``n_clusters``. Each iteration draws one Rademacher per cluster
         and broadcasts to rows via ``cluster_codes``."""
@@ -684,8 +699,14 @@ def _make_bootstrap_kernels():
 
         @jit
         def _one_wild_cluster_boot(
-            key, X, w_base, residuals, beta_hat, XtWX_inv, cluster_codes,
-        ):
+            key: Any,
+            X: Any,
+            w_base: Any,
+            residuals: Any,
+            beta_hat: Any,
+            XtWX_inv: Any,
+            cluster_codes: Any,
+        ) -> Any:
             eta_g = (2 * jax.random.bernoulli(
                 key, p=0.5, shape=(n_clusters_int,)
             ).astype(X.dtype) - 1)
@@ -709,7 +730,7 @@ def _jax_prep_inputs(
     drop_singletons: bool,
     fe_tol: float,
     fe_maxiter: int,
-) -> dict:
+) -> Dict[str, Any]:
     """Shared prep: parse formula → extract matrices → FE-residualise.
 
     Mirrors the prep block of :func:`feols_jax` so bootstrap can reuse
@@ -1093,7 +1114,7 @@ def feols_jax_bootstrap(
     keys = jax.random.split(key, int(n_boot))
 
     if bootstrap == 'pairs':
-        def _run_chunk(keys_chunk):
+        def _run_chunk(keys_chunk: Any) -> Any:
             return jax.vmap(
                 _one_pairs_boot, in_axes=(0, None, None, None),
             )(keys_chunk, X_j, y_j, w_j)
@@ -1101,13 +1122,13 @@ def feols_jax_bootstrap(
         cluster_codes_j = jnp.asarray(cluster_codes_kept)
         _one_cluster_boot = _build_cluster_boot(n_clusters)
 
-        def _run_chunk(keys_chunk):
+        def _run_chunk(keys_chunk: Any) -> Any:
             return jax.vmap(
                 _one_cluster_boot,
                 in_axes=(0, None, None, None, None),
             )(keys_chunk, X_j, y_j, w_j, cluster_codes_j)
     elif bootstrap == 'wild':
-        def _run_chunk(keys_chunk):
+        def _run_chunk(keys_chunk: Any) -> Any:
             return jax.vmap(
                 _one_wild_boot,
                 in_axes=(0, None, None, None, None, None),
@@ -1116,7 +1137,7 @@ def feols_jax_bootstrap(
         cluster_codes_j = jnp.asarray(cluster_codes_kept)
         _one_wild_cluster_boot = _build_wild_cluster_boot(n_clusters)
 
-        def _run_chunk(keys_chunk):
+        def _run_chunk(keys_chunk: Any) -> Any:
             return jax.vmap(
                 _one_wild_cluster_boot,
                 in_axes=(0, None, None, None, None, None, None),

@@ -10,11 +10,13 @@ References
 ----------
 Bruhn, M. & McKenzie, D. (2009).
 "In Pursuit of Balance: Randomization in Practice in
-Development Field Experiments." *AEJ: Applied*, 1(4), 200-232. [@bruhn2009pursuit]
+Development Field Experiments." *AEJ: Applied*, 1(4), 200-232.
+[@bruhn2009pursuit]
 """
 
 import warnings
-from typing import Optional, List, Dict, Any, Union
+from typing import Any, Dict, List, Optional, cast
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -48,8 +50,17 @@ class RandomizationResult:
     True
     """
 
-    def __init__(self, data, treatment_col, n_treated, n_control,
-                 strata_col, method, balance, seed):
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        treatment_col: str,
+        n_treated: Optional[int],
+        n_control: Optional[int],
+        strata_col: Optional[str],
+        method: str,
+        balance: Optional[Dict[str, Any]],
+        seed: Optional[int],
+    ) -> None:
         self.data = data
         self.treatment_col = treatment_col
         self.n_treated = n_treated
@@ -60,19 +71,31 @@ class RandomizationResult:
         self.seed = seed
 
     def summary(self) -> str:
-        lines = [
+        lines: List[str] = [
             "Randomization Summary",
             "=" * 50,
             f"Method: {self.method}",
-            f"Treated: {self.n_treated}   Control: {self.n_control}",
-            f"Total: {self.n_treated + self.n_control}",
         ]
+        if self.n_treated is not None and self.n_control is not None:
+            lines.extend([
+                f"Treated: {self.n_treated}   Control: {self.n_control}",
+                f"Total: {self.n_treated + self.n_control}",
+            ])
+        else:
+            counts = self.data[self.treatment_col].value_counts().sort_index()
+            count_text = ", ".join(
+                f"{arm}: {count}" for arm, count in counts.items()
+            )
+            lines.append(f"Arm counts: {count_text}")
+            lines.append(f"Total: {len(self.data)}")
         if self.strata_col:
             lines.append(f"Stratified by: {self.strata_col}")
         if self.seed is not None:
             lines.append(f"Seed: {self.seed}")
         if self.balance is not None:
-            lines.append(f"\nBalance (F-test p-value): {self.balance['omnibus_p']:.4f}")
+            lines.append(
+                f"\nBalance (F-test p-value): {self.balance['omnibus_p']:.4f}"
+            )
         lines.append("=" * 50)
         return "\n".join(lines)
 
@@ -107,8 +130,15 @@ class BalanceResult:
     True
     """
 
-    def __init__(self, table, omnibus_f, omnibus_p, normalized_diffs,
-                 n_treat, n_control):
+    def __init__(
+        self,
+        table: pd.DataFrame,
+        omnibus_f: float,
+        omnibus_p: float,
+        normalized_diffs: Dict[str, float],
+        n_treat: int,
+        n_control: int,
+    ) -> None:
         self.table = table
         self.omnibus_f = omnibus_f
         self.omnibus_p = omnibus_p
@@ -117,28 +147,38 @@ class BalanceResult:
         self.n_control = n_control
 
     def summary(self) -> str:
-        lines = [
+        lines: List[str] = [
             "Balance Check",
             "=" * 70,
             f"Treated: {self.n_treat}   Control: {self.n_control}",
             "",
-            f"{'Variable':<20s} {'Mean(T)':>10s} {'Mean(C)':>10s} {'Diff':>10s} "
-            f"{'NormDiff':>10s} {'p-value':>8s}",
+            (
+                f"{'Variable':<20s} {'Mean(T)':>10s} "
+                f"{'Mean(C)':>10s} {'Diff':>10s} "
+                f"{'NormDiff':>10s} {'p-value':>8s}"
+            ),
             "-" * 70,
         ]
         for _, row in self.table.iterrows():
-            flag = " ***" if abs(row.get('norm_diff', 0)) > 0.25 else ""
+            norm_diff = row.get('norm_diff', 0)
+            flag = " ***" if abs(norm_diff) > 0.25 else ""
             lines.append(
-                f"{row['variable']:<20s} {row['mean_treat']:>10.4f} "
-                f"{row['mean_control']:>10.4f} {row['diff']:>10.4f} "
-                f"{row.get('norm_diff', 0):>10.4f} {row['p_value']:>8.4f}{flag}"
+                f"{row['variable']:<20s} "
+                f"{row['mean_treat']:>10.4f} "
+                f"{row['mean_control']:>10.4f} "
+                f"{row['diff']:>10.4f} "
+                f"{norm_diff:>10.4f} "
+                f"{row['p_value']:>8.4f}{flag}"
             )
         lines.append("-" * 70)
-        lines.append(f"Omnibus F-test: F = {self.omnibus_f:.3f}, p = {self.omnibus_p:.4f}")
+        lines.append(
+            "Omnibus F-test: "
+            f"F = {self.omnibus_f:.3f}, p = {self.omnibus_p:.4f}"
+        )
         lines.append("Note: *** indicates |normalized difference| > 0.25")
         return "\n".join(lines)
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Any = None, **kwargs: Any) -> Any:
         """Love plot of normalized differences."""
         try:
             import matplotlib.pyplot as plt
@@ -153,7 +193,11 @@ class BalanceResult:
         vars_ = list(nd.keys())
         vals = list(nd.values())
 
-        ax.barh(y_pos, vals, color=['red' if abs(v) > 0.25 else 'steelblue' for v in vals])
+        plot_kwargs: Dict[str, Any] = {
+            "color": ['red' if abs(v) > 0.25 else 'steelblue' for v in vals],
+        }
+        plot_kwargs.update(kwargs)
+        ax.barh(y_pos, vals, **plot_kwargs)
         ax.set_yticks(y_pos)
         ax.set_yticklabels(vars_)
         ax.axvline(0, color='black', lw=0.5)
@@ -168,14 +212,14 @@ class BalanceResult:
 def randomize(
     data: pd.DataFrame,
     n_arms: int = 2,
-    prob: List[float] = None,
-    strata: str = None,
-    cluster: str = None,
+    prob: Optional[List[float]] = None,
+    strata: Optional[str] = None,
+    cluster: Optional[str] = None,
     method: str = "simple",
-    balance_vars: List[str] = None,
+    balance_vars: Optional[List[str]] = None,
     n_rerand: int = 0,
     rerand_threshold: float = 0.001,
-    seed: int = None,
+    seed: Optional[int] = None,
     treatment_col: str = "treatment",
 ) -> RandomizationResult:
     """
@@ -239,6 +283,7 @@ def randomize(
     if prob is None:
         prob = [1.0 / n_arms] * n_arms
 
+    assignments: np.ndarray
     if method == 'simple' and strata is None and cluster is None:
         # Complete randomization
         assignments = rng.choice(n_arms, size=n, p=prob)
@@ -246,7 +291,8 @@ def randomize(
     elif strata is not None or method == 'stratified':
         # Stratified (block) randomization
         assignments = np.empty(n, dtype=int)
-        for _, group in df.groupby(strata):
+        strata_col = cast(str, strata)
+        for _, group in df.groupby(strata_col):
             idx = group.index
             g_n = len(idx)
             # Within each stratum, do complete randomization
@@ -258,17 +304,20 @@ def randomize(
                 # Find largest count to decrement
                 max_idx = max(range(len(counts)), key=lambda i: counts[i])
                 counts[max_idx] -= 1
-            arm_labels = np.concatenate([np.full(max(c, 0), arm) for arm, c in enumerate(counts)])
+            arm_labels = np.concatenate([
+                np.full(max(c, 0), arm) for arm, c in enumerate(counts)
+            ])
             rng.shuffle(arm_labels)
             assignments[idx] = arm_labels[:g_n]
 
     elif cluster is not None or method == 'cluster':
         # Cluster randomization
-        clusters = df[cluster].unique()
+        cluster_col = cast(str, cluster)
+        clusters = df[cluster_col].unique()
         n_clusters = len(clusters)
         cluster_assignments = rng.choice(n_arms, size=n_clusters, p=prob)
         cluster_map = dict(zip(clusters, cluster_assignments))
-        assignments = df[cluster].map(cluster_map).values
+        assignments = df[cluster_col].map(cluster_map).to_numpy(dtype=int)
 
     else:
         assignments = rng.choice(n_arms, size=n, p=prob)
@@ -292,12 +341,14 @@ def randomize(
     df[treatment_col] = assignments
 
     # Check balance
-    bal = None
+    bal: Optional[BalanceResult] = None
     if balance_vars is not None and n_arms == 2:
-        bal = balance_check(df, treatment=treatment_col, covariates=balance_vars)
+        bal = balance_check(
+            df, treatment=treatment_col, covariates=balance_vars
+        )
 
-    n_treated = (assignments == 1).sum() if n_arms == 2 else None
-    n_control = (assignments == 0).sum() if n_arms == 2 else None
+    n_treated = int((assignments == 1).sum()) if n_arms == 2 else None
+    n_control = int((assignments == 0).sum()) if n_arms == 2 else None
 
     return RandomizationResult(
         data=df, treatment_col=treatment_col,
@@ -308,21 +359,25 @@ def randomize(
     )
 
 
-def _mahalanobis_distance(df, vars, assignments):
+def _mahalanobis_distance(
+    df: pd.DataFrame,
+    balance_vars: List[str],
+    assignments: np.ndarray,
+) -> float:
     """Compute Mahalanobis distance between treatment and control means."""
-    treat = df.loc[assignments == 1, vars].values
-    control = df.loc[assignments == 0, vars].values
+    treat = df.loc[assignments == 1, balance_vars].values
+    control = df.loc[assignments == 0, balance_vars].values
 
     if len(treat) == 0 or len(control) == 0:
         return np.inf
 
     diff = treat.mean(axis=0) - control.mean(axis=0)
-    pooled = np.cov(df[vars].values, rowvar=False)
+    pooled = np.cov(df[balance_vars].values, rowvar=False)
     try:
         inv_cov = np.linalg.inv(pooled)
-        return diff @ inv_cov @ diff
+        return float(diff @ inv_cov @ diff)
     except np.linalg.LinAlgError:
-        return np.sum(diff**2)
+        return float(np.sum(diff**2))
 
 
 def balance_check(
@@ -408,7 +463,6 @@ def balance_check(
     table = pd.DataFrame(rows)
 
     # Omnibus F-test: regress treatment on all covariates
-    from ..regression.ols import regress
     try:
         y_treat = data[treatment].values.astype(float)
         X_bal = data[covariates].values.astype(float)

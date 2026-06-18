@@ -4,9 +4,9 @@ Extends :func:`bayes_iv` with a linear CATE-by-covariate model:
 
 .. code-block:: text
 
-    D_i = pi_0 + pi_Z' Z_i + pi_X' X_i + v_i                        (first stage)
+    D_i = pi_0 + pi_Z' Z_i + pi_X' X_i + v_i
     tau(M_i) = tau_0 + tau_hte' (M_i - M_bar)                       (CATE)
-    Y_i = alpha + tau(M_i) * D_i + beta_X' X_i + rho * v_hat_i + eps_i   (structural)
+    Y_i = alpha + tau(M_i) * D_i + beta_X' X_i + rho * v_hat_i + eps_i
 
 The posterior gives the average LATE (``tau_0``) and a table of
 slopes on each effect modifier. ``prob_positive`` on any individual
@@ -69,8 +69,13 @@ def _prepare_hte_iv_frame(
     all_cols = [y, treat] + iv_cols + mod_cols + cov_cols
     # Deduplicate while preserving order (modifiers may overlap with
     # covariates; that's fine, we just don't want NA-drop redundancy)
-    seen = set()
-    uniq_cols = [c for c in all_cols if not (c in seen or seen.add(c))]
+    seen: set[str] = set()
+    uniq_cols = []
+    for col in all_cols:
+        if col in seen:
+            continue
+        seen.add(col)
+        uniq_cols.append(col)
     clean = data[uniq_cols].dropna().reset_index(drop=True)
     n = len(clean)
     if n < 40:
@@ -183,8 +188,10 @@ def bayes_hte_iv(
     mu_late, sigma_late = prior_late
 
     with pm.Model() as model:
-        # First stage (model for pi_Z so we can report identification strength)
-        pi_intercept = pm.Normal('pi_intercept', mu=0.0, sigma=prior_coef_sigma)
+        # First stage: model pi_Z so we can report identification strength.
+        pi_intercept = pm.Normal(
+            'pi_intercept', mu=0.0, sigma=prior_coef_sigma,
+        )
         pi_Z = pm.Normal(
             'pi_Z', mu=0.0, sigma=prior_coef_sigma, shape=n_instr,
         )

@@ -74,7 +74,7 @@ def _normalize_columns(cols: Sequence[str] | str, *, name: str) -> List[str]:
     return out
 
 
-def _ensure_columnar_eager(obj: Any):
+def _ensure_columnar_eager(obj: Any) -> Any:
     """Resolve supported lazy/eager columnar inputs.
 
     Polars LazyFrames are collected. Polars DataFrames and PyArrow Tables
@@ -92,7 +92,7 @@ def _ensure_columnar_eager(obj: Any):
     )
 
 
-def _polars_to_numpy_zero_copy(series) -> np.ndarray:
+def _polars_to_numpy_zero_copy(series: Any) -> np.ndarray:
     """Best-effort zero-copy conversion of a Polars Series to NumPy.
 
     Polars 1.x exposes ``.to_numpy(allow_copy=False)`` which succeeds
@@ -102,22 +102,22 @@ def _polars_to_numpy_zero_copy(series) -> np.ndarray:
     (e.g. int → float) inevitably copies and we accept that.
     """
     try:
-        return series.to_numpy(allow_copy=False)
+        return np.asarray(series.to_numpy(allow_copy=False))
     except (TypeError, RuntimeError, ValueError):
         # Older Polars versions may raise different exception types;
         # also: presence of nulls / non-contiguous storage forces copy.
-        return series.to_numpy()
+        return np.asarray(series.to_numpy())
 
 
-def _arrow_to_numpy_zero_copy(column) -> np.ndarray:
+def _arrow_to_numpy_zero_copy(column: Any) -> np.ndarray:
     """Best-effort conversion of a PyArrow ChunkedArray to NumPy."""
     try:
-        return column.to_numpy(zero_copy_only=True)
+        return np.asarray(column.to_numpy(zero_copy_only=True))
     except (pa.ArrowInvalid, ValueError, TypeError):
-        return column.to_numpy(zero_copy_only=False)
+        return np.asarray(column.to_numpy(zero_copy_only=False))
 
 
-def _column_names(df) -> List[str]:
+def _column_names(df: Any) -> List[str]:
     if _HAS_POLARS and isinstance(df, pl.DataFrame):
         return list(df.columns)
     if _HAS_ARROW and isinstance(df, pa.Table):
@@ -127,13 +127,13 @@ def _column_names(df) -> List[str]:
     )
 
 
-def _n_rows(df) -> int:
+def _n_rows(df: Any) -> int:
     if _HAS_ARROW and isinstance(df, pa.Table):
         return int(df.num_rows)
     return len(df)
 
 
-def _column_to_numpy(df, column: str) -> np.ndarray:
+def _column_to_numpy(df: Any, column: str) -> np.ndarray:
     if _HAS_POLARS and isinstance(df, pl.DataFrame):
         return _polars_to_numpy_zero_copy(df[column])
     if _HAS_ARROW and isinstance(df, pa.Table):
@@ -143,7 +143,7 @@ def _column_to_numpy(df, column: str) -> np.ndarray:
     )
 
 
-def _select_to_pandas(df, cols: Sequence[str]) -> pd.DataFrame:
+def _select_to_pandas(df: Any, cols: Sequence[str]) -> pd.DataFrame:
     if _HAS_POLARS and isinstance(df, pl.DataFrame):
         return df.select(cols).to_pandas()
     if _HAS_ARROW and isinstance(df, pa.Table):
@@ -153,13 +153,13 @@ def _select_to_pandas(df, cols: Sequence[str]) -> pd.DataFrame:
     )
 
 
-def _require_columns(df, cols: Sequence[str], *, context: str) -> None:
+def _require_columns(df: Any, cols: Sequence[str], *, context: str) -> None:
     missing = [c for c in cols if c not in _column_names(df)]
     if missing:
         raise MethodIncompatibility(f"{context}: missing columns: {missing}")
 
 
-def _columns_to_numpy(df, cols: Sequence[str]) -> np.ndarray:
+def _columns_to_numpy(df: Any, cols: Sequence[str]) -> np.ndarray:
     """Stack the named columns into a (n, len(cols)) float64 ndarray."""
     _require_columns(df, cols, context="fast.demean_polars")
     arrays: List[np.ndarray] = []
@@ -172,7 +172,7 @@ def _columns_to_numpy(df, cols: Sequence[str]) -> np.ndarray:
     return np.column_stack(arrays) if arrays else np.empty((_n_rows(df), 0))
 
 
-def _columns_as_object(df, cols: Sequence[str]) -> List[np.ndarray]:
+def _columns_as_object(df: Any, cols: Sequence[str]) -> List[np.ndarray]:
     """Extract columns as 1-D NumPy arrays (any dtype) for FE factorisation."""
     _require_columns(df, cols, context="fast.demean_polars")
     out: List[np.ndarray] = []
@@ -187,8 +187,8 @@ def _columns_as_object(df, cols: Sequence[str]) -> List[np.ndarray]:
 
 def demean_polars(
     df: Any,
-    X_cols: Sequence[str],
-    fe_cols: Sequence[str],
+    X_cols: Sequence[str] | str,
+    fe_cols: Sequence[str] | str,
     **kwargs: Any,
 ) -> Tuple[np.ndarray, DemeanInfo]:
     """Within-transform a polars DataFrame's columns by HDFE.

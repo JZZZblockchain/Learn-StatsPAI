@@ -32,15 +32,13 @@ What it does NOT (yet) do
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
 
 from ..exceptions import MethodIncompatibility
-from .demean import demean as _fast_demean
 from ._result_protocol import jsonable as _jsonable
 from ._result_protocol import tidy_records as _tidy_records
 from ._validation import (
@@ -87,7 +85,7 @@ class FePoisResult:
     fe_names: List[str]
     fe_cardinality: List[int]
     vcov_type: str
-    df_residual: int = 0           # n_kept - p - Σ(G_k - 1); used for t-stat tails
+    df_residual: int = 0
     backend: str = "statspai-native"
 
     # ------------------------------------------------------------------
@@ -123,7 +121,8 @@ class FePoisResult:
     def summary(self) -> str:
         lines: List[str] = []
         lines.append(
-            f"sp.fast.fepois  |  {self.formula}  |  Poisson, log link, vcov={self.vcov_type}"
+            f"sp.fast.fepois  |  {self.formula}  |  "
+            f"Poisson, log link, vcov={self.vcov_type}"
         )
         lines.append(
             f"N={self.n_obs:,}  kept={self.n_kept:,}  "
@@ -133,20 +132,24 @@ class FePoisResult:
         )
         if self.fe_names:
             fe_desc = ", ".join(
-                f"{n}({c:,})" for n, c in zip(self.fe_names, self.fe_cardinality)
+                f"{n}({c:,})"
+                for n, c in zip(self.fe_names, self.fe_cardinality)
             )
             lines.append(f"Fixed effects: {fe_desc}")
         lines.append("")
-        lines.append(self.tidy().to_string(float_format=lambda x: f"{x:.6f}"))
+        lines.append(
+            str(self.tidy().to_string(float_format=lambda x: f"{x:.6f}"))
+        )
         lines.append("")
         lines.append(
-            f"Deviance: {self.deviance:.4f}    Log-likelihood: {self.log_likelihood:.4f}"
+            f"Deviance: {self.deviance:.4f}    "
+            f"Log-likelihood: {self.log_likelihood:.4f}"
         )
         return "\n".join(lines)
 
     def to_dict(self) -> Dict[str, Any]:
         """Lossless JSON-safe payload for Poisson HDFE results."""
-        return _jsonable({
+        payload = {
             "kind": "fast_fepois_result",
             "model": "poisson_hdfe",
             "formula": self.formula,
@@ -163,21 +166,25 @@ class FePoisResult:
             "backend": self.backend,
             "fixed_effects": [
                 {"name": name, "cardinality": cardinality}
-                for name, cardinality in zip(self.fe_names, self.fe_cardinality)
+                for name, cardinality in zip(
+                    self.fe_names,
+                    self.fe_cardinality,
+                )
             ],
             "coefficients": _tidy_records(self.tidy()),
             "vcov": {
                 "terms": list(self.coef_names),
                 "matrix": self.vcov_matrix,
             },
-        })
+        }
+        return cast(Dict[str, Any], _jsonable(payload))
 
     def to_agent_summary(self, *, max_terms: int = 10) -> Dict[str, Any]:
         """Bounded agent-facing summary for fast Poisson HDFE results."""
         n_terms = len(self.coef_names)
         limit = max(int(max_terms), 0)
         rows = _tidy_records(self.tidy().head(limit))
-        return _jsonable({
+        payload = {
             "kind": "fast_fepois_agent_summary",
             "model": "poisson_hdfe",
             "formula": self.formula,
@@ -193,13 +200,17 @@ class FePoisResult:
             "df_residual": self.df_residual,
             "fixed_effects": [
                 {"name": name, "cardinality": cardinality}
-                for name, cardinality in zip(self.fe_names, self.fe_cardinality)
+                for name, cardinality in zip(
+                    self.fe_names,
+                    self.fe_cardinality,
+                )
             ],
             "coefficients": rows,
             "n_terms": n_terms,
             "truncated_terms": max(n_terms - limit, 0),
             "backend": self.backend,
-        })
+        }
+        return cast(Dict[str, Any], _jsonable(payload))
 
     def __repr__(self) -> str:  # pragma: no cover  - cosmetic
         return self.summary()
@@ -274,7 +285,7 @@ def _aitken_extrapolate(
     if den < 1e-30:
         return x2
     alpha = float(d1 @ d2) / den
-    return x0 - alpha * d1
+    return cast(np.ndarray, x0 - alpha * d1)
 
 
 def _weighted_ap_demean_numpy(
@@ -288,7 +299,7 @@ def _weighted_ap_demean_numpy(
     accelerate: bool = True,
     accel_period: int = 5,
 ) -> Tuple[np.ndarray, int, bool]:
-    """Pure-NumPy weighted alternating-projection demean (canonical reference + Rust-unavailable fallback).
+    """Pure-NumPy weighted alternating-projection demean.
 
     Returns the residualised array (copy), iter count, and convergence
     flag. Used inside the IRLS loop where the weight vector ``w = mu``
@@ -539,7 +550,12 @@ def _weighted_ap_demean(
         ]
 
         # F-contig src in π order; Rust mutates this in place.
-        arr_F_p = np.array(src[plan.perm], dtype=np.float64, order="F", copy=True)
+        arr_F_p = np.array(
+            src[plan.perm],
+            dtype=np.float64,
+            order="F",
+            copy=True,
+        )
 
         infos = _rust_hdfe.demean_2d_weighted_sorted(
             arr_F_p,
@@ -548,22 +564,35 @@ def _weighted_ap_demean(
             plan.secondary_codes_p,
             secondary_wsum,
             weights_p,
-            int(max_iter), 0.0, float(tol), bool(accelerate), int(accel_period),
+            int(max_iter),
+            0.0,
+            float(tol),
+            bool(accelerate),
+            int(accel_period),
         )
 
         # π⁻¹ restores caller's row order.
-        arr_F = np.array(arr_F_p[plan.inv_perm], dtype=np.float64, order="F", copy=True)
+        arr_F = np.array(
+            arr_F_p[plan.inv_perm],
+            dtype=np.float64,
+            order="F",
+            copy=True,
+        )
     else:
         # Pre-B0 fallback: random-scatter Rust path (Phase A behaviour).
         arr_F = np.array(src, dtype=np.float64, order="F", copy=True)
         wsum_list = [
-            np.bincount(fe_codes_list[k], weights=weights,
-                        minlength=counts_list[k].size).astype(np.float64)
+            np.bincount(
+                fe_codes_list[k],
+                weights=weights,
+                minlength=counts_list[k].size,
+            ).astype(np.float64)
             for k in range(K)
         ]
         infos = _rust_hdfe.demean_2d_weighted(
             arr_F, list(fe_codes_list), wsum_list, weights,
-            int(max_iter), 0.0, float(tol), bool(accelerate), int(accel_period),
+            int(max_iter), 0.0, float(tol),
+            bool(accelerate), int(accel_period),
         )
 
     iters = max(int(d["iters"]) for d in infos) if infos else 0
@@ -605,7 +634,7 @@ def _drop_separation_dispatcher(
             list(fe_codes),
             g_per_fe,
         )
-        return mask_u8.astype(bool, copy=False)
+        return cast(np.ndarray, mask_u8.astype(bool, copy=False))
     return _drop_separation(y, fe_codes)
 
 
@@ -710,7 +739,9 @@ def fepois(
             f"fepois: vcov={vcov!r}; supported: 'iid', 'hc1', or 'cr1'"
         )
     if vcov == "cr1" and cluster is None:
-        raise MethodIncompatibility("fepois: vcov='cr1' requires cluster=<column name>")
+        raise MethodIncompatibility(
+            "fepois: vcov='cr1' requires cluster=<column name>"
+        )
     if cluster is not None and vcov in ("iid", "hc1"):
         raise MethodIncompatibility(
             f"fepois: cluster={cluster!r} provided but vcov={vcov!r}; "
@@ -736,7 +767,9 @@ def fepois(
         needed_cols = needed_cols + [cluster]
     missing = [c for c in needed_cols if c not in data.columns]
     if missing:
-        raise MethodIncompatibility(f"fepois: columns missing from data: {missing}")
+        raise MethodIncompatibility(
+            f"fepois: columns missing from data: {missing}"
+        )
 
     n_obs = len(data)
     _nonempty_sample(n_obs, context="fepois")
@@ -755,7 +788,8 @@ def fepois(
             )
         if not np.isfinite(obs_weights).all():
             raise MethodIncompatibility(
-                f"fepois: weights column {weights!r} contains non-finite values"
+                f"fepois: weights column {weights!r} contains "
+                "non-finite values"
             )
         _positive_weight_mass(
             obs_weights, context=f"fepois weights column {weights!r}",
@@ -776,12 +810,16 @@ def fepois(
             )
     else:
         cluster_arr_full = None
-    X_user = data[rhs_terms].to_numpy(dtype=np.float64).copy() if rhs_terms else \
-        np.empty((n_obs, 0), dtype=np.float64)
+    X_user = (
+        data[rhs_terms].to_numpy(dtype=np.float64).copy()
+        if rhs_terms else np.empty((n_obs, 0), dtype=np.float64)
+    )
     if X_user.ndim == 1:
         X_user = X_user.reshape(-1, 1)
     if not np.isfinite(X_user).all():
-        raise MethodIncompatibility("fepois: regressor columns contain non-finite values")
+        raise MethodIncompatibility(
+            "fepois: regressor columns contain non-finite values"
+        )
     if add_intercept:
         X = np.column_stack([np.ones(n_obs, dtype=np.float64), X_user])
         coef_names_full = ["(Intercept)"] + list(rhs_terms)
@@ -793,7 +831,11 @@ def fepois(
     fe_codes_raw: List[np.ndarray] = []
     fe_card_raw: List[int] = []
     for fe_name in fe_terms:
-        codes, uniq = pd.factorize(data[fe_name], sort=False, use_na_sentinel=True)
+        codes, uniq = pd.factorize(
+            data[fe_name],
+            sort=False,
+            use_na_sentinel=True,
+        )
         if (codes < 0).any():
             raise MethodIncompatibility(
                 f"fepois: NaN in fixed effect column {fe_name!r}"
@@ -833,8 +875,9 @@ def fepois(
     if n_kept == 0:
         raise ValueError(
             "All rows dropped by singleton + separation pre-passes. Common "
-            "causes: too-fine FE structure relative to N, or all-zero outcomes "
-            "in every FE cluster. Disable the drops with drop_singletons=False "
+            "causes: too-fine FE structure relative to N, or all-zero "
+            "outcomes in every FE cluster. Disable the drops with "
+            "drop_singletons=False "
             "/ drop_separation=False to inspect what happens."
         )
     n, p = X[keep].shape if n_kept < n_obs else X.shape
@@ -875,15 +918,16 @@ def fepois(
     # ----- IRLS / PPML-HDFE main loop -----
     # n, p already computed and guarded above; reassign in case X was masked
     n, p = X.shape
-    # Effective per-obs weight in the IRLS working step is ``mu * obs_weights``.
+    # Effective per-obs weight in IRLS is ``mu * obs_weights``.
     # Default to 1 so the unweighted MLE path is unchanged.
     if obs_weights is None:
         obs_weights = np.ones(n, dtype=np.float64)
     else:
         _positive_weight_mass(
-            obs_weights, context=f"fepois kept sample weights column {weights!r}",
+            obs_weights,
+            context=f"fepois kept sample weights column {weights!r}",
         )
-    # Initialisation: add a small jitter so log(y) is well-defined for y=0 rows.
+    # Initialisation: add a small jitter so log(y) is defined for y=0.
     mu = np.maximum(y, 1.0) + 0.1
     eta = np.log(mu)
     deviance = float("inf")
@@ -928,7 +972,7 @@ def fepois(
         x_tilde_flat = np.asarray(result["x_tilde_flat"], dtype=np.float64)
         x_tilde_n = int(result["x_tilde_n"])
         x_tilde_p = int(result["x_tilde_p"])
-        X_tilde = x_tilde_flat.reshape(x_tilde_p, x_tilde_n).T  # (n, p) C-order
+        X_tilde = x_tilde_flat.reshape(x_tilde_p, x_tilde_n).T
         w = np.asarray(result["w"], dtype=np.float64)
         eta = np.asarray(result["eta"], dtype=np.float64)
         mu = np.asarray(result["mu"], dtype=np.float64)
@@ -938,8 +982,8 @@ def fepois(
     else:
         # Python IRLS fallback (Phase A / B0 dispatcher path).
         for it in range(maxiter):
-            z = eta + (y - mu) / mu             # working response (no weights here)
-            w = mu * obs_weights                 # working weight: μ_i * w_i
+            z = eta + (y - mu) / mu
+            w = mu * obs_weights
 
             # Weighted within-transform of z and X by FE
             z_tilde, _, _ = _weighted_ap_demean(
@@ -951,7 +995,8 @@ def fepois(
                 max_iter=fe_maxiter, tol=fe_tol,
             )
 
-            # WLS on demeaned: solve (X_tilde' W X_tilde) beta = X_tilde' W z_tilde
+            # WLS on demeaned:
+            # (X_tilde' W X_tilde) beta = X_tilde' W z_tilde.
             Xw = X_tilde * w[:, None]
             XtWX = X_tilde.T @ Xw
             XtWz = X_tilde.T @ (w * z_tilde)
@@ -963,20 +1008,25 @@ def fepois(
                     "perfect collinearity or all-zero weights."
                 ) from exc
 
-            # eta_new such that eta_new = X*beta + alpha (FE) (Correia 2020, §3.1)
-            # Identity: P_FE^w(z - X*beta) = (z - X*beta) - (z_tilde - X_tilde*beta)
-            # so eta_new = X*beta + P_FE^w(z - X*beta) = z - (z_tilde - X_tilde @ beta)
+            # eta_new = X*beta + alpha (FE) (Correia 2020, sec. 3.1).
+            # P_FE^w(z - X*beta) =
+            #   (z - X*beta) - (z_tilde - X_tilde*beta)
+            # so eta_new = z - (z_tilde - X_tilde @ beta).
             eta_new = z - (z_tilde - X_tilde @ beta)
             # Numerical guard on eta to keep mu in float64 range.
             np.clip(eta_new, -30.0, 30.0, out=eta_new)
             mu_new = np.exp(eta_new)
 
-            # Step-halving if deviance non-decrease (rare but happens near boundary).
+            # Step-halving if deviance non-decreases.
             # Use the weighted deviance when ``weights=`` was supplied so the
             # scalar tracks the actual log-likelihood we're optimising.
             new_dev = _poisson_deviance(y, mu_new, obs_weights)
             halvings = 0
-            while new_dev > deviance and halvings < 10 and np.isfinite(deviance):
+            while (
+                new_dev > deviance
+                and halvings < 10
+                and np.isfinite(deviance)
+            ):
                 eta_new = 0.5 * (eta_new + eta)
                 np.clip(eta_new, -30.0, 30.0, out=eta_new)
                 mu_new = np.exp(eta_new)
@@ -1070,7 +1120,7 @@ def fepois(
 def _poisson_deviance(
     y: np.ndarray, mu: np.ndarray, weights: Optional[np.ndarray] = None,
 ) -> float:
-    """Poisson deviance: 2 * Σ w_i [ y log(y/mu) - (y - mu) ] (y log y → 0 at y=0).
+    """Poisson deviance.
 
     ``weights`` defaults to 1; passing a per-obs weight vector returns the
     weighted deviance so step-halving tracks the weighted log-likelihood

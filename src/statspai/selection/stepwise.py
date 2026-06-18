@@ -15,14 +15,15 @@ References
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
-from typing import List, Optional, Literal
+from dataclasses import dataclass
+from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +70,10 @@ class SelectionResult(ResultProtocolMixin):
     selected: List[str]
     dropped: List[str]
     history: pd.DataFrame
-    final_model: dict
+    final_model: Dict[str, Any]
     method: str = ""
-    coefficients: Optional[dict] = None
-    lasso_path: Optional[dict] = None
+    coefficients: Optional[Dict[str, float]] = None
+    lasso_path: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Display helpers
@@ -93,10 +94,20 @@ class SelectionResult(ResultProtocolMixin):
         lines.append(f"  AIC          : {fm.get('aic', 0):.2f}")
         lines.append(f"  BIC          : {fm.get('bic', 0):.2f}")
         lines.append("")
-        lines.append(f"  Selected ({len(self.selected)}): "
-                      + ", ".join(self.selected) if self.selected else "  Selected: (none)")
-        lines.append(f"  Dropped  ({len(self.dropped)}): "
-                      + ", ".join(self.dropped) if self.dropped else "  Dropped: (none)")
+        if self.selected:
+            lines.append(
+                f"  Selected ({len(self.selected)}): "
+                + ", ".join(self.selected)
+            )
+        else:
+            lines.append("  Selected: (none)")
+        if self.dropped:
+            lines.append(
+                f"  Dropped  ({len(self.dropped)}): "
+                + ", ".join(self.dropped)
+            )
+        else:
+            lines.append("  Dropped: (none)")
 
         if self.coefficients:
             lines.append("")
@@ -109,7 +120,10 @@ class SelectionResult(ResultProtocolMixin):
         print(text)
         return text
 
-    def plot(self, figsize=(10, 6)):
+    def plot(
+        self,
+        figsize: Tuple[float, float] = (10, 6),
+    ) -> Tuple[Any, Any]:
         """Plot selection diagnostics.
 
         For stepwise: criterion value at each step.
@@ -119,13 +133,14 @@ class SelectionResult(ResultProtocolMixin):
         -------
         (fig, ax) : matplotlib Figure and Axes
         """
-        import matplotlib.pyplot as plt
-
         if self.lasso_path is not None:
             return self._plot_lasso_path(figsize)
         return self._plot_stepwise_history(figsize)
 
-    def _plot_stepwise_history(self, figsize):
+    def _plot_stepwise_history(
+        self,
+        figsize: Tuple[float, float],
+    ) -> Tuple[Any, Any]:
         import matplotlib.pyplot as plt
 
         hist = self.history
@@ -135,9 +150,15 @@ class SelectionResult(ResultProtocolMixin):
 
         fig, ax = plt.subplots(figsize=figsize)
         steps = hist["step"].values
-        criterion_col = [c for c in hist.columns if c.lower() in ("aic", "bic", "adjr2", "pvalue")]
+        criterion_col = [
+            c for c in hist.columns
+            if c.lower() in ("aic", "bic", "adjr2", "pvalue")
+        ]
         if not criterion_col:
-            criterion_col = [c for c in hist.columns if c not in ("step", "action", "variable", "r_squared")]
+            criterion_col = [
+                c for c in hist.columns
+                if c not in ("step", "action", "variable", "r_squared")
+            ]
         if not criterion_col:
             warnings.warn("Cannot determine criterion column from history.")
             return fig, ax
@@ -146,25 +167,35 @@ class SelectionResult(ResultProtocolMixin):
         ax.plot(steps, hist[col].values, marker="o", linewidth=2)
         for _, row in hist.iterrows():
             label = row.get("action", "") + " " + row.get("variable", "")
-            ax.annotate(label.strip(), (row["step"], row[col]),
-                        textcoords="offset points", xytext=(5, 5), fontsize=8)
+            ax.annotate(
+                label.strip(), (row["step"], row[col]),
+                textcoords="offset points", xytext=(5, 5), fontsize=8,
+            )
         ax.set_xlabel("Step")
         ax.set_ylabel(col.upper())
         ax.set_title(f"Stepwise Selection — {col.upper()} at Each Step")
         fig.tight_layout()
         return fig, ax
 
-    def _plot_lasso_path(self, figsize):
+    def _plot_lasso_path(
+        self,
+        figsize: Tuple[float, float],
+    ) -> Tuple[Any, Any]:
         import matplotlib.pyplot as plt
 
-        lambdas = self.lasso_path["lambdas"]
-        paths = self.lasso_path["coef_paths"]
+        path = self.lasso_path
+        if path is None:
+            raise MethodIncompatibility("LASSO path is not available.")
+        lambdas = path["lambdas"]
+        paths = path["coef_paths"]
 
         fig, ax = plt.subplots(figsize=figsize)
         for name, coefs in paths.items():
             ax.plot(np.log10(lambdas), coefs, label=name)
-        ax.axvline(np.log10(self.lasso_path.get("lambda_best", lambdas[-1])),
-                    color="grey", linestyle="--", linewidth=1, label="selected λ")
+        ax.axvline(
+            np.log10(path.get("lambda_best", lambdas[-1])),
+            color="grey", linestyle="--", linewidth=1, label="selected λ",
+        )
         ax.set_xlabel("log₁₀(λ)")
         ax.set_ylabel("Coefficient")
         ax.set_title("LASSO Coefficient Path")
@@ -175,10 +206,14 @@ class SelectionResult(ResultProtocolMixin):
     # Jupyter rich display
     def _repr_html_(self) -> str:
         fm = self.final_model
+
+        def _fmt(value: Any) -> str:
+            return f"{value:.4f}" if isinstance(value, float) else str(value)
+
         rows = "".join(
             f"<tr><td style='text-align:left;padding:2px 8px'>{k}</td>"
             f"<td style='text-align:right;padding:2px 8px'>"
-            f"{v:.4f if isinstance(v, float) else v}</td></tr>"
+            f"{_fmt(v)}</td></tr>"
             for k, v in fm.items()
         )
         sel = ", ".join(f"<code>{s}</code>" for s in self.selected) or "(none)"
@@ -197,7 +232,10 @@ class SelectionResult(ResultProtocolMixin):
 # Internal OLS helpers (no sklearn)
 # ---------------------------------------------------------------------------
 
-def _ols_fit(X: np.ndarray, y: np.ndarray):
+def _ols_fit(
+    X: np.ndarray,
+    y: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, int]:
     """OLS via QR decomposition. Returns (beta, residuals, rank)."""
     Q, R = np.linalg.qr(X, mode="reduced")
     beta = np.linalg.solve(R, Q.T @ y)
@@ -205,7 +243,7 @@ def _ols_fit(X: np.ndarray, y: np.ndarray):
     return beta, residuals, np.linalg.matrix_rank(R)
 
 
-def _model_stats(X: np.ndarray, y: np.ndarray):
+def _model_stats(X: np.ndarray, y: np.ndarray) -> Optional[Dict[str, Any]]:
     """Compute model statistics: RSS, R², adj-R², AIC, BIC, p-values."""
     n, k = X.shape
     if n <= k:
@@ -243,12 +281,16 @@ def _model_stats(X: np.ndarray, y: np.ndarray):
     }
 
 
-def _build_X(data: pd.DataFrame, cols: list[str], add_intercept: bool = True):
+def _build_X(
+    data: pd.DataFrame,
+    cols: list[str],
+    add_intercept: bool = True,
+) -> np.ndarray:
     """Build design matrix from column names."""
     X = data[cols].values.astype(float)
     if add_intercept:
         X = np.column_stack([np.ones(len(X)), X])
-    return X
+    return np.asarray(X, dtype=float)
 
 
 # ---------------------------------------------------------------------------
@@ -294,9 +336,10 @@ def stepwise(
     --------
     >>> import statspai as sp
     >>> df = sp.cps_wage()
-    >>> res = sp.stepwise(df, y="log_wage",
-    ...                   x=["female", "education", "experience", "tenure", "union"],
-    ...                   method="both", criterion="bic", verbose=False)
+    >>> res = sp.stepwise(
+    ...     df, y="log_wage",
+    ...     x=["female", "education", "experience", "tenure", "union"],
+    ...     method="both", criterion="bic", verbose=False)
     >>> "education" in res.selected
     True
     >>> bool(set(res.selected).isdisjoint(res.dropped))
@@ -318,27 +361,27 @@ def stepwise(
     # Choose comparator
     if criterion in ("aic", "bic"):
         # lower is better
-        def is_better(new, old):
+        def is_better(new: float, old: float) -> bool:
             return new < old
         worse_init = np.inf
     elif criterion == "adjr2":
         # higher is better
-        def is_better(new, old):
+        def is_better(new: float, old: float) -> bool:
             return new > old
         worse_init = -np.inf
     else:  # pvalue — use BIC internally for tie-breaking, but gate on p-value
-        def is_better(new, old):
+        def is_better(new: float, old: float) -> bool:
             return new < old
         worse_init = np.inf
 
-    def _criterion_value(st):
+    def _criterion_value(st: Optional[Dict[str, Any]]) -> float:
         if st is None:
-            return worse_init
+            return float(worse_init)
         if criterion == "adjr2":
-            return st["adj_r_squared"]
+            return float(st["adj_r_squared"])
         elif criterion == "pvalue":
-            return st["bic"]  # use BIC as tiebreaker
-        return st[criterion]
+            return float(st["bic"])  # use BIC as tiebreaker
+        return float(st[criterion])
 
     # Initialise
     if method == "backward":
@@ -346,10 +389,10 @@ def stepwise(
     else:
         included = []
 
-    history_rows: list[dict] = []
+    history_rows: List[Dict[str, Any]] = []
     step = 0
 
-    def _eval_model(cols):
+    def _eval_model(cols: List[str]) -> Optional[Dict[str, Any]]:
         if not cols:
             # intercept-only
             X = np.ones((len(y_vec), 1))
@@ -357,7 +400,12 @@ def stepwise(
             X = _build_X(df, cols, add_intercept=True)
         return _model_stats(X, y_vec)
 
-    def _log_step(step_num, action, var, st):
+    def _log_step(
+        step_num: int,
+        action: str,
+        var: str,
+        st: Optional[Dict[str, Any]],
+    ) -> None:
         crit_val = _criterion_value(st)
         r2 = st["r_squared"] if st else 0.0
         row = {
@@ -381,8 +429,8 @@ def stepwise(
     while improved:
         improved = False
         best_crit = current_crit
-        best_action = None
-        best_var = None
+        best_action: Optional[str] = None
+        best_var: Optional[str] = None
 
         # --- Try adding ---
         if method in ("forward", "both"):
@@ -415,9 +463,12 @@ def stepwise(
                     continue
 
                 if criterion == "pvalue":
-                    # Only remove if that variable's p-value in current model > alpha_out
+                    # Gate removal on the current model's variable p-value.
                     cur_idx = included.index(var) + 1  # +1 for intercept
-                    if current_stats is not None and cur_idx < len(current_stats["pvalues"]):
+                    if (
+                        current_stats is not None
+                        and cur_idx < len(current_stats["pvalues"])
+                    ):
                         pval = current_stats["pvalues"][cur_idx]
                         if pval <= alpha_out:
                             continue
@@ -430,7 +481,7 @@ def stepwise(
                     best_action = "remove"
                     best_var = var
 
-        if best_var is not None:
+        if best_var is not None and best_action is not None:
             step += 1
             if best_action == "add":
                 included.append(best_var)
@@ -449,6 +500,8 @@ def stepwise(
 
     # Final stats
     final_stats = _eval_model(included)
+    if final_stats is None:
+        raise MethodIncompatibility("Final stepwise model is not estimable.")
     fm = {
         "n": final_stats["n"],
         "k": final_stats["k"],
@@ -552,18 +605,27 @@ def _lasso_coordinate_descent(
 def _lambda_max(X: np.ndarray, y: np.ndarray) -> float:
     """Smallest lambda for which all coefficients are zero."""
     n = X.shape[0]
-    return np.max(np.abs(X.T @ y)) / n
+    return float(np.max(np.abs(X.T @ y)) / n)
 
 
-def _lambda_grid(X: np.ndarray, y: np.ndarray, n_lambda: int = 100,
-                 eps: float = 1e-3) -> np.ndarray:
+def _lambda_grid(
+    X: np.ndarray,
+    y: np.ndarray,
+    n_lambda: int = 100,
+    eps: float = 1e-3,
+) -> np.ndarray:
     """Log-spaced lambda grid from lambda_max to eps * lambda_max."""
     lam_max = _lambda_max(X, y)
     return np.logspace(np.log10(lam_max), np.log10(eps * lam_max), n_lambda)
 
 
-def _lasso_path(X: np.ndarray, y: np.ndarray, lambdas: np.ndarray,
-                max_iter: int = 1000, tol: float = 1e-6):
+def _lasso_path(
+    X: np.ndarray,
+    y: np.ndarray,
+    lambdas: np.ndarray,
+    max_iter: int = 1000,
+    tol: float = 1e-6,
+) -> np.ndarray:
     """Compute the full LASSO regularisation path.
 
     Returns
@@ -581,7 +643,11 @@ def _lasso_path(X: np.ndarray, y: np.ndarray, lambdas: np.ndarray,
     return coef_matrix
 
 
-def _kfold_indices(n: int, k: int, seed: int = 42):
+def _kfold_indices(
+    n: int,
+    k: int,
+    seed: int = 42,
+) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
     """Generate K-fold train/test index splits."""
     rng = np.random.default_rng(seed)
     indices = rng.permutation(n)
@@ -645,9 +711,10 @@ def lasso_select(
     --------
     >>> import statspai as sp
     >>> df = sp.cps_wage()
-    >>> res = sp.lasso_select(df, y="log_wage",
-    ...                       x=["female", "education", "experience", "tenure", "union"],
-    ...                       method="bic", verbose=False)
+    >>> res = sp.lasso_select(
+    ...     df, y="log_wage",
+    ...     x=["female", "education", "experience", "tenure", "union"],
+    ...     method="bic", verbose=False)
     >>> res.method
     'lasso_bic'
     >>> bool(res.lasso_path["lambda_best"] > 0)
@@ -695,12 +762,15 @@ def lasso_select(
             rss = float(resid @ resid)
             k_nonzero = int(np.sum(np.abs(coef_matrix[i]) > 1e-10))
             if method == "bic":
-                scores[i] = n * np.log(rss / n + 1e-300) + k_nonzero * np.log(n)
+                scores[i] = (
+                    n * np.log(rss / n + 1e-300)
+                    + k_nonzero * np.log(n)
+                )
             else:  # aic
                 scores[i] = n * np.log(rss / n + 1e-300) + 2 * k_nonzero
         best_idx = int(np.argmin(scores))
 
-    best_lambda = lambdas[best_idx]
+    best_lambda = float(lambdas[best_idx])
     best_beta_sc = coef_matrix[best_idx]
 
     # Un-standardise coefficients
@@ -720,6 +790,10 @@ def lasso_select(
         # intercept-only
         X_final = np.ones((n, 1))
         final_st = _model_stats(X_final, y_raw)
+    if final_st is None:
+        raise MethodIncompatibility(
+            "Final LASSO-selected model is not estimable."
+        )
 
     fm = {
         "n": final_st["n"],
@@ -738,12 +812,12 @@ def lasso_select(
             coefs[var_names[j]] = float(beta_orig[j])
 
     # Build path dict for plotting (un-standardise)
-    path_dict = {}
+    path_dict: Dict[str, List[float]] = {}
     for j in range(p):
         path_dict[var_names[j]] = (coef_matrix[:, j] / X_std[j]).tolist()
 
     # History: one row per lambda showing selected count & criterion
-    history_rows = []
+    history_rows: List[Dict[str, Any]] = []
     for i, lam in enumerate(lambdas):
         k_nonzero = int(np.sum(np.abs(coef_matrix[i]) > 1e-10))
         resid = y_c - X_sc @ coef_matrix[i]
@@ -756,10 +830,15 @@ def lasso_select(
         })
 
     if verbose:
-        method_label = f"lasso_{method}"
         print(f"LASSO ({method.upper()}): λ = {best_lambda:.6f}")
-        print(f"  Selected ({len(selected)}): {', '.join(selected) if selected else '(none)'}")
-        print(f"  Dropped  ({len(dropped)}): {', '.join(dropped) if dropped else '(none)'}")
+        print(
+            f"  Selected ({len(selected)}): "
+            f"{', '.join(selected) if selected else '(none)'}"
+        )
+        print(
+            f"  Dropped  ({len(dropped)}): "
+            f"{', '.join(dropped) if dropped else '(none)'}"
+        )
 
     _result = SelectionResult(
         selected=selected,

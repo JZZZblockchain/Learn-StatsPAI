@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def as_float_arrays(*arrays):
+def as_float_arrays(*arrays: object) -> list[np.ndarray]:
     """Cast a bundle of inputs to float ndarrays and verify equal length.
 
     Raises
@@ -32,8 +32,11 @@ def as_float_arrays(*arrays):
     return out
 
 
-def harmonize_signs(bx: np.ndarray, by: np.ndarray):
-    """Flip signs so all exposure betas are positive (MR harmonic convention)."""
+def harmonize_signs(
+    bx: np.ndarray,
+    by: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Flip signs so all exposure betas are positive."""
     flip = bx < 0
     bx = bx.copy()
     by = by.copy()

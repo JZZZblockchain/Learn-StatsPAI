@@ -33,7 +33,7 @@ Correia, S. (2017). Linear models with high-dimensional fixed effects.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -68,12 +68,12 @@ class FeolsResult:
     n_obs: int
     n_kept: int
     n_dropped_singletons: int
-    rss: float                  # residual sum of squares (in residualised space)
-    tss: float                  # total sum of squares (after FE residualisation)
-    r_squared_within: float     # within R²
+    rss: float
+    tss: float
+    r_squared_within: float
     fe_names: List[str]
     fe_cardinality: List[int]
-    df_resid: int               # n_kept - p - sum(G_k - 1)
+    df_resid: int
     vcov_type: str
     ssc: str = "statspai"
     cluster_var: Optional[str] = None
@@ -124,16 +124,19 @@ class FeolsResult:
         )
         if self.fe_names:
             fe_desc = ", ".join(
-                f"{n}({c:,})" for n, c in zip(self.fe_names, self.fe_cardinality)
+                f"{n}({c:,})"
+                for n, c in zip(self.fe_names, self.fe_cardinality)
             )
             lines.append(f"Fixed effects: {fe_desc}")
         lines.append("")
-        lines.append(self.tidy().to_string(float_format=lambda x: f"{x:.6f}"))
+        lines.append(
+            str(self.tidy().to_string(float_format=lambda x: f"{x:.6f}"))
+        )
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
         """Lossless JSON-safe payload for HDFE OLS results."""
-        return _jsonable({
+        payload = {
             "kind": "fast_feols_result",
             "model": "ols_hdfe",
             "formula": self.formula,
@@ -150,21 +153,25 @@ class FeolsResult:
             "backend": self.backend,
             "fixed_effects": [
                 {"name": name, "cardinality": cardinality}
-                for name, cardinality in zip(self.fe_names, self.fe_cardinality)
+                for name, cardinality in zip(
+                    self.fe_names,
+                    self.fe_cardinality,
+                )
             ],
             "coefficients": _tidy_records(self.tidy()),
             "vcov": {
                 "terms": list(self.coef_names),
                 "matrix": self.vcov_matrix,
             },
-        })
+        }
+        return cast(dict[str, Any], _jsonable(payload))
 
     def to_agent_summary(self, *, max_terms: int = 10) -> dict[str, Any]:
         """Bounded agent-facing summary for fast HDFE OLS results."""
         n_terms = len(self.coef_names)
         limit = max(int(max_terms), 0)
         rows = _tidy_records(self.tidy().head(limit))
-        return _jsonable({
+        payload = {
             "kind": "fast_feols_agent_summary",
             "model": "ols_hdfe",
             "formula": self.formula,
@@ -178,13 +185,17 @@ class FeolsResult:
             "cluster_var": self.cluster_var,
             "fixed_effects": [
                 {"name": name, "cardinality": cardinality}
-                for name, cardinality in zip(self.fe_names, self.fe_cardinality)
+                for name, cardinality in zip(
+                    self.fe_names,
+                    self.fe_cardinality,
+                )
             ],
             "coefficients": rows,
             "n_terms": n_terms,
             "truncated_terms": max(n_terms - limit, 0),
             "backend": self.backend,
-        })
+        }
+        return cast(dict[str, Any], _jsonable(payload))
 
     def __repr__(self) -> str:  # pragma: no cover  - cosmetic
         return self.summary()
@@ -279,7 +290,9 @@ def feols(
             f"feols: ssc={ssc!r}; supported: 'statspai' or 'fixest'"
         )
     if vcov == "cr1" and cluster is None:
-        raise MethodIncompatibility("feols: vcov='cr1' requires cluster=<column name>")
+        raise MethodIncompatibility(
+            "feols: vcov='cr1' requires cluster=<column name>"
+        )
     if cluster is not None and vcov in ("iid", "hc1"):
         raise MethodIncompatibility(
             f"feols: cluster={cluster!r} provided but vcov={vcov!r}; "
@@ -306,7 +319,9 @@ def feols(
         needed_cols = needed_cols + [cluster]
     missing = [c for c in needed_cols if c not in data.columns]
     if missing:
-        raise MethodIncompatibility(f"feols: columns missing from data: {missing}")
+        raise MethodIncompatibility(
+            f"feols: columns missing from data: {missing}"
+        )
 
     n_obs = len(data)
     _nonempty_sample(n_obs, context="feols")
@@ -322,7 +337,9 @@ def feols(
     if X_user.ndim == 1:
         X_user = X_user.reshape(-1, 1)
     if not np.isfinite(X_user).all():
-        raise MethodIncompatibility("feols: regressor columns contain non-finite values")
+        raise MethodIncompatibility(
+            "feols: regressor columns contain non-finite values"
+        )
     if add_intercept:
         X = np.column_stack([np.ones(n_obs, dtype=np.float64), X_user])
         coef_names_full: List[str] = ["(Intercept)"] + list(rhs_terms)
@@ -409,7 +426,7 @@ def feols(
             # Re-densify codes on kept rows
             fe_codes_kept: List[np.ndarray] = []
             counts_list: List[np.ndarray] = []
-            fe_card: List[int] = []
+            weighted_fe_card: List[int] = []
             for codes_k in fe_codes_raw:
                 ck = codes_k[keep_mask]
                 dense, uniq = pd.factorize(ck, sort=False)
@@ -419,7 +436,7 @@ def feols(
                 counts_list.append(
                     np.bincount(dense, minlength=G).astype(np.float64)
                 )
-                fe_card.append(G)
+                weighted_fe_card.append(G)
             y_kept = y[keep_mask]
             X_kept = X[keep_mask]
             w_kept = w_full[keep_mask]
@@ -430,6 +447,7 @@ def feols(
             )
             y_dem = stacked_dem[:, 0]
             X_dem = stacked_dem[:, 1:]
+            fe_card = weighted_fe_card
         fe_dof_statspai = _statspai_fe_dof(fe_card)
     else:
         keep_mask = np.ones(n_obs, dtype=bool)
@@ -569,7 +587,10 @@ def _fixest_cluster_fe_dof(
     return int(sum(effective_cards))
 
 
-def _is_nested_in_cluster(fe_values: np.ndarray, cluster_values: np.ndarray) -> bool:
+def _is_nested_in_cluster(
+    fe_values: np.ndarray,
+    cluster_values: np.ndarray,
+) -> bool:
     mapping: dict[object, object] = {}
     for fe_value, cluster_value in zip(fe_values, cluster_values):
         previous = mapping.setdefault(fe_value, cluster_value)

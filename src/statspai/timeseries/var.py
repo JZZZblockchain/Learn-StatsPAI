@@ -13,11 +13,12 @@ Lutkepohl, H. (2005).
 *Springer*.
 
 Granger, C.W.J. (1969).
-"Investigating Causal Relations by Econometric Models and Cross-spectral Methods."
+"Investigating Causal Relations by Econometric Models and Cross-spectral
+Methods."
 *Econometrica*, 37(3), 424-438. [@granger1969investigating]
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -58,9 +59,22 @@ class VARResult:
     lutkepohl2005new
     """
 
-    def __init__(self, coefs, se, residuals, sigma_u, var_names, lags,
-                 n_obs, aic, bic, hqic, det_sigma, log_likelihood,
-                 se_df="stata"):
+    def __init__(
+        self,
+        coefs: Dict[str, pd.DataFrame],
+        se: Dict[str, np.ndarray],
+        residuals: pd.DataFrame,
+        sigma_u: pd.DataFrame,
+        var_names: List[str],
+        lags: int,
+        n_obs: int,
+        aic: float,
+        bic: float,
+        hqic: float,
+        det_sigma: float,
+        log_likelihood: float,
+        se_df: str = "stata",
+    ) -> None:
         self.coefs = coefs  # dict: var_name -> DataFrame of coefficients
         self.se = se
         self.residuals = residuals
@@ -74,11 +88,13 @@ class VARResult:
         self.det_sigma = det_sigma
         self.log_likelihood = log_likelihood
         self.se_df = se_df
-        self._companion = None
-        self._B = None
+        self._companion: Optional[np.ndarray] = None
+        self._B: Optional[np.ndarray] = None
         self._k = len(var_names)
         self._lags = lags
-        self._trend = None
+        self._trend: Optional[str] = None
+        self._XtX_inv: Optional[np.ndarray] = None
+        self._coef_sigma_u: Optional[np.ndarray] = None
 
     def summary(self) -> str:
         k = len(self.var_names)
@@ -87,24 +103,39 @@ class VARResult:
             "=" * 60,
             f"Lags: {self.lags:<10d} Variables: {k}",
             f"N obs: {self.n_obs:<10d} Log-lik: {self.log_likelihood:.2f}",
-            f"AIC: {self.aic:.4f}   BIC: {self.bic:.4f}   HQIC: {self.hqic:.4f}",
+            (
+                f"AIC: {self.aic:.4f}   BIC: {self.bic:.4f}   "
+                f"HQIC: {self.hqic:.4f}"
+            ),
             "=" * 60,
         ]
         for var_name in self.var_names:
             lines.append(f"\nEquation: {var_name}")
             lines.append("-" * 60)
             coef_df = self.coefs[var_name]
-            lines.append(f"{'Variable':<20s} {'Coef':>10s} {'SE':>10s} {'t':>8s} {'P>|t|':>8s}")
+            lines.append(
+                f"{'Variable':<20s} {'Coef':>10s} {'SE':>10s}"
+                f" {'t':>8s} {'P>|t|':>8s}"
+            )
             lines.append("-" * 60)
             for idx, row in coef_df.iterrows():
                 t_val = row['coef'] / row['se'] if row['se'] > 0 else np.nan
-                p_val = 2 * (1 - stats.t.cdf(abs(t_val), self.n_obs - coef_df.shape[0]))
-                lines.append(f"{idx:<20s} {row['coef']:>10.4f} {row['se']:>10.4f} "
-                             f"{t_val:>8.3f} {p_val:>8.4f}")
+                p_val = 2 * (
+                    1 - stats.t.cdf(abs(t_val), self.n_obs - coef_df.shape[0])
+                )
+                lines.append(
+                    f"{idx:<20s} {row['coef']:>10.4f} "
+                    f"{row['se']:>10.4f} {t_val:>8.3f} {p_val:>8.4f}"
+                )
         return "\n".join(lines)
 
-    def irf(self, periods: int = 20, impulse: str = None, response: str = None,
-            orthogonal: bool = True) -> Dict[str, Any]:
+    def irf(
+        self,
+        periods: int = 20,
+        impulse: Optional[str] = None,
+        response: Optional[str] = None,
+        orthogonal: bool = True,
+    ) -> Dict[str, Any]:
         """Compute impulse response functions."""
         return irf(self, periods=periods, impulse=impulse, response=response,
                    orthogonal=orthogonal)
@@ -113,7 +144,12 @@ class VARResult:
         """Test Granger causality."""
         return granger_causality(self, caused=caused, causing=causing)
 
-    def plot_irf(self, periods: int = 20, orthogonal: bool = True, **kwargs):
+    def plot_irf(
+        self,
+        periods: int = 20,
+        orthogonal: bool = True,
+        **kwargs: Any,
+    ) -> Any:
         """Plot impulse response functions."""
         try:
             import matplotlib.pyplot as plt
@@ -139,7 +175,7 @@ class VARResult:
         return fig
 
 
-def _lag_matrix(data, lags):
+def _lag_matrix(data: np.ndarray, lags: int) -> tuple[np.ndarray, np.ndarray]:
     """Create lagged matrix for VAR estimation."""
     n, k = data.shape
     Y = data[lags:]  # dependent (T-p) x k
@@ -154,7 +190,7 @@ def _lag_matrix(data, lags):
 
 def var(
     data: pd.DataFrame,
-    variables: List[str] = None,
+    variables: Optional[List[str]] = None,
     lags: int = 1,
     trend: str = "c",
     alpha: float = 0.05,
@@ -275,7 +311,10 @@ def var(
 
     # Information criteria
     det_sigma = np.linalg.det(sigma_u)
-    log_lik = -(T * k / 2) * (1 + np.log(2 * np.pi)) - (T / 2) * np.log(det_sigma)
+    log_lik = (
+        -(T * k / 2) * (1 + np.log(2 * np.pi))
+        - (T / 2) * np.log(det_sigma)
+    )
     n_total_params = k * n_params
     aic = -2 * log_lik / T + 2 * n_total_params / T
     bic = -2 * log_lik / T + np.log(T) * n_total_params / T
@@ -305,11 +344,11 @@ def var(
 
 
 def granger_causality(
-    var_result: VARResult = None,
-    data: pd.DataFrame = None,
-    caused: str = None,
-    causing: str = None,
-    lags: int = None,
+    var_result: Optional[VARResult] = None,
+    data: Optional[pd.DataFrame] = None,
+    caused: Optional[str] = None,
+    causing: Optional[str] = None,
+    lags: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Granger causality test.
@@ -358,6 +397,12 @@ def granger_causality(
     >>> gc2 = sp.granger_causality(data=df, caused="x", causing="y", lags=2)
     >>> print(gc2["reject"])  # False — y does not Granger-cause x
     """
+    if caused is None or causing is None:
+        raise MethodIncompatibility(
+            "granger_causality requires both caused=... and causing=....",
+            diagnostics={"caused": caused, "causing": causing},
+        )
+
     if var_result is None:
         if data is None:
             raise MethodIncompatibility("Provide var_result or data")
@@ -412,7 +457,11 @@ def granger_causality(
 
     df1 = len(restrict_indices)
     df2 = T - len(coefs_all)
-    p_value = 1 - stats.f.cdf(F_stat, df1, df2) if np.isfinite(F_stat) else np.nan
+    p_value = (
+        1 - stats.f.cdf(F_stat, df1, df2)
+        if np.isfinite(F_stat)
+        else np.nan
+    )
 
     return {
         'F_stat': F_stat,
@@ -428,8 +477,8 @@ def granger_causality(
 def irf(
     var_result: VARResult,
     periods: int = 20,
-    impulse: str = None,
-    response: str = None,
+    impulse: Optional[str] = None,
+    response: Optional[str] = None,
     orthogonal: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -482,6 +531,11 @@ def irf(
     k = var_result._k
     p = var_result._lags
     B = var_result._B
+    if B is None:
+        raise MethodIncompatibility(
+            "VARResult does not contain coefficient matrices for IRF. "
+            "Re-fit the model with sp.var(...) and retry."
+        )
     var_names = var_result.var_names
 
     # Build companion matrix
@@ -500,7 +554,11 @@ def irf(
         Phi.append(Phi_s)
 
     # Orthogonalize via Cholesky
-    sigma_u = var_result.sigma_u.values if isinstance(var_result.sigma_u, pd.DataFrame) else var_result.sigma_u
+    sigma_u = (
+        var_result.sigma_u.values
+        if isinstance(var_result.sigma_u, pd.DataFrame)
+        else var_result.sigma_u
+    )
     if orthogonal:
         P = np.linalg.cholesky(sigma_u)
     else:
@@ -516,7 +574,9 @@ def irf(
         for resp in resp_vars:
             resp_idx = var_names.index(resp)
             key = f"{imp} -> {resp}"
-            irf_values = np.array([Phi[s] @ P[:, imp_idx] for s in range(periods + 1)])
+            irf_values = np.array(
+                [Phi[s] @ P[:, imp_idx] for s in range(periods + 1)]
+            )
             irfs[key] = irf_values[:, resp_idx]
 
     return {'irf': irfs, 'periods': list(range(periods + 1))}

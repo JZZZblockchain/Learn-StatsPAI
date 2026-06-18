@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 
 
-def _ensure_mpl():
+def _ensure_mpl() -> Tuple[Any, Any]:
     try:
         import matplotlib.pyplot as plt
         import matplotlib
@@ -40,7 +40,7 @@ def _ensure_mpl():
         )
 
 
-def _style_ax(ax):
+def _style_ax(ax: Any) -> None:
     """Apply clean academic styling to axes."""
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -59,14 +59,14 @@ def parallel_trends_plot(
     id: Optional[str] = None,
     treat_time: Optional[Union[int, float]] = None,
     agg: str = 'mean',
-    labels: Optional[Dict] = None,
+    labels: Optional[Dict[str, str]] = None,
     colors: Optional[Tuple[str, str]] = None,
     ci: bool = True,
-    ax=None,
-    figsize: tuple = (10, 6),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Plot raw outcome means over time for treatment and control groups.
 
@@ -191,12 +191,12 @@ def parallel_trends_plot(
 
 def bacon_plot(
     bacon_result: Dict[str, Any],
-    ax=None,
-    figsize: tuple = (10, 6),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
     colors: Optional[Dict[str, str]] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Scatter plot of Goodman-Bacon decomposition.
 
@@ -286,17 +286,17 @@ def bacon_plot(
 # ======================================================================
 
 def group_time_plot(
-    result,
+    result: Any,
     plot_type: str = 'dot',
-    ax=None,
-    figsize: tuple = (12, 7),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (12, 7),
     title: Optional[str] = None,
     color: str = '#2C3E50',
     sig_color: str = '#E74C3C',
     insig_color: str = '#BDC3C7',
     alpha_level: float = 0.05,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Plot group-time ATT estimates from Callaway-Sant'Anna.
 
@@ -406,7 +406,14 @@ def group_time_plot(
     return fig, ax
 
 
-def _group_time_heatmap(gt, ax, figsize, title, plt, mpl):
+def _group_time_heatmap(
+    gt: pd.DataFrame,
+    ax: Any,
+    figsize: Tuple[float, float],
+    title: Optional[str],
+    plt: Any,
+    mpl: Any,
+) -> Tuple[Any, Any]:
     """Internal: heatmap of group-time ATTs."""
     pivot = gt.pivot_table(
         values='att', index='group', columns='time', aggfunc='mean',
@@ -459,14 +466,14 @@ def did_plot(
     treat: str,
     treat_time: Optional[Union[int, float]] = None,
     show_counterfactual: bool = True,
-    labels: Optional[Dict] = None,
+    labels: Optional[Dict[str, str]] = None,
     colors: Optional[Tuple[str, str, str]] = None,
-    ax=None,
-    figsize: tuple = (10, 6),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
     annotate_effect: bool = True,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Classic DID diagram showing treatment effect with counterfactual.
 
@@ -630,9 +637,9 @@ def did_plot(
 # ======================================================================
 
 def event_study_plot(
-    result,
-    ax=None,
-    figsize: tuple = (10, 6),
+    result: Any,
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
     color: str = '#2C3E50',
     sig_color: Optional[str] = '#E74C3C',
@@ -645,8 +652,8 @@ def event_study_plot(
     marker: str = 'o',
     markersize: int = 6,
     alpha_level: float = 0.05,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Enhanced event study plot with pre/post shading and significance coloring.
 
@@ -812,16 +819,16 @@ def treatment_rollout_plot(
     time: str,
     treat: str,
     id: str,
-    ax=None,
-    figsize: tuple = (12, 7),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (12, 7),
     title: Optional[str] = None,
     treated_color: str = '#E74C3C',
     untreated_color: str = '#ECF0F1',
     never_color: str = '#BDC3C7',
     sort_by: str = 'treat_time',
     show_cohort_labels: bool = True,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Visualise staggered treatment adoption timing.
 
@@ -995,14 +1002,14 @@ def sensitivity_plot(
     sensitivity: pd.DataFrame,
     original_ci: Optional[Tuple[float, float]] = None,
     original_estimate: Optional[float] = None,
-    ax=None,
-    figsize: tuple = (10, 6),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
     color: str = '#2C3E50',
     breakdown_color: str = '#E74C3C',
     original_color: str = '#27AE60',
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Plot Rambachan & Roth (2023) sensitivity analysis.
 
@@ -1127,17 +1134,17 @@ def sensitivity_plot(
 # ======================================================================
 
 def cohort_event_study_plot(
-    result,
-    ax=None,
-    figsize: tuple = (12, 7),
+    result: Any,
+    ax: Any = None,
+    figsize: Tuple[float, float] = (12, 7),
     title: Optional[str] = None,
     palette: Optional[List[str]] = None,
     show_aggregate: bool = True,
     aggregate_color: str = '#2C3E50',
     ci: bool = True,
     ci_alpha: float = 0.08,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """
     Per-cohort event study plot (overlay).
 
@@ -1271,15 +1278,15 @@ def cohort_event_study_plot(
 # ======================================================================
 
 def ggdid(
-    result,
-    ax=None,
-    figsize=(10, 6),
+    result: Any,
+    ax: Any = None,
+    figsize: Tuple[float, float] = (10, 6),
     title: Optional[str] = None,
     point_color: str = '#2E86AB',
     band_color: str = '#F18F01',
     show_pointwise: bool = True,
     show_uniform: bool = True,
-):
+) -> Tuple[Any, Any]:
     """Plot an ``aggte()`` result, mirroring R :func:`did::ggdid`.
 
     Automatically dispatches on ``result.model_info['aggregation']``:
@@ -1442,15 +1449,15 @@ def ggdid(
 # ======================================================================
 
 def did_summary_plot(
-    result,
-    ax=None,
-    figsize: tuple = (9, 5),
+    result: Any,
+    ax: Any = None,
+    figsize: Tuple[float, float] = (9, 5),
     color: str = "#2C3E50",
     highlight_color: str = "#C0392B",
     reference: Optional[float] = None,
     title: Optional[str] = None,
     sort_by: Optional[str] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Forest plot of DID method-robustness summary.
 

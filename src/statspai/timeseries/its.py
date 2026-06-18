@@ -38,7 +38,7 @@ Epidemiology*, 46(1), 348-355. [@lopezbernal2016interrupted]
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Sequence
+from typing import Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -78,9 +78,11 @@ class ITSResult(ResultProtocolMixin):
             "----------------------------------------------\n"
             f"  intervention time : t = {self.intervention_time}\n"
             f"  n                 : {self.n_obs}\n"
-            f"  level change      : {self.level_change:+.4f}  (SE={self.se_level:.4f}, "
+            f"  level change      : {self.level_change:+.4f}  "
+            f"(SE={self.se_level:.4f}, "
             f"p={self.pvalue_level:.4f})\n"
-            f"  slope change      : {self.slope_change:+.4f}  (SE={self.se_slope:.4f}, "
+            f"  slope change      : {self.slope_change:+.4f}  "
+            f"(SE={self.se_slope:.4f}, "
             f"p={self.pvalue_slope:.4f})\n\n"
             f"Coefficients:\n{self.coefficients.to_string(index=False)}"
         )
@@ -93,7 +95,6 @@ class ITSResult(ResultProtocolMixin):
 
 
 def _newey_west_vcov(X: np.ndarray, resid: np.ndarray, L: int) -> np.ndarray:
-    n = X.shape[0]
     XtX_inv = np.linalg.pinv(X.T @ X)
     S = np.zeros((X.shape[1], X.shape[1]))
     for lag in range(L + 1):
@@ -192,8 +193,11 @@ def its(
 
     D = (np.arange(n) >= intervention).astype(float)
     # time since intervention (for slope change term)
-    t_post = np.where(np.arange(n) >= intervention,
-                       np.arange(n) - intervention, 0).astype(float)
+    t_post = np.where(
+        np.arange(n) >= intervention,
+        np.arange(n) - intervention,
+        0,
+    ).astype(float)
 
     # Build design: [1, t, D, t_post]
     parts = [np.ones(n), t, D, t_post]

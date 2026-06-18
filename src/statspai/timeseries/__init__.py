@@ -6,7 +6,11 @@ Granger causality, and cointegration analysis.
 """
 
 from .var import var, VARResult, granger_causality, irf
-from .structural_break import structural_break, StructuralBreakResult, cusum_test
+from .structural_break import (
+    structural_break,
+    StructuralBreakResult,
+    cusum_test,
+)
 from .cointegration import engle_granger, johansen, CointegrationResult
 from .local_projections import local_projections, LocalProjectionsResult
 from .garch import garch, GARCHResult

@@ -15,7 +15,7 @@ Examples
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -62,7 +62,7 @@ class ARIMAResult(ResultProtocolMixin):
     residuals: np.ndarray
     fitted_values: np.ndarray
     n: int
-    _model: object  # statsmodels result (opaque)
+    _model: Any  # statsmodels result (opaque)
 
     # --- inference accessors -------------------------------------------------
     @property
@@ -81,7 +81,10 @@ class ARIMAResult(ResultProtocolMixin):
         from scipy import stats
 
         z = (self.params / self.se).to_numpy()
-        return pd.Series(2.0 * stats.norm.sf(np.abs(z)), index=self.params.index)
+        return pd.Series(
+            2.0 * stats.norm.sf(np.abs(z)),
+            index=self.params.index,
+        )
 
     def conf_int(self, alpha: float = 0.05) -> pd.DataFrame:
         """Confidence intervals for each parameter.
@@ -101,7 +104,10 @@ class ARIMAResult(ResultProtocolMixin):
         z = stats.norm.ppf(1.0 - alpha / 2.0)
         lower = self.params - z * self.se
         upper = self.params + z * self.se
-        return pd.DataFrame({"lower": lower, "upper": upper}, index=self.params.index)
+        return pd.DataFrame(
+            {"lower": lower, "upper": upper},
+            index=self.params.index,
+        )
 
     def forecast(self, horizon: int = 10, alpha: float = 0.05) -> pd.DataFrame:
         fc = self._model.get_forecast(steps=horizon)
@@ -116,13 +122,24 @@ class ARIMAResult(ResultProtocolMixin):
             }
         )
 
-    def plot(self, horizon: int = 20, alpha: float = 0.05, ax=None):
+    def plot(
+        self,
+        horizon: int = 20,
+        alpha: float = 0.05,
+        ax: Optional[Any] = None,
+    ) -> Any:
         import matplotlib.pyplot as plt
 
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 4))
         T = np.arange(self.n)
-        ax.plot(T, self.fitted_values, color="C0", linewidth=0.8, label="fitted")
+        ax.plot(
+            T,
+            self.fitted_values,
+            color="C0",
+            linewidth=0.8,
+            label="fitted",
+        )
         ax.plot(
             T,
             self.fitted_values + self.residuals,
@@ -152,14 +169,20 @@ class ARIMAResult(ResultProtocolMixin):
             f"AICc       : {self.aicc:.2f}",
             f"Log-Lik    : {self.log_likelihood:.2f}",
             "",
-            f"  {'':<15s}  {'coef':>10s}  {'std err':>10s}  {'z':>8s}  {'P>|z|':>8s}",
+            (
+                f"  {'':<15s}  {'coef':>10s}  {'std err':>10s}"
+                f"  {'z':>8s}  {'P>|z|':>8s}"
+            ),
         ]
         pvals = self.pvalues
         for nm, val in self.params.items():
             s = float(self.se.get(nm, np.nan))
             z = val / s if s and np.isfinite(s) else np.nan
             p = float(pvals.get(nm, np.nan))
-            lines.append(f"  {nm:<15s}  {val:>10.4f}  {s:>10.4f}  {z:>8.3f}  {p:>8.3f}")
+            lines.append(
+                f"  {nm:<15s}  {val:>10.4f}  {s:>10.4f}"
+                f"  {z:>8.3f}  {p:>8.3f}"
+            )
         return "\n".join(lines)
 
     def __repr__(self) -> str:
@@ -167,10 +190,10 @@ class ARIMAResult(ResultProtocolMixin):
 
 
 def arima(
-    y,
+    y: Any,
     order: Tuple[int, int, int] = (1, 0, 0),
     seasonal_order: Optional[Tuple[int, int, int, int]] = None,
-    exog=None,
+    exog: Optional[Any] = None,
     auto: bool = False,
     max_p: int = 5,
     max_q: int = 5,
@@ -195,8 +218,8 @@ def arima(
         Kalman/SARIMAX likelihood. ``'css_ml'`` is retained as a compatibility
         alias for ``'innovations_mle'``. The innovations-MLE path uses
         statsmodels' stationary/invertible exact-MLE parameterization, matching
-        ``stats::arima(method='ML')`` and tightly converged Stata ``arima``
-        coefficient conventions for pure ARMA models.
+        ``stats::arima(method='ML')`` and tightly converged Stata
+        ``arima`` coefficient conventions for pure ARMA models.
 
     Returns
     -------
@@ -219,9 +242,9 @@ def arima(
     ...     y[t] = 0.5 * y[t - 1] - 0.2 * y[t - 2] + e[t]
     >>> gdp = pd.Series(y, name="gdp")
     >>> res = sp.arima(gdp, order=(2, 0, 0))
-    >>> bool((res.se > 0).all())   # standard errors, indexed by parameter name
+    >>> bool((res.se > 0).all())  # standard errors indexed by parameter name
     True
-    >>> res.conf_int().shape       # 95% confidence intervals: one row per param
+    >>> res.conf_int().shape  # 95% CIs, one row per param
     (3, 2)
     """
     try:
@@ -241,9 +264,14 @@ def arima(
     elif method_norm in {"css", "css_ml", "conditional", "conditional_mle"}:
         method_norm = "innovations_mle"
     if method_norm not in {"statespace", "innovations_mle"}:
-        raise ValueError("method must be 'statespace', 'css_ml', or 'innovations_mle'")
+        raise ValueError(
+            "method must be 'statespace', 'css_ml', or 'innovations_mle'"
+        )
 
-    def _fit(order_: Tuple[int, int, int], maxiter: Optional[int] = None):
+    def _fit(
+        order_: Tuple[int, int, int],
+        maxiter: Optional[int] = None,
+    ) -> Any:
         if method_norm == "statespace":
             model = SARIMAX(
                 y,
@@ -253,7 +281,7 @@ def arima(
                 enforce_stationarity=False,
                 enforce_invertibility=False,
             )
-            kwargs = {"disp": False}
+            kwargs: dict[str, Any] = {"disp": False}
             if maxiter is not None:
                 kwargs["maxiter"] = maxiter
             return model.fit(**kwargs)
@@ -324,7 +352,9 @@ def arima(
             function="sp.timeseries.arima",
             params={
                 "order": list(order),
-                "seasonal_order": list(seasonal_order) if seasonal_order else None,
+                "seasonal_order": (
+                    list(seasonal_order) if seasonal_order else None
+                ),
                 "auto": auto,
                 "max_p": max_p,
                 "max_q": max_q,

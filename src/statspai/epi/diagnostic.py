@@ -30,7 +30,7 @@ under a receiver operating characteristic (ROC) curve." *Radiology*,
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from scipy import stats
@@ -116,8 +116,8 @@ def _wilson_ci(k: int, n: int, alpha: float = 0.05) -> tuple[float, float]:
 
 
 def sensitivity_specificity(
-    y_true=None,
-    y_pred=None,
+    y_true: Any = None,
+    y_pred: Any = None,
     *,
     tp: Optional[int] = None,
     fn: Optional[int] = None,
@@ -158,20 +158,25 @@ def sensitivity_specificity(
         fn = int(np.sum((y_pred == 0) & (y_true == 1)))
         fp = int(np.sum((y_pred == 1) & (y_true == 0)))
         tn = int(np.sum((y_pred == 0) & (y_true == 0)))
-    elif not all(v is not None for v in (tp, fn, fp, tn)):
+    elif tp is None or fn is None or fp is None or tn is None:
         raise ValueError(
             "Provide (y_true, y_pred) OR all of (tp, fn, fp, tn)."
         )
 
-    pos = tp + fn
-    neg = tn + fp
-    sens = tp / pos if pos > 0 else float("nan")
-    spec = tn / neg if neg > 0 else float("nan")
-    sens_ci = _wilson_ci(tp, pos, alpha) if pos > 0 else (0.0, 1.0)
-    spec_ci = _wilson_ci(tn, neg, alpha) if neg > 0 else (0.0, 1.0)
+    tp_i = int(tp)
+    fn_i = int(fn)
+    fp_i = int(fp)
+    tn_i = int(tn)
 
-    ppv = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
-    npv = tn / (tn + fn) if (tn + fn) > 0 else float("nan")
+    pos = tp_i + fn_i
+    neg = tn_i + fp_i
+    sens = tp_i / pos if pos > 0 else float("nan")
+    spec = tn_i / neg if neg > 0 else float("nan")
+    sens_ci = _wilson_ci(tp_i, pos, alpha) if pos > 0 else (0.0, 1.0)
+    spec_ci = _wilson_ci(tn_i, neg, alpha) if neg > 0 else (0.0, 1.0)
+
+    ppv = tp_i / (tp_i + fp_i) if (tp_i + fp_i) > 0 else float("nan")
+    npv = tn_i / (tn_i + fn_i) if (tn_i + fn_i) > 0 else float("nan")
     lr_pos = sens / (1 - spec) if spec < 1 else float("inf")
     lr_neg = (1 - sens) / spec if spec > 0 else float("inf")
     prevalence = pos / (pos + neg) if (pos + neg) > 0 else float("nan")
@@ -186,11 +191,11 @@ def sensitivity_specificity(
         lr_pos=float(lr_pos),
         lr_neg=float(lr_neg),
         prevalence=float(prevalence),
-        tp=tp, fp=fp, fn=fn, tn=tn,
+        tp=tp_i, fp=fp_i, fn=fn_i, tn=tn_i,
     )
 
 
-def diagnostic_test(*args, **kwargs) -> DiagnosticTestResult:
+def diagnostic_test(*args: Any, **kwargs: Any) -> DiagnosticTestResult:
     """Alias for :func:`sensitivity_specificity`.
 
     Examples
@@ -249,8 +254,8 @@ class ROCResult:
 
 
 def roc_curve(
-    y_true,
-    scores,
+    y_true: Any,
+    scores: Any,
     *,
     alpha: float = 0.05,
 ) -> ROCResult:
@@ -326,7 +331,7 @@ def roc_curve(
     )
 
 
-def auc(y_true, scores) -> float:
+def auc(y_true: Any, scores: Any) -> float:
     """Shortcut: just return the AUC.
 
     Examples
@@ -408,8 +413,8 @@ class KappaResult:
 
 
 def cohen_kappa(
-    rater_a,
-    rater_b,
+    rater_a: Any,
+    rater_b: Any,
     *,
     weights: str = "unweighted",
     alpha: float = 0.05,
@@ -495,7 +500,6 @@ def cohen_kappa(
                 if weights == "unweighted":
                     w_bar_i = 1 - marg_a[i] / n
                     w_bar_j = 1 - marg_b[j] / n
-                    w_bar_star = 1 - (marg_a[i] + marg_b[j]) / n
                     var_num += conf[i, j] / n * (
                         (1 - int(i == j)) - (w_bar_i + w_bar_j) * (1 - kappa)
                         - kappa + pe

@@ -71,7 +71,7 @@ References:
 """
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -82,11 +82,14 @@ from ._base import (
     _az_hdi_compat,
     _require_pymc,
     _sample_model,
-    _summarise_posterior,
 )
 
 
-def _logit_propensity(Z: np.ndarray, X: Optional[np.ndarray], D: np.ndarray):
+def _logit_propensity(
+    Z: np.ndarray,
+    X: Optional[np.ndarray],
+    D: np.ndarray,
+) -> np.ndarray:
     """Plug-in logit first stage returning fitted P(D=1|Z,X).
 
     Uses scikit-learn's LogisticRegression; falls back to a scipy
@@ -101,7 +104,7 @@ def _logit_propensity(Z: np.ndarray, X: Optional[np.ndarray], D: np.ndarray):
     clf = LogisticRegression(max_iter=500, solver='lbfgs')
     clf.fit(W, D.astype(int))
     ps = clf.predict_proba(W)[:, 1]
-    return np.clip(ps, 1e-4, 1 - 1e-4)
+    return cast(np.ndarray, np.clip(ps, 1e-4, 1 - 1e-4))
 
 
 def bayes_mte(
@@ -130,7 +133,7 @@ def bayes_mte(
     random_state: int = 42,
     progressbar: bool = False,
 ) -> BayesianMTEResult:
-    """Bayesian Marginal Treatment Effects via plug-in propensity + polynomial MTE.
+    """Bayesian Marginal Treatment Effects.
 
     Parameters
     ----------
@@ -151,7 +154,8 @@ def bayes_mte(
           polynomial sees it directly, so first-stage uncertainty
           propagates into the MTE curve. 2-4× slower than plugin but
           honest about uncertainty.
-    mte_method : {'polynomial', 'hv_latent', 'bivariate_normal'}, default ``'polynomial'``
+    mte_method : {'polynomial', 'hv_latent', 'bivariate_normal'}, default
+        ``'polynomial'``
         MTE parameterisation.
 
         - ``'polynomial'`` : fit a polynomial in the propensity
@@ -244,7 +248,11 @@ def bayes_mte(
             raise ValueError(f"Column '{c}' not found in data")
 
     cov_cols = list(covariates) if covariates else []
-    clean = data[[y, treat] + iv_cols + cov_cols].dropna().reset_index(drop=True)
+    clean = (
+        data[[y, treat] + iv_cols + cov_cols]
+        .dropna()
+        .reset_index(drop=True)
+    )
     n = len(clean)
     if n < 50:
         raise ValueError(
@@ -259,7 +267,8 @@ def bayes_mte(
     uniq_D = np.unique(D)
     if not set(uniq_D).issubset({0.0, 1.0}):
         raise ValueError(
-            f"Treatment '{treat}' must be binary 0/1; got unique values {uniq_D}."
+            f"Treatment '{treat}' must be binary 0/1; got unique values "
+            f"{uniq_D}."
         )
 
     if first_stage not in ('plugin', 'joint'):
@@ -416,7 +425,7 @@ def bayes_mte(
         # is linear (``poly_u=1``), matching Heckman (1979) /
         # HV 2005 exactly.
         # ------------------------------------------------------------------
-        def _abscissa(a_expr, is_numpy: bool):
+        def _abscissa(a_expr: Any, is_numpy: bool) -> Any:
             """Transform a in [0,1] to v = Φ^{-1}(a) on the probit
             scale when ``selection == 'normal'``; otherwise pass
             through unchanged. Works on numpy arrays and PyMC
@@ -425,7 +434,9 @@ def bayes_mte(
                 return a_expr
             if is_numpy:
                 from scipy.stats import norm as _norm_dist
-                return _norm_dist.ppf(np.clip(a_expr, PROBIT_CLIP, 1 - PROBIT_CLIP))
+                return _norm_dist.ppf(
+                    np.clip(a_expr, PROBIT_CLIP, 1 - PROBIT_CLIP)
+                )
             import pytensor.tensor as pt
             a_safe = pm.math.clip(a_expr, PROBIT_CLIP, 1 - PROBIT_CLIP)
             # Φ^{-1}(p) = √2 · erfinv(2p - 1)
@@ -486,13 +497,13 @@ def bayes_mte(
                 + (1.0 - D_float) * sigma_0V * lam0
             )
         else:  # 'hv_latent' — sample U_D_i per unit from the truncated
-               # uniform induced by D_i and the current p_i estimate.
-               # Reparameterisation keeps NUTS applicable:
-               #   raw_U_i ~ Uniform(0, 1)
-               #   D_i = 1: U_D_i = raw_U_i * p_i      ∈ [0, p_i]
-               #   D_i = 0: U_D_i = p_i + raw_U_i*(1-p_i) ∈ [p_i, 1]
-               # This yields U_D_i | D_i distributed as the correct
-               # truncated uniform under the HV-2005 identification.
+            # uniform induced by D_i and the current p_i estimate.
+            # Reparameterisation keeps NUTS applicable:
+            #   raw_U_i ~ Uniform(0, 1)
+            #   D_i = 1: U_D_i = raw_U_i * p_i      ∈ [0, p_i]
+            #   D_i = 0: U_D_i = p_i + raw_U_i*(1-p_i) ∈ [p_i, 1]
+            # This yields U_D_i | D_i distributed as the correct
+            # truncated uniform under the HV-2005 identification.
             raw_U = pm.Uniform('raw_U', lower=0.0, upper=1.0, shape=n)
             # Convert observed D into a float array usable in the
             # element-wise expression below.
@@ -541,7 +552,9 @@ def bayes_mte(
     # having to recompute the transform themselves.
     if selection == 'normal':
         from scipy.stats import norm as _norm_dist
-        v_grid_out = _norm_dist.ppf(np.clip(u_grid, PROBIT_CLIP, 1 - PROBIT_CLIP))
+        v_grid_out = _norm_dist.ppf(
+            np.clip(u_grid, PROBIT_CLIP, 1 - PROBIT_CLIP)
+        )
     else:
         v_grid_out = None
     for k, u in enumerate(u_grid):
@@ -562,7 +575,9 @@ def bayes_mte(
 
     # Integrated summaries (trapezoidal integration over u_grid)
     # ATE = int_0^1 MTE(u) du, approx by grid weights
-    ate_samples = np.trapezoid(mte_samples, x=u_grid, axis=1) / (u_grid.max() - u_grid.min())
+    ate_samples = np.trapezoid(
+        mte_samples, x=u_grid, axis=1
+    ) / (u_grid.max() - u_grid.min())
 
     # ATT / ATU use the population-level unit propensities to weight
     # MTE over the treated / untreated subpopulations.
@@ -590,10 +605,16 @@ def bayes_mte(
         U_pop = propensity_mle
     treated_mask = D == 1
     untreated_mask = D == 0
-    U_treated = U_pop[treated_mask] if treated_mask.sum() > 0 else np.array([])
-    U_untreated = U_pop[untreated_mask] if untreated_mask.sum() > 0 else np.array([])
+    U_treated = (
+        U_pop[treated_mask] if treated_mask.sum() > 0 else np.array([])
+    )
+    U_untreated = (
+        U_pop[untreated_mask] if untreated_mask.sum() > 0 else np.array([])
+    )
 
-    def _integrated_effect(U_population):
+    def _integrated_effect(
+        U_population: np.ndarray,
+    ) -> Tuple[float, float, float, float, float]:
         """Posterior summary of the MTE integrated over a subpopulation.
 
         Returns (mean, sd, hdi_lower, hdi_high, prob_positive). All
@@ -681,7 +702,11 @@ def bayes_mte(
     # samples U_D_i per unit so the polynomial is evaluated at the
     # textbook latent variable, not at the propensity.
     fs_label = 'joint' if first_stage == 'joint' else 'plug-in'
-    scale_label = 'V scale (probit)' if selection == 'normal' else 'U_D scale (uniform)'
+    scale_label = (
+        'V scale (probit)'
+        if selection == 'normal'
+        else 'U_D scale (uniform)'
+    )
     if mte_method == 'hv_latent':
         method_label = (
             f'Bayesian HV-latent MTE on {scale_label} '

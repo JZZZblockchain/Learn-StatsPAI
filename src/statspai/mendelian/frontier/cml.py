@@ -102,7 +102,7 @@ class MRcMLResult(ResultProtocolMixin):
 def _fit_fixed_k(
     bx: np.ndarray, by: np.ndarray, vx: np.ndarray, vy: np.ndarray,
     K: int, *, max_iter: int = 200, tol: float = 1e-8,
-):
+) -> tuple[float, float, float, np.ndarray]:
     """Block-coordinate-descent MR-cML at fixed K.
 
     Algorithm (Xue, Shen, Pan 2021 §2.3):

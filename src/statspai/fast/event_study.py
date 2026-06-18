@@ -1,4 +1,4 @@
-"""``sp.fast.event_study`` — fast event-study (TWFE) on the Phase 1+ HDFE stack.
+"""``sp.fast.event_study`` on the Phase 1+ HDFE stack.
 
 Phase 6 deliverable. This is a homogeneous-effects event-study estimator
 (post-treatment leads/lags interacted with treatment), built on top of:
@@ -34,7 +34,7 @@ estimators with heterogeneous treatment effects. AER 110(9): 2964–2996.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -69,7 +69,7 @@ class EventStudyResult:
             "ci_upper": self.coefs + 1.96 * self.ses,
         })
 
-    def plot(self, ax=None):  # pragma: no cover  - cosmetic
+    def plot(self, ax: Any = None) -> Any:  # pragma: no cover  - cosmetic
         try:
             import matplotlib.pyplot as plt
         except ImportError as exc:
@@ -89,15 +89,20 @@ class EventStudyResult:
         return ax
 
     def summary(self) -> str:
+        table = str(
+            self.tidy().to_string(
+                index=False,
+                float_format=lambda v: f"{v:.4f}",
+            )
+        )
         return (
             f"sp.fast.event_study  |  N={self.n_obs:,}, kept={self.n_kept:,}, "
-            f"event_times={list(self.event_times)}\n" +
-            self.tidy().to_string(index=False, float_format=lambda v: f"{v:.4f}")
+            f"event_times={list(self.event_times)}\n" + table
         )
 
     def to_dict(self) -> dict[str, Any]:
         """Lossless JSON-safe payload for the fast TWFE event study."""
-        return _jsonable({
+        payload = {
             "kind": "fast_event_study_result",
             "model": "twfe_event_study",
             "formula": self.formula,
@@ -110,14 +115,15 @@ class EventStudyResult:
             "coefficients": self.coefs,
             "standard_errors": self.ses,
             "tidy": _tidy_records(self.tidy()),
-        })
+        }
+        return cast(dict[str, Any], _jsonable(payload))
 
     def to_agent_summary(self, *, max_event_times: int = 20) -> dict[str, Any]:
         """Bounded agent-facing summary for fast TWFE event-study results."""
         n_terms = len(self.event_times)
         limit = max(int(max_event_times), 0)
         rows = _tidy_records(self.tidy().head(limit))
-        return _jsonable({
+        payload = {
             "kind": "fast_event_study_agent_summary",
             "model": "twfe_event_study",
             "formula": self.formula,
@@ -129,7 +135,8 @@ class EventStudyResult:
             "event_times": rows,
             "n_event_times": n_terms,
             "truncated_event_times": max(n_terms - limit, 0),
-        })
+        }
+        return cast(dict[str, Any], _jsonable(payload))
 
 
 def event_study(
@@ -176,14 +183,23 @@ def event_study(
     EventStudyResult
     """
     if not isinstance(data, pd.DataFrame):
-        raise MethodIncompatibility("fast.event_study: data must be a DataFrame")
+        raise MethodIncompatibility(
+            "fast.event_study: data must be a DataFrame"
+        )
     if len(data) < 1:
-        raise DataInsufficient("fast.event_study: data must contain at least one row")
+        raise DataInsufficient(
+            "fast.event_study: data must contain at least one row"
+        )
     roles = {"y": y, "unit": unit, "time": time, "event_time": event_time}
-    bad_roles = [name for name, col in roles.items() if not isinstance(col, str) or not col]
+    bad_roles = [
+        name
+        for name, col in roles.items()
+        if not isinstance(col, str) or not col
+    ]
     if bad_roles:
         raise MethodIncompatibility(
-            f"fast.event_study: column arguments must be non-empty strings: {bad_roles}"
+            "fast.event_study: column arguments must be non-empty strings: "
+            f"{bad_roles}"
         )
     missing = [col for col in roles.values() if col not in data.columns]
     if missing:
@@ -221,7 +237,8 @@ def event_study(
             or not isinstance(hi, (int, np.integer))
         ):
             raise MethodIncompatibility(
-                "fast.event_study: window bounds must be integer event-time offsets"
+                "fast.event_study: window bounds must be integer "
+                "event-time offsets"
             )
         lo = int(lo)
         hi = int(hi)
@@ -244,20 +261,21 @@ def event_study(
         et = df[event_time].to_numpy(dtype=np.float64)
     except (TypeError, ValueError) as exc:
         raise MethodIncompatibility(
-            f"fast.event_study: event_time column {event_time!r} must be numeric with NaN for "
-            "never-treated rows"
+            f"fast.event_study: event_time column {event_time!r} must be "
+            "numeric with NaN for never-treated rows"
         ) from exc
     if np.isinf(et).any():
         raise MethodIncompatibility(
-            f"fast.event_study: event_time column {event_time!r} contains infinite values; "
-            "use NaN only for never-treated rows"
+            f"fast.event_study: event_time column {event_time!r} contains "
+            "infinite values; use NaN only for never-treated rows"
         )
     finite = np.isfinite(et)
     rounded_et = np.rint(et[finite])
     if not np.allclose(et[finite], rounded_et, atol=1e-10, rtol=0.0):
         raise MethodIncompatibility(
-            f"fast.event_study: event_time column {event_time!r} must contain integer event-time "
-            "offsets; non-integer finite values would be silently truncated"
+            f"fast.event_study: event_time column {event_time!r} must contain "
+            "integer event-time offsets; non-integer finite values would be "
+            "silently truncated"
         )
     # cast finite rows to int for dummy labels; non-finite get a sentinel
     et_int = np.full(et.shape, np.iinfo(np.int64).min, dtype=np.int64)
@@ -315,8 +333,12 @@ def event_study(
     )
     se = np.sqrt(np.diag(V))
 
+    formula = (
+        f"{y} ~ event_time | {unit} + {time}  "
+        f"(cluster: {cluster_col})"
+    )
     return EventStudyResult(
-        formula=f"{y} ~ event_time | {unit} + {time}  (cluster: {cluster_col})",
+        formula=formula,
         event_times=np.asarray(levels),
         coefs=beta,
         ses=se,

@@ -56,7 +56,7 @@ for nAGQ ≥ 1; only the point estimates β̂, θ̂ change with nAGQ.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import warnings
 
@@ -250,19 +250,33 @@ class _Gaussian(_Family):
     link = "identity"
 
     @staticmethod
-    def inv_link(eta):
-        return eta
+    def inv_link(eta: np.ndarray) -> np.ndarray:
+        return np.asarray(eta, dtype=float)
 
     @staticmethod
-    def irls_weight(mu, w, dispersion):
-        return w
+    def irls_weight(
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(w, dtype=float)
 
     @staticmethod
-    def score_eta(y, mu, w, dispersion):
-        return w * (y - mu)
+    def score_eta(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(w * (y - mu), dtype=float)
 
     @staticmethod
-    def log_lik(y, mu, w, dispersion):
+    def log_lik(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> float:
         # Use a unit residual variance scale; the LMM path is preferred for
         # production Gaussian fits.  ``w`` here carries an observation weight
         # (typically 1.0) and serves the same role as σ⁻² in a known-variance
@@ -277,7 +291,7 @@ class _Binomial(_Family):
     link = "logit"
 
     @staticmethod
-    def inv_link(eta):
+    def inv_link(eta: np.ndarray) -> np.ndarray:
         out = np.empty_like(eta, dtype=float)
         pos = eta >= 0
         out[pos] = 1.0 / (1.0 + np.exp(-eta[pos]))
@@ -286,15 +300,29 @@ class _Binomial(_Family):
         return out
 
     @staticmethod
-    def irls_weight(mu, w, dispersion):
-        return w * mu * (1.0 - mu)
+    def irls_weight(
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(w * mu * (1.0 - mu), dtype=float)
 
     @staticmethod
-    def score_eta(y, mu, w, dispersion):
-        return y - w * mu
+    def score_eta(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(y - w * mu, dtype=float)
 
     @staticmethod
-    def log_lik(y, mu, w, dispersion):
+    def log_lik(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> float:
         mu = np.clip(mu, _EPS, 1.0 - _EPS)
         # Include the log-binomial-coefficient constant so the
         # Bernoulli (w=1) and trials-binomial (w>1) cases yield the full
@@ -313,19 +341,33 @@ class _Poisson(_Family):
     link = "log"
 
     @staticmethod
-    def inv_link(eta):
-        return np.exp(np.clip(eta, -30.0, 30.0))
+    def inv_link(eta: np.ndarray) -> np.ndarray:
+        return np.asarray(np.exp(np.clip(eta, -30.0, 30.0)), dtype=float)
 
     @staticmethod
-    def irls_weight(mu, w, dispersion):
-        return mu
+    def irls_weight(
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(mu, dtype=float)
 
     @staticmethod
-    def score_eta(y, mu, w, dispersion):
-        return y - mu
+    def score_eta(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
+        return np.asarray(y - mu, dtype=float)
 
     @staticmethod
-    def log_lik(y, mu, w, dispersion):
+    def log_lik(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> float:
         mu = np.clip(mu, 1e-300, None)
         # Include -log(y!) so AIC is comparable to negative-binomial fits
         # on the same y (NB collapses to Poisson + log(y!) as α → 0).
@@ -354,21 +396,35 @@ class _Gamma(_Family):
     n_disp_params = 1
 
     @staticmethod
-    def inv_link(eta):
-        return np.exp(np.clip(eta, -30.0, 30.0))
+    def inv_link(eta: np.ndarray) -> np.ndarray:
+        return np.asarray(np.exp(np.clip(eta, -30.0, 30.0)), dtype=float)
 
     @staticmethod
-    def irls_weight(mu, w, dispersion):
+    def irls_weight(
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
         phi = dispersion if dispersion is not None else 1.0
-        return (w / max(phi, _EPS)) * np.ones_like(mu)
+        return np.asarray((w / max(phi, _EPS)) * np.ones_like(mu), dtype=float)
 
     @staticmethod
-    def score_eta(y, mu, w, dispersion):
+    def score_eta(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
         phi = dispersion if dispersion is not None else 1.0
-        return w * (y - mu) / (mu * max(phi, _EPS))
+        return np.asarray(w * (y - mu) / (mu * max(phi, _EPS)), dtype=float)
 
     @staticmethod
-    def log_lik(y, mu, w, dispersion):
+    def log_lik(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> float:
         phi = dispersion if dispersion is not None else 1.0
         phi = max(phi, _EPS)
         inv_phi = 1.0 / phi
@@ -402,21 +458,35 @@ class _NegBin(_Family):
     n_disp_params = 1
 
     @staticmethod
-    def inv_link(eta):
-        return np.exp(np.clip(eta, -30.0, 30.0))
+    def inv_link(eta: np.ndarray) -> np.ndarray:
+        return np.asarray(np.exp(np.clip(eta, -30.0, 30.0)), dtype=float)
 
     @staticmethod
-    def irls_weight(mu, w, dispersion):
+    def irls_weight(
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
         alpha = dispersion if dispersion is not None else 0.0
-        return w * mu / (1.0 + alpha * mu)
+        return np.asarray(w * mu / (1.0 + alpha * mu), dtype=float)
 
     @staticmethod
-    def score_eta(y, mu, w, dispersion):
+    def score_eta(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> np.ndarray:
         alpha = dispersion if dispersion is not None else 0.0
-        return w * (y - mu) / (1.0 + alpha * mu)
+        return np.asarray(w * (y - mu) / (1.0 + alpha * mu), dtype=float)
 
     @staticmethod
-    def log_lik(y, mu, w, dispersion):
+    def log_lik(
+        y: np.ndarray,
+        mu: np.ndarray,
+        w: np.ndarray,
+        dispersion: Optional[float],
+    ) -> float:
         alpha = dispersion if dispersion is not None else 0.0
         if alpha <= _EPS:
             # Poisson limit
@@ -520,8 +590,8 @@ class MEGLMResult(ResultProtocolMixin):
     link: str = "identity"
 
     _se_fixed: pd.Series = field(default=None, repr=False)
-    _cov_fixed: np.ndarray = field(default=None, repr=False)
-    _G: np.ndarray = field(default=None, repr=False)
+    _cov_fixed: Optional[np.ndarray] = field(default=None, repr=False)
+    _G: Optional[np.ndarray] = field(default=None, repr=False)
     _x_fixed: List[str] = field(default_factory=list, repr=False)
     _x_random: List[str] = field(default_factory=list, repr=False)
     _group_col: str = field(default="", repr=False)
@@ -586,7 +656,7 @@ class MEGLMResult(ResultProtocolMixin):
 
     @property
     def bic(self) -> float:
-        return self.n_params * np.log(self.n_obs) - 2.0 * self.log_likelihood
+        return float(self.n_params * np.log(self.n_obs) - 2.0 * self.log_likelihood)
 
     @property
     def dispersion(self) -> Optional[float]:
@@ -743,7 +813,7 @@ class MEGLMResult(ResultProtocolMixin):
             "</div>"
         )
 
-    def cite(self) -> str:
+    def cite(self, format: str = "bibtex") -> str:
         return (
             "@article{breslow1993,\n"
             "  author  = {Breslow, N. E. and Clayton, D. G.},\n"
@@ -759,17 +829,25 @@ class MEGLMResult(ResultProtocolMixin):
     # LaTeX / plot
     # ------------------------------------------------------------------
 
-    def to_latex(self) -> str:
+    def to_latex(
+        self,
+        *,
+        caption: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> str:
         """Booktabs LaTeX fragment; mirrors ``MixedResult.to_latex``."""
+        caption_text = caption or f"{self.family.capitalize()} GLMM ({self.link} link)"
         lines = [
             r"\begin{table}[htbp]",
             r"\centering",
-            rf"\caption{{{self.family.capitalize()} GLMM ({self.link} link)}}",
+            rf"\caption{{{caption_text}}}",
             r"\begin{tabular}{lrrrr}",
             r"\toprule",
             r"Variable & Coef. & Std.\ Err. & $z$ & $P>|z|$ \\",
             r"\midrule",
         ]
+        if label is not None:
+            lines.insert(3, rf"\label{{{label}}}")
         for var in self.fixed_effects.index:
             b = self.fixed_effects[var]
             se = self._se_fixed[var]
@@ -795,8 +873,8 @@ class MEGLMResult(ResultProtocolMixin):
         self,
         kind: str = "caterpillar",
         variable: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
         """
         Diagnostic plot for the GLMM fit.
 
@@ -1099,7 +1177,7 @@ def _glmm_nll(
     nAGQ: int,
     gh_nodes: Optional[np.ndarray],
     gh_log_weights: Optional[np.ndarray],
-):
+) -> float:
     """
     Negative integrated log-likelihood for a GLMM.
 
@@ -1143,6 +1221,8 @@ def _glmm_nll(
         u_cache[j] = u_hat
 
         if use_aghq:
+            if sigma2 is None or gh_nodes is None or gh_log_weights is None:
+                raise RuntimeError("AGHQ nodes must be initialized for nAGQ > 1.")
             # H_j is a 1×1 in q=1, so its scalar value is H_j[0,0].
             ll_j = _aghq_log_lik(
                 block, beta, sigma2, family, w, off,

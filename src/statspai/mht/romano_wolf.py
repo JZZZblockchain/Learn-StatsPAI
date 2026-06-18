@@ -39,8 +39,8 @@ Clarke, D., Romano, J.P. and Wolf, M. (2020).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Union
+from dataclasses import dataclass
+from typing import Any, List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -53,7 +53,10 @@ from .._result_serialize import ResultProtocolMixin
 # Classical (non-resampling) adjustments
 # ──────────────────────────────────────────────────────────────────────
 
-def bonferroni(pvalues: Sequence[float]) -> np.ndarray:
+PValueInput = Union[Sequence[float], np.ndarray]
+
+
+def bonferroni(pvalues: PValueInput) -> np.ndarray:
     """
     Bonferroni correction: ``p_adj = min(p * S, 1)``.
 
@@ -74,10 +77,10 @@ def bonferroni(pvalues: Sequence[float]) -> np.ndarray:
     [0.004, 0.04, 0.12, 0.8]
     """
     p = np.asarray(pvalues, dtype=float)
-    return np.minimum(p * len(p), 1.0)
+    return np.asarray(np.minimum(p * len(p), 1.0), dtype=float)
 
 
-def holm(pvalues: Sequence[float]) -> np.ndarray:
+def holm(pvalues: PValueInput) -> np.ndarray:
     """
     Holm (1979) step-down correction.
 
@@ -117,7 +120,7 @@ def holm(pvalues: Sequence[float]) -> np.ndarray:
     return result
 
 
-def benjamini_hochberg(pvalues: Sequence[float]) -> np.ndarray:
+def benjamini_hochberg(pvalues: PValueInput) -> np.ndarray:
     """
     Benjamini-Hochberg (1995) FDR correction.
 
@@ -404,7 +407,10 @@ class RomanoWolfResult(ResultProtocolMixin):
     def __repr__(self) -> str:
         return self.summary()
 
-    def plot(self, figsize: tuple = (8, 5)):
+    def plot(
+        self,
+        figsize: tuple[float, float] = (8, 5),
+    ) -> tuple[Any, Any]:
         """
         Dot-plot comparing unadjusted and adjusted p-values.
 
@@ -624,7 +630,7 @@ def romano_wolf(
         # Remove this hypothesis from the active set
         active = active[active != hyp]
 
-    rw_pvalues = np.minimum(rw_pvalues, 1.0)
+    np.minimum(rw_pvalues, 1.0, out=rw_pvalues)
 
     # ── Step 4: classical adjustments for comparison ───────────────
     p_bonf = bonferroni(orig_p)
@@ -659,7 +665,7 @@ def romano_wolf(
 # ──────────────────────────────────────────────────────────────────────
 
 def adjust_pvalues(
-    pvalues: Sequence[float],
+    pvalues: PValueInput,
     method: str = "holm",
 ) -> np.ndarray:
     """

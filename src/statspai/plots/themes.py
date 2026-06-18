@@ -361,7 +361,7 @@ def use_chinese(style: str = 'auto') -> str:
     """
     try:
         import matplotlib as mpl
-        from matplotlib.font_manager import fontManager, findfont, FontProperties
+        from matplotlib.font_manager import fontManager
     except ImportError:
         raise ImportError("matplotlib required. Install: pip install matplotlib")
 
@@ -405,7 +405,7 @@ def use_chinese(style: str = 'auto') -> str:
     _sans_kws = ('Han Sans', 'CJK', 'WenQuanYi', 'YaHei', 'PingFang', 'Heiti')
     _serif_kws = ('Han Serif', 'Mincho', 'Ming', 'Song')
 
-    def _substring_match(keywords):
+    def _substring_match(keywords: tuple[str, ...]) -> Optional[str]:
         for name in sorted(available):
             if any(kw in name for kw in keywords):
                 return name
@@ -455,14 +455,12 @@ def use_chinese(style: str = 'auto') -> str:
     # Determine family
     _serif_names = ('Song', 'Serif', 'Mincho', 'Ming', 'STSong', 'Noto Serif')
     if any(kw in chosen for kw in _serif_names):
-        family = 'serif'
         mpl.rcParams['font.family'] = 'serif'
         current = list(mpl.rcParams.get('font.serif', []))
         if chosen not in current:
             current.insert(0, chosen)
         mpl.rcParams['font.serif'] = current
     else:
-        family = 'sans-serif'
         mpl.rcParams['font.family'] = 'sans-serif'
         current = list(mpl.rcParams.get('font.sans-serif', []))
         if chosen not in current:

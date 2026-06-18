@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from scipy import stats
@@ -37,7 +37,7 @@ class ICCResult:
 
 
 def icc(
-    result,
+    result: Any,
     component: str = "_cons",
     alpha: float = 0.05,
     n_boot: int = 0,

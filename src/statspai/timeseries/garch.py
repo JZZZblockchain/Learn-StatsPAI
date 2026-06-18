@@ -79,13 +79,19 @@ class GARCHResult:
     def params(self) -> pd.Series:
         if self.coef is None or self.param_names is None:
             return pd.Series(dtype=float)
-        return pd.Series(np.asarray(self.coef, float), index=list(self.param_names))
+        return pd.Series(
+            np.asarray(self.coef, float),
+            index=list(self.param_names),
+        )
 
     @property
     def std_errors(self) -> pd.Series:
         if self.se_vec is None or self.param_names is None:
             return pd.Series(dtype=float)
-        return pd.Series(np.asarray(self.se_vec, float), index=list(self.param_names))
+        return pd.Series(
+            np.asarray(self.se_vec, float),
+            index=list(self.param_names),
+        )
 
     @property
     def tvalues(self) -> pd.Series:
@@ -120,7 +126,6 @@ class GARCHResult:
         return s2
 
     def summary(self) -> str:
-        k = 1 + len(self.alpha) + len(self.beta) + 1
         lines = [
             f"GARCH({self.p},{self.q})",
             "-" * 40,
@@ -136,7 +141,8 @@ class GARCHResult:
             pr, se = self.params, self.std_errors
             tv, pv = self.tvalues, self.pvalues
             lines.append(
-                f"  {'':<10s}{'coef':>11s}{'std err':>11s}" f"{'z':>9s}{'P>|z|':>9s}"
+                f"  {'':<10s}{'coef':>11s}{'std err':>11s}"
+                f"{'z':>9s}{'P>|z|':>9s}"
             )
             for nm in self.param_names:
                 lines.append(
@@ -157,7 +163,7 @@ class GARCHResult:
 
 
 def garch(
-    y,
+    y: object,
     p: int = 1,
     q: int = 1,
     mean: bool = True,
@@ -209,8 +215,8 @@ def garch(
     def neg_ll(theta: np.ndarray) -> float:
         mu = float(theta[0]) if mean else 0.0
         omega = float(theta[int(mean)])
-        alpha = theta[int(mean) + 1 : int(mean) + 1 + q]
-        beta = theta[int(mean) + 1 + q : int(mean) + 1 + q + p]
+        alpha = theta[int(mean) + 1: int(mean) + 1 + q]
+        beta = theta[int(mean) + 1 + q: int(mean) + 1 + q + p]
         if omega <= 0 or np.any(alpha < 0) or np.any(beta < 0):
             return 1e15
         if alpha.sum() + beta.sum() >= 1.0:
@@ -221,12 +227,18 @@ def garch(
         for t in range(T):
             s2[t] = omega
             for i in range(q):
-                s2[t] += alpha[i] * (eps[t - 1 - i] ** 2 if t - 1 - i >= 0 else s2_init)
+                eps_lag = (
+                    eps[t - 1 - i] ** 2
+                    if t - 1 - i >= 0
+                    else s2_init
+                )
+                s2[t] += alpha[i] * eps_lag
             for j in range(p):
-                s2[t] += beta[j] * (s2[t - 1 - j] if t - 1 - j >= 0 else s2_init)
+                s2_lag = s2[t - 1 - j] if t - 1 - j >= 0 else s2_init
+                s2[t] += beta[j] * s2_lag
             s2[t] = max(s2[t], 1e-12)
         ll = -0.5 * np.sum(np.log(2 * np.pi) + np.log(s2) + eps**2 / s2)
-        return -ll
+        return float(-ll)
 
     # Initial guesses
     eps0 = y - y_mean
@@ -234,8 +246,8 @@ def garch(
     omega0 = var0 * 0.05
     alpha0 = [0.1] * q
     beta0 = [0.85 / max(p, 1)] * p
-    x0 = ([y_mean] if mean else []) + [omega0] + alpha0 + beta0
-    x0 = np.array(x0)
+    x0_parts = ([y_mean] if mean else []) + [omega0] + alpha0 + beta0
+    x0 = np.asarray(x0_parts, dtype=float)
 
     opt = minimize(
         neg_ll,
@@ -243,11 +255,11 @@ def garch(
         method="Nelder-Mead",
         options={"maxiter": 5000, "xatol": 1e-8, "fatol": 1e-10},
     )
-    theta = opt.x
+    theta = np.asarray(opt.x, dtype=float)
     mu = float(theta[0]) if mean else 0.0
     omega = float(theta[int(mean)])
-    alpha = theta[int(mean) + 1 : int(mean) + 1 + q]
-    beta = theta[int(mean) + 1 + q : int(mean) + 1 + q + p]
+    alpha = theta[int(mean) + 1: int(mean) + 1 + q]
+    beta = theta[int(mean) + 1 + q: int(mean) + 1 + q + p]
 
     eps = y - mu
     s2 = np.empty(T)
@@ -255,9 +267,15 @@ def garch(
     for t in range(T):
         s2[t] = omega
         for i in range(q):
-            s2[t] += alpha[i] * (eps[t - 1 - i] ** 2 if t - 1 - i >= 0 else s2_init)
+            eps_lag = (
+                eps[t - 1 - i] ** 2
+                if t - 1 - i >= 0
+                else s2_init
+            )
+            s2[t] += alpha[i] * eps_lag
         for j in range(p):
-            s2[t] += beta[j] * (s2[t - 1 - j] if t - 1 - j >= 0 else s2_init)
+            s2_lag = s2[t - 1 - j] if t - 1 - j >= 0 else s2_init
+            s2[t] += beta[j] * s2_lag
         s2[t] = max(s2[t], 1e-12)
 
     param_names = (

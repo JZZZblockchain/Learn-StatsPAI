@@ -5,9 +5,7 @@ Single entry point for all decomposition methods in StatsPAI.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
-
-import pandas as pd
+from typing import Any, Dict
 
 
 # Lazy import registry: name -> (module_path, function_name)
@@ -79,7 +77,7 @@ def available_methods() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
-def decompose(method: str, /, **kwargs) -> Any:
+def decompose(method: str, /, **kwargs: Any) -> Any:
     """
     Unified entry point for all decomposition methods.
 

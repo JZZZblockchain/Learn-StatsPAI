@@ -8,7 +8,7 @@ real-time cosmetic editing with live preview and code generation.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 if TYPE_CHECKING:
     from .interactive import FigureEditor
@@ -50,7 +50,7 @@ def _code_to_html(code: str) -> str:
     )
 
 
-def create_jupyter_panel(editor: FigureEditor):
+def create_jupyter_panel(editor: FigureEditor) -> None:
     """
     Build and display an ipywidgets control panel for the editor.
 
@@ -73,7 +73,6 @@ def create_jupyter_panel(editor: FigureEditor):
 
     import io
     import matplotlib.pyplot as plt
-    from .interactive import ArtistRole
 
     fig = editor.fig
     axes = fig.get_axes()
@@ -85,7 +84,7 @@ def create_jupyter_panel(editor: FigureEditor):
     # ---- Live preview: render figure to Image widget ----
     preview_dpi = 100  # preview resolution (fast)
 
-    def _render_fig_to_png(figure, dpi=preview_dpi):
+    def _render_fig_to_png(figure: Any, dpi: int = preview_dpi) -> bytes:
         """Render a matplotlib figure to PNG bytes."""
         buf = io.BytesIO()
         figure.savefig(buf, format='png', dpi=dpi,
@@ -109,13 +108,13 @@ def create_jupyter_panel(editor: FigureEditor):
     )
 
     # ---- Render mode: Auto vs Manual ----
-    _render_state = {'pending': 0, 'auto': True}
+    _render_state: Dict[str, Any] = {'pending': 0, 'auto': True}
 
-    def _safe(fn):
+    def _safe(fn: Callable[..., Any]) -> Callable[..., Any]:
         """Wrap widget callbacks to surface exceptions in status_bar."""
         import functools
         @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return fn(*args, **kwargs)
             except Exception as exc:
@@ -141,7 +140,7 @@ def create_jupyter_panel(editor: FigureEditor):
         layout=widgets.Layout(width='auto', height='26px', display='none'),
     )
 
-    def _do_render(figure):
+    def _do_render(figure: Any) -> None:
         """Actually render the figure to the preview widget."""
         fig_image.value = _render_fig_to_png(figure, dpi=preview_dpi)
         n = len(editor.edits)
@@ -156,7 +155,7 @@ def create_jupyter_panel(editor: FigureEditor):
             f'export size: {px_w}\u00d7{px_h}px</span>'
         )
 
-    def _live_refresh(figure):
+    def _live_refresh(figure: Any) -> None:
         """Callback: re-render or queue depending on render mode."""
         try:
             if _render_state['auto']:
@@ -179,13 +178,13 @@ def create_jupyter_panel(editor: FigureEditor):
             )
 
     @_safe
-    def _on_apply(btn):
+    def _on_apply(btn: Any) -> None:
         _do_render(editor.fig)
 
     apply_btn.on_click(_on_apply)
 
     @_safe
-    def _on_toggle_mode(btn):
+    def _on_toggle_mode(btn: Any) -> None:
         _render_state['auto'] = not _render_state['auto']
         if _render_state['auto']:
             render_mode.description = 'Auto'
@@ -237,10 +236,10 @@ def create_jupyter_panel(editor: FigureEditor):
         layout=widgets.Layout(width='95%'),
     )
 
-    def _get_ax_idx():
-        return ax_selector.value
+    def _get_ax_idx() -> int:
+        return int(ax_selector.value)
 
-    def _get_ax():
+    def _get_ax() -> Any:
         return axes[_get_ax_idx()]
 
     # ==================================================================
@@ -283,9 +282,9 @@ def create_jupyter_panel(editor: FigureEditor):
     )
 
     # Guard flag: suppress slider observers during programmatic sync
-    _syncing = {'active': False}
+    _syncing: Dict[str, bool] = {'active': False}
 
-    def _on_ax_change(change):
+    def _on_ax_change(change: Any) -> None:
         """Update all widgets when axis selection changes."""
         _syncing['active'] = True
         try:
@@ -332,40 +331,40 @@ def create_jupyter_panel(editor: FigureEditor):
 
     ax_selector.observe(_on_ax_change, names='value')
 
-    def _on_title_change(change):
+    def _on_title_change(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_title(change['new'], ax_index=_get_ax_idx())
 
-    def _on_title_size(change):
+    def _on_title_size(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_fontsize('title', change['new'],
                             ax_index=_get_ax_idx())
 
-    def _on_xlabel_change(change):
+    def _on_xlabel_change(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_xlabel(change['new'], ax_index=_get_ax_idx())
 
-    def _on_xlabel_size(change):
+    def _on_xlabel_size(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_fontsize('xlabel', change['new'],
                             ax_index=_get_ax_idx())
 
-    def _on_ylabel_change(change):
+    def _on_ylabel_change(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_ylabel(change['new'], ax_index=_get_ax_idx())
 
-    def _on_ylabel_size(change):
+    def _on_ylabel_size(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_fontsize('ylabel', change['new'],
                             ax_index=_get_ax_idx())
 
-    def _on_tick_size(change):
+    def _on_tick_size(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_fontsize('ticks', change['new'],
@@ -397,7 +396,7 @@ def create_jupyter_panel(editor: FigureEditor):
     )
     font_preset_info = widgets.HTML('')
 
-    def _on_font_preset(change):
+    def _on_font_preset(change: Any) -> None:
         name = change['new']
         if not name:
             return
@@ -430,7 +429,6 @@ def create_jupyter_panel(editor: FigureEditor):
     # --- Size preset dropdown (sizes only, independent of font) ---
     size_preset_options = [('-- Choose size --', '')]
     for name, sp_info in SIZE_PRESETS.items():
-        desc = sp_info.get('desc', '')
         label = f"{name}  (title {sp_info['title_size']}, label {sp_info['label_size']}, tick {sp_info['tick_size']})"
         size_preset_options.append((label, name))
     size_preset = widgets.Dropdown(
@@ -439,7 +437,7 @@ def create_jupyter_panel(editor: FigureEditor):
         layout=widgets.Layout(width='95%'),
     )
 
-    def _on_size_preset(change):
+    def _on_size_preset(change: Any) -> None:
         name = change['new']
         if not name:
             return
@@ -471,7 +469,7 @@ def create_jupyter_panel(editor: FigureEditor):
     )
 
     # Specific font dropdown (updates based on family selection)
-    def _get_font_options(family):
+    def _get_font_options(family: str) -> List[Tuple[str, str]]:
         choices = get_font_choices()
         if family == 'serif':
             fonts = choices['English Serif'] + choices['CJK']
@@ -488,12 +486,12 @@ def create_jupyter_panel(editor: FigureEditor):
         layout=widgets.Layout(width='95%'),
     )
 
-    def _on_font_family(change):
+    def _on_font_family(change: Any) -> None:
         font_name.options = _get_font_options(change['new'])
         font_name.value = ''
         editor.set_font(change['new'], ax_index=_get_ax_idx())
 
-    def _on_font_name(change):
+    def _on_font_name(change: Any) -> None:
         if change['new']:
             editor.set_font(font_family.value, change['new'],
                             ax_index=_get_ax_idx())
@@ -534,7 +532,7 @@ def create_jupyter_panel(editor: FigureEditor):
         widgets.HTML('<i>Loading...</i>'),
     ])
 
-    def _rebuild_style_widgets():
+    def _rebuild_style_widgets() -> None:
         """Rebuild style widgets for the current axis."""
         ax = _get_ax()
         ax_idx = _get_ax_idx()
@@ -548,7 +546,7 @@ def create_jupyter_panel(editor: FigureEditor):
         )
         title_color_status = widgets.HTML('')
 
-        def _on_tc(change):
+        def _on_tc(change: Any) -> None:
             editor.set_color('title', change['new'],
                              ax_index=ax_idx)
             title_color_status.value = (
@@ -580,8 +578,11 @@ def create_jupyter_panel(editor: FigureEditor):
             )
             cp_status = widgets.HTML('')
 
-            def _make_color_cb(idx, status_widget):
-                def _cb(change):
+            def _make_color_cb(
+                idx: int,
+                status_widget: Any,
+            ) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_color(f'line{idx}', change['new'],
                                      ax_index=ax_idx)
                     status_widget.value = (
@@ -600,8 +601,8 @@ def create_jupyter_panel(editor: FigureEditor):
                 continuous_update=False,
             )
 
-            def _make_lw_cb(idx):
-                def _cb(change):
+            def _make_lw_cb(idx: int) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_linewidth(idx, change['new'],
                                          ax_index=ax_idx)
                 return _cb
@@ -619,8 +620,8 @@ def create_jupyter_panel(editor: FigureEditor):
                 layout=widgets.Layout(width='95%'),
             )
 
-            def _make_ls_cb(idx):
-                def _cb(change):
+            def _make_ls_cb(idx: int) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_linestyle(idx, change['new'],
                                          ax_index=ax_idx)
                 return _cb
@@ -638,8 +639,8 @@ def create_jupyter_panel(editor: FigureEditor):
                 continuous_update=False,
             )
 
-            def _make_alpha_cb(idx):
-                def _cb(change):
+            def _make_alpha_cb(idx: int) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_alpha(f'line{idx}', change['new'],
                                      ax_index=ax_idx)
                 return _cb
@@ -659,8 +660,8 @@ def create_jupyter_panel(editor: FigureEditor):
                 layout=widgets.Layout(width='95%'),
             )
 
-            def _make_mk_cb(idx):
-                def _cb(change):
+            def _make_mk_cb(idx: int) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_marker(idx, change['new'],
                                       ax_index=ax_idx)
                 return _cb
@@ -696,7 +697,7 @@ def create_jupyter_panel(editor: FigureEditor):
 
             # Scatter color
             if isinstance(coll, mcoll.PathCollection):
-                fc = coll.get_facecolors()
+                fc = getattr(coll, "get_facecolors")()
                 hex_color = _to_hex(fc[0] if len(fc) > 0 else 'black')
                 sc_cp = widgets.ColorPicker(
                     value=hex_color, description='Color:',
@@ -704,8 +705,11 @@ def create_jupyter_panel(editor: FigureEditor):
                 )
                 sc_cp_status = widgets.HTML('')
 
-                def _make_sc_cb(idx, status_widget):
-                    def _cb(change):
+                def _make_sc_cb(
+                    idx: int,
+                    status_widget: Any,
+                ) -> Callable[[Any], None]:
+                    def _cb(change: Any) -> None:
                         editor.set_scatter_color(
                             idx, change['new'], ax_index=ax_idx)
                         status_widget.value = (
@@ -728,8 +732,8 @@ def create_jupyter_panel(editor: FigureEditor):
             target_prefix = 'scatter' if isinstance(
                 coll, mcoll.PathCollection) else 'ci'
 
-            def _make_ca_cb(prefix, idx):
-                def _cb(change):
+            def _make_ca_cb(prefix: str, idx: int) -> Callable[[Any], None]:
+                def _cb(change: Any) -> None:
                     editor.set_alpha(f'{prefix}{idx}', change['new'],
                                      ax_index=ax_idx)
                 return _cb
@@ -966,8 +970,8 @@ def create_jupyter_panel(editor: FigureEditor):
     )
 
     # ---- Callbacks ----
-    def _on_spine(spine_name):
-        def _cb(change):
+    def _on_spine(spine_name: str) -> Callable[[Any], None]:
+        def _cb(change: Any) -> None:
             if _syncing['active']:
                 return
             editor.set_spine_visible(spine_name, change['new'],
@@ -979,7 +983,7 @@ def create_jupyter_panel(editor: FigureEditor):
     spine_bottom.observe(_on_spine('bottom'), names='value')
     spine_left.observe(_on_spine('left'), names='value')
 
-    def _on_grid(change):
+    def _on_grid(change: Any) -> None:
         if _syncing['active']:
             return
         if change['new']:
@@ -991,7 +995,7 @@ def create_jupyter_panel(editor: FigureEditor):
 
     grid_toggle.observe(_on_grid, names='value')
 
-    def _on_grid_color(change):
+    def _on_grid_color(change: Any) -> None:
         if grid_toggle.value:
             editor.set_grid_style(color=change['new'],
                                   ax_index=_get_ax_idx())
@@ -999,12 +1003,12 @@ def create_jupyter_panel(editor: FigureEditor):
                 '<span style="color:#2ECC71; font-size:11px">'
                 '\u2714 Applied</span>')
 
-    def _on_grid_alpha(change):
+    def _on_grid_alpha(change: Any) -> None:
         if grid_toggle.value:
             editor.set_grid_style(alpha=change['new'],
                                   ax_index=_get_ax_idx())
 
-    def _on_grid_linestyle(change):
+    def _on_grid_linestyle(change: Any) -> None:
         if grid_toggle.value:
             editor.set_grid_style(linestyle=change['new'],
                                   ax_index=_get_ax_idx())
@@ -1013,7 +1017,7 @@ def create_jupyter_panel(editor: FigureEditor):
     grid_alpha.observe(_on_grid_alpha, names='value')
     grid_linestyle.observe(_on_grid_linestyle, names='value')
 
-    def _on_figsize_preset(change):
+    def _on_figsize_preset(change: Any) -> None:
         key = change['new']
         if not key:
             return
@@ -1030,12 +1034,12 @@ def create_jupyter_panel(editor: FigureEditor):
 
     size_preset.observe(_on_figsize_preset, names='value')
 
-    def _on_figsize_w(change):
+    def _on_figsize_w(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_figsize(change['new'], fig.get_size_inches()[1])
 
-    def _on_figsize_h(change):
+    def _on_figsize_h(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_figsize(fig.get_size_inches()[0], change['new'])
@@ -1043,7 +1047,7 @@ def create_jupyter_panel(editor: FigureEditor):
     fig_width.observe(_on_figsize_w, names='value')
     fig_height.observe(_on_figsize_h, names='value')
 
-    def _on_dpi(change):
+    def _on_dpi(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_dpi(change['new'])
@@ -1056,38 +1060,38 @@ def create_jupyter_panel(editor: FigureEditor):
 
     fig_dpi.observe(_on_dpi, names='value')
 
-    def _on_legend_visible(change):
+    def _on_legend_visible(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_legend_visible(change['new'], ax_index=_get_ax_idx())
 
-    def _on_legend_loc(change):
+    def _on_legend_loc(change: Any) -> None:
         editor.set_legend(loc=change['new'], ax_index=_get_ax_idx())
 
-    def _on_legend_fontsize(change):
+    def _on_legend_fontsize(change: Any) -> None:
         editor.set_legend(fontsize=change['new'], ax_index=_get_ax_idx())
 
     legend_visible.observe(_on_legend_visible, names='value')
     legend_loc.observe(_on_legend_loc, names='value')
     legend_fontsize.observe(_on_legend_fontsize, names='value')
 
-    def _on_title_weight(change):
+    def _on_title_weight(change: Any) -> None:
         editor.set_title_weight(change['new'], ax_index=_get_ax_idx())
 
     title_weight.observe(_on_title_weight, names='value')
 
-    def _on_xtick_rot(change):
+    def _on_xtick_rot(change: Any) -> None:
         editor.set_tick_rotation('x', change['new'],
                                  ax_index=_get_ax_idx())
 
-    def _on_ytick_rot(change):
+    def _on_ytick_rot(change: Any) -> None:
         editor.set_tick_rotation('y', change['new'],
                                  ax_index=_get_ax_idx())
 
     xtick_rotation.observe(_on_xtick_rot, names='value')
     ytick_rotation.observe(_on_ytick_rot, names='value')
 
-    def _on_fig_bg(change):
+    def _on_fig_bg(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_background_color(change['new'], target='figure')
@@ -1095,7 +1099,7 @@ def create_jupyter_panel(editor: FigureEditor):
             '<span style="color:#2ECC71; font-size:11px">'
             '\u2714 Applied</span>')
 
-    def _on_ax_bg(change):
+    def _on_ax_bg(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_background_color(change['new'], target='axes',
@@ -1107,7 +1111,7 @@ def create_jupyter_panel(editor: FigureEditor):
     fig_bg_color.observe(_on_fig_bg, names='value')
     ax_bg_color.observe(_on_ax_bg, names='value')
 
-    def _on_tight(btn):
+    def _on_tight(btn: Any) -> None:
         editor.tight_layout()
         tight_info.value = (
             '<span style="color:#2ECC71; font-size:11px">'
@@ -1115,7 +1119,7 @@ def create_jupyter_panel(editor: FigureEditor):
 
     tight_btn.on_click(_on_tight)
 
-    def _on_annot_add(btn):
+    def _on_annot_add(btn: Any) -> None:
         text = annot_text.value
         if not text:
             annot_info.value = (
@@ -1140,13 +1144,13 @@ def create_jupyter_panel(editor: FigureEditor):
 
     annot_btn.on_click(_on_annot_add)
 
-    def _on_xlim(change):
+    def _on_xlim(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_xlim(change['new'][0], change['new'][1],
                         ax_index=_get_ax_idx())
 
-    def _on_ylim(change):
+    def _on_ylim(change: Any) -> None:
         if _syncing['active']:
             return
         editor.set_ylim(change['new'][0], change['new'][1],
@@ -1234,7 +1238,7 @@ def create_jupyter_panel(editor: FigureEditor):
     theme_preview = widgets.HTML('')
 
     @_safe
-    def _on_theme(change):
+    def _on_theme(change: Any) -> None:
         name = change['new']
         try:
             editor.apply_theme(name)
@@ -1310,7 +1314,7 @@ def create_jupyter_panel(editor: FigureEditor):
         icon='download',
     )
 
-    def _on_format_change(change):
+    def _on_format_change(change: Any) -> None:
         ext = change['new']
         fname = save_filename.value
         # Replace extension
@@ -1339,7 +1343,7 @@ def create_jupyter_panel(editor: FigureEditor):
 
     edit_summary = widgets.HTML('')
 
-    def _on_undo(btn):
+    def _on_undo(btn: Any) -> None:
         editor.undo()
         _live_refresh(fig)  # force preview update
         edit_summary.value = (
@@ -1348,7 +1352,7 @@ def create_jupyter_panel(editor: FigureEditor):
             f'{len(editor._redo_stack)} redo available</span>'
         )
 
-    def _on_redo(btn):
+    def _on_redo(btn: Any) -> None:
         editor.redo()
         _live_refresh(fig)  # force preview update
         edit_summary.value = (
@@ -1357,7 +1361,7 @@ def create_jupyter_panel(editor: FigureEditor):
             f'{len(editor._redo_stack)} redo remaining</span>'
         )
 
-    def _on_reset(btn):
+    def _on_reset(btn: Any) -> None:
         editor.reset()
         _live_refresh(fig)  # force preview update
         edit_summary.value = (
@@ -1370,7 +1374,7 @@ def create_jupyter_panel(editor: FigureEditor):
         xlabel_text.value = ax.get_xlabel()
         ylabel_text.value = ax.get_ylabel()
 
-    def _on_save(btn):
+    def _on_save(btn: Any) -> None:
         fname = save_filename.value
         dpi = save_dpi.value
         fmt = save_format.value
@@ -1391,7 +1395,7 @@ def create_jupyter_panel(editor: FigureEditor):
         '<span style="font-size:11px; color:#999">No edits yet</span>'
     )
 
-    def _render_history():
+    def _render_history() -> None:
         """Render the edit history as an HTML table."""
         if not editor.edits:
             history_html.value = (
@@ -1434,7 +1438,7 @@ def create_jupyter_panel(editor: FigureEditor):
         )
         history_html.value = table
 
-    def _live_history_update(figure):
+    def _live_history_update(figure: Any) -> None:
         try:
             _render_history()
         except Exception:
@@ -1468,7 +1472,7 @@ def create_jupyter_panel(editor: FigureEditor):
     ])
 
     # ---- Live code auto-update ----
-    def _live_code_update(figure):
+    def _live_code_update(figure: Any) -> None:
         """Auto-update the code display on every edit."""
         try:
             code = editor.generate_code()
@@ -1501,8 +1505,10 @@ def create_jupyter_panel(editor: FigureEditor):
             '<div style="padding:20px; color:#999; text-align:center">'
             'Loading...</div>')]),
     }
-    _tab_loaded = {0: True, 1: True, 2: False, 3: False, 4: False}
-    _real_tabs = {
+    _tab_loaded: Dict[int, bool] = {
+        0: True, 1: True, 2: False, 3: False, 4: False,
+    }
+    _real_tabs: Dict[int, Any] = {
         2: style_container,
         3: layout_tab,
         4: code_tab,
@@ -1521,7 +1527,7 @@ def create_jupyter_panel(editor: FigureEditor):
     tabs.set_title(3, 'Layout')
     tabs.set_title(4, 'Export')
 
-    def _on_tab_switch(change):
+    def _on_tab_switch(change: Any) -> None:
         idx = change['new']
         if idx is not None and not _tab_loaded.get(idx, True):
             _tab_loaded[idx] = True
@@ -1594,7 +1600,7 @@ def create_jupyter_panel(editor: FigureEditor):
     display(full_layout)
 
 
-def _to_hex(color) -> str:
+def _to_hex(color: Any) -> str:
     """Convert any matplotlib color to hex string."""
     import matplotlib.colors as mcolors
     try:

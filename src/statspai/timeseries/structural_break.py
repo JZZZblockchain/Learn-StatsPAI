@@ -173,7 +173,13 @@ class StructuralBreakResult:
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 5))
         for bd in self.break_dates:
-            ax.axvline(bd, color='red', ls='--', lw=1.5, label=f'Break at {bd}')
+            ax.axvline(
+                bd,
+                color='red',
+                ls='--',
+                lw=1.5,
+                label=f'Break at {bd}',
+            )
         ax.legend()
         return ax
 
@@ -302,7 +308,11 @@ def structural_break(
         # Andrews (1993) sup-F law, NOT F(k, n-2k). Using the naive F CDF here
         # inflated the false-positive rate to ~35% on white noise.
         p_value = _supf_pvalue(best_f, k, n, min_segment)
-        selected_breaks = [best_break] if p_value < alpha and best_break is not None else []
+        selected_breaks = (
+            [best_break]
+            if p_value < alpha and best_break is not None
+            else []
+        )
 
         return StructuralBreakResult(
             test_type='Sup-F' if method == 'sup-f' else 'Chow',
@@ -346,9 +356,13 @@ def structural_break(
 
                 b1 = np.linalg.lstsq(X1, y1, rcond=None)[0]
                 b2 = np.linalg.lstsq(X2, y2, rcond=None)[0]
-                rss_split = np.sum((y1 - X1 @ b1)**2) + np.sum((y2 - X2 @ b2)**2)
+                rss_split = np.sum((y1 - X1 @ b1) ** 2) + np.sum(
+                    (y2 - X2 @ b2) ** 2
+                )
 
-                f_stat = ((rss_seg - rss_split) / k) / (rss_split / (seg_len - 2*k))
+                f_stat = ((rss_seg - rss_split) / k) / (
+                    rss_split / (seg_len - 2 * k)
+                )
                 if f_stat > best_f:
                     best_f = f_stat
                     best_break = abs_t

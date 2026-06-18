@@ -20,8 +20,12 @@ public API is unchanged.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Callable, TypeVar
 
 import numpy as np
+
+
+_DecoratedFn = TypeVar("_DecoratedFn", bound=Callable[..., Any])
 
 try:  # pragma: no cover — import-time branch
     from numba import njit  # type: ignore
@@ -30,8 +34,11 @@ try:  # pragma: no cover — import-time branch
 except Exception:  # pragma: no cover
     _HAS_NUMBA = False
 
-    def njit(*_args, **_kwargs):  # type: ignore
-        def deco(fn):
+    def njit(
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> Callable[[_DecoratedFn], _DecoratedFn]:  # type: ignore[misc]
+        def deco(fn: _DecoratedFn) -> _DecoratedFn:
             return fn
         return deco
 
@@ -45,7 +52,11 @@ _NUMBA_CACHE = _HAS_NUMBA and Path(__file__).exists()
 
 
 @njit(cache=_NUMBA_CACHE, fastmath=True)  # type: ignore[misc]
-def _sweep_numba(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None:
+def _sweep_numba(
+    col: np.ndarray,
+    codes: np.ndarray,
+    counts: np.ndarray,
+) -> None:
     G = counts.shape[0]  # pragma: no cover
     sums = np.zeros(G, dtype=np.float64)  # pragma: no cover
     n = col.shape[0]  # pragma: no cover
@@ -61,9 +72,17 @@ def _sweep_numba(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None
         col[i] -= sums[codes[i]]  # pragma: no cover
 
 
-def _sweep_numpy(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None:
-    sums = np.bincount(codes, weights=col, minlength=counts.size)  # pragma: no cover
-    col -= (sums / counts)[codes]  # pragma: no cover
+def _sweep_numpy(
+    col: np.ndarray,
+    codes: np.ndarray,
+    counts: np.ndarray,
+) -> None:
+    sums = np.bincount(  # pragma: no cover
+        codes,
+        weights=col,
+        minlength=counts.size,
+    )
+    col -= (sums / counts)[codes]
 
 
 def sweep(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None:
@@ -109,8 +128,12 @@ def _sweep_weighted_numpy(
     codes: np.ndarray,
     wsum: np.ndarray,
 ) -> None:
-    sums = np.bincount(codes, weights=col * weights, minlength=wsum.size)  # pragma: no cover
-    col -= (sums / wsum)[codes]  # pragma: no cover
+    sums = np.bincount(  # pragma: no cover
+        codes,
+        weights=col * weights,
+        minlength=wsum.size,
+    )
+    col -= (sums / wsum)[codes]
 
 
 def sweep_weighted(

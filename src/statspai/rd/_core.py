@@ -20,7 +20,7 @@ to statspai.rd):
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 
 import numpy as np
 from scipy import stats as _sp_stats
@@ -40,13 +40,13 @@ def _kernel_fn(u: np.ndarray, kernel: str) -> np.ndarray:
     """
     u = np.asarray(u, dtype=float)
     if kernel == 'triangular':
-        return np.maximum(1 - np.abs(u), 0)
+        return cast(np.ndarray, np.maximum(1 - np.abs(u), 0))
     elif kernel == 'uniform':
-        return 0.5 * (np.abs(u) <= 1).astype(float)
+        return cast(np.ndarray, 0.5 * (np.abs(u) <= 1).astype(float))
     elif kernel == 'epanechnikov':
-        return 0.75 * np.maximum(1 - u ** 2, 0)
+        return cast(np.ndarray, 0.75 * np.maximum(1 - u ** 2, 0))
     elif kernel == 'gaussian':
-        return _sp_stats.norm.pdf(u)
+        return cast(np.ndarray, _sp_stats.norm.pdf(u))
     raise ValueError(f"Unknown kernel: {kernel}")  # pragma: no cover
 
 
@@ -111,11 +111,11 @@ def _sandwich_variance(
             score = (Xw[idx].T @ (yw[idx] - Xw[idx] @ beta)).ravel()
             meat += np.outer(score, score)
         corr = n_cl / (n_cl - 1) if n_cl > 1 else 1.0
-        return corr * bread @ meat @ bread
+        return cast(np.ndarray, corr * bread @ meat @ bread)
     else:
         corr = n_eff / (n_eff - k) if n_eff > k else 1.0
         meat = Xw.T @ np.diag(resid ** 2 * corr) @ Xw
-        return bread @ meat @ bread
+        return cast(np.ndarray, bread @ meat @ bread)
 
 
 def _local_poly_wls(

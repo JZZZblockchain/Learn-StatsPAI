@@ -14,7 +14,8 @@ and Testing." *Econometrica*, 55(2), 251-276. [@engle1987integration]
 
 Johansen, S. (1991).
 "Estimation and Hypothesis Testing of Cointegration Vectors in
-Gaussian Vector Autoregressive Models." *Econometrica*, 59(6), 1551-1580. [@johansen1991estimation]
+Gaussian Vector Autoregressive Models." *Econometrica*, 59(6),
+1551-1580. [@johansen1991estimation]
 """
 
 from typing import Optional, List, Any
@@ -90,16 +91,28 @@ class CointegrationResult:
                          f"{self.critical_values[1]:.3f}, "
                          f"{self.critical_values[2]:.3f}")
             reject = self.test_stats < self.critical_values[1]
-            lines.append(f"Conclusion: {'Cointegrated' if reject else 'Not cointegrated'} at 5%")
+            conclusion = "Cointegrated" if reject else "Not cointegrated"
+            lines.append(f"Conclusion: {conclusion} at 5%")
         else:
-            lines.append(f"{'H0: rank':>12s} {'Trace stat':>12s} {'5% CV':>10s} {'Reject':>8s}")
+            lines.append(
+                f"{'H0: rank':>12s} {'Trace stat':>12s}"
+                f" {'5% CV':>10s} {'Reject':>8s}"
+            )
             lines.append("-" * 50)
             for i in range(self.n_vars):
                 ts = self.test_stats[i] if i < len(self.test_stats) else np.nan
-                cv = self.critical_values[i] if i < len(self.critical_values) else np.nan
-                reject = ts > cv if np.isfinite(ts) and np.isfinite(cv) else False
-                lines.append(f"{'r <= ' + str(i):>12s} {ts:>12.4f} {cv:>10.3f} "
-                             f"{'Yes' if reject else 'No':>8s}")
+                cv = (
+                    self.critical_values[i]
+                    if i < len(self.critical_values)
+                    else np.nan
+                )
+                reject = (
+                    ts > cv if np.isfinite(ts) and np.isfinite(cv) else False
+                )
+                lines.append(
+                    f"{'r <= ' + str(i):>12s} {ts:>12.4f}"
+                    f" {cv:>10.3f} {'Yes' if reject else 'No':>8s}"
+                )
 
             lines.append(f"\nEstimated cointegration rank: {self.rank}")
 
@@ -324,7 +337,11 @@ def johansen(
         Z = np.empty((T_eff, 0))
 
     if trend == 'c':
-        Z = np.column_stack([Z, np.ones(T_eff)]) if Z.shape[1] > 0 else np.ones((T_eff, 1))
+        Z = (
+            np.column_stack([Z, np.ones(T_eff)])
+            if Z.shape[1] > 0
+            else np.ones((T_eff, 1))
+        )
     elif trend == 'ct':
         Z = np.column_stack([Z, np.ones(T_eff), np.arange(1, T_eff + 1)])
 
@@ -371,9 +388,12 @@ def johansen(
         test_stats = trace_stats
     else:
         # Max eigenvalue: -T ln(1-λ_{r+1})
-        maxeig_stats = np.array([
-            -T_eff * np.log(1 - eigenvalues[r]) if r < k else 0 for r in range(k)
-        ])
+        maxeig_stats = np.array(
+            [
+                -T_eff * np.log(1 - eigenvalues[r]) if r < k else 0
+                for r in range(k)
+            ]
+        )
         test_stats = maxeig_stats
 
     # Critical values (Osterwald-Lenum 1992, approximate)

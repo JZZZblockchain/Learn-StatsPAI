@@ -6,7 +6,7 @@ Provides:
 - winsor: Winsorize variables at specified percentiles
 """
 
-from typing import Optional, List, Dict, Union, Tuple
+from typing import Optional, List, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -94,7 +94,7 @@ def pwcorr(
                 pval_matrix[i, j] = p
 
     # Format with stars (lower triangle only, like Stata)
-    def _fmt(val, pval, show_stars):
+    def _fmt(val: float, pval: float, show_stars: bool) -> str:
         s = f'{val:.{decimals}f}'
         if show_stars and pval < 0.01:
             s += '***'
@@ -136,7 +136,11 @@ def pwcorr(
     return '\n'.join(lines)
 
 
-def _pwcorr_latex(display, vars, stars):
+def _pwcorr_latex(
+    display: pd.DataFrame,
+    vars: List[str],
+    stars: bool,
+) -> str:
     """LaTeX output for pwcorr."""
     k = len(vars)
     spec = 'l' + 'c' * k

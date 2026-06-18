@@ -418,7 +418,11 @@ def _gray_test(
     k = len(groups)
     all_times = np.sort(np.unique(time[event == cause]))
     if len(all_times) == 0 or k < 2:
-        return {"statistic": float("nan"), "df": k - 1, "p_value": float("nan")}
+        return {
+            "statistic": float("nan"),
+            "df": k - 1,
+            "p_value": float("nan"),
+        }
 
     # Subdistribution "at risk": never experienced cause-of-interest yet, and
     # either still under observation OR already failed from a competing cause.
@@ -662,7 +666,9 @@ def finegray(
     >>> status = np.where((t1 <= t2) & (t1 <= cens), 1,
     ...                   np.where((t2 < t1) & (t2 <= cens), 2, 0))
     >>> df = pd.DataFrame({"time": time, "status": status, "x": x})
-    >>> res = sp.finegray(df, duration="time", event="status", x=["x"], cause=1)
+    >>> res = sp.finegray(
+    ...     df, duration="time", event="status", x=["x"], cause=1
+    ... )
     >>> res.cause
     1
     >>> res.tidy()["term"].tolist()
@@ -750,9 +756,10 @@ def finegray(
     for _ in range(max_iter):
         ll, grad, hess = _ll_grad_hess(beta)
         try:
-            step = np.linalg.solve(hess, grad)
+            step = np.asarray(np.linalg.solve(hess, grad), dtype=float)
         except np.linalg.LinAlgError:
-            step = np.linalg.pinv(hess) @ grad
+            step = np.asarray(np.linalg.pinv(hess) @ grad, dtype=float)
+        step = step.reshape(p)
         beta_new = beta - step
         if np.max(np.abs(beta_new - beta)) < tol:
             beta = beta_new

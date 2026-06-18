@@ -19,7 +19,7 @@ call time.
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
@@ -205,7 +205,7 @@ def policy_weight_observed_prte(
     propensity_sample: np.ndarray,
     shift: float,
     *,
-    bw_method=None,
+    bw_method: Any = None,
 ) -> Callable[[np.ndarray], np.ndarray]:
     """True **CHV-2011 PRTE** weights from the observed propensity
     distribution via Gaussian KDE.
@@ -323,7 +323,11 @@ def policy_weight_observed_prte(
         # shift ⇒ negative weight ⇒ policy reduction).
         out = np.empty_like(u_arr)
         for i, u_val in enumerate(u_arr):
-            lo, hi = (u_val - shift, u_val) if shift > 0 else (u_val, u_val - shift)
+            lo, hi = (
+                (u_val - shift, u_val)
+                if shift > 0
+                else (u_val, u_val - shift)
+            )
             integral = kde.integrate_box_1d(float(lo), float(hi))
             out[i] = integral / shift
         return out

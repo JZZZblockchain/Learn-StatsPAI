@@ -22,7 +22,7 @@ from scipy import stats
 
 
 def margins(
-    result,
+    result: Any,
     data: Optional[pd.DataFrame] = None,
     variables: Optional[List[str]] = None,
     at: Optional[Dict[str, Any]] = None,
@@ -97,7 +97,7 @@ def margins(
         return _numerical_margins(result, data, variables, at, method, eps, alpha)
 
 
-def _is_purely_linear(param_names, variables):
+def _is_purely_linear(param_names: Any, variables: List[str]) -> bool:
     """Check if model has interactions or polynomials involving these variables."""
     for name in param_names:
         if ':' in name:
@@ -107,17 +107,22 @@ def _is_purely_linear(param_names, variables):
     return True
 
 
-def _get_vcov(result):
+def _get_vcov(result: Any) -> np.ndarray:
     """Extract variance-covariance matrix from result."""
     # Try various locations
     if hasattr(result, '_results') and hasattr(result._results, 'var_cov'):
-        return result._results.var_cov
+        return np.asarray(result._results.var_cov, dtype=float)
     # Reconstruct from std_errors (diagonal approximation)
     se = result.std_errors
     return np.diag(se.values**2)
 
 
-def _linear_margins(params, var_cov, variables, alpha):
+def _linear_margins(
+    params: pd.Series,
+    var_cov: np.ndarray,
+    variables: List[str],
+    alpha: float,
+) -> pd.DataFrame:
     """Marginal effects for purely linear model = coefficients themselves."""
     rows = []
     z_crit = stats.norm.ppf(1 - alpha / 2)
@@ -144,7 +149,15 @@ def _linear_margins(params, var_cov, variables, alpha):
     return pd.DataFrame(rows)
 
 
-def _numerical_margins(result, data, variables, at, method, eps, alpha):
+def _numerical_margins(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    variables: List[str],
+    at: Optional[Dict[str, Any]],
+    method: str,
+    eps: float,
+    alpha: float,
+) -> pd.DataFrame:
     """Numerical marginal effects via finite differences (for interactions etc.)."""
     params = result.params
 
@@ -190,7 +203,12 @@ def _numerical_margins(result, data, variables, at, method, eps, alpha):
     return pd.DataFrame(rows)
 
 
-def _compute_dydx(params, data, var, eps):
+def _compute_dydx(
+    params: pd.Series,
+    data: pd.DataFrame,
+    var: str,
+    eps: float,
+) -> np.ndarray:
     """Compute dy/dx for each observation via central differences."""
     n = len(data)
     dydx = np.zeros(n)
@@ -204,7 +222,12 @@ def _compute_dydx(params, data, var, eps):
     return dydx
 
 
-def _predict_row(params, row, var_to_change, new_val):
+def _predict_row(
+    params: pd.Series,
+    row: pd.Series,
+    var_to_change: Optional[str],
+    new_val: Any,
+) -> float:
     """Predict y for a single observation, changing one variable."""
     y = 0.0
     for term, coef in params.items():
@@ -228,16 +251,16 @@ def _predict_row(params, row, var_to_change, new_val):
                 y += coef * new_val
             elif term in row.index:
                 y += coef * row[term]
-    return y
+    return float(y)
 
 
 def marginsplot(
     margins_df: pd.DataFrame,
-    ax=None,
-    figsize: tuple = (8, 5),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (8, 5),
     color: str = '#2C3E50',
     title: Optional[str] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Plot marginal effects with confidence intervals.
 
@@ -305,7 +328,7 @@ def marginsplot(
 # ---------------------------------------------------------------------------
 
 def margins_at(
-    result,
+    result: Any,
     data: pd.DataFrame,
     at: Dict[str, Any],
     alpha: float = 0.05,
@@ -405,7 +428,7 @@ def margins_at(
     return pd.DataFrame(rows)
 
 
-def _margin_gradient(params, df_mod):
+def _margin_gradient(params: pd.Series, df_mod: pd.DataFrame) -> np.ndarray:
     """Gradient of average prediction w.r.t. parameter vector (for delta method)."""
     n = len(df_mod)
     p = len(params)
@@ -442,13 +465,13 @@ def margins_at_plot(
     margins_at_df: pd.DataFrame,
     x: Optional[str] = None,
     by: Optional[str] = None,
-    ax=None,
-    figsize: tuple = (8, 5),
+    ax: Any = None,
+    figsize: Tuple[float, float] = (8, 5),
     title: Optional[str] = None,
     xlabel: Optional[str] = None,
     ylabel: str = 'Predicted Value',
     palette: Optional[List[str]] = None,
-):
+) -> Tuple[Any, Any]:
     """
     Plot predictive margins from ``margins_at()`` with confidence bands.
 
@@ -554,7 +577,7 @@ def margins_at_plot(
 # ---------------------------------------------------------------------------
 
 def contrast(
-    result,
+    result: Any,
     data: pd.DataFrame,
     variable: str,
     method: str = 'r',
@@ -709,7 +732,7 @@ def contrast(
 # ---------------------------------------------------------------------------
 
 def pwcompare(
-    result,
+    result: Any,
     data: pd.DataFrame,
     variable: str,
     adjust: str = 'none',
@@ -820,15 +843,25 @@ def pwcompare(
     return pd.DataFrame(rows)
 
 
-def _adjust_pvalues(pvals, method, n_comparisons):
+def _adjust_pvalues(
+    pvals: Any,
+    method: str,
+    n_comparisons: int,
+) -> List[float]:
     """Apply multiple-comparison correction to p-values."""
     pvals = np.asarray(pvals, dtype=float)
     if method == 'none':
-        return pvals.tolist()
+        return [float(p) for p in pvals.tolist()]
     elif method == 'bonferroni':
-        return np.minimum(pvals * n_comparisons, 1.0).tolist()
+        return [
+            float(p)
+            for p in np.minimum(pvals * n_comparisons, 1.0).tolist()
+        ]
     elif method == 'sidak':
-        return (1.0 - (1.0 - pvals) ** n_comparisons).tolist()
+        return [
+            float(p)
+            for p in (1.0 - (1.0 - pvals) ** n_comparisons).tolist()
+        ]
     elif method == 'holm':
         n = len(pvals)
         order = np.argsort(pvals)
@@ -840,7 +873,7 @@ def _adjust_pvalues(pvals, method, n_comparisons):
         for idx in order:
             cum_max = max(cum_max, adj[idx])
             adj[idx] = cum_max
-        return adj.tolist()
+        return [float(p) for p in adj.tolist()]
     else:
         raise ValueError(
             f"Unknown adjustment method '{method}'. "
@@ -848,14 +881,14 @@ def _adjust_pvalues(pvals, method, n_comparisons):
         )
 
 
-def _adjusted_alpha(alpha, method, n_comparisons):
+def _adjusted_alpha(alpha: float, method: str, n_comparisons: int) -> float:
     """Return adjusted significance level for CI construction."""
     if method == 'none':
         return alpha
     elif method == 'bonferroni':
         return alpha / n_comparisons
     elif method == 'sidak':
-        return 1.0 - (1.0 - alpha) ** (1.0 / n_comparisons)
+        return float(1.0 - (1.0 - alpha) ** (1.0 / n_comparisons))
     elif method == 'holm':
         # Conservative: use Bonferroni alpha for CIs
         return alpha / n_comparisons
@@ -887,7 +920,7 @@ class _MarginsResult:
         *,
         n_obs: Optional[int] = None,
         method: str = "ame",
-    ):
+    ) -> None:
         if "variable" not in margins_df.columns:
             raise ValueError(
                 "margins_table requires a DataFrame with a 'variable' column "
@@ -943,12 +976,12 @@ class _MarginsResult:
 
 
 def event_study_table(
-    result,
+    result: Any,
     *,
     regex: Optional[str] = None,
     label_fmt: str = "t={t}",
     include_reference: bool = False,
-):
+) -> _MarginsResult:
     """Adapter that turns an event-study fit into a regtable input.
 
     Two extraction paths:
@@ -1090,14 +1123,14 @@ def event_study_table(
 
 
 def margins_table(
-    result,
+    result: Any,
     data: Optional[pd.DataFrame] = None,
     variables: Optional[List[str]] = None,
     at: Optional[Dict[str, Any]] = None,
     method: str = "ame",
     eps: float = 1e-5,
     alpha: float = 0.05,
-):
+) -> _MarginsResult:
     """Marginal-effects result that pipes straight into ``sp.regtable``.
 
     Thin adapter over :func:`margins`: computes the marginal effects

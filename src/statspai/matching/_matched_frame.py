@@ -344,9 +344,10 @@ def build_matched_frame(
     if support is None:
         support = np.ones(n, dtype=bool)
     support = np.asarray(support, dtype=bool)
-    has_outcome = outcome is not None
-    if has_outcome:
-        outcome = np.asarray(outcome, dtype=float)
+    outcome_arr: Optional[np.ndarray] = None
+    if outcome is not None:
+        outcome_arr = np.asarray(outcome, dtype=float)
+    has_outcome = outcome_arr is not None
 
     obs_id = np.arange(1, n + 1, dtype=float)  # _id = 1..n (estimation order)
 
@@ -380,8 +381,10 @@ def build_matched_frame(
             # ordered nearest-first), matching Stata's definition.
             pdif[t_pos] = float(abs(pscore[t_pos] - pscore[ctrl_pos[0]]))
 
-        if has_outcome:
-            matched_y[t_pos] = float(np.average(outcome[ctrl_pos], weights=w_arr))
+        if outcome_arr is not None:
+            matched_y[t_pos] = float(
+                np.average(outcome_arr[ctrl_pos], weights=w_arr)
+            )
 
         # Accumulate each matched control's frequency weight.
         for pos, share in zip(ctrl_pos, w_arr):

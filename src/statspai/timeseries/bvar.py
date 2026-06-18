@@ -63,7 +63,7 @@ class BVARResult:
     sigma: np.ndarray  # (K, K) posterior mean of Sigma
     fitted: np.ndarray  # (T-p, K)
     residuals: np.ndarray  # (T-p, K)
-    var_names: list
+    var_names: list[str]
     lags: int
     n: int
     lambda1: float
@@ -74,7 +74,6 @@ class BVARResult:
         K = self.sigma.shape[0]
         p = self.lags
         B = self.coef
-        last_obs = self.fitted[-1:] + self.residuals[-1:]  # last actual
         # gather last p observations
         history = np.zeros((p, K))
         T_data = self.fitted.shape[0]
@@ -97,19 +96,11 @@ class BVARResult:
         p = self.lags
         B = self.coef[:-1]  # exclude constant row
         # Companion form
-        A_mats = [B[k * K : (k + 1) * K].T for k in range(p)]
+        A_mats = [B[k * K: (k + 1) * K].T for k in range(p)]
         chol = np.linalg.cholesky(self.sigma)
         irfs = np.zeros((horizon, K))
-        phi = np.eye(K)
         irfs[0] = chol[:, shock_var]
         for h in range(1, horizon):
-            phi_new = np.zeros((K, K))
-            for j in range(min(h, p)):
-                phi_new += A_mats[j] @ (
-                    irfs[h - 1 - j][:, None] @ np.eye(1, K, 0)
-                    if h - 1 - j == 0
-                    else np.diag(irfs[h - 1 - j])
-                )
             # Simplified: multiply lag coefficients
             contrib = np.zeros(K)
             for j in range(min(h, p)):
@@ -117,7 +108,10 @@ class BVARResult:
             irfs[h] = contrib
         return irfs
 
-    def credible_interval(self, level: float = 0.90):
+    def credible_interval(
+        self,
+        level: float = 0.90,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Posterior credible interval for every coefficient.
 
         Returns ``(lower, upper)`` matrices the same shape as ``coef``, using a
@@ -135,7 +129,7 @@ class BVARResult:
     def summary(self) -> str:
         K = len(self.var_names)
         lines = [
-            f"Bayesian VAR (Minnesota prior)",
+            "Bayesian VAR (Minnesota prior)",
             f"  lags = {self.lags}, K = {K}, T = {self.n}",
             f"  λ₁ = {self.lambda1}, λ₂ = {self.lambda2}",
             "",
@@ -146,7 +140,12 @@ class BVARResult:
             lines += [
                 "",
                 "Posterior SD (first 5 rows):",
-                str(pd.DataFrame(self.coef_sd[:5], columns=self.var_names).round(3)),
+                str(
+                    pd.DataFrame(
+                        self.coef_sd[:5],
+                        columns=self.var_names,
+                    ).round(3)
+                ),
             ]
         return "\n".join(lines)
 
@@ -210,7 +209,7 @@ def bvar(
     n = Y.shape[0]
     X_parts = []
     for lag in range(1, lags + 1):
-        X_parts.append(Y_raw[lags - lag : T - lag])
+        X_parts.append(Y_raw[lags - lag: T - lag])
     X = np.column_stack(X_parts + [np.ones(n)])  # (n, K*p + 1)
     m = X.shape[1]
 

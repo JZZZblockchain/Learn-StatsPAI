@@ -20,8 +20,8 @@ where a future Rust wheel is loaded.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -31,11 +31,18 @@ from ._result_protocol import jsonable as _jsonable
 from ._validation import nonnegative_finite_float, positive_int
 
 
+_BackendFn = Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]
+
+
 # ---------------------------------------------------------------------------
 # Reference implementation: pure NumPy
 # ---------------------------------------------------------------------------
 
-def _sweep_numpy(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None:
+def _sweep_numpy(
+    col: np.ndarray,
+    codes: np.ndarray,
+    counts: np.ndarray,
+) -> None:
     """In-place demean by group using numpy ``bincount``."""
     sums = np.bincount(codes, weights=col, minlength=counts.size)
     means = sums / np.maximum(counts, 1)
@@ -56,7 +63,7 @@ def _hdfe_numpy(y: np.ndarray, codes: np.ndarray,
 @dataclass
 class _Backend:
     name: str
-    fn: object           # callable (y, codes, counts) -> np.ndarray (copy)
+    fn: _BackendFn
     available: bool
     note: str = ''
 
@@ -77,7 +84,11 @@ def _detect_backends() -> Dict[str, _Backend]:
     try:
         from ..panel._hdfe_kernels import sweep as _numba_sweep, _HAS_NUMBA
 
-        def _hdfe_numba(y, codes, counts):
+        def _hdfe_numba(
+            y: np.ndarray,
+            codes: np.ndarray,
+            counts: np.ndarray,
+        ) -> np.ndarray:
             out = np.ascontiguousarray(y, dtype=np.float64).copy()
             _numba_sweep(out, np.asarray(codes, dtype=np.int64),
                          np.asarray(counts, dtype=np.int64))
@@ -99,9 +110,15 @@ def _detect_backends() -> Dict[str, _Backend]:
     # Rust path: present for forward-compat but marked unavailable
     # until the PyO3 wheel lands (see spec 2026-04-20-v095-rust-hdfe-spike).
     try:
-        from statspai_hdfe import group_demean as _rust_group_demean  # type: ignore
+        from statspai_hdfe import (  # type: ignore[import-untyped]
+            group_demean as _rust_group_demean,
+        )
 
-        def _hdfe_rust(y, codes, counts):
+        def _hdfe_rust(
+            y: np.ndarray,
+            codes: np.ndarray,
+            counts: np.ndarray,
+        ) -> np.ndarray:
             out = np.ascontiguousarray(y, dtype=np.float64).copy()
             sums = np.zeros(counts.size, dtype=np.float64)
             _rust_group_demean(
@@ -143,7 +160,7 @@ class HDFEBenchResult:
         Name of the reference backend used for correctness comparison
         (always ``'numpy'``).
     """
-    results: List[Dict[str, object]]
+    results: List[Dict[str, Any]]
     backends: Dict[str, _Backend]
     reference: str = 'numpy'
 
@@ -167,7 +184,7 @@ class HDFEBenchResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Lossless JSON-safe payload for benchmark evidence."""
-        return _jsonable({
+        payload = {
             "kind": "fast_hdfe_bench_result",
             "reference": self.reference,
             "backends": {
@@ -175,7 +192,8 @@ class HDFEBenchResult:
                 for name, backend in self.backends.items()
             },
             "results": self.to_dataframe().to_dict(orient="records"),
-        })
+        }
+        return cast(Dict[str, Any], _jsonable(payload))
 
     def to_agent_summary(self, *, max_rows: int = 20) -> Dict[str, Any]:
         """Bounded agent-facing benchmark summary."""
@@ -195,7 +213,7 @@ class HDFEBenchResult:
                 .groupby("n", as_index=False)
                 .first()[["n", "backend", "wall_time_s", "relative_to_numpy"]]
             )
-        return _jsonable({
+        payload = {
             "kind": "fast_hdfe_bench_agent_summary",
             "reference": self.reference,
             "backends": {
@@ -206,14 +224,19 @@ class HDFEBenchResult:
             "n_rows": int(len(df)),
             "truncated_rows": max(int(len(df)) - limit, 0),
             "best_by_n": best_by_n.to_dict(orient="records"),
-        })
+        }
+        return cast(Dict[str, Any], _jsonable(payload))
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def _positive_int_sequence(value: Sequence[int], *, name: str) -> Tuple[int, ...]:
+def _positive_int_sequence(
+    value: Sequence[int],
+    *,
+    name: str,
+) -> Tuple[int, ...]:
     """Return a non-empty tuple of positive integers."""
     if isinstance(value, (str, bytes)):
         raise MethodIncompatibility(
@@ -272,7 +295,7 @@ def hdfe_bench(
 
     backends = _detect_backends()
     rng = np.random.default_rng(seed)
-    rows: List[Dict[str, object]] = []
+    rows: List[Dict[str, Any]] = []
 
     for n in n_values:
         codes = rng.integers(0, n_groups, size=n).astype(np.int64)

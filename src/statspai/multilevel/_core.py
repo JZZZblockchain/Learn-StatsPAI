@@ -27,7 +27,7 @@ import pandas as pd
 # Grouping utilities
 # ---------------------------------------------------------------------------
 
-def _as_str_list(x) -> List[str]:
+def _as_str_list(x: Optional[str | Sequence[str]]) -> List[str]:
     """Normalise a column spec to a list of strings."""
     if x is None:
         return []
@@ -48,9 +48,9 @@ def _build_group_keys(df: pd.DataFrame, groups: Sequence[str]) -> np.ndarray:
     if len(groups) == 0:
         raise ValueError("at least one grouping variable is required")
     if len(groups) == 1:
-        return df[groups[0]].values
+        return np.asarray(df[groups[0]].values)
     # Tuple-based key preserves hierarchical identity across levels.
-    return pd.MultiIndex.from_frame(df[list(groups)]).values
+    return np.asarray(pd.MultiIndex.from_frame(df[list(groups)]).values)
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +81,11 @@ def _unpack_G(theta: np.ndarray, q: int, cov_type: str) -> np.ndarray:
                      G = L L'.
     """
     if cov_type == "identity":
-        s2 = np.exp(theta[0])
-        return s2 * np.eye(q)
+        s2 = float(np.exp(theta[0]))
+        return np.asarray(s2 * np.eye(q), dtype=float)
 
     if cov_type == "diagonal":
-        return np.diag(np.exp(theta[:q]))
+        return np.asarray(np.diag(np.exp(theta[:q])), dtype=float)
 
     if cov_type == "unstructured":
         L = np.zeros((q, q))
@@ -97,7 +97,7 @@ def _unpack_G(theta: np.ndarray, q: int, cov_type: str) -> np.ndarray:
                 else:
                     L[i, j] = theta[idx]
                 idx += 1
-        return L @ L.T
+        return np.asarray(L @ L.T, dtype=float)
 
     raise ValueError(f"unknown cov_type {cov_type!r}")
 
@@ -150,11 +150,11 @@ class _GroupBlock:
     X: np.ndarray               # (n_j, p)
     Z: np.ndarray               # (n_j, q)  (intercept-first ordering)
     n: int
-    row_idx: np.ndarray = None  # positional row indices into original df
+    row_idx: Optional[np.ndarray] = None  # positions into original df
 
     def V(self, G: np.ndarray, sigma2: float) -> np.ndarray:
         """Marginal covariance V_j = Z_j G Z_j' + sigma² I."""
-        return self.Z @ G @ self.Z.T + sigma2 * np.eye(self.n)
+        return np.asarray(self.Z @ G @ self.Z.T + sigma2 * np.eye(self.n))
 
 
 def _group_blocks(

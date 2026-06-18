@@ -57,7 +57,7 @@ _LINE_WIDTH = 65
 # ======================================================================
 
 def estat(
-    result,
+    result: Any,
     test: str = "all",
     *,
     print_results: bool = True,
@@ -156,7 +156,7 @@ def estat(
 #  Helpers: extract arrays from result
 # ======================================================================
 
-def _get_residuals(result) -> np.ndarray:
+def _get_residuals(result: Any) -> np.ndarray:
     r = result.data_info.get("residuals")
     if r is None:
         raise ValueError(
@@ -166,7 +166,7 @@ def _get_residuals(result) -> np.ndarray:
     return np.asarray(r, dtype=float)
 
 
-def _get_fitted(result) -> np.ndarray:
+def _get_fitted(result: Any) -> np.ndarray:
     yhat = result.data_info.get("fitted_values")
     if yhat is None:
         raise ValueError(
@@ -175,7 +175,7 @@ def _get_fitted(result) -> np.ndarray:
     return np.asarray(yhat, dtype=float)
 
 
-def _get_X(result) -> np.ndarray:
+def _get_X(result: Any) -> np.ndarray:
     X = result.data_info.get("X")
     if X is None:
         raise ValueError(
@@ -184,7 +184,7 @@ def _get_X(result) -> np.ndarray:
     return np.asarray(X, dtype=float)
 
 
-def _get_y(result) -> np.ndarray:
+def _get_y(result: Any) -> np.ndarray:
     y = result.data_info.get("y")
     if y is None:
         raise ValueError(
@@ -193,14 +193,17 @@ def _get_y(result) -> np.ndarray:
     return np.asarray(y, dtype=float)
 
 
-def _get_nobs(result) -> int:
+def _get_nobs(result: Any) -> int:
     n = result.data_info.get("nobs")
     if n is None:
         n = len(_get_residuals(result))
     return int(n)
 
 
-def _ols_fit(X: np.ndarray, y: np.ndarray):
+def _ols_fit(
+    X: np.ndarray,
+    y: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Fit OLS via normal equations.  Returns (beta, residuals, yhat)."""
     beta = np.linalg.lstsq(X, y, rcond=None)[0]
     yhat = X @ beta
@@ -222,7 +225,7 @@ def _r_squared(y: np.ndarray, resid: np.ndarray) -> float:
 #  Breusch-Pagan heteroskedasticity test
 # ------------------------------------------------------------------
 
-def _estat_hettest(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_hettest(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Breusch-Pagan / Cook-Weisberg test for heteroskedasticity."""
     resid = _get_residuals(result)
     X = _get_X(result)
@@ -262,7 +265,7 @@ def _estat_hettest(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  White's general heteroskedasticity test
 # ------------------------------------------------------------------
 
-def _estat_white(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_white(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """White's test: regress e^2 on X, X^2, and cross-products."""
     resid = _get_residuals(result)
     X = _get_X(result)
@@ -328,7 +331,7 @@ def _estat_white(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  Ramsey RESET
 # ------------------------------------------------------------------
 
-def _estat_reset(result, *, powers: int = 3,
+def _estat_reset(result: Any, *, powers: int = 3,
                  alpha: float = 0.05) -> Dict[str, Any]:
     """Ramsey RESET: add yhat^2, yhat^3, ... to detect misspecification."""
     y = _get_y(result)
@@ -383,7 +386,7 @@ def _estat_reset(result, *, powers: int = 3,
 #  Breusch-Godfrey serial correlation
 # ------------------------------------------------------------------
 
-def _estat_bgodfrey(result, *, lags: int = 1,
+def _estat_bgodfrey(result: Any, *, lags: int = 1,
                     alpha: float = 0.05) -> Dict[str, Any]:
     """Breusch-Godfrey LM test for serial correlation up to *lags* lags."""
     resid = _get_residuals(result)
@@ -395,11 +398,13 @@ def _estat_bgodfrey(result, *, lags: int = 1,
     e_trimmed = resid[lags:]
     X_trimmed = X[lags:]
 
-    lag_cols = []
+    lag_cols: List[np.ndarray] = []
     for lag in range(1, lags + 1):
         lag_cols.append(resid[lags - lag : n - lag].reshape(-1, 1))
 
-    X_aux = np.column_stack([X_trimmed] + lag_cols)
+    aux_cols: List[np.ndarray] = [X_trimmed]
+    aux_cols.extend(lag_cols)
+    X_aux = np.column_stack(aux_cols)
     n_aux = X_aux.shape[0]
 
     _, aux_resid, _ = _ols_fit(X_aux, e_trimmed)
@@ -438,7 +443,7 @@ def _estat_bgodfrey(result, *, lags: int = 1,
 #  Durbin-Watson
 # ------------------------------------------------------------------
 
-def _estat_dwatson(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_dwatson(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Durbin-Watson statistic for first-order autocorrelation."""
     resid = _get_residuals(result)
 
@@ -477,7 +482,7 @@ def _estat_dwatson(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  Variance Inflation Factors
 # ------------------------------------------------------------------
 
-def _estat_vif(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_vif(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Compute VIF for each regressor (excluding constant)."""
     X = _get_X(result)
     n, k = X.shape
@@ -543,7 +548,7 @@ def _estat_vif(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  Information criteria
 # ------------------------------------------------------------------
 
-def _estat_ic(result) -> Dict[str, Any]:
+def _estat_ic(result: Any) -> Dict[str, Any]:
     """AIC, BIC, and HQIC."""
     resid = _get_residuals(result)
     n = _get_nobs(result)
@@ -575,7 +580,7 @@ def _estat_ic(result) -> Dict[str, Any]:
 #  Link test (specification)
 # ------------------------------------------------------------------
 
-def _estat_linktest(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_linktest(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """
     Specification link test.
 
@@ -623,7 +628,7 @@ def _estat_linktest(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  Normality of residuals
 # ------------------------------------------------------------------
 
-def _estat_normality(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_normality(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Jarque-Bera and Shapiro-Wilk tests on residuals."""
     resid = _get_residuals(result)
     n = len(resid)
@@ -699,7 +704,7 @@ def _estat_normality(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  Leverage / influence diagnostics
 # ------------------------------------------------------------------
 
-def _estat_leverage(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_leverage(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Cook's distance, DFBETAS, and leverage diagnostics."""
     resid = _get_residuals(result)
     X = _get_X(result)
@@ -784,7 +789,7 @@ def _estat_leverage(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  IV-specific: endogeneity (Durbin-Wu-Hausman)
 # ------------------------------------------------------------------
 
-def _estat_endogenous(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_endogenous(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Durbin-Wu-Hausman endogeneity test (for IV results)."""
     mi = result.model_info
 
@@ -831,7 +836,7 @@ def _estat_endogenous(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  IV-specific: over-identification (Sargan / Hansen J)
 # ------------------------------------------------------------------
 
-def _estat_overid(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_overid(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """Sargan/Hansen J test for over-identifying restrictions."""
     mi = result.model_info
 
@@ -882,7 +887,7 @@ def _estat_overid(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 #  IV-specific: first-stage F
 # ------------------------------------------------------------------
 
-def _estat_firststage(result, *, alpha: float = 0.05) -> Dict[str, Any]:
+def _estat_firststage(result: Any, *, alpha: float = 0.05) -> Dict[str, Any]:
     """First-stage F-statistic for weak instrument detection."""
     mi = result.model_info
 
@@ -932,7 +937,7 @@ def _estat_firststage(result, *, alpha: float = 0.05) -> Dict[str, Any]:
 # ======================================================================
 
 def _estat_all(
-    result,
+    result: Any,
     *,
     print_results: bool = True,
     lags: int = 1,

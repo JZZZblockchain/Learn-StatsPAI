@@ -8,19 +8,19 @@ Implements:
 - Parametric survival / AFT models (Weibull, exponential, log-normal, log-logistic)
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from scipy import stats, optimize
 
-from ..core.results import EconometricResults, CausalResult
+from ..core.results import EconometricResults
 
 
 # ---------------------------------------------------------------------------
 # Formula parser (local)
 # ---------------------------------------------------------------------------
 
-def _parse_formula(formula: str):
+def _parse_formula(formula: str) -> Tuple[str, List[str]]:
     """Parse 'y ~ x1 + x2' into (y_name, [x1, x2])."""
     parts = formula.split("~")
     if len(parts) != 2:
@@ -34,7 +34,7 @@ def _parse_formula(formula: str):
 # Robust / clustered variance helpers
 # ---------------------------------------------------------------------------
 
-def _sandwich_variance(X, hessian_inv, score_i):
+def _sandwich_variance(X: Any, hessian_inv: Any, score_i: Any) -> Any:
     """HC0 sandwich variance: H^{-1} (sum s_i s_i') H^{-1}.
 
     Delegates to the canonical ``core._vcov.sandwich_vcov`` (CLAUDE.md §4).
@@ -43,7 +43,12 @@ def _sandwich_variance(X, hessian_inv, score_i):
     return sandwich_vcov(hessian_inv, score_i, correction="none")
 
 
-def _cluster_variance(X, hessian_inv, score_i, clusters):
+def _cluster_variance(
+    X: Any,
+    hessian_inv: Any,
+    score_i: Any,
+    clusters: Any,
+) -> Any:
     """Clustered sandwich variance (correction G/(G-1) = 'cgm').
 
     Byte-identical to the prior hand-rolled sandwich for G >= 2.
@@ -89,13 +94,22 @@ class CoxResult(EconometricResults):
 
     def __init__(
         self,
-        params, std_errors, model_info, data_info=None, diagnostics=None,
+        params: Any,
+        std_errors: Any,
+        model_info: Any,
+        data_info: Optional[Dict[str, Any]] = None,
+        diagnostics: Optional[Dict[str, Any]] = None,
         # Cox-specific internals
-        _X=None, _durations=None, _events=None,
-        _baseline_hazard_df=None, _concordance=None,
-        _schoenfeld_resid=None, _strata=None,
-        _hazard_ratios=None, _hr_ci=None,
-    ):
+        _X: Any = None,
+        _durations: Any = None,
+        _events: Any = None,
+        _baseline_hazard_df: Optional[pd.DataFrame] = None,
+        _concordance: Optional[float] = None,
+        _schoenfeld_resid: Any = None,
+        _strata: Any = None,
+        _hazard_ratios: Any = None,
+        _hr_ci: Any = None,
+    ) -> None:
         super().__init__(params, std_errors, model_info, data_info, diagnostics)
         self._X = _X
         self._durations = _durations
@@ -111,7 +125,9 @@ class CoxResult(EconometricResults):
     @property
     def concordance(self) -> float:
         """Harrell's C-statistic (concordance index)."""
-        return self._concordance_val
+        if self._concordance_val is None:
+            raise RuntimeError("Concordance statistic is not available.")
+        return float(self._concordance_val)
 
     # -- baseline hazard ----------------------------------------------------
     def baseline_hazard(self) -> pd.DataFrame:
@@ -123,6 +139,8 @@ class CoxResult(EconometricResults):
         pd.DataFrame
             Columns ``time``, ``baseline_cumhaz``, ``baseline_survival``.
         """
+        if self._baseline_hazard_df is None:
+            raise RuntimeError("Baseline hazard is not available.")
         return self._baseline_hazard_df.copy()
 
     # -- PH test (Schoenfeld residuals) ------------------------------------
@@ -166,7 +184,8 @@ class CoxResult(EconometricResults):
         return pd.DataFrame(rows)
 
     # -- plot ---------------------------------------------------------------
-    def plot(self, kind: str = "survival", ax=None, **kwargs):
+    def plot(self, kind: str = "survival", ax: Any = None,
+             **kwargs: Any) -> Any:
         """
         Plot survival-related curves.
 
@@ -184,6 +203,8 @@ class CoxResult(EconometricResults):
             fig, ax = plt.subplots(figsize=kwargs.pop("figsize", (7, 4)))
 
         bh = self._baseline_hazard_df
+        if bh is None:
+            raise RuntimeError("Baseline hazard is not available for plotting.")
 
         if kind == "survival":
             ax.step(bh["time"], bh["baseline_survival"], where="post", **kwargs)
@@ -198,6 +219,8 @@ class CoxResult(EconometricResults):
             ax.set_title("Cox baseline cumulative hazard")
         elif kind == "hr":
             hr = self._hazard_ratios
+            if hr is None or self._hr_ci is None:
+                raise RuntimeError("Hazard-ratio intervals are not available.")
             lo, hi = self._hr_ci[:, 0], self._hr_ci[:, 1]
             names = list(self.params.index)
             y = np.arange(len(names))
@@ -214,7 +237,7 @@ class CoxResult(EconometricResults):
         return ax
 
     # -- repr ---------------------------------------------------------------
-    def __repr__(self):
+    def __repr__(self) -> str:
         n_obs = self.data_info.get("nobs", "?")
         n_events = self.data_info.get("n_events", "?")
         return (
@@ -277,7 +300,7 @@ class KMResult:
         return pd.concat(parts, ignore_index=True)
 
     @property
-    def median_survival(self):
+    def median_survival(self) -> Union[float, Dict[str, float]]:
         """Median survival time (scalar or dict by group)."""
         result = {}
         for g, df in self._tables.items():
@@ -297,7 +320,11 @@ class KMResult:
         for g, df in self._tables.items():
             n = int(df["n_risk"].iloc[0]) if len(df) > 0 else 0
             n_events = int(df["n_event"].sum())
-            med = self.median_survival if len(self._tables) == 1 else self.median_survival.get(g, np.nan)
+            med_val = self.median_survival
+            if isinstance(med_val, dict):
+                med = med_val.get(g, np.nan)
+            else:
+                med = med_val
             label = f"Group: {g}" if len(self._tables) > 1 else "Overall"
             out.append(f"\n{label}")
             out.append(f"  N at risk (start): {n}")
@@ -307,7 +334,7 @@ class KMResult:
         return "\n".join(out)
 
     # -- plot ---------------------------------------------------------------
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Any = None, **kwargs: Any) -> Any:
         """
         Plot Kaplan-Meier survival curves with confidence bands.
 
@@ -337,7 +364,7 @@ class KMResult:
         plt.tight_layout()
         return ax
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         groups = list(self._tables.keys())
         if len(groups) == 1:
             n_ev = int(list(self._tables.values())[0]["n_event"].sum())
@@ -349,7 +376,7 @@ class KMResult:
 # Internal: Kaplan-Meier computation
 # ===================================================================
 
-def _km_table(durations, events, alpha=0.05):
+def _km_table(durations: Any, events: Any, alpha: float = 0.05) -> pd.DataFrame:
     """Build a KM life table from raw duration/event arrays."""
     durations = np.asarray(durations, dtype=float)
     events = np.asarray(events, dtype=float)
@@ -403,7 +430,7 @@ def kaplan_meier(
     data: pd.DataFrame,
     duration: str,
     event: str,
-    group: str = None,
+    group: Optional[str] = None,
     alpha: float = 0.05,
 ) -> KMResult:
     """
@@ -532,9 +559,6 @@ def logrank_test(
     expected = {g: 0.0 for g in groups}
     var_mat = np.zeros((K - 1, K - 1))
 
-    # Build index map for groups
-    g_idx = {g: i for i, g in enumerate(groups)}
-
     for t in event_times:
         at_risk_total = np.sum(T >= t)
         events_total = np.sum((T == t) & (E == 1))
@@ -594,7 +618,13 @@ def logrank_test(
 # Internal: Cox partial likelihood helpers
 # ===================================================================
 
-def _cox_neg_logpl_efron(beta, X, T, E, strata_arr=None):
+def _cox_neg_logpl_efron(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+    strata_arr: Optional[np.ndarray] = None,
+) -> float:
     """Negative log partial likelihood (Efron approximation for ties)."""
     n, p = X.shape
     xb = X @ beta
@@ -605,7 +635,7 @@ def _cox_neg_logpl_efron(beta, X, T, E, strata_arr=None):
 
     for s in np.unique(strata_arr):
         mask = strata_arr == s
-        Ts, Es, xbs, Xs = T[mask], E[mask], xb[mask], X[mask]
+        Ts, Es, xbs = T[mask], E[mask], xb[mask]
         order = np.argsort(-Ts)  # descending
         Ts, Es, xbs = Ts[order], Es[order], xbs[order]
 
@@ -625,10 +655,16 @@ def _cox_neg_logpl_efron(beta, X, T, E, strata_arr=None):
             for ell in range(d):
                 nll += np.log(risk_sum - ell / d * event_exp_sum)
 
-    return nll
+    return float(nll)
 
 
-def _cox_score_hessian_efron(beta, X, T, E, strata_arr=None):
+def _cox_score_hessian_efron(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+    strata_arr: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Score vector and Hessian of Cox log partial likelihood (Efron)."""
     n, p = X.shape
     xb = X @ beta
@@ -675,7 +711,13 @@ def _cox_score_hessian_efron(beta, X, T, E, strata_arr=None):
     return score, hessian
 
 
-def _cox_score_individual(beta, X, T, E, strata_arr=None):
+def _cox_score_individual(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+    strata_arr: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """Per-observation score contributions (for sandwich variance).
 
     Uses the counting-process decomposition: for each subject i,
@@ -697,8 +739,6 @@ def _cox_score_individual(beta, X, T, E, strata_arr=None):
         Es = E[mask]
         xbs = xb[mask]
         Xs = X[mask]
-        ns = len(Ts)
-
         event_times = np.sort(np.unique(Ts[Es == 1]))
 
         for t in event_times:
@@ -802,7 +842,13 @@ def _cox_score_individual(beta, X, T, E, strata_arr=None):
     return scores
 
 
-def _breslow_baseline_hazard(beta, X, T, E, strata_arr=None):
+def _breslow_baseline_hazard(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+    strata_arr: Optional[np.ndarray] = None,
+) -> pd.DataFrame:
     """Breslow estimator of baseline cumulative hazard."""
     n = X.shape[0]
     xb = X @ beta
@@ -829,7 +875,12 @@ def _breslow_baseline_hazard(beta, X, T, E, strata_arr=None):
     return df
 
 
-def _concordance_index(beta, X, T, E):
+def _concordance_index(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+) -> float:
     """Harrell's C-statistic for Cox model."""
     risk_scores = X @ beta
     concordant = 0
@@ -855,7 +906,13 @@ def _concordance_index(beta, X, T, E):
     return (concordant + 0.5 * tied_risk) / total
 
 
-def _schoenfeld_residuals(beta, X, T, E, strata_arr=None):
+def _schoenfeld_residuals(
+    beta: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+    strata_arr: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """Schoenfeld residuals for PH test."""
     n, p = X.shape
     xb = X @ beta
@@ -893,15 +950,15 @@ def _schoenfeld_residuals(beta, X, T, E, strata_arr=None):
 # ===================================================================
 
 def cox(
-    formula: str = None,
+    formula: Optional[str] = None,
     data: pd.DataFrame = None,
-    duration: str = None,
-    event: str = None,
-    x: list = None,
+    duration: Optional[str] = None,
+    event: Optional[str] = None,
+    x: Optional[List[str]] = None,
     ties: str = "efron",
-    strata: str = None,
+    strata: Optional[str] = None,
     robust: str = "nonrobust",
-    cluster: str = None,
+    cluster: Optional[str] = None,
     hazard_ratio: bool = True,
     alpha: float = 0.05,
 ) -> CoxResult:
@@ -988,13 +1045,12 @@ def cox(
     # ---- Optimization (Newton-Raphson) --------------------------------
     beta0 = np.zeros(p)
 
-    if ties == "efron":
-        neg_logpl = lambda b: _cox_neg_logpl_efron(b, X, T, E, strata_arr)
-    elif ties == "breslow":
-        # Breslow is Efron with d always=1 equivalent; reuse Efron
-        neg_logpl = lambda b: _cox_neg_logpl_efron(b, X, T, E, strata_arr)
-    else:
+    if ties not in ("efron", "breslow"):
         raise ValueError(f"ties must be 'efron' or 'breslow', got {ties!r}")
+
+    def neg_logpl(b: np.ndarray) -> float:
+        # Breslow currently reuses the Efron helper, matching prior behavior.
+        return _cox_neg_logpl_efron(b, X, T, E, strata_arr)
 
     # Newton-Raphson with fallback to L-BFGS-B
     beta = beta0.copy()
@@ -1134,7 +1190,12 @@ def cox(
 # Parametric survival / AFT: survreg()
 # ===================================================================
 
-def _weibull_loglik(params, X, T, E):
+def _weibull_loglik(
+    params: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+) -> float:
     """Log-likelihood for Weibull AFT: T ~ Weibull(lambda=exp(-Xb/sigma), k=1/sigma)."""
     p = X.shape[1]
     beta = params[:p]
@@ -1147,10 +1208,15 @@ def _weibull_loglik(params, X, T, E):
     # log f(t) = -log(sigma) - log(t) + z - exp(z)  [standard extreme value]
     # log S(t) = -exp(z)
     ll = E * (-log_sigma - np.log(T + 1e-15) + z - np.exp(z)) + (1 - E) * (-np.exp(z))
-    return -ll.sum()
+    return float(-ll.sum())
 
 
-def _lognormal_loglik(params, X, T, E):
+def _lognormal_loglik(
+    params: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+) -> float:
     """Log-likelihood for log-normal AFT."""
     p = X.shape[1]
     beta = params[:p]
@@ -1162,10 +1228,15 @@ def _lognormal_loglik(params, X, T, E):
 
     ll = (E * (stats.norm.logpdf(z) - log_sigma - np.log(T + 1e-15)) +
           (1 - E) * stats.norm.logsf(z))
-    return -ll.sum()
+    return float(-ll.sum())
 
 
-def _loglogistic_loglik(params, X, T, E):
+def _loglogistic_loglik(
+    params: np.ndarray,
+    X: np.ndarray,
+    T: np.ndarray,
+    E: np.ndarray,
+) -> float:
     """Log-likelihood for log-logistic AFT."""
     p = X.shape[1]
     beta = params[:p]
@@ -1179,18 +1250,18 @@ def _loglogistic_loglik(params, X, T, E):
     # S(t) = 1 / (1+exp(z))
     ll = (E * (z - log_sigma - np.log(T + 1e-15) - 2 * np.log(1 + np.exp(z))) +
           (1 - E) * (-np.log(1 + np.exp(z))))
-    return -ll.sum()
+    return float(-ll.sum())
 
 
 def survreg(
-    formula: str = None,
+    formula: Optional[str] = None,
     data: pd.DataFrame = None,
-    duration: str = None,
-    event: str = None,
-    x: list = None,
+    duration: Optional[str] = None,
+    event: Optional[str] = None,
+    x: Optional[List[str]] = None,
     dist: str = "weibull",
     robust: str = "nonrobust",
-    cluster: str = None,
+    cluster: Optional[str] = None,
     alpha: float = 0.05,
 ) -> EconometricResults:
     """
@@ -1260,8 +1331,6 @@ def survreg(
     n, p = X.shape  # p includes intercept
     param_names = ["_cons"] + list(x)
 
-    cluster_arr = data[cluster].values if cluster else None
-
     # ---- Select distribution -----------------------------------------
     dist_lower = dist.lower()
     if dist_lower in ("weibull", "exponential"):
@@ -1273,33 +1342,29 @@ def survreg(
     else:
         raise ValueError(f"dist must be weibull/exponential/lognormal/loglogistic, got {dist!r}")
 
+    def neg_ll_wrapper(params: np.ndarray) -> float:
+        return loglik_fn(params, X, T, E)
+
     # Initial params: beta=0, log_sigma=0
     init = np.zeros(p + 1)
     if dist_lower == "exponential":
         # Fix sigma=1 => log_sigma=0, only optimize beta
-        def neg_ll_exp(beta):
+        def neg_ll_exp(beta: np.ndarray) -> float:
             return loglik_fn(np.append(beta, 0.0), X, T, E)
         res = optimize.minimize(neg_ll_exp, np.zeros(p), method="L-BFGS-B")
         full_params = np.append(res.x, 0.0)
     else:
-        res = optimize.minimize(lambda params: loglik_fn(params, X, T, E),
-                                init, method="L-BFGS-B")
+        res = optimize.minimize(neg_ll_wrapper, init, method="L-BFGS-B")
         full_params = res.x
 
     beta_hat = full_params[:p]
     log_sigma_hat = full_params[p]
 
     # ---- Standard errors (observed information) -----------------------
-    from scipy.optimize import approx_fprime
-
-    def neg_ll_wrapper(params):
-        return loglik_fn(params, X, T, E)
-
     # Numerical Hessian
     eps = 1e-5
     k = len(full_params)
     H = np.zeros((k, k))
-    f0 = neg_ll_wrapper(full_params)
     for i in range(k):
         for j in range(i, k):
             e_i = np.zeros(k)

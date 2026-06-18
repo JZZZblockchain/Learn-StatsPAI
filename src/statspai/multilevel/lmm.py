@@ -512,16 +512,24 @@ class MixedResult(ResultProtocolMixin):
         )
         return "\n".join(out)
 
-    def to_latex(self) -> str:
+    def to_latex(
+        self,
+        *,
+        caption: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> str:
+        caption_text = caption or "Linear Mixed Model"
         lines = [
             r"\begin{table}[htbp]",
             r"\centering",
-            r"\caption{Linear Mixed Model}",
+            rf"\caption{{{caption_text}}}",
             r"\begin{tabular}{lrrrr}",
             r"\toprule",
             r"Variable & Coef. & Std.\ Err. & $z$ & $P>|z|$ \\",
             r"\midrule",
         ]
+        if label is not None:
+            lines.insert(3, rf"\label{{{label}}}")
         for var in self.fixed_effects.index:
             b = self.fixed_effects[var]
             se = self._se_fixed[var]
@@ -579,7 +587,7 @@ class MixedResult(ResultProtocolMixin):
             "</div>"
         )
 
-    def cite(self) -> str:
+    def cite(self, format: str = "bibtex") -> str:
         return (
             "@book{mcculloch2008,\n"
             "  title   = {Generalized, Linear, and Mixed Models},\n"

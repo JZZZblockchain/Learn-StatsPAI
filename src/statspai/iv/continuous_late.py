@@ -117,15 +117,19 @@ def continuous_iv_late(
     n = len(df)
     rng = np.random.default_rng(seed)
 
-    def _wald_per_bin(Yi, Di, Zi):
+    def _wald_per_bin(
+        Yi: np.ndarray,
+        Di: np.ndarray,
+        Zi: np.ndarray,
+    ) -> tuple[float, float]:
         z_bins = pd.qcut(Zi, q=n_quantiles, labels=False,
                           duplicates='drop')
         unique_bins = np.sort(np.unique(z_bins))
         if len(unique_bins) < 2:
             return float(np.mean(Yi[Di > Di.mean()]) - np.mean(Yi[Di <= Di.mean()])), 1.0
         # Wald ratio for each adjacent bin, then average
-        atts = []
-        weights = []
+        atts: list[float] = []
+        weights: list[float] = []
         for k in range(len(unique_bins) - 1):
             mask = z_bins == unique_bins[k]
             mask_next = z_bins == unique_bins[k + 1]
@@ -137,12 +141,12 @@ def continuous_iv_late(
             weights.append(abs(denom))
         if not atts:
             return float('nan'), 0.0
-        atts = np.array(atts)
-        weights = np.array(weights)
+        atts_arr = np.asarray(atts, dtype=float)
+        weights_arr = np.asarray(weights, dtype=float)
         # Maximal complier class: pick the bin pair with the biggest
         # |denom| (most "responsive" units to Z).
-        idx = int(np.argmax(weights))
-        return float(atts[idx]), float(weights[idx])
+        idx = int(np.argmax(weights_arr))
+        return float(atts_arr[idx]), float(weights_arr[idx])
 
     estimate, complier = _wald_per_bin(Y, D, Z)
     boot = np.full(n_boot, np.nan)

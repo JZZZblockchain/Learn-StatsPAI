@@ -21,7 +21,7 @@ Attached as the ``sensitivity`` method of :class:`CausalResult` and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -45,7 +45,7 @@ class SensitivityDashboard:
     rosenbaum: Optional[Dict[str, float]] = None
     sensemakr: Optional[Dict[str, float]] = None
     breakdown: Optional[Dict[str, float]] = None
-    notes: list = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         bar = "=" * 60
@@ -100,7 +100,20 @@ class SensitivityDashboard:
 # --------------------------------------------------------------------------- #
 
 
-def _extract_estimate(result) -> tuple[float, float, tuple[float, float]]:
+def _float_or_nan(value: Any) -> float:
+    return float(value) if value is not None else float("nan")
+
+
+def _finite_optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    out = float(value)
+    return None if np.isnan(out) else out
+
+
+def _extract_estimate(
+    result: Any,
+) -> tuple[Optional[float], Optional[float], Optional[tuple[float, float]]]:
     """Pull (estimate, se, ci) from a heterogeneous result object."""
     estimate = None
     se = None
@@ -139,25 +152,27 @@ def _extract_estimate(result) -> tuple[float, float, tuple[float, float]]:
     return estimate, se, ci
 
 
-def _as_risk_ratio(estimate: float, se: float, ci) -> tuple[float, tuple[float, float]]:
+def _as_risk_ratio(
+    estimate: float,
+    se: float,
+    ci: tuple[float, float],
+) -> tuple[float, tuple[float, float]]:
     """Interpret estimate as an RR for E-value.
 
     If estimate > 1 already, treat as RR directly.  Otherwise use the
     conservative VanderWeele-Ding conversion
     RR = (1 + d) / 1, where ``d`` is a standardized effect size.
     """
-    if estimate is None:
-        return float("nan"), (float("nan"), float("nan"))
     # Assume estimate already on RR scale if strictly positive and CI > 0.
-    if estimate > 0 and ci is not None and ci[0] > 0:
+    if estimate > 0 and ci[0] > 0:
         return float(estimate), (float(ci[0]), float(ci[1]))
     # Otherwise convert mean difference to RR via ABS + 1
     rr = 1 + abs(estimate)
-    ci_conv = (1 + abs(ci[0]) if ci else rr, 1 + abs(ci[1]) if ci else rr)
+    ci_conv = (1 + abs(ci[0]), 1 + abs(ci[1]))
     return float(rr), (float(min(ci_conv)), float(max(ci_conv)))
 
 
-def _coerce_matched_pairs(mp) -> tuple[np.ndarray, np.ndarray]:
+def _coerce_matched_pairs(mp: Any) -> tuple[np.ndarray, np.ndarray]:
     """Coerce ``result.matched_pairs`` into (treated, control) outcome arrays.
 
     Accepts a 2-tuple/list ``(treated, control)``, an ``(n, 2)`` array
@@ -194,13 +209,13 @@ def _coerce_matched_pairs(mp) -> tuple[np.ndarray, np.ndarray]:
 
 
 def unified_sensitivity(
-    result,
+    result: Any,
     *,
     r2_treated: Optional[float] = None,
     r2_controlled: Optional[float] = None,
     beta_uncontrolled: Optional[float] = None,
     rho_max: float = 1.0,
-    data=None,
+    data: Any = None,
     y: Optional[str] = None,
     treat: Optional[str] = None,
     controls: Optional[Sequence[str]] = None,
@@ -260,29 +275,37 @@ def unified_sensitivity(
     if estimate is None or se is None or ci is None:
         raise ValueError(
             "Could not extract (estimate, se, ci) from result object. "
-            "Supply them directly via .sensitivity(estimate=..., se=..., ci=...)."
+            "Supply them directly via "
+            ".sensitivity(estimate=..., se=..., ci=...)."
         )
 
     rr, rr_ci = _as_risk_ratio(estimate, se, ci)
 
-    notes = []
+    notes: list[str] = []
     # 1. E-value (always).  ``evalue`` returns a dict with keys
     # ``evalue_estimate`` (point) and ``evalue_ci``.
     try:
         ev = _evalue_fn(estimate=rr, ci=rr_ci, measure="RR")
         if isinstance(ev, dict):
-            e_point = float(ev.get("evalue_estimate",
-                                    ev.get("evalue",
-                                           ev.get("e_point", float("nan")))))
+            e_point = _float_or_nan(
+                ev.get(
+                    "evalue_estimate",
+                    ev.get("evalue", ev.get("e_point", float("nan"))),
+                )
+            )
             e_ci_val = ev.get("evalue_ci", ev.get("e_ci", None))
         else:
-            e_point = float(getattr(ev, "evalue_estimate",
-                                     getattr(ev, "evalue",
-                                             getattr(ev, "e_point",
-                                                     float("nan")))))
+            e_point = _float_or_nan(
+                getattr(
+                    ev, "evalue_estimate",
+                    getattr(
+                        ev, "evalue",
+                        getattr(ev, "e_point", float("nan")),
+                    ),
+                )
+            )
             e_ci_val = getattr(ev, "evalue_ci", getattr(ev, "e_ci", None))
-        e_ci = float(e_ci_val) if e_ci_val is not None and not \
-            (isinstance(e_ci_val, float) and np.isnan(e_ci_val)) else None
+        e_ci = _finite_optional_float(e_ci_val)
     except Exception as exc:
         notes.append(f"E-value computation failed: {exc}")
         e_point, e_ci = float("nan"), None
@@ -311,25 +334,34 @@ def unified_sensitivity(
                 # quantity of interest); the ``delta`` key in the return
                 # dict merely echoes the *input* proportionality (1.0).
                 oster = {
-                    "delta": float(od.get("delta_for_zero",
-                                            od.get("delta_breakdown",
-                                                    float("nan")))),
-                    "beta_star": float(od.get("beta_star",
-                                                od.get("beta_adjusted",
-                                                        float("nan")))),
+                    "delta": _float_or_nan(
+                        od.get(
+                            "delta_for_zero",
+                            od.get("delta_breakdown", float("nan")),
+                        )
+                    ),
+                    "beta_star": _float_or_nan(
+                        od.get(
+                            "beta_star",
+                            od.get("beta_adjusted", float("nan")),
+                        )
+                    ),
                 }
             else:
                 oster = {
                     "delta": float(getattr(od, "delta", float("nan"))),
-                    "beta_star": float(getattr(od, "beta_star",
-                                                 float("nan"))),
+                    "beta_star": float(
+                        getattr(od, "beta_star", float("nan"))
+                    ),
                 }
         except Exception as exc:
             import warnings as _warnings
             _warnings.warn(f"Oster delta skipped: {exc}", stacklevel=2)
             notes.append(f"Oster delta skipped: {exc}")
-    elif (include_oster and (r2_treated is not None
-                              or r2_controlled is not None)):
+    elif (
+        include_oster
+        and (r2_treated is not None or r2_controlled is not None)
+    ):
         notes.append(
             "Oster delta skipped: need r2_treated, r2_controlled, and "
             "beta_uncontrolled (the short-regression estimate)."
@@ -345,7 +377,8 @@ def unified_sensitivity(
             from ..diagnostics import rosenbaum_bounds as _rb
             treated_y, control_y = _coerce_matched_pairs(
                 result.matched_pairs)
-            rb = _rb(treated_y, control_y, alternative="two-sided")
+            rb = _rb(treated_y.tolist(), control_y.tolist(),
+                     alternative="two-sided")
             rosenbaum = {"gamma_critical": float(rb.gamma_critical)}
         except Exception as exc:
             import warnings as _warnings
@@ -365,10 +398,16 @@ def unified_sensitivity(
     if include_sensemakr:
         sm_args = {"data": data, "y": y, "treat": treat,
                    "controls": controls}
-        if all(v is not None for v in sm_args.values()):
+        if (
+            data is not None
+            and y is not None
+            and treat is not None
+            and controls is not None
+        ):
+            controls_list = list(controls)
             try:
                 from ..diagnostics.sensemakr import sensemakr as _sm
-                sm = _sm(data, y=y, treat=treat, controls=list(controls))
+                sm = _sm(data, y=y, treat=treat, controls=controls_list)
                 sensemakr = {
                     "rv_q1": float(sm["rv_q"]),
                     "rv_qa": float(sm["rv_qa"]),
@@ -377,7 +416,7 @@ def unified_sensitivity(
                 import warnings as _warnings
                 msg = (
                     f"Sensemakr failed: {exc}. Check that data contains "
-                    f"numeric columns {[y, treat] + list(controls)}, or "
+                    f"numeric columns {[y, treat] + controls_list}, or "
                     "call sp.sensemakr(data, y, treat, controls) directly."
                 )
                 _warnings.warn(msg, stacklevel=2)
@@ -404,7 +443,8 @@ def unified_sensitivity(
     lo, hi = ci
     sign = np.sign(estimate)
     if sign > 0:
-        ci_near_null = lo  # lower bound: how close we are to losing significance
+        # Lower bound: how close we are to losing significance.
+        ci_near_null = lo
     elif sign < 0:
         ci_near_null = hi
     else:

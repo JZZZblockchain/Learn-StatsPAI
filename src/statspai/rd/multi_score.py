@@ -11,11 +11,10 @@ boundary curve using a multivariate local linear estimator.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from ._core import _kernel_fn
 
@@ -83,7 +82,7 @@ def rd_multi_score(
     y: str,
     running_vars: List[str],
     cutoffs: List[float],
-    bandwidth: float = None,
+    bandwidth: Optional[float] = None,
     kernel: str = 'triangular',
     alpha: float = 0.05,
 ) -> MultiScoreRDResult:
@@ -131,7 +130,8 @@ def rd_multi_score(
     """
     if len(running_vars) != len(cutoffs):
         raise ValueError(
-            f"len(running_vars)={len(running_vars)} != len(cutoffs)={len(cutoffs)}"
+            f"len(running_vars)={len(running_vars)} != "
+            f"len(cutoffs)={len(cutoffs)}"
         )
     df = data[[y] + list(running_vars)].dropna().reset_index(drop=True)
     Y = df[y].to_numpy(float)
@@ -151,10 +151,11 @@ def rd_multi_score(
     mask = weights > 0
     if mask.sum() < 5:
         raise ValueError(  # pragma: no cover
-            f"Bandwidth {bandwidth:.4f} too small — only {mask.sum()} obs in window."
+            f"Bandwidth {bandwidth:.4f} too small — only "
+            f"{mask.sum()} obs in window."
         )
 
-    # Local linear: regress Y on (1, R1, ..., Rk, treat, treat*R1, ..., treat*Rk)
+    # Local linear design: (1, R1, ..., Rk, treat, treat*R1, ..., treat*Rk).
     Xb = [np.ones(mask.sum())]
     for j in range(R.shape[1]):
         Xb.append(R[mask, j])

@@ -28,7 +28,7 @@ Rosenbaum, P. R. (2010). *Design of Observational Studies*. Springer. [@rosenbau
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, Union, Dict, Any, List
+from typing import Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -228,19 +228,20 @@ def rosenbaum_bounds(
         raise ValueError("No matched pairs after cleaning")
 
     if gamma_grid is None:
-        gamma_grid = np.round(np.arange(1.0, 3.01, 0.1), 3)
-    gamma_grid = np.asarray(gamma_grid, dtype=float)
-    if np.any(gamma_grid < 1.0):
+        gamma_grid_arr = np.round(np.arange(1.0, 3.01, 0.1), 3)
+    else:
+        gamma_grid_arr = np.asarray(gamma_grid, dtype=float)
+    if np.any(gamma_grid_arr < 1.0):
         raise ValueError("gamma_grid must be >= 1")
 
     # ---- Compute bounds per Gamma ----------------------------------
-    lowers = np.empty_like(gamma_grid)
-    uppers = np.empty_like(gamma_grid)
+    lowers = np.empty_like(gamma_grid_arr)
+    uppers = np.empty_like(gamma_grid_arr)
 
     if method == "wilcoxon":
         ranks_abs, signs = _wilcoxon_ranks(diffs)
         statistic = float(np.sum(ranks_abs * (signs > 0)))
-        for i, gamma in enumerate(gamma_grid):
+        for i, gamma in enumerate(gamma_grid_arr):
             p_low = 1.0 / (1.0 + gamma)
             p_high = gamma / (1.0 + gamma)
             # worst case toward alternative = p_high
@@ -259,7 +260,7 @@ def rosenbaum_bounds(
         else:
             statistic = float(np.sum(nonzero > 0))
             target = statistic
-        for i, gamma in enumerate(gamma_grid):
+        for i, gamma in enumerate(gamma_grid_arr):
             p_low = 1.0 / (1.0 + gamma)
             p_high = gamma / (1.0 + gamma)
             if alternative == "less":
@@ -279,11 +280,11 @@ def rosenbaum_bounds(
     if above.size == 0:
         gamma_crit = float("inf")
     else:
-        gamma_crit = float(gamma_grid[above[0]])
+        gamma_crit = float(gamma_grid_arr[above[0]])
 
     detail = pd.DataFrame(
         {
-            "Gamma": gamma_grid,
+            "Gamma": gamma_grid_arr,
             "p_lower": lowers,
             "p_upper": uppers,
             "reject_upper": uppers <= alpha,
@@ -291,7 +292,7 @@ def rosenbaum_bounds(
     )
 
     return RosenbaumResult(
-        gamma_grid=gamma_grid,
+        gamma_grid=gamma_grid_arr,
         pvalue_lower=lowers,
         pvalue_upper=uppers,
         gamma_critical=gamma_crit,

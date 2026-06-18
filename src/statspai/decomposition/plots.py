@@ -19,7 +19,7 @@ a clear ``ImportError`` rather than a deep import-time failure.
 """
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,7 @@ from scipy import stats
 from ._results import DECOMP_PALETTE, apply_decomp_style
 
 
-def _require_mpl():
+def _require_mpl() -> Any:
     try:
         import matplotlib.pyplot as plt
         return plt
@@ -60,9 +60,9 @@ def detailed_waterfall(
     label_col: str = "variable",
     se_col: Optional[str] = "se",
     title: str = "Decomposition",
-    figsize=(8, 5),
+    figsize: tuple[float, float] = (8, 5),
     alpha: float = 0.05,
-):
+) -> tuple[Any, Any]:
     """Horizontal bar chart of per-variable contributions with optional 95% CI.
 
     Parameters
@@ -106,9 +106,9 @@ def forest_plot(
     label_col: str = "variable",
     se_col: str = "se",
     title: str = "Decomposition",
-    figsize=(8, 5),
+    figsize: tuple[float, float] = (8, 5),
     alpha: float = 0.05,
-):
+) -> tuple[Any, Any]:
     """Forest-style plot: point estimates + 95% CI per variable.
 
     Useful for emphasising which contributions are statistically
@@ -150,7 +150,10 @@ def forest_plot(
 # Aggregate decomposition bar chart (gap / composition / structure)
 # ════════════════════════════════════════════════════════════════════════
 
-def dfl_plot(result, figsize=(7, 4)):
+def dfl_plot(
+    result: Any,
+    figsize: tuple[float, float] = (7, 4),
+) -> tuple[Any, Any]:
     """Summary bar chart: gap, composition, structure with 95% CI whiskers."""
     plt = _require_mpl()
     labels = ["Total gap", "Composition", "Structure"]
@@ -162,12 +165,11 @@ def dfl_plot(result, figsize=(7, 4)):
         z * se_dict.get("composition", 0.0),
         z * se_dict.get("structure", 0.0),
     ]
-    if not any(errs):
-        errs = None
+    yerr = errs if any(errs) else None
     fig, ax = plt.subplots(figsize=figsize)
     colors = [DECOMP_PALETTE["accent"], DECOMP_PALETTE["a"],
               DECOMP_PALETTE["b"]]
-    ax.bar(labels, values, yerr=errs, color=colors, capsize=4,
+    ax.bar(labels, values, yerr=yerr, color=colors, capsize=4,
            edgecolor="white",
            error_kw=dict(ecolor=DECOMP_PALETTE["ci"]))
     ax.axhline(0, color="black", linewidth=0.8)
@@ -184,7 +186,10 @@ def dfl_plot(result, figsize=(7, 4)):
 # FFL waterfall (composition + structure side by side)
 # ════════════════════════════════════════════════════════════════════════
 
-def ffl_waterfall(result, figsize=(11, 6)):
+def ffl_waterfall(
+    result: Any,
+    figsize: tuple[float, float] = (11, 6),
+) -> tuple[Any, Any]:
     """Two-panel forest chart: composition (left) vs structure (right)."""
     plt = _require_mpl()
     fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=False)
@@ -233,13 +238,13 @@ def ffl_waterfall(result, figsize=(11, 6)):
 # ════════════════════════════════════════════════════════════════════════
 
 def quantile_process_plot(
-    result,
+    result: Any,
     *,
-    figsize=(9, 5),
+    figsize: tuple[float, float] = (9, 5),
     show_gap: bool = True,
     show_ci: bool = True,
     alpha: float = 0.05,
-):
+) -> tuple[Any, Any]:
     """Plot total gap, composition and structure as functions of τ.
 
     If the result's ``quantile_grid`` carries SE columns
@@ -283,7 +288,10 @@ def quantile_process_plot(
 # Counterfactual CDF (CFM)
 # ════════════════════════════════════════════════════════════════════════
 
-def counterfactual_cdf_plot(result, figsize=(9, 5)):
+def counterfactual_cdf_plot(
+    result: Any,
+    figsize: tuple[float, float] = (9, 5),
+) -> tuple[Any, Any]:
     """Overlay observed A, observed B, and counterfactual CDFs."""
     plt = _require_mpl()
     c = result.cdf_grid
@@ -307,7 +315,10 @@ def counterfactual_cdf_plot(result, figsize=(9, 5)):
 # Inequality subgroup plot (between / within / overlap)
 # ════════════════════════════════════════════════════════════════════════
 
-def inequality_subgroup_plot(result, figsize=(8, 5)):
+def inequality_subgroup_plot(
+    result: Any,
+    figsize: tuple[float, float] = (8, 5),
+) -> tuple[Any, Any]:
     """Bar chart of subgroup inequality decomposition."""
     plt = _require_mpl()
     fig, ax = plt.subplots(figsize=figsize)
@@ -330,7 +341,11 @@ def inequality_subgroup_plot(result, figsize=(8, 5)):
 # Gap closing — observed vs counterfactual vs closed (with CI whiskers)
 # ════════════════════════════════════════════════════════════════════════
 
-def gap_closing_plot(result, figsize=(7, 4), alpha: float = 0.05):
+def gap_closing_plot(
+    result: Any,
+    figsize: tuple[float, float] = (7, 4),
+    alpha: float = 0.05,
+) -> tuple[Any, Any]:
     """Bars for observed, counterfactual, and closed gap with whiskers."""
     plt = _require_mpl()
     fig, ax = plt.subplots(figsize=figsize)
@@ -339,10 +354,9 @@ def gap_closing_plot(result, figsize=(7, 4), alpha: float = 0.05):
     values = [result.observed_gap, result.counterfactual_gap, result.closed_gap]
     errs = [z * se.get("observed", 0.0), z * se.get("counterfactual", 0.0),
             z * se.get("closed", 0.0)]
-    if not any(errs):
-        errs = None
+    yerr = errs if any(errs) else None
     ax.bar(
-        ["Observed", "Counterfactual", "Closed"], values, yerr=errs,
+        ["Observed", "Counterfactual", "Closed"], values, yerr=yerr,
         color=[DECOMP_PALETTE["accent"], DECOMP_PALETTE["cf"],
                DECOMP_PALETTE["a"]],
         edgecolor="white", capsize=4, zorder=2,
@@ -360,11 +374,11 @@ def gap_closing_plot(result, figsize=(7, 4), alpha: float = 0.05):
 # ════════════════════════════════════════════════════════════════════════
 
 def mediation_forest(
-    result,
+    result: Any,
     *,
-    figsize=(7, 3.5),
+    figsize: tuple[float, float] = (7, 3.5),
     alpha: float = 0.05,
-):
+) -> tuple[Any, Any]:
     """Forest plot of NDE / NIE / total effect with 95% CI."""
     plt = _require_mpl()
     z = float(stats.norm.ppf(1 - alpha / 2))
@@ -382,9 +396,9 @@ def mediation_forest(
         rows.append((label, float(v), s))
     if not rows:
         raise ValueError("MediationDecompResult has no NDE/NIE/total effect.")
-    labels, vals, ses = zip(*rows)
-    vals = np.asarray(vals)
-    ses = np.asarray(ses)
+    labels, vals_raw, ses_raw = zip(*rows)
+    vals = np.asarray(vals_raw, dtype=float)
+    ses = np.asarray(ses_raw, dtype=float)
     fig, ax = plt.subplots(figsize=figsize)
     y = np.arange(len(labels))
     lo = vals - z * ses
@@ -419,9 +433,9 @@ def rif_heatmap(
     variable_col: str = "variable",
     tau_col: str = "tau",
     value_col: str = "contribution",
-    figsize=(9, 5),
+    figsize: tuple[float, float] = (9, 5),
     cmap: str = "RdBu_r",
-):
+) -> tuple[Any, Any]:
     """Heatmap of per-variable RIF contributions across quantiles.
 
     ``grid_df`` is expected in long form with three columns: variable,
@@ -450,8 +464,12 @@ def rif_heatmap(
 # Yu-Elwert mechanism plot (prevalence / impact / selection)
 # ════════════════════════════════════════════════════════════════════════
 
-def yu_elwert_mechanisms_plot(result, *, figsize=(8, 4.5),
-                              alpha: float = 0.05):
+def yu_elwert_mechanisms_plot(
+    result: Any,
+    *,
+    figsize: tuple[float, float] = (8, 4.5),
+    alpha: float = 0.05,
+) -> tuple[Any, Any]:
     """Bar chart of the three Yu-Elwert (2025) decomposition mechanisms.
 
     Bars: total disparity, prevalence, treatment-effect, selection,
@@ -466,7 +484,9 @@ def yu_elwert_mechanisms_plot(result, *, figsize=(8, 4.5),
         ("Effect",      "effect"),
         ("Selection",   "selection"),
     ]
-    labels, vals, errs = [], [], []
+    labels: list[str] = []
+    vals: list[float] = []
+    errs: list[float] = []
     se_dict = getattr(result, "se", None) or {}
     for label, key in components:
         v = getattr(result, key, None)
@@ -476,13 +496,12 @@ def yu_elwert_mechanisms_plot(result, *, figsize=(8, 4.5),
         vals.append(float(v))
         s = float(se_dict.get(key, 0.0))
         errs.append(z * s)
-    if not any(errs):
-        errs = None
+    yerr = errs if any(errs) else None
     fig, ax = plt.subplots(figsize=figsize)
     colors = [DECOMP_PALETTE["accent"], DECOMP_PALETTE["ci"],
               DECOMP_PALETTE["a"], DECOMP_PALETTE["b"],
               DECOMP_PALETTE["cf"]][: len(labels)]
-    ax.bar(labels, vals, yerr=errs, color=colors, edgecolor="white",
+    ax.bar(labels, vals, yerr=yerr, color=colors, edgecolor="white",
            capsize=4, zorder=2,
            error_kw=dict(ecolor=DECOMP_PALETTE["ci"]))
     ax.axhline(0, color="black", linewidth=0.8, zorder=3)

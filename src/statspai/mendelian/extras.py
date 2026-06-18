@@ -27,7 +27,7 @@ Staiger, D. & Stock, J.H. (1997).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 from scipy import stats
@@ -52,7 +52,6 @@ __all__ = [
 
 @dataclass
 class ModeBasedResult(ResultProtocolMixin):
-    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
     """Result container returned by :func:`mr_mode`.
 
     Holds the mode-based MR point estimate, bootstrap standard error,
@@ -75,6 +74,8 @@ class ModeBasedResult(ResultProtocolMixin):
     >>> res.method
     'weighted-mode'
     """
+
+    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
 
     estimate: float
     se: float
@@ -111,7 +112,7 @@ def _silverman_bandwidth(x: np.ndarray, weights: Optional[np.ndarray] = None) ->
     scale = min(sd, iqr) if iqr > 0 else sd
     if scale == 0:
         scale = 1.0
-    return 0.9 * scale * n ** (-1 / 5)
+    return float(0.9 * scale * n ** (-1 / 5))
 
 
 def _weighted_mode(
@@ -240,7 +241,6 @@ def mr_mode(
 
 @dataclass
 class FStatisticResult(ResultProtocolMixin):
-    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
     """Result container returned by :func:`mr_f_statistic`.
 
     Summarises instrument strength across SNPs: the mean / min / max
@@ -261,6 +261,8 @@ class FStatisticResult(ResultProtocolMixin):
     >>> f.per_snp_F.shape
     (25,)
     """
+
+    _citation_keys = ("hartwig2017robust", "staiger1997instrumental")
 
     f_mean: float
     f_min: float
@@ -348,8 +350,8 @@ def mr_funnel_plot(
     se_outcome: np.ndarray,
     *,
     snp_ids: Optional[List[str]] = None,
-    ax=None,
-):
+    ax: Any = None,
+) -> Any:
     """Funnel plot of SNP-specific Wald ratios vs. precision.
 
     An asymmetric funnel around the IVW estimate suggests directional
@@ -404,8 +406,8 @@ def mr_scatter_plot(
     se_exposure: np.ndarray,
     se_outcome: np.ndarray,
     *,
-    ax=None,
-):
+    ax: Any = None,
+) -> Any:
     """Classic MR scatter plot with IVW and MR-Egger lines.
 
     Examples

@@ -23,11 +23,11 @@ instruments using a weighted median estimator." *Genetic Epidemiology*,
 40(4), 304-314. [@bowden2016consistent]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
 from scipy import stats
-import warnings
 
 
 class MRResult:
@@ -63,8 +63,15 @@ class MRResult:
     ['IVW', 'MR-Egger', 'Weighted Median']
     """
 
-    def __init__(self, estimates, heterogeneity, pleiotropy,
-                 n_snps, exposure, outcome):
+    def __init__(
+        self,
+        estimates: pd.DataFrame,
+        heterogeneity: Dict[str, Any],
+        pleiotropy: Optional[Dict[str, float]],
+        n_snps: int,
+        exposure: str,
+        outcome: str,
+    ) -> None:
         self.estimates = estimates  # DataFrame with methods and results
         self.heterogeneity = heterogeneity  # Q-statistic
         self.pleiotropy = pleiotropy  # MR-Egger intercept test
@@ -102,7 +109,7 @@ class MRResult:
         lines.append("=" * 65)
         return "\n".join(lines)
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Any = None, **kwargs: Any) -> Any:
         """Scatter plot of SNP effects with MR lines."""
         return mr_plot(self, ax=ax, **kwargs)
 
@@ -139,16 +146,7 @@ def mr_ivw(
     ----------
     burgess2013mendelian
     """
-    # Wald ratios
-    ratio = beta_outcome / beta_exposure
-    ratio_se = se_outcome / np.abs(beta_exposure)
-
-    # IVW (weighted regression through origin)
-    weights = 1 / ratio_se**2
-    estimate = np.sum(weights * ratio) / np.sum(weights)
-    se = np.sqrt(1 / np.sum(weights))
-
-    # Alternatively: weighted regression of beta_Y on beta_X
+    # Weighted regression of beta_Y on beta_X through the origin.
     w = 1 / se_outcome**2
     estimate_wls = np.sum(w * beta_exposure * beta_outcome) / np.sum(w * beta_exposure**2)
     se_wls = np.sqrt(1 / np.sum(w * beta_exposure**2))
@@ -260,7 +258,7 @@ def mr_median(
     penalized: bool = False,
     n_boot: int = 1000,
     alpha: float = 0.05,
-    seed: int = None,
+    seed: Optional[int] = None,
 ) -> Dict[str, float]:
     """
     Weighted median MR estimator.
@@ -307,7 +305,7 @@ def mr_median(
     sorted_ratio = ratio[order]
     sorted_weights = weights[order]
     cum_weights = np.cumsum(sorted_weights)
-    median_idx = np.searchsorted(cum_weights, 0.5)
+    median_idx = int(np.searchsorted(cum_weights, 0.5))
     estimate = sorted_ratio[min(median_idx, len(sorted_ratio) - 1)]
 
     # Bootstrap SE
@@ -322,7 +320,7 @@ def mr_median(
 
         order_b = np.argsort(boot_ratio)
         cum_w_b = np.cumsum(boot_w[order_b])
-        mid_b = np.searchsorted(cum_w_b, 0.5)
+        mid_b = int(np.searchsorted(cum_w_b, 0.5))
         boot_estimates[b] = boot_ratio[order_b[min(mid_b, len(order_b)-1)]]
 
     se = np.std(boot_estimates, ddof=1)
@@ -339,16 +337,16 @@ def mr_median(
 
 
 def mendelian_randomization(
-    data: pd.DataFrame = None,
-    beta_exposure: str = None,
-    beta_outcome: str = None,
-    se_exposure: str = None,
-    se_outcome: str = None,
+    data: Optional[pd.DataFrame] = None,
+    beta_exposure: Optional[str] = None,
+    beta_outcome: Optional[str] = None,
+    se_exposure: Optional[str] = None,
+    se_outcome: Optional[str] = None,
     exposure_name: str = "Exposure",
     outcome_name: str = "Outcome",
-    methods: List[str] = None,
+    methods: Optional[List[str]] = None,
     alpha: float = 0.05,
-    seed: int = None,
+    seed: Optional[int] = None,
 ) -> MRResult:
     """
     Mendelian Randomization analysis using summary statistics.
@@ -404,6 +402,18 @@ def mendelian_randomization(
     >>> summary_text = result.summary()
     >>> ax = result.plot()
     """
+    if data is None:
+        raise ValueError("data must be provided.")
+    if (
+        beta_exposure is None
+        or beta_outcome is None
+        or se_exposure is None
+        or se_outcome is None
+    ):
+        raise ValueError(
+            "beta_exposure, beta_outcome, se_exposure, and se_outcome "
+            "must all be provided."
+        )
     if methods is None:
         methods = ['ivw', 'egger', 'weighted_median']
 
@@ -418,9 +428,9 @@ def mendelian_randomization(
     by[flip] = -by[flip]
 
     n_snps = len(bx)
-    results_rows = []
-    heterogeneity = {'Q': np.nan, 'Q_p': np.nan, 'I2': np.nan}
-    pleiotropy = None
+    results_rows: List[Dict[str, Any]] = []
+    heterogeneity: Dict[str, Any] = {'Q': np.nan, 'Q_p': np.nan, 'I2': np.nan}
+    pleiotropy: Optional[Dict[str, float]] = None
 
     for method in methods:
         if method == 'ivw':
@@ -474,7 +484,11 @@ def mendelian_randomization(
     )
 
 
-def mr_plot(result: MRResult = None, ax=None, **kwargs):
+def mr_plot(
+    result: Optional[MRResult] = None,
+    ax: Any = None,
+    **kwargs: Any,
+) -> Any:
     """
     Scatter plot of SNP-exposure vs SNP-outcome effects with MR lines.
     """
@@ -482,6 +496,9 @@ def mr_plot(result: MRResult = None, ax=None, **kwargs):
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError("matplotlib required for plotting")
+
+    if result is None:
+        raise ValueError("result must be provided.")
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))

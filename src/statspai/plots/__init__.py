@@ -10,11 +10,13 @@ Provides publication-quality academic plots:
 - interactive: Interactive plot editor with data protection
 """
 
+from typing import Any
+
 from .binscatter import binscatter
 from .themes import set_theme, list_themes, use_chinese, _register_cjk_fallback
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     if name in {"interactive", "get_code", "FigureEditor"}:
         from .interactive import FigureEditor, get_code, interactive
         bindings = {
@@ -49,12 +51,12 @@ def __getattr__(name):
 #
 # Opt-out: STATSPAI_NO_AUTO_CJK=1. User's later rcParams[...] assignment wins.
 # --------------------------------------------------------------------------
-def _ensure_cjk_fallback():
+def _ensure_cjk_fallback() -> None:
     # Idempotent: _register_cjk_fallback guards on its own _registered flag.
     _register_cjk_fallback()
 
 
-def _install_cjk_pyplot_hook():
+def _install_cjk_pyplot_hook() -> None:
     import sys
 
     if "matplotlib.pyplot" in sys.modules:
@@ -67,13 +69,18 @@ def _install_cjk_pyplot_hook():
     import importlib.util
 
     class _PyplotCJKHook(importlib.abc.MetaPathFinder):
-        """One-shot finder: register CJK right after matplotlib.pyplot loads."""
+        """One-shot finder for matplotlib.pyplot CJK registration."""
 
-        def find_spec(self, fullname, path=None, target=None):
+        def find_spec(
+            self,
+            fullname: str,
+            path: Any = None,
+            target: Any = None,
+        ) -> Any:
             if fullname != "matplotlib.pyplot":
                 return None
             # Remove ourselves first so the find_spec below (and any future
-            # imports) bypass us — no recursion, no per-import overhead.
+            # imports) bypass us: no recursion, no per-import overhead.
             try:
                 sys.meta_path.remove(self)
             except ValueError:
@@ -84,10 +91,10 @@ def _install_cjk_pyplot_hook():
             real_loader = spec.loader
 
             class _Loader(importlib.abc.Loader):
-                def create_module(self, spec):
+                def create_module(self, spec: Any) -> Any:
                     return real_loader.create_module(spec)
 
-                def exec_module(self, module):
+                def exec_module(self, module: Any) -> None:
                     real_loader.exec_module(module)
                     try:
                         _ensure_cjk_fallback()

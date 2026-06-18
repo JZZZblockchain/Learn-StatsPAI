@@ -147,28 +147,28 @@ def _probit_mle(X: np.ndarray, D: np.ndarray) -> np.ndarray:
     n, k = X.shape
     Xa = np.column_stack([np.ones(n), X])
 
-    def neg_loglik(beta):
+    def neg_loglik(beta: np.ndarray) -> float:
         eta = Xa @ beta
         eta = np.clip(eta, -30, 30)
         Phi = stats.norm.cdf(eta)
         Phi = np.clip(Phi, 1e-12, 1 - 1e-12)
-        return -np.sum(D * np.log(Phi) + (1 - D) * np.log(1 - Phi))
+        return float(-np.sum(D * np.log(Phi) + (1 - D) * np.log(1 - Phi)))
 
-    def grad(beta):
+    def grad(beta: np.ndarray) -> np.ndarray:
         eta = Xa @ beta
         eta = np.clip(eta, -30, 30)
         Phi = stats.norm.cdf(eta)
         Phi = np.clip(Phi, 1e-12, 1 - 1e-12)
         phi = stats.norm.pdf(eta)
         lam = D * phi / Phi - (1 - D) * phi / (1 - Phi)
-        return -Xa.T @ lam
+        return np.asarray(-Xa.T @ lam, dtype=float)
 
     beta0 = np.zeros(Xa.shape[1])
     result = optimize.minimize(neg_loglik, beta0, jac=grad, method="BFGS",
                                options={"maxiter": 200})
     eta = Xa @ result.x
     eta = np.clip(eta, -30, 30)
-    return stats.norm.cdf(eta)
+    return np.asarray(stats.norm.cdf(eta), dtype=float)
 
 
 def _gbm_ps(X: np.ndarray, D: np.ndarray) -> np.ndarray:
@@ -180,7 +180,7 @@ def _gbm_ps(X: np.ndarray, D: np.ndarray) -> np.ndarray:
             subsample=0.8, random_state=42,
         )
         gbm.fit(X, D)
-        return gbm.predict_proba(X)[:, 1]
+        return np.asarray(gbm.predict_proba(X)[:, 1], dtype=float)
     except ImportError:
         import warnings
         warnings.warn(
@@ -329,7 +329,7 @@ def _smd(x_t: np.ndarray, x_c: np.ndarray,
     denom = np.sqrt((var_t + var_c) / 2.0)
     if denom < 1e-12:
         return 0.0
-    return (mean_t - mean_c) / denom
+    return float((mean_t - mean_c) / denom)
 
 
 def _variance_ratio(x_t: np.ndarray, x_c: np.ndarray,
@@ -350,7 +350,7 @@ def _variance_ratio(x_t: np.ndarray, x_c: np.ndarray,
 
     if var_c < 1e-12:
         return np.inf if var_t > 1e-12 else 1.0
-    return var_t / var_c
+    return float(var_t / var_c)
 
 
 def _ks_stat(x_t: np.ndarray, x_c: np.ndarray,
@@ -358,7 +358,7 @@ def _ks_stat(x_t: np.ndarray, x_c: np.ndarray,
              w_c: Optional[np.ndarray] = None) -> float:
     """Kolmogorov-Smirnov statistic (unweighted or weighted)."""
     if w_t is None and w_c is None:
-        return stats.ks_2samp(x_t, x_c).statistic
+        return float(stats.ks_2samp(x_t, x_c).statistic)
 
     # Weighted KS
     all_vals = np.sort(np.concatenate([x_t, x_c]))
@@ -378,7 +378,7 @@ def _ks_stat(x_t: np.ndarray, x_c: np.ndarray,
                         left=0, right=1)
     ecdf_c = np.interp(all_vals, x_c[idx_c], cum_w_c / cum_w_c[-1],
                         left=0, right=1)
-    return np.max(np.abs(ecdf_t - ecdf_c))
+    return float(np.max(np.abs(ecdf_t - ecdf_c)))
 
 
 # ======================================================================
@@ -415,7 +415,7 @@ class PSBalanceResult:
     [0.02, -0.06]
     """
 
-    def __init__(self, table: pd.DataFrame, ps: pd.Series):
+    def __init__(self, table: pd.DataFrame, ps: pd.Series) -> None:
         self.table = table
         self.ps = ps
 
@@ -436,21 +436,21 @@ class PSBalanceResult:
                      f" -> {n_imbalanced_wtd} (weighted)")
         return "\n".join(lines)
 
-    def love_plot(self, threshold: float = 0.1, **kwargs):
+    def love_plot(self, threshold: float = 0.1, **kwargs: Any) -> Tuple[Any, Any]:
         """Convenience method: calls ``love_plot()`` from balance data."""
         return _love_plot_from_table(self.table, threshold=threshold, **kwargs)
 
     def _repr_html_(self) -> str:
         """Rich HTML display for Jupyter notebooks."""
         html = "<h4>Propensity Score Balance Diagnostics</h4>"
-        html += self.table.to_html(float_format="{:.4f}".format)
+        html += str(self.table.to_html(float_format="{:.4f}".format))
         n_raw = (self.table["smd_raw"].abs() > 0.1).sum()
         n_wtd = (self.table["smd_weighted"].abs() > 0.1).sum()
         html += (f"<p>Covariates with |SMD| &gt; 0.1: {n_raw} (raw) "
                  f"&rarr; {n_wtd} (weighted)</p>")
         return html
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.summary()
 
 
@@ -481,7 +481,7 @@ class BalanceDiagnosticsResult:
         summary: Dict[str, Any],
         ps: Optional[pd.Series] = None,
         weights: Optional[pd.Series] = None,
-    ):
+    ) -> None:
         self.table = table
         self.summary_stats = summary
         self.ps = ps
@@ -515,13 +515,13 @@ class BalanceDiagnosticsResult:
             "summary": dict(self.summary_stats),
         }
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.summary()
 
 
 def table_to_string(df: pd.DataFrame) -> str:
     """Format a DataFrame as an aligned text table."""
-    return df.to_string(float_format=lambda x: f"{x:.4f}")
+    return str(df.to_string(float_format=lambda x: f"{x:.4f}"))
 
 
 # ======================================================================
@@ -802,7 +802,7 @@ def _effective_sample_size(weights: np.ndarray) -> float:
 # Plotting helpers
 # ======================================================================
 
-def _require_matplotlib():
+def _require_matplotlib() -> Any:
     """Import matplotlib or raise a helpful error."""
     try:
         import matplotlib.pyplot as plt
@@ -824,10 +824,10 @@ def overlap_plot(
     covariates: List[str],
     ps: Optional[pd.Series] = None,
     method: str = "logit",
-    ax=None,
+    ax: Any = None,
     figsize: Tuple[float, float] = (8, 4),
     title: str = "Propensity Score Overlap",
-) -> Tuple:
+) -> Tuple[Any, Any]:
     """Mirrored density plot of propensity scores by treatment group.
 
     Parameters
@@ -939,10 +939,10 @@ def love_plot(
     weights: Optional[Union[np.ndarray, pd.Series]] = None,
     threshold: float = 0.1,
     ps_method: str = "logit",
-    ax=None,
-    figsize: Tuple[float, float] = (7, None),
+    ax: Any = None,
+    figsize: Tuple[float, Optional[float]] = (7, None),
     title: str = "Covariate Balance (Love Plot)",
-) -> Tuple:
+) -> Tuple[Any, Any]:
     """Love plot: dot plot of standardized mean differences before/after.
 
     Parameters
@@ -994,10 +994,10 @@ def love_plot(
 def _love_plot_from_table(
     table: pd.DataFrame,
     threshold: float = 0.1,
-    ax=None,
-    figsize: Tuple[float, float] = (7, None),
+    ax: Any = None,
+    figsize: Tuple[float, Optional[float]] = (7, None),
     title: str = "Covariate Balance (Love Plot)",
-) -> Tuple:
+) -> Tuple[Any, Any]:
     """Internal love plot renderer from a balance table."""
     plt = _require_matplotlib()
 

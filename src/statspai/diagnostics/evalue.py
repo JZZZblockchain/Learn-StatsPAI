@@ -234,6 +234,8 @@ def evalue(
     # ------------------------------------------------------------------
     # Map (estimate, CI) onto the risk-ratio scale.
     # ------------------------------------------------------------------
+    rr_lo: Optional[float]
+    rr_hi: Optional[float]
     if measure in _RATIO_MEASURES:
         if estimate <= 0:
             raise MethodIncompatibility(
@@ -258,18 +260,20 @@ def evalue(
             rr_lo = rr_hi = None
 
     elif measure in ("MD", "SMD", "OLS"):
-        est_d, se_d = estimate, se
+        est_d = estimate
+        se_d: Optional[float] = se
+        ols_scale = 1.0
         if measure == "OLS":
             if sd is None:
                 raise MethodIncompatibility(
                     "measure='OLS' requires the outcome sd > 0.",
                     diagnostics={"context": context, "sd": None},
-                )
+            )
             sd = _positive_float(sd, "sd", context)
-            d = abs(delta)
-            est_d = estimate * d / sd
-            se_d = None if se is None else se * d / sd
-            true_md = true_native * d / sd
+            ols_scale = abs(delta) / sd
+            est_d = estimate * ols_scale
+            se_d = None if se is None else se * ols_scale
+            true_md = true_native * ols_scale
         else:
             true_md = true_native
         rr = float(np.exp(_MD_SLOPE * est_d))
@@ -280,7 +284,7 @@ def evalue(
         elif ci is not None:
             # CI supplied on the (standardised) difference scale.
             ci = _check_ci(estimate, ci)
-            scale = (abs(delta) / sd) if measure == "OLS" else 1.0
+            scale = ols_scale if measure == "OLS" else 1.0
             rr_lo = float(np.exp(_MD_SLOPE * ci[0] * scale))
             rr_hi = float(np.exp(_MD_SLOPE * ci[1] * scale))
         else:
@@ -418,6 +422,8 @@ def evalue_rd(
         np.sqrt((true + diff) ** 2 + 4 * p1 * p0 * f * (1 - f)) - (true + diff)
     ) / (2 * p0 * f)
     ev_estimate = _threshold(est_bf)
+    if ev_estimate is None:
+        ev_estimate = 1.0
 
     z = sp_stats.norm.ppf(1 - alpha / 2)
     lower_ci = (p1 - p0) - z * np.sqrt(s2_p1 + s2_p0)
@@ -432,7 +438,11 @@ def evalue_rd(
             + rd_search ** 2 * (1 - 1 / bf_search) ** 2 * s2_f
         )
         hit = np.where(low_search <= true)[0]
-        ev_ci = _threshold(bf_search[hit[0]]) if hit.size else 1.0
+        if hit.size:
+            ev_ci_raw = _threshold(float(bf_search[hit[0]]))
+            ev_ci = ev_ci_raw if ev_ci_raw is not None else 1.0
+        else:
+            ev_ci = 1.0
 
     return {
         "evalue_estimate": float(ev_estimate),
@@ -475,7 +485,7 @@ def bias_factor(rr_eu: float, rr_ud: float) -> float:
 
 
 def evalue_from_result(
-    result,
+    result: Any,
     measure: str = "SMD",
     rare: Optional[bool] = None,
     rare_outcome: Optional[bool] = None,
@@ -577,7 +587,12 @@ def _threshold(x: Optional[float], true: float = 1.0) -> Optional[float]:
     return float(rat + np.sqrt(rat * (rat - 1.0)))
 
 
-def _ci_evalue(rr, rr_lo, rr_hi, true_rr):
+def _ci_evalue(
+    rr: float,
+    rr_lo: Optional[float],
+    rr_hi: Optional[float],
+    true_rr: float,
+) -> Tuple[Optional[float], Optional[float]]:
     """E-value for the confidence limit closest to ``true_rr``.
 
     If the interval already contains ``true_rr`` the E-value is 1.0.
@@ -628,7 +643,7 @@ def _diff_to_rr(value: float) -> float:
     return float(np.exp(2.0 * capped))
 
 
-def _check_ci(estimate, ci) -> Tuple[float, float]:
+def _check_ci(estimate: float, ci: Tuple[float, float]) -> Tuple[float, float]:
     """Validate a (lower, upper) confidence interval."""
     try:
         lo_raw, hi_raw = ci
@@ -652,7 +667,12 @@ def _check_ci(estimate, ci) -> Tuple[float, float]:
     return lo, hi
 
 
-def _interpret(ev_est, ev_ci, measure, true_value) -> str:
+def _interpret(
+    ev_est: Optional[float],
+    ev_ci: Optional[float],
+    measure: str,
+    true_value: float,
+) -> str:
     """Plain-language interpretation of the E-value(s)."""
     lines = []
     target = "the null" if true_value in (0.0, 1.0) else f"{true_value:g}"

@@ -225,9 +225,13 @@ def power_logrank(
         d_req = (z_a + z_b) ** 2 / (p * (1 - p) * log_hr ** 2)
         n_total = int(np.ceil(d_req / prob_event))
         return PowerResult(
-            power_val=float(_power_for_events(np.array([n_total * prob_event]))[0]),
-            n=n_total, effect_size=log_hr,
-            design="logrank", params=dict(params, n_events=int(np.ceil(d_req))),
+            power_val=float(
+                _power_for_events(np.array([n_total * prob_event]))[0]
+            ),
+            n=n_total,
+            effect_size=log_hr,
+            design="logrank",
+            params=dict(params, n_events=int(np.ceil(d_req))),
         )
 
     n_arr = _as_array(n)

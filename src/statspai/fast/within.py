@@ -19,7 +19,7 @@ high-throughput AP-only path for the new Rust kernel.
 """
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -338,7 +338,7 @@ class WithinTransformer:
 def within(
     data: Optional[pd.DataFrame] = None,
     fe: Union[pd.DataFrame, np.ndarray, Sequence] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> WithinTransformer:
     """Build a ``WithinTransformer`` from a DataFrame + FE spec.
 

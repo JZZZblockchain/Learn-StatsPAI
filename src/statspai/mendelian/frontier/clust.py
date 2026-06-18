@@ -106,7 +106,7 @@ def _em_gaussian_mixture(
     max_iter: int = 200,
     tol: float = 1e-6,
     seed: int = 0,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """EM for finite-Gaussian mixture with *SNP-specific* measurement SE.
 
     Model:  r_i | z_i=k  ~  N(theta_k, tau_i^2)
@@ -120,7 +120,9 @@ def _em_gaussian_mixture(
     n = len(r)
 
     if K == 1:
-        theta_init = np.array([0.0]) if include_null else np.array([np.median(r)])
+        theta_init = (
+            np.array([0.0]) if include_null else np.array([np.median(r)])
+        )
     else:
         qs = np.linspace(0.1, 0.9, K)
         theta_init = np.quantile(r, qs)
@@ -266,7 +268,7 @@ def mr_clust(
         bic_table[K] = float(bic)
         fits[K] = (theta, pi, resp, loglik)
 
-    K_best = int(min(bic_table, key=bic_table.get))
+    K_best = int(min(bic_table, key=lambda k: bic_table[k]))
     theta, pi, resp, loglik = fits[K_best]
 
     assignments = np.argmax(resp, axis=1)

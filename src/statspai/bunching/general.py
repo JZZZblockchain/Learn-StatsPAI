@@ -38,7 +38,9 @@ class GeneralBunchingResult:
     >>> base = rng.normal(0.0, 1.0, size=2000)
     >>> bunchers = np.abs(rng.normal(0.0, 0.05, size=300))
     >>> df = pd.DataFrame({"earnings": np.concatenate([base, bunchers])})
-    >>> res = sp.general_bunching(df, running="earnings", cutoff=0.0, n_boot=50)
+    >>> res = sp.general_bunching(
+    ...     df, running="earnings", cutoff=0.0, n_boot=50
+    ... )
     >>> isinstance(res, sp.GeneralBunchingResult)
     True
     >>> res.n_obs
@@ -106,9 +108,13 @@ def general_bunching(
     >>> import numpy as np, pandas as pd
     >>> rng = np.random.default_rng(0)
     >>> base = rng.normal(0.0, 1.0, size=2000)
-    >>> bunchers = np.abs(rng.normal(0.0, 0.05, size=300))  # mass near the kink
+    >>> bunchers = np.abs(
+    ...     rng.normal(0.0, 0.05, size=300)
+    ... )  # mass near the kink
     >>> df = pd.DataFrame({"earnings": np.concatenate([base, bunchers])})
-    >>> res = sp.general_bunching(df, running="earnings", cutoff=0.0, n_boot=50)
+    >>> res = sp.general_bunching(
+    ...     df, running="earnings", cutoff=0.0, n_boot=50
+    ... )
     >>> res.n_obs
     2300
     >>> res.polynomial_order
@@ -123,12 +129,18 @@ def general_bunching(
         bin_width = bandwidth / 25.0
     rng = np.random.default_rng(seed)
 
-    def _elasticity(R, order):
-        bins = np.arange(cutoff - bandwidth, cutoff + bandwidth + bin_width,
-                          bin_width)
-        counts, edges = np.histogram(R, bins=bins)
+    def _elasticity(running_values: np.ndarray, order: int) -> float:
+        bins = np.arange(
+            cutoff - bandwidth,
+            cutoff + bandwidth + bin_width,
+            bin_width,
+        )
+        counts, edges = np.histogram(running_values, bins=bins)
         centers = 0.5 * (edges[:-1] + edges[1:])
-        excluded = (centers > cutoff - bin_width) & (centers < cutoff + bin_width)
+        excluded = (
+            (centers > cutoff - bin_width)
+            & (centers < cutoff + bin_width)
+        )
         fit_mask = ~excluded
         if fit_mask.sum() < order + 1:
             return float('nan')

@@ -29,8 +29,8 @@ Closed-form influence-function SE follows the rank-kernel derivation in
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional, Sequence, Dict, Any, Tuple, Callable
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -109,8 +109,12 @@ class CATEEvalResult(ResultProtocolMixin):
     def __repr__(self) -> str:  # pragma: no cover
         return self.summary()
 
-    def plot(self, ax=None, target: Optional[str] = None,
-             figsize: Tuple[float, float] = (6.0, 4.0)):
+    def plot(
+        self,
+        ax: Any = None,
+        target: Optional[str] = None,
+        figsize: Tuple[float, float] = (6.0, 4.0),
+    ) -> tuple[Any, Any]:
         """Plot the TOC curve plus a dashed zero line.
 
         ``target`` defaults to ``self.target``; pass ``"both"`` to overlay
@@ -149,10 +153,16 @@ def _aipw_pseudo_outcome(
     """AIPW Ψ_i for binary T."""
     if mu1_hat is not None and mu0_hat is not None:
         mu_T = T * mu1_hat + (1 - T) * mu0_hat
-        return (mu1_hat - mu0_hat) + (T - e_hat) * (Y - mu_T) / (
-            e_hat * (1 - e_hat)
+        return np.asarray(
+            (mu1_hat - mu0_hat) + (T - e_hat) * (Y - mu_T) / (
+                e_hat * (1 - e_hat)
+            ),
+            dtype=float,
         )
-    return T * (Y - m_hat) / e_hat - (1 - T) * (Y - m_hat) / (1 - e_hat)
+    return np.asarray(
+        T * (Y - m_hat) / e_hat - (1 - T) * (Y - m_hat) / (1 - e_hat),
+        dtype=float,
+    )
 
 
 def _crossfit_nuisances(
@@ -161,7 +171,7 @@ def _crossfit_nuisances(
     T: np.ndarray,
     n_folds: int,
     random_state: int,
-):
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Cross-fit m̂, ê, μ̂_1, μ̂_0 with sklearn GBM defaults."""
     from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
     from sklearn.model_selection import KFold
@@ -294,7 +304,7 @@ def cate_eval(
     autoc = float(phi_autoc.mean())
     qini = float(phi_qini.mean())
 
-    def _se(phi):
+    def _se(phi: np.ndarray) -> float:
         c = phi - phi.mean()
         var = float(c @ c) / (n * (n - 1)) if n > 1 else float("nan")
         return float(np.sqrt(max(var, 0.0)))

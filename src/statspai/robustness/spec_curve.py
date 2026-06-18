@@ -36,6 +36,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import MethodIncompatibility
 
 
 # ---------------------------------------------------------------------------
@@ -146,14 +147,33 @@ class SpecCurveResult(ResultProtocolMixin):
 
     # ---- export ---------------------------------------------------------
 
-    def to_latex(self, caption: str = "Specification Curve Summary") -> str:
+    def to_latex(
+        self,
+        *args: Any,
+        caption: Optional[str] = "Specification Curve Summary",
+        label: Optional[str] = None,
+    ) -> str:
         """Export summary to a LaTeX table."""
+        if args:
+            if len(args) > 1:
+                raise MethodIncompatibility(
+                    "SpecCurveResult.to_latex() accepts at most one "
+                    "positional caption",
+                )
+            if caption != "Specification Curve Summary":
+                raise MethodIncompatibility(
+                    "SpecCurveResult.to_latex() received caption both "
+                    "positionally and by keyword",
+                )
+            caption = str(args[0])
+        caption_text = caption or "Specification Curve Summary"
+        label_text = label or "tab:spec_curve"
         df = self.results_df
         lines = [
             r"\begin{table}[htbp]",
             r"\centering",
-            f"\\caption{{{caption}}}",
-            r"\label{tab:spec_curve}",
+            f"\\caption{{{caption_text}}}",
+            f"\\label{{{label_text}}}",
             r"\begin{tabular}{lc}",
             r"\hline\hline",
             f"Key variable & {self.x} \\\\",
@@ -183,8 +203,8 @@ class SpecCurveResult(ResultProtocolMixin):
 
     # ---- citation -------------------------------------------------------
 
-    def cite(self) -> str:
-        return (
+    def cite(self, format: str = "bibtex") -> Any:
+        bibtex = (
             "@article{simonsohn2020specification,\n"
             "  title={Specification curve analysis},\n"
             "  author={Simonsohn, Uri and Simmons, Joseph P "
@@ -197,6 +217,12 @@ class SpecCurveResult(ResultProtocolMixin):
             "  publisher={Nature Publishing Group}\n"
             "}"
         )
+        if format == "json":
+            return {
+                "citation_keys": ["simonsohn2020specification"],
+                "bibtex": bibtex,
+            }
+        return bibtex
 
     # ---- plotting -------------------------------------------------------
 
@@ -208,7 +234,7 @@ class SpecCurveResult(ResultProtocolMixin):
         figsize: Optional[Tuple[float, float]] = None,
         title: Optional[str] = None,
         sort_by: str = "estimate",
-    ):
+    ) -> Tuple[Any, Tuple[Any, Any]]:
         """
         Draw the canonical two-panel specification curve plot.
 
@@ -299,7 +325,7 @@ class SpecCurveResult(ResultProtocolMixin):
         # Build category mapping per dimension
         y_ticks = []
         y_labels = []
-        y_offset = 0
+        y_offset = 0.0
 
         for dim_idx, dim in enumerate(self.choice_dims):
             categories = sorted(df[dim].unique(), key=str)
@@ -330,7 +356,7 @@ class SpecCurveResult(ResultProtocolMixin):
             ax_bot.spines[spine].set_visible(False)
 
         # Add dimension labels on the right
-        y_offset_label = 0
+        y_offset_label = 0.0
         for dim in self.choice_dims:
             cats = sorted(df[dim].unique(), key=str)
             mid = y_offset_label + (len(cats) - 1) / 2
@@ -362,9 +388,9 @@ def _run_one_spec(
     subset_mask: Optional[pd.Series],
     subset_label: str,
     model_type: str,
-    transform_y: Optional[Callable],
+    transform_y: Optional[Callable[[pd.Series], Any]],
     transform_label: str,
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """Run a single specification and return results dict."""
     df = data.copy()
 
@@ -486,7 +512,7 @@ def spec_curve(
     se_types: Optional[List[str]] = None,
     subsets: Optional[Dict[str, Optional[pd.Series]]] = None,
     cluster_var: Optional[str] = None,
-    y_transforms: Optional[Dict[str, Callable]] = None,
+    y_transforms: Optional[Dict[str, Optional[Callable[[pd.Series], Any]]]] = None,
     alpha: float = 0.05,
 ) -> SpecCurveResult:
     """

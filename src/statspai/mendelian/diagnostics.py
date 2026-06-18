@@ -28,7 +28,7 @@ randomization between complex traits and diseases." *Nature Genetics*,
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -53,6 +53,9 @@ __all__ = [
 ]
 
 
+SampleSizeInput = Union[int, float, Sequence[float], np.ndarray]
+
+
 # --------------------------------------------------------------------------- #
 #  Cochran's Q / Rücker's Q'
 # --------------------------------------------------------------------------- #
@@ -60,12 +63,6 @@ __all__ = [
 
 @dataclass
 class HeterogeneityResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for Cochran's Q / Rücker's Q' heterogeneity diagnostics.
 
     Returned by :func:`mr_heterogeneity`.  Holds the Q statistic, its
@@ -89,6 +86,13 @@ class HeterogeneityResult(ResultProtocolMixin):
     >>> bool(het.Q >= 0.0)
     True
     """
+
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
 
     Q: float
     Q_df: int
@@ -196,12 +200,6 @@ def mr_heterogeneity(
 
 @dataclass
 class PleiotropyResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for the MR-Egger intercept (directional-pleiotropy) test.
 
     Returned by :func:`mr_pleiotropy_egger`.  Holds the fitted Egger
@@ -223,6 +221,13 @@ class PleiotropyResult(ResultProtocolMixin):
     >>> bool(0.0 <= pleio.p_value <= 1.0)
     True
     """
+
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
 
     intercept: float
     se: float
@@ -299,12 +304,6 @@ def mr_pleiotropy_egger(
 
 @dataclass
 class LeaveOneOutResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for leave-one-out IVW estimates.
 
     Returned by :func:`mr_leave_one_out`.  Wraps a :class:`pandas.DataFrame`
@@ -326,6 +325,13 @@ class LeaveOneOutResult(ResultProtocolMixin):
     >>> len(loo.table)
     12
     """
+
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
 
     table: pd.DataFrame  # columns: dropped_snp, estimate, se, ci_lower, ci_upper, p
 
@@ -405,12 +411,6 @@ def mr_leave_one_out(
 
 @dataclass
 class SteigerResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for the Steiger directionality test.
 
     Returned by :func:`mr_steiger`.  Reports whether the assumed causal
@@ -435,6 +435,13 @@ class SteigerResult(ResultProtocolMixin):
     True
     """
 
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
+
     correct_direction: bool
     steiger_pvalue: float
     r2_exposure: float
@@ -455,7 +462,12 @@ class SteigerResult(ResultProtocolMixin):
         )
 
 
-def _r2_from_beta_se(beta, se, n, eaf=None):
+def _r2_from_beta_se(
+    beta: np.ndarray,
+    se: np.ndarray,
+    n: SampleSizeInput,
+    eaf: Optional[np.ndarray] = None,
+) -> float:
     """Approximate R^2 contributed by a SNP to a trait from GWAS summary.
 
     Uses the standard two-term approximation:
@@ -480,10 +492,10 @@ def _r2_from_beta_se(beta, se, n, eaf=None):
 def mr_steiger(
     beta_exposure: np.ndarray,
     se_exposure: np.ndarray,
-    n_exposure,
+    n_exposure: SampleSizeInput,
     beta_outcome: np.ndarray,
     se_outcome: np.ndarray,
-    n_outcome,
+    n_outcome: SampleSizeInput,
     *,
     eaf: Optional[np.ndarray] = None,
 ) -> SteigerResult:
@@ -563,12 +575,6 @@ def mr_steiger(
 
 @dataclass
 class MRPressoResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for MR-PRESSO global test and outlier-corrected estimates.
 
     Returned by :func:`mr_presso`.  Holds the raw IVW estimate, the
@@ -592,6 +598,13 @@ class MRPressoResult(ResultProtocolMixin):
     >>> bool(0.0 <= res.global_test_pvalue <= 1.0)
     True
     """
+
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
 
     raw_estimate: float
     raw_se: float
@@ -631,7 +644,11 @@ class MRPressoResult(ResultProtocolMixin):
         return "\n".join(lines)
 
 
-def _ivw(bx, by, sy):
+def _ivw(
+    bx: np.ndarray,
+    by: np.ndarray,
+    sy: np.ndarray,
+) -> tuple[float, float]:
     w = 1.0 / sy ** 2
     beta = float(np.sum(w * bx * by) / np.sum(w * bx ** 2))
     se = float(np.sqrt(1.0 / np.sum(w * bx ** 2)))
@@ -692,7 +709,11 @@ def mr_presso(
     raw_p = float(2 * (1 - stats.norm.cdf(abs(raw_beta / raw_se)))) if raw_se > 0 else 1.0
 
     # Observed residuals and per-SNP RSS contribution (leave-one-out)
-    def _rss_components(bx_, by_, sy_):
+    def _rss_components(
+        bx_: np.ndarray,
+        by_: np.ndarray,
+        sy_: np.ndarray,
+    ) -> np.ndarray:
         comps = np.empty(len(bx_))
         for i in range(len(bx_)):
             mask = np.arange(len(bx_)) != i
@@ -772,12 +793,6 @@ def mr_presso(
 
 @dataclass
 class RadialResult(ResultProtocolMixin):
-    _citation_keys = (
-        "bowden2016assessing",
-        "hemani2017orienting",
-        "bowden2018improving",
-        "verbanck2018detection",
-    )
     """Container for radial-MR diagnostics.
 
     Returned by :func:`mr_radial`.  Wraps a per-SNP ``table`` (columns
@@ -800,6 +815,13 @@ class RadialResult(ResultProtocolMixin):
     >>> len(rad.table)
     12
     """
+
+    _citation_keys = (
+        "bowden2016assessing",
+        "hemani2017orienting",
+        "bowden2018improving",
+        "verbanck2018detection",
+    )
 
     table: pd.DataFrame   # columns: snp, W, beta_hat, q_contribution
     total_Q: float

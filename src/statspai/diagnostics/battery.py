@@ -21,14 +21,14 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
 
 
 def diagnose_result(
-    result,
+    result: Any,
     print_results: bool = True,
     alpha: float = 0.05,
 ) -> Dict[str, Any]:
@@ -114,7 +114,7 @@ def diagnose_result(
     return output
 
 
-def _collect_violations(result) -> List[Dict[str, Any]]:
+def _collect_violations(result: Any) -> List[Dict[str, Any]]:
     """Return ``result.violations()`` if the method exists, else ``[]``."""
     vfn = getattr(result, "violations", None)
     if vfn is None:
@@ -125,25 +125,26 @@ def _collect_violations(result) -> List[Dict[str, Any]]:
         return []
     if not isinstance(vs, list):
         return []
-    return vs
+    return cast(List[Dict[str, Any]], vs)
 
 
-def _collect_next_steps(result) -> List[Dict[str, Any]]:
+def _collect_next_steps(result: Any) -> List[Dict[str, Any]]:
     """Return ``result.next_steps(print_result=False)`` if available."""
     nfn = getattr(result, "next_steps", None)
     if nfn is None:
         return []
     try:
-        return nfn(print_result=False) or []
+        steps = nfn(print_result=False) or []
     except Exception:  # pragma: no cover - defensive
         return []
+    return cast(List[Dict[str, Any]], steps)
 
 
 # ====================================================================== #
 #  Method detection
 # ====================================================================== #
 
-def _detect_method(result) -> str:
+def _detect_method(result: Any) -> str:
     """Infer method family from result metadata."""
     # PrincipalStratResult is its own dataclass (not CausalResult).
     # Detect it via class name first — it does not have a .method attr.
@@ -202,7 +203,7 @@ def _detect_method(result) -> str:
 #  Battery implementations
 # ====================================================================== #
 
-def _battery_ols(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_ols(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """OLS: heteroskedasticity, RESET, VIF, omitted-variable sensitivity."""
     checks = []
 
@@ -248,7 +249,7 @@ def _battery_ols(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_panel(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_panel(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Panel: same as OLS plus entity/time info."""
     output = _battery_ols(result, alpha)
 
@@ -261,13 +262,13 @@ def _battery_panel(result, alpha: float = 0.05) -> Dict[str, Any]:
             "N_entities": n_entities,
             "N_time_periods": n_time,
             "pass": True,
-            "interpretation": f"Balanced panel" if n_entities and n_time else "Panel info available",
+            "interpretation": "Balanced panel" if n_entities and n_time else "Panel info available",
         })
 
     return output
 
 
-def _battery_iv(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_iv(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """IV: first-stage F, Sargan, Wu-Hausman."""
     checks = []
 
@@ -317,7 +318,7 @@ def _battery_iv(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_did(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_did(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """DID: parallel trends, event study pre-trend, placebo."""
     checks = []
 
@@ -372,7 +373,7 @@ def _battery_did(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_rd(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_rd(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """RDD: McCrary density, bandwidth robustness, effect."""
     checks = []
 
@@ -426,7 +427,7 @@ def _battery_rd(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_synth(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_synth(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Synthetic control: pre-treatment RMSPE, weights."""
     checks = []
 
@@ -492,7 +493,7 @@ def _battery_synth(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_matching(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_matching(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Matching: balance, sample size, treatment effect."""
     checks = []
 
@@ -543,7 +544,7 @@ def _battery_matching(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_dml(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_dml(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """DML: treatment effect, first-stage fit."""
     checks = []
 
@@ -582,7 +583,7 @@ def _battery_dml(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_generic(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_generic(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Fallback: report whatever is available."""
     checks = []
     estimate = getattr(result, "estimate", None)
@@ -605,7 +606,7 @@ def _battery_generic(result, alpha: float = 0.05) -> Dict[str, Any]:
 #  Sprint-B (v0.9.6) batteries: proximal / msm / principal / g-formula  #
 # ====================================================================== #
 
-def _battery_proximal(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_proximal(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Proximal causal inference: bridge + proxy rank + weak-IV checks."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -672,7 +673,7 @@ def _battery_proximal(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_msm(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_msm(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Marginal Structural Model: weight diagnostics + positivity."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -748,7 +749,7 @@ def _battery_msm(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_principal_strat(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_principal_strat(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Principal stratification: monotonicity + stratum balance."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -814,7 +815,7 @@ def _battery_principal_strat(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_g_computation(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_g_computation(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """G-computation: estimand + bootstrap failure rate."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -873,7 +874,7 @@ def _battery_g_computation(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_front_door(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_front_door(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Front-door adjustment diagnostics."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -939,7 +940,7 @@ def _battery_front_door(result, alpha: float = 0.05) -> Dict[str, Any]:
     return {"checks": checks}
 
 
-def _battery_mediation_interventional(result, alpha: float = 0.05) -> Dict[str, Any]:
+def _battery_mediation_interventional(result: Any, alpha: float = 0.05) -> Dict[str, Any]:
     """Interventional (in)direct effects: IIE / IDE / Total consistency."""
     checks = []
     info = getattr(result, "model_info", {}) or {}
@@ -1007,35 +1008,35 @@ def _battery_mediation_interventional(result, alpha: float = 0.05) -> Dict[str, 
 #  Helpers
 # ====================================================================== #
 
-def _get_residuals(result) -> Optional[np.ndarray]:
+def _get_residuals(result: Any) -> Optional[np.ndarray]:
     if hasattr(result, "data_info") and "residuals" in result.data_info:
         r = result.data_info["residuals"]
         return np.asarray(r) if r is not None else None
     return None
 
 
-def _get_fitted(result) -> Optional[np.ndarray]:
+def _get_fitted(result: Any) -> Optional[np.ndarray]:
     if hasattr(result, "data_info") and "fitted_values" in result.data_info:
         f = result.data_info["fitted_values"]
         return np.asarray(f) if f is not None else None
     return None
 
 
-def _get_nobs(result) -> int:
+def _get_nobs(result: Any) -> int:
     if hasattr(result, "n_obs"):
-        return result.n_obs
+        return int(result.n_obs)
     if hasattr(result, "data_info"):
-        return result.data_info.get("nobs", 0)
+        return int(result.data_info.get("nobs", 0))
     return 0
 
 
-def _get_diagnostic(result, key: str):
+def _get_diagnostic(result: Any, key: str) -> Any:
     if hasattr(result, "diagnostics") and isinstance(result.diagnostics, dict):
         return result.diagnostics.get(key)
     return None
 
 
-def _get_model_info(result, key: str):
+def _get_model_info(result: Any, key: str) -> Any:
     if hasattr(result, "model_info") and isinstance(result.model_info, dict):
         return result.model_info.get(key)
     return None
@@ -1045,7 +1046,7 @@ def _get_model_info(result, key: str):
 #  Pretty printer
 # ====================================================================== #
 
-def _print_battery(output: Dict[str, Any]):
+def _print_battery(output: Dict[str, Any]) -> None:
     """Print diagnostic battery in a clean format."""
     method = output.get("method_type", "unknown").upper()
     checks = output.get("checks", [])

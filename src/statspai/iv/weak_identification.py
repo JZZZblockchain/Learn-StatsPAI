@@ -36,7 +36,7 @@ Cragg, J.G. and Donald, S.G. (1993). "Testing identifiability and
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 
 import numpy as np
@@ -133,7 +133,7 @@ def _residualize(M: np.ndarray, W: Optional[np.ndarray]) -> np.ndarray:
     if W is None or W.size == 0 or W.shape[1] == 0:
         return M
     beta, *_ = np.linalg.lstsq(W, M, rcond=None)
-    return M - W @ beta
+    return np.asarray(M - W @ beta, dtype=float)
 
 
 def _as_matrix(x: Union[np.ndarray, pd.DataFrame, pd.Series]) -> np.ndarray:
@@ -169,7 +169,7 @@ def _extract_exog(
         W = _as_matrix(exog)
     if add_const:
         W = np.column_stack([np.ones(W.shape[0]), W])
-    return W
+    return np.asarray(W, dtype=float)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -333,7 +333,7 @@ def kleibergen_paap_rk(
 def _sqrtm_sym(M: np.ndarray) -> np.ndarray:
     w, V = np.linalg.eigh(M)
     w = np.clip(w, 1e-12, None)
-    return V @ np.diag(np.sqrt(w)) @ V.T
+    return np.asarray(V @ np.diag(np.sqrt(w)) @ V.T, dtype=float)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -411,10 +411,13 @@ def sanderson_windmeijer(
             # then run first-stage of (D_j | D_other) on (Z | D_other)
             # SW (2016) Theorem 1: equivalent conditional F form
             Zc = _residualize(Z_tilde, D_other)
-            y_j = _residualize(D_j.reshape(-1, 1), D_other).ravel()
+            y_j = np.asarray(
+                _residualize(D_j.reshape(-1, 1), D_other).ravel(),
+                dtype=float,
+            )
         else:
             Zc = Z_tilde
-            y_j = D_j
+            y_j = np.asarray(D_j, dtype=float)
 
         # First-stage regression of y_j on Zc
         beta, *_ = np.linalg.lstsq(Zc, y_j, rcond=None)
@@ -496,9 +499,23 @@ def conditional_lr_test(
     -------
     CLRResult
     """
-    Yv = data[y].values.astype(float) if isinstance(y, str) else np.asarray(y, dtype=float)
-    Dv = data[endog].values.astype(float) if isinstance(endog, str) else np.asarray(endog, dtype=float)
+    if isinstance(y, str):
+        if data is None:
+            raise ValueError("`data` is required when `y` is a column name.")
+        Yv = data[y].values.astype(float)
+    else:
+        Yv = np.asarray(y, dtype=float)
+    if isinstance(endog, str):
+        if data is None:
+            raise ValueError("`data` is required when `endog` is a column name.")
+        Dv = data[endog].values.astype(float)
+    else:
+        Dv = np.asarray(endog, dtype=float)
     if isinstance(instruments, list) and all(isinstance(v, str) for v in instruments):
+        if data is None:
+            raise ValueError(
+                "`data` is required when `instruments` are column names."
+            )
         Z = data[instruments].values.astype(float)
     else:
         Z = _as_matrix(instruments)
@@ -531,10 +548,8 @@ def conditional_lr_test(
     M_Z = np.eye(n) - Zs @ Zs.T
     Sigma = YD.T @ M_Z @ YD / max(n - W.shape[1] - k, 1)
 
-    # S and T statistics (Moreira 2003 notation)
-    a0 = np.array([1.0, -beta0])  # identifies y*(beta0)
-    b0 = np.array([beta0, 1.0])
-    # Simplify: directly work with residuals
+    # S and T statistics (Moreira 2003 notation), working directly with
+    # residuals in the y*(beta0) and d directions.
     # S = Zs' ystar / sqrt(sigma_vv_given_u * ...)
     sigma_uu = float(Sigma[0, 0])
     sigma_vv = float(Sigma[1, 1])
@@ -558,8 +573,6 @@ def conditional_lr_test(
     # Conditional critical value via Monte-Carlo, conditioning on qt
     rng = np.random.default_rng(random_state)
     m = int(n_simulations)
-    X = rng.standard_normal((m, k))
-    Y = rng.standard_normal((m, k))
     # Fix qt; sample S independently of T direction.
     # Moreira 2003 Algorithm: simulate S' S and S' T under H0 with qt fixed.
     # Standard trick: draw chi2_k for ar_sim, draw beta(1/2, (k-1)/2) for lm/ar ratio.

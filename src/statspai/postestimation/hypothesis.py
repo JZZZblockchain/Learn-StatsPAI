@@ -9,16 +9,16 @@ Supports:
 - Linear combinations of coefficients
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Any
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
 
 def test(
-    result,
+    result: Any,
     hypothesis: str,
-) -> Dict[str, float]:
+) -> dict[str, Any]:
     """
     Wald test for linear restrictions on coefficients.
 
@@ -57,12 +57,12 @@ def test(
     >>> restr = sp.test(result, "x1 + x2 = 1")  # beta1 + beta2 = 1?
     """
     params = result.params
-    vcov = _get_vcov(result)
+    vcov = np.asarray(_get_vcov(result), dtype=float)
 
     R, r = _parse_hypothesis(hypothesis, params)
 
     # Wald statistic: (R*beta - r)' * [R*V*R']^{-1} * (R*beta - r) / q
-    beta = params.values
+    beta = np.asarray(params.values, dtype=float)
     q = R.shape[0]  # number of restrictions
 
     Rb_minus_r = R @ beta - r
@@ -71,11 +71,18 @@ def test(
         meat = R @ vcov @ R.T
         wald = float(Rb_minus_r @ np.linalg.solve(meat, Rb_minus_r))
     except np.linalg.LinAlgError:
-        wald = float(Rb_minus_r @ np.linalg.lstsq(meat, Rb_minus_r, rcond=None)[0])
+        wald = float(
+            Rb_minus_r @ np.linalg.lstsq(meat, Rb_minus_r, rcond=None)[0]
+        )
 
     # F-statistic = Wald / q
     f_stat = wald / q
-    df_resid = result.data_info.get('df_resid', np.inf) if hasattr(result, 'data_info') and isinstance(result.data_info, dict) else np.inf
+    data_info = getattr(result, 'data_info', None)
+    df_resid = (
+        data_info.get('df_resid', np.inf)
+        if isinstance(data_info, dict)
+        else np.inf
+    )
 
     if np.isfinite(df_resid):
         pvalue = float(1 - sp_stats.f.cdf(f_stat, q, df_resid))
@@ -93,10 +100,10 @@ def test(
 
 
 def lincom(
-    result,
+    result: Any,
     expression: str,
     alpha: float = 0.05,
-) -> Dict[str, float]:
+) -> dict[str, Any]:
     """
     Estimate a linear combination of coefficients with inference.
 
@@ -136,12 +143,12 @@ def lincom(
     True
     """
     params = result.params
-    vcov = _get_vcov(result)
+    vcov = np.asarray(_get_vcov(result), dtype=float)
 
     # Parse expression into coefficient vector
     c = _parse_lincom(expression, params)
 
-    beta = params.values
+    beta = np.asarray(params.values, dtype=float)
     estimate = float(c @ beta)
     se = float(np.sqrt(c @ vcov @ c))
     z = estimate / se if se > 0 else 0
@@ -162,15 +169,18 @@ def lincom(
 # Parsing helpers
 # ======================================================================
 
-def _get_vcov(result):
+def _get_vcov(result: Any) -> np.ndarray:
     """Extract variance-covariance matrix."""
     se = result.std_errors
     if isinstance(se, pd.Series):
-        return np.diag(se.values**2)
-    return np.diag(np.array([se])**2)
+        return np.asarray(np.diag(se.values**2), dtype=float)
+    return np.asarray(np.diag(np.array([se])**2), dtype=float)
 
 
-def _parse_hypothesis(hypothesis: str, params: pd.Series):
+def _parse_hypothesis(
+    hypothesis: str,
+    params: pd.Series,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Parse hypothesis string into R matrix and r vector.
 
@@ -180,19 +190,11 @@ def _parse_hypothesis(hypothesis: str, params: pd.Series):
         "x1 = x2 = 0" → R = [[0,1,0,...], [0,0,1,...]], r = [0, 0]
         "x1 + x2 = 1" → R = [0, 1, 1, 0, ...], r = [1]
     """
-    k = len(params)
-    var_idx = {v: i for i, v in enumerate(params.index)}
-
     # Handle "x1 = x2 = 0" (joint test)
     parts = [p.strip() for p in hypothesis.split('=')]
 
     if len(parts) >= 3:
         # Joint test: x1 = x2 = ... = value
-        try:
-            rhs = float(parts[-1])
-        except ValueError:
-            rhs = 0.0
-
         vars_in_test = parts[:-1] if _is_number(parts[-1]) else parts
         if _is_number(parts[-1]):
             rhs_val = float(parts[-1])
@@ -200,15 +202,14 @@ def _parse_hypothesis(hypothesis: str, params: pd.Series):
             rhs_val = 0.0
             vars_in_test = parts
 
-        R_rows = []
-        r_vals = []
+        R_rows: list[np.ndarray] = []
+        r_vals: list[float] = []
         for var_expr in vars_in_test:
-            row = np.zeros(k)
             c = _parse_lincom(var_expr, params)
             R_rows.append(c)
             r_vals.append(rhs_val)
 
-        return np.array(R_rows), np.array(r_vals)
+        return np.asarray(R_rows, dtype=float), np.asarray(r_vals, dtype=float)
 
     elif len(parts) == 2:
         lhs_str, rhs_str = parts[0].strip(), parts[1].strip()
@@ -217,13 +218,13 @@ def _parse_hypothesis(hypothesis: str, params: pd.Series):
         if _is_number(rhs_str):
             rhs_val = float(rhs_str)
             c_lhs = _parse_lincom(lhs_str, params)
-            return c_lhs.reshape(1, -1), np.array([rhs_val])
+            return c_lhs.reshape(1, -1), np.asarray([rhs_val], dtype=float)
         else:
             # "x1 = x2" → "x1 - x2 = 0"
             c_lhs = _parse_lincom(lhs_str, params)
             c_rhs = _parse_lincom(rhs_str, params)
             R = (c_lhs - c_rhs).reshape(1, -1)
-            return R, np.array([0.0])
+            return R, np.asarray([0.0], dtype=float)
 
     raise ValueError(f"Cannot parse hypothesis: '{hypothesis}'")
 
@@ -232,7 +233,7 @@ def _parse_lincom(expression: str, params: pd.Series) -> np.ndarray:
     """Parse a linear combination expression into coefficient vector."""
     k = len(params)
     var_idx = {v: i for i, v in enumerate(params.index)}
-    c = np.zeros(k)
+    c = np.zeros(k, dtype=float)
 
     # Tokenize: split on + and -, keeping the sign
     expr = expression.strip()

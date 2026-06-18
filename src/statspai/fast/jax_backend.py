@@ -25,15 +25,15 @@ raises ``ImportError`` with a clear message.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 
 try:
     import jax
     # Match StatsPAI's float64 default — XLA truncates to float32 unless
-    # explicitly enabled (https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html)
+    # explicitly enabled:
+    # https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
     jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
     _HAS_JAX = True
@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover  - exercised on no-jax CI
 # Pure-JAX kernel
 # ---------------------------------------------------------------------------
 
-def _sweep_one_fe_jax(col, codes, group_count: int):
+def _sweep_one_fe_jax(col: Any, codes: Any, group_count: int) -> Any:
     """col -= mean(col | codes); pure-JAX bincount equivalent."""
     sums = jnp.zeros(group_count, dtype=col.dtype).at[codes].add(col)
     counts = jnp.zeros(group_count, dtype=col.dtype).at[codes].add(1.0)
@@ -57,7 +57,7 @@ def _sweep_one_fe_jax(col, codes, group_count: int):
     return col - means[codes]
 
 
-def _aitken_jax(x0, x1, x2):
+def _aitken_jax(x0: Any, x1: Any, x2: Any) -> Any:
     d1 = x1 - x0
     d2 = x2 - 2.0 * x1 + x0
     den = jnp.dot(d2, d2)
@@ -67,9 +67,15 @@ def _aitken_jax(x0, x1, x2):
 
 
 def _demean_one_column_jax(
-    x, fe_codes_list, group_counts, max_iter, tol, accelerate, accel_period,
-):
-    """Single column AP + Aitken on JAX. ``fe_codes_list`` is a tuple of jnp arrays."""
+    x: Any,
+    fe_codes_list: Tuple[Any, ...],
+    group_counts: Tuple[int, ...],
+    max_iter: int,
+    tol: float,
+    accelerate: bool,
+    accel_period: int,
+) -> Any:
+    """Single-column AP + Aitken on JAX."""
     K = len(fe_codes_list)
     if K == 0:
         return x
@@ -77,7 +83,7 @@ def _demean_one_column_jax(
     base_scale = jnp.maximum(jnp.max(jnp.abs(x)), 1e-30)
     stop = tol * base_scale
 
-    def sweep_all(col):
+    def sweep_all(col: Any) -> Any:
         for k in range(K):
             col = _sweep_one_fe_jax(col, fe_codes_list[k], group_counts[k])
         return col
@@ -91,7 +97,7 @@ def _demean_one_column_jax(
     # ``sweep_all`` call.
     sweep_jit = jax.jit(sweep_all)
     accel_period = int(accel_period)
-    hist: List = []
+    hist: List[Any] = []
     for it in range(max_iter):
         before = x
         x = sweep_jit(x)
@@ -144,11 +150,11 @@ def demean_jax(
     fe_jnp = tuple(jnp.asarray(c, dtype=jnp.int32) for c in fe_codes_list)
     group_counts = tuple(int(c.size) for c in counts_list)
 
-    out_cols = []
+    out_cols: List[np.ndarray] = []
     converged: List[bool] = []
     for j in range(p):
-        x_j = jnp.asarray(X[:, j], dtype=jnp.float64) if X.dtype == np.float64 \
-            else jnp.asarray(X[:, j], dtype=jnp.float32)
+        jax_dtype = jnp.float64 if X.dtype == np.float64 else jnp.float32
+        x_j = jnp.asarray(X[:, j], dtype=jax_dtype)
         x_dem = _demean_one_column_jax(
             x_j, fe_jnp, group_counts,
             max_iter=int(max_iter), tol=float(tol),

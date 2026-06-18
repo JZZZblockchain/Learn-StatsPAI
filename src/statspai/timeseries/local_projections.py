@@ -2,7 +2,8 @@
 
 Estimates impulse responses by running horizon-by-horizon regressions:
 
-    y_{t+h} - y_{t-1}  =  α_h  +  β_h · shock_t  +  γ_h · controls_t  +  ε_{t,h}
+    y_{t+h} - y_{t-1} = α_h + β_h · shock_t
+                         + γ_h · controls_t + ε_{t,h}
 
 for h = 0, 1, …, H. The sequence ``{β_h}`` traces the impulse response
 function. Inference uses Newey-West HAC standard errors (required because
@@ -14,8 +15,8 @@ macro (Ramey 2016; Plagborg-Møller & Wolf 2021).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -35,7 +36,8 @@ def _newey_west(X: np.ndarray, e: np.ndarray, lags: int) -> np.ndarray:
     """
     n, k = X.shape
     XtX_inv = np.linalg.inv(X.T @ X)
-    # meat: sum_l w_l (Γ_l + Γ_l') where Γ_l = (1/n) sum_t X_t e_t e_{t-l} X_{t-l}'
+    # meat: sum_l w_l (Gamma_l + Gamma_l') where
+    # Gamma_l = (1/n) sum_t X_t e_t e_{t-l} X_{t-l}'
     omega = np.zeros((k, k))
     u = X * e[:, None]                          # (n, k)
     for lag in range(lags + 1):
@@ -98,7 +100,7 @@ class LocalProjectionsResult(ResultProtocolMixin):
             "n": self.n_obs_per_horizon,
         })
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Any = None, **kwargs: Any) -> Any:
         import matplotlib.pyplot as plt
         if ax is None:
             _, ax = plt.subplots(figsize=(7, 4))
@@ -157,11 +159,15 @@ def _lpirfs_cholesky(
     if missing:
         raise KeyError(f"endog_order columns not found in data: {missing}")
     if len(data) <= horizons + 2:
-        raise DataInsufficient("too few observations for Cholesky local projections")
+        raise DataInsufficient(
+            "too few observations for Cholesky local projections"
+        )
 
     y_all = data.loc[:, order].to_numpy(dtype=float)
     if np.isnan(y_all).any():
-        raise ValueError("Cholesky local projections require complete endog_order data")
+        raise ValueError(
+            "Cholesky local projections require complete endog_order data"
+        )
 
     k_endog = y_all.shape[1]
     response_idx = order.index(outcome)
@@ -203,8 +209,8 @@ def _lpirfs_cholesky(
             resid = yy[:, k] - x_h @ beta
             cov_beta = _newey_west(x_h, resid, lags=lag_nw)
             std = np.sqrt(np.maximum(np.diag(cov_beta), 0.0))
-            coef[k, :] = beta[1 : k_endog + 1]
-            half_width[k, :] = std[1 : k_endog + 1]
+            coef[k, :] = beta[1: k_endog + 1]
+            half_width[k, :] = std[1: k_endog + 1]
         point = coef @ shock_vec
         # lpirfs stores lower/upper bands for each coefficient before the
         # Cholesky map; for the two-variable unit-shock case this is exactly
@@ -323,7 +329,8 @@ def local_projections(
     if identification_norm in {"lpirfs_cholesky", "cholesky"}:
         if controls:
             raise ValueError(
-                "controls are not supported with identification='lpirfs_cholesky'"
+                "controls are not supported with "
+                "identification='lpirfs_cholesky'"
             )
         if cumulative:
             raise ValueError(
@@ -378,11 +385,9 @@ def local_projections(
     lag_y = np.concatenate([[np.nan], y[:-1]])
     lag_s = np.concatenate([[np.nan], s[:-1]])
     extra_cols = []
-    extra_names = []
     for c in controls:
         col = df[c].to_numpy(dtype=float)
         extra_cols.append(col)
-        extra_names.append(c)
 
     irf = np.empty(horizons + 1)
     se = np.empty(horizons + 1)
@@ -408,7 +413,9 @@ def local_projections(
         X_use = X[valid]
         lhs_use = lhs[valid]
         if len(X_use) <= X_use.shape[1] + 2:
-            irf[h] = np.nan; se[h] = np.nan; n_used[h] = int(valid.sum())
+            irf[h] = np.nan
+            se[h] = np.nan
+            n_used[h] = int(valid.sum())
             continue
         beta, *_ = np.linalg.lstsq(X_use, lhs_use, rcond=None)
         e = lhs_use - X_use @ beta
@@ -442,7 +449,9 @@ def local_projections(
                 "alpha": alpha, "cumulative": cumulative,
                 "auto_lag": auto_lag,
                 "identification": identification,
-                "endog_order": list(endog_order) if endog_order is not None else None,
+                "endog_order": (
+                    list(endog_order) if endog_order is not None else None
+                ),
             },
             data=data,
             overwrite=False,

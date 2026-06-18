@@ -116,7 +116,8 @@ def mr_lap(
 
     .. math::
 
-       E[\\hat\\beta_{IVW}] - \\beta \\approx \\frac{p \\, \\rho_{obs}}{F_{mean}}
+       E[\\hat\\beta_{IVW}] - \\beta \\approx
+       \\frac{p \\, \\rho_{obs}}{F_{mean}}
 
     where :math:`p` is the overlap fraction (share of samples appearing in
     both GWAS), :math:`\\rho_{obs}` is the phenotypic correlation of

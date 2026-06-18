@@ -11,7 +11,8 @@ Duflo, E., Glennerster, R. & Kremer, M. (2007).
 *Handbook of Development Economics*, 4, 3895-3962. [@duflo2007chapter]
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
+
 import numpy as np
 from scipy import stats
 
@@ -37,8 +38,18 @@ class OptimalDesignResult:
     True
     """
 
-    def __init__(self, n_total, n_per_arm, n_clusters, cluster_size,
-                 icc, mde, power, alpha, design_type):
+    def __init__(
+        self,
+        n_total: Optional[int],
+        n_per_arm: Optional[int],
+        n_clusters: Optional[int],
+        cluster_size: Optional[int],
+        icc: float,
+        mde: Optional[float],
+        power: float,
+        alpha: float,
+        design_type: str,
+    ) -> None:
         self.n_total = n_total
         self.n_per_arm = n_per_arm
         self.n_clusters = n_clusters
@@ -50,13 +61,14 @@ class OptimalDesignResult:
         self.design_type = design_type
 
     def summary(self) -> str:
-        lines = [
+        mde_text = f"{self.mde:.4f}" if self.mde is not None else "not solved"
+        lines: List[str] = [
             "Optimal Experimental Design",
             "=" * 50,
             f"Design: {self.design_type}",
             f"Total sample: {self.n_total}",
             f"Per arm: {self.n_per_arm}",
-            f"MDE: {self.mde:.4f}",
+            f"MDE: {mde_text}",
             f"Power: {self.power:.1%}",
             f"Alpha: {self.alpha}",
         ]
@@ -71,16 +83,16 @@ class OptimalDesignResult:
 def optimal_design(
     design: str = "individual",
     sigma: float = 1.0,
-    mde: float = None,
+    mde: Optional[float] = None,
     power: float = 0.8,
     alpha: float = 0.05,
     n_arms: int = 2,
     prop_treat: float = 0.5,
     icc: float = 0.0,
-    cluster_size: int = None,
-    n_clusters: int = None,
-    cost_per_cluster: float = None,
-    cost_per_unit: float = None,
+    cluster_size: Optional[int] = None,
+    n_clusters: Optional[int] = None,
+    cost_per_cluster: Optional[float] = None,
+    cost_per_unit: Optional[float] = None,
     r2: float = 0.0,
     baseline_mean: float = 0.0,
 ) -> OptimalDesignResult:
@@ -124,7 +136,9 @@ def optimal_design(
     Examples
     --------
     >>> import statspai as sp
-    >>> result = sp.optimal_design(mde=0.2, sigma=1.0, icc=0.05, cluster_size=20)
+    >>> result = sp.optimal_design(
+    ...     mde=0.2, sigma=1.0, icc=0.05, cluster_size=20
+    ... )
     >>> print(result.summary())
     """
     z_alpha = stats.norm.ppf(1 - alpha / 2)
@@ -143,8 +157,10 @@ def optimal_design(
         else:
             n_per_arm = None
             n_total = None
-            mde = (z_alpha + z_beta) * sigma * np.sqrt(variance_factor) / np.sqrt(
-                prop_treat * (1 - prop_treat))
+            mde = (
+                (z_alpha + z_beta) * sigma * np.sqrt(variance_factor)
+                / np.sqrt(prop_treat * (1 - prop_treat))
+            )
 
         return OptimalDesignResult(
             n_total=n_total, n_per_arm=n_per_arm,
@@ -172,8 +188,14 @@ def optimal_design(
             n_clusters_total = n_clusters or 100
             n_total = n_clusters_total * cluster_size
             n_ind_per_arm = int(n_total * prop_treat)
-            mde = (z_alpha + z_beta) * sigma * np.sqrt(
-                variance_factor * deff / (prop_treat * (1 - prop_treat) * n_ind_per_arm))
+            mde = (
+                (z_alpha + z_beta) * sigma
+                * np.sqrt(
+                    variance_factor
+                    * deff
+                    / (prop_treat * (1 - prop_treat) * n_ind_per_arm)
+                )
+            )
 
         # Optimal cluster size given costs
         if cost_per_cluster is not None and cost_per_unit is not None:

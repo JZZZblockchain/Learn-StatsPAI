@@ -1,5 +1,6 @@
 """
-Power and sample size calculations for causal inference and econometric designs.
+Power and sample size calculations for causal inference and econometric
+designs.
 
 Provides power analysis for designs that are missing from the Python ecosystem:
 DID, RD, IV, cluster RCT, and standard RCT/OLS — with support for power curves,
@@ -11,8 +12,14 @@ References:
 - Stock & Yogo (2005): "Testing for weak instruments"
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, Optional
+
 import numpy as np
 from scipy.stats import norm
+
+from ..exceptions import ConvergenceFailure
 
 __all__ = [
     "power",
@@ -30,7 +37,7 @@ __all__ = [
 # Design registry
 # ---------------------------------------------------------------------------
 
-_DESIGN_FUNCTIONS = {}  # populated after function definitions
+_DESIGN_FUNCTIONS: Dict[str, Callable[..., "PowerResult"]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +73,14 @@ class PowerResult:
     0.9184
     """
 
-    def __init__(self, power_val, n, effect_size, design, params):
+    def __init__(
+        self,
+        power_val: Any,
+        n: Any,
+        effect_size: Any,
+        design: str,
+        params: Dict[str, Any],
+    ) -> None:
         self.power = power_val
         self.n = n
         self.effect_size = effect_size
@@ -79,7 +93,7 @@ class PowerResult:
 
     def summary(self) -> str:
         """Return a formatted summary string."""
-        lines = []
+        lines: list[str] = []
         lines.append("=" * 56)
         lines.append(f"  Power Analysis — {self.design.upper()} design")
         lines.append("=" * 56)
@@ -91,20 +105,32 @@ class PowerResult:
             lines.append(f"  Effect size  : {float(self.effect_size):.4f}")
         else:
             arr = np.asarray(self.power)
-            lines.append(f"  Power range  : [{arr.min():.4f}, {arr.max():.4f}]")
+            lines.append(
+                f"  Power range  : [{arr.min():.4f}, {arr.max():.4f}]"
+            )
             n_arr = np.asarray(self.n)
-            lines.append(f"  N range      : [{self._fmt_n(n_arr.min())}, {self._fmt_n(n_arr.max())}]")
+            lines.append(
+                f"  N range      : "
+                f"[{self._fmt_n(n_arr.min())}, "
+                f"{self._fmt_n(n_arr.max())}]"
+            )
             es_arr = np.asarray(self.effect_size)
             if es_arr.ndim == 0:
                 lines.append(f"  Effect size  : {float(es_arr):.4f}")
             else:
-                lines.append(f"  Effect range : [{es_arr.min():.4f}, {es_arr.max():.4f}]")
+                lines.append(
+                    f"  Effect range : "
+                    f"[{es_arr.min():.4f}, {es_arr.max():.4f}]"
+                )
 
         lines.append(f"  Alpha        : {self.params.get('alpha', 0.05)}")
 
         # Design-specific extras
-        extras = {k: v for k, v in self.params.items()
-                  if k not in ("n", "effect_size", "alpha", "power", "design")}
+        extras = {
+            k: v
+            for k, v in self.params.items()
+            if k not in ("n", "effect_size", "alpha", "power", "design")
+        }
         if extras:
             lines.append("-" * 56)
             for k, v in extras.items():
@@ -114,19 +140,22 @@ class PowerResult:
         lines.append("=" * 56)
         return "\n".join(lines)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if np.ndim(self.power) == 0:
             return (
-                f"PowerResult(design={self.design!r}, power={float(self.power):.4f}, "
-                f"n={self._fmt_n(self.n)}, effect_size={float(self.effect_size):.4f})"
+                f"PowerResult(design={self.design!r}, "
+                f"power={float(self.power):.4f}, "
+                f"n={self._fmt_n(self.n)}, "
+                f"effect_size={float(self.effect_size):.4f})"
             )
         arr = np.asarray(self.power)
         return (
-            f"PowerResult(design={self.design!r}, power=[{arr.min():.4f}..{arr.max():.4f}], "
+            f"PowerResult(design={self.design!r}, "
+            f"power=[{arr.min():.4f}..{arr.max():.4f}], "
             f"len={len(arr)})"
         )
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         """Rich display in Jupyter notebooks."""
         if np.ndim(self.power) == 0:
             rows = [
@@ -142,26 +171,34 @@ class PowerResult:
             rows = [
                 ("Design", self.design.upper()),
                 ("Power range", f"[{arr.min():.4f}, {arr.max():.4f}]"),
-                ("N range", f"[{self._fmt_n(n_arr.min())}, {self._fmt_n(n_arr.max())}]"),
+                (
+                    "N range",
+                    (
+                        f"[{self._fmt_n(n_arr.min())}, "
+                        f"{self._fmt_n(n_arr.max())}]"
+                    ),
+                ),
                 ("Alpha", self.params.get("alpha", 0.05)),
             ]
 
         html = (
             '<div style="font-family: monospace; padding:8px;">'
             '<table style="border-collapse:collapse;">'
-            f'<caption style="font-weight:bold; font-size:1.1em; padding-bottom:6px;">'
+            '<caption style="font-weight:bold; font-size:1.1em; '
+            'padding-bottom:6px;">'
             f'Power Analysis &mdash; {self.design.upper()}</caption>'
         )
         for label, val in rows:
             html += (
-                f'<tr><td style="padding:2px 12px 2px 0; font-weight:bold;">{label}</td>'
+                '<tr><td style="padding:2px 12px 2px 0; '
+                f'font-weight:bold;">{label}</td>'
                 f'<td style="padding:2px 0;">{val}</td></tr>'
             )
         html += "</table></div>"
         return html
 
     @staticmethod
-    def _fmt_n(val):
+    def _fmt_n(val: Any) -> str:
         """Format sample size as int when possible."""
         if isinstance(val, (int, np.integer)):
             return str(int(val))
@@ -174,7 +211,12 @@ class PowerResult:
     # Plotting
     # ------------------------------------------------------------------
 
-    def plot(self, ax=None, figsize=(8, 5), **kwargs):
+    def plot(
+        self,
+        ax: Any = None,
+        figsize: tuple[float, float] = (8, 5),
+        **kwargs: Any,
+    ) -> Any:
         """Plot power curve.
 
         Works when *n* or *effect_size* was supplied as an array / range.
@@ -193,7 +235,8 @@ class PowerResult:
 
         if np.ndim(self.power) == 0:
             raise ValueError(
-                "plot() requires power computed over a range of n or effect_size values. "
+                "plot() requires power computed over a range of n or "
+                "effect_size values. "
                 "Pass n=range(...) or effect_size=np.linspace(...) to power()."
             )
 
@@ -215,10 +258,16 @@ class PowerResult:
             x = np.arange(len(power_arr))
             xlabel = "Index"
 
-        plot_kwargs = dict(linewidth=2, color="#2563eb")
+        plot_kwargs: Dict[str, Any] = dict(linewidth=2, color="#2563eb")
         plot_kwargs.update(kwargs)
         ax.plot(x, power_arr, **plot_kwargs)
-        ax.axhline(0.8, linestyle="--", color="#9ca3af", linewidth=1, label="Power = 0.80")
+        ax.axhline(
+            0.8,
+            linestyle="--",
+            color="#9ca3af",
+            linewidth=1,
+            label="Power = 0.80",
+        )
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Power")
         ax.set_title(f"Power Curve — {self.design.upper()} design")
@@ -234,7 +283,7 @@ class PowerResult:
 # ---------------------------------------------------------------------------
 
 
-def _to_array(val):
+def _to_array(val: Any) -> np.ndarray:
     """Convert scalar, list, or range to numpy array."""
     if isinstance(val, range):
         return np.array(list(val), dtype=float)
@@ -247,7 +296,13 @@ def _to_array(val):
 # ---------------------------------------------------------------------------
 
 
-def power_rct(n, effect_size, alpha=0.05, ratio=1.0, sigma=1.0):
+def power_rct(
+    n: Any,
+    effect_size: Any,
+    alpha: float = 0.05,
+    ratio: float = 1.0,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for a two-arm Randomised Controlled Trial.
 
     Parameters
@@ -291,8 +346,15 @@ def power_rct(n, effect_size, alpha=0.05, ratio=1.0, sigma=1.0):
     )
 
 
-def power_did(n, effect_size, n_periods, n_treated_periods, rho=0.5,
-              alpha=0.05, sigma=1.0):
+def power_did(
+    n: Any,
+    effect_size: Any,
+    n_periods: int,
+    n_treated_periods: int,
+    rho: float = 0.5,
+    alpha: float = 0.05,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for Difference-in-Differences.
 
     Follows Burlig, Preonas & Woerman (2020) accounting for serial
@@ -333,9 +395,8 @@ def power_did(n, effect_size, n_periods, n_treated_periods, rho=0.5,
 
     T = n_periods
     T_post = n_treated_periods
-    T_pre = T - T_post
 
-    # SE(DID) ~ sigma / sqrt(N) * sqrt((1 + (T-1)*rho) / (T_post * (1 - T_post/T)))
+    # SE(DID) ~ sigma / sqrt(N) times the serial-correlation adjustment.
     # Denominator captures information gain from pre/post split
     numerator = 1 + (T - 1) * rho
     denominator = T_post * (1 - T_post / T)
@@ -354,8 +415,15 @@ def power_did(n, effect_size, n_periods, n_treated_periods, rho=0.5,
     )
 
 
-def power_rd(n, effect_size, bandwidth=None, kernel="triangular",
-             density_at_cutoff=1.0, alpha=0.05, sigma=1.0):
+def power_rd(
+    n: Any,
+    effect_size: Any,
+    bandwidth: Optional[float] = None,
+    kernel: str = "triangular",
+    density_at_cutoff: float = 1.0,
+    alpha: float = 0.05,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for Regression Discontinuity designs.
 
     Following Cattaneo, Titiunik & Vazquez-Bare (2019).
@@ -428,8 +496,14 @@ def power_rd(n, effect_size, bandwidth=None, kernel="triangular",
     )
 
 
-def power_iv(n, effect_size, first_stage_f=None, r2_z=None,
-             alpha=0.05, sigma=1.0):
+def power_iv(
+    n: Any,
+    effect_size: Any,
+    first_stage_f: Optional[float] = None,
+    r2_z: Optional[float] = None,
+    alpha: float = 0.05,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for Instrumental Variables / 2SLS estimation.
 
     Accounts for the power penalty from a weak first stage.
@@ -475,6 +549,7 @@ def power_iv(n, effect_size, first_stage_f=None, r2_z=None,
     pwr_ols = norm.cdf(np.abs(es_arr) * sigma / se_ols - z_alpha)
 
     # Adjustment for first-stage weakness
+    adjustment: Any
     if first_stage_f is not None:
         adjustment = first_stage_f / (first_stage_f + 1)
     elif r2_z is not None:
@@ -497,8 +572,14 @@ def power_iv(n, effect_size, first_stage_f=None, r2_z=None,
     )
 
 
-def power_cluster_rct(n_clusters, cluster_size, effect_size, icc,
-                      alpha=0.05, sigma=1.0):
+def power_cluster_rct(
+    n_clusters: Any,
+    cluster_size: float,
+    effect_size: Any,
+    icc: float,
+    alpha: float = 0.05,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for a Cluster-Randomised Controlled Trial.
 
     Parameters
@@ -551,8 +632,14 @@ def power_cluster_rct(n_clusters, cluster_size, effect_size, icc,
     )
 
 
-def power_ols(n, effect_size, n_covariates=0, r2_other=0.0,
-              alpha=0.05, sigma=1.0):
+def power_ols(
+    n: Any,
+    effect_size: Any,
+    n_covariates: int = 0,
+    r2_other: float = 0.0,
+    alpha: float = 0.05,
+    sigma: float = 1.0,
+) -> PowerResult:
     """Power for OLS regression (single coefficient of interest).
 
     Parameters
@@ -622,7 +709,14 @@ _DESIGN_FUNCTIONS = {
 # ---------------------------------------------------------------------------
 
 
-def power(design, *, n=None, effect_size=None, power_target=None, **kwargs):
+def power(
+    design: str,
+    *,
+    n: Any = None,
+    effect_size: Any = None,
+    power_target: Optional[float] = None,
+    **kwargs: Any,
+) -> PowerResult:
     """Compute statistical power (or solve for sample size) for a causal
     inference / econometric design.
 
@@ -653,8 +747,10 @@ def power(design, *, n=None, effect_size=None, power_target=None, **kwargs):
     Examples
     --------
     >>> import statspai as sp
-    >>> sp.power("did", n=1000, effect_size=0.1, n_periods=10, n_treated_periods=5)
-    >>> sp.power("did", power=0.8, effect_size=0.1, n_periods=10, n_treated_periods=5)
+    >>> sp.power("did", n=1000, effect_size=0.1,
+    ...          n_periods=10, n_treated_periods=5)
+    >>> sp.power("did", power=0.8, effect_size=0.1,
+    ...          n_periods=10, n_treated_periods=5)
     >>> result = sp.power("did", n=range(100, 2000, 100), effect_size=0.1,
     ...                   n_periods=10, n_treated_periods=5)
     >>> result.plot()
@@ -685,8 +781,7 @@ def power(design, *, n=None, effect_size=None, power_target=None, **kwargs):
             raise ValueError(
                 "When solving for n, effect_size must be specified."
             )
-        n_solved = _solve_for_n(func, effect_size, power_target, design, kwargs)
-        return n_solved
+        return _solve_for_n(func, effect_size, power_target, design, kwargs)
 
     # ------------------------------------------------------------------
     # Case 2: Solve for MDE
@@ -694,7 +789,8 @@ def power(design, *, n=None, effect_size=None, power_target=None, **kwargs):
     if effect_size is None:
         if power_target is None:
             raise ValueError(
-                "When effect_size is None you must specify power_target (or power=) "
+                "When effect_size is None you must specify "
+                "power_target (or power=) "
                 "so that the MDE can be solved."
             )
         return _solve_for_mde(func, n, power_target, design, kwargs)
@@ -713,7 +809,13 @@ def power(design, *, n=None, effect_size=None, power_target=None, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def mde(design, *, n=None, power_target=0.8, **kwargs):
+def mde(
+    design: str,
+    *,
+    n: Any = None,
+    power_target: float = 0.8,
+    **kwargs: Any,
+) -> PowerResult:
     """Compute the Minimum Detectable Effect (MDE) for a given design.
 
     Inverts the power function to find the smallest effect size that
@@ -742,7 +844,13 @@ def mde(design, *, n=None, power_target=0.8, **kwargs):
     """
     if n is None:
         raise ValueError("n must be specified for MDE calculation.")
-    return power(design, n=n, effect_size=None, power_target=power_target, **kwargs)
+    return power(
+        design,
+        n=n,
+        effect_size=None,
+        power_target=power_target,
+        **kwargs,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -750,13 +858,22 @@ def mde(design, *, n=None, power_target=0.8, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def _solve_for_n(func, effect_size, power_target, design, extra_kwargs):
+def _solve_for_n(
+    func: Callable[..., PowerResult],
+    effect_size: Any,
+    power_target: float,
+    design: str,
+    extra_kwargs: Dict[str, Any],
+) -> PowerResult:
     """Binary search for the minimum n achieving *power_target*."""
-    alpha = extra_kwargs.get("alpha", 0.05)
 
-    def _power_at_n(n_val):
+    def _power_at_n(n_val: int) -> float:
         if design == "cluster_rct":
-            res = func(n_clusters=n_val, effect_size=effect_size, **extra_kwargs)
+            res = func(
+                n_clusters=n_val,
+                effect_size=effect_size,
+                **extra_kwargs,
+            )
         else:
             res = func(n=n_val, effect_size=effect_size, **extra_kwargs)
         return float(np.asarray(res.power).item())
@@ -766,9 +883,21 @@ def _solve_for_n(func, effect_size, power_target, design, extra_kwargs):
     while _power_at_n(hi) < power_target:
         hi *= 2
         if hi > 1e9:
-            raise RuntimeError(
+            raise ConvergenceFailure(
                 "Could not find a sample size achieving the target power. "
-                "Check that your effect size and design parameters are reasonable."
+                "Check that your effect size and design parameters are "
+                "reasonable.",
+                recovery_hint=(
+                    "Increase the effect size, lower power_target, or "
+                    "revise design-specific parameters before solving for "
+                    "sample size."
+                ),
+                diagnostics={
+                    "design": design,
+                    "effect_size": effect_size,
+                    "power_target": power_target,
+                    "max_n": hi,
+                },
             )
 
     # Binary search
@@ -782,16 +911,26 @@ def _solve_for_n(func, effect_size, power_target, design, extra_kwargs):
     n_required = int(hi)
     # Compute final result at solved n
     if design == "cluster_rct":
-        result = func(n_clusters=n_required, effect_size=effect_size, **extra_kwargs)
+        result = func(
+            n_clusters=n_required,
+            effect_size=effect_size,
+            **extra_kwargs,
+        )
     else:
         result = func(n=n_required, effect_size=effect_size, **extra_kwargs)
     return result
 
 
-def _solve_for_mde(func, n, power_target, design, extra_kwargs):
+def _solve_for_mde(
+    func: Callable[..., PowerResult],
+    n: Any,
+    power_target: float,
+    design: str,
+    extra_kwargs: Dict[str, Any],
+) -> PowerResult:
     """Binary search for the minimum effect size achieving *power_target*."""
 
-    def _power_at_es(es_val):
+    def _power_at_es(es_val: float) -> float:
         if design == "cluster_rct":
             res = func(n_clusters=n, effect_size=es_val, **extra_kwargs)
         else:
@@ -803,9 +942,19 @@ def _solve_for_mde(func, n, power_target, design, extra_kwargs):
     while _power_at_es(hi) < power_target:
         hi *= 2
         if hi > 100:
-            raise RuntimeError(
+            raise ConvergenceFailure(
                 "Could not find a detectable effect size. "
-                "The sample size may be too small for this design."
+                "The sample size may be too small for this design.",
+                recovery_hint=(
+                    "Increase n, lower power_target, or revisit the design "
+                    "parameters before solving for an MDE."
+                ),
+                diagnostics={
+                    "design": design,
+                    "n": n,
+                    "power_target": power_target,
+                    "max_effect_size": hi,
+                },
             )
 
     # Binary search with precision 1e-6

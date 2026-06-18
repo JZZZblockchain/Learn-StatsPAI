@@ -23,12 +23,12 @@ covariance matrix.
 
 from __future__ import annotations
 
-from typing import Callable, Tuple
+from typing import Any, Callable, Tuple
 
 import numpy as np
 
 
-def robust_convergence(opt_result, grad_tol: float = 1e-3) -> Tuple[bool, float]:
+def robust_convergence(opt_result: Any, grad_tol: float = 1e-3) -> Tuple[bool, float]:
     """Robust convergence flag for a ``scipy.optimize.minimize`` MLE fit.
 
     SciPy's BFGS frequently returns ``success=False`` with status 2

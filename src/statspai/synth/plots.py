@@ -24,7 +24,7 @@ Plot types
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -58,13 +58,13 @@ _PALETTE = {
 def synthplot(
     result: Union[CausalResult, List[CausalResult]],
     type: str = "trajectory",
-    ax=None,
-    figsize: Optional[tuple] = None,
+    ax: Any = None,
+    figsize: Optional[tuple[float, float]] = None,
     title: Optional[str] = None,
     top_n: int = 15,
     labels: Optional[List[str]] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> tuple[Any, Any]:
     """
     Unified plot function for all Synthetic Control variants.
 
@@ -165,8 +165,6 @@ def synthplot(
     if isinstance(result, list):
         result = result[0]
 
-    mi = result.model_info
-
     # --- Dispatch ---
     if type_ == "both":
         return _plot_both(result, figsize=figsize or (10, 9),
@@ -233,7 +231,9 @@ def synthplot(
 #  Data extraction — normalise model_info across all variants
 # ====================================================================== #
 
-def _extract_trajectories(result: CausalResult):
+def _extract_trajectories(
+    result: CausalResult,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any, Any]:
     """
     Extract (times, Y_treated, Y_synth, treatment_time, label) from
     any SCM variant's CausalResult.
@@ -298,7 +298,7 @@ def _extract_trajectories(result: CausalResult):
     raise ValueError("Cannot extract trajectory data from this result")  # pragma: no cover
 
 
-def _extract_weights(result: CausalResult):
+def _extract_weights(result: CausalResult) -> tuple[np.ndarray, np.ndarray]:
     """Extract (unit_names, weights) as sorted arrays."""
     mi = result.model_info
 
@@ -329,9 +329,15 @@ def _extract_weights(result: CausalResult):
 # ====================================================================== #
 
 def _plot_trajectory(
-    result, ax=None, figsize=(10, 6.5), title=None,
-    *, pi_band: bool = False, pre_band: bool = False, **kw,
-):
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6.5),
+    title: Optional[str] = None,
+    *,
+    pi_band: bool = False,
+    pre_band: bool = False,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Treated-vs-synthetic trajectory plot.
 
     Parameters
@@ -439,9 +445,14 @@ def _plot_trajectory(
 
 
 def _plot_gap(
-    result, ax=None, figsize=(10, 5), title=None,
-    *, pre_band: bool = False, **kw,
-):
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 5),
+    title: Optional[str] = None,
+    *,
+    pre_band: bool = False,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Treatment-effect (gap) plot.
 
     Parameters
@@ -522,7 +533,12 @@ def _plot_gap(
     return fig, ax
 
 
-def _plot_both(result, figsize=(10, 9), title=None, **kw):
+def _plot_both(
+    result: CausalResult,
+    figsize: tuple[float, float] = (10, 9),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True,
@@ -534,14 +550,20 @@ def _plot_both(result, figsize=(10, 9), title=None, **kw):
     # Remove duplicate x-label on top panel
     axes[0].set_xlabel("")
 
-    method_short = _method_short_label(result)
     if title:
         fig.suptitle(title, fontsize=14, y=1.01)
     fig.tight_layout()
     return fig, axes
 
 
-def _plot_weights(result, top_n=15, ax=None, figsize=(8, 5), title=None, **kw):
+def _plot_weights(
+    result: CausalResult,
+    top_n: int = 15,
+    ax: Any = None,
+    figsize: tuple[float, float] = (8, 5),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     import matplotlib.pyplot as plt
 
     names, weights = _extract_weights(result)
@@ -574,7 +596,13 @@ def _plot_weights(result, top_n=15, ax=None, figsize=(8, 5), title=None, **kw):
     return fig, ax
 
 
-def _plot_placebo(result, ax=None, figsize=(9, 6), title=None, **kw):
+def _plot_placebo(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (9, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Placebo ATT distribution: histogram + treated unit marker."""
     import matplotlib.pyplot as plt
 
@@ -623,8 +651,14 @@ def _plot_placebo(result, ax=None, figsize=(9, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_placebo_gap(result, ax=None, figsize=(10, 6), title=None,
-                      rmspe_threshold=None, **kw):
+def _plot_placebo_gap(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6),
+    title: Optional[str] = None,
+    rmspe_threshold: Optional[float] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """
     Spaghetti plot: all placebo gap paths overlaid with treated gap.
 
@@ -705,7 +739,13 @@ def _plot_placebo_gap(result, ax=None, figsize=(10, 6), title=None,
     return fig, ax
 
 
-def _plot_rmspe(result, ax=None, figsize=(9, 6), title=None, **kw):
+def _plot_rmspe(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (9, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """
     RMSPE ratio histogram: post-RMSPE / pre-RMSPE distribution.
 
@@ -762,7 +802,13 @@ def _plot_rmspe(result, ax=None, figsize=(9, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_conformal(result, ax=None, figsize=(10, 6), title=None, **kw):
+def _plot_conformal(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Period-level effects with conformal confidence intervals."""
     import matplotlib.pyplot as plt
 
@@ -811,7 +857,13 @@ def _plot_conformal(result, ax=None, figsize=(10, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_staggered(result, ax=None, figsize=(9, 6), title=None, **kw):
+def _plot_staggered(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (9, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Cohort-level ATT comparison for staggered adoption."""
     import matplotlib.pyplot as plt
 
@@ -836,7 +888,7 @@ def _plot_staggered(result, ax=None, figsize=(9, 6), title=None, **kw):
 
         # Bar chart of cohort ATTs
         bar_colors = [colors[i % len(colors)] for i in range(len(cohort_times))]
-        bars = ax.bar(
+        ax.bar(
             [str(t) for t in cohort_times], cohort_atts,
             color=bar_colors, edgecolor="white", linewidth=0.5, zorder=3,
         )
@@ -864,6 +916,7 @@ def _plot_staggered(result, ax=None, figsize=(9, 6), title=None, **kw):
         ax.set_ylabel("ATT", fontsize=11)
     else:
         # Fallback: just unit-level
+        assert unit_df is not None
         ax.barh(
             unit_df["unit"].astype(str),
             unit_df["att"],
@@ -881,7 +934,13 @@ def _plot_staggered(result, ax=None, figsize=(9, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_factors(result, ax=None, figsize=(10, 5), title=None, **kw):
+def _plot_factors(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 5),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Latent factor time paths for gsynth."""
     import matplotlib.pyplot as plt
 
@@ -889,11 +948,12 @@ def _plot_factors(result, ax=None, figsize=(10, 5), title=None, **kw):
     F_pre = mi.get("factors_pre")
     F_post = mi.get("factors_post")
 
-    if F_pre is None:
+    if F_pre is None or F_post is None:
         raise ValueError("No factor data. Use method='gsynth'.")  # pragma: no cover
 
-    pre_times = mi.get("times", [])[:F_pre.shape[0]] if "times" not in mi else mi["times"]
-    n_factors = F_pre.shape[1]
+    F_pre_arr = np.asarray(F_pre)
+    F_post_arr = np.asarray(F_post)
+    n_factors = F_pre_arr.shape[1]
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -901,12 +961,14 @@ def _plot_factors(result, ax=None, figsize=(10, 5), title=None, **kw):
         fig = ax.get_figure()
 
     # Combine pre + post factors
-    all_times = mi.get("times", np.arange(F_pre.shape[0] + F_post.shape[0]))
-    T0 = F_pre.shape[0]
+    all_times = mi.get(
+        "times",
+        np.arange(F_pre_arr.shape[0] + F_post_arr.shape[0]),
+    )
 
     colors = _PALETTE["cohort_colors"]
     for k in range(n_factors):
-        F_all = np.concatenate([F_pre[:, k], F_post[:, k]])
+        F_all = np.concatenate([F_pre_arr[:, k], F_post_arr[:, k]])
         ax.plot(all_times, F_all, color=colors[k % len(colors)],
                 linewidth=1.8, label=f"Factor {k + 1}", zorder=3)
 
@@ -927,11 +989,11 @@ def _plot_factors(result, ax=None, figsize=(10, 5), title=None, **kw):
 def _plot_compare(
     results: List[CausalResult],
     labels: Optional[List[str]] = None,
-    ax=None,
-    figsize=(11, 7),
-    title=None,
-    **kw,
-):
+    ax: Any = None,
+    figsize: tuple[float, float] = (11, 7),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Overlay treated vs synthetic for multiple methods."""
     import matplotlib.pyplot as plt
 
@@ -993,9 +1055,9 @@ def _method_short_label(result: CausalResult) -> str:
             "elastic_net": "Elastic-Net SCM",
             "penalized": "Penalized SCM",
         }
-        return labels.get(v, v)
+        return str(labels.get(v, v))
     if mi.get("estimator_label"):
-        return mi["estimator_label"]
+        return str(mi["estimator_label"])
     if mi.get("inference_method") == "conformal":
         return "Conformal SCM"
     if mi.get("n_factors") is not None:
@@ -1034,7 +1096,13 @@ def _method_short_label(result: CausalResult) -> str:
     return "SCM"
 
 
-def _plot_distributional(result, ax=None, figsize=(10, 6), title=None, **kw):
+def _plot_distributional(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Distributional treatment effects across quantiles."""
     import matplotlib.pyplot as plt
 
@@ -1074,7 +1142,13 @@ def _plot_distributional(result, ax=None, figsize=(10, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_multi_outcome(result, ax=None, figsize=(10, 6), title=None, **kw):
+def _plot_multi_outcome(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Per-outcome ATT comparison for multi-outcome SCM."""
     import matplotlib.pyplot as plt
 
@@ -1112,8 +1186,13 @@ def _plot_multi_outcome(result, ax=None, figsize=(10, 6), title=None, **kw):
     return fig, ax
 
 
-def _plot_prediction_interval(result, ax=None, figsize=(10, 6),
-                               title=None, **kw):
+def _plot_prediction_interval(
+    result: CausalResult,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 6),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Period-level effects with prediction intervals."""
     import matplotlib.pyplot as plt
 
@@ -1164,7 +1243,13 @@ def _plot_prediction_interval(result, ax=None, figsize=(10, 6),
     return fig, ax
 
 
-def _plot_sensitivity(result, ax=None, figsize=(10, 8), title=None, **kw):
+def _plot_sensitivity(
+    result: Any,
+    ax: Any = None,
+    figsize: tuple[float, float] = (10, 8),
+    title: Optional[str] = None,
+    **kw: Any,
+) -> tuple[Any, Any]:
     """Multi-panel sensitivity analysis plot."""
     import matplotlib.pyplot as plt
 
@@ -1241,14 +1326,15 @@ def _plot_sensitivity(result, ax=None, figsize=(10, 8), title=None, **kw):
     return fig, axes
 
 
-def _clean_spines(ax):
+def _clean_spines(ax: Any) -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
 
-def _ensure_matplotlib():
+def _ensure_matplotlib() -> None:
     try:
-        import matplotlib
+        import importlib
+        importlib.import_module("matplotlib")
     except ImportError:  # pragma: no cover
         raise ImportError(  # pragma: no cover
             "matplotlib is required for plotting. "

@@ -19,7 +19,7 @@ MR estimand / identification / inference framework review (arXiv:2509.11519).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -43,7 +43,8 @@ __all__ = [
 class MVMRResult:
     """Multivariable MR output."""
     exposures: List[str]
-    direct_effect: pd.DataFrame  # columns: exposure, estimate, se, ci_low, ci_high, p_value
+    # Columns: exposure, estimate, se, ci_low, ci_high, p_value.
+    direct_effect: pd.DataFrame
     conditional_f_stats: Dict[str, float]
     n_snps: int
 
@@ -129,10 +130,16 @@ def _check_columns(df: pd.DataFrame, cols: Sequence[str]) -> None:
         raise ValueError(f"Missing columns in data: {missing}")
 
 
-def _ivw(beta_outcome, se_outcome, beta_exposure):
+def _ivw(
+    beta_outcome: np.ndarray,
+    se_outcome: np.ndarray,
+    beta_exposure: np.ndarray,
+) -> float:
     """Inverse-variance-weighted estimator for a single exposure."""
     w = 1.0 / (se_outcome ** 2)
-    return float(np.sum(w * beta_exposure * beta_outcome) / np.sum(w * beta_exposure ** 2))
+    numerator = np.sum(w * beta_exposure * beta_outcome)
+    denominator = np.sum(w * beta_exposure ** 2)
+    return float(numerator / denominator)
 
 
 # -------------------------------------------------------------------------
@@ -205,7 +212,8 @@ def mr_multivariable(
     ----------
     Sanderson, E., Davey Smith, G., Windmeijer, F. & Bowden, J. (2019).
     "An examination of multivariable Mendelian randomization in the
-    single-sample and two-sample summary data settings." IJE 48(3). [@sanderson2019examination]
+    single-sample and two-sample summary data settings." IJE 48(3).
+    [@sanderson2019examination]
     """
     if exposures is None:
         exposures = [c for c in snp_associations.columns
@@ -253,7 +261,11 @@ def mr_multivariable(
             "se": se,
             "ci_low": est - z * se,
             "ci_high": est + z * se,
-            "p_value": float(2 * (1 - stats.norm.cdf(abs(est) / se))) if se > 0 else np.nan,
+            "p_value": (
+                float(2 * (1 - stats.norm.cdf(abs(est) / se)))
+                if se > 0
+                else np.nan
+            ),
         })
     direct = pd.DataFrame(rows)
 
@@ -331,7 +343,8 @@ def mr_mediation(
     snp_associations : DataFrame
         One row per SNP. Must contain SNP-associations with the exposure,
         mediator and outcome (both beta and SE).
-    beta_exposure, se_exposure, beta_mediator, se_mediator, beta_outcome, se_outcome : str
+    beta_exposure, se_exposure, beta_mediator, se_mediator,
+    beta_outcome, se_outcome : str
 
     Returns
     -------
@@ -343,7 +356,8 @@ def mr_mediation(
 
     1. **Step 1 — total effect (IVW)**: α_total = IVW(β_Y ~ β_X).
     2. **Step 2a — exposure → mediator**: α_XM = IVW(β_M ~ β_X).
-    3. **Step 2b — direct effect via MVMR**: α_direct = MVMR(β_Y ~ β_X, β_M).
+    3. **Step 2b — direct effect via MVMR**:
+       α_direct = MVMR(β_Y ~ β_X, β_M).
     4. **Indirect**: α_indirect = α_total − α_direct.
 
     Delta-method SE for the indirect effect combines SEs from steps 1
@@ -356,7 +370,8 @@ def mr_mediation(
     >>> rng = np.random.default_rng(1)
     >>> n_snps = 30
     >>> bx = rng.uniform(0.1, 0.5, n_snps)
-    >>> # exposure -> mediator (0.5), mediator -> outcome (0.6), direct (0.2).
+    >>> # exposure -> mediator (0.5), mediator -> outcome (0.6),
+    >>> # direct (0.2).
     >>> bm = 0.5 * bx + rng.normal(0, 0.02, n_snps)
     >>> by = 0.2 * bx + 0.6 * bm + rng.normal(0, 0.02, n_snps)
     >>> snp = pd.DataFrame({
@@ -397,15 +412,30 @@ def mr_mediation(
     total_se = float(np.sqrt(1.0 / np.sum(w * bX ** 2)))
 
     # Direct effect via MVMR on [β_X, β_M]
-    mvmr_df = df[[beta_outcome, se_outcome, beta_exposure, beta_mediator]].rename(
-        columns={beta_exposure: "beta_x", beta_mediator: "beta_m"}
+    mvmr_df = df[
+        [beta_outcome, se_outcome, beta_exposure, beta_mediator]
+    ].rename(
+        columns={
+            beta_exposure: "beta_x",
+            beta_mediator: "beta_m",
+        }
     )
     mv = mr_multivariable(
         mvmr_df, outcome=beta_outcome, outcome_se=se_outcome,
         exposures=["beta_x", "beta_m"],
     )
-    direct = float(mv.direct_effect.loc[mv.direct_effect["exposure"] == "beta_x", "estimate"].iloc[0])
-    direct_se = float(mv.direct_effect.loc[mv.direct_effect["exposure"] == "beta_x", "se"].iloc[0])
+    direct = float(
+        mv.direct_effect.loc[
+            mv.direct_effect["exposure"] == "beta_x",
+            "estimate",
+        ].iloc[0]
+    )
+    direct_se = float(
+        mv.direct_effect.loc[
+            mv.direct_effect["exposure"] == "beta_x",
+            "se",
+        ].iloc[0]
+    )
 
     indirect = total - direct
     # Delta-method SE (approx): Var(A - B) = Var(A) + Var(B) (ignoring cov).
@@ -482,7 +512,10 @@ def mr_bma(
     >>> isinstance(res, sp.MRBMAResult)
     True
     >>> # X1 carries the most posterior inclusion mass.
-    >>> bool(res.marginal_inclusion["beta_x1"] > res.marginal_inclusion["beta_x2"])
+    >>> bool(
+    ...     res.marginal_inclusion["beta_x1"]
+    ...     > res.marginal_inclusion["beta_x2"]
+    ... )
     True
 
     References
@@ -493,8 +526,10 @@ def mr_bma(
     Nature Communications 11, 29. [@zuber2020selecting]
     """
     if exposures is None:
-        exposures = [c for c in snp_associations.columns
-                     if c.startswith("beta_") and c != outcome]
+        exposures = [
+            c for c in snp_associations.columns
+            if c.startswith("beta_") and c != outcome
+        ]
     exposures = list(exposures)
     k = len(exposures)
     if k < 2:

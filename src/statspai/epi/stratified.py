@@ -63,7 +63,7 @@ class MantelHaenszelResult:
         return "\n".join(lines)
 
 
-def _validate_strata(tables) -> np.ndarray:
+def _validate_strata(tables: Union[Sequence[object], np.ndarray]) -> np.ndarray:
     arr = np.asarray(tables, dtype=float)
     if arr.ndim != 3 or arr.shape[1:] != (2, 2):
         raise ValueError(
