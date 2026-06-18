@@ -12,9 +12,14 @@ Causal Effects."
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Iterable, Set, List
-from itertools import combinations
+
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Any
+
+
+NodeInput = str | Iterable[str]
+NodeSet = set[str]
 
 
 @dataclass
@@ -49,8 +54,8 @@ class IdentificationResult:
 
     identifiable: bool
     estimand: str
-    c_components: list
-    hedge: tuple | None
+    c_components: list[NodeSet]
+    hedge: tuple[frozenset[str], frozenset[str]] | None
     explanation: str
 
     def __repr__(self) -> str:
@@ -58,7 +63,11 @@ class IdentificationResult:
         return f"IdentificationResult({status}: {self.estimand})"
 
 
-def identify(dag, treatment, outcome) -> IdentificationResult:
+def identify(
+    dag: Any,
+    treatment: NodeInput,
+    outcome: NodeInput,
+) -> IdentificationResult:
     """Run Shpitser-Pearl ID algorithm on ``dag``.
 
     Parameters
@@ -91,7 +100,9 @@ def identify(dag, treatment, outcome) -> IdentificationResult:
     >>> "hedge" in res2.estimand
     True
     """
-    X = frozenset({treatment} if isinstance(treatment, str) else set(treatment))
+    X = frozenset(
+        {treatment} if isinstance(treatment, str) else set(treatment)
+    )
     Y = frozenset({outcome} if isinstance(outcome, str) else set(outcome))
 
     V = frozenset(dag._nodes)
@@ -136,12 +147,17 @@ def identify(dag, treatment, outcome) -> IdentificationResult:
 # --------------------------------------------------------------------------- #
 
 class _NotIdentifiable(Exception):
-    def __init__(self, F, F_prime):
+    def __init__(self, F: Iterable[str], F_prime: Iterable[str]) -> None:
         self.F = frozenset(F)
         self.F_prime = frozenset(F_prime)
 
 
-def _ID(Y: frozenset, X: frozenset, dag, V: frozenset) -> str:
+def _ID(
+    Y: frozenset[str],
+    X: frozenset[str],
+    dag: Any,
+    V: frozenset[str],
+) -> str:
     """Non-parametric identification over observed set V. Returns a
     string-form estimand (sum / product of conditional densities)."""
     # Line 1: if X empty -> marginalize
@@ -165,7 +181,7 @@ def _ID(Y: frozenset, X: frozenset, dag, V: frozenset) -> str:
     G_minus_X = _subgraph_without_nodes(dag, X)
     ccs = _c_components(G_minus_X, V - X)
     if len(ccs) > 1:
-        parts = []
+        parts: list[str] = []
         for S in ccs:
             parts.append(_ID(frozenset(S), V - frozenset(S), dag, V))
         extra = (V - Y - X)
@@ -212,35 +228,35 @@ def _is_latent(node: str) -> bool:
     return node.startswith("_L_") or node.startswith("U_")
 
 
-def _observed_parents(dag, node: str) -> Set[str]:
-    out = set()
+def _observed_parents(dag: Any, node: str) -> NodeSet:
+    out: NodeSet = set()
     for p, children in dag._edges.items():
         if node in children and not _is_latent(p):
             out.add(p)
     return out
 
 
-def _bidirected_neighbors(dag, node: str) -> Set[str]:
+def _bidirected_neighbors(dag: Any, node: str) -> NodeSet:
     """Return observed nodes sharing a latent parent with ``node``."""
     latent_parents = [
         p for p, ch in dag._edges.items() if node in ch and _is_latent(p)
     ]
-    out = set()
+    out: NodeSet = set()
     for L in latent_parents:
         out |= {v for v in dag._edges.get(L, set()) if not _is_latent(v)}
     out.discard(node)
     return out
 
 
-def _c_components(dag, observed: Iterable[str]) -> List[Set[str]]:
+def _c_components(dag: Any, observed: Iterable[str]) -> list[NodeSet]:
     """Bidirected-connected components restricted to ``observed``."""
     observed = set(observed)
     unvisited = set(observed)
-    components: List[Set[str]] = []
+    components: list[NodeSet] = []
     while unvisited:
         seed = next(iter(unvisited))
         stack = [seed]
-        comp: Set[str] = set()
+        comp: NodeSet = set()
         while stack:
             v = stack.pop()
             if v in comp:
@@ -253,9 +269,13 @@ def _c_components(dag, observed: Iterable[str]) -> List[Set[str]]:
     return components
 
 
-def _ancestors_in(dag, nodes: Iterable[str], universe: Iterable[str]) -> frozenset:
+def _ancestors_in(
+    dag: Any,
+    nodes: Iterable[str],
+    universe: Iterable[str],
+) -> frozenset[str]:
     universe = set(universe)
-    result: Set[str] = set()
+    result: NodeSet = set()
     stack = list(nodes)
     while stack:
         v = stack.pop()
@@ -266,7 +286,7 @@ def _ancestors_in(dag, nodes: Iterable[str], universe: Iterable[str]) -> frozens
     return frozenset(result)
 
 
-def _subgraph(dag, V: Iterable[str]):
+def _subgraph(dag: Any, V: Iterable[str]) -> Any:
     """Return a fresh DAG restricted to nodes in V (plus relevant latents)."""
     from .graph import DAG as _DAG
     sub = _DAG()
@@ -286,13 +306,13 @@ def _subgraph(dag, V: Iterable[str]):
     return sub
 
 
-def _subgraph_without_nodes(dag, remove: Iterable[str]):
+def _subgraph_without_nodes(dag: Any, remove: Iterable[str]) -> Any:
     V = set(dag._nodes) - set(remove)
     V = {v for v in V if not _is_latent(v)}
     return _subgraph(dag, V)
 
 
-def _topo_order(dag, V: Iterable[str]) -> list:
+def _topo_order(dag: Any, V: Iterable[str]) -> list[str]:
     V = set(V)
     indeg = {v: 0 for v in V}
     for p, ch in dag._edges.items():
@@ -302,7 +322,7 @@ def _topo_order(dag, V: Iterable[str]) -> list:
             if p in V and c in V:
                 indeg[c] += 1
     stack = [v for v, d in indeg.items() if d == 0]
-    order: list = []
+    order: list[str] = []
     while stack:
         v = stack.pop(0)
         order.append(v)
@@ -316,7 +336,7 @@ def _topo_order(dag, V: Iterable[str]) -> list:
     return order
 
 
-def _prior(order: list, v: str) -> list:
+def _prior(order: list[str], v: str) -> list[str]:
     return order[: order.index(v)] if v in order else []
 
 

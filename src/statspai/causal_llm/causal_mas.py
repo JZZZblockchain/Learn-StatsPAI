@@ -275,7 +275,7 @@ def causal_mas(
         roles[v] = "confounder"
 
     transcript: List[Dict[str, Any]] = []
-    endorsement_counts: Dict[Tuple[str, str], int] = {}
+    endorsement_counts: Dict[Tuple[str, str], float] = {}
 
     # --- Debate loop ------------------------------------------------------
     for r in range(rounds):
@@ -327,7 +327,8 @@ def causal_mas(
             endorsed = _domain_expert_heuristic(proposed, domain)
         else:
             prompt = (
-                f"You are a domain expert in {domain or 'the relevant field'}. "
+                "You are a domain expert in "
+                f"{domain or 'the relevant field'}. "
                 f"Of these proposed edges, endorse those consistent with "
                 f"domain knowledge: {proposed}.  Return endorsements one "
                 "per line as 'A -> B'."

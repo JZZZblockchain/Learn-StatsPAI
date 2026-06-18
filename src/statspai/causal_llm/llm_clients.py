@@ -100,7 +100,7 @@ class _OpenAIClient(LLMClient):
     name: str = "openai"
     history: List[Dict[str, Any]] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as err:  # pragma: no cover
@@ -227,7 +227,7 @@ class _AnthropicClient(LLMClient):
     name: str = "anthropic"
     history: List[Dict[str, Any]] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         try:
             import anthropic  # type: ignore
         except ImportError as err:  # pragma: no cover

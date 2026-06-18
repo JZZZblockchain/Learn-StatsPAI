@@ -176,7 +176,7 @@ class LLMConstrainedDAGResult:
             'provenance': self.provenance,
         }
 
-    def to_dag(self):
+    def to_dag(self) -> Any:
         """Convert the final CPDAG into a :class:`statspai.dag.DAG`."""
         from ..dag import dag as _dag_factory
         if not self.final_edges:
@@ -606,7 +606,7 @@ def llm_dag_constrained(
 
 
 def llm_dag_validate(
-    dag,
+    dag: Any,
     data: pd.DataFrame,
     *,
     alpha: float = 0.05,

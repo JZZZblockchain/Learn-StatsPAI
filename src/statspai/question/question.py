@@ -266,7 +266,13 @@ class CausalQuestion:
 
     # --- Serialization / reproducibility -------------------------------- #
 
-    def save(self, filename, *, fmt: str = "auto", note: str = "") -> "Path":
+    def save(
+        self,
+        filename: str | Path,
+        *,
+        fmt: str = "auto",
+        note: str = "",
+    ) -> "Path":
         """Save the question to a pre-registration file.
 
         See :func:`statspai.question.preregister.preregister` for details.
@@ -275,7 +281,7 @@ class CausalQuestion:
         return _pre(self, filename, fmt=fmt, note=note)
 
     @classmethod
-    def load(cls, filename) -> "CausalQuestion":
+    def load(cls, filename: str | Path) -> "CausalQuestion":
         """Load a CausalQuestion from a preregistration file."""
         from .preregister import load_preregister
         return load_preregister(filename)
@@ -287,7 +293,7 @@ class CausalQuestion:
 
     # --- Introspection --------------------------------------------------- #
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "treatment": self.treatment,
             "outcome": self.outcome,
@@ -314,7 +320,7 @@ class CausalQuestion:
 
     # --- Estimation ------------------------------------------------------ #
 
-    def estimate(self, **kwargs) -> EstimationResult:
+    def estimate(self, **kwargs: Any) -> EstimationResult:
         """Execute the identification plan against ``self.data``."""
         if self.data is None:
             raise DataInsufficient(
@@ -322,9 +328,10 @@ class CausalQuestion:
                 recovery_hint="Pass data=... when constructing the question.",
             )
         self.data = _require_dataframe(self.data, "data")
-        if self._plan is None:
-            self.identify()
-        result = _dispatch_estimator(self, self._plan, **kwargs)
+        plan = self._plan
+        if plan is None:
+            plan = self.identify()
+        result = _dispatch_estimator(self, plan, **kwargs)
         self._result = result
         return result
 
@@ -332,14 +339,16 @@ class CausalQuestion:
 
     def report(self, fmt: str = "markdown") -> str:
         """Render a Methods + Results narrative."""
-        if self._plan is None:
-            self.identify()
-        if self._result is None:
+        plan = self._plan
+        if plan is None:
+            plan = self.identify()
+        result = self._result
+        if result is None:
             raise MethodIncompatibility(
                 "Run .estimate() before .report().",
                 recovery_hint="Call q.estimate() before rendering a report.",
             )
-        return _render_report(self, self._plan, self._result, fmt=fmt)
+        return _render_report(self, plan, result, fmt=fmt)
 
     # --- Paper builder --------------------------------------------------- #
 
@@ -348,7 +357,7 @@ class CausalQuestion:
               dag: Any = None,
               include_robustness: bool = True,
               cite: bool = True,
-              reviewer_mode: bool = False):
+              reviewer_mode: bool = False) -> Any:
         """Build a full :class:`PaperDraft` from this declared question.
 
         Convenience wrapper around :func:`statspai.paper_from_question`.
@@ -906,12 +915,18 @@ def _auto_design(q: CausalQuestion) -> str:
 
 def _dispatch_estimator(q: CausalQuestion,
                         plan: IdentificationPlan,
-                        **kwargs) -> EstimationResult:
+                        **kwargs: Any) -> EstimationResult:
     import statspai as sp
 
     est_name = plan.estimator
-    data = q.data
+    if q.data is None:
+        raise DataInsufficient(
+            "CausalQuestion.data must be set before estimate().",
+            recovery_hint="Pass data=... when constructing the question.",
+        )
+    data = _require_dataframe(q.data, "data")
     n = int(len(data))
+    res: Any
 
     if est_name == "regress":
         formula_parts = [q.outcome, "~", q.treatment]
@@ -946,11 +961,20 @@ def _dispatch_estimator(q: CausalQuestion,
 
     if est_name == "iv":
         # 2SLS via formula interface
+        from ..iv import fit as _iv_fit
         instrs = " + ".join(q.instruments)
         covs = " + " + " + ".join(q.covariates) if q.covariates else ""
-        formula = f"{q.outcome} ~ [{q.treatment} ~ {instrs}]{covs}"
-        res = sp.iv(formula, data=data, **kwargs)
-        est, se, ci = _extract_generic(res)
+        formula = f"{q.outcome} ~ ({q.treatment} ~ {instrs}){covs}"
+        res = _iv_fit(formula, data=data, **kwargs)
+        if hasattr(res, "params") and q.treatment in res.params:
+            est = float(res.params.get(q.treatment, float("nan")))
+            se = float(res.std_errors.get(q.treatment, float("nan")))
+            ci = (
+                float(res.conf_int_lower.get(q.treatment, float("nan"))),
+                float(res.conf_int_upper.get(q.treatment, float("nan"))),
+            )
+        else:
+            est, se, ci = _extract_generic(res)
         return EstimationResult(
             estimand=plan.estimand, estimator=est_name,
             estimate=est, se=se, ci=ci, n=n,
@@ -958,6 +982,15 @@ def _dispatch_estimator(q: CausalQuestion,
         )
 
     if est_name == "did":
+        if q.time is None:
+            raise MethodIncompatibility(
+                "design='did' requires time=....",
+                diagnostics={"time": q.time},
+            )
+        did_columns = [q.outcome, q.treatment, q.time]
+        if q.id is not None:
+            did_columns.append(q.id)
+        _require_columns_present(data, did_columns, "did")
         res = sp.did(
             data=data,
             y=q.outcome,
@@ -1025,6 +1058,17 @@ def _dispatch_estimator(q: CausalQuestion,
         )
 
     if est_name == "longitudinal.analyze":
+        if q.id is None or q.time is None:
+            raise MethodIncompatibility(
+                "design='longitudinal_observational' requires id=... "
+                "and time=....",
+                diagnostics={"id": q.id, "time": q.time},
+            )
+        _require_columns_present(
+            data,
+            [q.outcome, q.treatment, q.id, q.time] + list(q.covariates),
+            "longitudinal.analyze",
+        )
         from ..longitudinal import analyze as _long_analyze
         res = _long_analyze(
             data=data,
@@ -1042,9 +1086,18 @@ def _dispatch_estimator(q: CausalQuestion,
         )
 
     if est_name == "event_study":
+        if q.id is None or q.time is None:
+            raise MethodIncompatibility(
+                "design='event_study' requires id=... and time=....",
+                diagnostics={"id": q.id, "time": q.time},
+            )
+        treat_time = q.cohort or q.treatment
+        _require_columns_present(
+            data, [q.outcome, treat_time, q.time, q.id], "event_study"
+        )
         res = sp.event_study(
-            data=data, y=q.outcome, treat=q.treatment,
-            time=q.time, id=q.id, **kwargs,
+            data=data, y=q.outcome, treat_time=treat_time,
+            time=q.time, unit=q.id, **kwargs,
         )
         est, se, ci = _extract_generic(res)
         return EstimationResult(
@@ -1114,7 +1167,10 @@ def _dispatch_estimator(q: CausalQuestion,
                 "first via sp.scalar_iv_projection(data, treat=..., "
                 "instruments=[...], covariates=[...]), then declare it "
                 "as the single instrument on the CausalQuestion.",
-                diagnostics={"model": model, "instruments": list(q.instruments)},
+                diagnostics={
+                    "model": model,
+                    "instruments": list(q.instruments),
+                },
             )
         if is_iv_model:
             instrument = kwargs.pop(
@@ -1183,7 +1239,10 @@ def _dispatch_estimator(q: CausalQuestion,
             raise MethodIncompatibility(
                 "design='metalearner' requires covariates=[...] — these "
                 "are the effect modifiers used to estimate tau(x).",
-                diagnostics={"design": "metalearner", "covariates": q.covariates},
+                diagnostics={
+                    "design": "metalearner",
+                    "covariates": q.covariates,
+                },
             )
         _reject_reserved_kwargs(
             kwargs, "metalearner",
@@ -1234,7 +1293,10 @@ def _dispatch_estimator(q: CausalQuestion,
             raise MethodIncompatibility(
                 "design='causal_forest' requires covariates=[...] as "
                 "effect modifiers.",
-                diagnostics={"design": "causal_forest", "covariates": q.covariates},
+                diagnostics={
+                    "design": "causal_forest",
+                    "covariates": q.covariates,
+                },
             )
         _reject_reserved_kwargs(
             kwargs, "causal_forest",
@@ -1303,7 +1365,7 @@ def _dispatch_estimator(q: CausalQuestion,
     )
 
 
-def _reject_reserved_kwargs(kwargs: dict, design: str, *,
+def _reject_reserved_kwargs(kwargs: dict[str, Any], design: str, *,
                             reserved: tuple[str, ...]) -> None:
     """Raise a clear TypeError if user kwargs collide with positional
     arguments the dispatcher fills from the CausalQuestion fields.
@@ -1324,7 +1386,7 @@ def _reject_reserved_kwargs(kwargs: dict, design: str, *,
 
 
 def _ate_inference_aipw(
-    *, X, Y, D,
+    *, X: Any, Y: Any, D: Any,
     n_folds: int = 5,
     alpha: float = 0.05,
     random_state: Optional[int] = 42,
@@ -1386,7 +1448,7 @@ def _ate_inference_aipw(
         outcome_model=outcome_model,
         propensity_model=propensity_model,
         n_folds=n_folds,
-        seed=random_state,
+        seed=random_state,  # type: ignore[arg-type]
     )
     ate = float(np.mean(phi))
     se = float(np.std(phi, ddof=1) / np.sqrt(n))
@@ -1396,7 +1458,7 @@ def _ate_inference_aipw(
     return ate, se, ci
 
 
-def _extract_generic(res) -> tuple[float, float, tuple[float, float]]:
+def _extract_generic(res: Any) -> tuple[float, float, tuple[float, float]]:
     """Pull (estimate, se, ci) from a heterogeneous result."""
     est = float(getattr(res, "estimate", float("nan")))
     se = float(getattr(res, "se", float("nan")))

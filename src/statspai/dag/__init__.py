@@ -16,7 +16,18 @@ the Python equivalent of R's ``dagitty`` and ``ggdag``.
 >>> sp.dag_example('discrimination')  # classic textbook DAG
 """
 
-from .graph import DAG, dag, dag_example, dag_examples, dag_example_positions, dag_simulate
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from .graph import (
+    DAG,
+    dag,
+    dag_example,
+    dag_examples,
+    dag_example_positions,
+    dag_simulate,
+)
 from .identification import identify, IdentificationResult
 from .do_calculus import rule1, rule2, rule3, apply_rules, RuleCheck
 from .swig import swig, SWIGGraph
@@ -30,8 +41,12 @@ from .recommend import recommend_estimator, EstimatorRecommendation
 
 
 # Attach recommend_estimator as a DAG method for the fluent API.
-def _dag_recommend_estimator(self, exposure, outcome,
-                             candidate_instruments=None):
+def _dag_recommend_estimator(
+    self: DAG,
+    exposure: str,
+    outcome: str,
+    candidate_instruments: Sequence[str] | None = None,
+) -> EstimatorRecommendation:
     """See :func:`statspai.dag.recommend_estimator`."""
     return recommend_estimator(
         self, exposure, outcome,
@@ -39,7 +54,7 @@ def _dag_recommend_estimator(self, exposure, outcome,
     )
 
 
-DAG.recommend_estimator = _dag_recommend_estimator
+setattr(DAG, "recommend_estimator", _dag_recommend_estimator)
 
 __all__ = [
     "DAG", "dag", "dag_example", "dag_examples",

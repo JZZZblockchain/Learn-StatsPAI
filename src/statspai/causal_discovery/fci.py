@@ -47,9 +47,9 @@ Intelligence*, 172(16-17), 1873-1896. [@zhang2008completeness]
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import combinations
-from typing import Dict, List, Optional, Sequence, Set, Tuple, Any
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -197,7 +197,6 @@ def _learn_skeleton(
 
 def _init_pag(adj: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Start with every edge as circle-circle."""
-    d = adj.shape[0]
     left = np.where(adj == 1, MARK_CIRCLE, MARK_NONE)
     right = np.where(adj == 1, MARK_CIRCLE, MARK_NONE)
     np.fill_diagonal(left, MARK_NONE)
@@ -206,16 +205,20 @@ def _init_pag(adj: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def _has_edge(left: np.ndarray, right: np.ndarray, i: int, j: int) -> bool:
-    return left[i, j] != MARK_NONE and right[i, j] != MARK_NONE
+    return bool(left[i, j] != MARK_NONE and right[i, j] != MARK_NONE)
 
 
-def _set_mark_i(left: np.ndarray, right: np.ndarray, i: int, j: int, mark: int) -> None:
+def _set_mark_i(
+    left: np.ndarray, right: np.ndarray, i: int, j: int, mark: int
+) -> None:
     """Set the mark on the i-side of edge (i,j). Also mirror via (j,i)."""
     left[i, j] = mark
     right[j, i] = mark
 
 
-def _set_mark_j(left: np.ndarray, right: np.ndarray, i: int, j: int, mark: int) -> None:
+def _set_mark_j(
+    left: np.ndarray, right: np.ndarray, i: int, j: int, mark: int
+) -> None:
     """Set mark on the j-side of edge (i,j)."""
     right[i, j] = mark
     left[j, i] = mark
@@ -255,7 +258,9 @@ def _orient_vstructures(
                     _set_mark_j(left, right, c, b, MARK_ARROW)  # c *-> b
 
 
-def _apply_fci_rules(left: np.ndarray, right: np.ndarray, max_iter: int = 100) -> None:
+def _apply_fci_rules(
+    left: np.ndarray, right: np.ndarray, max_iter: int = 100
+) -> None:
     d = left.shape[0]
     for _ in range(max_iter):
         changed = False
@@ -291,7 +296,10 @@ def _apply_fci_rules(left: np.ndarray, right: np.ndarray, max_iter: int = 100) -
                 for b in range(d):
                     if b in (a, c):
                         continue
-                    if not (_has_edge(left, right, a, b) and _has_edge(left, right, b, c)):
+                    if not (
+                        _has_edge(left, right, a, b)
+                        and _has_edge(left, right, b, c)
+                    ):
                         continue
                     cond1 = (
                         _mark_i(left, a, b) == MARK_TAIL
@@ -325,7 +333,10 @@ def _apply_fci_rules(left: np.ndarray, right: np.ndarray, max_iter: int = 100) -
                 for a, c in combinations(preds, 2):
                     if _has_edge(left, right, a, c):
                         continue
-                    if not (_has_edge(left, right, a, theta) and _has_edge(left, right, theta, c)):
+                    if not (
+                        _has_edge(left, right, a, theta)
+                        and _has_edge(left, right, theta, c)
+                    ):
                         continue
                     if _mark_j(right, a, theta) != MARK_CIRCLE:
                         continue
@@ -345,8 +356,10 @@ def _apply_fci_rules(left: np.ndarray, right: np.ndarray, max_iter: int = 100) -
                 for c in range(d):
                     if c in (a, b) or not _has_edge(left, right, c, b):
                         continue
-                    if (_mark_j(right, a, b) == MARK_ARROW
-                            and _mark_j(right, c, b) == MARK_ARROW):
+                    if (
+                        _mark_j(right, a, b) == MARK_ARROW
+                        and _mark_j(right, c, b) == MARK_ARROW
+                    ):
                         for dnode in range(d):
                             if dnode in (a, b, c):
                                 continue

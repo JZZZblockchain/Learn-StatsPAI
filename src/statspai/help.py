@@ -44,39 +44,81 @@ from typing import Any, Dict, List, Optional, Union
 # blurb in ``sp.help()``.
 
 CATEGORY_DESCRIPTIONS: Dict[str, str] = {
-    "regression": "OLS / IV / GLM / quantile / Tobit / Heckman / count / survival",
-    "causal": "DID, RD, Synth, Matching, DML, IPW, Causal Forest, Meta-learners, DAG, g-methods",
-    "panel": "Fixed/random effects, dynamic panel GMM, HDFE, interactive FE, unit roots",
-    "timeseries": "VAR, ARIMA, GARCH, local projections, cointegration, structural breaks",
-    "spatial": "SAR/SEM/SDM/SAC, GWR, spatial panels, LISA, Moran's I, spatial weights",
+    "regression": (
+        "OLS / IV / GLM / quantile / Tobit / Heckman / count / survival"
+    ),
+    "causal": (
+        "DID, RD, Synth, Matching, DML, IPW, Causal Forest, "
+        "Meta-learners, DAG, g-methods"
+    ),
+    "panel": (
+        "Fixed/random effects, dynamic panel GMM, HDFE, interactive FE, "
+        "unit roots"
+    ),
+    "timeseries": (
+        "VAR, ARIMA, GARCH, local projections, cointegration, "
+        "structural breaks"
+    ),
+    "spatial": (
+        "SAR/SEM/SDM/SAC, GWR, spatial panels, LISA, Moran's I, "
+        "spatial weights"
+    ),
     "survey": "svydesign, svymean/glm, raking, calibration",
     "survival": "Cox, Kaplan-Meier, AFT, frailty, logrank",
-    "decomposition": "Oaxaca, RIF, DFL, Machado-Mata, Kitagawa, Shapley, Gelbach",
-    "diagnostics": "Sensitivity (Oster, sensemakr, E-value), specification tests, heterogeneity",
+    "decomposition": (
+        "Oaxaca, RIF, DFL, Machado-Mata, Kitagawa, Shapley, Gelbach"
+    ),
+    "diagnostics": (
+        "Sensitivity (Oster, sensemakr, E-value), specification tests, "
+        "heterogeneity"
+    ),
     "robustness": "Spec curve, subgroup analysis, sensitivity dashboards",
-    "inference": "Bootstrap, wild cluster, Romano-Wolf, conformal, CR2/CR3, Conley",
+    "inference": (
+        "Bootstrap, wild cluster, Romano-Wolf, conformal, CR2/CR3, Conley"
+    ),
     "output": "outreg2, modelsummary, regtable, paper_tables, coefplot",
     "plots": "binscatter, event-study plots, theme management",
-    "smart": "Recommender, compare_estimators, assumption_audit, pub_ready, workflow",
+    "smart": (
+        "Recommender, compare_estimators, assumption_audit, pub_ready, "
+        "workflow"
+    ),
     "power": "Power analysis for RCT/DID/RD/IV/cluster-RCT and MDE",
     "experimental": "Randomization, balance checks, attrition, optimal design",
     "missing": "MICE, multiple imputation, mi_estimate",
-    "bayes": "bayes_did / bayes_rd / bayes_iv / bayes_mte / BCF / policy weights",
+    "bayes": (
+        "bayes_did / bayes_rd / bayes_iv / bayes_mte / BCF / "
+        "policy weights"
+    ),
     "postestimation": "margins, contrast, pwcompare, test, lincom",
     "agent": "LLM tool-definition surface + JSON schema export",
-    "validation": "JSS reproducibility reports, coverage matrices, table regeneration",
+    "validation": (
+        "JSS reproducibility reports, coverage matrices, table regeneration"
+    ),
     "utils": "Labels, winsor, DGP simulators, read_data, describe, pwcorr",
-    "datasets": "Canonical datasets (Prop99, German reunification, CPS wage, ...)",
-    "epi": "Epidemiology — diagnostic tests, kappa, ROC/AUC, NNT, prevalence ratio",
-    "target_trial": "Target-trial emulation — protocol, CCW, immortal-time diagnostics",
-    "transport": "Transportability — identification, weighting, generalization",
-    "longitudinal": "Longitudinal regimes, sequential strategies, time-varying treatment",
+    "datasets": (
+        "Canonical datasets (Prop99, German reunification, CPS wage, ...)"
+    ),
+    "epi": (
+        "Epidemiology — diagnostic tests, kappa, ROC/AUC, NNT, "
+        "prevalence ratio"
+    ),
+    "target_trial": (
+        "Target-trial emulation — protocol, CCW, immortal-time diagnostics"
+    ),
+    "transport": (
+        "Transportability — identification, weighting, generalization"
+    ),
+    "longitudinal": (
+        "Longitudinal regimes, sequential strategies, time-varying treatment"
+    ),
     "censoring": "Inverse-probability-of-censoring weighting (IPCW)",
     "gformula": "Parametric g-formula (ICE, MC) for time-varying confounding",
     "bridge": "Bridging functions for transportability and shrinkage",
     "assimilation": "Causal assimilation / data fusion across studies",
     "interference": "Spillover / partial-interference / network exposure",
-    "mendelian": "Mendelian randomization — IVW / Egger / median / MR-PRESSO / MVMR",
+    "mendelian": (
+        "Mendelian randomization — IVW / Egger / median / MR-PRESSO / MVMR"
+    ),
     "mediation": "Direct / indirect effects + sensitivity (E-value)",
     "frontier": "Stochastic frontier analysis (SFA, xtfrontier)",
     "structural": "Production functions, markups, demand systems",
@@ -86,7 +128,9 @@ CATEGORY_DESCRIPTIONS: Dict[str, str] = {
     "causal_rl": "Causal reinforcement learning (off-policy, batch)",
     "causal_text": "Text-treatment effects, annotator-bias correction",
     "ope": "Off-policy evaluation (IPS, DR, switch)",
-    "dag": "DAG inference — d-separation, identification, backdoor / frontdoor",
+    "dag": (
+        "DAG inference — d-separation, identification, backdoor / frontdoor"
+    ),
     "fairness": "Counterfactual / causal fairness diagnostics",
     "surrogate": "Surrogate-endpoint / proximal-outcome estimators",
     "core": "CausalResult, exception taxonomy, infrastructure primitives",
@@ -100,7 +144,7 @@ CATEGORY_DESCRIPTIONS: Dict[str, str] = {
 # the labels here aligned with the categories used by hand-written
 # ``FunctionSpec`` entries in :mod:`statspai.registry` so the two passes
 # produce a single coherent taxonomy.
-_MODULE_CATEGORY_PREFIXES: List[tuple] = [
+_MODULE_CATEGORY_PREFIXES: List[tuple[str, str]] = [
     ("statspai.regression", "regression"),
     ("statspai.fixest", "panel"),
     ("statspai.panel", "panel"),
@@ -271,7 +315,9 @@ def _top_overview() -> str:
     lines.append("-----------")
     lines.append("  >>> import statspai as sp")
     lines.append("  >>> result = sp.regress('y ~ x1 + x2', data=df)")
-    lines.append("  >>> result = sp.did(df, y='wage', treat='treated', time='post')")
+    lines.append(
+        "  >>> result = sp.did(df, y='wage', treat='treated', time='post')"
+    )
     lines.append("  >>> cf = sp.causal_forest('y ~ treat | x1 + x2', data=df)")
     lines.append("")
 
@@ -289,7 +335,10 @@ def _top_overview() -> str:
     # Stability = API lifecycle. Validation = numerical evidence tier.
     tiers = _stability_with_counts()
     if tiers:
-        lines.append("STABILITY  (API lifecycle; use sp.list_functions(stability='<tier>'))")
+        lines.append(
+            "STABILITY  (API lifecycle; "
+            "use sp.list_functions(stability='<tier>'))"
+        )
         lines.append("---------")
         order = ["stable", "experimental", "deprecated"]
         for tier in order:
@@ -303,9 +352,18 @@ def _top_overview() -> str:
 
     validation = _validation_with_counts()
     if validation:
-        lines.append("VALIDATION  (evidence; use sp.list_functions(validation_status='<tier>'))")
+        lines.append(
+            "VALIDATION  (evidence; "
+            "use sp.list_functions(validation_status='<tier>'))"
+        )
         lines.append("----------")
-        order = ["certified", "validated", "api_stable", "experimental", "deprecated"]
+        order = [
+            "certified",
+            "validated",
+            "api_stable",
+            "experimental",
+            "deprecated",
+        ]
         for tier in order:
             n = validation.get(tier, 0)
             if n == 0:
@@ -318,29 +376,58 @@ def _top_overview() -> str:
     lines.append("HELP ENTRY POINTS")
     lines.append("-----------------")
     lines.append("  sp.help()                      — this overview")
-    lines.append("  sp.help('<name>')              — function detail (e.g. sp.help('did'))")
-    lines.append("  sp.help('<category>')          — list functions in a category")
+    lines.append(
+        "  sp.help('<name>')              — function detail "
+        "(e.g. sp.help('did'))"
+    )
+    lines.append(
+        "  sp.help('<category>')          — list functions in a category"
+    )
     lines.append("  sp.help('<category>.<name>')   — scoped function detail")
-    lines.append("  sp.help(sp.regress)            — Python docstring for a callable")
+    lines.append(
+        "  sp.help(sp.regress)            — Python docstring for a callable"
+    )
     lines.append("  sp.help(search='treatment')    — keyword search")
-    lines.append("  sp.help('<name>', verbose=True)— include full param schema")
-    lines.append("  sp.help('<name>', format='dict')— return dict for programmatic use")
+    lines.append(
+        "  sp.help('<name>', verbose=True)— include full param schema"
+    )
+    lines.append(
+        "  sp.help('<name>', format='dict')— return dict for programmatic use"
+    )
     lines.append("")
 
     lines.append("OTHER HELP LAYERS")
     lines.append("-----------------")
-    lines.append("  sp.list_functions(category=None)   Machine-readable function index")
-    lines.append("  sp.describe_function(name)         Full metadata for one function")
-    lines.append("  sp.search_functions(query)         Keyword search (AND logic)")
-    lines.append("  sp.function_schema(name)           OpenAI/Anthropic tool schema")
-    lines.append("  sp.all_schemas()                   Bulk schema export for LLM agents")
-    lines.append("  sp.recommend(data=df, y=..., treat=...)  Method advisor")
+    lines.append(
+        "  sp.list_functions(category=None)   Machine-readable function index"
+    )
+    lines.append(
+        "  sp.describe_function(name)         Full metadata for one function"
+    )
+    lines.append(
+        "  sp.search_functions(query)         Keyword search (AND logic)"
+    )
+    lines.append(
+        "  sp.function_schema(name)           OpenAI/Anthropic tool schema"
+    )
+    lines.append(
+        "  sp.all_schemas()                   "
+        "Bulk schema export for LLM agents"
+    )
+    lines.append(
+        "  sp.recommend(data=df, y=..., treat=...)  Method advisor"
+    )
     lines.append("  from statspai.decomposition import available_methods")
-    lines.append("                                     Sub-module method catalogs")
+    lines.append(
+        "                                     Sub-module method catalogs"
+    )
     lines.append("")
     lines.append("CLI")
     lines.append("---")
-    lines.append("  $ statspai list [--category <cat>] [--stability stable|experimental|deprecated]")
+    lines.append(
+        "  $ statspai list [--category <cat>] "
+        "[--stability stable|experimental|deprecated]"
+    )
     lines.append("  $ statspai list --validation certified")
     lines.append("  $ statspai describe <name>")
     lines.append("  $ statspai search <query>")
@@ -368,7 +455,9 @@ def _categories_with_counts() -> Dict[str, int]:
 _STABILITY_BLURBS: Dict[str, str] = {
     "stable": "public signature locked under SemVer minor releases",
     "experimental": "method/API may shift across minor versions",
-    "deprecated": "scheduled for removal — see MIGRATION.md for the replacement",
+    "deprecated": (
+        "scheduled for removal — see MIGRATION.md for the replacement"
+    ),
 }
 
 _STABILITY_BADGES: Dict[str, str] = {
@@ -427,7 +516,11 @@ def _validation_with_counts() -> Dict[str, int]:
 
 def _category_listing(category: str) -> Optional[str]:
     """List functions in a category. Returns None if category unknown."""
-    from .registry import list_functions, _REGISTRY, _ensure_full_registry  # noqa: WPS433
+    from .registry import (  # noqa: WPS433
+        _REGISTRY,
+        _ensure_full_registry,
+        list_functions,
+    )
     _ensure_full_registry()
 
     names = list_functions(category=category)
@@ -461,7 +554,9 @@ def _category_listing(category: str) -> Optional[str]:
         lines.append(f"  {name:<{width}}  {short}{marker}")
 
     lines.append("")
-    lines.append(f"Use sp.help('{category}.<name>') or sp.help('<name>') for details.")
+    lines.append(
+        f"Use sp.help('{category}.<name>') or sp.help('<name>') for details."
+    )
     return "\n".join(lines)
 
 
@@ -543,7 +638,10 @@ def _function_detail(name: str, verbose: bool = False) -> Optional[str]:
 
 def _search_results(query: str) -> str:
     """Render keyword-search hits."""
-    from .registry import search_functions, _ensure_full_registry  # noqa: WPS433
+    from .registry import (  # noqa: WPS433
+        _ensure_full_registry,
+        search_functions,
+    )
     _ensure_full_registry()
 
     hits = search_functions(query)
@@ -552,17 +650,29 @@ def _search_results(query: str) -> str:
     lines.append(header)
     lines.append("=" * len(header))
     if not hits:
-        lines.append("(no matches — try sp.search_functions(query) with different words)")
+        lines.append(
+            "(no matches — try sp.search_functions(query) with different "
+            "words)"
+        )
         return "\n".join(lines)
 
     width = max(len(h["name"]) for h in hits)
     for h in hits[:50]:
         short = h["description"].split(".")[0][:80]
         v = h.get("validation_status", "")
-        suffix = f" [{v}]" if v in {"certified", "validated", "experimental"} else ""
-        lines.append(f"  {h['name']:<{width}}  [{h['category']}]  {short}{suffix}")
+        suffix = (
+            f" [{v}]" if v in {"certified", "validated", "experimental"}
+            else ""
+        )
+        lines.append(
+            f"  {h['name']:<{width}}  [{h['category']}]  "
+            f"{short}{suffix}"
+        )
     if len(hits) > 50:
-        lines.append(f"  ... and {len(hits) - 50} more. Use sp.search_functions(query).")
+        lines.append(
+            f"  ... and {len(hits) - 50} more. "
+            "Use sp.search_functions(query)."
+        )
     return "\n".join(lines)
 
 
@@ -667,7 +777,11 @@ def help(  # noqa: A001 (shadow builtin by design; sp.help is our public API)
             from .registry import _REGISTRY, _ensure_full_registry
             _ensure_full_registry()
             spec = _REGISTRY.get(name) if name else None
-            return spec.to_dict() if spec else {"kind": "docstring", "name": name, "text": text}
+            return (
+                spec.to_dict()
+                if spec
+                else {"kind": "docstring", "name": name, "text": text}
+            )
         return HelpResult(text, data={"kind": "callable", "name": name})
 
     # String topic: category / function / scoped name
@@ -681,7 +795,10 @@ def help(  # noqa: A001 (shadow builtin by design; sp.help is our public API)
                 if format == "dict":
                     from .registry import _REGISTRY
                     return _REGISTRY[fn].to_dict()
-                return HelpResult(detail, data={"kind": "function", "name": fn})
+                return HelpResult(
+                    detail,
+                    data={"kind": "function", "name": fn},
+                )
             # scoped but unknown → fall through to suggestion
 
         # function name?
@@ -697,8 +814,15 @@ def help(  # noqa: A001 (shadow builtin by design; sp.help is our public API)
         if listing is not None:
             if format == "dict":
                 from .registry import list_functions
-                return {"kind": "category", "category": t, "functions": list_functions(t)}
-            return HelpResult(listing, data={"kind": "category", "category": t})
+                return {
+                    "kind": "category",
+                    "category": t,
+                    "functions": list_functions(t),
+                }
+            return HelpResult(
+                listing,
+                data={"kind": "category", "category": t},
+            )
 
         # Unknown — suggest nearest matches
         from difflib import get_close_matches
@@ -728,5 +852,6 @@ def help(  # noqa: A001 (shadow builtin by design; sp.help is our public API)
         return HelpResult(text, data={"kind": "not_found", "query": topic})
 
     raise TypeError(
-        f"sp.help() topic must be str, callable, or None; got {type(topic).__name__}"
+        "sp.help() topic must be str, callable, or None; "
+        f"got {type(topic).__name__}"
     )

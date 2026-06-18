@@ -13,9 +13,19 @@ non-linear SCMs we fall back to rejection sampling.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
+
 import numpy as np
+from numpy.typing import NDArray
+
+
+ParentValues = dict[str, float]
+Equation = Callable[[ParentValues, float], float]
+Noise = Callable[[np.random.Generator], float]
+SampleMap = dict[str, NDArray[np.float64]]
 
 
 @dataclass
@@ -32,18 +42,28 @@ class SCM:
     --------
     >>> import statspai as sp
     >>> scm = sp.SCM()
-    >>> scm.add("X", [], lambda pa, u: u, lambda rng: rng.normal())  # doctest: +ELLIPSIS
+    >>> scm.add(  # doctest: +ELLIPSIS
+    ...     "X", [], lambda pa, u: u, lambda rng: rng.normal()
+    ... )
     SCM(...)
-    >>> scm.add("Y", ["X"], lambda pa, u: 2 * pa["X"] + u)  # doctest: +ELLIPSIS
+    >>> scm.add(  # doctest: +ELLIPSIS
+    ...     "Y", ["X"], lambda pa, u: 2 * pa["X"] + u
+    ... )
     SCM(...)
     >>> sim = scm.simulate(n=100, seed=0)
     >>> bool(sim["Y"].shape == (100,))
     True
     """
 
-    equations: dict = field(default_factory=dict)
+    equations: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def add(self, name: str, parents, equation: Callable, noise: Callable | None = None) -> "SCM":
+    def add(
+        self,
+        name: str,
+        parents: Iterable[str],
+        equation: Equation,
+        noise: Noise | None = None,
+    ) -> "SCM":
         self.equations[name] = {
             "parents": tuple(parents),
             "equation": equation,
@@ -52,8 +72,10 @@ class SCM:
         return self
 
     def topo_order(self) -> list[str]:
-        order, seen = [], set()
-        def visit(v):
+        order: list[str] = []
+        seen: set[str] = set()
+
+        def visit(v: str) -> None:
             if v in seen:
                 return
             seen.add(v)
@@ -65,9 +87,11 @@ class SCM:
             visit(v)
         return order
 
-    def simulate(self, n: int = 1, seed: int | None = None) -> dict:
+    def simulate(self, n: int = 1, seed: int | None = None) -> SampleMap:
         rng = np.random.default_rng(seed)
-        out = {name: np.empty(n) for name in self.equations}
+        out: SampleMap = {
+            name: np.empty(n, dtype=np.float64) for name in self.equations
+        }
         order = self.topo_order()
         for i in range(n):
             for v in order:
@@ -78,13 +102,13 @@ class SCM:
 
     def counterfactual(
         self,
-        evidence: dict,
-        intervention: dict,
+        evidence: Mapping[str, float],
+        intervention: Mapping[str, float],
         n_samples: int = 2000,
         seed: int | None = None,
         tol: float = 1e-2,
-    ) -> dict:
-        """Compute E[Y(intervention) | evidence] via abduction-action-prediction.
+    ) -> SampleMap:
+        """Compute E[Y(intervention) | evidence] via abduction-action.
 
         Parameters
         ----------
@@ -104,13 +128,20 @@ class SCM:
         """
         rng = np.random.default_rng(seed)
         order = self.topo_order()
-        accepted = {name: [] for name in self.equations}
+        accepted: dict[str, list[float]] = {
+            name: [] for name in self.equations
+        }
         attempts = 0
         max_attempts = n_samples * 2000
-        while (len(accepted[order[0]]) < n_samples) and attempts < max_attempts:
+        while (
+            len(accepted[order[0]]) < n_samples
+            and attempts < max_attempts
+        ):
             attempts += 1
-            noise = {v: self.equations[v]["noise"](rng) for v in self.equations}
-            factual = {}
+            noise: dict[str, float] = {
+                v: self.equations[v]["noise"](rng) for v in self.equations
+            }
+            factual: dict[str, float] = {}
             for v in order:
                 parents = {p: factual[p] for p in self.equations[v]["parents"]}
                 factual[v] = self.equations[v]["equation"](parents, noise[v])
@@ -120,7 +151,7 @@ class SCM:
             if not ok:
                 continue
             # Action: override interventions; re-run prediction
-            cf = {}
+            cf: dict[str, float] = {}
             for v in order:
                 if v in intervention:
                     cf[v] = intervention[v]
@@ -134,4 +165,6 @@ class SCM:
                 "Rejection sampling failed to match evidence. "
                 "Consider loosening `tol` or providing analytical abduction."
             )
-        return {k: np.asarray(v) for k, v in accepted.items()}
+        return {
+            k: np.asarray(v, dtype=np.float64) for k, v in accepted.items()
+        }

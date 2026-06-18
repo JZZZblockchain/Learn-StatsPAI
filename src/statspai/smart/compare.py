@@ -21,6 +21,8 @@ Usage
 >>> comp.plot()
 """
 
+from __future__ import annotations
+
 from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
@@ -62,7 +64,13 @@ class ComparisonResult:
     ['method', 'estimate']
     """
 
-    def __init__(self, results, estimates_table, agreement, n_obs):
+    def __init__(
+        self,
+        results: Dict[str, Any],
+        estimates_table: pd.DataFrame,
+        agreement: Dict[str, float],
+        n_obs: int,
+    ) -> None:
         self.results = results  # dict: method -> result object
         self.estimates_table = estimates_table  # DataFrame
         self.agreement = agreement  # dict with agreement metrics
@@ -107,7 +115,7 @@ class ComparisonResult:
         lines.append("\n" + "=" * 70)
         return "\n".join(lines)
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax: Optional[Any] = None, **kwargs: Any) -> Any:
         """Forest plot comparing estimates across methods."""
         try:
             import matplotlib.pyplot as plt
@@ -134,7 +142,9 @@ class ComparisonResult:
 
         ax.set_xlabel('Treatment Effect Estimate')
         ax.set_title('Multi-Estimator Comparison')
-        ax.get_figure().tight_layout()
+        tight_layout = getattr(ax.get_figure(), 'tight_layout', None)
+        if callable(tight_layout):
+            tight_layout()
         return ax
 
 
@@ -142,11 +152,11 @@ def compare_estimators(
     data: pd.DataFrame,
     y: str,
     treatment: str,
-    methods: List[str] = None,
-    covariates: List[str] = None,
-    id: str = None,
-    time: str = None,
-    instrument: str = None,
+    methods: Optional[List[str]] = None,
+    covariates: Optional[List[str]] = None,
+    id: Optional[str] = None,
+    time: Optional[str] = None,
+    instrument: Optional[str] = None,
     alpha: float = 0.05,
     method_hints: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> ComparisonResult:
@@ -247,7 +257,7 @@ def compare_estimators(
     # with a UserWarning on explicit conflict.
     method_hints = method_hints or {}
 
-    def _values_differ(a, b):
+    def _values_differ(a: Any, b: Any) -> bool:
         """
         Compare two hint values, with list equality being set-based so
         that pure reordering (e.g. ``['x1','x2']`` vs ``['x2','x1']``)
@@ -263,9 +273,12 @@ def compare_estimators(
                 # to strict element-wise comparison, still
                 # order-sensitive, but better than crashing.
                 return list(a) != list(b)
-        return a != b
+        return bool(a != b)
 
-    def _resolve_hints(method_name, shared_kwargs):
+    def _resolve_hints(
+        method_name: str,
+        shared_kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """Merge shared kwargs with per-method hints; hint wins on conflict."""
         hint = method_hints.get(method_name, {}) or {}
         merged = dict(shared_kwargs)
@@ -280,11 +293,12 @@ def compare_estimators(
             merged[k] = v
         return merged
 
-    results = {}
-    rows = []
+    results: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
 
     for method in methods:
         try:
+            r: Any
             if method == 'ols':
                 x_vars = [treatment] + covariates[:10]
                 formula = f"{y} ~ {' + '.join(x_vars)}"
@@ -303,7 +317,7 @@ def compare_estimators(
                 name = 'Propensity Score Matching'
 
             elif method == 'ipw':
-                r = sp.ipw(df, y=y, treatment=treatment,
+                r = sp.ipw(df, y=y, treat=treatment,
                            covariates=covariates[:10])
                 est = r.estimate if hasattr(r, 'estimate') else r.params.iloc[0]
                 se = r.se if hasattr(r, 'se') else r.std_errors.iloc[0]
@@ -311,7 +325,7 @@ def compare_estimators(
                 name = 'Inverse Probability Weighting'
 
             elif method == 'aipw':
-                r = sp.aipw(df, y=y, treatment=treatment,
+                r = sp.aipw(df, y=y, treat=treatment,
                             covariates=covariates[:10])
                 est = r.estimate if hasattr(r, 'estimate') else r.params.iloc[0]
                 se = r.se if hasattr(r, 'se') else r.std_errors.iloc[0]
@@ -530,7 +544,6 @@ def compare_estimators(
     # Agreement metrics
     if len(rows) > 1:
         ests = np.array([r['estimate'] for r in rows])
-        ses = np.array([r['se'] for r in rows])
         pvals = np.array([r['p_value'] for r in rows])
 
         sign_agree = np.mean(np.sign(ests) == np.sign(ests[0]))

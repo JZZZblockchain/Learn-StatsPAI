@@ -30,7 +30,7 @@ References
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple, List, Any
+from typing import Any, Optional, Sequence, Tuple, List
 
 import numpy as np
 
@@ -58,7 +58,7 @@ class DAGDict(dict):
     _ADJ_KEYS = ("cpdag", "adjacency", "dag")
     _NAME_KEYS = ("variables", "names")
 
-    def _get_adj(self):
+    def _get_adj(self) -> tuple[Any, Any]:
         import pandas as _pd
         for k in self._ADJ_KEYS:
             if k in self:
@@ -70,28 +70,28 @@ class DAGDict(dict):
             f"DAGDict has no adjacency under {self._ADJ_KEYS!r}"
         )
 
-    def _get_names(self, fallback):
+    def _get_names(self, fallback: Any) -> list[str]:
         for k in self._NAME_KEYS:
             if k in self:
                 return list(self[k])
         return list(fallback)
 
-    def to_networkx(self, **kwargs):
+    def to_networkx(self, **kwargs: Any) -> Any:
         adj, names = self._get_adj()
         names = self._get_names(names)
         return to_networkx(adj, names, **kwargs)
 
-    def to_dot(self, **kwargs):
+    def to_dot(self, **kwargs: Any) -> str:
         adj, names = self._get_adj()
         names = self._get_names(names)
         return to_dot(adj, names, **kwargs)
 
-    def plot(self, **kwargs):
+    def plot(self, **kwargs: Any) -> tuple[Any, Any]:
         adj, names = self._get_adj()
         names = self._get_names(names)
         return plot_dag(adj, names, **kwargs)
 
-    def edge_list(self, **kwargs):
+    def edge_list(self, **kwargs: Any) -> List[Tuple[str, str, float]]:
         adj, names = self._get_adj()
         names = self._get_names(names)
         return edge_list(adj, names, **kwargs)
@@ -129,7 +129,7 @@ def to_networkx(
     names: Sequence[str],
     directed: bool = True,
     threshold: float = 0.0,
-):
+) -> Any:
     """Build a :class:`networkx.DiGraph` (or :class:`networkx.Graph`) from
     an adjacency matrix. Edge weight equals the matrix entry.
 
@@ -139,7 +139,8 @@ def to_networkx(
         import networkx as nx
     except ImportError as e:  # pragma: no cover
         raise ImportError(
-            "networkx required for to_networkx(). Install: pip install networkx"
+            "networkx required for to_networkx(). Install: "
+            "pip install networkx"
         ) from e
     A = np.asarray(adjacency, dtype=float)
     G = (nx.DiGraph if directed else nx.Graph)()
@@ -202,7 +203,7 @@ def plot_dag(
     pos_edge_color: str = "#1f77b4",
     neg_edge_color: str = "#d62728",
     digits: int = 2,
-):
+) -> tuple[Any, Any]:
     """Draw the DAG with Matplotlib + NetworkX.
 
     Parameters
@@ -269,7 +270,7 @@ def plot_dag(
     pos_edges = [(u, v) for u, v, d in G.edges(data=True) if d["weight"] >= 0]
     neg_edges = [(u, v) for u, v, d in G.edges(data=True) if d["weight"] < 0]
 
-    def _widths(edges):
+    def _widths(edges: Sequence[tuple[Any, Any]]) -> list[float]:
         return [
             1.0 + min(abs(G[u][v]["weight"]) * 2, 3.0) for (u, v) in edges
         ]

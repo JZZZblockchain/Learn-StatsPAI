@@ -29,7 +29,7 @@ tractable.
 from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Iterable, Sequence
+from typing import Any
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -96,7 +96,8 @@ class ICPResult:
         for v, (lo, hi) in self.coefficients.items():
             lines.append(f"  {v}: [{lo:.3f}, {hi:.3f}]")
         lines.append(
-            f"{len(self.accepted_subsets)} subsets accepted by invariance test."
+            f"{len(self.accepted_subsets)} subsets accepted by "
+            "invariance test."
         )
         return "\n".join(lines)
 
@@ -184,7 +185,10 @@ def icp(
             if pval >= per_subset_alpha:
                 accepted.append(S)
             else:
-                rejection[S] = f"pval={pval:.4g} < alpha/m={per_subset_alpha:.2g}: {reason}"
+                rejection[S] = (
+                    f"pval={pval:.4g} < alpha/m={per_subset_alpha:.2g}: "
+                    f"{reason}"
+                )
 
     if not accepted:
         return ICPResult(
@@ -231,7 +235,9 @@ def _invariance_test(
 ) -> tuple[float, str]:
     """Return (pvalue, reason) for the null hypothesis of invariance."""
     n = X.shape[0]
-    X_with_const = np.column_stack([np.ones(n), X]) if X.size else np.ones((n, 1))
+    X_with_const = (
+        np.column_stack([np.ones(n), X]) if X.size else np.ones((n, 1))
+    )
 
     beta, *_ = np.linalg.lstsq(X_with_const, y, rcond=None)
     resid = y - X_with_const @ beta
@@ -248,13 +254,12 @@ def _invariance_test(
             means.append(r.mean())
             vars_.append(r.var(ddof=1))
             ns.append(r.size)
-        overall_var = resid.var(ddof=1)
         # Welch-style test for equality of means
-        stat_mean, p_mean = stats.f_oneway(
+        _, p_mean = stats.f_oneway(
             *[resid[env == e] for e in env_labels]
         )
         # Levene-style test for equality of variances
-        stat_var, p_var = stats.levene(
+        _, p_var = stats.levene(
             *[resid[env == e] for e in env_labels]
         )
         p = min(p_mean, p_var)
@@ -275,7 +280,13 @@ def _invariance_test(
     raise ValueError(f"Unknown ICP method: {method!r}")
 
 
-def nonlinear_icp(X, y, environment, alpha: float = 0.05, **kw) -> ICPResult:
+def nonlinear_icp(
+    X: pd.DataFrame | np.ndarray,
+    y: np.ndarray,
+    environment: np.ndarray,
+    alpha: float = 0.05,
+    **kw: Any,
+) -> ICPResult:
     """Alias for ``icp(..., method='nonlinear')`` -- Heinze-Deml et al. 2018.
 
     The nonlinear variant swaps the linear mean/variance invariance test for

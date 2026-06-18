@@ -45,9 +45,13 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from ._config import DEFAULT_MODELS, load_config
+
+if TYPE_CHECKING:
+    from .llm_clients import LLMClient
 
 
 __all__ = [
@@ -100,7 +104,7 @@ def _construct_client(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     **kwargs: Any,
-):
+) -> "LLMClient":
     """Build a concrete LLMClient for the named provider."""
     from .llm_clients import openai_client, anthropic_client
 
@@ -204,14 +208,14 @@ def _interactive_prompt(
 
 def get_llm_client(
     *,
-    client: Any = None,
+    client: Optional["LLMClient"] = None,
     provider: Optional[str] = None,
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     allow_interactive: bool = True,
-    config_path=None,
+    config_path: Optional[Path] = None,
     **kwargs: Any,
-):
+) -> "LLMClient":
     """Resolve an :class:`LLMClient` via layered fallback.
 
     See module docstring for the full resolution order. Most users
@@ -315,8 +319,8 @@ def configure_llm(
     *,
     provider: Optional[str] = None,
     model: Optional[str] = None,
-    config_path=None,
-):
+    config_path: Optional[Path] = None,
+) -> Path:
     """Persist a provider+model preference to
     ``~/.config/statspai/llm.toml``.
 

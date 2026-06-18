@@ -18,10 +18,9 @@ prompt engineering — the caller owns the LLM specifics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 
 
@@ -38,7 +37,8 @@ class LLMCausalAssessResult:
     """Output of :func:`llm_causal_assess`."""
     level1_accuracy: Optional[float]
     level2_accuracy: Optional[float]
-    per_item: pd.DataFrame       # columns: id, level, question, truth, pred, correct
+    # columns: id, level, question, truth, pred, correct
+    per_item: pd.DataFrame
     llm_identifier: str
 
     def summary(self) -> str:
@@ -50,10 +50,16 @@ class LLMCausalAssessResult:
         ]
         if self.level1_accuracy is not None:
             n1 = (self.per_item["level"] == 1).sum()
-            lines.append(f"  Level-1 accuracy   : {self.level1_accuracy:.4f}  (n={n1})")
+            lines.append(
+                f"  Level-1 accuracy   : {self.level1_accuracy:.4f}  "
+                f"(n={n1})"
+            )
         if self.level2_accuracy is not None:
             n2 = (self.per_item["level"] == 2).sum()
-            lines.append(f"  Level-2 accuracy   : {self.level2_accuracy:.4f}  (n={n2})")
+            lines.append(
+                f"  Level-2 accuracy   : {self.level2_accuracy:.4f}  "
+                f"(n={n2})"
+            )
         return "\n".join(lines)
 
 
@@ -95,7 +101,8 @@ def pairwise_causal_benchmark(
     pair_b_col: str = "B",
     truth_col: str = "a_causes_b",
     prompt_template: str = (
-        "Does variable {a} causally influence variable {b}? Answer 'yes' or 'no'."
+        "Does variable {a} causally influence variable {b}? "
+        "Answer 'yes' or 'no'."
     ),
 ) -> PairwiseBenchmarkResult:
     """Benchmark an LLM on pairwise causal-direction identification.
@@ -150,18 +157,18 @@ def pairwise_causal_benchmark(
     acc = float(per_pair["correct"].mean())
     # Precision (forward): of predicted-forward, how many are truly-forward.
     pred_series = per_pair["pred"]
-    forward_pred_mask = pred_series == True  # noqa: E712
+    forward_pred_mask = pred_series.eq(True)
     if forward_pred_mask.any():
         precision = float(
-            (per_pair.loc[forward_pred_mask, "truth"] == True).mean()
+            per_pair.loc[forward_pred_mask, "truth"].eq(True).mean()
         )
     else:
         precision = float("nan")
     # Recall (forward): of truly-forward, how many were predicted-forward.
-    truly_forward = per_pair["truth"] == True  # noqa: E712
+    truly_forward = per_pair["truth"].eq(True)
     if truly_forward.any():
         recall = float(
-            (per_pair.loc[truly_forward, "pred"] == True).mean()
+            per_pair.loc[truly_forward, "pred"].eq(True).mean()
         )
     else:
         recall = float("nan")
@@ -217,11 +224,16 @@ def llm_causal_assess(
     """
     rows: List[Dict[str, Any]] = []
 
-    def _score(level: int, items: Optional[pd.DataFrame]):
+    def _score(
+        level: int,
+        items: Optional[pd.DataFrame],
+    ) -> Optional[float]:
         if items is None or len(items) == 0:
             return None
         if not {"question", "answer"} <= set(items.columns):
-            raise ValueError(f"Level-{level} items need 'question' and 'answer' columns.")
+            raise ValueError(
+                f"Level-{level} items need 'question' and 'answer' columns."
+            )
         correct = 0
         for i, row in items.iterrows():
             raw = llm_client(row["question"])

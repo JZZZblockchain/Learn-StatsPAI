@@ -27,11 +27,11 @@ Cunningham, S. (2021). *Causal Inference: The Mixtape*. Yale University Press.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from itertools import combinations
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, TYPE_CHECKING
+
 if TYPE_CHECKING:
     import pandas as pd
-from itertools import combinations
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple, Union
 
 
 class DAG:
@@ -99,7 +99,11 @@ class DAG:
 
     @property
     def edges(self) -> List[Tuple[str, str]]:
-        return [(p, c) for p, children in self._edges.items() for c in children]
+        return [
+            (p, c)
+            for p, children in self._edges.items()
+            for c in children
+        ]
 
     # ------------------------------------------------------------------ #
     #  Graph queries
@@ -150,7 +154,10 @@ class DAG:
             return False
         prev_node = path[idx - 1]
         next_node = path[idx + 1]
-        return node in self.children(prev_node) and node in self.children(next_node)
+        return (
+            node in self.children(prev_node)
+            and node in self.children(next_node)
+        )
 
     # ------------------------------------------------------------------ #
     #  Path enumeration
@@ -201,7 +208,14 @@ class DAG:
         for nb in neighbours:
             if nb not in visited:
                 path.append(nb)
-                self._find_paths(nb, target, path, visited, results, directed_only)
+                self._find_paths(
+                    nb,
+                    target,
+                    path,
+                    visited,
+                    results,
+                    directed_only,
+                )
                 path.pop()
 
     def causal_paths(self, exposure: str, outcome: str) -> List[List[str]]:
@@ -246,10 +260,11 @@ class DAG:
             prev_node = path[i - 1]
             next_node = path[i + 1]
             is_coll = (
-                node in self.children(prev_node) and node in self.children(next_node)
+                node in self.children(prev_node)
+                and node in self.children(next_node)
             )
             if is_coll:
-                # Collider: path blocked unless node or descendant is conditioned
+                # Collider: path blocked unless node/descendant is conditioned.
                 if node not in cond_ancestors:
                     return False
             else:
@@ -284,7 +299,10 @@ class DAG:
          {'path': ['X', 'Z', 'Y'], 'type': 'backdoor', 'open': False}]
         """
         conditioned = conditioned or set()
-        causal_set = set(tuple(p) for p in self.causal_paths(exposure, outcome))
+        causal_set = {
+            tuple(p)
+            for p in self.causal_paths(exposure, outcome)
+        }
         all_p = self.all_paths(exposure, outcome)
         result = []
         for p in all_p:
@@ -409,7 +427,8 @@ class DAG:
                     )
                 else:
                     reasons.append(
-                        "descendant_of_treatment — biases the causal effect estimate"
+                        "descendant_of_treatment — biases the causal "
+                        "effect estimate"
                     )
 
             # 2. Collider on a backdoor path
@@ -560,8 +579,12 @@ class DAG:
         reachable = self._active_reachable(x, conditioned)
         return y not in reachable
 
-    def _active_reachable(self, source: str, conditioned: Set[str]) -> Set[str]:
-        """Nodes reachable from *source* via active paths given *conditioned*."""
+    def _active_reachable(
+        self,
+        source: str,
+        conditioned: Set[str],
+    ) -> Set[str]:
+        """Nodes reachable from *source* through active paths."""
         # Ancestors of conditioned set (needed for collider activation)
         cond_ancestors: Set[str] = set()
         for c in conditioned:
@@ -595,7 +618,7 @@ class DAG:
                     for child in self.children(node):
                         queue.append((child, "down"))
                 if node in cond_ancestors:
-                    # Collider (or descendant of collider) that is conditioned on
+                    # Conditioned collider/descendant.
                     for parent in self.parents(node):
                         queue.append((parent, "up"))
 
@@ -631,9 +654,12 @@ class DAG:
             Each set is a valid adjustment set (possibly empty).
         """
         if method != "backdoor":
-            raise ValueError(f"Only 'backdoor' method is currently supported, got '{method}'")
+            raise ValueError(
+                "Only 'backdoor' method is currently supported, "
+                f"got {method!r}"
+            )
 
-        # Candidate nodes: observed, not exposure, not outcome, not descendants of exposure
+        # Candidate nodes: observed and not exposure/outcome/descendant.
         descendants_x = self.descendants(exposure)
         candidates = self.observed_nodes - {exposure, outcome} - descendants_x
 
@@ -672,7 +698,7 @@ class DAG:
     def _d_sep_manipulated(
         self, exposure: str, outcome: str, conditioned: Set[str],
     ) -> bool:
-        """d-separation in the graph with outgoing edges of exposure removed."""
+        """d-separation after removing exposure's outgoing edges."""
         # Create a modified DAG without edges from exposure
         modified = DAG()
         for n in self._nodes:
@@ -711,14 +737,14 @@ class DAG:
         outcome: Optional[str] = None,
         conditioned: Optional[Set[str]] = None,
         positions: Optional[Dict[str, Tuple[float, float]]] = None,
-        figsize: tuple = (8, 6),
+        figsize: Tuple[float, float] = (8, 6),
         seed: int = 42,
         title: Optional[str] = None,
         style: str = "ggdag",
         node_size: float = 0.22,
         font_size: int = 12,
-        ax=None,
-    ):
+        ax: Any = None,
+    ) -> Tuple[Any, Any]:
         """
         Plot the DAG with publication-quality styling.
 
@@ -786,7 +812,10 @@ class DAG:
             for n in self._nodes:
                 if n not in pos and n.startswith("_L_"):
                     children_of_l = sorted(self._edges.get(n, set()))
-                    if len(children_of_l) == 2 and all(c in pos for c in children_of_l):
+                    if (
+                        len(children_of_l) == 2
+                        and all(c in pos for c in children_of_l)
+                    ):
                         c0, c1 = children_of_l
                         mx = (pos[c0][0] + pos[c1][0]) / 2
                         my = (pos[c0][1] + pos[c1][1]) / 2 + 0.8
@@ -846,7 +875,9 @@ class DAG:
             if n.startswith("_L_"):
                 children_of_l = sorted(self._edges.get(n, set()))
                 if len(children_of_l) == 2:
-                    bidirected_pairs.append((children_of_l[0], children_of_l[1]))
+                    bidirected_pairs.append(
+                        (children_of_l[0], children_of_l[1])
+                    )
                     latent_nodes_to_skip.add(n)
 
         # --- Draw directed edges ---
@@ -888,19 +919,6 @@ class DAG:
                 continue
             x0, y0 = pos[a]
             x1, y1 = pos[b]
-
-            mx = (x0 + x1) / 2
-            my = (y0 + y1) / 2
-            dx, dy = x1 - x0, y1 - y0
-            dist = np.sqrt(dx**2 + dy**2)
-            # Perpendicular offset for the arc bulge
-            offset = max(0.5, dist * 0.4)
-            if dist > 1e-6:
-                nx, ny = -dy / dist, dx / dist
-            else:
-                nx, ny = 0, 1
-            cx = mx + nx * offset
-            cy = my + ny * offset
 
             # Draw quadratic bezier as arc
             arrow = FancyArrowPatch(
@@ -1075,9 +1093,9 @@ class DAG:
     #  Parsing
     # ------------------------------------------------------------------ #
 
-    def _parse(self, spec: str):
+    def _parse(self, spec: str) -> None:
         """Parse edge specification string."""
-        # Split by semicolons, newlines, or commas (but not commas inside parens)
+        # Split by semicolons, newlines, or commas.
         parts = re.split(r"[;\n]", spec)
         # Also split by comma if no semicolons/newlines were effective
         if len(parts) == 1 and "," in spec:
@@ -1143,13 +1161,13 @@ class DAG:
         # Bad controls
         bad = self.bad_controls(exposure, outcome)
         if bad:
-            lines.append(f"\n⚠ Bad controls (do NOT condition on):")
+            lines.append("\n⚠ Bad controls (do NOT condition on):")
             for v, reasons in bad.items():
                 for r in reasons:
                     lines.append(f"  {v}: {r}")
 
         # Variable roles
-        lines.append(f"\nVariable roles:")
+        lines.append("\nVariable roles:")
         for v in sorted(self.observed_nodes - {exposure, outcome}):
             roles = self.classify_variable(v, exposure, outcome)
             if roles:
@@ -1303,7 +1321,7 @@ _EXAMPLES = {
 }
 
 
-_EXAMPLE_POSITIONS = {
+_EXAMPLE_POSITIONS: Dict[str, Dict[str, Tuple[float, float]]] = {
     "confounding": {"Z": (0, 0), "X": (-1, -1.5), "Y": (1, -1.5)},
     "collider": {"X": (-1.5, 0), "M": (0, -1.5), "Y": (1.5, 0)},
     "mediation": {"X": (-1.5, 0), "M": (0, -1.5), "Y": (1.5, 0)},
@@ -1445,7 +1463,8 @@ def dag_simulate(
     >>> # Biased: wrong sign due to collider
     >>> smf.ols('wage ~ female + occupation', data=df).fit().params['female']
     >>> # Correct: includes ability
-    >>> smf.ols('wage ~ female + occupation + ability', data=df).fit().params['female']
+    >>> fit = smf.ols('wage ~ female + occupation + ability', data=df).fit()
+    >>> fit.params['female']
     """
     import numpy as np
     import pandas as pd

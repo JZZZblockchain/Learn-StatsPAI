@@ -18,7 +18,7 @@ Usage
 >>> result = rec.run()  # execute the recommended estimator
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import pandas as pd
 
@@ -46,8 +46,16 @@ class RecommendationResult:
     True
     """
 
-    def __init__(self, recommendations, data_profile, design,
-                 warnings, data, y, treatment):
+    def __init__(
+        self,
+        recommendations: List[Dict[str, Any]],
+        data_profile: Dict[str, Any],
+        design: str,
+        warnings: List[str],
+        data: pd.DataFrame,
+        y: str,
+        treatment: Optional[str],
+    ) -> None:
         self.recommendations = recommendations  # list of dicts
         self.data_profile = data_profile
         self.design = design
@@ -201,7 +209,7 @@ class RecommendationResult:
                 subs = (v.get("subsample") or {}).get("score", np.nan)
                 err = v.get("error")
 
-                def _fmt(x):
+                def _fmt(x: Any) -> str:
                     return f"{x:.0f}" if isinstance(x, float) and np.isfinite(x) else "--"
 
                 marker = f" {{\\tiny\\textit{{({_esc(err)})}}}}" if err else ""
@@ -251,15 +259,15 @@ class RecommendationResult:
         ])
         return "\n".join(lines)
 
-    def _workflow_steps(self):
+    def _workflow_steps(self) -> List[str]:
         """Generate a recommended workflow."""
-        steps = []
+        steps: List[str] = []
         rec = self.recommendations[0] if self.recommendations else None
         if not rec:
             return ["Insufficient information to recommend"]
 
         # Pre-estimation
-        steps.append(f"Run sp.sumstats(df) to check data quality")
+        steps.append("Run sp.sumstats(df) to check data quality")
         if self.data_profile.get('missing_pct', 0) > 5:
             steps.append(f"Handle missing data: sp.mice(df, m=5) — {self.data_profile['missing_pct']:.0%} missing")
 
@@ -271,22 +279,22 @@ class RecommendationResult:
         steps.append(f"Estimate: result = {rec['code']}")
 
         # Post-estimation
-        steps.append(f"Diagnostics: sp.diagnose_result(result)")
+        steps.append("Diagnostics: sp.diagnose_result(result)")
 
         if rec['function'] in ['regress', 'iv', 'panel']:
-            steps.append(f"Sensitivity: sp.sensemakr(result) or sp.oster_bounds(result)")
+            steps.append("Sensitivity: sp.sensemakr(result) or sp.oster_bounds(result)")
         if rec['function'] in ['did', 'callaway_santanna']:
-            steps.append(f"Pre-trends: sp.pretrends_test(result)")
-            steps.append(f"Event study: sp.event_study(df, ...)")
+            steps.append("Pre-trends: sp.pretrends_test(result)")
+            steps.append("Event study: sp.event_study(df, ...)")
         if rec['function'] == 'rdrobust':
-            steps.append(f"McCrary test: sp.rddensity(df, x='running_var')")
+            steps.append("McCrary test: sp.rddensity(df, x='running_var')")
 
-        steps.append(f"Robustness: sp.robustness_report(result)")
-        steps.append(f"Export: sp.outreg2(result, filename='results.xlsx')")
+        steps.append("Robustness: sp.robustness_report(result)")
+        steps.append("Export: sp.outreg2(result, filename='results.xlsx')")
 
         return steps
 
-    def run(self, which: int = 0, **kwargs):
+    def run(self, which: int = 0, **kwargs: Any) -> Any:
         """Execute the recommended estimator.
 
         Parameters
@@ -304,7 +312,7 @@ class RecommendationResult:
         params.update(kwargs)
         return func(**params)
 
-    def run_all(self, **kwargs):
+    def run_all(self, **kwargs: Any) -> Dict[str, Any]:
         """Run all recommended estimators and return a comparison."""
         results = {}
         for i, rec in enumerate(self.recommendations):
@@ -315,9 +323,15 @@ class RecommendationResult:
         return results
 
 
-def _profile_data(data, y, treatment, id_col, time_col):
+def _profile_data(
+    data: pd.DataFrame,
+    y: str,
+    treatment: Optional[str],
+    id_col: Optional[str],
+    time_col: Optional[str],
+) -> Dict[str, Any]:
     """Profile the dataset to understand its structure."""
-    profile = {
+    profile: Dict[str, Any] = {
         'n_obs': len(data),
         'n_vars': len(data.columns),
     }
@@ -363,8 +377,16 @@ def _profile_data(data, y, treatment, id_col, time_col):
     return profile
 
 
-def _detect_design(data, y, treatment, id_col, time_col, running_var,
-                   instrument, profile):
+def _detect_design(
+    data: pd.DataFrame,
+    y: str,
+    treatment: Optional[str],
+    id_col: Optional[str],
+    time_col: Optional[str],
+    running_var: Optional[str],
+    instrument: Optional[str],
+    profile: Dict[str, Any],
+) -> str:
     """Auto-detect the likely research design."""
     if running_var:
         return 'rd'
@@ -387,21 +409,21 @@ def _detect_design(data, y, treatment, id_col, time_col, running_var,
 def recommend(
     data: pd.DataFrame,
     y: str,
-    treatment: str = None,
-    covariates: List[str] = None,
-    id: str = None,
-    time: str = None,
-    running_var: str = None,
-    instrument: str = None,
-    cutoff: float = None,
-    design: str = None,
-    dag=None,
+    treatment: Optional[str] = None,
+    covariates: Optional[List[str]] = None,
+    id: Optional[str] = None,
+    time: Optional[str] = None,
+    running_var: Optional[str] = None,
+    instrument: Optional[str] = None,
+    cutoff: Optional[float] = None,
+    design: Optional[str] = None,
+    dag: Any = None,
     # --- Sprint-B / 0.9.6 causal-method extensions (all opt-in) ---
-    mediator: str = None,
-    tv_confounders: List[str] = None,
-    proxy_z: List[str] = None,
-    proxy_w: List[str] = None,
-    post_treat_strata: str = None,
+    mediator: Optional[str] = None,
+    tv_confounders: Optional[List[str]] = None,
+    proxy_z: Optional[List[str]] = None,
+    proxy_w: Optional[List[str]] = None,
+    post_treat_strata: Optional[str] = None,
     # --- verification (pre-existing) ---
     verify: bool = False,
     verify_B: int = 50,
@@ -518,11 +540,11 @@ def recommend(
         design = _detect_design(data, y, treatment, id, time,
                                 running_var, instrument, profile)
 
-    warnings_list = []
-    recommendations = []
+    warnings_list: List[str] = []
+    recommendations: List[Dict[str, Any]] = []
 
     # DAG-based recommendations
-    dag_adjustment = None
+    dag_adjustment: Optional[List[str]] = None
     if dag is not None:
         try:
             adj_sets = dag.adjustment_sets(treatment, y)
@@ -573,8 +595,13 @@ def recommend(
         if time and data[time].nunique() > 2:
             cohort_col = f"_cohort_{treatment}"
 
-            def _derive_cohort(df_in, _treat=treatment, _id=id, _time=time,
-                                _col=cohort_col):
+            def _derive_cohort(
+                df_in: pd.DataFrame,
+                _treat: Any = treatment,
+                _id: Any = id,
+                _time: Any = time,
+                _col: str = cohort_col,
+            ) -> pd.DataFrame:
                 """Attach cohort column = first treated period per unit."""
                 out = df_in.copy()
                 if _id and _id in out.columns:
@@ -624,7 +651,7 @@ def recommend(
 
     elif design == 'rd':
         rv = running_var or 'running_var'
-        c = cutoff or 0
+        cutoff_value = cutoff or 0
         recommendations.append({
             'method': 'Local polynomial RD (CCT 2014)',
             'function': 'rdrobust',
@@ -632,8 +659,8 @@ def recommend(
             'assumptions': ['Continuity of potential outcomes at cutoff',
                             'No manipulation of running variable'],
             'robustness': 'Run sp.rddensity(), sp.rdbwsensitivity(), sp.rdplacebo()',
-            'code': f"sp.rdrobust(df, y='{y}', x='{rv}', c={c})",
-            'params': {'data': data, 'y': y, 'x': rv, 'c': c},
+            'code': f"sp.rdrobust(df, y='{y}', x='{rv}', c={cutoff_value})",
+            'params': {'data': data, 'y': y, 'x': rv, 'c': cutoff_value},
         })
 
     elif design == 'iv':
@@ -649,7 +676,7 @@ def recommend(
         # adapt to weak instruments (Staiger-Stock 1997 rule of thumb
         # F=10; Stock-Yogo 2005 10% max-size critical value F=16.38
         # for one endogenous variable / one instrument).
-        first_stage_F = None
+        first_stage_F: Optional[float] = None
         weak_iv = False
         very_weak_iv = False
         if (treatment and z and treatment in data.columns
@@ -722,7 +749,7 @@ def recommend(
             else:
                 twoSLS_reason += ' (clears Stock-Yogo 10% max size).'
 
-        twoSLS_rec = {
+        twoSLS_rec: Dict[str, Any] = {
             'method': '2SLS (two-stage least squares)',
             'function': 'ivreg',
             'reason': twoSLS_reason,
@@ -757,7 +784,7 @@ def recommend(
                 '(Stock-Yogo 10% max size): LIML reduces 2SLS '
                 'weak-instrument bias.'
             )
-        liml_rec = {
+        liml_rec: Dict[str, Any] = {
             'method': 'LIML (robust to weak instruments)',
             'function': 'liml',
             'reason': liml_reason,
@@ -1133,7 +1160,7 @@ def recommend(
         head = recommendations[:k]
         tail = recommendations[k:]
 
-        def _sort_key(rec):
+        def _sort_key(rec: Dict[str, Any]) -> float:
             v = rec.get("verify") or {}
             s = v.get("score")
             if s is None or not np.isfinite(s):
@@ -1185,7 +1212,9 @@ def recommend(
     )
 
 
-def _filter_unstable_recommendations(recommendations):
+def _filter_unstable_recommendations(
+    recommendations: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
     """Drop recommendations whose function is experimental/deprecated.
 
     Returns ``(filtered_recommendations, dropped_function_names)``.
@@ -1196,10 +1225,13 @@ def _filter_unstable_recommendations(recommendations):
     """
     from ..registry import _REGISTRY, _ensure_full_registry  # local: avoid cycle
     _ensure_full_registry()
-    keep = []
-    dropped = []
+    keep: List[Dict[str, Any]] = []
+    dropped: List[str] = []
     for rec in recommendations:
         fn = rec.get("function")
+        if not isinstance(fn, str):
+            keep.append(rec)
+            continue
         spec = _REGISTRY.get(fn) if fn else None
         if spec is not None and spec.stability in {"experimental", "deprecated"}:
             dropped.append(fn)
@@ -1208,7 +1240,12 @@ def _filter_unstable_recommendations(recommendations):
     return keep, dropped
 
 
-def _enrich_with_agent_cards(recommendations, *, n_obs: int, warnings_list):
+def _enrich_with_agent_cards(
+    recommendations: List[Dict[str, Any]],
+    *,
+    n_obs: int,
+    warnings_list: List[str],
+) -> None:
     """Merge registry agent-card metadata into each recommendation in place.
 
     Adds keys ``agent_card`` (full card), ``pre_conditions``,

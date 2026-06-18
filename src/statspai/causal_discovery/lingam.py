@@ -22,7 +22,7 @@ This implementation uses the DirectLiNGAM algorithm (Shimizu 2011):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -46,7 +46,7 @@ def _negentropy_hyvarinen(x: np.ndarray) -> float:
     gamma = 0.37457
     t1 = k1 * (float(np.mean(np.log(np.cosh(z)))) - gamma) ** 2
     t2 = k2a * (float(np.mean(z * np.exp(-z ** 2 / 2.0)))) ** 2
-    return t1 + t2
+    return float(t1 + t2)
 
 
 def _mi_quadratic(x: np.ndarray, y: np.ndarray) -> float:
@@ -117,7 +117,9 @@ class LiNGAMResult:
     residuals: np.ndarray            # (n, k) final residuals
 
     def to_frame(self) -> pd.DataFrame:
-        return pd.DataFrame(self.adjacency, index=self.names, columns=self.names)
+        return pd.DataFrame(
+            self.adjacency, index=self.names, columns=self.names
+        )
 
     def edges(self, threshold: float = 0.05) -> List[tuple]:
         out = []
@@ -178,16 +180,22 @@ def _pick_exogenous(X: np.ndarray, remaining: List[int]) -> int:
             r_j_given_i = x_j - b_ji * x_i
             b_ij = np.cov(x_i, x_j)[0, 1] / max(np.var(x_j), 1e-12)
             r_i_given_j = x_i - b_ij * x_j
-            # If i is exogenous, residual r_{j|i} should be INDEPENDENT of x_i
+            # If i is exogenous, residual r_{j|i} should be independent of x_i
             # so mi(r_{j|i}, x_i) small; mi(r_{i|j}, x_j) large.
             # Diff = mi(r_{j|i}, x_i) - mi(r_{i|j}, x_j) should be ≤ 0.
-            diff = _mi_quadratic(r_j_given_i, x_i) - _mi_quadratic(r_i_given_j, x_j)
+            diff = (
+                _mi_quadratic(r_j_given_i, x_i)
+                - _mi_quadratic(r_i_given_j, x_j)
+            )
             total += min(0.0, diff) ** 2
         scores.append((i, total))
     return min(scores, key=lambda t: t[1])[0]
 
 
-def lingam(data, standardize: bool = True) -> LiNGAMResult:
+def lingam(
+    data: Union[pd.DataFrame, np.ndarray],
+    standardize: bool = True,
+) -> LiNGAMResult:
     """Fit DirectLiNGAM (Shimizu 2011).
 
     Parameters

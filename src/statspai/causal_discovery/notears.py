@@ -18,7 +18,7 @@ Zheng, X., Aragam, B., Ravikumar, P., & Xing, E. P. (2018).
 Advances in Neural Information Processing Systems, 31. [@zheng2018dags]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
@@ -155,7 +155,7 @@ class NOTEARS:
         rho_max: float = 1e16,
         w_threshold: float = 0.3,
         random_state: int = 42,
-    ):
+    ) -> None:
         self.data = data
         self.variables = variables
         self.lambda1 = lambda1
@@ -183,7 +183,9 @@ class NOTEARS:
 
         n, d = X.shape
         if d < 2:
-            raise ValueError("At least 2 variables are required for DAG learning")
+            raise ValueError(
+                "At least 2 variables are required for DAG learning"
+            )
 
         # Standardise
         X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
@@ -204,7 +206,9 @@ class NOTEARS:
         for i in range(d):
             for j in range(d):
                 if W_est[i, j] != 0:
-                    edges.append((var_names[i], var_names[j], float(W_est[i, j])))
+                    edges.append(
+                        (var_names[i], var_names[j], float(W_est[i, j]))
+                    )
         edges.sort(key=lambda e: abs(e[2]), reverse=True)
 
         dag_binary = (np.abs(W_est) > 0).astype(int)
@@ -226,7 +230,12 @@ class NOTEARS:
             'w_threshold': self.w_threshold,
         })
 
-    def _notears_linear(self, X, d, n):
+    def _notears_linear(
+        self,
+        X: np.ndarray,
+        d: int,
+        n: int,
+    ) -> np.ndarray:
         """
         Solve the NOTEARS optimisation via augmented Lagrangian.
 
@@ -265,10 +274,18 @@ class NOTEARS:
 
         return W
 
-    def _solve_inner(self, X, W_init, rho, alpha, d, n):
+    def _solve_inner(
+        self,
+        X: np.ndarray,
+        W_init: np.ndarray,
+        rho: float,
+        alpha: float,
+        d: int,
+        n: int,
+    ) -> np.ndarray:
         """Solve inner L-BFGS-B problem for fixed rho, alpha."""
 
-        def _objective(w_flat):
+        def _objective(w_flat: np.ndarray) -> float:
             W = w_flat.reshape(d, d)
 
             # Least-squares loss: 0.5/n * ||X - X@W||_F^2
@@ -281,9 +298,9 @@ class NOTEARS:
             # Augmented Lagrangian terms
             obj = loss + alpha * h + 0.5 * rho * h * h
 
-            return obj
+            return float(obj)
 
-        def _gradient(w_flat):
+        def _gradient(w_flat: np.ndarray) -> np.ndarray:
             W = w_flat.reshape(d, d)
 
             # Gradient of least-squares loss
@@ -298,7 +315,7 @@ class NOTEARS:
 
             grad = grad_loss + (alpha + rho * _h_func(W)) * grad_h
 
-            return grad.ravel()
+            return np.asarray(grad.ravel(), dtype=float)
 
         # Use L-BFGS-B with bounds to implement L1 via variable splitting
         # For simplicity, use proximal gradient for L1
@@ -319,7 +336,7 @@ class NOTEARS:
 
             bounds = [(0, None)] * (2 * d2)
 
-            def _obj_split(w):
+            def _obj_split(w: np.ndarray) -> float:
                 wp = w[:d2].reshape(d, d)
                 wm = w[d2:].reshape(d, d)
                 W = wp - wm
@@ -327,9 +344,9 @@ class NOTEARS:
                 loss = 0.5 / n * np.sum(R ** 2)
                 h = _h_func(W)
                 l1 = self.lambda1 * (np.sum(wp) + np.sum(wm))
-                return loss + alpha * h + 0.5 * rho * h * h + l1
+                return float(loss + alpha * h + 0.5 * rho * h * h + l1)
 
-            def _grad_split(w):
+            def _grad_split(w: np.ndarray) -> np.ndarray:
                 wp = w[:d2].reshape(d, d)
                 wm = w[d2:].reshape(d, d)
                 W = wp - wm
@@ -344,7 +361,7 @@ class NOTEARS:
                 grad = np.zeros(2 * d2)
                 grad[:d2] = (grad_W + self.lambda1).ravel()
                 grad[d2:] = (-grad_W + self.lambda1).ravel()
-                return grad
+                return np.asarray(grad, dtype=float)
 
             result = minimize(
                 _obj_split, w0,
@@ -354,7 +371,10 @@ class NOTEARS:
                 options={'maxiter': 1000, 'ftol': 1e-12},
             )
             w_opt = result.x
-            W_opt = w_opt[:d2].reshape(d, d) - w_opt[d2:].reshape(d, d)
+            W_opt = np.asarray(
+                w_opt[:d2].reshape(d, d) - w_opt[d2:].reshape(d, d),
+                dtype=float,
+            )
         else:
             w0 = W_init.ravel()
             result = minimize(
@@ -363,7 +383,7 @@ class NOTEARS:
                 method='L-BFGS-B',
                 options={'maxiter': 1000, 'ftol': 1e-12},
             )
-            W_opt = result.x.reshape(d, d)
+            W_opt = np.asarray(result.x.reshape(d, d), dtype=float)
 
         # Zero out diagonal (no self-loops)
         np.fill_diagonal(W_opt, 0)
@@ -408,7 +428,7 @@ class NOTEARS:
 # Acyclicity constraint
 # ======================================================================
 
-def _h_func(W):
+def _h_func(W: np.ndarray) -> float:
     """
     Acyclicity constraint: h(W) = tr(e^{W o W}) - d.
 

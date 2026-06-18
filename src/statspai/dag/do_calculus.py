@@ -19,8 +19,14 @@ Rule 3  (insertion/deletion of actions):
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Set
+from typing import Any
+
+
+NodeInput = str | Iterable[str] | None
+NodeSet = set[str]
 
 
 @dataclass
@@ -30,11 +36,11 @@ class RuleCheck:
     Attributes
     ----------
     applicable : bool
-        Whether the rule's d-separation condition holds (so the rewrite is licensed).
+        Whether the rule's d-separation condition holds.
     rule : int
         Which rule was checked (1, 2, or 3).
     reason : str
-        Human-readable statement of the (failed or satisfied) d-separation condition.
+        Human-readable statement of the rule's d-separation condition.
     transformed : str
         The resulting interventional expression; unchanged if not applicable.
 
@@ -55,7 +61,13 @@ class RuleCheck:
     transformed: str
 
 
-def rule1(dag, Y, X, Z, W=None) -> RuleCheck:
+def rule1(
+    dag: Any,
+    Y: NodeInput,
+    X: NodeInput,
+    Z: NodeInput,
+    W: NodeInput = None,
+) -> RuleCheck:
     """Check Rule 1: can we *insert or delete observation* of Z?
 
     Rule 1 licenses ``P(y | do(x), z, w) = P(y | do(x), w)`` when
@@ -75,18 +87,29 @@ def rule1(dag, Y, X, Z, W=None) -> RuleCheck:
     mutilated = _bar(dag, into=X)
     ok = _d_separated(mutilated, Y, Z, X | W)
     reason = (
-        f"(Y ⊥ Z | X,W) in G_{{bar X}}" if ok
-        else f"Y and Z are NOT d-separated given X,W in G_{{bar X}}"
+        "(Y ⊥ Z | X,W) in G_{bar X}" if ok
+        else "Y and Z are NOT d-separated given X,W in G_{bar X}"
     )
     transformed = (
         f"P({_s(Y)} | do({_s(X)}), {_s(W)})"
         if ok
         else f"P({_s(Y)} | do({_s(X)}), {_s(Z)}, {_s(W)})  [unchanged]"
     )
-    return RuleCheck(applicable=ok, rule=1, reason=reason, transformed=transformed)
+    return RuleCheck(
+        applicable=ok,
+        rule=1,
+        reason=reason,
+        transformed=transformed,
+    )
 
 
-def rule2(dag, Y, X, Z, W=None) -> RuleCheck:
+def rule2(
+    dag: Any,
+    Y: NodeInput,
+    X: NodeInput,
+    Z: NodeInput,
+    W: NodeInput = None,
+) -> RuleCheck:
     """Check Rule 2: can do(Z) be swapped for observing Z?
 
     Rule 2 licenses ``P(y | do(x), do(z), w) = P(y | do(x), z, w)`` when
@@ -107,7 +130,7 @@ def rule2(dag, Y, X, Z, W=None) -> RuleCheck:
     mutilated = _bar(_underline(dag, out_of=Z), into=X)
     ok = _d_separated(mutilated, Y, Z, X | W)
     reason = (
-        f"(Y ⊥ Z | X,W) in G_{{bar X, underline Z}}" if ok
+        "(Y ⊥ Z | X,W) in G_{bar X, underline Z}" if ok
         else "Y and Z not d-separated in G_{bar X, underline Z}"
     )
     transformed = (
@@ -115,10 +138,21 @@ def rule2(dag, Y, X, Z, W=None) -> RuleCheck:
         if ok
         else f"P({_s(Y)} | do({_s(X)}), do({_s(Z)}), {_s(W)})  [unchanged]"
     )
-    return RuleCheck(applicable=ok, rule=2, reason=reason, transformed=transformed)
+    return RuleCheck(
+        applicable=ok,
+        rule=2,
+        reason=reason,
+        transformed=transformed,
+    )
 
 
-def rule3(dag, Y, X, Z, W=None) -> RuleCheck:
+def rule3(
+    dag: Any,
+    Y: NodeInput,
+    X: NodeInput,
+    Z: NodeInput,
+    W: NodeInput = None,
+) -> RuleCheck:
     """Check Rule 3: can we delete do(Z)?
 
     Rule 3 licenses ``P(y | do(x), do(z), w) = P(y | do(x), w)`` when
@@ -144,17 +178,28 @@ def rule3(dag, Y, X, Z, W=None) -> RuleCheck:
     ok = _d_separated(mutilated, Y, Z, X | W)
     reason = (
         f"(Y ⊥ Z | X,W) in G_{{bar X, bar Z(W)}}, Z(W) = {sorted(Z_W)}"
-        if ok else f"Y,Z not d-separated in G_{{bar X, bar Z(W)}}"
+        if ok else "Y,Z not d-separated in G_{bar X, bar Z(W)}"
     )
     transformed = (
         f"P({_s(Y)} | do({_s(X)}), {_s(W)})"
         if ok
         else f"P({_s(Y)} | do({_s(X)}), do({_s(Z)}), {_s(W)})  [unchanged]"
     )
-    return RuleCheck(applicable=ok, rule=3, reason=reason, transformed=transformed)
+    return RuleCheck(
+        applicable=ok,
+        rule=3,
+        reason=reason,
+        transformed=transformed,
+    )
 
 
-def apply_rules(dag, Y, X, Z, W=None) -> list[RuleCheck]:
+def apply_rules(
+    dag: Any,
+    Y: NodeInput,
+    X: NodeInput,
+    Z: NodeInput,
+    W: NodeInput = None,
+) -> list[RuleCheck]:
     """Try all three rules and return every applicable simplification.
 
     Examples
@@ -167,14 +212,18 @@ def apply_rules(dag, Y, X, Z, W=None) -> list[RuleCheck]:
     >>> bool(checks[0].applicable)  # Rule 1 fires on this chain
     True
     """
-    return [rule1(dag, Y, X, Z, W), rule2(dag, Y, X, Z, W), rule3(dag, Y, X, Z, W)]
+    return [
+        rule1(dag, Y, X, Z, W),
+        rule2(dag, Y, X, Z, W),
+        rule3(dag, Y, X, Z, W),
+    ]
 
 
 # --------------------------------------------------------------------------- #
 #  Graph mutilation helpers
 # --------------------------------------------------------------------------- #
 
-def _bar(dag, into: Iterable[str]):
+def _bar(dag: Any, into: Iterable[str]) -> Any:
     """G_{bar S}: remove all edges INTO nodes in S."""
     from .graph import DAG as _DAG
     S = set(into)
@@ -188,7 +237,7 @@ def _bar(dag, into: Iterable[str]):
     return new
 
 
-def _underline(dag, out_of: Iterable[str]):
+def _underline(dag: Any, out_of: Iterable[str]) -> Any:
     """G_{underline S}: remove all edges OUT of nodes in S."""
     from .graph import DAG as _DAG
     S = set(out_of)
@@ -203,8 +252,8 @@ def _underline(dag, out_of: Iterable[str]):
     return new
 
 
-def _ancestors_in(dag, nodes: Iterable[str]) -> Set[str]:
-    result: Set[str] = set()
+def _ancestors_in(dag: Any, nodes: Iterable[str]) -> NodeSet:
+    result: NodeSet = set()
     stack = list(nodes)
     while stack:
         v = stack.pop()
@@ -217,12 +266,19 @@ def _ancestors_in(dag, nodes: Iterable[str]) -> Set[str]:
     return result
 
 
-def _d_separated(dag, A, B, C) -> bool:
+def _d_separated(
+    dag: Any,
+    A: Iterable[str],
+    B: Iterable[str],
+    C: Iterable[str],
+) -> bool:
     """Standard d-separation via moralisation of the ancestral subgraph.
 
     A classic textbook algorithm — fine for reasonably sized DAGs.
     """
-    A = set(A); B = set(B); C = set(C)
+    A = set(A)
+    B = set(B)
+    C = set(C)
     nodes = A | B | C
     anc = set()
     stack = list(nodes)
@@ -236,8 +292,8 @@ def _d_separated(dag, A, B, C) -> bool:
                 stack.append(p)
     # Build undirected moralized ancestral graph: add parent--child edges, then
     # "marry" the co-parents of each node (parents that share a common child).
-    adj: dict[str, Set[str]] = {v: set() for v in anc}
-    parents_in: dict[str, list] = {v: [] for v in anc}
+    adj: dict[str, NodeSet] = {v: set() for v in anc}
+    parents_in: dict[str, list[str]] = {v: [] for v in anc}
     for p, ch in dag._edges.items():
         if p not in anc:
             continue
@@ -275,8 +331,13 @@ def _d_separated(dag, A, B, C) -> bool:
     return True
 
 
-def _standardize(Y, X, Z, W):
-    def _mk(s):
+def _standardize(
+    Y: NodeInput,
+    X: NodeInput,
+    Z: NodeInput,
+    W: NodeInput,
+) -> tuple[NodeSet, NodeSet, NodeSet, NodeSet]:
+    def _mk(s: NodeInput) -> NodeSet:
         if s is None:
             return set()
         if isinstance(s, str):

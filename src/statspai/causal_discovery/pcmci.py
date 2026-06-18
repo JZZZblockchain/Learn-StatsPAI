@@ -27,7 +27,8 @@ References
 ----------
 Runge, J., Nowack, P., Kretschmer, M., Flaxman, S. & Sejdinovic, D.
 (2019). "Detecting and quantifying causal associations in large
-nonlinear time series datasets." *Science Advances*, 5(11). [@runge2019detecting]
+nonlinear time series datasets." *Science Advances*, 5(11).
+[@runge2019detecting]
 
 Runge, J. (2020). "Discovering contemporaneous and lagged causal
 relations in autocorrelated nonlinear time series datasets."
@@ -39,8 +40,8 @@ Prediction, and Search*, 2nd ed. [@spirtes2000causation]
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -125,11 +126,13 @@ def _make_lagged(X: np.ndarray, tau_max: int) -> Tuple[np.ndarray, np.ndarray]:
     if tau_max < 1:
         raise ValueError("tau_max must be >= 1")
     if T <= tau_max + 1:
-        raise ValueError(f"Need at least tau_max+2 = {tau_max+2} time points.")
+        raise ValueError(
+            f"Need at least tau_max+2 = {tau_max+2} time points."
+        )
     Y = X[tau_max:]  # (T - tau_max, d)
     blocks = []
     for lag in range(1, tau_max + 1):
-        blocks.append(X[tau_max - lag : T - lag])
+        blocks.append(X[tau_max - lag: T - lag])
     lagged = np.hstack(blocks)  # (T - tau_max, d * tau_max)
     return Y, lagged
 
@@ -184,8 +187,9 @@ class PCMCIResult:
     variables: List[str]
     tau_max: int
     alpha: float
-    p_matrix: np.ndarray   # shape (tau_max + 1, d, d)  p[lag, i, j]: edge X_i^{t-lag} → X_j^t
-    val_matrix: np.ndarray # partial correlation strength, same shape
+    # shape (tau_max + 1, d, d); p[lag, i, j] tests X_i^{t-lag} -> X_j^t
+    p_matrix: np.ndarray
+    val_matrix: np.ndarray  # partial correlation strength, same shape
     adjacency: np.ndarray  # boolean, same shape
     n_effective: int
     method: str = "PCMCI (Runge et al. 2019)"
@@ -239,7 +243,9 @@ def pcmci(
     tau_max: int = 3,
     pc_alpha: float = 0.05,
     mci_alpha: Optional[float] = None,
-    ci_test: Optional[Callable[[np.ndarray, np.ndarray, Optional[np.ndarray]], float]] = None,
+    ci_test: Optional[
+        Callable[[np.ndarray, np.ndarray, Optional[np.ndarray]], float]
+    ] = None,
     max_conds_dim: Optional[int] = None,
     verbose: bool = False,
 ) -> PCMCIResult:
@@ -362,28 +368,32 @@ def pcmci(
                 cond_coords: List[Tuple[int, int]] = list(parents[j])
                 for (k, sigma) in parents[i]:
                     new_lag = sigma + tau
-                    if 1 <= new_lag <= tau_max and (k, new_lag) not in cond_coords:
+                    if (
+                        1 <= new_lag <= tau_max
+                        and (k, new_lag) not in cond_coords
+                    ):
                         cond_coords.append((k, new_lag))
                 # Remove the candidate itself if it slipped in
                 cond_coords = [c for c in cond_coords if c != (i, tau)]
 
                 x_arr = L[:, _coord(i, tau, d)]
                 y_arr = Y[:, j]
+                Z_cond: Optional[np.ndarray]
                 if cond_coords:
-                    Z = np.column_stack(
+                    Z_cond = np.column_stack(
                         [L[:, _coord(k, s, d)] for (k, s) in cond_coords]
                     )
                 else:
-                    Z = None
+                    Z_cond = None
 
-                p = ci(x_arr, y_arr, Z)
+                p = ci(x_arr, y_arr, Z_cond)
                 p_matrix[tau, i, j] = p
 
                 # Also store the residual correlation magnitude
-                if Z is None:
+                if Z_cond is None:
                     r, _ = stats.pearsonr(x_arr, y_arr)
                 else:
-                    Z_aug = np.column_stack([np.ones(len(x_arr)), Z])
+                    Z_aug = np.column_stack([np.ones(len(x_arr)), Z_cond])
                     bx, *_ = np.linalg.lstsq(Z_aug, x_arr, rcond=None)
                     by, *_ = np.linalg.lstsq(Z_aug, y_arr, rcond=None)
                     rx = x_arr - Z_aug @ bx

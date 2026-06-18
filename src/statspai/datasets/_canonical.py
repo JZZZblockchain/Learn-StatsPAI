@@ -469,11 +469,22 @@ def nsw_dw(seed: int = 42) -> pd.DataFrame:
     # Outcome: homogeneous effect of 1794 on treated; controls have
     # high re78 driven by their demographics.  Calibrated so that
     # naive OLS(re78 ~ treat) gives ≈ -$8,500 (Dehejia-Wahba 1999).
-    def _re78(age, educ, black, hisp, married, re74, re75, treat):
+    def _re78(
+        age: np.ndarray,
+        educ: np.ndarray,
+        black: np.ndarray,
+        hisp: np.ndarray,
+        married: np.ndarray,
+        re74: np.ndarray,
+        re75: np.ndarray,
+        treat: np.ndarray,
+    ) -> np.ndarray:
         base = (-500 + 40*age + 250*educ - 800*black - 200*hisp
                 + 700*married + 0.25*re74 + 0.22*re75)
-        return np.maximum(0.0, base + 1794*treat +
-                          rng.normal(0, 5800, len(age)))
+        return np.asarray(
+            np.maximum(0.0, base + 1794*treat + rng.normal(0, 5800, len(age))),
+            dtype=float,
+        )
 
     re78_t = _re78(age_t, educ_t, black_t, hisp_t, married_t,
                    re74_t, re75_t, np.ones(n_t))

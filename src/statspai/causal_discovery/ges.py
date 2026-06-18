@@ -15,7 +15,7 @@ the Markov equivalence class of the true DAG.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,7 @@ def _bic_score_local(data: np.ndarray, j: int, parents: List[int]) -> float:
         rss = float(np.sum((y - X @ beta) ** 2))
         k = len(parents) + 1
     rss = max(rss, 1e-12)
-    return n * np.log(rss / n) + k * np.log(n)
+    return float(n * np.log(rss / n) + k * np.log(n))
 
 
 def _total_bic(data: np.ndarray, adj: np.ndarray) -> float:
@@ -75,12 +75,14 @@ class GESResult:
     True
     """
 
-    adjacency: np.ndarray            # CPDAG adjacency (may have undirected edges)
+    adjacency: np.ndarray
     names: List[str]
     bic: float
 
     def to_frame(self) -> pd.DataFrame:
-        return pd.DataFrame(self.adjacency, index=self.names, columns=self.names)
+        return pd.DataFrame(
+            self.adjacency, index=self.names, columns=self.names
+        )
 
     def edges(self) -> List[Tuple[str, str, str]]:
         out = []
@@ -113,7 +115,10 @@ class GESResult:
         return self.summary()
 
 
-def ges(data, max_iter: int = 500) -> GESResult:
+def ges(
+    data: Union[pd.DataFrame, np.ndarray],
+    max_iter: int = 500,
+) -> GESResult:
     """Greedy Equivalence Search.
 
     Parameters
@@ -153,7 +158,7 @@ def ges(data, max_iter: int = 500) -> GESResult:
     n, p = X.shape
     adj = np.zeros((p, p), dtype=int)
 
-    def _score():
+    def _score() -> float:
         return _total_bic(X, adj)
 
     best_bic = _score()
@@ -162,6 +167,7 @@ def ges(data, max_iter: int = 500) -> GESResult:
     for _ in range(max_iter):
         best_gain = 0.0
         best_edge = None
+        best_new_bic = best_bic
         for i in range(p):
             for j in range(p):
                 if i == j or adj[i, j]:
@@ -183,6 +189,7 @@ def ges(data, max_iter: int = 500) -> GESResult:
     for _ in range(max_iter):
         best_gain = 0.0
         best_edge = None
+        best_new_bic = best_bic
         for i in range(p):
             for j in range(p):
                 if adj[i, j] == 0:

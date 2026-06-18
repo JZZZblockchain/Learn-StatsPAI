@@ -24,7 +24,7 @@ Order-independent constraint-based causal structure learning.
 JMLR, 15, 3921-3962.
 """
 
-from typing import Optional, List, Dict, Any, Set, Tuple
+from typing import Optional, List, Dict, Any, Tuple
 from itertools import combinations
 import numpy as np
 import pandas as pd
@@ -164,7 +164,7 @@ class PCAlgorithm:
         ci_test: str = 'fisherz',
         forbidden: Optional[List[Tuple[str, str]]] = None,
         required: Optional[List[Tuple[str, str]]] = None,
-    ):
+    ) -> None:
         self.data = data
         self.variables = variables
         self.alpha = alpha
@@ -200,7 +200,7 @@ class PCAlgorithm:
         # over a superset (e.g. an LLM-proposed edge involving a column
         # the user excluded) and shouldn't get a hard error.
         name_to_idx = {n: i for i, n in enumerate(var_names)}
-        forbidden_idx = set()
+        forbidden_idx: set[tuple[int, int]] = set()
         for a, b in self.forbidden:
             ia = name_to_idx.get(a)
             ib = name_to_idx.get(b)
@@ -208,8 +208,8 @@ class PCAlgorithm:
                 continue
             forbidden_idx.add((ia, ib))
             forbidden_idx.add((ib, ia))
-        required_idx_directed = []
-        required_idx_undirected = set()
+        required_idx_directed: list[tuple[int, int]] = []
+        required_idx_undirected: set[tuple[int, int]] = set()
         for a, b in self.required:
             ia = name_to_idx.get(a)
             ib = name_to_idx.get(b)
@@ -255,7 +255,11 @@ class PCAlgorithm:
             key = (var_names[i], var_names[j])
             sep_sets_named[key] = {var_names[k] for k in s}
 
-        skeleton_df = pd.DataFrame(skeleton, index=var_names, columns=var_names)
+        skeleton_df = pd.DataFrame(
+            skeleton,
+            index=var_names,
+            columns=var_names,
+        )
         cpdag_df = pd.DataFrame(cpdag, index=var_names, columns=var_names)
 
         total_edges = len(directed_edges) + len(undirected_edge_names)
@@ -277,7 +281,13 @@ class PCAlgorithm:
             'ci_test': self.ci_test,
         })
 
-    def _learn_skeleton(self, X, d, n, max_k):
+    def _learn_skeleton(
+        self,
+        X: np.ndarray,
+        d: int,
+        n: int,
+        max_k: int,
+    ) -> tuple[np.ndarray, dict[tuple[int, int], set[int]]]:
         """
         Phase I: Learn the skeleton via conditional independence tests.
 
@@ -293,7 +303,7 @@ class PCAlgorithm:
             adj[ib, ia] = 0
 
         # Separating sets
-        sep_sets: Dict[Tuple[int, int], set] = {}
+        sep_sets: dict[tuple[int, int], set[int]] = {}
 
         for k in range(max_k + 1):
             # For each pair of adjacent nodes
@@ -324,7 +334,11 @@ class PCAlgorithm:
                 # background knowledge takes precedence over CI-test
                 # independence calls. We still skip the test loop so
                 # we don't waste compute on edges we won't drop.
-                if (i, j) in getattr(self, '_required_idx_undirected', set()):
+                if (i, j) in getattr(
+                    self,
+                    '_required_idx_undirected',
+                    set(),
+                ):
                     continue
                 for S in combinations(candidates, k):
                     S_set = set(S)
@@ -344,7 +358,12 @@ class PCAlgorithm:
 
         return adj, sep_sets
 
-    def _orient_edges(self, adj, sep_sets, d):
+    def _orient_edges(
+        self,
+        adj: np.ndarray,
+        sep_sets: dict[tuple[int, int], set[int]],
+        d: int,
+    ) -> np.ndarray:
         """
         Phase II: Orient edges to form CPDAG.
 
@@ -424,7 +443,14 @@ class PCAlgorithm:
 
         return cpdag
 
-    def _ci_test_pval(self, X, i, j, S, n):
+    def _ci_test_pval(
+        self,
+        X: np.ndarray,
+        i: int,
+        j: int,
+        S: list[int],
+        n: int,
+    ) -> float:
         """
         Conditional independence test: X_i _||_ X_j | X_S.
 
@@ -433,7 +459,9 @@ class PCAlgorithm:
         if self.ci_test == 'fisherz':
             return _fisher_z_test(X, i, j, S, n)
         else:
-            raise ValueError(f"Unknown CI test: {self.ci_test}. Use 'fisherz'.")
+            raise ValueError(
+                f"Unknown CI test: {self.ci_test}. Use 'fisherz'."
+            )
 
     def summary(self) -> str:
         """Print a summary of the learned structure."""
@@ -466,13 +494,17 @@ class PCAlgorithm:
             lines.append("  Directed Edges:")
             lines.append("  " + "-" * 40)
             for i, j in directed:
-                lines.append(f"    {self._var_names[i]} -> {self._var_names[j]}")
+                lines.append(
+                    f"    {self._var_names[i]} -> {self._var_names[j]}"
+                )
 
         if undirected:
             lines.append("  Undirected Edges:")
             lines.append("  " + "-" * 40)
             for i, j in undirected:
-                lines.append(f"    {self._var_names[i]} -- {self._var_names[j]}")
+                lines.append(
+                    f"    {self._var_names[i]} -- {self._var_names[j]}"
+                )
 
         lines.append("=" * 60)
         return "\n".join(lines)
@@ -482,7 +514,13 @@ class PCAlgorithm:
 # Conditional Independence Tests
 # ======================================================================
 
-def _fisher_z_test(X, i, j, S, n):
+def _fisher_z_test(
+    X: np.ndarray,
+    i: int,
+    j: int,
+    S: list[int],
+    n: int,
+) -> float:
     """
     Fisher's Z test for conditional independence via partial correlation.
 
@@ -511,7 +549,7 @@ def _fisher_z_test(X, i, j, S, n):
         r = _partial_correlation(X, i, j, S)
 
     # Clip for numerical stability
-    r = np.clip(r, -1 + 1e-10, 1 - 1e-10)
+    r = float(np.clip(r, -1 + 1e-10, 1 - 1e-10))
 
     # Fisher's Z transformation
     z = 0.5 * np.log((1 + r) / (1 - r))
@@ -525,7 +563,12 @@ def _fisher_z_test(X, i, j, S, n):
     return float(pval)
 
 
-def _partial_correlation(X, i, j, S):
+def _partial_correlation(
+    X: np.ndarray,
+    i: int,
+    j: int,
+    S: list[int],
+) -> float:
     """
     Compute partial correlation of X_i and X_j given X_S.
 
@@ -541,6 +584,6 @@ def _partial_correlation(X, i, j, S):
         denom = np.sqrt(abs(P[0, 0] * P[1, 1]))
         if denom < 1e-15:
             return 0.0
-        return -P[0, 1] / denom
+        return float(-P[0, 1] / denom)
     except np.linalg.LinAlgError:
         return 0.0

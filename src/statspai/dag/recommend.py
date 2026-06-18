@@ -16,7 +16,7 @@ Rules (checked in priority order):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Set
+from typing import Any, List, Optional, Sequence, Set
 
 
 __all__ = ["EstimatorRecommendation", "recommend_estimator"]
@@ -24,10 +24,10 @@ __all__ = ["EstimatorRecommendation", "recommend_estimator"]
 
 @dataclass
 class EstimatorRecommendation:
-    estimator: str                       # statspai function name
-    sp_call: str                         # example sp.xxx(...) string
-    identification: str                  # identification assumption in plain English
-    adjustment_set: Optional[Set[str]]   # what to condition on, if any
+    estimator: str  # statspai function name
+    sp_call: str  # example sp.xxx(...) string
+    identification: str  # identification assumption in plain English
+    adjustment_set: Optional[Set[str]]  # what to condition on, if any
     instrument: Optional[str] = None
     mediators: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -49,7 +49,9 @@ class EstimatorRecommendation:
         if self.instrument:
             lines.append(f"  Instrument            : {self.instrument}")
         if self.mediators:
-            lines.append(f"  Mediators on path     : {', '.join(self.mediators)}")
+            lines.append(
+                f"  Mediators on path     : {', '.join(self.mediators)}"
+            )
         if self.alternatives:
             lines.append("  Alternatives          :")
             for alt in self.alternatives:
@@ -62,10 +64,10 @@ class EstimatorRecommendation:
 
 
 def recommend_estimator(
-    dag,
+    dag: Any,
     exposure: str,
     outcome: str,
-    candidate_instruments: Optional[List[str]] = None,
+    candidate_instruments: Optional[Sequence[str]] = None,
 ) -> EstimatorRecommendation:
     """Inspect a DAG and recommend a statspai estimator.
 
@@ -132,8 +134,14 @@ def recommend_estimator(
             alternatives=[
                 f"sp.ipw(treat='{exposure}', outcome='{outcome}', "
                 f"covariates={sorted(s)!r})",
-                "sp.aipw(...): doubly-robust combination of IPW + outcome model",
-                f"sp.match(..., covariates={sorted(s)!r}): propensity-score matching",
+                (
+                    "sp.aipw(...): doubly-robust combination of IPW + "
+                    "outcome model"
+                ),
+                (
+                    f"sp.match(..., covariates={sorted(s)!r}): "
+                    "propensity-score matching"
+                ),
             ] + alternatives,
         )
 
@@ -144,7 +152,10 @@ def recommend_estimator(
     if iv_candidate is not None:
         return EstimatorRecommendation(
             estimator="iv",
-            sp_call=f"sp.iv('{outcome} ~ [{exposure} ~ {iv_candidate}]', data=df)",
+            sp_call=(
+                f"sp.iv('{outcome} ~ [{exposure} ~ {iv_candidate}]', "
+                "data=df)"
+            ),
             identification=(
                 f"Unobserved confounding blocks backdoor adjustment, but "
                 f"{iv_candidate} satisfies the exclusion restriction "
@@ -156,7 +167,10 @@ def recommend_estimator(
             alternatives=[
                 "sp.liml(...): weak-IV-robust LIML",
                 "sp.anderson_rubin_ci(...): weak-IV-robust CI",
-                f"sp.bartik(...): shift-share IV if {iv_candidate} is a shift-share",
+                (
+                    f"sp.bartik(...): shift-share IV if {iv_candidate} "
+                    "is a shift-share"
+                ),
             ] + alternatives,
         )
 
@@ -166,12 +180,14 @@ def recommend_estimator(
         return EstimatorRecommendation(
             estimator="front_door",
             sp_call=(
-                f"sp.front_door(df, exposure='{exposure}', outcome='{outcome}', "
+                f"sp.front_door(df, exposure='{exposure}', "
+                f"outcome='{outcome}', "
                 f"mediators={sorted(fd_set)!r})"
             ),
             identification=(
                 f"Front-door criterion: mediators {sorted(fd_set)} capture "
-                f"the full causal pathway and have no open backdoor to {outcome}."
+                "the full causal pathway and have no open backdoor to "
+                f"{outcome}."
             ),
             adjustment_set=None,
             mediators=list(fd_set),
@@ -185,13 +201,18 @@ def recommend_estimator(
     )
     return EstimatorRecommendation(
         estimator="identify",
-        sp_call=f"sp.dag.identify(dag, '{exposure}', '{outcome}')  # to see why",
+        sp_call=(
+            f"sp.dag.identify(dag, '{exposure}', '{outcome}')  # to see why"
+        ),
         identification="Not identifiable under the declared DAG.",
         adjustment_set=None,
         mediators=mediators,
         alternatives=[
             "sp.proximal(...): use proxies for unmeasured confounding",
-            "sp.lee_bounds(...) / sp.manski_bounds(...): partial identification",
+            (
+                "sp.lee_bounds(...) / sp.manski_bounds(...): partial "
+                "identification"
+            ),
             "sp.sensemakr(...): sensitivity to unobserved confounding",
         ] + alternatives,
         warnings=warnings,
@@ -203,7 +224,7 @@ def recommend_estimator(
 # --------------------------------------------------------------------------- #
 
 
-def _causal_mediators(dag, x: str, y: str) -> List[str]:
+def _causal_mediators(dag: Any, x: str, y: str) -> List[str]:
     """Nodes lying on a directed path from X to Y (excluding endpoints)."""
     descendants_x = dag.descendants(x)
     ancestors_y = dag.ancestors(y)
@@ -212,21 +233,24 @@ def _causal_mediators(dag, x: str, y: str) -> List[str]:
 
 
 def _find_instrument(
-    dag,
+    dag: Any,
     exposure: str,
     outcome: str,
-    candidates: Optional[List[str]],
+    candidates: Optional[Sequence[str]],
 ) -> Optional[str]:
     """Search for a node Z that:
       - has a directed path to ``exposure``,
       - has no directed path to ``outcome`` other than through ``exposure``,
-      - is d-separated from ``outcome`` given ``exposure`` and the unconfounded set.
+      - is d-separated from ``outcome`` given ``exposure`` and the
+        unconfounded set.
 
     This is a heuristic IV finder — not a full identification check.
     """
     if candidates is None:
-        candidates = [n for n in dag.observed_nodes
-                      if n not in (exposure, outcome)]
+        candidates = [
+            n for n in dag.observed_nodes
+            if n not in (exposure, outcome)
+        ]
 
     desc_x = dag.descendants(exposure)
     for z in candidates:
@@ -244,7 +268,12 @@ def _find_instrument(
     return None
 
 
-def _frontdoor_set(dag, x: str, y: str, mediators: List[str]) -> Set[str]:
+def _frontdoor_set(
+    dag: Any,
+    x: str,
+    y: str,
+    mediators: Sequence[str],
+) -> Set[str]:
     """Identify a frontdoor set: mediators such that
       - all directed paths X -> Y pass through them,
       - they have no unblocked backdoor to Y,

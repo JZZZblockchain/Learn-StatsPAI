@@ -16,21 +16,27 @@ Usage
 >>> print(audit.summary())
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Any, List, Optional, Sequence
 import numpy as np
 import pandas as pd
-import warnings
 
 from ..workflow._degradation import (
-    WorkflowDegradedWarning,
     record_degradation,
 )
 
 
 class AssumptionCheck:
     """A single assumption test result."""
-    def __init__(self, assumption, test_name, passed, statistic,
-                 p_value, detail, remedy):
+    def __init__(
+        self,
+        assumption: str,
+        test_name: str,
+        passed: Optional[bool],
+        statistic: Any,
+        p_value: Optional[float],
+        detail: str,
+        remedy: str,
+    ) -> None:
         self.assumption = assumption
         self.test_name = test_name
         self.passed = passed  # True/False/None (inconclusive)
@@ -39,8 +45,14 @@ class AssumptionCheck:
         self.detail = detail
         self.remedy = remedy
 
-    def __repr__(self):
-        status = "✓ PASS" if self.passed else "✗ FAIL" if self.passed is False else "? INCONCLUSIVE"
+    def __repr__(self) -> str:
+        status = (
+            "✓ PASS"
+            if self.passed
+            else "✗ FAIL"
+            if self.passed is False
+            else "? INCONCLUSIVE"
+        )
         return f"{status} | {self.assumption}: {self.test_name}"
 
 
@@ -73,8 +85,16 @@ class AssumptionResult:
     True
     """
 
-    def __init__(self, method, checks, overall_grade, n_pass, n_fail,
-                 n_inconclusive, critical_failures):
+    def __init__(
+        self,
+        method: str,
+        checks: List[AssumptionCheck],
+        overall_grade: str,
+        n_pass: int,
+        n_fail: int,
+        n_inconclusive: int,
+        critical_failures: List[str],
+    ) -> None:
         self.method = method
         self.checks = checks  # list of AssumptionCheck
         self.overall_grade = overall_grade  # A/B/C/D/F
@@ -129,8 +149,8 @@ class AssumptionResult:
 
 
 def assumption_audit(
-    result,
-    data: pd.DataFrame = None,
+    result: Any,
+    data: Optional[pd.DataFrame] = None,
     alpha: float = 0.05,
     verbose: bool = True,
 ) -> AssumptionResult:
@@ -175,7 +195,7 @@ def assumption_audit(
     ...     for fail in audit.failed():
     ...         _ = fail.remedy
     """
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # Detect method type. CausalResult stores the human-readable method
     # on ``.method`` (e.g. "Proximal Causal Inference (linear 2SLS)");
@@ -246,7 +266,7 @@ def assumption_audit(
     # already classified the method, skip all of these outright.
     if not sprint_b_matched:
         # Use word-boundary tokens to avoid the short-substring trap.
-        def _has_token(*tokens):
+        def _has_token(*tokens: str) -> bool:
             import re
             for tok in tokens:
                 if re.search(r'\b' + re.escape(tok) + r'\b', method_str):
@@ -328,9 +348,13 @@ def assumption_audit(
     return audit
 
 
-def _audit_linear(result, data, alpha):
+def _audit_linear(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for OLS / linear regression."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     import statspai as sp
 
     # Shared regressor / outcome extraction for tests that need
@@ -338,10 +362,17 @@ def _audit_linear(result, data, alpha):
     # sp.oster_bounds all take (data, y, x) — not a fitted result).
     _di = getattr(result, 'data_info', {}) or {}
     _y_col = _di.get('dependent_var') or _di.get('y')
+    params_obj = getattr(result, 'params', None)
+    if params_obj is not None and hasattr(params_obj, 'index'):
+        param_names = list(params_obj.index)
+    elif isinstance(params_obj, dict):
+        param_names = list(params_obj.keys())
+    else:
+        param_names = []
     _regressors = [
-        str(name) for name in getattr(result, 'params', {}).index
+        str(name) for name in param_names
         if str(name).lower() not in ('intercept', 'const', '(intercept)')
-    ] if hasattr(result, 'params') else []
+    ]
 
     # 1. Linearity (RESET test)
     try:
@@ -518,9 +549,13 @@ def _audit_linear(result, data, alpha):
     return checks
 
 
-def _audit_iv(result, data, alpha):
+def _audit_iv(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for IV / 2SLS."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # 1. Instrument relevance (first-stage F)
     diag = getattr(result, 'diagnostics', {})
@@ -566,9 +601,13 @@ def _audit_iv(result, data, alpha):
     return checks
 
 
-def _audit_did(result, data, alpha):
+def _audit_did(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for DID."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # 1. Parallel trends (from result if available)
     mi = getattr(result, 'model_info', {})
@@ -620,9 +659,13 @@ def _audit_did(result, data, alpha):
     return checks
 
 
-def _audit_rd(result, data, alpha):
+def _audit_rd(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for RD."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # 1. No manipulation
     checks.append(AssumptionCheck(
@@ -660,9 +703,13 @@ def _audit_rd(result, data, alpha):
     return checks
 
 
-def _audit_binary(result, data, alpha):
+def _audit_binary(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for logit/probit."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # 1. Goodness of fit
     diag = getattr(result, 'diagnostics', {})
@@ -692,9 +739,13 @@ def _audit_binary(result, data, alpha):
     return checks
 
 
-def _audit_panel(result, data, alpha):
+def _audit_panel(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Assumption tests for panel models."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     mi = getattr(result, 'model_info', {})
     method = mi.get('method', mi.get('model_type', ''))
@@ -724,9 +775,13 @@ def _audit_panel(result, data, alpha):
     return checks
 
 
-def _audit_generic(result, data, alpha):
+def _audit_generic(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Generic checks for any model."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     # Sample size
     n = getattr(result, 'data_info', {}).get('n_obs', 0)
@@ -760,9 +815,13 @@ def _audit_generic(result, data, alpha):
 #  actionable next step.
 
 
-def _audit_proximal(result, data, alpha):
+def _audit_proximal(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Proximal causal inference: bridge + proxy rank + weak-instrument F."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     bridge = info.get('bridge', 'linear')
@@ -819,9 +878,13 @@ def _audit_proximal(result, data, alpha):
     return checks
 
 
-def _audit_msm(result, data, alpha):
+def _audit_msm(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Marginal structural model: positivity + sequential exchangeability."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     sw_mean = info.get('sw_mean')
@@ -880,9 +943,13 @@ def _audit_msm(result, data, alpha):
     return checks
 
 
-def _audit_principal_strat(result, data, alpha):
+def _audit_principal_strat(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Principal stratification: monotonicity + principal ignorability."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     viol = info.get('mono_violation_frac')
@@ -934,9 +1001,13 @@ def _audit_principal_strat(result, data, alpha):
     return checks
 
 
-def _audit_g_computation(result, data, alpha):
+def _audit_g_computation(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """G-computation: outcome model correctness + positivity + non-DR warning."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     estimand = info.get('estimand', 'ATE')
@@ -971,9 +1042,13 @@ def _audit_g_computation(result, data, alpha):
     return checks
 
 
-def _audit_front_door(result, data, alpha):
+def _audit_front_door(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Front-door: mediator exhaustiveness + unmeasured confounding blocked."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     m_type = info.get('mediator_type')
@@ -1012,9 +1087,13 @@ def _audit_front_door(result, data, alpha):
     return checks
 
 
-def _audit_mediation_interventional(result, data, alpha):
+def _audit_mediation_interventional(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Interventional (in)direct effects: decomposition identity + assumptions."""
-    checks = []
+    checks: List[AssumptionCheck] = []
     info = getattr(result, 'model_info', {}) or {}
 
     iie = info.get('iie')
@@ -1075,9 +1154,13 @@ def _audit_mediation_interventional(result, data, alpha):
     return checks
 
 
-def _audit_mediation_natural(result, data, alpha):
+def _audit_mediation_natural(
+    result: Any,
+    data: Optional[pd.DataFrame],
+    alpha: float,
+) -> List[AssumptionCheck]:
     """Classical natural (in)direct effects (Imai-Keele-Tingley)."""
-    checks = []
+    checks: List[AssumptionCheck] = []
 
     checks.append(AssumptionCheck(
         assumption='Cross-world independence (natural effects)',

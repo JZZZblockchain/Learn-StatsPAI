@@ -43,12 +43,16 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Any
 import pandas as pd
 
 
+Edge = Tuple[str, str]
+Oracle = Callable[[Sequence[str], Dict[str, str]], List[Edge]]
+
+
 @dataclass
 class LLMDAGResult:
-    edges: List[Tuple[str, str]]
-    oracle_edges: List[Tuple[str, str]]
-    ci_rejects: List[Tuple[str, str]]
-    ci_asserts: List[Tuple[str, str]]
+    edges: List[Edge]
+    oracle_edges: List[Edge]
+    ci_rejects: List[Edge]
+    ci_asserts: List[Edge]
     disagreements: List[Tuple[str, str, str]]  # (from, to, reason)
     provenance: Dict[str, Any] = field(default_factory=dict)
 
@@ -71,7 +75,7 @@ class LLMDAGResult:
 def llm_dag(
     variables: Sequence[str],
     descriptions: Optional[Dict[str, str]] = None,
-    oracle: Optional[Callable[[Sequence[str], Dict[str, str]], List[Tuple[str, str]]]] = None,
+    oracle: Optional[Oracle] = None,
     data: Optional[pd.DataFrame] = None,
     ci_test: str = "fisherz",
     alpha: float = 0.05,
@@ -104,28 +108,35 @@ def llm_dag(
     descriptions = dict(descriptions or {})
 
     # 1) Oracle pass
-    oracle_edges: List[Tuple[str, str]] = []
+    oracle_edges: List[Edge] = []
+    oracle_error: Optional[str] = None
     if oracle is not None:
         try:
             raw = oracle(list(variables), descriptions)
-            oracle_edges = [tuple(e) for e in raw if len(e) == 2]
+            filtered_edges: List[Edge] = []
+            for edge in raw:
+                if len(edge) == 2:
+                    src, dst = edge
+                    filtered_edges.append((src, dst))
+            oracle_edges = filtered_edges
         except Exception as exc:  # pragma: no cover
             oracle_edges = []
             oracle_error = str(exc)
-        else:
-            oracle_error = None
     else:
         oracle_error = "no oracle supplied"
 
     # 2) Data-driven skeleton via CI tests (optional)
-    ci_asserts: List[Tuple[str, str]] = []
-    ci_rejects: List[Tuple[str, str]] = []
+    ci_asserts: List[Edge] = []
+    ci_rejects: List[Edge] = []
     if data is not None:
         from ..causal_discovery.pc import pc_algorithm
 
         try:
             pc = pc_algorithm(
-                data=data, variables=list(variables), alpha=alpha, ci_test=ci_test,
+                data=data,
+                variables=list(variables),
+                alpha=alpha,
+                ci_test=ci_test,
             )
             skeleton = pc["skeleton"].to_numpy()
             for i, a in enumerate(variables):
@@ -140,8 +151,8 @@ def llm_dag(
             pass
 
     # 3) Merge
-    oracle_set = {tuple(e) for e in oracle_edges}
-    ci_set = set()
+    oracle_set: set[Edge] = set(oracle_edges)
+    ci_set: set[Edge] = set()
     for a, b in ci_asserts:
         ci_set.add((a, b))
         ci_set.add((b, a))
@@ -149,13 +160,16 @@ def llm_dag(
     if merge_strategy == "oracle_only":
         final = list(oracle_set)
     elif merge_strategy == "intersection":
-        final = [e for e in oracle_set if e in ci_set or (e[1], e[0]) in ci_set]
+        final = [
+            e for e in oracle_set
+            if e in ci_set or (e[1], e[0]) in ci_set
+        ]
     elif merge_strategy == "union_with_ci":
         final = list(oracle_set | ci_set)
     else:
         raise ValueError(f"unknown merge_strategy: {merge_strategy}")
 
-    disagreements = []
+    disagreements: List[Tuple[str, str, str]] = []
     for e in oracle_set:
         rev = (e[1], e[0])
         undirected_exists = e in ci_set or rev in ci_set

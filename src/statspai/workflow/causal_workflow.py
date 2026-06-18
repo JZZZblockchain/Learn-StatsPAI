@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html import escape
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -85,7 +85,7 @@ class CausalWorkflow:
     # Stage 1: diagnose
     # ------------------------------------------------------------------
 
-    def diagnose(self):
+    def diagnose(self) -> Any:
         """Run sp.check_identification, cache the report."""
         from ..smart.identification import check_identification
         self.diagnostics = check_identification(
@@ -106,7 +106,7 @@ class CausalWorkflow:
     # Stage 2: recommend
     # ------------------------------------------------------------------
 
-    def recommend(self):
+    def recommend(self) -> Any:
         """Run sp.recommend() to pick an estimator."""
         from ..smart.recommend import recommend as _rec
         self.recommendation = _rec(
@@ -133,7 +133,7 @@ class CausalWorkflow:
     # Stage 3: estimate
     # ------------------------------------------------------------------
 
-    def estimate(self):
+    def estimate(self) -> Any:
         """Fit the top-recommended estimator.
 
         Returns the result object (``CausalResult`` or ``EconometricResults``).
@@ -151,6 +151,9 @@ class CausalWorkflow:
         """
         if self.recommendation is None:
             self.recommend()
+        recommendation = self.recommendation
+        if recommendation is None:
+            raise RuntimeError("recommend() did not produce a recommendation.")
 
         # If the user passed a Sprint-B hint, route via the fallback
         # which picks the matching Sprint-B estimator directly. This
@@ -191,8 +194,8 @@ class CausalWorkflow:
                 )
                 # fall through to the normal recommendation path
 
-        top = (self.recommendation.recommendations[0]
-               if self.recommendation.recommendations else None)
+        top = (recommendation.recommendations[0]
+               if recommendation.recommendations else None)
 
         # OLS/IV recommendations from recommend() ship a formula that omits
         # the user's covariates; enrich here so the workflow doesn't fit
@@ -217,7 +220,7 @@ class CausalWorkflow:
 
         # Run the top recommendation via RecommendationResult.run()
         try:
-            self.result = self.recommendation.run()
+            self.result = recommendation.run()
         except Exception as e:
             # Fallback: call the estimator directly with a safe default
             # for the detected design.  This mirrors recommend()'s
@@ -231,7 +234,7 @@ class CausalWorkflow:
         self._mark('estimate')
         return self.result
 
-    def _fallback_estimate(self, error):
+    def _fallback_estimate(self, error: Any) -> Any:
         """Direct fallback when recommendation.run() fails."""
         import statspai as sp
         d = self.design
@@ -291,6 +294,10 @@ class CausalWorkflow:
                     self.data, y=self.y, g=self.cohort,
                     t=self.time, i=self.id, estimator='reg',
                 )
+            if not (self.treatment and self.time):
+                raise RuntimeError(
+                    "2x2 DiD fallback requires treatment=... and time=...."
+                )
             return sp.did(self.data, y=self.y,
                           treat=self.treatment, time=self.time)
         if d == 'rd' and self.running_var:
@@ -314,7 +321,7 @@ class CausalWorkflow:
     # Stage 4: robustness
     # ------------------------------------------------------------------
 
-    def robustness(self):
+    def robustness(self) -> Dict[str, Any]:
         """Run design-appropriate robustness checks on the fitted result.
 
         Delegates to :func:`statspai.workflow._robustness.run_robustness_battery`
@@ -332,10 +339,13 @@ class CausalWorkflow:
         """
         if self.result is None:
             self.estimate()
+        result = self.result
+        if result is None:
+            raise RuntimeError("estimate() did not produce a result.")
 
         from ._robustness import run_robustness_battery
         report = run_robustness_battery(
-            self.result,
+            result,
             design=self.design,
             data=self.data,
             treatment=self.treatment,
@@ -394,6 +404,14 @@ class CausalWorkflow:
     # ------------------------------------------------------------------
 
     def _render_markdown(self) -> str:
+        diagnostics = self.diagnostics
+        recommendation = self.recommendation
+        result = self.result
+        if diagnostics is None or recommendation is None or result is None:
+            raise RuntimeError(
+                "_render_markdown() requires diagnostics, recommendation, "
+                "and result. Call report() or run() first."
+            )
         lines: List[str] = []
         lines.append("# Causal Analysis Report")
         lines.append("")
@@ -406,10 +424,10 @@ class CausalWorkflow:
 
         lines.append("## 1. Identification diagnostics")
         lines.append("")
-        lines.append(f"**Verdict: {self.diagnostics.verdict}**")
+        lines.append(f"**Verdict: {diagnostics.verdict}**")
         lines.append("")
-        if self.diagnostics.findings:
-            for f in self.diagnostics.findings:
+        if diagnostics.findings:
+            for f in diagnostics.findings:
                 lines.append(f"- [{f.severity.upper()}] "
                              f"*{f.category}* — {f.message}")
                 if f.suggestion:
@@ -420,8 +438,8 @@ class CausalWorkflow:
 
         lines.append("## 2. Recommended estimator")
         lines.append("")
-        top = (self.recommendation.recommendations[0]
-               if self.recommendation.recommendations else None)
+        top = (recommendation.recommendations[0]
+               if recommendation.recommendations else None)
         if top:
             lines.append(f"- **Method**: {top['method']}")
             lines.append(f"- **Function**: `sp.{top['function']}()`")
@@ -433,7 +451,7 @@ class CausalWorkflow:
 
         lines.append("## 3. Main estimate")
         lines.append("")
-        r = self.result
+        r = result
         if hasattr(r, 'estimate') and hasattr(r, 'se'):
             stars = ''
             pv = getattr(r, 'pvalue', np.nan)
@@ -613,12 +631,21 @@ class CausalWorkflow:
         """
         if self.result is None:
             self.estimate()
+        result = self.result
+        if result is None:
+            raise RuntimeError("estimate() did not produce a result.")
 
         import statspai as sp
         rows: List[Dict[str, Any]] = []
         d = self.design
 
-        def _row(label, estimate, se, ci=None, extra=""):
+        def _row(
+            label: str,
+            estimate: Any,
+            se: Any,
+            ci: Any = None,
+            extra: str = "",
+        ) -> None:
             z = 1.96
             if ci is None and se == se and not np.isnan(se):
                 ci = (estimate - z * se, estimate + z * se)
@@ -633,7 +660,7 @@ class CausalWorkflow:
                 "note": extra,
             })
 
-        def _extract_effect(r):
+        def _extract_effect(r: Any) -> tuple[float, float, Any]:
             """Pull estimate + SE whether r is CausalResult or EconometricResults."""
             # Preferred: CausalResult
             if hasattr(r, "estimate") and r.estimate is not None \
@@ -679,7 +706,7 @@ class CausalWorkflow:
                     )
             return (np.nan, np.nan, None)
 
-        def _safe_call(label, fn):
+        def _safe_call(label: str, fn: Callable[[], Any]) -> None:
             try:
                 r = fn()
                 est, se, ci = _extract_effect(r)
@@ -688,22 +715,33 @@ class CausalWorkflow:
                 _row(label, np.nan, np.nan, extra=f"ERROR: {type(exc).__name__}: {exc}")
 
         if d == "did" and self.time and self.id and self.cohort:
+            time_col = self.time
+            id_col = self.id
+            cohort_col = self.cohort
             _safe_call("Callaway–Sant'Anna (CS)", lambda: sp.callaway_santanna(
-                self.data, y=self.y, g=self.cohort, t=self.time, i=self.id,
+                self.data, y=self.y, g=cohort_col, t=time_col, i=id_col,
                 estimator="reg"))
             _safe_call("Sun–Abraham", lambda: sp.sun_abraham(
-                self.data, y=self.y, g=self.cohort, t=self.time, i=self.id))
+                self.data, y=self.y, g=cohort_col, t=time_col, i=id_col))
             _safe_call("Borusyak–Jaravel–Spiess (imputation)",
                        lambda: sp.did_imputation(
-                           self.data, y=self.y, first_treat=self.cohort,
-                           time=self.time, group=self.id))
+                           self.data, y=self.y, first_treat=cohort_col,
+                           time=time_col, group=id_col))
             _safe_call("Wooldridge (2021)", lambda: sp.wooldridge_did(
-                self.data, y=self.y, first_treat=self.cohort,
-                time=self.time, group=self.id))
+                self.data, y=self.y, first_treat=cohort_col,
+                time=time_col, group=id_col))
         elif d == "did":
-            _safe_call("2x2 DiD",
-                       lambda: sp.did(self.data, y=self.y,
-                                      treat=self.treatment, time=self.time))
+            if self.treatment and self.time:
+                treat_col = self.treatment
+                time_col = self.time
+                _safe_call("2x2 DiD",
+                           lambda: sp.did(self.data, y=self.y,
+                                          treat=treat_col, time=time_col))
+            else:
+                _row(
+                    "2x2 DiD", np.nan, np.nan,
+                    extra="ERROR: 2x2 DiD requires treatment and time columns",
+                )
         elif d == "iv" and self.instrument and self.treatment:
             formula = f"{self.y} ~ ({self.treatment} ~ {self.instrument})"
             if self.covariates:
@@ -713,31 +751,33 @@ class CausalWorkflow:
             _safe_call("LIML", lambda: sp.liml(formula, data=self.data))
         elif d == "rd" and self.running_var:
             c = self.cutoff or 0.0
+            running_var = self.running_var
             _safe_call("RDD (MSE-optimal)",
                        lambda: sp.rdrobust(self.data, y=self.y,
-                                           x=self.running_var, c=c))
+                                           x=running_var, c=c))
         elif d in ("observational", "rct") and self.treatment and self.covariates:
+            treat_col = self.treatment
             cov = list(self.covariates)
             # OLS w/ controls
-            rhs = self.treatment + " + " + " + ".join(cov)
+            rhs = treat_col + " + " + " + ".join(cov)
             _safe_call("OLS (HC1)", lambda: sp.regress(
                 f"{self.y} ~ {rhs}", data=self.data, robust="hc1"))
             _safe_call("Entropy balancing (ATT)", lambda: sp.ebalance(
-                self.data, y=self.y, treat=self.treatment, covariates=cov))
+                self.data, y=self.y, treat=treat_col, covariates=cov))
             _safe_call("CBPS", lambda: sp.cbps(
-                self.data, y=self.y, treat=self.treatment, covariates=cov))
+                self.data, y=self.y, treat=treat_col, covariates=cov))
             _safe_call("SBW (δ=0.02)", lambda: sp.sbw(
-                self.data, y=self.y, treat=self.treatment, covariates=cov,
+                self.data, y=self.y, treat=treat_col, covariates=cov,
                 delta=0.02))
             # DML (partially-linear)
             _safe_call("DML-PLR", lambda: sp.dml(
                 self.data, y=self.y, d=self.treatment, X=cov))
 
         # Always add the primary estimate for context
-        if self.result is not None and hasattr(self.result, "estimate"):
-            _row("→ primary (this workflow)", self.result.estimate,
-                 getattr(self.result, "se", np.nan),
-                 getattr(self.result, "ci", None), extra="primary")
+        if hasattr(result, "estimate"):
+            _row("→ primary (this workflow)", result.estimate,
+                 getattr(result, "se", np.nan),
+                 getattr(result, "ci", None), extra="primary")
 
         self.estimator_comparison = pd.DataFrame(rows)
         self._mark("compare_estimators")
@@ -757,6 +797,9 @@ class CausalWorkflow:
         """
         if self.result is None:
             self.estimate()
+        result = self.result
+        if result is None:
+            raise RuntimeError("estimate() did not produce a result.")
         import statspai as sp
 
         rows: List[Dict[str, Any]] = []
@@ -764,7 +807,7 @@ class CausalWorkflow:
         # ── E-value ──────────────────────────────────────────────────
         try:
             est, se = None, None
-            r = self.result
+            r = result
             if hasattr(r, "estimate") and r.estimate is not None \
                     and not (isinstance(r.estimate, float) and np.isnan(r.estimate)):
                 est = float(r.estimate)
@@ -884,7 +927,7 @@ class CausalWorkflow:
         import statspai as sp
         rows: List[Dict[str, Any]] = []
 
-        def _summarise(label, result):
+        def _summarise(label: str, result: Any) -> None:
             # Extract per-unit CATE from any of several locations
             cate_vec = None
             try:
@@ -957,7 +1000,7 @@ class CausalWorkflow:
     # Orchestration entry point
     # ------------------------------------------------------------------
 
-    def run(self, full: bool = True):
+    def run(self, full: bool = True) -> "CausalWorkflow":
         """Run the causal pipeline.
 
         Parameters
@@ -1001,11 +1044,11 @@ class CausalWorkflow:
     # Representation
     # ------------------------------------------------------------------
 
-    def _mark(self, stage: str):
+    def _mark(self, stage: str) -> None:
         if stage not in self.stages_completed:
             self.stages_completed.append(stage)
 
-    def _note(self, message: str):
+    def _note(self, message: str) -> None:
         note = str(message).strip()
         if note and note not in self.pipeline_notes:
             self.pipeline_notes.append(note)
@@ -1051,7 +1094,7 @@ def causal(
     cohort: Optional[str] = None,
     cluster: Optional[str] = None,
     design: Optional[str] = None,
-    dag=None,
+    dag: Any = None,
     strict: bool = False,
     auto_run: bool = True,
     # --- Sprint-B causal-method context (all opt-in). When supplied,

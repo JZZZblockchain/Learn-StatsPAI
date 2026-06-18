@@ -25,8 +25,8 @@ Pamfil, R. et al. (2020).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -59,7 +59,9 @@ class DYNOTEARSResult:
     >>> res.lag
     1
     >>> edges = res.to_frame()
-    >>> bool(set(["lag", "from", "to", "coef"]).issubset(edges.columns)) if len(edges) else True
+    >>> bool(set(["lag", "from", "to", "coef"]).issubset(
+    ...     edges.columns
+    ... )) if len(edges) else True
     True
     """
     variables: List[str]
@@ -124,7 +126,7 @@ def _h_acyclicity(W: np.ndarray) -> float:
 
 def _h_grad(W: np.ndarray) -> np.ndarray:
     """Gradient of the acyclicity constraint wrt ``W``."""
-    return linalg.expm(W * W).T * 2 * W
+    return np.asarray(linalg.expm(W * W).T * 2 * W, dtype=float)
 
 
 def _loss_fn(
@@ -137,7 +139,7 @@ def _loss_fn(
     lambda_A: float,
     rho: float,
     mu: float,
-) -> tuple:
+) -> tuple[float, np.ndarray]:
     """Compute augmented-Lagrangian loss + gradient."""
     W = params[: d * d].reshape(d, d)
     A = params[d * d:].reshape(p, d, d) if p > 0 else np.zeros((0, d, d))
@@ -156,8 +158,10 @@ def _loss_fn(
 
     # L1 (smoothed via |w| ≈ sqrt(w^2 + eps))
     eps = 1e-8
-    l1_W = lambda_W * float(np.sqrt(W ** 2 + eps).sum()
-                             - np.sqrt(np.diag(W) ** 2 + eps).sum())
+    l1_W = lambda_W * float(
+        np.sqrt(W ** 2 + eps).sum()
+        - np.sqrt(np.diag(W) ** 2 + eps).sum()
+    )
     l1_A = lambda_A * float(np.sqrt(A ** 2 + eps).sum()) if p > 0 else 0.0
 
     total = mse + penalty + l1_W + l1_A
@@ -257,7 +261,9 @@ def dynotears(
         # np.number)``) so a pandas extension dtype — e.g. a ``StringDtype``
         # column under pandas>=3.0 — is excluded rather than raising TypeError.
         # Identical column selection for numpy numeric dtypes.
-        variables = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])]
+        variables = [
+            c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
+        ]
     variables = list(variables)
     d = len(variables)
     if d < 2:
@@ -294,7 +300,10 @@ def dynotears(
         np.fill_diagonal(W, 0.0)
         h = _h_acyclicity(W)
         if verbose:
-            print(f"iter {it}: loss={result.fun:.4f}, h={h:.2e}, rho={rho:.2e}")
+            print(
+                f"iter {it}: loss={result.fun:.4f}, h={h:.2e}, "
+                f"rho={rho:.2e}"
+            )
         if h < h_tol or rho >= rho_max:
             break
         if h >= 0.25 * h_prev:
@@ -304,10 +313,15 @@ def dynotears(
 
     W = params[: d * d].reshape(d, d)
     np.fill_diagonal(W, 0.0)
-    A = params[d * d:].reshape(lag, d, d) if lag > 0 else np.zeros((0, d, d))
+    A: np.ndarray = (
+        params[d * d:].reshape(lag, d, d)
+        if lag > 0
+        else np.zeros((0, d, d))
+    )
     # Threshold small coefficients
-    W = np.where(np.abs(W) > threshold, W, 0.0)
-    A = np.where(np.abs(A) > threshold, A, 0.0) if lag > 0 else A
+    W = np.asarray(np.where(np.abs(W) > threshold, W, 0.0), dtype=float)
+    if lag > 0:
+        A = np.asarray(np.where(np.abs(A) > threshold, A, 0.0), dtype=float)
     loss = float(result.fun)
 
     _result = DYNOTEARSResult(

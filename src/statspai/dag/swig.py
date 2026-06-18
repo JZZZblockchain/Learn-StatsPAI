@@ -22,7 +22,9 @@ A Unification of the Counterfactual and Graphical Approaches to Causality."
 """
 
 from __future__ import annotations
-from typing import Iterable
+
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
 class SWIGGraph:
@@ -55,7 +57,7 @@ class SWIGGraph:
       X(x) -> Y(X=x)
     """
 
-    def __init__(self, parent, intervention: dict):
+    def __init__(self, parent: Any, intervention: Mapping[str, str]) -> None:
         self.parent = parent
         self.intervention = dict(intervention)
         self.nodes: set[str] = set()
@@ -66,11 +68,13 @@ class SWIGGraph:
         V = set(self.parent._nodes)
         X = set(self.intervention)
 
-        def _label(v):
+        def _label(v: str) -> str:
             if v in X:
                 return v  # observation half
             # potential outcome labeled by intervention arguments:
-            args = ",".join(f"{k}={val}" for k, val in self.intervention.items())
+            args = ",".join(
+                f"{k}={val}" for k, val in self.intervention.items()
+            )
             return f"{v}({args})"
 
         for v in V:
@@ -107,7 +111,10 @@ class SWIGGraph:
         return f"SWIG(n={len(self.nodes)}, intervention={self.intervention})"
 
 
-def swig(dag, intervention) -> SWIGGraph:
+def swig(
+    dag: Any,
+    intervention: Mapping[str, str] | Iterable[str] | str,
+) -> SWIGGraph:
     """Construct a SWIG for ``dag`` under ``intervention``.
 
     Parameters
@@ -133,8 +140,8 @@ def swig(dag, intervention) -> SWIGGraph:
     >>> sorted(sw.counterfactual_nodes())
     ['L(X=x)', 'X', 'X(x)', 'Y(X=x)']
     """
-    if isinstance(intervention, dict):
-        mapping = intervention
+    if isinstance(intervention, Mapping):
+        mapping = dict(intervention)
     elif isinstance(intervention, str):
         mapping = {intervention: intervention.lower()}
     else:

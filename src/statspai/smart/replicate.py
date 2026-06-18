@@ -39,7 +39,7 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -629,7 +629,7 @@ def _resolve_loader(path: str) -> Callable[..., pd.DataFrame]:
         obj = getattr(obj, part)
     if not callable(obj):
         raise AttributeError(f"Resolved object {path!r} is not callable")
-    return obj
+    return cast(Callable[..., pd.DataFrame], obj)
 
 
 def _accepted_kwargs(

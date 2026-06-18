@@ -22,7 +22,7 @@ confounders." NeurIPS 2020.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Sequence
 
 import numpy as np
@@ -80,7 +80,9 @@ class LPCMCIResult:
         n_d = int((self.edge_types == "-->").sum())
         n_b = int((self.edge_types == "<->").sum())
         n_u = int(np.isin(self.edge_types, ["o->", "o-o"]).sum())
-        lines.append(f"  edges     : directed={n_d}, bidirected={n_b}, uncertain={n_u}")
+        lines.append(
+            f"  edges     : directed={n_d}, bidirected={n_b}, uncertain={n_u}"
+        )
         return "\n".join(lines)
 
     def to_frame(self) -> pd.DataFrame:
@@ -192,7 +194,10 @@ def lpcmci(
         # np.number)``) so a pandas extension dtype — e.g. a ``StringDtype``
         # column under pandas>=3.0 — is excluded rather than raising TypeError.
         # Identical column selection for numpy numeric dtypes.
-        variables = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])]
+        variables = [
+            c for c in data.columns
+            if pd.api.types.is_numeric_dtype(data[c])
+        ]
     variables = list(variables)
     if len(variables) < 2:
         raise ValueError("Need at least 2 variables for LPCMCI.")
@@ -209,7 +214,11 @@ def lpcmci(
     # Stage 1: PC1 parent selection (like PCMCI but simplified).
     parents: Dict[str, List[tuple]] = {v: [] for v in variables}
     for j, vj in enumerate(variables):
-        candidates = [(i, tau) for tau in range(1, tau_max + 1) for i in range(N)]
+        candidates = [
+            (i, tau)
+            for tau in range(1, tau_max + 1)
+            for i in range(N)
+        ]
         # Marginal screening
         kept = []
         for (i, tau) in candidates:
@@ -253,7 +262,8 @@ def lpcmci(
                     continue
                 if tau > 0 and i == j:
                     pass  # autoregressive self-loop allowed
-                # Conditioning: parents of j (excluding this edge) + parents of i
+                # Conditioning: parents of j excluding this edge, plus parents
+                # of i.
                 Z_parents = [p for p in parents[vj] if p != (i, tau)]
                 Z_parents += [(p0, p1 + tau) for (p0, p1) in parents[vi]]
                 Z_parents = [p for p in Z_parents if 0 < p[1] <= tau_max]
@@ -261,15 +271,19 @@ def lpcmci(
                 if T - lag_max_used < 5:
                     continue
                 y = X[lag_max_used:, j]
-                x = X[lag_max_used - tau: T - tau, i] if tau > 0 else X[lag_max_used:, i]
+                x = (
+                    X[lag_max_used - tau: T - tau, i]
+                    if tau > 0 else X[lag_max_used:, i]
+                )
+                Z_cond: Optional[np.ndarray]
                 if Z_parents:
-                    Z = np.column_stack([
+                    Z_cond = np.column_stack([
                         X[lag_max_used - pt: T - pt, pi]
                         for (pi, pt) in Z_parents
                     ])
                 else:
-                    Z = None
-                p = float(ci_test(x, y, Z))
+                    Z_cond = None
+                p = float(ci_test(x, y, Z_cond))
                 p_values[tau, i, j] = p
                 if p < alpha:
                     if tau > 0:
