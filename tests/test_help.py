@@ -187,8 +187,12 @@ class TestCLI:
     def test_cli_list_category(self):
         rc, out = self._run("list", "--category", "causal")
         assert rc == 0
-        assert "did" in out
-        assert "regress" not in out
+        listed = {ln.strip() for ln in out.splitlines()}
+        assert "did" in listed
+        # Exact-name match: the regression-category ``regress`` is absent even
+        # though causal functions like ``proximal_regression`` contain the
+        # substring (a naive ``"regress" not in out`` would false-positive).
+        assert "regress" not in listed
 
     def test_cli_list_json(self):
         rc, out = self._run("list", "--json")

@@ -70,14 +70,14 @@ class LimitedDepResult(CausalResult):
         s = self._column_series(self._COEF_COL)
         if s is not None:
             return s
-        return CausalResult.params.fget(self)
+        return super().params
 
     @property
     def std_errors(self) -> pd.Series:
         s = self._column_series("se")
         if s is not None:
             return s
-        return CausalResult.std_errors.fget(self)
+        return super().std_errors
 
     @property
     def tvalues(self) -> pd.Series:
@@ -89,14 +89,14 @@ class LimitedDepResult(CausalResult):
         if len(params) > 1 and params.index.equals(ses.index):
             with np.errstate(divide="ignore", invalid="ignore"):
                 return params / ses
-        return CausalResult.tvalues.fget(self)
+        return super().tvalues
 
     @property
     def pvalues(self) -> pd.Series:
         s = self._column_series("pvalue")
         if s is not None:
             return s
-        return CausalResult.pvalues.fget(self)
+        return super().pvalues
 
     # ------------------------------------------------------------------
     # Convenience: full coefficient table as a tidy DataFrame

@@ -47,13 +47,17 @@ ALL_NOT_REGISTERED_BASELINE = frozenset({
 # Names registered in the registry but *not* in ``__all__``. Most are real
 # estimators that ship today on ``sp.<name>`` but were never added to the
 # star-import list. Reducing this set is the goal; growing it is a regression.
+#
+# 2026-06 drift repair: 19 estimators that already shipped on ``sp.<name>``
+# but were invisible to ``sp.list_functions`` / ``sp.describe_function`` /
+# ``sp.function_schema`` were added to ``__all__`` (BCF extensions, the
+# proximal / negative-control family, DiD extras, shift-share, dose-response,
+# ITS, longitudinal TMLE, etc.), shrinking this baseline from 44 → 25 and
+# locking the gain in so they can never silently drop back out.
 REGISTERED_NOT_IN_ALL_BASELINE = frozenset({
     "anthropic_client",
     "assimilative_causal",
     "bayes_dml",
-    "bcf_factor_exposure",
-    "bcf_longitudinal",
-    "bcf_ordinal",
     "causal_bandit",
     "causal_kalman",
     "causal_mas",
@@ -63,35 +67,19 @@ REGISTERED_NOT_IN_ALL_BASELINE = frozenset({
     "counterfactual_fairness",
     "counterfactual_policy_optimization",
     "demographic_parity",
-    "dl_propensity_score",
     "echo_client",
     "equalized_odds",
     "evidence_without_injustice",
     "fairness_audit",
-    "harvest_did",
     "heterogeneity_of_effect",
-    "inward_outward_spillover",
     "long_term_from_short",
-    "llm_causal_assess",
     "mr_bma",
-    "mr_mediation",
     "mr_multivariable",
-    "network_hte",
     "openai_client",
-    "orthogonal_to_bias",
-    "overlap_weighted_did",
-    "pairwise_causal_benchmark",
-    "paper",
     "particle_filter",
     "proximal_surrogate_index",
     "rwd_rct_concordance",
     "sharp_ope_unobserved",
-    "shift_share_political",
-    "shift_share_political_panel",
-    "structural_mdp",
-    "surrogate_index",
-    "synth_experimental_design",
-    "synthesise_evidence",
 })
 
 # Registered functions that live on a submodule rather than the top-level
