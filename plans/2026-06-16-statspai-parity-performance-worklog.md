@@ -9423,6 +9423,67 @@ Post-batch gate sweep:
   remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
   external/parallel `replication/results/*` modifications and was not touched.
 
+## 2026-06-18 Batch 268
+
+Target: quantile-regression helper typing and detail narrowing.
+
+- Typed `src/statspai/regression/quantile.py` array coercion, formula parsing,
+  quantile-regression fit/IRLS, standard-error, and pseudo-R2 helpers.
+- Narrowed `sqreg` detail-table handling before iterating result rows so a
+  missing or incompatible detail payload raises a clear
+  `MethodIncompatibility` instead of flowing as an arbitrary object.
+- Replaced an untyped check-function lambda with a typed nested helper while
+  preserving the existing objective and pseudo-R2 calculations.
+- Removed stale imports and kept public qreg/sqreg output fields, Stata-facing
+  parameter names, and parity behavior unchanged.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/regression/quantile.py` reported
+  success after the repository Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/regression/quantile.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/regression/quantile.py --count --statistics` passed with
+  0 selected touched-file violations.
+- `git diff --check -- src/statspai/regression/quantile.py` passed.
+- `.venv/bin/python -m pytest -q
+  tests/reference_parity/test_count_quantile_parity.py
+  tests/test_coefplot_tikz.py tests/test_v06_round2.py -k
+  'qreg or sqreg or quantile' -o addopts=''` passed, 10 tests with 25
+  deselected.
+- `.venv/bin/python tests/stata_parity/verify_reproduce_stata.py 40_qreg`
+  reproduced the module with worst relative estimate drift `0.00e+00`; the
+  generated single-module Stata report diff was restored and not left in the
+  worktree.
+- `.venv/bin/python -m pytest -q tests/test_quantile.py -o addopts=''`
+  passed, 13 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1398 taxonomy raises and 1297 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3539 <= 4698, mypy observed 1928 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
 ## 2026-06-17 Batch 154
 
 Target: direct typing and touched-file cleanup for output collections.
