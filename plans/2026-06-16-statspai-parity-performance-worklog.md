@@ -11552,6 +11552,5115 @@ Post-batch gate sweep:
   remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
   external/parallel `replication/results/*` modifications and was not touched.
 
+## 2026-06-18 Batch 308
+
+Target: shared bootstrap helper typing.
+
+- Annotated the `bootstrap_se()` array-like replicate input in
+  `src/statspai/core/_bootstrap.py` as `Any`, preserving the existing
+  NaN/warning behavior for failed bootstrap replicates.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/core/_bootstrap.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/core/_bootstrap.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/core/_bootstrap.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_silent_degradation_fixes.py
+  tests/test_honest_did_sdid.py -o addopts=''` passed, 40 tests.
+- `git diff --check -- src/statspai/core/_bootstrap.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3494 <= 4698, mypy observed 1727 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 309
+
+Target: canonical dataset helper typing.
+
+- Typed the nested `nsw_dw()` outcome generator in
+  `src/statspai/datasets/_canonical.py` and narrowed the generated
+  nonnegative earnings vector through `np.asarray(..., dtype=float)`, preserving
+  the calibrated Dehejia-Wahba replica behavior while closing the file's direct
+  mypy error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/datasets/_canonical.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/datasets/_canonical.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/datasets/_canonical.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q
+  tests/external_parity/test_published_replications.py
+  tests/test_replicate_dual_track.py tests/test_tierD_lalonde_psm_guard.py
+  tests/test_decomposition_cov_results_datasets.py -o addopts=''` passed, 76
+  tests with the existing PSM caution warnings.
+- `git diff --check -- src/statspai/datasets/_canonical.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3493 <= 4698, mypy observed 1726 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 310
+
+Target: help registry category typing.
+
+- Narrowed `src/statspai/help.py::_MODULE_CATEGORY_PREFIXES` from a bare
+  `tuple` list to `List[tuple[str, str]]`, preserving category routing while
+  making `_infer_category()` return a typed string instead of `Any`.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/help.py --show-error-codes
+  --no-error-summary` reported success after the repository Python-version
+  warning.
+- `.venv/bin/python -m py_compile src/statspai/help.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/help.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_help.py
+  tests/test_registry_drift_repair.py -o addopts=''` passed, 174 tests.
+- `git diff --check -- src/statspai/help.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3493 <= 4698, mypy observed 1725 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 311
+
+Target: output utility typing.
+
+- Annotated `src/statspai/output/_repro.py::_hash_dataframe()` to accept the
+  documented arbitrary object boundary before narrowing to pandas DataFrame.
+- Narrowed `src/statspai/output/_bibliography.py::write_bib()` so only string
+  citations pass through `citations_to_bib_entries()`, while pre-built entry
+  dictionaries still use the existing keyed-entry path.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/output/_repro.py
+  src/statspai/output/_bibliography.py --show-error-codes --no-error-summary`
+  reported success after the repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/output/_repro.py
+  src/statspai/output/_bibliography.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/output/_repro.py src/statspai/output/_bibliography.py --count
+  --statistics` passed with 0 selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_bibliography.py
+  tests/test_repro_metadata.py tests/test_paper_quarto.py
+  tests/test_paper_branches.py -o addopts=''` passed, 99 tests with existing
+  workflow-degradation warning coverage.
+- `git diff --check -- src/statspai/output/_repro.py
+  src/statspai/output/_bibliography.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3493 <= 4698, mypy observed 1723 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 312
+
+Target: plotting theme typing and touched-file lint cleanup.
+
+- Annotated the nested CJK-font substring matcher in
+  `src/statspai/plots/themes.py::use_chinese()` as
+  `tuple[str, ...] -> Optional[str]`, preserving the existing font-selection
+  priority order.
+- Removed unused `findfont` / `FontProperties` imports and the unused local
+  `family` assignment exposed by touched-file flake8, without changing the
+  rcParams mutation path.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/plots/themes.py --show-error-codes
+  --no-error-summary` reported success after the repository Python-version
+  warning.
+- `.venv/bin/python -m py_compile src/statspai/plots/themes.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/plots/themes.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_diag_themes.py
+  tests/test_v093_bugfixes.py tests/test_auto_cjk_fallback.py
+  tests/test_output_and_survey_helpers.py -o addopts=''` passed, 50 tests with
+  existing deprecation/no-model warning coverage.
+- `git diff --check -- src/statspai/plots/themes.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3490 <= 4698, mypy observed 1722 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 313
+
+Target: fast within wrapper typing.
+
+- Annotated the `**kwargs` passthrough in
+  `src/statspai/fast/within.py::within()` as `Any`, preserving the public
+  convenience wrapper while closing the file's direct mypy error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/fast/within.py --show-error-codes
+  --no-error-summary` reported success after the repository Python-version
+  warning.
+- `.venv/bin/python -m py_compile src/statspai/fast/within.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/fast/within.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_fast_within_dsl.py
+  tests/test_fast_demean.py tests/test_fast_event_study.py
+  tests/test_event_study_pipeline.py -o addopts=''` passed, 85 tests and 2
+  existing skips.
+- `git diff --check -- src/statspai/fast/within.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3490 <= 4698, mypy observed 1721 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 314
+
+Target: regression optimizer helper typing.
+
+- Annotated `src/statspai/regression/_optim_helpers.py::robust_convergence()`
+  to accept an arbitrary SciPy-like optimize result object, preserving the
+  existing `getattr`-based compatibility boundary while closing the helper's
+  direct mypy error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/regression/_optim_helpers.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/regression/_optim_helpers.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/regression/_optim_helpers.py --count --statistics` passed with
+  0 selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_limited_dep_lane.py
+  tests/test_weakiv_tobit.py tests/test_tierD_p2_regression_system_analytic.py
+  -o addopts=''` passed, 49 tests.
+- `git diff --check -- src/statspai/regression/_optim_helpers.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3490 <= 4698, mypy observed 1720 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 315
+
+Target: MCP prompt handler typing.
+
+- Annotated the injected JSON-RPC error classes in
+  `src/statspai/agent/_prompts.py::handle_prompts_get()` as
+  `type[Exception]`, preserving the circular-import-free dependency injection
+  from `mcp_server` while closing the prompt module's direct mypy error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/agent/_prompts.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/agent/_prompts.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/agent/_prompts.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_mcp_prompts_expanded.py
+  tests/test_mcp_protocol.py tests/test_agent_schema.py
+  tests/test_mcp_error_envelope.py -o addopts=''` passed, 117 tests.
+- `git diff --check -- src/statspai/agent/_prompts.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3488 <= 4698, mypy observed 1719 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 316
+
+Target: decomposition dispatcher typing and touched-file lint cleanup.
+
+- Annotated `src/statspai/decomposition/dispatcher.py::decompose()` keyword
+  passthrough as `Any`, preserving the positional-only dispatcher method
+  contract and method-specific keyword forwarding.
+- Removed unused `Callable` and pandas imports exposed by touched-file flake8.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/decomposition/dispatcher.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/decomposition/dispatcher.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/decomposition/dispatcher.py --count --statistics` passed with
+  0 selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_decomposition_polish.py
+  tests/test_decomposition_cov_rendering.py
+  tests/test_decomposition_cov_results_datasets.py
+  tests/test_decomposition_cov_misc2.py -o addopts=''` passed, 62 tests.
+- `git diff --check -- src/statspai/decomposition/dispatcher.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1718 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 317
+
+Target: smart replication loader typing.
+
+- Cast the dynamically resolved `sp.datasets.*` replication loader in
+  `src/statspai/smart/replicate.py::_resolve_loader()` to
+  `Callable[..., pd.DataFrame]` after the existing runtime `callable()` guard,
+  preserving lazy top-level resolution while closing the loader helper's direct
+  mypy return error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/smart/replicate.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/smart/replicate.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/smart/replicate.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_replicate_dual_track.py
+  tests/test_smart_workflow.py tests/external_parity/test_published_replications.py
+  -o addopts=''` passed, 81 tests with existing assumption-audit degradation
+  warning coverage.
+- `git diff --check -- src/statspai/smart/replicate.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1717 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 318
+
+Target: psmatch2 matched-frame outcome typing.
+
+- Introduced an `outcome_arr` non-`None` local in
+  `src/statspai/matching/_matched_frame.py::build_matched_frame()` so the
+  matched-control outcome column is indexed only after explicit ndarray
+  narrowing, preserving the existing `_y` emission semantics.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/matching/_matched_frame.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/matching/_matched_frame.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/matching/_matched_frame.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_tierD_lalonde_psm_guard.py
+  tests/reference_parity/test_psmatch2_parity.py tests/test_estimator_coherence.py
+  tests/test_tidy_glance.py tests/test_match_dispatcher.py -o addopts=''`
+  passed, 77 tests with existing PSM caution warnings.
+- `git diff --check -- src/statspai/matching/_matched_frame.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1716 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 319
+
+Target: Bradford-Hill scoring typing.
+
+- Explicitly typed `src/statspai/epi/bradford_hill.py::bradford_hill()`
+  keyword-score mapping as `Dict[str, Optional[float]]` and renamed the second
+  loop variable, preserving the evidence/keyword merge semantics while closing
+  the direct mypy assignment error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/epi/bradford_hill.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/epi/bradford_hill.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/epi/bradford_hill.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_v100_integration.py
+  tests/test_epi.py tests/test_untested_bounds_and_diag.py -o addopts=''`
+  passed, 118 tests.
+- `git diff --check -- src/statspai/epi/bradford_hill.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1715 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 320
+
+Target: stratified epidemiology helper typing.
+
+- Annotated `src/statspai/epi/stratified.py::_validate_strata()` with the
+  array-like input contract used by `mantel_haenszel()`, preserving the
+  existing shape/count validation while closing the direct helper mypy error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/epi/stratified.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/epi/stratified.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/epi/stratified.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_epi.py
+  tests/test_v0917_review_fixes.py tests/test_tierD_p2_epi_analytic.py
+  tests/test_v100_integration.py -o addopts=''` passed, 134 tests.
+- `git diff --check -- src/statspai/epi/stratified.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1714 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 321
+
+Target: multilevel ICC diagnostics typing.
+
+- Annotated `src/statspai/multilevel/diagnostics.py::icc()` to accept a
+  duck-typed MixedResult-like object as `Any`, preserving the existing runtime
+  `variance_components` checks while closing the direct mypy parameter error.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/multilevel/diagnostics.py
+  --show-error-codes --no-error-summary` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/multilevel/diagnostics.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/multilevel/diagnostics.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_multilevel.py
+  tests/test_v06_round3.py -o addopts=''` passed, 72 tests.
+- `git diff --check -- src/statspai/multilevel/diagnostics.py` passed.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1713 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 322
+
+Target: continuous-instrument LATE helper typing.
+
+- Annotated the nested Wald-ratio helper in
+  `src/statspai/iv/continuous_late.py` with ndarray inputs and a
+  `tuple[float, float]` return type.
+- Kept the runtime estimator behavior unchanged while avoiding list/array
+  variable reuse by converting accumulated ATTs and weights into separate
+  NumPy arrays before choosing the maximal complier bin.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/iv/continuous_late.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/iv/continuous_late.py`
+  passed.
+- `.venv/bin/python -m pytest -q tests/test_continuous_iv_late.py
+  tests/test_iv_frontiers.py tests/test_cov95_iv_small_estimators.py
+  tests/test_iv_cov_edges.py tests/test_estimator_provenance_round9.py
+  -o addopts=''` passed, 42 tests with 2 expected numerical warnings.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3486 <= 4698, mypy observed 1712 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 323
+
+Target: Romano-Wolf multiple-testing typing and schema sync.
+
+- Added a shared `PValueInput` boundary in
+  `src/statspai/mht/romano_wolf.py` so public p-value adjustment helpers accept
+  both Python sequences and internal NumPy arrays without type-cast drift.
+- Removed an unused dataclass import, made `bonferroni()` return a typed NumPy
+  array explicitly, annotated `RomanoWolfResult.plot()`, and clipped
+  Romano-Wolf adjusted p-values in place to preserve the inferred array type.
+- Refreshed generated schema bundles after the public adjustment-helper
+  signature change (`schemas/*.json` and `src/statspai/schemas/*.json`).
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/mht/romano_wolf.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/mht/romano_wolf.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/mht/romano_wolf.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_mht_romano_wolf.py
+  tests/test_untested_function_coverage.py -o addopts=''` passed, 21 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python scripts/dump_schemas.py` refreshed the root and runtime
+  schema mirrors after the first `--check` detected expected stale files.
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3485 <= 4698, mypy observed 1706 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 324
+
+Target: CATE evaluation helper typing and touched-file import cleanup.
+
+- Annotated `CATEEvalResult.plot()` in
+  `src/statspai/metalearners/cate_eval.py` with a permissive axes boundary and
+  `(fig, ax)` return type.
+- Made the AIPW pseudo-outcome helper return explicit float NumPy arrays,
+  annotated the cross-fit nuisance tuple return, and typed the nested standard
+  error helper.
+- Removed stale unused imports in the CATE evaluation module.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/metalearners/cate_eval.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/metalearners/cate_eval.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/metalearners/cate_eval.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_tierD_p2_cate_eval_analytic.py
+  tests/test_ml_causal_polish.py -o addopts=''` passed, 25 tests with 1
+  optional skip.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3480 <= 4698, mypy observed 1700 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 325
+
+Target: Mendelian extras helper and plotting typing.
+
+- Made `_silverman_bandwidth()` return an explicit `float` in
+  `src/statspai/mendelian/extras.py`.
+- Added permissive axes boundaries and return annotations for
+  `mr_funnel_plot()` and `mr_scatter_plot()` without changing plotting
+  behavior or MR calculations.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/mendelian/extras.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/mendelian/extras.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/mendelian/extras.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_mr_extras.py
+  tests/test_tierD_p2_mendelian_analytic.py tests/test_dispatchers_v150.py
+  -o addopts=''` passed, 42 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3480 <= 4698, mypy observed 1695 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 326
+
+Target: Mendelian diagnostics helper typing.
+
+- Added a `SampleSizeInput` type boundary in
+  `src/statspai/mendelian/diagnostics.py` for scalar or vector GWAS sample
+  sizes used by `mr_steiger()`.
+- Annotated the R-squared helper, IVW helper, and nested MR-PRESSO RSS
+  component helper with ndarray inputs and explicit return types.
+- Preserved the existing Steiger, IVW, MR-PRESSO, and radial diagnostic
+  calculations.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/mendelian/diagnostics.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/mendelian/diagnostics.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/mendelian/diagnostics.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_mr_diagnostics.py
+  tests/test_tierD_p2_mendelian_analytic.py
+  tests/reference_parity/test_mr_parity.py tests/test_v0917_review_fixes.py
+  -o addopts=''` passed, 37 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3480 <= 4698, mypy observed 1691 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 327
+
+Target: Mendelian frontier helper typing.
+
+- Annotated the nested beta-only likelihood closure in
+  `src/statspai/mendelian/frontier/grapple.py`.
+- Annotated the fixed-K MR-cML helper in
+  `src/statspai/mendelian/frontier/cml.py` with its tuple return.
+- Annotated the MR-Clust EM helper in
+  `src/statspai/mendelian/frontier/clust.py` and replaced
+  `min(..., key=dict.get)` with a lambda returning a definite float.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/mendelian/frontier/grapple.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/clust.py --config-file pyproject.toml
+  --show-error-codes` reported success after the repository Python-version
+  warning.
+- `.venv/bin/python -m py_compile
+  src/statspai/mendelian/frontier/grapple.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/clust.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/mendelian/frontier/grapple.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/clust.py --count --statistics` passed with
+  0 selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_mr_frontier.py
+  tests/test_mr_extensions.py -o addopts=''` passed, 47 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3480 <= 4698, mypy observed 1687 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 328
+
+Target: Rosenbaum sensitivity grid typing and schema sync.
+
+- Split the optional `gamma_grid` input in
+  `src/statspai/diagnostics/rosenbaum.py` from the concrete
+  `gamma_grid_arr` NumPy work array used for validation, iteration, result
+  assembly, and `RosenbaumResult`.
+- Removed stale unused typing imports exposed by the touched-file flake8 pass.
+- Refreshed generated schema bundles after the public `rosenbaum_bounds`
+  signature/import metadata changed (`schemas/*.json` and
+  `src/statspai/schemas/*.json`).
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/diagnostics/rosenbaum.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/diagnostics/rosenbaum.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/diagnostics/rosenbaum.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_registry_drift_repair.py
+  tests/test_untested_bounds_and_diag.py tests/test_v100_integration.py
+  -o addopts=''` passed, 232 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python scripts/dump_schemas.py` refreshed the root and runtime
+  schema mirrors after the first `--check` detected expected stale files.
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1298 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3476 <= 4698, mypy observed 1679 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+
+## 2026-06-18 Batch 329
+
+Target: multilevel GLMM/LMM type contracts.
+
+- Annotated GLMM family hot-loop methods in
+  `src/statspai/multilevel/glmm.py` with the protocol already declared by the
+  `_Family` base class, and made ndarray-returning methods return explicit
+  float arrays.
+- Aligned GLMM result helpers with `ResultProtocolMixin` by adding optional
+  `caption`/`label` support to `to_latex()`, a `format` parameter to `cite()`,
+  and a typed `(fig, ax)` return for `plot()`.
+- Narrowed optional AGHQ node inputs before the quadrature call and annotated
+  `_glmm_nll()` as returning `float`.
+- Aligned `src/statspai/multilevel/lmm.py` `to_latex()` and `cite()` with the
+  same result-protocol signatures.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/multilevel/glmm.py
+  src/statspai/multilevel/lmm.py --config-file pyproject.toml
+  --show-error-codes --no-error-summary` reported no errors after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/multilevel/glmm.py
+  src/statspai/multilevel/lmm.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/multilevel/glmm.py src/statspai/multilevel/lmm.py --count
+  --statistics` passed with 0 selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_multilevel.py
+  tests/test_v06_round3.py tests/test_v100_integration.py -o addopts=''`
+  passed, 154 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1299 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3475 <= 4698, mypy observed 1646 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- Post-batch root status also showed new external/parallel root changes in
+  files outside this batch's edit set, including `CHANGELOG.md`,
+  `src/statspai/gformula/*`, `src/statspai/interference/*`, and
+  `tests/test_result_protocol.py`; those were not touched or reverted here.
+
+## 2026-06-18 Batch 330
+
+Target: weak-identification IV diagnostic typing.
+
+- Made `src/statspai/iv/weak_identification.py` helper returns explicit float
+  NumPy arrays for residualization, exogenous extraction, and symmetric square
+  roots.
+- Narrowed `conditional_lr_test()` column-name paths so `data` is checked
+  before indexing, preserving array-input behavior.
+- Removed unused CLR simulation scratch variables and stale imports; kept the
+  Moreira CLR, Kleibergen-Paap, and Sanderson-Windmeijer formulas unchanged.
+- Normalized the Sanderson-Windmeijer conditional outcome vector to a plain
+  float ndarray in both single- and multiple-endogenous branches.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/iv/weak_identification.py
+  --config-file pyproject.toml --show-error-codes` reported success after the
+  repository Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/iv/weak_identification.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/iv/weak_identification.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_iv_cov_array_inputs.py
+  tests/test_iv_cov_edges.py tests/test_weakiv_tobit.py
+  tests/test_iv_frontiers.py -o addopts=''` passed, 39 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1302 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3468 <= 4698, mypy observed 1639 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 331
+
+Target: E-value sensitivity typing and protocol-adjacent cleanup.
+
+- Declared optional RR confidence bounds before scale-specific conversion
+  branches in `src/statspai/diagnostics/evalue.py`, so later serialization no
+  longer depends on partially inferred optional values.
+- Kept a non-null OLS scale for confidence-interval conversion, avoiding
+  optional `sd` leakage into float arithmetic.
+- Narrowed `_threshold()` returns in `evalue_rd()` before float serialization.
+- Typed `evalue_from_result()`, `_ci_evalue()`, `_check_ci()`, and
+  `_interpret()` boundaries without changing the reported E-value formulas.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/diagnostics/evalue.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/diagnostics/evalue.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/diagnostics/evalue.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_registry_drift_repair.py
+  tests/test_untested_bounds_and_diag.py tests/test_v100_integration.py
+  -o addopts=''` passed, 232 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1302 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3469 <= 4698, mypy observed 1629 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 332
+
+Target: method-aware diagnostic battery typing and touched-file lint cleanup.
+
+- Annotated the public `diagnose_result()` boundary and all internal battery
+  dispatch helpers in `src/statspai/diagnostics/battery.py` with `Any` result
+  inputs, keeping the duck-typed result protocol intact.
+- Cast `violations()` and `next_steps(print_result=False)` outputs to the
+  structured list-of-dicts shape already documented by the closed-loop tests.
+- Narrowed helper return boundaries for residuals, fitted values, observation
+  counts, diagnostics, model info, and the pretty-printer.
+- Removed one no-placeholder f-string in the panel battery so touched-file
+  selected flake8 stays clean.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/diagnostics/battery.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/diagnostics/battery.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/diagnostics/battery.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_diagnose_result_closed_loop.py
+  tests/test_diagnose_batteries_sprint_b.py
+  tests/test_new_features.py::TestDiagnoseResult -o addopts=''` passed,
+  32 tests with expected diagnostic warnings.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1302 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3468 <= 4698, mypy observed 1600 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 333
+
+Target: clinical epidemiology diagnostic metrics typing and lint cleanup.
+
+- Annotated the public diagnostic metric inputs in
+  `src/statspai/epi/diagnostic.py` while keeping array-like duck typing for
+  labels, scores, and raters.
+- Replaced the aggregate `all(...)` optional-count guard with explicit
+  `tp`/`fn`/`fp`/`tn` checks, then narrowed the four confusion-matrix cells to
+  local `int` values before sensitivity, specificity, predictive-value, and
+  likelihood-ratio arithmetic.
+- Typed the `diagnostic_test()` alias varargs and the ROC/AUC/kappa public
+  boundaries.
+- Removed an unused Cohen-kappa standard-error scratch variable caught by
+  touched-file flake8; the active variance terms and returned metrics are
+  unchanged.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/epi/diagnostic.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/epi/diagnostic.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/epi/diagnostic.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_epi_diagnostic.py
+  tests/test_tierD_p2_epi_analytic.py
+  tests/test_v100_integration.py::test_v097_three_school_surface_still_reachable
+  -o addopts=''` passed, 55 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1302 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3467 <= 4698, mypy observed 1573 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 334
+
+Target: core Mendelian-randomization typing, explicit input guards, and schema
+refresh.
+
+- Typed `MRResult.__init__()` and `.plot()` in
+  `src/statspai/mendelian/mr.py`, including the heterogeneity and optional
+  pleiotropy metadata dictionaries.
+- Removed unused `warnings` and an unused IVW ratio-method scratch calculation;
+  the function already returned the weighted regression through-origin IVW
+  estimate, and that returned formula is unchanged.
+- Marked `mr_median()` and `mendelian_randomization()` seeds as optional and
+  narrowed `np.searchsorted()` indices to plain `int` before indexing.
+- Added explicit `mendelian_randomization()` guards for missing `data` or
+  required column names, replacing deeper `TypeError`/`KeyError` failure modes
+  with actionable `ValueError`s.
+- Typed `mr_plot()` and added an explicit missing-result guard.
+- Refreshed the root and runtime schema bundles after the MR public signature
+  annotations made `functions.json` stale.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/mendelian/mr.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/mendelian/mr.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/mendelian/mr.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/reference_parity/test_mr_parity.py
+  tests/test_correctness_v150.py::TestMREggerUsesTDistribution
+  tests/test_correctness_v150.py::test_mendelian_randomization_reports_t_based_egger
+  tests/test_dispatchers_v150.py::TestMRDispatcher
+  tests/test_new_v06_modules.py::TestMendelianRandomization -o addopts=''`
+  passed, 23 tests.
+
+Post-batch gate sweep:
+
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  `functions.json` and `src/statspai/schemas/functions.json`; `.venv/bin/python
+  scripts/dump_schemas.py` refreshed the schema bundle.
+- `.venv/bin/python -m compileall -q src/statspai` passed after refresh.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1305 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)` after refresh.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3462 <= 4698, mypy observed 1560 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 335
+
+Target: core result-protocol typing and export hygiene.
+
+- Annotated `src/statspai/core/results.py` result-time helpers, Jupyter pretty
+  hooks, constructors, statistics computation, plotting dispatchers, and
+  sensitivity wrappers without changing public method names or return shapes.
+- Narrowed `EconometricResults.tidy()` array coercion and `predict()` returns
+  through `np.asarray()`, preserving array-like outputs while satisfying the
+  declared `np.ndarray` contract.
+- Cast publication-table wrapper outputs from `regtable` to `str` at the
+  `to_latex()`, `to_html()`, and `to_markdown()` boundaries.
+- Removed unused local variables/imports in HTML and Word exporters and
+  expanded touched one-line star helpers; thresholds and rendered strings are
+  unchanged.
+- Cast `CausalResult.pretrend_test()` metadata to the documented dict shape.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/core/results.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/core/results.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/core/results.py --count --statistics` passed with 0 selected
+  touched-file violations.
+- `.venv/bin/python -m pytest -q tests/test_econometric_results_export.py
+  tests/test_agent_detail_levels.py tests/test_diagnose_result_closed_loop.py
+  tests/test_result_protocol.py tests/test_lineage.py -o addopts=''` passed,
+  291 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1305 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3443 <= 4698, mypy observed 1534 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 336
+
+Target: decomposition plot return typing and CI-error hygiene.
+
+- Annotated `src/statspai/decomposition/plots.py` matplotlib loader and every
+  plot helper with explicit `(fig, ax/axes)` return boundaries.
+- Kept result objects duck-typed as `Any`, matching the existing design where
+  plot functions accept any object exposing the needed decomposition
+  attributes.
+- Replaced list-to-`None` reassignment for bar error whiskers with separate
+  `yerr` variables, keeping matplotlib behavior unchanged while satisfying
+  static typing.
+- Split mediation rows into raw tuples and ndarray values before arithmetic,
+  avoiding tuple/ndarray reassignment ambiguity.
+- Removed an unused typing import and wrapped the `dfl_plot()` signature so no
+  new line-length debt is introduced.
+
+Verification run:
+
+- `.venv/bin/python -m mypy src/statspai/decomposition/plots.py --config-file
+  pyproject.toml --show-error-codes` reported success after the repository
+  Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/decomposition/plots.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731
+  src/statspai/decomposition/plots.py --count --statistics` passed with 0
+  selected touched-file violations.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q
+  tests/test_decomposition_cov_rendering.py tests/test_decomposition_cov_misc2.py
+  tests/test_decomposition_cov_oaxaca.py::test_oaxaca_result_plot
+  -o addopts=''` passed, 34 tests.
+
+Post-batch gate sweep:
+
+- `.venv/bin/python -m compileall -q src/statspai` passed.
+- `.venv/bin/python scripts/error_taxonomy_audit.py --check` passed with
+  1403 taxonomy raises and 1305 generic raises.
+- `.venv/bin/python scripts/result_protocol_audit.py --check` passed with
+  270 result classes inspected.
+- `.venv/bin/python scripts/tierd_classify.py report` reported 0
+  estimator-like Tier-D worklist items across 1070 registered functions
+  (`reference=128`, `anchored=579`, `weak=149`, `smoke=11`,
+  `untested=203`).
+- `.venv/bin/python scripts/tier_a_fixture_lock.py` passed with
+  `tests/r_parity/TIER_A_FIXTURE_LOCK.json is current`.
+- `.venv/bin/python scripts/dump_schemas.py --check` reported
+  `schemas/ is in sync (5 files)`.
+- `.venv/bin/python scripts/benchmark_ratchet.py --check` passed with no
+  StatsPAI timing regression beyond 1.50x.
+- `.venv/bin/python scripts/quality_gate.py all` passed with flake8 observed
+  3442 <= 4698, mypy observed 1509 <= 3521, import-budget observed 0, and the
+  agent-card, result-protocol, and error-taxonomy gates passing.
+- `git diff --check` passed.
+- Root-scoped JOSS paths remain untouched by this batch. `CausalAgentBench/`
+  remains clean on `main...origin/main`; nested `Paper-JSS/` still shows
+  external/parallel `replication/results/*` modifications and was not touched.
+- External/parallel root changes from Batch 329 remain present and were not
+  touched or reverted here.
+
+## 2026-06-18 Batch 337
+
+Target: synthetic-control plot dispatcher typing and schema refresh.
+
+- Annotated `src/statspai/synth/plots.py` `synthplot()` and all internal plot
+  helpers with explicit dynamic Matplotlib return boundaries.
+- Typed trajectory and weight extraction helpers while preserving
+  `CausalResult` and list-dispatch behavior.
+- Kept plot data semantics unchanged; removed dead locals in dispatcher, paired
+  trajectory, and staggered plotting branches.
+- Narrowed staggered fallback `unit_df` and gsynth factor arrays before indexing
+  and shape arithmetic.
+- Changed `_ensure_matplotlib()` to use `importlib.import_module("matplotlib")`
+  so the optional availability check does not create an unused import warning.
+- Refreshed root and runtime schema bundles after the public `synthplot`
+  signature annotations changed tool/function metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/synth/plots.py --config-file pyproject.toml --show-error-codes`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/synth/plots.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/synth/plots.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_synth_exports.py tests/test_cov95_synth_r4_staggered.py tests/test_cov95_synth_r2_exports.py -o addopts=''`
+  passed, 40 tests.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1305 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3430`, `mypy observed=1483`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 338
+
+Target: interactive plot editor typing and action-boundary hardening.
+
+- Annotated `src/statspai/plots/interactive.py` font/size preset registries,
+  cache state, edit-record serialization, and the full `FigureEditor` method
+  surface.
+- Preserved the existing data-protection model and generated-code format while
+  making Matplotlib/Jupyter duck-typed boundaries explicit with `Any`.
+- Narrowed protected x/y limit expansion to require both data endpoints before
+  margin arithmetic, avoiding optional-float arithmetic paths.
+- Typed grid style kwargs and web/action payloads as structured dicts and added
+  an explicit non-string action-name guard before dispatch.
+- Removed an unused collection import from artist classification after typing
+  exposed the selected touched-file lint issue.
+- Kept schema bundles unchanged; `dump_schemas.py --check` remained in sync.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/plots/interactive.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/plots/interactive.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/plots/interactive.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_untested_public_api.py tests/test_import_budget.py -o addopts=''`
+  passed, 17 tests and 2 existing skips.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1306 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3429`, `mypy observed=1392`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 339
+
+Target: Jupyter plot editor callback typing and lint cleanup.
+
+- Annotated `src/statspai/plots/_jupyter_editor.py` notebook-panel entrypoint,
+  preview renderer, callback decorator, widget event handlers, callback
+  factories, tab-loading state, and color conversion helper.
+- Kept ipywidgets and matplotlib imports lazy inside the notebook panel so the
+  top-level import budget remains unchanged.
+- Narrowed axis-selector values through `int(...)` at the helper boundary and
+  typed local state dictionaries used by render/manual-mode and tab loading.
+- Replaced a matplotlib-stub-invisible `PathCollection.get_facecolors()` call
+  with `getattr(..., "get_facecolors")()` while preserving runtime behavior.
+- Removed one unused interactive import and one unused size-preset scratch
+  variable caught by touched-file flake8.
+- Kept schema bundles unchanged; `dump_schemas.py --check` remained in sync.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/plots/_jupyter_editor.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/plots/_jupyter_editor.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/plots/_jupyter_editor.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_untested_public_api.py tests/test_import_budget.py -o addopts=''`
+  passed, 17 tests and 2 existing skips.
+- `.venv/bin/python -c "from statspai.plots._jupyter_editor import _code_to_html; html = _code_to_html('x < y'); assert '&lt;' in html and '<pre' in html"`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1306 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3427`, `mypy observed=1320`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 340
+
+Target: survival estimator typing, explicit result guards, and schema refresh.
+
+- Annotated `src/statspai/survival/models.py` formula parsing, Cox variance
+  helpers, Cox/Kaplan-Meier result methods, KM table construction, Cox partial
+  likelihood helpers, AFT log-likelihood helpers, and public `cox()` /
+  `survreg()` optional parameters.
+- Preserved Cox, KM, log-rank, and AFT numerical formulas while casting numpy
+  scalar objective returns at the function boundary.
+- Added explicit `RuntimeError` guards when a `CoxResult` is missing
+  concordance, baseline hazard, or hazard-ratio CI internals, replacing deeper
+  `None` indexing/float-conversion failures.
+- Narrowed `KMResult.median_survival` in summary generation so scalar and
+  grouped-dict cases are handled explicitly.
+- Removed historical dead locals in log-rank, Cox score, and AFT Hessian paths;
+  replaced local optimizer lambdas with named nested functions.
+- Refreshed root and runtime `functions.json` after public survival signature
+  annotations changed schema metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/survival/models.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/survival/models.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/survival/models.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_timeseries_survival_estimators.py tests/test_tierD_p2_survival_analytic.py tests/test_glance_survival.py tests/test_new_v06_modules.py::TestSurvival tests/test_estimator_provenance_round9.py::TestKaplanMeierProvenance tests/test_estimator_provenance_round9.py::TestCoxProvenance -o addopts=''`
+  passed, 24 tests.
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  `functions.json` and `src/statspai/schemas/functions.json`;
+  `.venv/bin/python scripts/dump_schemas.py` refreshed the schema bundle.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1310 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3413`, `mypy observed=1285`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 341
+
+Target: smart recommendation typing, stability-gate guards, and schema refresh.
+
+- Annotated `src/statspai/smart/recommend.py` recommendation-result storage,
+  workflow rendering helpers, data-profile/design detection helpers, public
+  `recommend()` optional parameters, and execution wrappers.
+- Typed recommendation, warning, DAG-adjustment, agent-card, and weak-IV
+  containers so branch-specific metadata is checked before result assembly.
+- Narrowed the staggered-DID cohort derivation helper and verification sort key
+  without changing recommendation ordering semantics.
+- Guarded non-string `function` metadata in the unstable-recommendation filter,
+  making the stability gate explicit for malformed or externally supplied
+  recommendation rows.
+- Removed no-placeholder workflow f-strings and renamed the RD cutoff local to
+  avoid cross-branch type collisions.
+- Refreshed root and runtime `functions.json` after public recommendation
+  signature annotations changed schema metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/smart/recommend.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/smart/recommend.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/smart/recommend.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_smart_workflow.py::TestRecommend tests/test_recommend_agent_cards.py tests/test_smart_stability_gating.py tests/test_workflow_sprint_b.py -o addopts=''`
+  passed, 42 tests.
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  `functions.json` and runtime schema files; `.venv/bin/python scripts/dump_schemas.py`
+  refreshed the schema bundle.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1310 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3400`, `mypy observed=1252`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 342
+
+Target: smart estimator-comparison typing, IPW/AIPW dispatch repair, and
+schema refresh.
+
+- Annotated `src/statspai/smart/compare.py` comparison-result storage, plot
+  method inputs, public `compare_estimators()` optional parameters, hint
+  conflict helpers, result map, and estimates rows.
+- Fixed the IPW and AIPW branches to call the canonical `treat=` keyword
+  instead of the non-existent `treatment=` keyword, restoring those methods in
+  `compare_estimators(methods=['ipw', 'aipw'])`.
+- Preserved the ROADMAP hint-collision rule while making arbitrary hint-value
+  comparisons return an explicit bool.
+- Guarded optional plot figure layout with a callable check so non-standard
+  Matplotlib figure backends do not fail at a narrow attribute boundary.
+- Removed a dead standard-error array from agreement diagnostics.
+- Refreshed root and runtime tool/function schemas after public comparison
+  signature annotations changed schema metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/smart/compare.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/smart/compare.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/smart/compare.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_smart_workflow.py tests/test_recommend_agent_cards.py tests/test_smart_stability_gating.py tests/test_workflow_sprint_b.py -o addopts=''`
+  passed, 52 tests.
+- A direct OLS/IPW/AIPW smoke run through `sp.compare_estimators(...)`
+  returned `OLS`, `IPW`, and `AIPW` results with finite estimate/SE/p-value
+  rows.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_smart_workflow.py::TestCompareEstimators -o addopts=''`
+  passed, 1 test.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_smart_tools_sprint_b_round3.py tests/test_smart_tools_sprint_b_round4.py -o addopts=''`
+  passed, 20 tests.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_v0917_additions.py::TestCausalWorkflow::test_compare_estimators_records_error_row -o addopts=''`
+  passed, 1 test.
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  tool/function schema files; `.venv/bin/python scripts/dump_schemas.py`
+  refreshed the schema bundle.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1403 taxonomy raises, 1310 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3399`, `mypy observed=1212`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 343
+
+Target: causal-question dispatch reliability and typing hardening.
+
+- Annotated `src/statspai/question/question.py` serialization helpers,
+  `to_dict()`, estimation/report/paper methods, estimator dispatch kwargs,
+  reserved-kwarg checks, AIPW inference inputs, and generic result extraction.
+- Narrowed generated identification plans and fitted results to local
+  non-optional variables before dispatch/report rendering.
+- Added a defensive non-empty DataFrame check at the private dispatch boundary
+  so direct internal calls get the same `DataInsufficient` error as
+  `CausalQuestion.estimate()`.
+- Replaced the IV path's callable-module dispatch with the explicit
+  `statspai.iv.fit` dispatcher, generated the current canonical IV formula
+  syntax `y ~ (d ~ z) + x`, and extracted treatment coefficient/SE/CI from
+  `EconometricResults` instead of reporting NaN.
+- Added early `id`/`time`/column checks for DiD, event-study, and longitudinal
+  dispatch paths.
+- Fixed event-study dispatch to call `sp.event_study(..., treat_time=..., unit=...)`;
+  `cohort=` is used as the treatment-time column when provided, otherwise the
+  existing `treatment` field remains the backward-compatible default.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/question/question.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/question/question.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/question/question.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_question_dsl.py tests/test_paper_from_question.py tests/test_v0917_review_fixes.py -o addopts=''`
+  passed, 92 tests.
+- Direct smoke through `sp.causal_question(..., design='iv')` returned a finite
+  IV estimate from `statspai.iv.fit`; direct smoke through
+  `sp.causal_question(..., design='event_study', cohort='first_treat')`
+  returned a finite event-study estimate.
+- `.venv/bin/python scripts/dump_schemas.py --check` passed without refresh.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1407 taxonomy raises, 1310 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3399`, `mypy observed=1173`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 344
+
+Target: causal workflow typing, rendered-state guards, and DID fallback clarity.
+
+- Annotated `src/statspai/workflow/causal_workflow.py` stage methods,
+  fallback estimator dispatch, robustness, run/mark/note helpers, nested
+  comparison helpers, CATE summarisation helper, and public `causal(..., dag)`.
+- Narrowed recommendation, diagnostics, and result objects to local non-optional
+  variables before estimator dispatch, markdown rendering, robustness, compare,
+  and sensitivity-panel logic.
+- Added an explicit runtime guard when `recommend()` or `estimate()` fail to
+  populate their cached objects, replacing later `None` attribute failures with
+  direct workflow-state errors.
+- Made the direct DiD fallback require both treatment and time fields before
+  calling `sp.did`.
+- In multi-estimator comparison, copied DiD/RD/observational column names into
+  local variables before lambda dispatch so checked values are the ones captured.
+- When a 2x2 DiD comparison lacks treatment or time columns, records an
+  explanatory `ERROR` row instead of forwarding `None` into the estimator.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/workflow/causal_workflow.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/workflow/causal_workflow.py`
+  passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/workflow/causal_workflow.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_v0917_additions.py::TestCausalWorkflow tests/test_workflow_degradations.py tests/test_robustness_battery.py::TestCausalWorkflowBackwardsCompat tests/test_smart_stability_gating.py -o addopts=''`
+  passed, 29 tests.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_causal_workflow.py tests/test_workflow_sprint_b.py -o addopts=''`
+  passed, 35 tests.
+- `.venv/bin/python scripts/dump_schemas.py --check` passed without refresh.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1407 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3399`, `mypy observed=1140`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 345
+
+Target: VAR/Granger/IRF typing, explicit cached-state guards, and schema
+refresh.
+
+- Annotated `src/statspai/timeseries/var.py` `VARResult.__init__`, cached
+  coefficient/covariance attributes, `VARResult.irf()`, `plot_irf()`,
+  `_lag_matrix()`, public `var()`, `granger_causality()`, and `irf()`.
+- Removed unused `Union` import.
+- Made `var(variables=...)`, `granger_causality(...)`, and `irf(...)`
+  implicit-optional parameters explicit in type metadata.
+- Added a `MethodIncompatibility` guard when `granger_causality()` is called
+  without both `caused` and `causing`.
+- Added an IRF guard for stale or externally constructed `VARResult` objects
+  that do not carry the fitted coefficient matrix cache.
+- Preserved the Stata/R SE denominator behavior and the Granger covariance fix.
+- Refreshed root and runtime `functions.json` after public time-series
+  signature annotations changed schema metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/timeseries/var.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/timeseries/var.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/timeseries/var.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_timeseries_survival_estimators.py tests/test_new_v06_modules.py::TestTimeSeries tests/test_tierD_p2_timeseries_analytic.py -o addopts=''`
+  passed, 15 tests.
+- Direct IRF/Granger smoke through `sp.var()`, `sp.irf()`, and
+  `sp.granger_causality()` passed, including the missing-`causing` error path.
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  `functions.json` files; `.venv/bin/python scripts/dump_schemas.py` refreshed
+  the schema bundle.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3397`, `mypy observed=1125`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 346
+
+Target: SDID wrapper, plotting, and resampling-helper typing.
+
+- Annotated `src/statspai/synth/sdid.py` R-style wrappers
+  (`synthdid_estimate`, `sc_estimate`, `did_estimate`), placebo kwargs, rows,
+  plotting helpers, and placebo/bootstrap/jackknife SE helper inputs.
+- Typed plot helper axis/figsize return boundaries while preserving Matplotlib
+  lazy imports and existing `(fig, ax)` returns.
+- Typed placebo override kwargs as `dict[str, Any]` so default `n_reps=50`
+  merges cleanly with user-supplied SDID options.
+- Converted placebo and jackknife `taus` from list to ndarray via dedicated
+  `taus_arr` variables instead of reassigning across container types.
+- Cast `_estimate_tau()` return to `float` at the function boundary, preserving
+  the SDID weighted-DID formula.
+- Removed an unused bootstrap local and one no-placeholder f-string.
+- Refreshed root and runtime tool/function schemas after public SDID
+  wrapper/plot annotations changed metadata.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/synth/sdid.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/synth/sdid.py` passed.
+- `.venv/bin/python -m flake8 --select=F401,F541,F841,E731 src/statspai/synth/sdid.py --count --statistics`
+  passed with 0 findings.
+- `MPLBACKEND=Agg .venv/bin/python -m pytest -q tests/test_honest_did_sdid.py tests/test_sdid_backend.py::test_native_sdid_matches_synthdid_reference_fixture tests/test_sdid_backend.py::test_native_sdid_recovers_constant_effect_on_exact_synthetic_dgp tests/test_synth_exports.py -o addopts=''`
+  passed, 51 tests.
+- Initial `.venv/bin/python scripts/dump_schemas.py --check` reported stale
+  tool/function schema files; `.venv/bin/python scripts/dump_schemas.py`
+  refreshed the schema bundle.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3395`, `mypy observed=1102`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 347
+
+Target: DID plotting type contract and schema container typing.
+
+- Annotated `src/statspai/did/plots.py` lazy Matplotlib helpers, DID plotter
+  public boundaries, result inputs, axis/figsize parameters, kwargs, and
+  `(fig, ax)` returns without changing rendering behavior.
+- Narrowed DID plot label mappings to `dict[str, str]` where the API consumes
+  named labels, preserving existing optional label defaults.
+- Added a registry schema regression guard for container annotations so
+  `Tuple[float, float]`, `tuple[float, float]`, `List[int]`, `Dict[str, float]`,
+  mapping unions, and bool-leading unions export to stable JSON schema types.
+- Fixed `src/statspai/registry.py` schema type ordering so list/tuple/sequence
+  annotations export as JSON arrays, dict/mapping annotations export as
+  objects, and bool-leading unions such as `Union[bool, Dict[str, Any], None]`
+  remain boolean switches rather than invalid object/array defaults.
+- Refreshed root and runtime schemas after public DID plotting annotations and
+  schema type normalization changed tool/function metadata. The refresh also
+  repaired previously stale tuple/list parameters such as `m_grid`, `horizon`,
+  `original_ci`, and `figsize` so they no longer export as scalar numbers.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/did/plots.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_agent_schema.py::TestBackwardCompatibility::test_json_schema_type_prefers_containers -q -o addopts=''`
+  passed, 12 tests.
+- `.venv/bin/python -m pytest tests/test_agent_schema.py::TestBackwardCompatibility::test_json_schema_type_prefers_containers tests/test_cov95_did_plots.py tests/test_did_cov_plots_diagram.py tests/test_did_cov_plots_guards.py -q -o addopts=''`
+  passed, 44 tests.
+- `.venv/bin/python scripts/dump_schemas.py` refreshed the schema bundle, then
+  `.venv/bin/python scripts/dump_schemas.py --check` passed.
+- Full gate after schema refresh passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3395`, `mypy observed=1079`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 348
+
+Target: auto-diagnostic row extractor typing.
+
+- Annotated `src/statspai/output/_diagnostics.py` result-object adapters,
+  numeric cell formatters, FE/cluster probes, IV diagnostic probes, DiD probes,
+  and RD probes with explicit `Any`/string-return boundaries.
+- Preserved the duck-typed metadata extraction behavior used by `regtable`
+  diagnostics; no row ordering, label, or formatting logic changed.
+- Kept schema snapshots unchanged; this module is a private output helper and
+  the schema check stayed current.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/output/_diagnostics.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_auto_diagnostics.py tests/test_shift_share_political.py::test_panel_fe_picked_up_by_diagnostic_extractor tests/test_shift_share_political.py::test_panel_fe_none_drops_fe_rows_entirely -q -o addopts=''`
+  passed, 39 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3395`, `mypy observed=1057`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 349
+
+Target: `estat` diagnostics dispatcher typing.
+
+- Annotated `src/statspai/diagnostics/estat.py` public dispatcher result input,
+  result-array accessors, OLS helper return tuple, individual diagnostic test
+  helpers, and `_estat_all()` with explicit `Any`/`np.ndarray`/dict boundaries.
+- Rewrote the Breusch-Godfrey auxiliary design assembly from direct
+  `[X_trimmed] + lag_cols` concatenation to an explicitly typed `aux_cols`
+  list followed by `extend()`, preserving the same column-stack inputs while
+  removing the ndarray-shape list-type ambiguity.
+- Left estat calculations, returned dictionaries, and formatted output
+  behavior unchanged.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/diagnostics/estat.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m py_compile src/statspai/diagnostics/estat.py` passed.
+- `.venv/bin/python -m pytest tests/test_estat_dispatcher.py tests/test_next_steps.py -q -o addopts=''`
+  passed, 42 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3395`, `mypy observed=1035`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 350
+
+Target: postestimation margins typing and schema stability.
+
+- Annotated `src/statspai/postestimation/margins.py` public postestimation API
+  surfaces (`margins`, `margins_at`, `contrast`, `pwcompare`,
+  `event_study_table`, and `margins_table`) and internal numerical derivative,
+  variance, multiplicity-adjustment, and plotting helper boundaries.
+- Narrowed array/scalar return paths in `_get_vcov()`, `_predict_row()`,
+  `_adjust_pvalues()`, and `_adjusted_alpha()` with explicit NumPy/float/list
+  conversions so mypy no longer treats these public postestimation helpers as
+  leaking `Any`.
+- Refreshed generated schemas after the public annotation changes; the runtime
+  and checked-in schema mirrors are in sync.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/postestimation/margins.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_postestimation.py tests/test_regtable_round3_extensions.py tests/test_untested_public_api.py::test_margins_at_plot_smoke tests/test_external_reviewer_followups.py::TestAdvancedPostEstimationMargins::test_pwcompare_adjusts_pvalues_and_intervals -q -o addopts=''`
+  passed, 34 tests.
+- `.venv/bin/python scripts/dump_schemas.py` refreshed generated schema files.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3395`, `mypy observed=1014`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 351
+
+Target: assumption-audit typing and result-parameter robustness.
+
+- Annotated `src/statspai/smart/assumptions.py` result containers, public
+  `assumption_audit()` boundary, nested token matcher, and all method-specific
+  `_audit_*()` branches with explicit result/data/alpha and
+  `List[AssumptionCheck]` return types.
+- Removed unused touched-file imports and rewrapped the long status expression
+  in `AssumptionCheck.__repr__()`.
+- Hardened linear-audit regressor extraction so results whose `params` are a
+  pandas-like object still use `.index`, while dict-backed results fall back to
+  parameter keys instead of assuming every `params` object has `.index`.
+- Refreshed generated function schemas after the public API annotation update.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/smart/assumptions.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_smart_workflow.py::TestAssumptionAudit tests/test_workflow_degradations.py::test_assumption_audit_records_underlying_failure tests/test_workflow_degradations.py::test_assumption_audit_runs_all_four_linear_checks_on_real_ols -q -o addopts=''`
+  passed, 3 tests.
+- `.venv/bin/python scripts/dump_schemas.py` refreshed generated schema files.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3390`, `mypy observed=994`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 352
+
+Target: propensity-score diagnostics typing and plotting boundaries.
+
+- Annotated `src/statspai/matching/ps_diagnostics.py` numerical optimizer
+  callbacks, result-container methods, matplotlib loader, and public
+  `overlap_plot()` / `love_plot()` / `_love_plot_from_table()` boundaries.
+- Narrowed dynamic SciPy, sklearn, NumPy, and pandas returns with explicit
+  `float()`, `np.asarray(..., dtype=float)`, and `str()` conversions in the
+  probit score, GBM score, SMD, variance-ratio, KS-statistic, and HTML/table
+  formatting paths.
+- Allowed love-plot `figsize` height to be typed as optional, matching the
+  existing `(7, None)` default and its runtime auto-height behavior.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/matching/ps_diagnostics.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- Initial targeted pytest invocation included a stale node id and failed at
+  collection; the corrected test selections below passed.
+- `.venv/bin/python -m pytest tests/test_matching.py::test_balance_diagnostics_returns_summary tests/test_tierD_identification_balance_analytic.py tests/test_tierD_bounds_analytic.py -q -o addopts=''`
+  passed, 21 tests.
+- `.venv/bin/python -m pytest tests/test_untested_bounds_and_diag.py::test_propensity_scores_are_probabilities_and_monotone -q -o addopts=''`
+  passed, 1 test.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3390`, `mypy observed=974`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 353
+
+Target: JAX-backed FEOLS typing and bootstrap helper boundaries.
+
+- Annotated `src/statspai/fast/jax_feols.py` JAX kernel factories and nested
+  JIT/vmap callables with explicit `Any` tracer boundaries, keeping JAX's
+  dynamic traced-array objects out of ordinary NumPy type assumptions.
+- Removed the same-scope `fe_card` redefinition in the weighted FE branch while
+  preserving the existing cardinality accumulation logic.
+- Narrowed bootstrap result string/dict exports with `str(...)` and
+  `dict(_jsonable(...))`, preserving JSON-safe protocol output while clearing
+  dynamic-return leakage.
+- Annotated chunk runner closures inside `feols_jax_bootstrap()` and the shared
+  `_jax_prep_inputs()` payload boundary.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these internal JAX annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/fast/jax_feols.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_fast_jax_feols_result_protocol.py tests/test_jax_feols.py -q -o addopts=''`
+  passed 2 tests with 1 JAX parity module skipped in the current no-JAX
+  environment.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3390`, `mypy observed=954`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 354
+
+Target: core formula/design-matrix utility typing.
+
+- Annotated `src/statspai/core/utils.py` simple numeric design-matrix fast path
+  with an optional tuple return boundary and widened `create_design_matrices()`
+  to the behavior it already supports (`dataframe` or `array` outputs).
+- Added an explicit heterogeneous `Dict[str, Any]` boundary to
+  `parse_formula()` so list-valued fields and boolean/string fields no longer
+  collapse into an unusable inferred union.
+- Removed the unused `dmatrix` import and unused fallback exception binding in
+  the touched file.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these utility annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/core/utils.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- Initial targeted pytest invocation used stale standalone node ids for
+  class-scoped fast-path tests and failed at collection; the corrected
+  selections below passed.
+- `.venv/bin/python -m pytest tests/test_ols.py::TestOLSRegression::test_basic_ols tests/test_ols.py::TestOLSRegression::test_regress_rejects_nonfinite_design_values tests/test_ols.py::TestOLSRegression::test_simple_numeric_design_fast_path_matches_patsy tests/test_ols.py::TestOLSRegression::test_simple_numeric_no_intercept_fast_path_matches_patsy tests/test_ols.py::TestOLSRegression::test_complex_formula_stays_on_patsy_path -q -o addopts=''`
+  passed, 5 tests.
+- `.venv/bin/python -m pytest tests/test_ols.py -q -o addopts=''`
+  passed, 43 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1409 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3387`, `mypy observed=936`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 355
+
+Target: specification-curve result protocol and skip semantics typing.
+
+- Aligned `src/statspai/robustness/spec_curve.py` result methods with
+  `ResultProtocolMixin`: `to_latex()` now accepts the mixin's `caption` and
+  `label` keyword boundary while preserving the legacy one-positional-caption
+  call, and `cite()` accepts a `format` argument.
+- Added taxonomy-classified `MethodIncompatibility` errors for invalid
+  `to_latex()` caption usage, avoiding a generic-raise regression.
+- Annotated `plot()` dynamic matplotlib return boundary and made plot offset
+  accumulators explicitly float-valued.
+- Marked `_run_one_spec()` as `Optional[Dict[str, Any]]`, matching its existing
+  behavior of returning `None` for too-small, singular, or otherwise
+  unestimable specifications that the public multiverse loop skips.
+- Typed `y_transforms` values as optional callables so the documented
+  `{'Level': None}` default is represented accurately.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/robustness/spec_curve.py --config-file pyproject.toml --show-error-codes --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_spec_curve.py tests/test_mixtape_ch09_guide.py::test_section5_spec_curve_runs_on_cross_section -q -o addopts=''`
+  passed, 22 tests, with the existing matplotlib tight-layout warnings.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1411 taxonomy raises, 1316 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3387`, `mypy observed=926`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 356
+
+Target: analytic power and MDE API typing plus solver failure taxonomy.
+
+- Typed `src/statspai/power/power.py` public power functions,
+  `PowerResult`, dispatcher, MDE helper, design registry, plotting boundary,
+  and internal binary-search solvers without changing the closed-form power
+  formulas.
+- Marked the IV first-stage adjustment as scalar-or-vector numeric state so
+  scalar `first_stage_f` and array-valued `r2_z` paths share the same typed
+  computation.
+- Removed the unused solver-local alpha lookup in `_solve_for_n()`.
+- Replaced the two impossible-to-bracket solver failures with
+  `ConvergenceFailure`, preserving `RuntimeError` compatibility while adding
+  recovery hints and machine-readable diagnostics.
+- Refreshed `schemas/functions.json` and
+  `src/statspai/schemas/functions.json` after the public signature metadata
+  changed.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/power/power.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m pytest tests/test_tierD_power_analytic.py tests/test_untested_function_coverage.py::TestPowerFamily tests/test_power_calculators.py -q -o addopts=''`
+  passed, 36 tests.
+- `.venv/bin/python scripts/dump_schemas.py --check` first reported stale
+  `functions.json` files; `.venv/bin/python scripts/dump_schemas.py` refreshed
+  them and the subsequent schema check passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1413 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3386`, `mypy observed=908`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 357
+
+Target: randomized experimental-design API typing and summary robustness.
+
+- Typed `src/statspai/experimental/design.py` result constructors,
+  `randomize()`, `BalanceResult.plot()`, and `_mahalanobis_distance()`.
+- Made optional public parameters explicit for probability vectors, strata,
+  clusters, balance covariates, and seeds.
+- Added an `assignments` array boundary and explicit integer conversions for
+  two-arm treated/control counts.
+- Kept the randomization formulas unchanged, while making
+  `RandomizationResult.summary()` robust for multi-arm randomizations by
+  reporting arm counts from the assigned data when treated/control counts are
+  not defined.
+- Removed an unused local `regress` import from the omnibus balance check and
+  cleaned touched-file flake8 issues in the module.
+- Refreshed `schemas/functions.json` and
+  `src/statspai/schemas/functions.json` after the public signature metadata
+  changed.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/experimental/design.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/experimental/design.py` passed.
+- `.venv/bin/python -m pytest tests/test_new_v06_modules.py::TestExperimental -q -o addopts=''`
+  passed, 4 tests.
+- `.venv/bin/python scripts/dump_schemas.py --check` first reported stale
+  `functions.json` files; `.venv/bin/python scripts/dump_schemas.py` refreshed
+  them and the subsequent schema check passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1413 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3378`, `mypy observed=898`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 358
+
+Target: optimal experimental-design API typing and summary edge robustness.
+
+- Typed `src/statspai/experimental/optimal.py` result constructor fields and
+  optional public parameters for MDE, cluster size, cluster count, and cost
+  inputs.
+- Added a safe `summary()` display path for results whose MDE has not been
+  solved instead of formatting `None` as a float.
+- Rewrapped long docstring and MDE formula lines so the touched module passes
+  direct flake8.
+- Refreshed `schemas/functions.json` and
+  `src/statspai/schemas/functions.json` after the public signature metadata
+  changed.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/experimental/optimal.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/experimental/optimal.py` passed.
+- `.venv/bin/python -m pytest tests/test_new_v06_modules.py::TestExperimental::test_optimal_design -q -o addopts=''`
+  passed, 1 test.
+- `.venv/bin/python scripts/dump_schemas.py --check` first reported stale
+  `functions.json` files; `.venv/bin/python scripts/dump_schemas.py` refreshed
+  them and the subsequent schema check passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1413 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3373`, `mypy observed=892`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 359
+
+Target: panel plotting API typing, touched-file flake cleanup, and Hausman
+plot failure taxonomy.
+
+- Typed `src/statspai/panel/panel_plots.py` matplotlib loader, plot entry
+  points, axes parameters, figure-size tuples, and `(fig, ax)` return
+  boundaries.
+- Split coefficient-comparison list accumulators from their NumPy array forms,
+  removing list/array reassignment confusion while preserving the plotted
+  values and confidence intervals.
+- Added an explicit `MethodIncompatibility` guard for Hausman plots when the
+  fitted result lacks stored panel data, formula, entity, or time metadata.
+- Rewrapped existing long plotting lines and removed an unused local `plt`
+  binding so the touched module passes direct flake8.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/panel/panel_plots.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/panel/panel_plots.py` passed.
+- `.venv/bin/python -m pytest tests/test_panel_cov_plots.py tests/test_cov95_panel_plots_branches.py tests/test_cov95_panel_reg.py::test_plot_dispatcher tests/test_cov95_panel_reg.py::test_plot_shortcut_methods tests/test_cov95_panel_reg.py::test_plot_unknown_type_raises -q -o addopts=''`
+  passed, 25 tests, with the existing Matplotlib/NumPy scalar-conversion
+  warnings.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1414 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3366`, `mypy observed=876`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 360
+
+Target: stepwise/LASSO selection typing, HTML display repair, and taxonomy
+guards.
+
+- Typed `src/statspai/selection/stepwise.py` result dictionaries, plotting
+  return boundaries, internal OLS helpers, model-stat helpers, stepwise
+  comparator/evaluator closures, LASSO path helpers, and K-fold index
+  generator.
+- Fixed `SelectionResult._repr_html_()` formatting by replacing an invalid
+  conditional format specifier with an explicit value formatter.
+- Added taxonomy-classified `MethodIncompatibility` guards for unestimable
+  final stepwise/LASSO models and missing LASSO path state.
+- Split list accumulators and NumPy array returns at type boundaries without
+  changing stepwise criteria, coordinate descent, CV, AIC, or BIC selection
+  logic.
+- Removed unused imports and cleaned touched-file flake8 issues.
+- Refreshed `schemas/functions.json` and
+  `src/statspai/schemas/functions.json` after the public signature metadata
+  changed.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/selection/stepwise.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/selection/stepwise.py` passed.
+- `.venv/bin/python -m pytest tests/test_tierD_spatial_diag_analytic.py::TestStepwiseAnalytic tests/test_lasso_select.py -q -o addopts=''`
+  passed, 11 tests.
+- `.venv/bin/python scripts/dump_schemas.py --check` first reported stale
+  `functions.json` files; `.venv/bin/python scripts/dump_schemas.py` refreshed
+  them and the subsequent schema check passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3351`, `mypy observed=861`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 361
+
+Target: unified sensitivity dashboard optional-value typing and component
+argument narrowing.
+
+- Typed `src/statspai/robustness/unified_sensitivity.py` result argument
+  extraction, matched-pair coercion, dashboard notes, and main entry boundary.
+- Made estimate/se/CI extraction explicitly optional, with downstream E-value,
+  Oster, Rosenbaum, Sensemakr, and breakdown calculations using narrowed
+  non-optional values after the existing extraction guard.
+- Added small conversion helpers for optional dict/object fields returned by
+  E-value and Oster routines, avoiding unsafe `float(None)` boundaries.
+- Routed Rosenbaum matched-pair arrays through Python lists to match the public
+  diagnostic function's sequence contract.
+- Narrowed Sensemakr inputs before calling `sensemakr()`, and reused the
+  narrowed controls list in failure guidance.
+- Cleaned touched-file flake8 issues; `dump_schemas.py --check` stayed current
+  because no public schema refresh was needed.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/robustness/unified_sensitivity.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/robustness/unified_sensitivity.py`
+  passed.
+- `.venv/bin/python -m pytest tests/test_unified_sensitivity.py tests/test_v0917_review_fixes.py::test_unified_sensitivity_skips_oster_without_beta_uncontrolled tests/test_v0917_review_fixes.py::test_unified_sensitivity_runs_oster_when_all_args_supplied tests/test_v0917_review_fixes.py::test_breakdown_bias_uses_ci_not_estimate -q -o addopts=''`
+  passed, 14 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3343`, `mypy observed=846`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 362
+
+Target: Polars/Arrow fast-path adapter typing.
+
+- Typed `src/statspai/fast/polars_io.py` lazy/eager input resolver,
+  Polars/Arrow NumPy conversion helpers, column-name and row-count helpers,
+  pandas projection helper, column validation, and FE-array extraction.
+- Made the public `demean_polars()` signature reflect the already-supported
+  scalar column-name path for `X_cols` and `fe_cols`.
+- Wrapped optional zero-copy conversion returns in `np.asarray()` so mypy sees
+  a concrete `np.ndarray` while preserving best-effort zero-copy behavior when
+  the backend already returns an ndarray.
+- `dump_schemas.py --check` stayed current; public schema files did not need a
+  refresh for these annotations.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/fast/polars_io.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/polars_io.py` passed.
+- `.venv/bin/python -m pytest tests/test_fast_polars.py tests/test_fast_arrow_io.py -q -o addopts=''`
+  passed, 5 tests, 1 skipped due an optional backend not being available in the
+  current environment.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1314 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3343`, `mypy observed=832`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 363
+
+Target: sklearn compatibility wrapper behavior and typing.
+
+- Typed `src/statspai/compat/sklearn.py` public wrapper constructors,
+  `fit()`/`predict()` methods, sklearn availability guard, and
+  `lasso_cv_alphas_kwargs()`.
+- Removed the duplicate `SklearnOLS.predict()` definition and normalized
+  wrapper prediction outputs to concrete one-dimensional NumPy arrays.
+- Fixed `SklearnDML` custom learner plumbing by passing `model_y` and
+  `model_t` through the supported DoubleML constructor arguments instead of
+  assigning attributes on the legacy facade.
+- Repaired `SklearnCausalForest` against the current `CausalForest` API:
+  `n_trees` now maps to `n_estimators`, `min_leaf_size` maps to
+  `min_samples_leaf`, `fit()` passes the formula/data to the actual fit call,
+  `coef_` reflects the fitted ATE diagnostic, and `predict()` returns CATEs via
+  `effect()` instead of a constant fallback.
+- Added sklearn compatibility regression tests covering the CausalForest
+  wrapper fit/predict smoke path and the no-covariate input guard.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this compatibility-layer change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_compat_sklearn.py tests/test_late_bind_contracts.py::test_sklearn_budget_ceiling_on_bare_import_statspai -q -o addopts=''`
+  passed, 8 tests.
+- `.venv/bin/python -m mypy src/statspai/compat/sklearn.py`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/compat/sklearn.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3339`, `mypy observed=820`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 364
+
+Target: fast result-protocol helper typing and JSON safety coverage.
+
+- Typed `src/statspai/fast/_result_protocol.py` helper return paths so
+  `tidy_records()` returns concrete JSON-safe row dictionaries instead of an
+  `Any`-typed `jsonable()` result.
+- Annotated `distribution_summary()`'s output mapping and returned the already
+  normalized Python scalar payload directly, removing the remaining direct mypy
+  errors in this helper module.
+- Added `tests/test_fast_result_protocol_helpers.py` to pin non-finite NumPy
+  scalar conversion, tidy-record NaN normalization, and finite-only summary
+  calculations.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this private helper change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_result_protocol_helpers.py tests/test_fast_feols.py::test_feols_result_protocol_json_safe tests/test_fast_fepois.py::test_fepois_result_protocol_json_safe tests/test_fast_event_study.py::test_event_study_result_protocol_json_safe tests/test_fast_bench.py::test_hdfe_bench_result_protocol_json_safe tests/test_fast_jax_feols_result_protocol.py -q -o addopts=''`
+  passed, 9 tests.
+- `.venv/bin/python -m mypy src/statspai/fast/_result_protocol.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/_result_protocol.py tests/test_fast_result_protocol_helpers.py`
+  passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/_result_protocol.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3339`, `mypy observed=808`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 365
+
+Target: optional great-tables adapter typing and touched-file cleanup.
+
+- Typed `src/statspai/output/_gt.py` lazy `great_tables` import boundary and
+  GT-returning dispatch helpers while preserving the optional dependency
+  design.
+- Removed unused typing imports and the unused theme-local `gt` binding.
+- Added explicit casts around dynamically constructed `GT` instances so the
+  public `to_gt()` return type and helper paths are visible to mypy.
+- Cleaned touched-file flake8 issues in the adapter docstring examples,
+  collection comment, error message wrapping, and helper signatures.
+- Refreshed the generated schema bundle after `dump_schemas.py --check`
+  reported stale `functions.json` mirrors.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_gt_adapter.py -q -o addopts=''`
+  passed, 20 tests.
+- `.venv/bin/python -m mypy src/statspai/output/_gt.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/output/_gt.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/output/_gt.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` refreshed the schema bundle,
+    and `.venv/bin/python scripts/dump_schemas.py --check` then passed.
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3334`, `mypy observed=797`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 366
+
+Target: shared Excel styling helper typing and smoke coverage.
+
+- Typed `src/statspai/output/_excel_style.py` lazy style factory and
+  worksheet-facing helper boundaries while preserving openpyxl as a soft,
+  function-local dependency.
+- Removed unused typing imports and cleaned touched-file line wrapping in body
+  cell writes, note writing, and column autofit loops.
+- Added `tests/test_excel_style_helpers.py` to verify the shared xlsx renderer
+  writes the expected title, Times font, booktab borders, row label, and notes.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this private Excel helper change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_excel_style_helpers.py tests/test_econometric_results_export.py::TestToExcel -q -o addopts=''`
+  passed, 3 tests.
+- `.venv/bin/python -m mypy src/statspai/output/_excel_style.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/output/_excel_style.py tests/test_excel_style_helpers.py`
+  passed.
+- `.venv/bin/python -m compileall -q src/statspai/output/_excel_style.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3333`, `mypy observed=790`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 367
+
+Target: AER/QJE booktab style helper typing.
+
+- Typed `src/statspai/output/_aer_style.py` DOCX border XML builder, cell
+  border mutator, table border cleanup, typography helper, notes helper, and
+  Excel border factory.
+- Kept `python-docx` and `openpyxl` as function-local soft dependencies and
+  used `Any` only at the document/table/cell object boundary.
+- Removed an unused `Tuple` import and cleaned touched-file line wrapping in
+  comments, a compound row-index condition, the notes helper signature, and
+  the Excel border factory docstring.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this private style-helper change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_aer_word_style.py -q -o addopts=''`
+  passed, 6 tests.
+- `.venv/bin/python -m mypy src/statspai/output/_aer_style.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/output/_aer_style.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/output/_aer_style.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3332`, `mypy observed=783`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 368
+
+Target: sumstats/balance table formatter typing.
+
+- Typed `src/statspai/output/sumstats.py` private statistic-computation and
+  output-dispatch helpers without changing the public `sumstats()` or
+  `balance_table()` API.
+- Added a `_StatFunc` alias for statistic label/function pairs and concrete row
+  mappings for `_compute_stats()`.
+- Narrowed pandas LaTeX/HTML renderer returns through `str(...)` so the
+  private helpers satisfy their declared string contract.
+- Cleaned touched-file long doctest and ImportError lines.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this private formatter change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_sumstats.py tests/test_aer_word_style.py::test_sumstats_word_uses_booktab -q -o addopts=''`
+  passed, 21 tests.
+- `.venv/bin/python -m mypy src/statspai/output/sumstats.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/output/sumstats.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/output/sumstats.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3331`, `mypy observed=776`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 369
+
+Target: plots package lazy-export and CJK hook typing.
+
+- Typed `src/statspai/plots/__init__.py` lazy `__getattr__` dispatch,
+  CJK fallback registration shim, pyplot import hook installer, finder, and
+  nested loader methods.
+- Preserved the existing lazy import behavior: no eager matplotlib or
+  interactive editor import was introduced.
+- Cleaned the touched hook docstring line while keeping the one-shot import
+  hook semantics unchanged.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this package-initializer typing change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_import_budget.py tests/test_auto_cjk_fallback.py -q -o addopts=''`
+  passed, 12 tests.
+- `.venv/bin/python -m mypy src/statspai/plots/__init__.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/plots/__init__.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/plots/__init__.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3331`, `mypy observed=770`, import-budget `0`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 370
+
+Target: agent tool serializer helper typing.
+
+- Typed `src/statspai/agent/tools/_helpers.py` scalar coercion,
+  default result serializer, nested scalar/value access helpers, and
+  identification-report serializer.
+- Renamed the dynamic `to_dict()` payload from `out` to `serialized` to avoid
+  shadowing the later fallback payload dict.
+- Kept `Any` at the dynamic result/object boundary but narrowed internal
+  coefficient, diagnostics, and optional float extraction helpers.
+- Cleaned the touched-file flake8 continuation in the coefficient serializer.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this private agent-helper change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_agent.py tests/test_agent_detail_levels.py tests/test_agent_native_contract.py -q -o addopts=''`
+  passed, 100 tests.
+- `.venv/bin/python -m mypy src/statspai/agent/tools/_helpers.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/agent/tools/_helpers.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/agent/tools/_helpers.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3330`, `mypy observed=762`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 371
+
+Target: orchestrator/advisor tool spec serializer typing.
+
+- Typed `src/statspai/agent/tools/_specs/_orchestrate.py` bespoke causal
+  workflow and recommendation serializers at the dynamic object boundary.
+- Rewrapped the `causal` tool `design` schema enum to clear touched-file
+  flake8 while preserving the advertised tool schema.
+- `dump_schemas.py --check` stayed current; no public schema refresh was
+  needed for this serializer typing change.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_agent.py tests/test_agent_native_contract.py -q -o addopts=''`
+  passed, 75 tests.
+- `.venv/bin/python -m mypy src/statspai/agent/tools/_specs/_orchestrate.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/agent/tools/_specs/_orchestrate.py`
+  passed.
+- `.venv/bin/python -m compileall -q src/statspai/agent/tools/_specs/_orchestrate.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3329`, `mypy observed=760`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 372
+
+Target: HDFE benchmark harness typing and lint cleanup.
+
+- Typed `src/statspai/fast/bench.py` backend callables with an explicit
+  `_BackendFn` signature so NumPy, Numba, and future Rust benchmark paths are
+  all callable under static analysis.
+- Annotated the dynamic Numba/Rust backend wrappers, removed unused imports,
+  and rewrapped long benchmark helper declarations/imports to keep touched-file
+  flake8 clean.
+- Cast JSON-safe result payloads at the result-protocol boundary and widened
+  benchmark rows to `Dict[str, Any]`, preserving existing dataframe and summary
+  behavior while removing direct mypy `Any` and `object` callability errors.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_bench.py -q -o addopts=''`
+  passed, 16 tests.
+- `.venv/bin/python -m mypy src/statspai/fast/bench.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/bench.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/bench.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3327`, `mypy observed=753`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 373
+
+Target: HDFE low-level kernel fallback typing and lint cleanup.
+
+- Typed the optional-Numba fallback `njit` decorator in
+  `src/statspai/panel/_hdfe_kernels.py` with a callable-preserving TypeVar,
+  keeping the no-Numba path behavior identical while removing direct mypy
+  `no-untyped-def`.
+- Rewrapped the unweighted and weighted NumPy sweep helpers plus the Numba
+  kernel signature so touched-file flake8 is clean.
+- Preserved the existing in-place NumPy and Numba demeaning semantics; no
+  public API or benchmark contract changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_cov95_panel_feols.py tests/test_panel_cov_misc.py tests/test_panel_cov_hdfe.py tests/test_fast_bench.py -q -o addopts=''`
+  passed, 54 tests.
+- `.venv/bin/python -m mypy src/statspai/panel/_hdfe_kernels.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/panel/_hdfe_kernels.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/panel/_hdfe_kernels.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3326`, `mypy observed=752`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 374
+
+Target: optional JAX HDFE backend typing and lint cleanup.
+
+- Typed `src/statspai/fast/jax_backend.py` JAX array helpers at the optional
+  dependency boundary, including the single-FE sweep, Aitken accelerator,
+  one-column demean loop, and output column buffer.
+- Removed the unused `dataclass` import and rewrapped the long JAX gotcha URL
+  plus dtype selection so touched-file flake8 is clean.
+- Preserved the existing optional-dependency behavior: environments without
+  JAX still raise the same explicit backend error when the JAX path is forced.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_demean.py tests/test_fast_jax.py -q -o addopts=''`
+  passed, 28 tests and 2 JAX-unavailable skips.
+- `.venv/bin/python -m pytest tests/test_import_budget.py -q -o addopts=''`
+  passed, 3 tests.
+- `.venv/bin/python -m mypy src/statspai/fast/jax_backend.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/jax_backend.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/jax_backend.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3324`, `mypy observed=747`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 375
+
+Target: fast event-study result protocol typing and touched-file lint cleanup.
+
+- Typed `EventStudyResult.plot`'s dynamic matplotlib boundary in
+  `src/statspai/fast/event_study.py` and removed the unused `List` import.
+- Explicitly stringified the pandas summary table and cast JSON-safe
+  `to_dict` / `to_agent_summary` payloads at the result-protocol boundary,
+  clearing direct mypy without changing serialized keys.
+- Rewrapped validation messages, the module docstring first line, and the
+  generated formula so touched-file flake8 is clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_event_study.py tests/test_fast_etable.py -q -o addopts=''`
+  passed, 35 tests and 1 skipped external parity test.
+- `.venv/bin/python -m mypy src/statspai/fast/event_study.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/event_study.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/event_study.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3318`, `mypy observed=743`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 376
+
+Target: native fast FEOLS result protocol typing and weighted-FE local typing.
+
+- Cast `FeolsResult.to_dict` and `to_agent_summary` JSON-safe payloads at the
+  `_jsonable` boundary in `src/statspai/fast/feols.py`, preserving all
+  serialized keys and result protocol behavior.
+- Renamed the weighted fixed-effect cardinality accumulator to
+  `weighted_fe_card` before assigning it back to the shared `fe_card`, clearing
+  direct mypy `no-redef` without changing the weighted demeaning path.
+- Removed the unused `Tuple` import, explicitly stringified the summary table,
+  and rewrapped touched long lines so direct flake8 is clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_feols.py tests/test_jax_feols.py tests/test_fast_jax_feols_result_protocol.py -q -o addopts=''`
+  passed, 31 tests and 4 optional-JAX/pyfixest skips.
+- `.venv/bin/python -m mypy src/statspai/fast/feols.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/feols.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/feols.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3316`, `mypy observed=740`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 377
+
+Target: core numerical kernel optional-backend typing.
+
+- Typed the no-Numba fallback `njit` decorator in
+  `src/statspai/core/_numba_kernels.py` with a callable-preserving TypeVar and
+  made fallback `prange` a typed `range` wrapper.
+- Cast dynamic Numba/Rust/NumPy kernel return boundaries for `sandwich_hc`,
+  `cluster_meat`, and `hac_meat`, preserving numerical behavior while
+  removing direct mypy `Any` returns.
+- Kept direct flake8 clean; no public API or kernel arithmetic changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_numba_kernels.py tests/test_cluster_meat_rust.py tests/numerical_accuracy/test_nist_strd_ols.py -q -o addopts=''`
+  passed, 35 tests and 9 optional-Rust/Numba skips.
+- `.venv/bin/python -m mypy src/statspai/core/_numba_kernels.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/core/_numba_kernels.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/core/_numba_kernels.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3316`, `mypy observed=733`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 378
+
+Target: native fast Poisson HDFE result protocol typing and touched-file lint.
+
+- Removed unused imports from `src/statspai/fast/fepois.py` and cast
+  `FePoisResult.to_dict` / `to_agent_summary` payloads at the JSON-safe result
+  protocol boundary.
+- Cast dynamic NumPy/Rust returns in `_aitken_extrapolate` and
+  `_drop_separation_dispatcher`, clearing direct mypy without changing the
+  IRLS, weighted demeaning, or separation algorithms.
+- Rewrapped validation messages, Rust weighted-demean calls, summary strings,
+  and IRLS comments so touched-file flake8 is clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_fast_fepois.py tests/test_fast_within_dsl.py tests/test_fast_etable.py tests/test_fast_polars.py tests/test_fast_arrow_io.py -q -o addopts=''`
+  passed, 86 tests and 10 optional-backend/parity skips.
+- `.venv/bin/python -m mypy src/statspai/fast/fepois.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/fast/fepois.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/fast/fepois.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3307`, `mypy observed=729`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 379
+
+Target: DAG graph typing and touched-file lint cleanup without changing
+graph-theoretic semantics.
+
+- Removed stale typing imports from `src/statspai/dag/graph.py`, annotated the
+  public plotting helper and the internal parser, and typed bundled example
+  position metadata.
+- Rewrapped long d-separation, adjustment-set, plotting, and doctest lines so
+  the touched DAG file is flake8 clean.
+- Removed unused bidirected-edge geometry locals while preserving the existing
+  curved-edge drawing behavior.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_new_features.py::TestDAG tests/test_external_reviewer_followups.py::TestDAGReasoningHelpers tests/test_tierD_p2_dag_dsep_analytic.py tests/test_dag_recommend_and_tte_report.py tests/test_untested_public_api.py -q -o addopts=''`
+  passed, 44 tests and 2 skips.
+- `.venv/bin/python -m pytest tests/test_paper_dag_section.py -q -o addopts=''`
+  passed, 14 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/graph.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/graph.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/graph.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3300`, `mypy observed=724`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 380
+
+Target: DAG estimator-recommendation typing and touched-file lint cleanup.
+
+- Annotated `src/statspai/dag/recommend.py` DAG helper boundaries, using an
+  `Any` graph boundary for the dynamically attached DAG API and
+  `Sequence[str]` for candidate instruments/mediators.
+- Rewrapped long recommendation strings, docstring bullets, and dataclass
+  comments so the touched file is flake8 clean under the direct file gate.
+- Preserved existing recommendation text assembly, estimator choice order, and
+  frontdoor/IV/backdoor heuristics.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_recommend_and_tte_report.py tests/test_api_stable_evidence.py::test_dag_example_and_recommendation_contract tests/test_v100_integration.py::test_v097_three_school_surface_still_reachable -q -o addopts=''`
+  passed, 41 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/recommend.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/recommend.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/recommend.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3300`, `mypy observed=720`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 381
+
+Target: SWIG entrypoint typing, schema synchronization, and touched-file lint.
+
+- Annotated `src/statspai/dag/swig.py` constructor, local label helper, and
+  public `swig()` entrypoint without changing intervention mapping semantics.
+- Switched runtime collection ABC imports to `collections.abc`, normalized
+  mapping inputs with `dict(...)`, and rewrapped the potential-outcome label
+  construction line.
+- Refreshed the generated schema bundle after the public `swig()` signature
+  annotation changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_scm.py::test_swig_splits_intervened_nodes tests/test_dag_scm.py::test_swig_accepts_bare_variable_iterable tests/test_v100_integration.py::test_v097_three_school_surface_still_reachable tests/test_untested_public_api.py -q -o addopts=''`
+  passed, 47 tests and 2 skips.
+- `.venv/bin/python -m mypy src/statspai/dag/swig.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/swig.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/swig.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` followed by
+    `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3299`, `mypy observed=717`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 382
+
+Target: DAG package fluent-API typing and import lint cleanup.
+
+- Rewrapped the long `src/statspai/dag/__init__.py` graph import and added
+  postponed annotations plus a `Sequence` boundary for candidate instruments.
+- Annotated the dynamically attached `_dag_recommend_estimator` wrapper and
+  returned `EstimatorRecommendation` explicitly.
+- Replaced direct class attribute assignment with `setattr(...)` for the
+  runtime DAG method attachment, clearing mypy without changing the fluent
+  `g.recommend_estimator(...)` API.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_recommend_and_tte_report.py tests/test_api_stable_evidence.py::test_dag_example_and_recommendation_contract tests/test_v100_integration.py::test_v097_three_school_surface_still_reachable tests/test_new_features.py::TestDAG -q -o addopts=''`
+  passed, 52 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/__init__.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/__init__.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/__init__.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3298`, `mypy observed=715`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 383
+
+Target: SCM counterfactual typing, schema sync, and touched-file lint cleanup.
+
+- Added explicit structural-equation, noise-function, parent-value, and sample
+  map aliases in `src/statspai/dag/counterfactual.py`.
+- Typed `SCM.add`, `SCM.topo_order`, `SCM.simulate`, and
+  `SCM.counterfactual` boundaries, including accepted/factual/counterfactual
+  work dictionaries inside the rejection sampler.
+- Rewrapped long doctest and counterfactual-loop lines; preserved the existing
+  abduction-action-prediction logic and NumPy array output contract.
+- Refreshed generated schemas after the public SCM method annotations changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_scm.py::test_scm_simulate_linear_chain tests/test_dag_scm.py::test_scm_counterfactual_matches_linear_prediction tests/test_v100_integration.py::test_v097_three_school_surface_still_reachable tests/test_new_features.py::TestDAG -q -o addopts=''`
+  passed, 44 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/counterfactual.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/counterfactual.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/counterfactual.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` followed by
+    `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3295`, `mypy observed=711`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 384
+
+Target: do-calculus rule typing, schema sync, and touched-file lint cleanup.
+
+- Added `NodeInput` / `NodeSet` aliases in
+  `src/statspai/dag/do_calculus.py` and annotated the public rule helpers,
+  graph mutilation helpers, d-separation helper, and standardizer.
+- Removed placeholder-free f-strings, split one-line multi-statement set
+  conversions, and rewrapped long rule-return/doctext lines.
+- Preserved all existing rule applicability logic and transformed expression
+  strings, aside from lint-equivalent f-string literal cleanup.
+- Refreshed generated schemas after the public do-calculus annotations changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_scm.py::test_rule1_independence_on_mutilated_graph tests/test_dag_scm.py::test_rule2_observation_exchange tests/test_dag_scm.py::test_rule3_deletion_of_action tests/test_dag_scm.py::test_apply_rules_returns_all_three tests/test_tierD_p2_dag_dsep_analytic.py tests/test_external_reviewer_followups.py::TestDAGReasoningHelpers -q -o addopts=''`
+  passed, 14 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/do_calculus.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/do_calculus.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/do_calculus.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` followed by
+    `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3289`, `mypy observed=699`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 385
+
+Target: ID algorithm typing, schema sync, and touched-file lint cleanup.
+
+- Removed unused `field` and `combinations` imports from
+  `src/statspai/dag/identification.py` and replaced legacy `typing` aliases
+  with lightweight `NodeInput` / `NodeSet` aliases.
+- Annotated `IdentificationResult`, the public `identify()` entrypoint, the
+  `_NotIdentifiable` hedge carrier, ID recursion, latent-aware c-component
+  helpers, subgraph helpers, topological ordering, and formatting helpers.
+- Rewrapped the treatment set construction line and preserved all
+  Shpitser-Pearl recursion, hedge construction, and estimand strings.
+- Refreshed generated schemas after the public `identify()` annotation changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_dag_scm.py::test_id_backdoor_is_identifiable tests/test_dag_scm.py::test_id_bow_arc_is_NOT_identifiable tests/test_dag_scm.py::test_id_frontdoor_structure tests/test_dag_scm.py::test_id_raises_on_unknown_variable tests/test_tierD_p2_dag_dsep_analytic.py tests/test_external_reviewer_followups.py::TestDAGReasoningHelpers tests/test_new_features.py::TestDAG -q -o addopts=''`
+  passed, 25 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/identification.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/identification.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/identification.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` followed by
+    `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3287`, `mypy observed=687`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 386
+
+Target: LLM-DAG oracle edge typing, schema sync, and touched-file lint cleanup.
+
+- Added `Edge` and `Oracle` aliases in `src/statspai/dag/llm_dag.py` and
+  applied them to `LLMDAGResult`, `oracle_edges`, CI edge lists, and merge sets.
+- Replaced tuple coercion in the oracle path with an explicit filtered loop,
+  preserving the existing malformed-edge ignore behavior while giving mypy a
+  fixed two-string edge type.
+- Annotated `oracle_error`, `final`, and `disagreements` boundaries and
+  rewrapped long oracle/PC/intersection lines.
+- Refreshed generated schemas after the public oracle annotation changed.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_tierd_new_export_anchors.py::test_llm_dag_oracle_only_preserves_supplied_edges tests/test_registry_drift_repair.py -q -o addopts=''`
+  passed, 144 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/llm_dag.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/llm_dag.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/llm_dag.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py` followed by
+    `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3286`, `mypy observed=684`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 387
+
+Target: LLM causal evaluator typing and touched-file lint cleanup.
+
+- Removed unused `field`, `Sequence`, and NumPy imports from
+  `src/statspai/dag/llm_evaluator.py`.
+- Rewrapped long result-summary, prompt-template, and validation-error lines.
+- Replaced pandas boolean comparisons to literal `True` with `.eq(True)`,
+  preserving the forward-precision/recall semantics while clearing flake8.
+- Annotated the nested `_score` helper return as `Optional[float]`.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_llm_evaluator.py tests/test_registry_drift_repair.py -q -o addopts=''`
+  passed, 148 tests.
+- `.venv/bin/python -m mypy src/statspai/dag/llm_evaluator.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/dag/llm_evaluator.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/dag/llm_evaluator.py`
+  passed.
+- Post-batch DAG package sweep:
+  - `.venv/bin/python -m mypy src/statspai/dag --hide-error-context --no-error-summary`
+    passed after the configured Python-version warning.
+  - `.venv/bin/python -m flake8 src/statspai/dag` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3280`, `mypy observed=683`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 388
+
+Target: causal LLM SDK adapter post-init typing.
+
+- Added explicit `-> None` annotations to `_OpenAIClient.__post_init__` and
+  `_AnthropicClient.__post_init__` in `src/statspai/causal_llm/llm_clients.py`.
+- Left optional SDK imports, key validation, retry logic, and history capture
+  unchanged.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_api_stable_evidence.py::test_llm_client_adapters_have_offline_contracts tests/test_causal_llm.py tests/integration/test_causal_mas_with_fake_llm.py tests/test_llm_resolver.py::TestCompleteAlias::test_echo_client_has_complete -q -o addopts=''`
+  passed, 17 tests.
+- `.venv/bin/python -m mypy src/statspai/causal_llm/llm_clients.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_llm/llm_clients.py`
+  passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_llm/llm_clients.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3280`, `mypy observed=681`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 389
+
+Target: causal LLM resolver typing.
+
+- Added `Path` and `TYPE_CHECKING` imports in
+  `src/statspai/causal_llm/_resolver.py` and type-only `LLMClient` binding.
+- Annotated `_construct_client` and `get_llm_client` to return `LLMClient`,
+  narrowed explicit `client` to optional `LLMClient`, and typed `config_path`.
+- Annotated `configure_llm` to return `Path`.
+- Preserved the existing explicit-client, provider, env-var, config,
+  interactive, and hard-error resolution order.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_llm_resolver.py tests/test_sampling_llm_loop.py tests/test_api_stable_evidence.py::test_llm_client_adapters_have_offline_contracts -q -o addopts=''`
+  passed, 35 tests with the expected no-API-key fallback warning.
+- `.venv/bin/python -m mypy src/statspai/causal_llm/_resolver.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_llm/_resolver.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_llm/_resolver.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3280`, `mypy observed=676`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 390
+
+Target: utility data-tools helper typing and touched-file lint cleanup.
+
+- Removed unused `Dict` import from `src/statspai/utils/data_tools.py`.
+- Annotated the private `pwcorr` formatter helper and LaTeX renderer helper.
+- Preserved public `pwcorr` and `winsor` behavior and schema.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_utils.py -q -o addopts=''`
+  passed, 24 tests.
+- `.venv/bin/python -m mypy src/statspai/utils/data_tools.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/utils/data_tools.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/utils/data_tools.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3279`, `mypy observed=674`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 391
+
+Target: RD core typed NumPy/SciPy array boundaries.
+
+- Added explicit typed casts around RD kernel-return paths in
+  `src/statspai/rd/_core.py`, including the SciPy Gaussian density path where
+  stubs degrade the array return to `Any`.
+- Added matching typed casts around the HC1 and cluster-robust sandwich
+  variance matrix returns.
+- Preserved the existing local-polynomial WLS and sandwich formulas; this batch
+  is a type-boundary hardening only.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_cov95_rd_rdrobust.py
+  tests/tier_eg/test_rd_invariance.py tests/tier_eg/test_rd_robustness.py
+  -q -o addopts=''` passed, 48 tests with the existing weak first-stage fuzzy
+  RD warning.
+- `.venv/bin/python -m mypy src/statspai/rd/_core.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/rd/_core.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/rd/_core.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3279`, `mypy observed=669`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 392
+
+Target: RD multi-score Optional typing and touched-file lint cleanup.
+
+- Made `rd_multi_score(..., bandwidth=None)` explicit as
+  `Optional[float]`, clearing the last direct mypy error in
+  `src/statspai/rd`.
+- Removed an unused SciPy import from `src/statspai/rd/multi_score.py`.
+- Rewrapped the length-mismatch error, small-bandwidth error, and local-linear
+  design comment to keep the touched file flake8-clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_rd_frontiers.py
+  tests/test_cov95_rd_misc.py::test_rdms_multi_score
+  tests/test_cov95_rd_frontiers.py::test_rd_multi_score_properties_and_error
+  tests/test_tierD_rd_multiscore_analytic.py -q -o addopts=''` passed,
+  15 tests.
+- `.venv/bin/python -m mypy src/statspai/rd/multi_score.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/rd/multi_score.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/rd/multi_score.py` passed.
+- `.venv/bin/python -m mypy src/statspai/rd --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning, so the RD package has no
+  direct mypy errors left.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3278`, `mypy observed=668`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 393
+
+Target: causal LLM closed-loop and MAS package typing.
+
+- Changed `causal_mas` endorsement counters to `float`, matching the existing
+  half-vote domain-endorsement logic and clearing the int/float assignment.
+- Annotated `LLMConstrainedDAGResult.to_dag()` and the DAG-like input to
+  `llm_dag_validate()` in `src/statspai/causal_llm/llm_dag_loop.py`.
+- Rewrapped the domain-expert prompt in `causal_mas.py` so touched-file flake8
+  remains clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_sampling_llm_loop.py
+  tests/test_llm_resolver.py tests/test_llm_dag_loop.py
+  tests/test_api_stable_evidence.py::test_llm_client_adapters_have_offline_contracts
+  -q -o addopts=''` passed, 53 tests with the expected no-API-key
+  heuristic-fallback warning.
+- `.venv/bin/python -m mypy src/statspai/causal_llm --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning, so the causal_llm
+  package has no direct mypy errors left.
+- `.venv/bin/python -m flake8 src/statspai/causal_llm/causal_mas.py
+  src/statspai/causal_llm/llm_dag_loop.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_llm/causal_mas.py
+  src/statspai/causal_llm/llm_dag_loop.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3278`, `mypy observed=665`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 394
+
+Target: general bunching inner-estimator typing and touched-file lint cleanup.
+
+- Annotated the private `_elasticity` helper inside
+  `src/statspai/bunching/general.py`, clearing the remaining direct mypy error
+  in the `bunching` package.
+- Rewrapped doctest examples, the bin-grid construction, and the excluded-bin
+  mask so the touched file is flake8-clean.
+- Preserved the high-order bunching estimator, bootstrap SE path, and lineage
+  attachment behavior.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_bunching_unified.py
+  tests/reference_parity/test_bunching_parity.py -q -o addopts=''` passed,
+  12 tests.
+- `.venv/bin/python -m mypy src/statspai/bunching --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning, so the bunching package
+  has no direct mypy errors left.
+- `.venv/bin/python -m flake8 src/statspai/bunching/general.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/bunching/general.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3277`, `mypy observed=664`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 395
+
+Target: Bayesian HTE-IV column de-duplication typing and touched-file cleanup.
+
+- Replaced the compact `seen.add(...)` list-comprehension idiom in
+  `src/statspai/bayes/hte_iv.py` with an explicit order-preserving loop, so
+  mypy no longer sees `set.add()`'s `None` return as a value.
+- Rewrapped the model equation docstring and first-stage PyMC prior line to
+  keep the touched file flake8-clean.
+- Preserved Bayesian HTE-IV preparation, sampling, CATE slope, and
+  `predict_cate` behavior.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_bayes_hte_iv.py
+  tests/test_bayes_result_protocol.py -q -o addopts=''` passed, 9 tests with
+  1 optional PyMC-dependent skip.
+- `.venv/bin/python -m mypy src/statspai/bayes/hte_iv.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/bayes/hte_iv.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/bayes/hte_iv.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3277`, `mypy observed=663`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 396
+
+Target: Bayesian MTE policy-weight builder typing.
+
+- Annotated `policy_weight_observed_prte(..., bw_method=...)` in
+  `src/statspai/bayes/policy_weights.py` so the SciPy KDE bandwidth argument
+  is explicit at the public helper boundary.
+- Rewrapped the signed-shift integration-bound expression so the touched file
+  is flake8-clean.
+- Preserved the CHV-2011 observed-propensity PRTE weight calculation and input
+  validation.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_bayes_mte_policy.py
+  tests/test_bayes_result_protocol.py::test_bayesian_mte_policy_effect_contract_errors_are_taxonomy
+  -q -o addopts=''` passed, 1 test with 1 optional PyMC-dependent skip.
+- `.venv/bin/python -m mypy src/statspai/bayes/policy_weights.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/bayes/policy_weights.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/bayes/policy_weights.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3277`, `mypy observed=662`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 397
+
+Target: Bayesian MTE helper typing and lint cleanup.
+
+- Removed an unused `_summarise_posterior` import from
+  `src/statspai/bayes/mte.py`.
+- Annotated private MTE helpers: `_logit_propensity`, `_abscissa`, and
+  `_integrated_effect`; added a local NumPy `clip` cast where stubs return
+  `Any`.
+- Rewrapped long validation/model-construction lines and fixed the hv-latent
+  branch comment indentation so touched-file flake8 is clean.
+- Preserved the Bayesian MTE plugin/joint first-stage, polynomial,
+  hv-latent, bivariate-normal, ATT/ATU, and policy-effect code paths.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_bayes_mte_policy.py
+  tests/test_bayes_result_protocol.py::test_bayesian_mte_policy_effect_contract_errors_are_taxonomy
+  tests/test_bayes_mte_selection.py -q -o addopts=''` passed, 1 test with
+  2 optional PyMC-dependent skips.
+- `.venv/bin/python -m mypy src/statspai/bayes/mte.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m mypy src/statspai/bayes --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning, so the Bayesian package
+  has no direct mypy errors left.
+- `.venv/bin/python -m flake8 src/statspai/bayes/mte.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/bayes/mte.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3260`, `mypy observed=658`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 398
+
+Target: DirectLiNGAM typing and touched-file lint cleanup.
+
+- Removed an unused `Optional` import from
+  `src/statspai/causal_discovery/lingam.py`.
+- Annotated `lingam()` input as `pd.DataFrame | np.ndarray`, matching the
+  documented API, and made the private negentropy helper return an explicit
+  `float`.
+- Rewrapped long DataFrame/difference expressions and clarified one exogeneity
+  comment so the touched file is flake8-clean.
+- Preserved DirectLiNGAM ordering, adjacency recovery, residual rescaling, and
+  provenance attachment.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_lingam.py -q -o addopts=''` passed,
+  4 tests with 1 optional reference-package skip.
+- `.venv/bin/python -m mypy src/statspai/causal_discovery/lingam.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_discovery/lingam.py`
+  passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_discovery/lingam.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3259`, `mypy observed=656`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 399
+
+Target: GES typing and touched-file lint cleanup.
+
+- Removed unused `Optional` and `Set` imports from
+  `src/statspai/causal_discovery/ges.py`.
+- Annotated `ges()` input as `pd.DataFrame | np.ndarray` and the private
+  `_score()` helper return type.
+- Made the local BIC score return an explicit `float` and initialized
+  `best_new_bic` in both search phases for clearer typed control flow.
+- Rewrapped the result DataFrame constructor and adjacency field comment so
+  the touched file is flake8-clean.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_ges.py tests/test_article_aliases_round2.py
+  -k "ges or causal_discovery" -q -o addopts=''` passed, 11 tests with
+  21 deselected.
+- `.venv/bin/python -m mypy src/statspai/causal_discovery/ges.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_discovery/ges.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_discovery/ges.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3257`, `mypy observed=653`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 400
+
+Target: FCI PAG helper typing and lint cleanup.
+
+- Removed unused `field` and `Any` imports from
+  `src/statspai/causal_discovery/fci.py`.
+- Removed the unused `_init_pag` local dimension variable.
+- Made `_has_edge()` return a concrete Python `bool` instead of a NumPy bool.
+- Rewrapped PAG mark setters and compound orientation-rule conditions so the
+  touched file is flake8-clean.
+- Preserved FCI skeleton learning, v-structure orientation, and R1-R4
+  orientation-rule behavior.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_tierD_p2_causal_discovery_analytic.py::TestFCIAnalytic
+  tests/test_transport_and_shiftshare.py::test_fci_returns_structured_pag
+  -q -o addopts=''` passed, 2 tests.
+- `.venv/bin/python -m mypy src/statspai/causal_discovery/fci.py --hide-error-context --no-error-summary`
+  passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_discovery/fci.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/causal_discovery/fci.py`
+  passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3252`, `mypy observed=652`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 401
+
+Target: PCMCI/LPCMCI typing and touched-file lint cleanup.
+
+- Removed unused imports from `src/statspai/causal_discovery/pcmci.py` and
+  `src/statspai/causal_discovery/lpcmci.py`.
+- Rewrapped long references, comments, candidate construction, and signature
+  lines in the touched time-series causal-discovery files.
+- Fixed PCMCI lag slice spacing and split a long lag-condition predicate.
+- Renamed Stage 2 conditional matrices to `Z_cond` in both PCMCI variants so
+  optional conditional-design types remain clear across MCI residualization.
+- Preserved PCMCI skeleton pruning, MCI orientation, and LPCMCI lagged-edge
+  discovery behavior.
+
+Verification:
+
+- `.venv/bin/python -m pytest tests/test_v0917_deferred.py::TestPCMCI
+  tests/test_v100_review_fixes.py::test_pcmci_fisher_z_effective_sample_size
+  tests/test_causal_discovery_ts.py::test_lpcmci_recovers_directed_chain
+  tests/test_causal_discovery_ts.py::test_lpcmci_needs_numeric_variables
+  tests/test_causal_discovery_ts.py::test_lpcmci_short_timeseries_errors
+  -q -o addopts=''` passed, 9 tests.
+- `.venv/bin/python -m mypy src/statspai/causal_discovery/pcmci.py
+  src/statspai/causal_discovery/lpcmci.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_discovery/pcmci.py
+  src/statspai/causal_discovery/lpcmci.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/causal_discovery/pcmci.py
+  src/statspai/causal_discovery/lpcmci.py` passed.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3245`, `mypy observed=650`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 402
+
+Target: remaining core causal-discovery typing/lint cleanup and schema sync.
+
+- Added explicit helper signatures and return typing in
+  `src/statspai/causal_discovery/_viz.py`, `pc.py`, `notears.py`, `icp.py`,
+  and `dynotears.py`.
+- Removed unused imports in PC/NOTEARS/ICP/DYNOTEARS helpers.
+- Cast NumPy/scipy helper returns to concrete Python floats or ndarrays where
+  direct mypy needed a stable boundary.
+- Rewrapped long doc/test-helper lines and messages in the touched files so
+  the batch is touched-file flake8-clean.
+- Refreshed generated schema mirrors with `scripts/dump_schemas.py`, restoring
+  `schemas/` and `src/statspai/schemas/` sync after the current agent/tool
+  specs changed.
+- Preserved public result payloads for PC, NOTEARS, ICP, DYNOTEARS, and shared
+  DAG visualization helpers.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/causal_discovery/_viz.py
+  src/statspai/causal_discovery/pc.py
+  src/statspai/causal_discovery/notears.py
+  src/statspai/causal_discovery/dynotears.py
+  src/statspai/causal_discovery/icp.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/causal_discovery/_viz.py
+  src/statspai/causal_discovery/pc.py
+  src/statspai/causal_discovery/notears.py
+  src/statspai/causal_discovery/dynotears.py
+  src/statspai/causal_discovery/icp.py` passed.
+- `.venv/bin/python -m compileall -q` on the touched causal-discovery files
+  passed.
+- `.venv/bin/python -m pytest tests/test_causal_discovery.py
+  tests/test_tierD_p2_causal_discovery_analytic.py::TestPCAlgorithmAnalytic
+  tests/test_icp.py
+  tests/test_causal_discovery_ts.py::test_dynotears_recovers_svar_coefficients
+  tests/test_causal_discovery_ts.py::test_dynotears_contemporaneous_acyclicity
+  tests/test_causal_discovery_ts.py::test_dynotears_lag_zero
+  tests/test_causal_discovery_ts.py::test_dynotears_summary_frame
+  tests/test_ml_causal_polish.py::TestCausalDiscoveryViz -q -o addopts=''`
+  passed, 43 tests and 1 skip.
+- `.venv/bin/python -m pytest
+  tests/reference_parity/test_causal_discovery_parity.py::TestPCSkeletonRecovery
+  tests/reference_parity/test_causal_discovery_parity.py::TestPCNaiveCorrelationContrast
+  tests/reference_parity/test_causal_discovery_parity.py::TestPCVStructureOrientation
+  tests/reference_parity/test_causal_discovery_parity.py::TestNOTEARSSkeletonRecovery
+  tests/reference_parity/test_causal_discovery_parity.py::TestSeedStability::test_pc_skeleton_stable
+  tests/reference_parity/test_causal_discovery_parity.py::TestSeedStability::test_notears_skeleton_stable
+  -q -o addopts=''` passed, 8 tests.
+- Initial full gate caught stale generated schemas; `.venv/bin/python
+  scripts/dump_schemas.py` refreshed the schema bundles and
+  `.venv/bin/python scripts/dump_schemas.py --check` then passed.
+- Full gate passed after schema refresh:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3235`, `mypy observed=626`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 403
+
+Target: post-estimation hypothesis-test helper typing and lint cleanup.
+
+- Narrowed `src/statspai/postestimation/hypothesis.py` public helper return
+  types to the actual mixed payload contract (`dict[str, Any]`) instead of a
+  float-only dict.
+- Added explicit `Any` result boundaries for `test()` and `lincom()` so the
+  helpers remain compatible with current result objects while direct mypy can
+  verify internal numeric operations.
+- Converted covariance and coefficient vectors to concrete NumPy arrays before
+  Wald/lincom algebra.
+- Typed `_get_vcov()` and `_parse_hypothesis()` return shapes and removed
+  unused parser locals/imports.
+- Preserved public keys and Stata-style hypothesis/lincom behavior.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/postestimation/hypothesis.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/postestimation/hypothesis.py`
+  passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/postestimation/hypothesis.py` passed.
+- `.venv/bin/python -m pytest tests/test_postestimation.py::TestHypothesisTest
+  tests/test_postestimation.py::TestLincom -q -o addopts=''` passed,
+  6 tests.
+- Post-estimation import smoke confirmed `sp.test` and `sp.lincom` still point
+  at the hypothesis helpers.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3227`, `mypy observed=620`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 404
+
+Target: Mendelian MR helper typing and touched-file lint cleanup.
+
+- Added explicit input/return typing to
+  `src/statspai/mendelian/frontier/_common.py` shared array helpers.
+- Added a concrete `_ivw()` signature in
+  `src/statspai/mendelian/multivariable.py` and split its numerator and
+  denominator for clearer numeric boundaries.
+- Removed an unused dataclass import from the multivariable MR module.
+- Rewrapped long docstring, comment, p-value, dataframe-selection, and
+  direct-effect extraction lines while preserving MVMR, mediation MR, and
+  MR-BMA behavior.
+- Kept existing public result containers and exported APIs unchanged.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/mendelian/frontier/_common.py
+  src/statspai/mendelian/multivariable.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/mendelian/frontier/_common.py
+  src/statspai/mendelian/multivariable.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/mendelian/frontier/_common.py
+  src/statspai/mendelian/multivariable.py` passed.
+- `.venv/bin/python -m pytest tests/test_mr_extensions.py
+  tests/test_mr_frontier.py -q -o addopts=''` passed, 47 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3219`, `mypy observed=617`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 405
+
+Target: multilevel shared-core ndarray typing cleanup.
+
+- Added explicit column-spec typing to `_as_str_list()` in
+  `src/statspai/multilevel/_core.py`.
+- Cast pandas group-key outputs to concrete NumPy arrays in
+  `_build_group_keys()`.
+- Cast covariance-matrix constructors in `_unpack_G()` to concrete float
+  ndarrays and made `_GroupBlock.row_idx` explicitly optional.
+- Cast `_GroupBlock.V()` to an ndarray return while preserving the marginal
+  covariance formula.
+- Kept LMM/GLMM numerical paths and public multilevel APIs unchanged.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/multilevel/_core.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/multilevel/_core.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/multilevel/_core.py`
+  passed.
+- `.venv/bin/python -m pytest tests/test_multilevel.py -q -o addopts=''`
+  passed, 63 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3219`, `mypy observed=611`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 406
+
+Target: BVAR result typing, lint cleanup, and function-schema sync.
+
+- Added a concrete `list[str]` type for `BVARResult.var_names` in
+  `src/statspai/timeseries/bvar.py`.
+- Added an explicit tuple-of-ndarrays return type for
+  `BVARResult.credible_interval()`.
+- Removed unused forecast/IRF temporaries that had no effect on returned
+  forecasts or impulse responses.
+- Rewrapped summary construction and fixed slice spacing so the touched BVAR
+  file is flake8-clean.
+- Refreshed generated function schemas after the BVAR signature change.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/timeseries/bvar.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/timeseries/bvar.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/timeseries/bvar.py`
+  passed.
+- `.venv/bin/python -m pytest tests/test_bvar.py
+  tests/test_bvar_posterior_se.py -q -o addopts=''` passed, 9 tests.
+- Initial full gate caught stale `functions.json` schema mirrors; running
+  `.venv/bin/python scripts/dump_schemas.py` refreshed them and
+  `.venv/bin/python scripts/dump_schemas.py --check` then passed.
+- Full gate passed after schema refresh:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3216`, `mypy observed=610`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 407
+
+Target: competing-risks Fine-Gray Newton-step typing cleanup.
+
+- Fixed two touched-file line-length issues in
+  `src/statspai/survival/competing_risks.py`.
+- Cast the Fine-Gray Newton solve/pseudo-inverse step to a one-dimensional
+  float ndarray before updating `beta`, clearing direct mypy shape inference.
+- Preserved Fine-Gray likelihood, gradient, Hessian, covariance, and public
+  result payload behavior.
+
+Verification:
+
+- `.venv/bin/python -m mypy
+  src/statspai/survival/competing_risks.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8
+  src/statspai/survival/competing_risks.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/survival/competing_risks.py` passed.
+- `.venv/bin/python -m pytest tests/test_competing_risks.py -q
+  -o addopts=''` passed, 8 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3216`, `mypy observed=608`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 408
+
+Target: GARCH direct typing and lint cleanup.
+
+- Added an explicit input boundary for `src/statspai/timeseries/garch.py`
+  `garch()` and converted the initial parameter vector to a concrete float
+  ndarray.
+- Cast optimizer output to a float ndarray and made the negative log-likelihood
+  return a Python `float`.
+- Split long variance-recursion, Series construction, and summary-header lines.
+- Removed an unused summary local and fixed slice spacing in parameter
+  extraction.
+- Preserved GARCH likelihood, stationarity checks, forecast recursion,
+  inference accessors, and provenance attachment.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/timeseries/garch.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/timeseries/garch.py` passed.
+- `.venv/bin/python -m compileall -q src/statspai/timeseries/garch.py`
+  passed.
+- `.venv/bin/python -m pytest tests/test_garch.py tests/test_garch_inference.py
+  tests/test_timeseries_survival_estimators.py::test_garch_persistence_and_positive_variance
+  tests/test_estimator_provenance_round10.py::test_garch_provenance
+  -q -o addopts=''` passed, 13 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3215`, `mypy observed=605`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 409
+
+Target: local projections direct typing and lint cleanup.
+
+- Removed an unused dataclass import from
+  `src/statspai/timeseries/local_projections.py`.
+- Added a broad typed plotting boundary for `LocalProjectionsResult.plot()`.
+- Rewrapped long docstring, HAC comment, Cholesky error messages, controls
+  error text, and provenance parameter lines.
+- Fixed slice spacing in Cholesky coefficient-band extraction.
+- Split the insufficient-sample branch assignments into separate statements.
+- Preserved direct and `lpirfs_cholesky` local-projection behavior and
+  provenance attachment.
+
+Verification:
+
+- `.venv/bin/python -m mypy
+  src/statspai/timeseries/local_projections.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m flake8
+  src/statspai/timeseries/local_projections.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/timeseries/local_projections.py` passed.
+- `.venv/bin/python -m pytest tests/test_local_projections.py
+  tests/test_timeseries_survival_estimators.py::test_local_projections_impulse_matches_shock_loading
+  tests/test_estimator_provenance_round10.py::test_local_projections_provenance
+  -q -o addopts=''` passed, 10 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3212`, `mypy observed=604`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 410
+
+Target: interrupted-time-series direct typing and lint cleanup.
+
+- Removed an unused `Sequence` import from `src/statspai/timeseries/its.py`.
+- Split long `summary()` lines for level-change and slope-change reporting.
+- Removed a dead `n = X.shape[0]` assignment from the Newey-West covariance
+  helper.
+- Rewrapped post-intervention time indexing to satisfy touched-file flake8
+  without changing ITS semantics.
+- Preserved ITS estimation, result round-trip, and provenance behavior.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/timeseries/its.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/timeseries/its.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/timeseries/its.py` passed.
+- `.venv/bin/python -m pytest
+  tests/test_estimator_input_hardening.py::TestITS
+  tests/test_estimator_provenance_round10.py::test_its_provenance
+  tests/test_result_protocol.py::TestFunctionalRoundTrip::test_its
+  tests/test_result_to_dict.py -q -o addopts=''` passed, 26 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3209`, `mypy observed=604`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 411
+
+Target: ARIMA direct typing, schema refresh, and parity-preserving lint cleanup.
+
+- Typed the public `arima()` inputs and the private `_fit()` helper in
+  `src/statspai/timeseries/arima.py`.
+- Marked the statsmodels result handle as opaque `Any`, preserving forecast
+  access while clearing the direct mypy attr-defined error.
+- Added a typed matplotlib axis boundary for `ARIMAResult.plot()`.
+- Fixed the `kwargs` inference issue in the state-space fit path.
+- Rewrapped inference, summary, error-message, provenance, and doctest lines
+  so the touched file is direct-flake clean.
+- Refreshed generated function/tool/agent-card schema mirrors after the public
+  function annotation change.
+- Preserved the default state-space estimator, the innovations-MLE parity
+  mode, standard-error exposure, forecast shape, and provenance behavior.
+
+Verification:
+
+- `.venv/bin/python -m mypy src/statspai/timeseries/arima.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m flake8 src/statspai/timeseries/arima.py` passed.
+- `.venv/bin/python -m compileall -q
+  src/statspai/timeseries/arima.py` passed.
+- `.venv/bin/python -m pytest tests/test_arima.py
+  tests/test_estimator_provenance_round10.py::test_arima_provenance
+  tests/test_parity_harness_contract.py::test_arima_uses_innovations_mle_reference_mode_for_r_stata_coefficients
+  -q -o addopts=''` passed, 11 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3209`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 412
+
+Target: cointegration and structural-break direct lint cleanup.
+
+- Rewrapped the Johansen citation and `CointegrationResult.summary()` table
+  lines in `src/statspai/timeseries/cointegration.py`.
+- Split the cointegration conclusion formatting into an explicit local string,
+  preserving the summary text while clearing long lines.
+- Rewrapped the trend-constant construction and max-eigenvalue statistic array
+  construction without changing Johansen calculations.
+- Rewrapped `StructuralBreakResult.plot()` break-date marker arguments.
+- Rewrapped the single-break selection expression and Bai-Perron split-stat
+  arithmetic in `src/statspai/timeseries/structural_break.py`, also normalizing
+  touched exponent/operator spacing.
+- Preserved Engle-Granger, Johansen, sup-F, Chow, and Bai-Perron behavior.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/timeseries/cointegration.py
+  src/statspai/timeseries/structural_break.py` passed.
+- `.venv/bin/python -m mypy src/statspai/timeseries/cointegration.py
+  src/statspai/timeseries/structural_break.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q
+  src/statspai/timeseries/cointegration.py
+  src/statspai/timeseries/structural_break.py` passed.
+- `.venv/bin/python -m pytest tests/test_v06_round2.py::TestCointegration
+  tests/test_new_v06_modules.py::TestTimeSeries::test_structural_break
+  tests/test_structural_break_size.py -q -o addopts=''` passed, 10 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3202`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 413
+
+Target: MR-Lap and MR-RAPS direct lint cleanup.
+
+- Split the long overlap-bias equation in
+  `src/statspai/mendelian/frontier/lap.py`.
+- Split long MR-RAPS docstring math lines in
+  `src/statspai/mendelian/frontier/raps.py`.
+- Rewrapped the MR-RAPS sandwich derivative expression without changing the
+  formula.
+- Preserved MR-Lap overlap correction behavior, MR-RAPS optimization, and
+  frontier dispatcher aliases.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/mendelian/frontier/lap.py
+  src/statspai/mendelian/frontier/raps.py` passed.
+- `.venv/bin/python -m mypy src/statspai/mendelian/frontier/lap.py
+  src/statspai/mendelian/frontier/raps.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q
+  src/statspai/mendelian/frontier/lap.py
+  src/statspai/mendelian/frontier/raps.py` passed.
+- `.venv/bin/python -m pytest tests/test_mr_frontier.py -q
+  -o addopts=''` passed, 41 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3201`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 414
+
+Target: power study-design and time-series export direct lint cleanup.
+
+- Rewrapped the logrank target-power `PowerResult` construction in
+  `src/statspai/power/study_designs.py`.
+- Split the `structural_break` export import in
+  `src/statspai/timeseries/__init__.py`.
+- Preserved power-study calculations and the public time-series package
+  exports.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/power/study_designs.py
+  src/statspai/timeseries/__init__.py` passed.
+- `.venv/bin/python -m mypy src/statspai/power/study_designs.py
+  src/statspai/timeseries/__init__.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q
+  src/statspai/power/study_designs.py
+  src/statspai/timeseries/__init__.py` passed.
+- `.venv/bin/python -m pytest tests/test_power_study_designs.py -q
+  -o addopts=''` passed, 8 tests.
+- Time-series package import smoke passed:
+  `import statspai.timeseries as ts; assert callable(ts.structural_break)`.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3201`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 415
+
+Target: power calculator direct lint cleanup and dead-variable removal.
+
+- Rewrapped `src/statspai/power/power.py` module docstring, summary range
+  reporting, `__repr__`, HTML repr, plotting error text, and 0.8 reference
+  line plotting.
+- Removed the unused `T_pre` local from the DID power calculator.
+- Rewrapped the dispatcher examples, MDE call-through, sample-size solver
+  calls, and `ConvergenceFailure` recovery hint text.
+- Preserved closed-form power formulas, dispatcher/MDE solver behavior, and
+  typed `ConvergenceFailure` migration already present in the dirty file.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/power/power.py` passed.
+- `.venv/bin/python -m mypy src/statspai/power/power.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/power/power.py` passed.
+- `.venv/bin/python -m pytest tests/test_power_calculators.py
+  tests/test_tierD_power_analytic.py
+  tests/test_untested_function_coverage.py::TestPowerFamily -q
+  -o addopts=''` passed, 36 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3193`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 416
+
+Target: VAR and Granger direct lint cleanup.
+
+- Rewrapped the Granger reference line and VAR summary table header in
+  `src/statspai/timeseries/var.py`.
+- Split the VAR equation p-value expression and summary row formatting without
+  changing the reported values.
+- Rewrapped the log-likelihood formula, Granger F-test p-value, innovation
+  covariance extraction, and IRF array construction.
+- Preserved the existing VAR typing, Granger input guards, IRF guard, and
+  Stata/R standard-error convention behavior already present in the dirty
+  file.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/timeseries/var.py` passed.
+- `.venv/bin/python -m mypy src/statspai/timeseries/var.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/timeseries/var.py` passed.
+- `.venv/bin/python -m pytest
+  tests/test_new_v06_modules.py::TestTimeSeries::test_var
+  tests/test_new_v06_modules.py::TestTimeSeries::test_granger
+  tests/test_tierD_p2_timeseries_analytic.py
+  tests/test_timeseries_survival_estimators.py::test_var_innovation_covariance_is_symmetric_psd
+  -q -o addopts=''` passed, 8 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3191`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 417
+
+Target: MR-Clust, MR-cML, and GRAPPLE direct lint cleanup.
+
+- Rewrapped the single-cluster initialization expression in
+  `src/statspai/mendelian/frontier/clust.py`.
+- Rewrapped the GRAPPLE docstring variance equation in
+  `src/statspai/mendelian/frontier/grapple.py`.
+- Preserved the already-present typed helper signatures in `clust.py`,
+  `cml.py`, and `grapple.py`, plus the MR-Clust BIC key selection.
+- Preserved MR-Clust, MR-cML, GRAPPLE, and dispatcher behavior.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/mendelian/frontier/clust.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/grapple.py` passed.
+- `.venv/bin/python -m mypy src/statspai/mendelian/frontier/clust.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/grapple.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q
+  src/statspai/mendelian/frontier/clust.py
+  src/statspai/mendelian/frontier/cml.py
+  src/statspai/mendelian/frontier/grapple.py` passed.
+- `.venv/bin/python -m pytest tests/test_mr_frontier.py -q
+  -o addopts=''` passed, 41 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3191`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 418
+
+Target: unified help layer direct lint cleanup.
+
+- Rewrapped long category descriptions, stability/validation overview headings,
+  help-entry examples, other-help-layer entries, CLI example text, search
+  result strings, callable dict return, and category/function result
+  construction in `src/statspai/help.py`.
+- Split registry imports used inside help rendering so direct flake is clean.
+- Preserved the already-present typed `_MODULE_CATEGORY_PREFIXES` annotation.
+- Preserved rendered help content, category/function search behavior, and
+  callable/topic dispatch.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/help.py` passed.
+- `.venv/bin/python -m mypy src/statspai/help.py --hide-error-context
+  --no-error-summary` passed after the configured Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/help.py` passed.
+- `.venv/bin/python -m pytest tests/test_help.py
+  tests/test_stability.py::TestStabilityInHelpLayer -q -o addopts=''`
+  passed, 35 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3176`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
+## 2026-06-18 Batch 419
+
+Target: core formula/utils direct lint cleanup.
+
+- Mechanically removed trailing whitespace from
+  `src/statspai/core/utils.py`.
+- Rewrapped the formula parse error, IV endogenous/instrument list extension,
+  constant/drop-term filters, fallback `DataFrame` construction, and
+  `np.column_stack` fallback paths.
+- Preserved the already-present fast numeric formula path typing, `dmatrices`
+  fallback behavior, label/winsor/correlation utilities, and OLS formula
+  integration.
+
+Verification:
+
+- `.venv/bin/python -m flake8 src/statspai/core/utils.py` passed.
+- `.venv/bin/python -m mypy src/statspai/core/utils.py
+  --hide-error-context --no-error-summary` passed after the configured
+  Python-version warning.
+- `.venv/bin/python -m compileall -q src/statspai/core/utils.py` passed.
+- `.venv/bin/python -m pytest tests/test_utils.py tests/test_ols.py -q
+  -o addopts=''` passed, 67 tests.
+- Full gate passed:
+  - `.venv/bin/python -m compileall -q src/statspai`
+  - `.venv/bin/python scripts/error_taxonomy_audit.py --check`
+    (`1417 taxonomy raises, 1315 generic raises`)
+  - `.venv/bin/python scripts/result_protocol_audit.py --check`
+    (`270 result classes inspected`)
+  - `.venv/bin/python scripts/tierd_classify.py report`
+    (`1070 registered functions`; `reference=128`, `anchored=579`,
+    `weak=149`, `smoke=11`, `untested=203`; 0 Tier-D estimator-like rows)
+  - `.venv/bin/python scripts/tier_a_fixture_lock.py`
+  - `.venv/bin/python scripts/dump_schemas.py --check`
+  - `.venv/bin/python scripts/benchmark_ratchet.py --check`
+  - `.venv/bin/python scripts/quality_gate.py all`
+    (`flake8 observed=3138`, `mypy observed=598`)
+  - `git diff --check`
+- Boundary check: `Paper-JSS/` still only has external
+  `replication/results/*` changes; `CausalAgentBench/` is clean.
+
 ## 2026-06-17 Batch 154
 
 Target: direct typing and touched-file cleanup for output collections.
