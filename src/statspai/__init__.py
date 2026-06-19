@@ -2246,7 +2246,11 @@ def _dedupe_public_exports(names):
     return out
 
 
-__all__ = _dedupe_public_exports(__all__)
+# In-place dedup: keep ``__all__`` bound to the literal list above so static
+# analysers (pyflakes/flake8 F401) can still see the export set. Rebinding it to
+# a function-call result made pyflakes treat ``__all__`` as dynamic and wrongly
+# flag ~747 re-exported names as unused imports.
+__all__[:] = _dedupe_public_exports(__all__)
 del _dedupe_public_exports
 
 
