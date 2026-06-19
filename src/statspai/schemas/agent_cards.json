@@ -13716,8 +13716,15 @@
             "type": "string"
           },
           "kind": {
-            "default": "Which bridge to invoke",
-            "description": "kind parameter (str).",
+            "description": "Which bridge to invoke",
+            "enum": [
+              "did_sc",
+              "ewm_cate",
+              "cb_ipw",
+              "kink_rdd",
+              "dr_calib",
+              "surrogate_pci"
+            ],
             "type": "string"
           }
         },

@@ -41,7 +41,34 @@ __all__ = ["bcf_factor_exposure", "BCFFactorExposureResult"]
 
 @dataclass
 class BCFFactorExposureResult(ResultProtocolMixin):
-    """Output of :func:`bcf_factor_exposure`."""
+    """Output of :func:`bcf_factor_exposure`.
+
+    Holds the PCA factor loadings/scores, per-factor ATEs, and the
+    aggregated total mixture effect produced by
+    :func:`bcf_factor_exposure`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n, p = 300, 10
+    >>> X = rng.normal(size=(n, 3))
+    >>> Z = rng.normal(size=(n, p))
+    >>> Y = X[:, 0] + Z.sum(axis=1) * 0.1 + rng.normal(size=n)
+    >>> cols = {f"x{j}": X[:, j] for j in range(3)}
+    >>> cols.update({f"z{j}": Z[:, j] for j in range(p)})
+    >>> cols["Y"] = Y
+    >>> df = pd.DataFrame(cols)
+    >>> res = sp.bcf_factor_exposure(  # doctest: +SKIP
+    ...     df, y="Y",
+    ...     exposures=[f"z{j}" for j in range(p)],
+    ...     covariates=[f"x{j}" for j in range(3)],
+    ...     n_factors=3, n_bootstrap=40, random_state=0,
+    ... )
+    >>> res.total_mixture_ate  # sum of per-factor ATEs  # doctest: +SKIP
+    >>> res.per_factor_ate  # per-factor ATE table  # doctest: +SKIP
+    """
 
     factor_loadings: pd.DataFrame
     factor_scores: pd.DataFrame

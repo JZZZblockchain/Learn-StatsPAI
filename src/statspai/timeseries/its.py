@@ -51,6 +51,23 @@ from .._result_serialize import ResultProtocolMixin
 
 @dataclass
 class ITSResult(ResultProtocolMixin):
+    """Result container for :func:`its`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> t = np.arange(60)
+    >>> y = 1 + 0.1 * t + (t >= 30) * 3.0 + rng.normal(scale=0.5, size=60)
+    >>> df = pd.DataFrame({"y": y, "t": t})
+    >>> res = sp.its(df, y="y", time="t", intervention=30)
+    >>> type(res).__name__
+    'ITSResult'
+    >>> float(res.level_change) > 0
+    True
+    """
+
     _citation_keys = ("wagner2002segmented", "lopezbernal2016interrupted")
 
     level_change: float
@@ -143,6 +160,20 @@ def its(
     Returns
     -------
     ITSResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> t = np.arange(60)
+    >>> y = 2 + 0.05 * t + (t >= 30) * 2.0 + rng.normal(scale=0.4, size=60)
+    >>> df = pd.DataFrame({"y": y, "month": t})
+    >>> res = sp.its(df, y="y", time="month", intervention=30)
+    >>> round(float(res.level_change), 1) > 0
+    True
+    >>> res.n_obs
+    60
     """
     if intervention is None:
         raise ValueError("intervention (time index) is required")

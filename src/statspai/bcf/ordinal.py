@@ -112,6 +112,25 @@ class BCFOrdinalResult(ResultProtocolMixin):
         Sorted unique dose levels actually observed.
     method : str
     diagnostics : dict
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 400
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.integers(0, 4, size=n)  # 4 ordered dose levels
+    >>> Y = X[:, 0] + 0.5 * T + rng.normal(0, 0.3, n)
+    >>> df = pd.DataFrame(
+    ...     {"Y": Y, "T": T, "X0": X[:, 0], "X1": X[:, 1], "X2": X[:, 2]}
+    ... )
+    >>> res = sp.bcf_ordinal(  # doctest: +SKIP
+    ...     df, y="Y", treat="T", covariates=["X0", "X1", "X2"],
+    ...     n_bootstrap=50, random_state=0,
+    ... )
+    >>> res.ate  # ATE(k) vs baseline k=0, one row per dose  # doctest: +SKIP
+    >>> res.levels  # sorted dose levels observed  # doctest: +SKIP
     """
 
     _citation_keys = ("hahn2020bayesian",)

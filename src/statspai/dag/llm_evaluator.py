@@ -34,7 +34,35 @@ __all__ = [
 
 @dataclass
 class LLMCausalAssessResult:
-    """Output of :func:`llm_causal_assess`."""
+    """Output of :func:`llm_causal_assess`.
+
+    Attributes
+    ----------
+    level1_accuracy, level2_accuracy : float or None
+        Per-level accuracy (``None`` when that level was not assessed).
+    per_item : pd.DataFrame
+        One row per question: ``id, level, question, truth, pred, correct``.
+    llm_identifier : str
+        Label of the assessed model.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # llm_client wraps any model API: prompt (str) -> response (str).
+    >>> def llm_client(question):
+    ...     return "the answer is Y"  # e.g. an Anthropic API call
+    >>> level1 = pd.DataFrame({
+    ...     "question": ["Does X cause Y?"],
+    ...     "answer": ["Y"],
+    ... })
+    >>> res = sp.llm_causal_assess(
+    ...     level1_items=level1, llm_client=llm_client,
+    ...     llm_identifier="my-model",
+    ... )  # doctest: +SKIP
+    >>> res.level1_accuracy  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    """
     level1_accuracy: Optional[float]
     level2_accuracy: Optional[float]
     # columns: id, level, question, truth, pred, correct
@@ -65,7 +93,33 @@ class LLMCausalAssessResult:
 
 @dataclass
 class PairwiseBenchmarkResult:
-    """Output of :func:`pairwise_causal_benchmark`."""
+    """Output of :func:`pairwise_causal_benchmark`.
+
+    Attributes
+    ----------
+    accuracy : float
+        Fraction of pairs whose predicted direction matches the truth.
+    precision_forward, recall_forward : float
+        Precision / recall for the ``A -> B`` (forward) class.
+    per_pair : pd.DataFrame
+        One row per pair: ``A, B, truth, pred, correct, raw_response``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> # llm_client wraps any model API: prompt (str) -> response (str).
+    >>> def llm_client(prompt):
+    ...     return "yes"  # e.g. an Anthropic API call
+    >>> gt = pd.DataFrame({
+    ...     "A": ["smoking"], "B": ["cancer"], "a_causes_b": [True],
+    ... })
+    >>> res = sp.pairwise_causal_benchmark(
+    ...     gt, llm_client=llm_client,
+    ... )  # doctest: +SKIP
+    >>> res.accuracy, res.precision_forward  # doctest: +SKIP
+    >>> print(res.summary())  # doctest: +SKIP
+    """
     accuracy: float
     precision_forward: float
     recall_forward: float

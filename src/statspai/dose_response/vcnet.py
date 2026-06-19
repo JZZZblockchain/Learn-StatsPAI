@@ -52,6 +52,38 @@ from ..exceptions import DataInsufficient, MethodIncompatibility
 
 @dataclass
 class VCNetResult:
+    """Dose-response curve returned by :func:`vcnet` / :func:`scigan`.
+
+    Attributes
+    ----------
+    t_grid : np.ndarray
+        Treatment grid at which the curve is evaluated.
+    mu_hat : np.ndarray
+        Estimated dose-response :math:`\\hat\\mu(t)` on ``t_grid``.
+    se : np.ndarray
+        Bootstrap pointwise standard errors.
+    ci_lo, ci_hi : np.ndarray
+        Pointwise lower / upper confidence band.
+    coef_matrix : np.ndarray
+        Varying-coefficient matrix of shape ``(n_basis, p + 1)``.
+    n_obs, n_basis : int
+    detail : dict
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({
+    ...     "y": np.random.randn(200),
+    ...     "dose": np.random.rand(200),
+    ...     "x1": np.random.randn(200),
+    ... })
+    >>> res = sp.vcnet(df, y="y", treatment="dose",
+    ...                covariates=["x1"])  # doctest: +SKIP
+    >>> res.mu_hat[:3]            # dose-response on the t-grid  # doctest: +SKIP
+    >>> print(res.summary())     # tidy curve table  # doctest: +SKIP
+    """
     t_grid: np.ndarray
     mu_hat: np.ndarray
     se: np.ndarray
@@ -304,6 +336,22 @@ def vcnet(
     Returns
     -------
     VCNetResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({
+    ...     "outcome": np.random.randn(300),
+    ...     "dose": np.random.rand(300),
+    ...     "age": np.random.randn(300),
+    ... })
+    >>> res = sp.vcnet(df, y="outcome", treatment="dose",
+    ...                covariates=["age"],
+    ...                t_grid=np.linspace(0, 1, 20))  # doctest: +SKIP
+    >>> res.t_grid.shape, res.mu_hat.shape  # doctest: +SKIP
+    ((20,), (20,))
     """
     n_basis, spline_degree, ridge, n_bootstrap, alpha = _validate_vcnet_controls(
         n_basis=n_basis,
@@ -421,6 +469,22 @@ def scigan(
     (``g(T | X)^{-1}``). For the full SCIGAN training loop, plug in
     your own GAN-generated counterfactual samples and pass the
     re-weighting through ``propensity_weights``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({
+    ...     "y": np.random.randn(200),
+    ...     "dose": np.random.rand(200),
+    ...     "x1": np.random.randn(200),
+    ... })
+    >>> w = np.ones(len(df))  # inverse-propensity balancing weights
+    >>> res = sp.scigan(df, y="y", treatment="dose",
+    ...                 covariates=["x1"],
+    ...                 propensity_weights=w)  # doctest: +SKIP
+    >>> res.mu_hat[:3]  # balanced dose-response curve  # doctest: +SKIP
     """
     df, X_cols = _prepare_vcnet_frame(data, y, treatment, covariates)
     if propensity_weights is not None:

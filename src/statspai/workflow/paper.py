@@ -195,6 +195,25 @@ class PaperDraft:
         ``section``, ``error_type``, ``message``; some carry ``detail``.
         Empty when the draft is fully populated.  See
         :class:`statspai.workflow.WorkflowDegradedWarning`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> df = pd.DataFrame({
+    ...     "wage": np.random.randn(200),
+    ...     "training": np.random.randint(0, 2, 200),
+    ...     "year": np.tile([2010, 2011], 100),
+    ...     "worker": np.repeat(np.arange(100), 2),
+    ... })
+    >>> draft = sp.paper(
+    ...     df, "effect of training on wages",
+    ...     id="worker", time="year", design="did",
+    ... )  # doctest: +SKIP
+    >>> print(draft.to_markdown())   # full publication draft  # doctest: +SKIP
+    >>> draft.sections["Results"]    # one rendered section  # doctest: +SKIP
+    >>> draft.workflow.result        # underlying CausalResult  # doctest: +SKIP
     """
     question: str
     sections: Dict[str, str]

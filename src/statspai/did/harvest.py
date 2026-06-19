@@ -52,7 +52,27 @@ __all__ = [
 
 @dataclass
 class HarvestDIDResult:
-    """Full diagnostic output of :func:`harvest_did`."""
+    """Full diagnostic output of :func:`harvest_did`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> es = pd.DataFrame({
+    ...     "relative_time": [0, 1], "att": [0.4, 0.5],
+    ...     "se": [0.1, 0.1], "pvalue": [0.01, 0.02], "n_comparisons": [3, 3],
+    ... })
+    >>> res = sp.HarvestDIDResult(
+    ...     estimate=0.45, se=0.07, ci=(0.31, 0.59), alpha=0.05,
+    ...     n_comparisons=6,
+    ...     comparisons=pd.DataFrame({"att": [0.4]}),
+    ...     event_study=es,
+    ...     pretrend_test={"pvalue": 0.6},
+    ... )
+    >>> float(res.estimate)
+    0.45
+    """
 
     estimate: float
     se: float

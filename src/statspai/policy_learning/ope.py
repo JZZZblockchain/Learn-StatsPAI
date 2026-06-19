@@ -136,7 +136,20 @@ def direct_method(
     n_actions: Optional[int] = None,
     alpha: float = 0.05,
 ) -> OPEResult:
-    """Direct outcome regression (plug-in Q-model) OPE."""
+    """Direct outcome regression (plug-in Q-model) OPE.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> X = rng.normal(size=(n, 3))
+    >>> A = rng.integers(0, 3, size=n)
+    >>> R = rng.normal(size=n)
+    >>> pi_target = rng.dirichlet(np.ones(3), size=n)
+    >>> res = sp.direct_method(X, A, R, pi_target)
+    >>> float(res.value)  # doctest: +SKIP
+    """
     X = np.asarray(X)
     A = np.asarray(A)
     R = np.asarray(R)
@@ -184,6 +197,18 @@ def ips(
     regression fails, propensities fall back to uniform ``1/K``; a
     ``ConvergenceWarning`` is emitted and
     ``diagnostics['propensity_fallback']`` is set to True.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> X = rng.normal(size=(n, 3))
+    >>> A = rng.integers(0, 3, size=n)
+    >>> R = rng.normal(size=n)
+    >>> pi_target = rng.dirichlet(np.ones(3), size=n)
+    >>> res = sp.ips(X, A, R, pi_target)
+    >>> v = float(res.value)
     """
     X = np.asarray(X)
     A = np.asarray(A)
@@ -229,6 +254,18 @@ def snips(
     regression fails, propensities fall back to uniform ``1/K``; a
     ``ConvergenceWarning`` is emitted and
     ``diagnostics['propensity_fallback']`` is set to True.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> X = rng.normal(size=(n, 3))
+    >>> A = rng.integers(0, 3, size=n)
+    >>> R = rng.normal(size=n)
+    >>> pi_target = rng.dirichlet(np.ones(3), size=n)
+    >>> res = sp.snips(X, A, R, pi_target)
+    >>> v = float(res.value)
     """
     X = np.asarray(X)
     A = np.asarray(A)
@@ -285,6 +322,18 @@ def doubly_robust(
     regression fails, propensities fall back to uniform ``1/K``; a
     ``ConvergenceWarning`` is emitted and
     ``diagnostics['propensity_fallback']`` is set to True.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> X = rng.normal(size=(n, 3))
+    >>> A = rng.integers(0, 3, size=n)
+    >>> R = rng.normal(size=n)
+    >>> pi_target = rng.dirichlet(np.ones(3), size=n)
+    >>> res = sp.doubly_robust(X, A, R, pi_target)
+    >>> v = float(res.value)  # doctest: +SKIP
     """
     X = np.asarray(X)
     A = np.asarray(A)

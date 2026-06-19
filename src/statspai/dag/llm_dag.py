@@ -49,6 +49,35 @@ Oracle = Callable[[Sequence[str], Dict[str, str]], List[Edge]]
 
 @dataclass
 class LLMDAGResult:
+    """Merged LLM-oracle / CI-test DAG returned by :func:`llm_dag`.
+
+    Attributes
+    ----------
+    edges : list of (str, str)
+        Final merged edge set after ``merge_strategy`` is applied.
+    oracle_edges : list of (str, str)
+        Raw ``(from, to)`` edges proposed by the LLM oracle.
+    ci_rejects, ci_asserts : list of (str, str)
+        Variable pairs the CI-test skeleton rejected / asserted.
+    disagreements : list of (str, str, str)
+        ``(from, to, reason)`` where oracle and CI test conflict.
+    provenance : dict
+        Bookkeeping: oracle error (if any), merge strategy, ci_test, alpha.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> # An oracle is any callable: (variables, descriptions) -> edges.
+    >>> def domain_oracle(variables, descriptions):
+    ...     return [("smoking", "cancer")]  # e.g. an LLM API call
+    >>> res = sp.llm_dag(
+    ...     variables=["smoking", "cancer", "tar"],
+    ...     oracle=domain_oracle,
+    ...     merge_strategy="oracle_only",
+    ... )  # doctest: +SKIP
+    >>> res.edges          # final merged edges  # doctest: +SKIP
+    >>> res.disagreements  # oracle vs CI-test conflicts  # doctest: +SKIP
+    """
     edges: List[Edge]
     oracle_edges: List[Edge]
     ci_rejects: List[Edge]
@@ -104,6 +133,23 @@ def llm_dag(
     Returns
     -------
     LLMDAGResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> df = pd.DataFrame(np.random.randn(100, 3),
+    ...                   columns=["x", "m", "y"])
+    >>> def oracle(variables, descriptions):
+    ...     return [("x", "m"), ("m", "y")]  # e.g. an LLM proposal
+    >>> res = sp.llm_dag(
+    ...     variables=["x", "m", "y"],
+    ...     oracle=oracle,
+    ...     data=df,
+    ...     merge_strategy="intersection",
+    ... )  # doctest: +SKIP
+    >>> res.edges  # edges surviving oracle + CI-test agreement  # doctest: +SKIP
     """
     descriptions = dict(descriptions or {})
 

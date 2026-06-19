@@ -40,7 +40,34 @@ __all__ = ["bcf_longitudinal", "BCFLongResult"]
 
 @dataclass
 class BCFLongResult(ResultProtocolMixin):
-    """Longitudinal BCF output container."""
+    """Longitudinal BCF output container.
+
+    Holds per-time and average treatment effects plus per-(unit, time)
+    CATE estimates produced by :func:`bcf_longitudinal`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np, pandas as pd
+    >>> rng = np.random.default_rng(53)
+    >>> rows = []
+    >>> for u in range(40):
+    ...     x1, x2, u_eff = rng.normal(), rng.normal(), rng.normal(0, 0.3)
+    ...     for t in range(4):
+    ...         d = int(rng.uniform() < 0.5)
+    ...         y = (0.5 * x1 + 0.3 * x2 + 1.5 * d + u_eff
+    ...              + 0.2 * t + rng.normal(0, 0.3))
+    ...         rows.append({"unit": u, "time": t, "y": y, "d": d,
+    ...                      "x1": x1, "x2": x2})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.bcf_longitudinal(  # doctest: +SKIP
+    ...     df, outcome="y", treatment="d", unit="unit", time="time",
+    ...     covariates=["x1", "x2"], n_trees_mu=80, n_trees_tau=30,
+    ...     n_bootstrap=30, random_state=53,
+    ... )
+    >>> res.average_ate  # ATE averaged over time  # doctest: +SKIP
+    >>> res.per_time_ate  # per-time ATE table  # doctest: +SKIP
+    """
 
     _citation_keys = ("prevot2025hierarchical",)
 

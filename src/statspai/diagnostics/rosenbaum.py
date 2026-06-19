@@ -39,7 +39,20 @@ from .._result_serialize import ResultProtocolMixin
 
 @dataclass
 class RosenbaumResult(ResultProtocolMixin):
-    """Result container for :func:`rosenbaum_bounds`."""
+    """Result container for :func:`rosenbaum_bounds`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> treated = rng.normal(1.0, 1.0, 80)
+    >>> control = rng.normal(0.0, 1.0, 80)
+    >>> res = sp.rosenbaum_bounds(treated, control)
+    >>> type(res).__name__
+    'RosenbaumResult'
+    >>> res.n_pairs
+    80
+    """
 
     _citation_keys = ("rosenbaum2002observational",)
 
@@ -192,6 +205,27 @@ def rosenbaum_bounds(
         ``gamma_critical`` is the smallest Gamma in the grid at which the
         upper-bound p-value exceeds ``alpha``. It is ``inf`` if the study
         is insensitive across the grid, and ``1.0`` if already sensitive.
+
+    Examples
+    --------
+    Two parallel arrays of matched-pair outcomes (Wilcoxon bound):
+
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> treated = rng.normal(1.0, 1.0, 80)
+    >>> control = rng.normal(0.0, 1.0, 80)
+    >>> res = sp.rosenbaum_bounds(treated, control)
+    >>> res.gamma_critical >= 1.0
+    True
+
+    A binary / robust sign-test bound on an insensitive example:
+
+    >>> import numpy as np
+    >>> t = np.array([2.0, 3.0, 4.0, 5.0])
+    >>> c = np.array([1.0, 1.0, 1.0, 1.0])
+    >>> bounds = sp.rosenbaum_bounds(t, c, method="sign", gamma_grid=[1.0, 2.0])
+    >>> bool(np.all(bounds.pvalue_upper >= bounds.pvalue_lower))
+    True
     """
     if method not in {"wilcoxon", "sign"}:
         raise ValueError("method must be 'wilcoxon' or 'sign'")

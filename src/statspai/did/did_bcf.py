@@ -1,6 +1,6 @@
 """DiD-BCF -- Forests for Differences.
 
-Wuthrich-Zhu (2025, arXiv 2505.09706). [@wuthrich2025forests]
+Souto & Neto (2025, arXiv 2505.09706). [@souto2025forests]
 
 Non-parametric DiD via Bayesian Causal Forests (Hahn-Murray-Carvalho
 2020) applied to the differenced outcome ΔY = Y_post - Y_pre.
@@ -243,10 +243,10 @@ def did_bcf(
 
 # Citation
 CausalResult._CITATIONS['did_bcf'] = (
-    "@article{wuthrich2025forests,\n"
+    "@article{souto2025forests,\n"
     "  title={Forests for Differences: Robust Causal Inference Beyond "
     "Parametric DiD},\n"
-    "  author={W{\\\"u}thrich, Kaspar and Zhu, Yinchu},\n"
+    "  author={Souto, Hugo Gobato and Louzada Neto, Francisco},\n"
     "  journal={arXiv preprint arXiv:2505.09706},\n"
     "  year={2025}\n"
     "}"

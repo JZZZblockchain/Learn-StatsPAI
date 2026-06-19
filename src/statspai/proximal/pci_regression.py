@@ -65,6 +65,27 @@ from .._result_serialize import ResultProtocolMixin
 
 @dataclass
 class ProximalRegResult(ResultProtocolMixin):
+    """Result of the regression-based proximal causal inference estimator.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> U = rng.normal(size=n)
+    >>> D = (0.5 * U + rng.normal(size=n) > 0).astype(int)
+    >>> df = pd.DataFrame({
+    ...     "Y": 1.5 * D + 1.0 * U + rng.normal(size=n),
+    ...     "D": D,
+    ...     "Z": 0.7 * U + rng.normal(size=n) * 0.5,
+    ...     "W": 0.7 * U + rng.normal(size=n) * 0.5,
+    ... })
+    >>> res = sp.proximal_regression(df, y="Y", treat="D", z_proxy="Z",
+    ...                              w_proxy="W")
+    >>> ate = float(res.ate)
+    """
+
     _citation_keys = ("tchetgentchetgen2024introduction", "cui2024semiparametric")
 
     ate: float
@@ -131,6 +152,25 @@ def proximal_regression(
     Returns
     -------
     ProximalRegResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> U = rng.normal(size=n)
+    >>> D = (0.5 * U + rng.normal(size=n) > 0).astype(int)
+    >>> df = pd.DataFrame({
+    ...     "Y": 1.5 * D + 1.0 * U + rng.normal(size=n),
+    ...     "D": D,
+    ...     "X": rng.normal(size=n),
+    ...     "Z": 0.7 * U + rng.normal(size=n) * 0.5,
+    ...     "W": 0.7 * U + rng.normal(size=n) * 0.5,
+    ... })
+    >>> res = sp.proximal_regression(df, y="Y", treat="D", z_proxy="Z",
+    ...                              w_proxy="W", covariates=["X"])
+    >>> ate = float(res.ate)
 
     Notes
     -----

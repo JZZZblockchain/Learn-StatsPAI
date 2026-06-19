@@ -62,6 +62,29 @@ class ShiftSharePoliticalResult:
 
     Wraps a standard :class:`CausalResult` (point + SEs) plus the two
     Park-Xu (2026) diagnostics: share-balance and Rotemberg top-K.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> units, inds = range(20), [f"I{k}" for k in range(5)]
+    >>> shares = pd.DataFrame(rng.dirichlet(np.ones(5), size=len(units)),
+    ...                       index=list(units), columns=inds)
+    >>> shocks = pd.Series(rng.normal(size=5), index=inds)
+    >>> rows = []
+    >>> for i in units:
+    ...     dx = float((shares.loc[i] * shocks).sum()) + rng.normal(scale=0.1)
+    ...     rows.append({"unit": i, "time": 0, "y": 0.0, "x": 0.0})
+    ...     rows.append({"unit": i, "time": 1, "y": 0.4 * dx, "x": dx})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.shift_share_political(
+    ...     df, unit="unit", time="time", outcome="y", endog="x",
+    ...     shares=shares, shocks=shocks,
+    ... )
+    >>> bool(np.isfinite(res.estimate))
+    True
     """
 
     iv_result: CausalResult
@@ -569,6 +592,32 @@ class ShiftSharePoliticalPanelResult:
         (column-name list as ``"unit+time"``), ``cluster``. Consumed by
         :func:`statspai.regtable` to render per-FE / cluster rows
         automatically.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> units, times, inds = list(range(30)), [0, 1, 2, 3], list("AB")
+    >>> shares = pd.DataFrame(rng.dirichlet(np.ones(2), size=len(units)),
+    ...                       index=units, columns=inds)
+    >>> shocks = pd.DataFrame(
+    ...     rng.normal(size=(len(times), 2)), index=times, columns=inds,
+    ... )
+    >>> rows = []
+    >>> for i in units:
+    ...     for t in times:
+    ...         b = float((shares.loc[i] * shocks.loc[t]).sum())
+    ...         x = b + rng.normal(scale=0.1)
+    ...         rows.append({"u": i, "t": t, "y": 0.3 * x, "x": x})
+    >>> df = pd.DataFrame(rows)
+    >>> res = sp.shift_share_political_panel(
+    ...     df, unit="u", time="t", outcome="y", endog="x",
+    ...     shares=shares, shocks=shocks,
+    ... )
+    >>> bool(np.isfinite(res.estimate))
+    True
     """
 
     estimate: float

@@ -37,7 +37,29 @@ import pandas as pd
 
 @dataclass
 class CausalWorkflow:
-    """Holds state across the diagnose -> estimate -> report pipeline."""
+    """Holds state across the diagnose -> estimate -> report pipeline.
+
+    Construct via :func:`sp.causal`, then drive the cached stages
+    (``diagnose`` -> ``recommend`` -> ``estimate`` -> ``robustness`` ->
+    ``report``). Each stage is independently callable and memoised.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> df = pd.DataFrame({
+    ...     "wage": np.random.randn(200),
+    ...     "training": np.random.randint(0, 2, 200),
+    ...     "year": np.tile([2010, 2011], 100),
+    ...     "worker": np.repeat(np.arange(100), 2),
+    ... })
+    >>> w = sp.causal(df, y="wage", treatment="training",
+    ...               id="worker", time="year", design="did")  # doctest: +SKIP
+    >>> w.result        # fitted CausalResult  # doctest: +SKIP
+    >>> w.diagnostics   # IdentificationReport  # doctest: +SKIP
+    >>> w.report("analysis.html")  # one-page HTML summary  # doctest: +SKIP
+    """
 
     data: pd.DataFrame
     y: str

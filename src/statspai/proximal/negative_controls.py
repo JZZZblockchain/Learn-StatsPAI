@@ -54,7 +54,20 @@ from .._result_serialize import ResultProtocolMixin
 
 @dataclass
 class NegativeControlResult(ResultProtocolMixin):
-    """Unified result for negative-control procedures."""
+    """Unified result for negative-control procedures.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> U = rng.normal(size=n)
+    >>> D = (0.5 * U + rng.normal(size=n) > 0).astype(int)
+    >>> df = pd.DataFrame({"D": D, "NCO": 0.8 * U + rng.normal(size=n)})
+    >>> res = sp.negative_control_outcome(df, nco="NCO", treat="D")
+    >>> est = float(res.estimate)
+    """
 
     _citation_keys = ("shi2020selective", "miao2018identifying")
 
@@ -152,6 +165,23 @@ def negative_control_outcome(
     Returns
     -------
     NegativeControlResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> U = rng.normal(size=n)
+    >>> D = (0.5 * U + rng.normal(size=n) > 0).astype(int)
+    >>> df = pd.DataFrame({
+    ...     "D": D,
+    ...     "X": rng.normal(size=n),
+    ...     "NCO": 0.8 * U + rng.normal(size=n),
+    ... })
+    >>> res = sp.negative_control_outcome(df, nco="NCO", treat="D",
+    ...                                   covariates=["X"])
+    >>> est = float(res.estimate)
     """
     cov = list(covariates or [])
     df = clean_frame(
@@ -203,6 +233,20 @@ def negative_control_exposure(
     A significant coefficient on ``nce`` — which by design is assumed to
     not causally affect ``y`` — indicates residual confounding along the
     exposure axis (selection, measurement error, etc.).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> U = rng.normal(size=n)
+    >>> df = pd.DataFrame({
+    ...     "Y": 1.0 * U + rng.normal(size=n),
+    ...     "NCE": 0.8 * U + rng.normal(size=n),
+    ... })
+    >>> res = sp.negative_control_exposure(df, y="Y", nce="NCE")
+    >>> est = float(res.estimate)
     """
     cov = list(covariates or [])
     df = clean_frame(
@@ -267,6 +311,24 @@ def double_negative_control(
     This is implemented as a just-identified 2SLS. The fitted ATE is
     asymptotically unbiased under the assumptions above and consistent
     with Shi et al. (2020, §3) closed-form.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 300
+    >>> U = rng.normal(size=n)
+    >>> D = (0.5 * U + rng.normal(size=n) > 0).astype(int)
+    >>> df = pd.DataFrame({
+    ...     "Y": 1.5 * D + 1.0 * U + rng.normal(size=n),
+    ...     "D": D,
+    ...     "NCE": 0.8 * U + rng.normal(size=n) * 0.5,
+    ...     "NCO": 0.8 * U + rng.normal(size=n) * 0.5,
+    ... })
+    >>> res = sp.double_negative_control(df, y="Y", treat="D", nce="NCE",
+    ...                                  nco="NCO")
+    >>> ate = float(res.estimate)
     """
     cov = list(covariates or [])
     df = clean_frame(
@@ -291,8 +353,7 @@ def double_negative_control(
     # For D, the IV set includes D itself (identity fit). For W, Z is the instrument.
     # Use standard 2SLS: X_hat = Z(Z'Z)^{-1} Z' X_full
     X_full = np.column_stack([endog, exog])
-    Z_full = np.column_stack([instruments, exog[:, 1:]]) if exog.shape[1] > 1 else instruments
-    # Keep it simple — use full instrument matrix = [1, X, D, Z]
+    # Use full instrument matrix = [1, X, D, Z] (already includes exog covariates)
     Z_mat = instruments
     PZ = Z_mat @ np.linalg.pinv(Z_mat.T @ Z_mat) @ Z_mat.T
     X_hat = PZ @ X_full

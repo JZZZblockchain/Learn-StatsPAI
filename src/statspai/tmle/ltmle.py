@@ -96,6 +96,34 @@ Regime = Union[
 
 @dataclass
 class LTMLEResult(ResultProtocolMixin):
+    """Structured output of :func:`ltmle`.
+
+    Holds the treated/control marginal means, their ATE contrast, and the
+    associated inference (``se``, ``ci``, ``pvalue``).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> l0 = rng.normal(size=n)
+    >>> a0 = rng.binomial(1, 1 / (1 + np.exp(-0.4 * l0)))
+    >>> l1 = 0.3 * l0 + 0.2 * a0 + rng.normal(size=n)
+    >>> a1 = rng.binomial(1, 1 / (1 + np.exp(-0.4 * l1)))
+    >>> y = 1.0 + 0.4 * a0 + 0.3 * a1 + 0.2 * l1 + rng.normal(scale=0.2, size=n)
+    >>> df = pd.DataFrame({"L0": l0, "A0": a0, "L1": l1, "A1": a1, "Y": y})
+    >>> res = sp.ltmle(
+    ...     df, y="Y", treatments=["A0", "A1"],
+    ...     covariates_time=[["L0"], ["L1"]],
+    ... )
+    >>> isinstance(res, sp.LTMLEResult)
+    True
+    >>> float(res.ate)  # doctest: +SKIP
+    0.71
+    """
+
     _citation_keys = ("lendle2017ltmle", "vanderlaan2012targeted")
 
     psi_treated: float
@@ -271,6 +299,26 @@ def ltmle(
     emitted and the failed step indices are recorded per regime in
     ``detail['targeting_failures']``. Per-step epsilons (time order
     k=0..K-1) are exposed in ``detail['epsilons']``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 80
+    >>> l0 = rng.normal(size=n)
+    >>> a0 = rng.binomial(1, 1 / (1 + np.exp(-0.4 * l0)))
+    >>> l1 = 0.3 * l0 + 0.2 * a0 + rng.normal(size=n)
+    >>> a1 = rng.binomial(1, 1 / (1 + np.exp(-0.4 * l1)))
+    >>> y = 1.0 + 0.4 * a0 + 0.3 * a1 + 0.2 * l1 + rng.normal(scale=0.2, size=n)
+    >>> df = pd.DataFrame({"L0": l0, "A0": a0, "L1": l1, "A1": a1, "Y": y})
+    >>> res = sp.ltmle(
+    ...     df, y="Y", treatments=["A0", "A1"],
+    ...     covariates_time=[["L0"], ["L1"]],
+    ... )
+    >>> bool(np.isfinite(res.ate))
+    True
     """
     if not isinstance(data, pd.DataFrame):
         raise _ltmle_error(

@@ -43,7 +43,27 @@ __all__ = [
 
 @dataclass
 class NetworkHTEResult(ResultProtocolMixin):
-    """Output of :func:`network_hte`."""
+    """Output of :func:`network_hte`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> d = (rng.uniform(size=n) < 0.5).astype(float)
+    >>> e = rng.uniform(size=n)
+    >>> x1 = rng.normal(size=n)
+    >>> y = 1.0 + 0.8 * d + 0.5 * e + 0.3 * x1 + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "e": e, "x1": x1})
+    >>> res = sp.network_hte(
+    ...     df, y="y", treatment="d", neighbor_exposure="e",
+    ...     covariates=["x1"], n_folds=3, random_state=0,
+    ... )
+    >>> bool(np.isfinite(res.direct_effect))
+    True
+    """
 
     _citation_keys = ("wu2025estimating",)
 
@@ -85,7 +105,27 @@ class NetworkHTEResult(ResultProtocolMixin):
 
 @dataclass
 class InwardOutwardResult(ResultProtocolMixin):
-    """Output of :func:`inward_outward_spillover`."""
+    """Output of :func:`inward_outward_spillover`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> rng = np.random.default_rng(0)
+    >>> n = 200
+    >>> d = (rng.uniform(size=n) < 0.5).astype(float)
+    >>> e_in = rng.uniform(size=n)
+    >>> e_out = rng.uniform(size=n)
+    >>> y = 1.0 + 0.6 * d + 0.4 * e_in + 0.2 * e_out + rng.normal(scale=0.5, size=n)
+    >>> df = pd.DataFrame({"y": y, "d": d, "e_in": e_in, "e_out": e_out})
+    >>> res = sp.inward_outward_spillover(
+    ...     df, y="y", treatment="d",
+    ...     inward_exposure="e_in", outward_exposure="e_out",
+    ... )
+    >>> bool(res.inward_se > 0)
+    True
+    """
 
     _citation_keys = ("fang2025inward",)
 

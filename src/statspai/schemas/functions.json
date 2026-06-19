@@ -7138,8 +7138,15 @@
           "type": "string"
         },
         "kind": {
-          "default": "Which bridge to invoke",
-          "description": "kind parameter (str).",
+          "description": "Which bridge to invoke",
+          "enum": [
+            "did_sc",
+            "ewm_cate",
+            "cb_ipw",
+            "kink_rdd",
+            "dr_calib",
+            "surrogate_pci"
+          ],
           "type": "string"
         }
       },
@@ -33433,22 +33440,22 @@
         },
         "n_periods": {
           "description": "Number of periods.",
-          "type": "string"
+          "type": "integer"
         },
         "n_units": {
           "description": "Number of units.",
-          "type": "string"
+          "type": "integer"
         },
         "p_value": {
-          "description": "p_value parameter.",
-          "type": "string"
+          "description": "p_value parameter (float).",
+          "type": "number"
         },
         "statistic": {
-          "description": "statistic parameter.",
-          "type": "string"
+          "description": "statistic parameter (float).",
+          "type": "number"
         },
         "test_type": {
-          "description": "test_type parameter.",
+          "description": "test_type parameter (str).",
           "type": "string"
         }
       },
@@ -33931,7 +33938,7 @@
         "alpha": {
           "default": 0.05,
           "description": "Significance level for confidence intervals and tests.",
-          "type": "string"
+          "type": "number"
         },
         "cdf_counterfactual": {
           "description": "cdf_counterfactual parameter.",
@@ -34925,19 +34932,22 @@
     "parameters": {
       "properties": {
         "baseline": {
-          "description": "baseline parameter.",
-          "type": "string"
+          "description": "baseline parameter (Dict[str, Any]).",
+          "type": "object"
         },
         "dimensions": {
-          "description": "dimensions parameter.",
-          "type": "string"
+          "description": "dimensions parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "method": {
           "description": "Estimator or algorithm variant to use.",
           "type": "string"
         },
         "overall_stability": {
-          "description": "overall_stability parameter.",
+          "description": "overall_stability parameter (str).",
           "type": "string"
         }
       },
@@ -35017,23 +35027,32 @@
     "parameters": {
       "properties": {
         "checks": {
-          "description": "checks parameter.",
-          "type": "string"
+          "description": "checks parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "missing": {
-          "description": "missing parameter.",
-          "type": "string"
+          "description": "missing parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "present": {
-          "description": "present parameter.",
-          "type": "string"
+          "description": "present parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "score": {
-          "description": "score parameter.",
-          "type": "string"
+          "description": "score parameter (int).",
+          "type": "integer"
         },
         "venue": {
-          "description": "venue parameter.",
+          "description": "venue parameter (str).",
           "type": "string"
         }
       },
@@ -44367,7 +44386,7 @@
           "type": "string"
         },
         "per_timepoint_means": {
-          "description": "per_timepoint_means parameter (list[float]).",
+          "description": "per_timepoint_means parameter (list[float] | None).",
           "items": {
             "type": "string"
           },
@@ -48668,7 +48687,7 @@
           "type": "array"
         },
         "diagnostics": {
-          "description": "diagnostics parameter (dict).",
+          "description": "diagnostics parameter (Optional[dict]).",
           "type": "object"
         },
         "estimate": {
@@ -50341,7 +50360,7 @@
     }
   },
   {
-    "description": "ProximalRegResult(ate: 'float', se: 'float', ci: 'tuple', pvalue: 'float', bridge_coefs: 'Dict[str, float]', propensity_coefs: 'Dict[str, float]', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Result of the regression-based proximal causal inference estimator.",
     "name": "ProximalRegResult",
     "parameters": {
       "properties": {
@@ -50627,7 +50646,7 @@
     }
   },
   {
-    "description": "FourWayResult(cde: 'float', int_ref: 'float', int_med: 'float', pie: 'float', total_effect: 'float', proportions: 'Dict[str, float]', n_obs: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Result container for :func:`four_way_decomposition`.",
     "name": "FourWayResult",
     "parameters": {
       "properties": {
@@ -50726,7 +50745,7 @@
     }
   },
   {
-    "description": "ITSResult(level_change: 'float', slope_change: 'float', se_level: 'float', se_slope: 'float', ci_level: 'tuple', ci_slope: 'tuple', pvalue_level: 'float', pvalue_slope: 'float', coefficients: 'pd.DataFrame', n_obs: 'int', intervention_time: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Result container for :func:`its`.",
     "name": "ITSResult",
     "parameters": {
       "properties": {
@@ -50896,7 +50915,7 @@
     }
   },
   {
-    "description": "LTMLEResult(psi_treated: 'float', psi_control: 'float', ate: 'float', se: 'float', ci: 'tuple[float, float]', pvalue: 'float', K: 'int', n_obs: 'int', regime_treated: 'Sequence[int]', regime_control: 'Sequence[int]', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Structured output of :func:`ltmle`.",
     "name": "LTMLEResult",
     "parameters": {
       "properties": {
@@ -51371,7 +51390,7 @@
     }
   },
   {
-    "description": "VCNetResult(t_grid: 'np.ndarray', mu_hat: 'np.ndarray', se: 'np.ndarray', ci_lo: 'np.ndarray', ci_hi: 'np.ndarray', coef_matrix: 'np.ndarray', n_obs: 'int', n_basis: 'int', detail: 'Dict[str, Any]' = <factory>)",
+    "description": "Dose-response curve returned by :func:`vcnet` / :func:`scigan`.",
     "name": "VCNetResult",
     "parameters": {
       "properties": {
@@ -51478,7 +51497,7 @@
     }
   },
   {
-    "description": "LLMDAGResult(edges: 'List[Edge]', oracle_edges: 'List[Edge]', ci_rejects: 'List[Edge]', ci_asserts: 'List[Edge]', disagreements: 'List[Tuple[str, str, str]]', provenance: 'Dict[str, Any]' = <factory>)",
+    "description": "Merged LLM-oracle / CI-test DAG returned by :func:`llm_dag`.",
     "name": "LLMDAGResult",
     "parameters": {
       "properties": {

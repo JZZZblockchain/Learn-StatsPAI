@@ -47,6 +47,23 @@ from .._result_serialize import ResultProtocolMixin
 
 @dataclass
 class FourWayResult(ResultProtocolMixin):
+    """Result container for :func:`four_way_decomposition`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> treat = np.tile([0.0, 1.0], 50)
+    >>> mediator = 0.5 + 0.4 * treat + np.repeat(np.linspace(-1, 1, 50), 2)
+    >>> y = 1 + 2 * treat + 3 * mediator + 4 * treat * mediator
+    >>> df = pd.DataFrame({"y": y, "a": treat, "m": mediator})
+    >>> res = sp.four_way_decomposition(df, y="y", treat="a", mediator="m")
+    >>> type(res).__name__
+    'FourWayResult'
+    >>> round(float(res.total_effect), 1)
+    6.8
+    """
+
     _citation_keys = ("vanderweele2014effect",)
 
     cde: float
@@ -107,6 +124,20 @@ def four_way_decomposition(
     Returns
     -------
     FourWayResult
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import pandas as pd
+    >>> treat = np.tile([0.0, 1.0], 50)
+    >>> mediator = 0.5 + 0.4 * treat + np.repeat(np.linspace(-1, 1, 50), 2)
+    >>> y = 1 + 2 * treat + 3 * mediator + 4 * treat * mediator
+    >>> df = pd.DataFrame({"y": y, "a": treat, "m": mediator})
+    >>> res = sp.four_way_decomposition(df, y="y", treat="a", mediator="m")
+    >>> round(float(res.cde), 1)
+    2.0
+    >>> round(float(res.pie), 1)
+    1.2
     """
     cov = list(covariates or [])
     from sklearn.linear_model import LinearRegression
@@ -141,7 +172,6 @@ def four_way_decomposition(
     # E[M | A=a, C=Cbar]
     Cbar = Xc.mean(axis=0) if Xc.size else np.array([])
     EM_a0 = beta0 + beta1 * a0 + (Cbar @ mlm.coef_[2:]) if Xc.size else beta0 + beta1 * a0
-    EM_a1 = beta0 + beta1 * a1 + (Cbar @ mlm.coef_[2:]) if Xc.size else beta0 + beta1 * a1
 
     # Closed-form from VanderWeele (2014) Table 1:
     cde = (theta1 + theta3 * m0) * (a1 - a0)

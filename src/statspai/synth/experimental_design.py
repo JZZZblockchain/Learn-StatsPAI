@@ -80,6 +80,18 @@ class SynthExperimentalDesignResult:
         Always ``'abadie_zhao_2025'``.
     diagnostics : dict
         Extra metadata (n_units, pre_periods, solver, etc.).
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> df = sp.utils.dgp_synth(n_units=40, n_periods=20, seed=0)
+    >>> res = sp.synth_experimental_design(
+    ...     df, unit="unit", time="time", outcome="y",
+    ...     k=5, pre_period=(0, 19), random_state=0,
+    ... )
+    >>> len(res.selected)
+    5
     """
 
     selected: List[Any]
