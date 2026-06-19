@@ -161,14 +161,25 @@ class TestTab:
         assert 'Pearson chi2' in result
 
     def test_excel_export(self, sample_df, tmp_dir):
+        openpyxl = pytest.importorskip("openpyxl")
         path = os.path.join(tmp_dir, 'tab.xlsx')
         tab(sample_df, 'treatment', 'outcome', output=path)
         assert os.path.exists(path)
+        ws = openpyxl.load_workbook(path)["Crosstab"]
+        assert ws.sheet_view.showGridLines is False
+        assert ws.freeze_panes == "B3"
+        assert ws.print_title_rows.replace("$", "") == "2:2"
+        assert ws.page_setup.fitToWidth == 1
 
     def test_word_export(self, sample_df, tmp_dir):
+        pytest.importorskip("docx")
+        from docx import Document
+
         path = os.path.join(tmp_dir, 'tab.docx')
         tab(sample_df, 'treatment', 'outcome', output=path)
         assert os.path.exists(path)
+        doc = Document(path)
+        assert doc.sections[0].left_margin.inches == pytest.approx(1.0)
 
     def test_normalize_row(self, sample_df):
         result = tab(sample_df, 'treatment', 'outcome', normalize='row')

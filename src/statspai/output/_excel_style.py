@@ -412,10 +412,13 @@ def render_dataframe_to_sheet(
     header_top, header_bot = write_header(ws, row, df, index_label=index_label)
     row = header_bot + 1
     if df.empty:
+        s = _styles()
         body_top = row
         body_bot = row
         for col in range(1, n_cols + 1):
-            ws.cell(row=row, column=col, value="")
+            cell = ws.cell(row=row, column=col, value="")
+            cell.font = s["body_font"]
+            cell.alignment = s["left"] if col == 1 else s["center"]
         row += 1
     else:
         body_top, body_bot = write_body(ws, row, df)

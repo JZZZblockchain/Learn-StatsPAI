@@ -40,6 +40,8 @@ def test_paper_tables_to_docx_writes_file(tmp_path, two_panels):
 
     doc = Document(str(out))
     assert len(doc.tables) == 2  # main + heterogeneity
+    assert doc.sections[0].left_margin.inches == pytest.approx(1.0)
+    assert doc.styles["Heading 2"].font.name == "Times New Roman"
 
 
 def test_paper_tables_to_docx_uses_booktab_borders(tmp_path, two_panels):
@@ -126,6 +128,10 @@ def test_paper_tables_xlsx_uses_shared_font_and_notes(tmp_path, two_panels):
 
     assert ws["A1"].value == "Main results"
     assert ws["A1"].font.name == "Times New Roman"
+    assert ws.sheet_view.showGridLines is False
+    assert ws.freeze_panes == "B3"
+    assert ws.print_title_rows.replace("$", "") == "2:2"
+    assert ws.page_setup.fitToWidth == 1
     assert "Robust standard errors in parentheses" in values
     assert any("p<0.10" in value for value in values)
 

@@ -128,6 +128,10 @@ class TestEform:
             for cell in row
             if isinstance(cell, str)
         ]
+        assert ws.sheet_view.showGridLines is False
+        assert ws.freeze_panes == "B2"
+        assert ws.print_title_rows.replace("$", "") == "1:1"
+        assert ws.page_setup.fitToWidth == 1
         assert any("exp(b)" in value or "exponentiated" in value.lower()
                    for value in values)
 

@@ -33,6 +33,7 @@ from statspai.output._aer_style import (  # noqa: E402
     _docx_border_xml,
     _set_cell_borders,
     _clear_table_borders,
+    apply_word_document_defaults,
     apply_word_booktab_rules,
     style_word_table_typography,
     add_word_notes_paragraph,
@@ -42,6 +43,29 @@ from statspai.output._aer_style import (  # noqa: E402
     MID_RULE_SZ,
     BOTTOM_RULE_SZ,
 )
+
+
+# ---- document defaults --------------------------------------------------
+
+
+def test_apply_word_document_defaults_sets_styles_and_margins():
+    d = docx.Document()
+    apply_word_document_defaults(d)
+
+    section = d.sections[0]
+    assert section.left_margin == Inches(1)
+    assert section.right_margin == Inches(1)
+    assert section.top_margin == Inches(1)
+    assert section.bottom_margin == Inches(1)
+
+    normal = d.styles["Normal"]
+    assert normal.font.name == "Times New Roman"
+    assert normal.font.size == Pt(10)
+
+    heading = d.styles["Heading 2"]
+    assert heading.font.name == "Times New Roman"
+    assert heading.font.bold is True
+    assert str(heading.font.color.rgb) == "000000"
 
 
 # ---- _docx_border_xml ---------------------------------------------------

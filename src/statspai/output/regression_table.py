@@ -2498,7 +2498,8 @@ class RegtableResult:
 
         from ._excel_style import (
             BODY_PT, HEADER_PT, NOTES_PT, TIMES,
-            apply_booktab_borders, autofit_columns, write_title,
+            apply_booktab_borders, apply_publication_sheet_defaults,
+            autofit_columns, write_title,
         )
 
         df = self.to_dataframe()
@@ -2574,6 +2575,13 @@ class RegtableResult:
             note_row += 1
 
         autofit_columns(ws, n_cols, max_width=25)
+        apply_publication_sheet_defaults(
+            ws,
+            header_top_row=header_top_row,
+            header_bot_row=header_bot_row,
+            final_row=max(note_row - 1, body_bot_row),
+            n_cols=n_cols,
+        )
         wb.save(filename)
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -2598,12 +2606,14 @@ class RegtableResult:
             return
 
         from ._aer_style import (
+            apply_word_document_defaults,
             apply_word_booktab_rules,
             style_word_table_typography,
             add_word_notes_paragraph,
         )
 
         doc = Document()
+        apply_word_document_defaults(doc)
         if self.title:
             doc.add_heading(self.title, level=2)
 

@@ -178,6 +178,7 @@ def _tab_to_excel(df, test_result, filename, title):
 
     from ._excel_style import (
         apply_booktab_borders,
+        apply_publication_sheet_defaults,
         autofit_columns,
         write_body,
         write_header,
@@ -213,10 +214,18 @@ def _tab_to_excel(df, test_result, filename, title):
             f"chi2({test_result['df']}) = {test_result['chi2']:.4f}, "
             f"p = {test_result['pvalue']:.4f}"
         )
+    next_row = body_bot + 1
     if notes:
-        write_notes(ws, body_bot + 1, notes, n_cols=n_cols)
+        next_row = write_notes(ws, next_row, notes, n_cols=n_cols)
 
     autofit_columns(ws, n_cols)
+    apply_publication_sheet_defaults(
+        ws,
+        header_top_row=header_top,
+        header_bot_row=header_bot,
+        final_row=max(next_row - 1, body_bot),
+        n_cols=n_cols,
+    )
     wb.save(filename)
 
 
@@ -230,12 +239,14 @@ def _tab_to_word(df, test_result, filename, title):
         raise ImportError("python-docx required. Install: pip install python-docx")
 
     from ._aer_style import (
+        apply_word_document_defaults,
         apply_word_booktab_rules,
         style_word_table_typography,
         add_word_notes_paragraph,
     )
 
     doc = Document()
+    apply_word_document_defaults(doc)
 
     if title:
         p = doc.add_paragraph()

@@ -404,9 +404,13 @@ class MeanComparisonResult:
             warnings.warn("python-docx required for Word export: pip install python-docx")
             return
 
-        from ._aer_style import render_dataframe_to_word_table
+        from ._aer_style import (
+            apply_word_document_defaults,
+            render_dataframe_to_word_table,
+        )
 
         doc = Document()
+        apply_word_document_defaults(doc)
         doc.add_heading(self.title, level=2)
         render_dataframe_to_word_table(
             doc,

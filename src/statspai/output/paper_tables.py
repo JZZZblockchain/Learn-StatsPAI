@@ -180,10 +180,12 @@ class PaperTables:
             ) from e
 
         from ._aer_style import (
+            apply_word_document_defaults,
             render_dataframe_to_word_table,
         )
 
         doc = Document()
+        apply_word_document_defaults(doc)
         panels = list(self.panels().items())
         for idx, (name, tbl) in enumerate(panels):
             # Panel heading — Times New Roman 12pt bold, centered

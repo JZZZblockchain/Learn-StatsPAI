@@ -618,9 +618,13 @@ class Collection:
                 "Install with: pip install python-docx"
             ) from e
 
-        from ._aer_style import render_dataframe_to_word_table
+        from ._aer_style import (
+            apply_word_document_defaults,
+            render_dataframe_to_word_table,
+        )
 
         doc = Document()
+        apply_word_document_defaults(doc)
         if self.title:
             t = doc.add_heading(self.title, level=1)
             for run in t.runs:

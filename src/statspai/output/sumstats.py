@@ -340,9 +340,13 @@ def _sumstats_to_word(df: pd.DataFrame, filename: str, title: str) -> None:
             "python-docx required. Install: pip install python-docx"
         )
 
-    from ._aer_style import render_dataframe_to_word_table
+    from ._aer_style import (
+        apply_word_document_defaults,
+        render_dataframe_to_word_table,
+    )
 
     doc = Document()
+    apply_word_document_defaults(doc)
 
     if title:
         p = doc.add_paragraph()

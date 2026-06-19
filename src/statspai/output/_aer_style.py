@@ -43,6 +43,62 @@ NOTE_PT = 8
 # ---------------------------------------------------------------------------
 
 
+def _set_style_font_name(style: Any, font_name: str) -> None:
+    """Set a Word style font across OOXML font slots."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    style.font.name = font_name
+    rpr = style.element.get_or_add_rPr()
+    rfonts = rpr.find(qn("w:rFonts"))
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.append(rfonts)
+    for key in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+        rfonts.set(qn(key), font_name)
+
+
+def apply_word_document_defaults(
+    doc: Any,
+    *,
+    font_name: str = DEFAULT_FONT,
+) -> None:
+    """Apply economics-journal document defaults to a DOCX document.
+
+    Table helpers handle cell-level typography and book-tab rules; this
+    function sets the surrounding Word document to the same publication
+    baseline: Times New Roman, black headings, compact paragraph spacing,
+    and standard one-inch manuscript margins.
+    """
+    from docx.shared import Inches, Pt, RGBColor
+
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+    style_specs = (
+        ("Normal", BODY_PT, False, 0),
+        ("Heading 1", 14, True, 6),
+        ("Heading 2", 12, True, 6),
+        ("Heading 3", 11, True, 4),
+        ("Title", 14, True, 6),
+    )
+    for style_name, pt_size, bold, space_after in style_specs:
+        try:
+            style = doc.styles[style_name]
+        except KeyError:
+            continue
+        _set_style_font_name(style, font_name)
+        style.font.size = Pt(pt_size)
+        style.font.bold = bold
+        style.font.color.rgb = RGBColor(0, 0, 0)
+        style.paragraph_format.space_before = Pt(0)
+        style.paragraph_format.space_after = Pt(space_after)
+        style.paragraph_format.line_spacing = 1.0
+
+
 def _docx_border_xml(
     *,
     top: Optional[dict[str, str]] = None,

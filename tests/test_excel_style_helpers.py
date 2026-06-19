@@ -82,6 +82,27 @@ def test_render_dataframe_to_sheet_reuses_shared_style(tmp_path):
     assert ws.page_margins.left == 0.5
 
 
+def test_render_dataframe_to_sheet_styles_empty_body_row():
+    openpyxl = pytest.importorskip("openpyxl")
+    df = pd.DataFrame(columns=["Mean", "SD"])
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    next_row = render_dataframe_to_sheet(
+        ws,
+        df,
+        notes=["No observations."],
+        index_label="Variable",
+    )
+
+    assert next_row == 4
+    assert ws["A2"].value == ""
+    assert ws["A2"].font.name == TIMES
+    assert ws["A2"].border.bottom.style == "medium"
+    assert ws["A3"].value == "No observations."
+    assert ws.freeze_panes == "B2"
+
+
 def test_safe_sheet_name_replaces_invalid_chars_and_collisions():
     assert safe_sheet_name("main/table*1") == "main_table_1"
     assert safe_sheet_name("", existing=()) == "Table"

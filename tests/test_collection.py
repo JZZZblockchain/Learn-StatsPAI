@@ -240,6 +240,8 @@ def test_save_docx(tmp_path, models_and_df):
     from docx import Document
     doc = Document(str(out))
     assert len(doc.tables) >= 3  # main + summary + balance
+    assert doc.sections[0].left_margin.inches == pytest.approx(1.0)
+    assert doc.styles["Heading 1"].font.name == "Times New Roman"
     text = "\n".join(p.text for p in doc.paragraphs)
     assert "Wage analysis" in text
     assert "clustered at firm level" in text
@@ -280,6 +282,9 @@ def test_save_xlsx_one_sheet_per_item(tmp_path, models_and_df):
     sheets = set(wb.sheetnames)
     assert "main" in sheets
     assert "desc" in sheets
+    assert wb["main"].sheet_view.showGridLines is False
+    assert wb["main"].freeze_panes == "B2"
+    assert wb["main"].page_setup.fitToWidth == 1
 
 
 def test_save_xlsx_preserves_regtable_notes(tmp_path, models_and_df):
