@@ -152,6 +152,40 @@ Tests added:
   print-title rows, fit-to-page setup, orientation, print area, margins, and
   duplicate sheet-name suffixing.
 
+## Batch 5: Word Document Defaults And Public API Coverage
+
+Problem:
+
+- Word tables had book-tab borders, but generated documents still inherited
+  Word's default heading/font/margin choices in several paths.
+- `tab(..., output=".xlsx/.docx")` had the same table borders as other output
+  writers, but not the new publication worksheet/document defaults.
+- Helper tests alone were not enough to prove users saw the defaults through
+  real export calls.
+
+Change:
+
+- Added `apply_word_document_defaults()` to set one-inch margins, Times New
+  Roman normal/heading styles, black headings, compact spacing, and stable
+  OOXML font slots.
+- Applied document defaults to `regtable`, `sumstats`, `mean_comparison`,
+  `paper_tables`, `collect`, and `tab` Word exports.
+- Applied publication worksheet defaults to `tab` Excel export.
+- Added public assertions for `EconometricResults.to_excel()` and
+  `EconometricResults.to_word()`, which delegate to `regtable`.
+- Styled empty Excel body rows so empty tables still carry the same typography
+  and bottom rule as non-empty tables.
+
+Tests added:
+
+- Word helper coverage now checks margins and document styles.
+- Public API tests now check DOCX margins/styles and XLSX freeze panes,
+  hidden gridlines, print-title rows, and fit-to-page settings through
+  `paper_tables`, `collect`, `regtable`, result-protocol exports, and `tab`.
+- Single-model `EconometricResults.to_excel()` / `.to_word()` coverage now
+  checks that delegated `regtable` output carries the same workbook and
+  document defaults.
+
 ## Verification Log
 
 Completed so far:
@@ -223,6 +257,59 @@ Completed so far:
 
 .venv/bin/python -m pytest tests/test_excel_style_helpers.py -q
 # 3 passed
+
+.venv/bin/python -m pytest tests/test_econometric_results_export.py -q
+# 29 passed
+
+.venv/bin/python -m pytest \
+  tests/test_aer_style.py \
+  tests/test_excel_style_helpers.py \
+  --no-cov -q
+# 26 passed
+
+.venv/bin/python -m pytest \
+  tests/test_paper_tables_export.py \
+  tests/test_collection.py \
+  tests/test_regtable_publication_extensions.py \
+  tests/test_aer_word_style.py \
+  tests/test_postestimation.py \
+  tests/test_sumstats.py \
+  tests/test_export.py \
+  tests/test_multi_se.py::test_multi_se_appears_in_excel \
+  --no-cov -q
+# 113 passed, 12 warnings (expected deprecation/sample-size warnings)
+
+.venv/bin/python -m py_compile \
+  src/statspai/output/_aer_style.py \
+  src/statspai/output/_excel_style.py \
+  src/statspai/output/sumstats.py \
+  src/statspai/output/mean_comparison.py \
+  src/statspai/output/paper_tables.py \
+  src/statspai/output/collection.py \
+  src/statspai/output/regression_table.py \
+  src/statspai/output/tab.py
+# passed
+
+.venv/bin/python -m pytest \
+  tests/test_aer_style.py \
+  tests/test_aer_word_style.py \
+  tests/test_excel_style_helpers.py \
+  tests/test_paper_tables_export.py \
+  tests/test_collection.py \
+  tests/test_econometric_results_export.py \
+  tests/test_multi_se.py::test_multi_se_appears_in_excel \
+  tests/test_journal_presets.py \
+  tests/test_sumstats.py \
+  tests/test_export.py \
+  tests/test_modelsummary.py \
+  tests/test_paper_tables.py \
+  tests/test_regtable_round2_extensions.py \
+  tests/test_regtable_publication_extensions.py \
+  tests/test_postestimation.py \
+  tests/test_output_and_survey_helpers.py \
+  tests/test_export_surface_contract.py \
+  --no-cov -q
+# 305 passed, 39 warnings (expected deprecation/sample-size warnings)
 
 git diff --check
 # passed

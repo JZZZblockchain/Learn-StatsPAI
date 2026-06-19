@@ -183,11 +183,15 @@ class TestToMarkdown:
 class TestToExcel:
 
     def test_writes_file(self, ols_result, tmp_dir):
-        pytest.importorskip("openpyxl")
+        openpyxl = pytest.importorskip("openpyxl")
         p = os.path.join(tmp_dir, "t.xlsx")
         out = ols_result.to_excel(p)
         assert out == p
         assert os.path.getsize(p) > 1000
+        ws = openpyxl.load_workbook(p).active
+        assert ws.sheet_view.showGridLines is False
+        assert ws.freeze_panes == "B2"
+        assert ws.page_setup.fitToWidth == 1
 
     def test_kwargs_passthrough(self, ols_result, tmp_dir):
         pytest.importorskip("openpyxl")
@@ -200,10 +204,14 @@ class TestToWord:
 
     def test_writes_file(self, ols_result, tmp_dir):
         pytest.importorskip("docx")
+        from docx import Document
+
         p = os.path.join(tmp_dir, "t.docx")
         out = ols_result.to_word(p)
         assert out == p
         assert os.path.getsize(p) > 1000
+        doc = Document(p)
+        assert doc.sections[0].left_margin.inches == pytest.approx(1.0)
 
     def test_caption(self, ols_result, tmp_dir):
         pytest.importorskip("docx")
