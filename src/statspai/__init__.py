@@ -709,7 +709,7 @@ from .question import (
 # (lazy) robustness_b: see _LAZY_SUBMODULES / _LAZY_ATTRS
 
 # === Canonical datasets (consolidated facade) ===
-from . import datasets
+from . import datasets  # noqa: F401 — exposed as ``sp.datasets``
 
 # === End-to-end workflow orchestrator ===
 # After ``import statspai.causal`` (the deprecated forest-shim) Python rebinds
@@ -717,10 +717,15 @@ from . import datasets
 # around it by making its module object callable (see ``causal/__init__.py``),
 # so ``sp.causal(df, y=, treatment=, ...)`` keeps dispatching to this
 # workflow function in either order.
-from .workflow import causal, CausalWorkflow, paper, PaperDraft
+from .workflow import (  # noqa: F401 — ``causal`` kept for the shadowing dance
+    causal,
+    CausalWorkflow,
+    paper,
+    PaperDraft,
+)
 
 # === LLM agent tool-definition surface ===
-from . import agent
+from . import agent  # noqa: F401 — exposed as ``sp.agent``
 
 from .power import (
     power,
