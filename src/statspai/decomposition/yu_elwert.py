@@ -43,7 +43,7 @@ doi:10.1214/24-AOAS1990. R implementation: ``cdgd``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, ClassVar, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -511,7 +511,7 @@ def yu_elwert_decompose(
     if method not in ("plugin", "efficient"):
         raise ValueError(f"method must be 'plugin' or 'efficient', got {method!r}")
     if inference not in ("bootstrap", "none"):
-        raise ValueError(f"inference must be 'bootstrap' or 'none'")
+        raise ValueError("inference must be 'bootstrap' or 'none'")
 
     cols = [y, treatment, group] + list(x) \
         + ([cluster] if cluster else [])

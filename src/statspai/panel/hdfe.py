@@ -54,7 +54,7 @@ fit models with high-dimensional fixed effects." Stata Journal, 10(4).
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd

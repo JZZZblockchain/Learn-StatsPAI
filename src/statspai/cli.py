@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 
 def _make_parser() -> argparse.ArgumentParser:

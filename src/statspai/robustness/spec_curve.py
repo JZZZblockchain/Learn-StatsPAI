@@ -29,7 +29,7 @@ from typing import (
     Any, Callable, Dict, List, Optional, Sequence, Tuple, Union,
 )
 from itertools import product
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -263,7 +263,6 @@ class SpecCurveResult(ResultProtocolMixin):
         try:
             import matplotlib.pyplot as plt
             import matplotlib.gridspec as gridspec
-            from matplotlib.lines import Line2D
         except ImportError:
             raise ImportError(
                 "matplotlib required for plotting.  pip install matplotlib"

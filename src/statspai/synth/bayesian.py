@@ -28,11 +28,10 @@ models." *The Annals of Applied Statistics*, 9(1), 247-274. [@brodersen2015infer
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import stats as sp_stats
 from scipy.special import gammaln
 
 from ..core.results import CausalResult

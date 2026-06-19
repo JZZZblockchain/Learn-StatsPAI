@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Sequence, Union
 
 import numpy as np
 

@@ -23,7 +23,7 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 import numpy as np
@@ -204,7 +204,6 @@ class SubgroupResult(ResultProtocolMixin):
         """
         try:
             import matplotlib.pyplot as plt
-            from matplotlib.patches import FancyBboxPatch
         except ImportError:
             raise ImportError("matplotlib required. pip install matplotlib")
 

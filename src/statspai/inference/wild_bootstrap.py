@@ -27,7 +27,7 @@ MacKinnon, J.G. and Webb, M.D. (2018).
 *The Econometrics Journal*, 21(2), 114-135. [@mackinnon2018wild]
 """
 
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Dict, Any
 
 import numpy as np
 import pandas as pd

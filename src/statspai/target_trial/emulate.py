@@ -4,7 +4,7 @@ Target trial emulation — end-to-end pipeline wiring a protocol to data.
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, cast
+from typing import Callable, Literal, cast
 import numpy as np
 import pandas as pd
 

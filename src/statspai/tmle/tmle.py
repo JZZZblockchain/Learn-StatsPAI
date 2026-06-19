@@ -29,7 +29,7 @@ Targeted Maximum Likelihood Learning.
 International Journal of Biostatistics, 2(1). [@vanderlaan2006targeted]
 """
 
-from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
+from typing import Optional, List, Any, Tuple, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats

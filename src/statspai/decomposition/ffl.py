@@ -27,12 +27,11 @@ Distributions Using Recentered Influence Function Regressions."
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from ._results import DecompResultMixin
 from ._common import (
@@ -48,7 +47,6 @@ from ._common import (
     weighted_quantile,
     wls,
 )
-from .rif import rif_values
 
 
 # ════════════════════════════════════════════════════════════════════════

@@ -41,7 +41,7 @@ data: intuition and a worked example." *Epidemiology*, 25(6), 889-897.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence, Union
 
 import numpy as np

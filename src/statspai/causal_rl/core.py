@@ -16,8 +16,8 @@ These complement the existing :func:`causal_dqn`,
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -50,7 +50,7 @@ class CausalBanditResult:
             "Causal Contextual Bandit — Optimal Arm Recommendation",
             "=" * 60,
             f"  Optimal arm       : {self.arm_labels[self.optimal_arm]}",
-            f"  Expected rewards  :",
+            "  Expected rewards  :",
         ]
         for a, r in zip(self.arm_labels, self.expected_rewards):
             marker = " *" if a == self.arm_labels[self.optimal_arm] else ""

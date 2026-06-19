@@ -10,10 +10,9 @@ client passed via ``client=`` the function delegates to it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional
+from dataclasses import dataclass
+from typing import Any, List, Optional
 
-import numpy as np
 
 
 # Heuristic priors: variable-name patterns → role hints

@@ -11,11 +11,10 @@ a measure of "exposure to treated neighbours" as a regressor.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
 

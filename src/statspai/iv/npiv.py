@@ -36,11 +36,10 @@ Darolles, S., Fan, Y., Florens, J.-P. and Renault, E. (2011). "Nonparametric
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 
 @dataclass

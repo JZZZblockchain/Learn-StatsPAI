@@ -34,7 +34,7 @@ Chakraborty, B., & Moodie, E. E. M. (2013).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Any
+from typing import Dict, List, Optional, Sequence, Any
 
 import numpy as np
 import pandas as pd

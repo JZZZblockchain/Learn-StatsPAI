@@ -33,7 +33,7 @@ quantile regression." *NeurIPS*.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd

@@ -9,7 +9,7 @@ joint surface τ(x, t) is the functional CATE.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np

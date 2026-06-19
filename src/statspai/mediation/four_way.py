@@ -36,7 +36,6 @@ from typing import Optional, Sequence, Dict, Any
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from .._input_validation import clean_frame
 from .._result_serialize import ResultProtocolMixin

@@ -29,7 +29,7 @@ Control Methods: A Synthesis." NBER Working Paper 22791. [@doudchenko2016balanci
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd

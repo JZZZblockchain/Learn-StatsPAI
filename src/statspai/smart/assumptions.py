@@ -16,7 +16,7 @@ Usage
 >>> print(audit.summary())
 """
 
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional
 import numpy as np
 import pandas as pd
 
@@ -114,7 +114,7 @@ class AssumptionResult:
         ]
 
         if self.critical_failures:
-            lines.append(f"\n⚠ CRITICAL FAILURES:")
+            lines.append("\n⚠ CRITICAL FAILURES:")
             for cf in self.critical_failures:
                 lines.append(f"  • {cf}")
 
@@ -487,7 +487,7 @@ def _audit_linear(
     if n > 0 and k > 0:
         checks.append(AssumptionCheck(
             assumption='Sample size adequacy',
-            test_name=f'N/k > 10',
+            test_name='N/k > 10',
             passed=n / max(k, 1) > 10,
             statistic=n / max(k, 1),
             p_value=None,

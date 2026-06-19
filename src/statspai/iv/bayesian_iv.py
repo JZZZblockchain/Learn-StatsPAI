@@ -34,11 +34,10 @@ Kleibergen, F. and Zivot, E. (2003). "Bayesian and Classical Approaches
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 
 @dataclass

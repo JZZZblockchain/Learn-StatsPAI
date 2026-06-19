@@ -17,10 +17,9 @@ Beck, N. & Katz, J.N. (1995).
 *APSR*, 89(3), 634-647. [@beck1995what]
 """
 
-from typing import Optional, List
+from typing import List
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from ..core.results import EconometricResults
 

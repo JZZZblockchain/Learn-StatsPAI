@@ -45,7 +45,7 @@ Heckman, J.J. and Vytlacil, E.J. (2005). Op. cit. [@heckman2005structural]
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd

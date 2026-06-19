@@ -18,7 +18,7 @@ Pesaran, M.H. (2004). "General Diagnostic Tests for Cross Section
     Dependence in Panels." [@hausman1978specification]
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd

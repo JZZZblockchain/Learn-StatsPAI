@@ -35,7 +35,7 @@ Abadie, A., Diamond, A. and Hainmueller, J. (2010).  "Synthetic Control
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd

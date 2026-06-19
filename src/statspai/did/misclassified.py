@@ -18,7 +18,7 @@ matrix.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 from ..core._bootstrap import bootstrap_se as _bootstrap_se

@@ -17,9 +17,8 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
-from ._core import _kernel_fn, _local_poly_wls
+from ._core import _kernel_fn
 
 
 @dataclass

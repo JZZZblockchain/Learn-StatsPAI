@@ -21,11 +21,11 @@ Cattaneo, M.D., Feng, Y. and Titiunik, R. (2021).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import optimize, stats
+from scipy import stats
 
 from ..core.results import CausalResult
 

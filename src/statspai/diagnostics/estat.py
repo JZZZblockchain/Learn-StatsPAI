@@ -38,7 +38,7 @@ Cook, R.D. (1977). *Technometrics*, 19(1), 15--18. [@breusch1979simple]
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd

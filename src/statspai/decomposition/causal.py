@@ -28,7 +28,7 @@ Identify Intervention Targets for Reducing Disparities." *Epidemiology*,
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1294,11 +1294,11 @@ def _htz_eta_from_quantities(qty: dict) -> float:
         Gk = Gcs_list[k]
         Hk = Hcs_list[k]
         P[:, :, k, k] = Gk @ Gk.T - Hk @ Hk.T
-        for l in range(k + 1, J):
-            Hl = Hcs_list[l]
-            cross = -(Hk @ Hl.T)
-            P[:, :, k, l] = cross
-            P[:, :, l, k] = cross.T
+        for m in range(k + 1, J):
+            Hm = Hcs_list[m]
+            cross = -(Hk @ Hm.T)
+            P[:, :, k, m] = cross
+            P[:, :, m, k] = cross.T
 
     # Critical: Ω used in HTZ is the *trace* of P_array over clusters,
     # NOT Σ_g G_g · G_g^T. From clubSandwich source:

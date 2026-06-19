@@ -25,7 +25,7 @@ Chetty, R., Friedman, J. N., Olsen, T., & Pistaferri, L. (2011).
 Elasticities." QJE, 126(2), 749-804. [@chetty2011adjustment]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats

@@ -23,7 +23,7 @@ Cameron, A.C., Gelbach, J.B. and Miller, D.L. (2008).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional
 
 import numpy as np
 import pandas as pd

@@ -25,8 +25,8 @@ and return a tidy :class:`FrontierSensitivityResult`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Dict, Optional, Sequence
 
 import numpy as np
 import pandas as pd

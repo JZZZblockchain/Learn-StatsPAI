@@ -34,7 +34,7 @@ Direct Test for Heteroskedasticity."
 *Econometrica*, 48(4), 817-838. [@white1980heteroskedasticity]
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 import numpy as np
 import pandas as pd
@@ -357,25 +357,25 @@ def _print_diagnostics(results: Dict[str, Any], x_vars: List[str]) -> None:
 
     # Heteroskedasticity
     ht = results['het_test']
-    print(f"\n  Breusch-Pagan test for heteroskedasticity")
+    print("\n  Breusch-Pagan test for heteroskedasticity")
     print(f"    chi2({ht['df']}) = {ht['statistic']:.4f}")
     print(f"    p-value = {ht['pvalue']:.4f}")
     print(f"    {'REJECT H0: evidence of heteroskedasticity' if ht['pvalue'] < 0.05 else 'Cannot reject H0: no evidence of heteroskedasticity'}")
 
     # RESET
     rt = results['reset_test']
-    print(f"\n  Ramsey RESET test")
+    print("\n  Ramsey RESET test")
     print(f"    F({rt['df1']}, {rt['df2']}) = {rt['statistic']:.4f}")
     print(f"    p-value = {rt['pvalue']:.4f}")
     print(f"    {'REJECT H0: functional form may be misspecified' if rt['pvalue'] < 0.05 else 'Cannot reject H0: no evidence of misspecification'}")
 
     # VIF
     vf = results['vif']
-    print(f"\n  Variance Inflation Factors")
+    print("\n  Variance Inflation Factors")
     print(vf.to_string(index=False))
     max_vif = vf['VIF'].max()
     if max_vif > 10:
-        print(f"    WARNING: VIF > 10 detected — multicollinearity concern")
+        print("    WARNING: VIF > 10 detected — multicollinearity concern")
     else:
         print(f"    Max VIF = {max_vif:.2f} — no multicollinearity concern")
 

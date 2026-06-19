@@ -29,7 +29,7 @@ Stepner, M. (2013).
 Statistical Software Components, Boston College.
 """
 
-from typing import Optional, List, Tuple, Union, Any
+from typing import Optional, List, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -181,7 +181,6 @@ def binscatter(
     """
     try:
         import matplotlib.pyplot as plt
-        from scipy import stats as sp_stats
     except ImportError:
         raise ImportError(
             "matplotlib and scipy required. "

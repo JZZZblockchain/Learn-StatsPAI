@@ -29,7 +29,7 @@ of Economics and Statistics*, 67, 151-156. [@lerman1985income]
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import combinations
 from math import factorial
 from typing import (

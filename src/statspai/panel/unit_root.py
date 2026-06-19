@@ -18,7 +18,7 @@ Im, K.S., Pesaran, M.H. & Shin, Y. (2003).
 """
 
 import warnings
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Any
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -70,7 +70,7 @@ class PanelUnitRootResult:
         lines = [
             f"Panel Unit Root Test: {self.test_type}",
             "=" * 55,
-            f"H0: Panels contain unit roots",
+            "H0: Panels contain unit roots",
             f"Ha: {'Panels are stationary' if self.test_type != 'Hadri' else 'Some panels contain unit roots'}",
             "",
             f"Statistic: {self.statistic:.4f}",

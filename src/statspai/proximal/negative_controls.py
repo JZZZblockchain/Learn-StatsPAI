@@ -42,7 +42,7 @@ confounder." *Biometrika*, 105(4), 987-993. [@miao2018identifying]
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, List, Dict, Any
+from typing import Optional, Sequence, Dict, Any
 
 import numpy as np
 import pandas as pd

@@ -38,8 +38,8 @@ Mogstad, M., Santos, A. and Torgovitsky, A. (2018). "Using Instrumental
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd

@@ -19,7 +19,7 @@ in observational studies.
 
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 
 _VALID_CONTRASTS = ("ITT", "per-protocol", "as-treated", "observational-analogue")

@@ -96,7 +96,7 @@ def lisa_cluster_map(
         labels[(p <= p_threshold) & ~hi_z & hi_lag] = "LH"
     cmap = {"HH": "#d62728", "LL": "#1f77b4", "HL": "#ff9896",
             "LH": "#9ecae1", "NS": "#d9d9d9"}
-    colours = [cmap[l] for l in labels]
+    colours = [cmap[lab] for lab in labels]
     if ax is None:
         _, ax = plt.subplots(figsize=(7, 7))
     gdf = gdf.copy()

@@ -17,13 +17,11 @@ Albrecht, Björklund, Vroman (2003). "Is There a Glass Ceiling in Sweden?"
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Dict, Optional, Sequence, Tuple, Union
-import warnings
+from dataclasses import dataclass
+from typing import Any, Callable, ClassVar, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
 
 from ._results import DecompResultMixin
 from ._common import (

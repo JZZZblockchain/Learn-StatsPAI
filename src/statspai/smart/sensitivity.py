@@ -17,7 +17,6 @@ Usage
 from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
-import warnings
 
 from ..workflow._degradation import record_degradation
 

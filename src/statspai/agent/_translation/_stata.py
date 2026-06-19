@@ -177,7 +177,7 @@ def _h_xtreg(cmd: StataCommand) -> Dict[str, Any]:
         notes.append("Between-effects / first-difference variants are not yet "
                       "translated — use sp.panel(method='be'/'fd') directly.")
     fe_repr = args["fe"]
-    code_pairs = [f"data=df", f"fe={fe_repr!r}"]
+    code_pairs = ["data=df", f"fe={fe_repr!r}"]
     if cluster:
         code_pairs.append(f"cluster={cluster!r}")
     python = f"sp.fixest({formula!r}, {', '.join(code_pairs)})"
@@ -797,7 +797,7 @@ def _h_xtabond_family(cmd: StataCommand, *, sp_kind: str) -> Dict[str, Any]:
         notes.append("Stata's `xtset id [t]` set the panel id; replace "
                       "<panel_id> with your unit-id column.")
     code_pairs = [
-        f"data=df", f"y={y!r}",
+        "data=df", f"y={y!r}",
         f"x={xs!r}",
     ]
     if args["id"]:
@@ -837,7 +837,7 @@ def _h_bunching(cmd: StataCommand) -> Dict[str, Any]:
             args["bandwidth"] = float(bandwidth)
         except (TypeError, ValueError):
             pass
-    code_pairs = [f"data=df", f"x={x!r}", f"c={c}"]
+    code_pairs = ["data=df", f"x={x!r}", f"c={c}"]
     if "bandwidth" in args:
         code_pairs.append(f"bandwidth={args['bandwidth']}")
     python = f"sp.bunching({', '.join(code_pairs)})"

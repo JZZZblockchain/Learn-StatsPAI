@@ -33,7 +33,7 @@ models with group interactions, contextual factors and fixed effects."
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, Dict, Any, List
+from typing import Sequence, Dict, Any, List
 
 import numpy as np
 import pandas as pd

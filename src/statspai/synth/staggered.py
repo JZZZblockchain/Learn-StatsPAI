@@ -25,7 +25,7 @@ Ben-Michael, E., Feller, A. and Rothstein, J. (2022).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Literal
 
 import numpy as np
 import pandas as pd

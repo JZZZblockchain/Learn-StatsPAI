@@ -10,7 +10,7 @@ Hilbert space, with a uniform confidence band (vs. pointwise CIs).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd

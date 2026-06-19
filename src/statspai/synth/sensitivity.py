@@ -34,7 +34,6 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from ..core.results import CausalResult
 
 
 # ======================================================================

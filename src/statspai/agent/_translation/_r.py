@@ -182,7 +182,7 @@ def _h_feols(pos: List[str], kw: Dict[str, str], _: List[str]) -> Dict[str, Any]
                       f"`robust=` / `cluster=` options.")
     if "weights" in kw:
         args["weights"] = _strip_quotes(kw["weights"])
-    code_pairs = [f"data=df", f"fe={fe_terms!r}"]
+    code_pairs = ["data=df", f"fe={fe_terms!r}"]
     if "cluster" in args:
         code_pairs.append(f"cluster={args['cluster']!r}")
     python = f"sp.fixest({formula_out!r}, {', '.join(code_pairs)})"

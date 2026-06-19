@@ -14,7 +14,7 @@ Supports:
 """
 
 import re
-from typing import Optional, List, Dict, Any, Union, Tuple
+from typing import Optional, List, Dict, Any, Tuple
 from itertools import product as itertools_product
 import numpy as np
 import pandas as pd
@@ -564,7 +564,7 @@ def margins_at_plot(
 
     ax.set_xlabel(xlabel or x)
     ax.set_ylabel(ylabel)
-    ax.set_title(title or f'Predictive Margins')
+    ax.set_title(title or 'Predictive Margins')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     fig.tight_layout()

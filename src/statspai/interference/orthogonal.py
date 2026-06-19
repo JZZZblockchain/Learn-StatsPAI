@@ -20,8 +20,8 @@ unit-level treatment ``treatment``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -30,7 +30,6 @@ import pandas as pd
 # ``import statspai`` doesn't pull ~245 sklearn submodules through this
 # file when the user never touches the spillover estimators.
 
-from ..core.results import CausalResult
 from ..exceptions import DataInsufficient
 from .._input_validation import clean_frame
 from .._result_serialize import ResultProtocolMixin

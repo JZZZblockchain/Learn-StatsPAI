@@ -19,7 +19,7 @@ Economics." In *Handbook of Labor Economics*, Vol. 4A, Ch. 1. [@fortin2011decomp
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd

@@ -30,7 +30,7 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 import numpy as np

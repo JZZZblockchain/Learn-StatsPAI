@@ -17,7 +17,7 @@ Design: A Density Test."
 *Journal of Econometrics*, 142(2), 698-714. [@mccrary2008manipulation]
 """
 
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd

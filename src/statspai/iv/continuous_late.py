@@ -10,7 +10,6 @@ Wald ratio across instrument quantiles.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 from ..core._bootstrap import bootstrap_se as _bootstrap_se

@@ -64,7 +64,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import stats as _stats
 
 from sklearn.base import BaseEstimator, clone
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
