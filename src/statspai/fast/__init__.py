@@ -10,8 +10,6 @@ Contents (v1.8 / Phase 1+):
 The module exposes building blocks that Phase 2+ (PPML / GLM HDFE),
 Phase 3 (`sp.within`), and Phase 5 (Polars/Arrow direct) sit on top of.
 """
-from typing import Any, Optional
-
 from .bench import hdfe_bench, HDFEBenchResult
 from .demean import demean, DemeanInfo
 from .fepois import fepois, FePoisResult
@@ -51,54 +49,16 @@ try:
     )
     _HAS_JAX_FEOLS = True
 except ImportError:  # pragma: no cover
+    # Re-export the stubs from a dedicated module so ``feols_jax`` &c. stay
+    # single-binding import-aliases (not an alias shadowed by a same-name
+    # ``def``). The shadowing form trips griffe's alias resolver and breaks
+    # ``mkdocs build --strict``; behaviour is byte-identical either way.
+    from ._jax_fallback import (  # noqa: F401
+        feols_jax,
+        feols_jax_bootstrap,
+        FeolsBootstrapResult,
+    )
     _HAS_JAX_FEOLS = False
-
-    def feols_jax(
-        formula: str,
-        data: Any,
-        *,
-        vcov: str = "iid",
-        cluster: Optional[str] = None,
-        weights: Optional[str] = None,
-        drop_singletons: bool = True,
-        fe_tol: float = 1e-10,
-        fe_maxiter: int = 1_000,
-        dtype: str = "float64",
-    ) -> FeolsResult:
-        raise ImportError(
-            "jax is not installed; pip install jax jaxlib to enable "
-            "feols_jax. Plain sp.fast.feols runs without JAX."
-        )
-
-    class FeolsBootstrapResult:  # type: ignore[no-redef]
-        """Placeholder exported when the optional JAX backend is unavailable."""
-
-        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
-            raise ImportError(
-                "jax is not installed; pip install jax jaxlib to enable "
-                "FeolsBootstrapResult."
-            )
-
-    def feols_jax_bootstrap(
-        formula: str,
-        data: Any,
-        *,
-        n_boot: int = 1_000,
-        seed: int = 0,
-        bootstrap: str = "pairs",
-        cluster: Optional[str] = None,
-        weights: Optional[str] = None,
-        drop_singletons: bool = True,
-        fe_tol: float = 1e-10,
-        fe_maxiter: int = 1_000,
-        ci_alpha: float = 0.05,
-        vmap_chunk_size: int = 200,
-        dtype: str = "float64",
-    ) -> FeolsBootstrapResult:
-        raise ImportError(
-            "jax is not installed; pip install jax jaxlib to enable "
-            "feols_jax_bootstrap."
-        )
 
 # Torch device diagnostic — mirrors jax_device_info for the optional
 # neural backends (deepiv / neural_causal / cevae). See
