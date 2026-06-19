@@ -699,8 +699,10 @@ def _run_command_step(
         step.stderr_tail = _tail(proc.stderr)
     except subprocess.TimeoutExpired as exc:
         step.returncode = -9
-        step.stdout_tail = _tail(exc.stdout or "")
-        step.stderr_tail = _tail((exc.stderr or "") + "\nTimed out.")
+        out = exc.stdout if isinstance(exc.stdout, str) else ""
+        err = exc.stderr if isinstance(exc.stderr, str) else ""
+        step.stdout_tail = _tail(out)
+        step.stderr_tail = _tail(err + "\nTimed out.")
     except OSError as exc:
         step.returncode = -1
         step.stderr_tail = str(exc)
@@ -1116,7 +1118,7 @@ def _validation_evidence(
 
     mc = _monte_carlo_summary(root)
     agent = _agent_bench_summary(root)
-    pytest_inventory = {
+    pytest_inventory: Dict[str, Any] = {
         "reference_parity_files": _count_files(
             root / "tests" / "reference_parity", "test_*.py"
         ),

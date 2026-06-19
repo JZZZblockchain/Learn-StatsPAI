@@ -439,7 +439,7 @@ class PaperDraft:
 
         return yaml + "\n\n" + "\n".join(chunks)
 
-    def _workflow_provenance(self):
+    def _workflow_provenance(self) -> Optional[Any]:
         wf = self.workflow
         if wf is None:
             return None
@@ -533,8 +533,9 @@ def _render_dag_section(
     if dag is None:
         return ""
 
-    nodes = sorted(getattr(dag, "observed_nodes", None) or
-                   getattr(dag, "nodes", set()))
+    node_set: Any = (getattr(dag, "observed_nodes", None) or
+                     getattr(dag, "nodes", set()))
+    nodes = sorted(node_set)
     edges = list(getattr(dag, "edges", []) or [])
 
     lines: List[str] = []
@@ -836,7 +837,7 @@ def _eda_block(data: pd.DataFrame, y: Optional[str],
 
 
 def _section_from_workflow(
-    workflow,
+    workflow: Any,
     *,
     include_robustness: bool = True,
     degradations: Optional[List[Dict[str, Any]]] = None,
@@ -1145,7 +1146,7 @@ def _reviewer_audit_section(
 
 
 def paper(
-    data,
+    data: "pd.DataFrame",
     question: Optional[str] = None,
     *,
     y: Optional[str] = None,
@@ -1159,7 +1160,7 @@ def paper(
     cohort: Optional[str] = None,
     cluster: Optional[str] = None,
     design: Optional[str] = None,
-    dag=None,
+    dag: Any = None,
     llm: Optional[str] = None,
     llm_client: Any = None,
     llm_domain: str = "",
@@ -1262,6 +1263,7 @@ def paper(
     # natural-language workflow path. This is the v1.7 estimand-first
     # entry point — the Target-Trial-Protocol-shaped declaration drives
     # the analysis end-to-end.
+    _CQ: Any
     try:
         from ..question.question import CausalQuestion as _CQ
     except Exception:
@@ -1538,7 +1540,7 @@ def paper(
 
 
 def paper_from_question(
-    q,
+    q: Any,
     *,
     question: Optional[str] = None,
     fmt: str = "markdown",
@@ -1852,7 +1854,7 @@ def paper_from_question(
             detail=f"estimator={plan.estimator}",
         )
 
-    pipeline_notes = []
+    pipeline_notes: List[str] = []
     for item in draft.degradations:
         detail = f" ({item['detail']})" if item.get("detail") else ""
         _record_note(
@@ -1877,7 +1879,7 @@ class _LightweightWorkflowAdapter:
 
     __slots__ = ("question", "_estimation", "data", "result")
 
-    def __init__(self, q, estimation):
+    def __init__(self, q: Any, estimation: Any) -> None:
         self.question = q
         self._estimation = estimation
         self.data = q.data

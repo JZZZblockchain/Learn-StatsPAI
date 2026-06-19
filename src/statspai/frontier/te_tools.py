@@ -6,13 +6,13 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 
 
-def te_summary(result, method: Optional[str] = None) -> pd.DataFrame:
+def te_summary(result: Any, method: Optional[str] = None) -> pd.DataFrame:
     """Return a small descriptive DataFrame of TE scores (summary stats only).
 
     Examples
@@ -53,7 +53,7 @@ def te_summary(result, method: Optional[str] = None) -> pd.DataFrame:
 
 
 def te_rank(
-    result,
+    result: Any,
     method: Optional[str] = None,
     with_ci: bool = False,
     alpha: float = 0.05,

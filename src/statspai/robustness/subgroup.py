@@ -133,7 +133,10 @@ class SubgroupResult(ResultProtocolMixin):
         return "\n".join(lines)
 
     def to_latex(
-        self, caption: str = "Subgroup Heterogeneity Analysis",
+        self,
+        *,
+        caption: Optional[str] = "Subgroup Heterogeneity Analysis",
+        label: Optional[str] = None,
     ) -> str:
         """Export to LaTeX."""
         df = self.results_df
@@ -191,7 +194,7 @@ class SubgroupResult(ResultProtocolMixin):
         title: Optional[str] = None,
         color: str = "#2C3E50",
         overall_color: str = "#E74C3C",
-    ):
+    ) -> Any:
         """
         Forest plot of subgroup estimates.
 
@@ -209,15 +212,15 @@ class SubgroupResult(ResultProtocolMixin):
         groups = df['group_var'].unique()
 
         # Build label list with section headers
-        labels = []
-        positions = []
-        is_header = []
-        estimates = []
-        ci_lo = []
-        ci_hi = []
-        colors = []
+        labels: List[Any] = []
+        positions: List[Any] = []
+        is_header: List[bool] = []
+        estimates: List[Any] = []
+        ci_lo: List[Any] = []
+        ci_hi: List[Any] = []
+        colors: List[Any] = []
 
-        pos = 0
+        pos: float = 0
         for gvar in groups:
             # Section header
             labels.append(f"By {gvar}")

@@ -38,7 +38,7 @@ class Step:
         self.priority = priority
         self.category = category
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         icon = {"essential": "❗", "recommended": "→",
                 "optional": "○"}.get(self.priority, "→")
         return f"{icon} {self.action}\n   {self.reason}"
@@ -64,7 +64,9 @@ def _format_steps(steps: List[Step], title: str = "Suggested Next Steps") -> str
         "━" * 65,
     ]
 
-    by_priority = {"essential": [], "recommended": [], "optional": []}
+    by_priority: Dict[str, List[Step]] = {
+        "essential": [], "recommended": [], "optional": []
+    }
     for s in steps:
         by_priority.get(s.priority, by_priority["recommended"]).append(s)
 
@@ -153,7 +155,7 @@ def _steps_repr_html(steps: List[Step], title: str = "Suggested Next Steps") -> 
 #  EconometricResults next_steps
 # ====================================================================== #
 
-def econometric_next_steps(result) -> List[Step]:
+def econometric_next_steps(result: Any) -> List[Step]:
     """Generate next steps for an EconometricResults object."""
     steps: List[Step] = []
     model_type = (result.model_info.get("model_type", "") or "").lower()
@@ -279,7 +281,7 @@ def econometric_next_steps(result) -> List[Step]:
 #  CausalResult next_steps
 # ====================================================================== #
 
-def causal_next_steps(result) -> List[Step]:
+def causal_next_steps(result: Any) -> List[Step]:
     """Generate next steps for a CausalResult object."""
     steps: List[Step] = []
     method = (result.method or "").lower()

@@ -23,6 +23,7 @@ outcome heads) factorisation. This keeps the import hierarchy light.
 
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Any
 import numpy as np
 import pandas as pd
 
@@ -132,7 +133,14 @@ class CEVAEResult:
             )
         return path
 
-    def plot(self, type: str = "ite", *, ax=None, figsize=(8, 5), bins: int = 30):
+    def plot(
+        self,
+        type: str = "ite",
+        *,
+        ax: Any = None,
+        figsize: Any = (8, 5),
+        bins: int = 30,
+    ) -> Any:
         """Plot ITE distribution or training loss."""
         try:
             import matplotlib.pyplot as plt
@@ -218,7 +226,9 @@ class CEVAE:
         return self._fit_numpy(X, t, y)
 
     # --------- Torch path (preferred) ---------
-    def _fit_torch(self, X, t, y) -> CEVAEResult:
+    def _fit_torch(
+        self, X: np.ndarray, t: np.ndarray, y: np.ndarray
+    ) -> CEVAEResult:
         import torch
         import torch.nn as nn
         import torch.nn.functional as F
@@ -235,24 +245,24 @@ class CEVAE:
         H, Z = self.hidden, self.z_dim
 
         class Enc(nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.net = nn.Sequential(nn.Linear(d, H), nn.ELU())
                 self.mu = nn.Linear(H, Z)
                 self.logv = nn.Linear(H, Z)
 
-            def forward(self, x):
+            def forward(self, x: Any) -> Any:
                 h = self.net(x)
                 return self.mu(h), self.logv(h)
 
         class Dec(nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.x_head = nn.Sequential(nn.Linear(Z, H), nn.ELU(), nn.Linear(H, d))
                 self.t_head = nn.Sequential(nn.Linear(Z, H), nn.ELU(), nn.Linear(H, 1))
                 self.y_head = nn.Sequential(nn.Linear(Z + 1, H), nn.ELU(), nn.Linear(H, 1))
 
-            def forward(self, z, t):
+            def forward(self, z: Any, t: Any) -> Any:
                 x_hat = self.x_head(z)
                 t_logit = self.t_head(z)
                 zt = torch.cat([z, t], dim=-1)
@@ -294,7 +304,9 @@ class CEVAE:
         )
 
     # --------- Numpy fallback ---------
-    def _fit_numpy(self, X, t, y) -> CEVAEResult:
+    def _fit_numpy(
+        self, X: np.ndarray, t: np.ndarray, y: np.ndarray
+    ) -> CEVAEResult:
         """Linear-Gaussian variational approximation. Fits:
             z ~ N(A X, 1),  t | z ~ Bern(sigmoid(c^T z)),
             y | z, t ~ N(b1 z * t + b0 z * (1-t), sigma^2)
@@ -343,7 +355,7 @@ def cevae(
     X: np.ndarray,
     treatment: np.ndarray,
     outcome: np.ndarray,
-    **kw,
+    **kw: Any,
 ) -> CEVAEResult:
     """Functional CEVAE wrapper.
 

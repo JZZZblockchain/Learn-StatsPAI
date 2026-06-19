@@ -130,7 +130,7 @@ def offline_safe_policy(
     # Estimate Q_reward and Q_cost per (s, a) by simple averaging
     Q_r = np.zeros((n_states, n_actions))
     Q_c = np.zeros((n_states, n_actions))
-    counts = np.zeros((n_states, n_actions))
+    counts: np.ndarray = np.zeros((n_states, n_actions))
     for s, a, r, c in zip(S, A, R, C):
         Q_r[s, a] += r
         Q_c[s, a] += c

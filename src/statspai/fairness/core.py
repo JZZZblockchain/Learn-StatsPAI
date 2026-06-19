@@ -213,7 +213,7 @@ def _column(df: pd.DataFrame, col: str) -> np.ndarray:
             recovery_hint="Drop missing rows or impute this column before running the diagnostic.",
             diagnostics={"column": col},
         )
-    return arr
+    return np.asarray(arr)
 
 
 def _finite_numeric_vector(values: Any, *, name: str, n_expected: Optional[int] = None) -> np.ndarray:
@@ -600,7 +600,7 @@ def counterfactual_fairness(
             )
 
     # For each alternative value, intervene and predict.
-    max_abs_diff = np.zeros(len(data), dtype=float)
+    max_abs_diff: np.ndarray = np.zeros(len(data), dtype=float)
     per_alt: Dict[Any, float] = {}
     for a_alt in alternative_values:
         df_cf = scm_intervention(data, a_alt)

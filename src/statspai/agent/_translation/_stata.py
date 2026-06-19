@@ -37,7 +37,8 @@ Handler = Callable[[StataCommand], Dict[str, Any]]
 # ---------------------------------------------------------------------------
 
 def _emit(tool: str, arguments: Dict[str, Any],
-           python_code: str, notes: List[str] = None) -> Dict[str, Any]:
+           python_code: str,
+           notes: Optional[List[str]] = None) -> Dict[str, Any]:
     return {
         "tool": tool,
         "arguments": dict(arguments),
@@ -47,7 +48,7 @@ def _emit(tool: str, arguments: Dict[str, Any],
     }
 
 
-def _emit_error(message: str, **extra) -> Dict[str, Any]:
+def _emit_error(message: str, **extra: Any) -> Dict[str, Any]:
     return {
         "tool": None,
         "ok": False,
@@ -422,10 +423,12 @@ def _h_xtnbreg(cmd: StataCommand) -> Dict[str, Any]:
         args["cluster"] = cluster
     if "irr" in cmd.options or "eform" in cmd.options:
         args["irr"] = True
-    if cmd.options.get("offset"):
-        args["offset"] = cmd.options["offset"].split()[0]
-    if cmd.options.get("exposure"):
-        args["exposure"] = cmd.options["exposure"].split()[0]
+    offset_opt = cmd.options.get("offset")
+    if offset_opt:
+        args["offset"] = offset_opt.split()[0]
+    exposure_opt = cmd.options.get("exposure")
+    if exposure_opt:
+        args["exposure"] = exposure_opt.split()[0]
 
     notes: List[str] = []
     if panel_id == "<panel_id>":
@@ -783,9 +786,10 @@ def _h_xtabond_family(cmd: StataCommand, *, sp_kind: str) -> Dict[str, Any]:
         "twostep": "twostep" in cmd.options,
         "robust": "robust" in cmd.options or _opt_matches(cmd.options.get("vce"), "robust"),
     }
-    if cmd.options.get("lags"):
+    lags_opt = cmd.options.get("lags")
+    if lags_opt:
         try:
-            args["lags"] = int(cmd.options["lags"])
+            args["lags"] = int(lags_opt)
         except (TypeError, ValueError):
             pass
     notes: List[str] = []

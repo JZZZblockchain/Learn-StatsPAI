@@ -131,7 +131,12 @@ class RobustnessResult(ResultProtocolMixin):
         lines.append("=" * 78)
         return "\n".join(lines)
 
-    def to_latex(self, caption: str = "Robustness Checks") -> str:
+    def to_latex(
+        self,
+        *,
+        caption: Optional[str] = "Robustness Checks",
+        label: Optional[str] = None,
+    ) -> str:
         """Export to LaTeX table."""
         df = self.results_df
         n_cols = 5
@@ -171,7 +176,7 @@ class RobustnessResult(ResultProtocolMixin):
         title: Optional[str] = None,
         color: str = "#2C3E50",
         baseline_color: str = "#E74C3C",
-    ):
+    ) -> Any:
         """
         Forest-plot style visualization of robustness checks.
 

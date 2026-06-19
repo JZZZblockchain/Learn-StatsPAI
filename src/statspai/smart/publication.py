@@ -44,7 +44,14 @@ class PubReadyResult:
     True
     """
 
-    def __init__(self, venue, checks, score, missing, present):
+    def __init__(
+        self,
+        venue: str,
+        checks: List[Dict[str, Any]],
+        score: int,
+        missing: List[str],
+        present: List[str],
+    ) -> None:
         self.venue = venue
         self.checks = checks
         self.score = score  # 0-100
@@ -78,7 +85,7 @@ class PubReadyResult:
 
 
 # Journal-specific checklists
-_CHECKLISTS = {
+_CHECKLISTS: Dict[str, Dict[str, Any]] = {
     'top5_econ': {
         'name': 'Top 5 Economics (AER/QJE/JPE/Econometrica/REStud)',
         'items': [
@@ -155,9 +162,9 @@ _CHECKLISTS = {
 
 
 def pub_ready(
-    results: list = None,
+    results: Optional[list] = None,
     venue: str = 'top5_econ',
-    design: str = None,
+    design: Optional[str] = None,
     has_balance: bool = False,
     has_pretrends: bool = False,
     has_robustness: bool = False,

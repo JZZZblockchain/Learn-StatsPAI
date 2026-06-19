@@ -7,13 +7,13 @@ cosmetic editing when running outside Jupyter notebooks.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .interactive import FigureEditor
 
 
-def create_script_editor(editor: FigureEditor):
+def create_script_editor(editor: FigureEditor) -> None:
     """
     Attach interactive editing controls to a matplotlib figure window.
 
@@ -57,7 +57,7 @@ def create_script_editor(editor: FigureEditor):
         for t in a.texts:
             t.set_picker(True)
 
-    def _on_pick(event):
+    def _on_pick(event: Any) -> None:
         """Handle clicking on a text element."""
         artist = event.artist
         if not hasattr(artist, 'get_text'):
@@ -88,7 +88,7 @@ def create_script_editor(editor: FigureEditor):
     ax_textbox = fig.add_axes([0.15, 0.04, 0.45, 0.05])
     textbox = TextBox(ax_textbox, 'Edit Text: ', initial='')
 
-    def _on_submit(text):
+    def _on_submit(text: str) -> None:
         """Apply text edit to selected element."""
         target = _state['selected_text']
         if target is None:
@@ -126,7 +126,7 @@ def create_script_editor(editor: FigureEditor):
     ax_codebtn = fig.add_axes([0.62, 0.04, 0.12, 0.05])
     btn_code = Button(ax_codebtn, 'Code')
 
-    def _on_code(event):
+    def _on_code(event: Any) -> None:
         print("\n" + "=" * 50)
         editor.copy_code()
         print("=" * 50)
@@ -137,7 +137,7 @@ def create_script_editor(editor: FigureEditor):
     ax_undobtn = fig.add_axes([0.75, 0.04, 0.1, 0.05])
     btn_undo = Button(ax_undobtn, 'Undo')
 
-    def _on_undo(event):
+    def _on_undo(event: Any) -> None:
         editor.undo()
         print(f"[StatsPAI] Undone last edit "
               f"({len(editor._redo_stack)} redo available)")
@@ -148,7 +148,7 @@ def create_script_editor(editor: FigureEditor):
     ax_redobtn = fig.add_axes([0.86, 0.04, 0.1, 0.05])
     btn_redo = Button(ax_redobtn, 'Redo')
 
-    def _on_redo(event):
+    def _on_redo(event: Any) -> None:
         editor.redo()
         print(f"[StatsPAI] Redone edit "
               f"({len(editor._redo_stack)} redo remaining)")
@@ -160,7 +160,7 @@ def create_script_editor(editor: FigureEditor):
     btn_grid = Button(ax_gridbtn, 'Grid')
     _grid_state = {'on': False}
 
-    def _on_grid(event):
+    def _on_grid(event: Any) -> None:
         _grid_state['on'] = not _grid_state['on']
         editor.set_grid(_grid_state['on'])
 
@@ -171,7 +171,7 @@ def create_script_editor(editor: FigureEditor):
     btn_spine = Button(ax_spinebtn, 'Spines')
     _spine_state = {'minimal': False}
 
-    def _on_spine(event):
+    def _on_spine(event: Any) -> None:
         _spine_state['minimal'] = not _spine_state['minimal']
         for spine in ('top', 'right'):
             editor.set_spine_visible(
@@ -191,7 +191,7 @@ def create_script_editor(editor: FigureEditor):
     )
 
     # Print code on figure close
-    def _on_close(event):
+    def _on_close(event: Any) -> None:
         if editor.edits:
             print("\n[StatsPAI] Figure closed. Reproducible code:")
             print("=" * 50)

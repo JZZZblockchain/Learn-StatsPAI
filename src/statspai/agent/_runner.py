@@ -128,7 +128,7 @@ def run_with_progress(
     *,
     progress_token: Optional[Any] = None,
     timeout: Optional[float] = None,
-    drain: Callable[[Dict[str, Any]], None] = None,
+    drain: Optional[Callable[[Dict[str, Any]], None]] = None,
     poll_interval: float = 0.05,
 ) -> Tuple[bool, Any]:
     """Execute ``work()`` in a worker thread, draining progress events.
@@ -165,7 +165,7 @@ def run_with_progress(
                 return True, work()
             result: Dict[str, Any] = {}
 
-            def _runner_no_progress():
+            def _runner_no_progress() -> None:
                 try:
                     result["value"] = work()
                     result["ok"] = True
@@ -194,7 +194,7 @@ def run_with_progress(
             return False, exc
 
     q: queue.Queue = queue.Queue(maxsize=256)
-    result: Dict[str, Any] = {}
+    result = {}
 
     def _put_done() -> None:
         try:
@@ -206,7 +206,7 @@ def run_with_progress(
                 pass
             q.put_nowait(("done", None))
 
-    def _runner():
+    def _runner() -> None:
         try:
             if progress_token is not None:
                 _set_progress_channel(progress_token, q)

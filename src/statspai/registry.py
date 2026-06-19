@@ -417,7 +417,7 @@ def _merge_inherited_view(
         # show up after the auto-pass and a later lookup will resolve.
         return None
 
-    def _union_strs(extractor) -> List[str]:
+    def _union_strs(extractor: Any) -> List[str]:
         seen: set[str] = set()
         out: List[str] = []
         for s in chain:
@@ -467,7 +467,7 @@ def register(spec: FunctionSpec) -> FunctionSpec:
     return spec
 
 
-def _build_registry():
+def _build_registry() -> None:
     """Register the hand-written specs that carry agent-native metadata.
 
     These specs are the curated layer: parameter docs, identifying
@@ -13080,17 +13080,17 @@ def _apply_validation_evidence() -> None:
     if _VALIDATION_EVIDENCE_APPLIED:
         return
 
-    for spec in _REGISTRY.values():
-        if spec.stability in {"experimental", "deprecated"}:
-            spec.validation_status = spec.stability
-        elif spec.validation_status in {"experimental", "deprecated"}:
-            spec.validation_status = "api_stable"
-        elif spec.validation_status == "validated":
+    for fs in _REGISTRY.values():
+        if fs.stability in {"experimental", "deprecated"}:
+            fs.validation_status = fs.stability
+        elif fs.validation_status in {"experimental", "deprecated"}:
+            fs.validation_status = "api_stable"
+        elif fs.validation_status == "validated":
             # Hand-written specs used to mark several high-use APIs as
             # validated based on unit/regression coverage. Keep the evidence
             # notes below, but require qualifying parity/known-truth/MC
             # evidence before the status itself says "validated".
-            spec.validation_status = "api_stable"
+            fs.validation_status = "api_stable"
 
     certified: Dict[str, List[str]] = {
         name: ["Track A parity seed"] for name in _CERTIFIED_SEED_FUNCTIONS

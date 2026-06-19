@@ -27,12 +27,12 @@ import pandas as pd
 from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
-def _has_missing(values) -> bool:
+def _has_missing(values: object) -> bool:
     mask = pd.isna(values)
     return bool(np.asarray(mask).any())
 
 
-def _as_1d_no_missing(values, *, context: str) -> np.ndarray:
+def _as_1d_no_missing(values: object, *, context: str) -> np.ndarray:
     arr = np.asarray(values)
     if arr.ndim != 1:
         raise MethodIncompatibility(f"{context}: input must be 1-D")
@@ -137,7 +137,7 @@ def fe_interact(*cols: Union[pd.Series, np.ndarray, Sequence]) -> np.ndarray:
             )
     if len(arrays) == 1:
         codes, _ = pd.factorize(arrays[0], sort=False, use_na_sentinel=True)
-        return codes.astype(np.int64)
+        return np.asarray(codes.astype(np.int64))
 
     # Build one-shot tuples; pd.factorize on the tuple-Series gives codes.
     # Avoid pandas object overhead for the simple two-column case via a
@@ -148,17 +148,17 @@ def fe_interact(*cols: Union[pd.Series, np.ndarray, Sequence]) -> np.ndarray:
         c1, _ = pd.factorize(arrays[1], sort=False, use_na_sentinel=True)
         n1 = int(c1.max()) + 1 if c1.size else 0
         if n1 == 0:
-            return c0.astype(np.int64)
+            return np.asarray(c0.astype(np.int64))
         packed = c0.astype(np.int64) * n1 + c1.astype(np.int64)
         codes, _ = pd.factorize(packed, sort=False)
-        return codes.astype(np.int64)
+        return np.asarray(codes.astype(np.int64))
 
     # General K-way fallback.
     df = pd.DataFrame({f"_c{i}": a for i, a in enumerate(arrays)})
     codes, _ = pd.factorize(
         df.apply(tuple, axis=1), sort=False, use_na_sentinel=True,
     )
-    return codes.astype(np.int64)
+    return np.asarray(codes.astype(np.int64))
 
 
 # ---------------------------------------------------------------------------

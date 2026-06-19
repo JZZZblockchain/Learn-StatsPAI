@@ -51,7 +51,13 @@ class SensitivityDashboard:
     True
     """
 
-    def __init__(self, baseline, dimensions, overall_stability, method):
+    def __init__(
+        self,
+        baseline: Dict[str, Any],
+        dimensions: List[Dict[str, Any]],
+        overall_stability: str,
+        method: str,
+    ) -> None:
         self.baseline = baseline  # dict: estimate, se, ci
         self.dimensions = dimensions  # list of dicts
         self.overall_stability = overall_stability  # A/B/C/D/F
@@ -88,9 +94,9 @@ class SensitivityDashboard:
 
 
 def sensitivity_dashboard(
-    result,
-    data: pd.DataFrame = None,
-    dimensions: List[str] = None,
+    result: Any,
+    data: Optional[pd.DataFrame] = None,
+    dimensions: Optional[List[str]] = None,
     alpha: float = 0.05,
     verbose: bool = True,
 ) -> SensitivityDashboard:
@@ -366,7 +372,7 @@ def sensitivity_dashboard(
             _id = _info.get('cluster_var')
             if _id and data is not None:
                 trim_grid = [0.0, 0.01, 0.02, 0.05]
-                ests = []
+                _ests: list = []
                 for t in trim_grid:
                     try:
                         # We reach into the Sprint-B interface with

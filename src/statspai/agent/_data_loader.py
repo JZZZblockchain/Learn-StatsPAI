@@ -19,9 +19,12 @@ from __future__ import annotations
 
 import functools
 import os
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from ..exceptions import MethodIncompatibility
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 #: Default max file size (bytes) the server will load. A misconfigured
@@ -48,7 +51,7 @@ def is_remote_url(path: str) -> bool:
 
 def load_dataframe(path: str,
                     columns: Optional[List[str]] = None,
-                    sample_n: Optional[int] = None):
+                    sample_n: Optional[int] = None) -> "pd.DataFrame":
     """Load a DataFrame from a local path or remote URL.
 
     Parameters
@@ -125,7 +128,8 @@ def load_dataframe(path: str,
 
 @functools.lru_cache(maxsize=8)
 def _load_local_cached(path: str, mtime: float,
-                       columns_key: tuple):  # noqa: ARG001 — mtime invalidates
+                       columns_key: tuple,  # noqa: ARG001 — mtime invalidates
+                       ) -> "pd.DataFrame":
     """LRU-cached local loader. ``mtime`` busts the cache on file edits."""
     import pandas as pd
     lower = path.lower()
@@ -156,7 +160,8 @@ def _load_local_cached(path: str, mtime: float,
     )
 
 
-def _load_remote(url: str, columns: Optional[List[str]] = None):
+def _load_remote(url: str,
+                 columns: Optional[List[str]] = None) -> "pd.DataFrame":
     """Load a DataFrame from a remote URL via pandas storage backends.
 
     Pandas dispatches s3:// / gs:// / https:// to fsspec. Authentication

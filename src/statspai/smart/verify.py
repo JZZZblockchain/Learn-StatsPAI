@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import time
 import warnings
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -90,11 +90,11 @@ def _get_treat_col(rec: Dict[str, Any], data: pd.DataFrame) -> Optional[str]:
             tokens = [t.strip() for t in endog_part.replace("+", " ").split()]
             for t in tokens:
                 if t in data.columns:
-                    return t
+                    return str(t)
         tokens = [t.strip() for t in rhs.replace("+", " ").replace("(", " ").replace(")", " ").split()]
         for t in tokens:
             if t in data.columns:
-                return t
+                return str(t)
     return None
 
 
@@ -110,7 +110,7 @@ def _extract_estimate(result: Any, treat_name: Optional[str] = None) -> Optional
         if val is None:
             continue
         if np.isscalar(val):
-            return float(val)
+            return float(cast(Any, val))
         try:
             arr = np.asarray(val).ravel()
             if arr.size == 1:
@@ -140,7 +140,7 @@ def _extract_pvalue(result: Any, treat_name: Optional[str] = None) -> Optional[f
         if val is None:
             continue
         if np.isscalar(val):
-            return float(val)
+            return float(cast(Any, val))
         try:
             arr = np.asarray(val).ravel()
             if arr.size == 1:

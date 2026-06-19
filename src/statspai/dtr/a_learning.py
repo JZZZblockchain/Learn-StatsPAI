@@ -104,8 +104,8 @@ def a_learning(
     ALearningResult
     """
     actions = list(actions)
-    stage_covariates = [list(c) for c in stage_covariates]
-    if len(actions) != len(stage_covariates):
+    stage_covs: List[List[str]] = [list(c) for c in stage_covariates]
+    if len(actions) != len(stage_covs):
         raise ValueError("actions and stage_covariates must have equal length")
     K = len(actions)
     df = data.copy().reset_index(drop=True)
@@ -115,8 +115,8 @@ def a_learning(
     def build_hist(k: int) -> np.ndarray:
         hist = list(baseline)
         for j in range(k):
-            hist += [actions[j]] + stage_covariates[j]
-        hist += stage_covariates[k]
+            hist += [actions[j]] + stage_covs[j]
+        hist += stage_covs[k]
         if not hist:
             return np.ones((n, 1))
         X = df[hist].to_numpy(dtype=float)

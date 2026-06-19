@@ -13,7 +13,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 def _emit(tool: str, arguments: Dict[str, Any],
-           python_code: str, notes: List[str] = None) -> Dict[str, Any]:
+           python_code: str,
+           notes: Optional[List[str]] = None) -> Dict[str, Any]:
     return {
         "tool": tool,
         "arguments": dict(arguments),
@@ -23,7 +24,7 @@ def _emit(tool: str, arguments: Dict[str, Any],
     }
 
 
-def _emit_error(message: str, **extra) -> Dict[str, Any]:
+def _emit_error(message: str, **extra: Any) -> Dict[str, Any]:
     return {"tool": None, "ok": False, "error": message, **extra}
 
 
@@ -188,12 +189,14 @@ def _h_feols(pos: List[str], kw: Dict[str, str], _: List[str]) -> Dict[str, Any]
     return _emit("fixest", args, python, notes)
 
 
-def _h_felm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_felm(pos: List[str], kw: Dict[str, str],
+            _: List[str]) -> Dict[str, Any]:
     """felm uses the same | structure as feols but is from the lfe package."""
     return _h_feols(pos, kw, _)  # delegate
 
 
-def _h_lm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_lm(pos: List[str], kw: Dict[str, str],
+          _: List[str]) -> Dict[str, Any]:
     formula = pos[0] if pos else kw.get("formula")
     if not formula:
         return _emit_error("lm requires a formula as the first argument")
@@ -206,7 +209,8 @@ def _h_lm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("regress", args, code)
 
 
-def _h_did(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_did(pos: List[str], kw: Dict[str, str],
+           _: List[str]) -> Dict[str, Any]:
     """Brantly Callaway's did::att_gt R API → sp.callaway_santanna."""
     yname = _strip_quotes(kw.get("yname", ""))
     gname = _strip_quotes(kw.get("gname", ""))
@@ -229,7 +233,8 @@ def _h_did(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("callaway_santanna", args, python)
 
 
-def _h_glm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_glm(pos: List[str], kw: Dict[str, str],
+           _: List[str]) -> Dict[str, Any]:
     """R `glm(y ~ x, family=binomial, data=df)` → ``sp.glm`` (or sp.logit
     / sp.probit / sp.poisson when the family resolves to one of those).
     """
@@ -255,7 +260,8 @@ def _h_glm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("glm", args, python)
 
 
-def _h_glmer(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_glmer(pos: List[str], kw: Dict[str, str],
+             _: List[str]) -> Dict[str, Any]:
     """R `lme4::glmer(y ~ x + (1|group), family=binomial, data=df)` →
     ``sp.glmer`` / multilevel GLM. The ``(1|group)`` random-effect
     syntax passes through verbatim — sp's multilevel module accepts
@@ -272,7 +278,8 @@ def _h_glmer(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("glmer", args, python, notes)
 
 
-def _h_lmer(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_lmer(pos: List[str], kw: Dict[str, str],
+            _: List[str]) -> Dict[str, Any]:
     """R `lme4::lmer(y ~ x + (1|group), data=df)` → ``sp.multilevel`` /
     Gaussian random effects."""
     formula = pos[0] if pos else kw.get("formula")
@@ -284,7 +291,8 @@ def _h_lmer(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("multilevel", args, python)
 
 
-def _h_plm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_plm(pos: List[str], kw: Dict[str, str],
+           _: List[str]) -> Dict[str, Any]:
     """R `plm(y ~ x, data=df, model='within', index=c('id','t'))` →
     ``sp.panel`` with the chosen estimator."""
     formula = pos[0] if pos else kw.get("formula")
@@ -310,7 +318,8 @@ def _h_plm(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("panel", args, python)
 
 
-def _h_matchit(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_matchit(pos: List[str], kw: Dict[str, str],
+               _: List[str]) -> Dict[str, Any]:
     """R `MatchIt::matchit(treat ~ x1 + x2, data=df, method='nearest')` →
     ``sp.match``."""
     formula = pos[0] if pos else kw.get("formula")
@@ -337,7 +346,8 @@ def _h_matchit(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
     return _emit("match", args, python, notes)
 
 
-def _h_synth(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
+def _h_synth(pos: List[str], kw: Dict[str, str],
+             _: List[str]) -> Dict[str, Any]:
     """R `Synth::synth(data.prep.obj=dataprep_out)` → translation note
     pointing at sp.synth's flat API.
 
@@ -358,7 +368,9 @@ def _h_synth(pos: List[str], kw: Dict[str, str], _) -> Dict[str, Any]:
         command="synth")
 
 
-R_FUNCTION_MAP: Dict[str, Callable] = {
+R_FUNCTION_MAP: Dict[
+    str, Callable[[List[str], Dict[str, str], List[str]], Dict[str, Any]]
+] = {
     "feols": _h_feols,
     "felm": _h_felm,
     "lm": _h_lm,

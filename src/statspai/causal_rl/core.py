@@ -119,7 +119,7 @@ class StructuralMDPResult:
 def causal_bandit(
     arms: Sequence[str],
     *,
-    reward_fn: Callable[[str, dict], float],
+    reward_fn: Callable[[str, Optional[dict]], float],
     context: Optional[dict] = None,
     n_samples: int = 500,
     rng_seed: int = 0,

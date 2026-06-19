@@ -116,6 +116,8 @@ def session(seed: Optional[int] = None,
 
     class _SessionState:
         __slots__ = ("seed", "jax_key")
+        seed: Optional[int]
+        jax_key: Any
 
     state = _SessionState()
     state.seed = seed
@@ -171,8 +173,8 @@ def session(seed: Optional[int] = None,
                 pass
         if jax and "jax" in sys.modules:
             try:
-                import jax  # type: ignore[import-not-found]
-                state.jax_key = jax.random.PRNGKey(seed)
+                _jax = sys.modules["jax"]
+                state.jax_key = _jax.random.PRNGKey(seed)
             except Exception:
                 pass
 

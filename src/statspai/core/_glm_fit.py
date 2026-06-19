@@ -14,12 +14,14 @@ parity-sensitive follow-up, not a drop-in dedup.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 __all__ = ["safe_logit_fit", "safe_logit_predict"]
 
 
-def safe_logit_fit(y, X):
+def safe_logit_fit(y: Any, X: Any) -> Any:
     """Fit a logistic regression via statsmodels with an added constant.
 
     Returns the fitted results object, or ``None`` when the fit fails
@@ -38,7 +40,7 @@ def safe_logit_fit(y, X):
         return None
 
 
-def safe_logit_predict(fit, X, fallback):
+def safe_logit_predict(fit: Any, X: Any, fallback: float) -> np.ndarray:
     """Predict P(y=1 | X) from a ``safe_logit_fit`` result.
 
     When ``fit is None`` (the fit failed) returns the constant ``fallback``
@@ -50,4 +52,4 @@ def safe_logit_predict(fit, X, fallback):
     import statsmodels.api as sm
 
     design = sm.add_constant(X, has_constant="add")
-    return np.clip(fit.predict(design), 1e-6, 1 - 1e-6)
+    return np.asarray(np.clip(fit.predict(design), 1e-6, 1 - 1e-6))

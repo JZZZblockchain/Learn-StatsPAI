@@ -189,7 +189,7 @@ def _detect_singletons(fe_codes_raw: List[np.ndarray], n: int) -> np.ndarray:
     if _HAS_RUST and len(fe_codes_raw) > 0:
         try:
             mask_u8 = _rust.singleton_mask(list(fe_codes_raw))  # type: ignore
-            return mask_u8.astype(bool, copy=False)
+            return np.asarray(mask_u8.astype(bool, copy=False))
         except Exception:
             pass
     return _detect_singletons_numpy(fe_codes_raw, n)
@@ -207,7 +207,7 @@ def _aitken(x0: np.ndarray, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
     if den < 1e-30:
         return x2
     alpha = float(dx1 @ d2) / den
-    return x0 - alpha * dx1
+    return np.asarray(x0 - alpha * dx1)
 
 
 def _sweep_one_fe(col: np.ndarray, codes: np.ndarray, counts: np.ndarray) -> None:

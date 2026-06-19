@@ -24,7 +24,7 @@ Imai, K., Keele, L. & Yamamoto, T. (2010). "Identification, Inference
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -37,8 +37,9 @@ class MediateSensitivityResult:
     rho_at_zero: Optional[float]     # ρ where ACME crosses zero
     acme_at_zero: float              # ACME at ρ=0 (the baseline)
 
-    def plot(self, ax=None, *, fill: bool = True, annotate: bool = True,
-             figsize=(7.0, 4.5), **kwargs):
+    def plot(self, ax: Any = None, *, fill: bool = True,
+             annotate: bool = True,
+             figsize: Any = (7.0, 4.5), **kwargs: Any) -> Any:
         """Publication-style sensitivity plot.
 
         Shows ACME(ρ) vs the mediator-outcome confounder strength ρ,

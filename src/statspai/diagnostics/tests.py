@@ -269,7 +269,9 @@ def vif(
 # Internal implementations
 # ======================================================================
 
-def _bp_test(resid, X, n, k):
+def _bp_test(
+    resid: Any, X: Any, n: int, k: int
+) -> Dict[str, Any]:
     """Breusch-Pagan test."""
     e2 = resid ** 2
     # Regress e² on X
@@ -288,7 +290,9 @@ def _bp_test(resid, X, n, k):
             'test': 'Breusch-Pagan'}
 
 
-def _reset_test(Y, X, resid, yhat, n, k, powers=3):
+def _reset_test(
+    Y: Any, X: Any, resid: Any, yhat: Any, n: int, k: int, powers: int = 3
+) -> Dict[str, Any]:
     """Ramsey RESET test."""
     # Augmented model: add yhat², yhat³, ...
     X_aug_cols = [X]
@@ -316,7 +320,7 @@ def _reset_test(Y, X, resid, yhat, n, k, powers=3):
             'pvalue': pvalue, 'test': 'Ramsey RESET'}
 
 
-def _vif(data, x_vars):
+def _vif(data: pd.DataFrame, x_vars: List[str]) -> pd.DataFrame:
     """Compute VIF for each variable."""
     df = data[x_vars].dropna()
     X = df.values
@@ -345,7 +349,7 @@ def _vif(data, x_vars):
     return pd.DataFrame(rows)
 
 
-def _print_diagnostics(results, x_vars):
+def _print_diagnostics(results: Dict[str, Any], x_vars: List[str]) -> None:
     """Pretty-print diagnostic results."""
     print("=" * 60)
     print("  Regression Diagnostics")

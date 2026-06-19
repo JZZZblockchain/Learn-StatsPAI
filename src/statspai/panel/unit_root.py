@@ -55,8 +55,9 @@ class PanelUnitRootResult:
     True
     """
 
-    def __init__(self, test_type, statistic, p_value, n_units, n_periods,
-                 individual_stats, lags):
+    def __init__(self, test_type: str, statistic: float, p_value: float,
+                 n_units: int, n_periods: int,
+                 individual_stats: Any, lags: Any) -> None:
         self.test_type = test_type
         self.statistic = statistic
         self.p_value = p_value
@@ -83,7 +84,9 @@ class PanelUnitRootResult:
         return "\n".join(lines)
 
 
-def _adf_single(y, lags=None, trend='c'):
+def _adf_single(
+    y: Any, lags: Optional[int] = None, trend: str = 'c'
+) -> Any:
     """ADF test for a single series. Returns (t-stat, p-value, lags)."""
     n = len(y)
     if lags is None:
@@ -129,7 +132,7 @@ def panel_unitroot(
     id: str = 'id',
     time: str = 'time',
     test: str = 'ips',
-    lags: int = None,
+    lags: Optional[int] = None,
     trend: str = 'c',
 ) -> PanelUnitRootResult:
     """

@@ -139,9 +139,10 @@ def copula_sensitivity(
     Balgi, Braun, Peña & Daoud (arXiv:2508.08752, 2025). [@balgi2025sensitivity]
     """
     if rho_grid is None:
-        rho_grid = np.linspace(-0.5, 0.5, 21)
-    rho_grid = np.array(rho_grid, dtype=float)
-    bias = rho_grid * sigma_u * sigma_y
+        grid: np.ndarray = np.linspace(-0.5, 0.5, 21)
+    else:
+        grid = np.array(rho_grid, dtype=float)
+    bias = grid * sigma_u * sigma_y
     adjusted = estimate - bias
     z = stats.norm.ppf(1 - alpha / 2)
     ci_low = adjusted - z * se
@@ -150,11 +151,11 @@ def copula_sensitivity(
     # includes zero.
     covers_zero = (ci_low <= 0) & (0 <= ci_high)
     try:
-        bp = float(rho_grid[covers_zero][np.argmin(np.abs(rho_grid[covers_zero]))])
+        bp = float(grid[covers_zero][np.argmin(np.abs(grid[covers_zero]))])
     except ValueError:
         bp = None
     curve = pd.DataFrame({
-        "rho": rho_grid,
+        "rho": grid,
         "bias": bias,
         "adjusted_estimate": adjusted,
         "ci_low": ci_low,
@@ -230,9 +231,10 @@ def survival_sensitivity(
     if not (0 < baseline_survival_t < 1):
         raise ValueError("`baseline_survival_t` must be in (0,1).")
     if gamma_grid is None:
-        gamma_grid = np.linspace(1.0, 3.0, 21)
-    gamma_grid = np.array(gamma_grid, dtype=float)
-    log_gamma = np.log(gamma_grid)
+        grid2: np.ndarray = np.linspace(1.0, 3.0, 21)
+    else:
+        grid2 = np.array(gamma_grid, dtype=float)
+    log_gamma = np.log(grid2)
     log_hr_worst = log_hr - log_gamma
     log_hr_best = log_hr + log_gamma
     z = stats.norm.ppf(1 - alpha / 2)
@@ -243,11 +245,11 @@ def survival_sensitivity(
     delta_best = baseline_survival_t ** np.exp(log_hr_best) - baseline_survival_t
     covers_zero_worst = (ci_low_worst <= 0) & (0 <= ci_high_worst)
     try:
-        bp = float(gamma_grid[covers_zero_worst][np.argmin(gamma_grid[covers_zero_worst])])
+        bp = float(grid2[covers_zero_worst][np.argmin(grid2[covers_zero_worst])])
     except ValueError:
         bp = None
     curve = pd.DataFrame({
-        "gamma": gamma_grid,
+        "gamma": grid2,
         "log_hr_worst": log_hr_worst,
         "log_hr_best": log_hr_best,
         "delta_survival_worst": delta_worst,

@@ -81,7 +81,7 @@ def _as_float(x: Any) -> Optional[float]:
     return f
 
 
-def causal_violations(result) -> List[Dict[str, Any]]:
+def causal_violations(result: Any) -> List[Dict[str, Any]]:
     """Detect assumption / diagnostic violations on a ``CausalResult``.
 
     Each violation is a dict with keys ``kind`` / ``severity`` /
@@ -289,7 +289,7 @@ def causal_violations(result) -> List[Dict[str, Any]]:
     return out
 
 
-def causal_agent_summary(result) -> Dict[str, Any]:
+def causal_agent_summary(result: Any) -> Dict[str, Any]:
     """Return a JSON-ready structured summary of a ``CausalResult``.
 
     Payload (all keys always present; empty containers when N/A):
@@ -364,7 +364,7 @@ def causal_agent_summary(result) -> Dict[str, Any]:
 # ====================================================================== #
 
 
-def econometric_violations(result) -> List[Dict[str, Any]]:
+def econometric_violations(result: Any) -> List[Dict[str, Any]]:
     """Detect common violations on an :class:`EconometricResults`."""
     out: List[Dict[str, Any]] = []
     diag: Dict[str, Any] = getattr(result, "diagnostics", None) or {}
@@ -435,7 +435,7 @@ def _positional(arr: Any, i: int) -> Optional[float]:
         return None
 
 
-def econometric_agent_summary(result) -> Dict[str, Any]:
+def econometric_agent_summary(result: Any) -> Dict[str, Any]:
     """JSON-ready structured summary of an :class:`EconometricResults`."""
     params = getattr(result, "params", None)
     ses = getattr(result, "std_errors", None)

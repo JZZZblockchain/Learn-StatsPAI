@@ -218,7 +218,7 @@ def crve(
             u_adj = inv_sqrt @ u_g                          # adjusted residuals
             score_g = (X_g * w_g[:, None]).T @ u_adj         # (k,)
             meat += np.outer(score_g, score_g)
-        return bread @ meat @ bread
+        return np.asarray(bread @ meat @ bread)
 
     if type == "cr3":
         # Analytic CR3 (clubSandwich type="CR3"):
@@ -242,7 +242,7 @@ def crve(
             u_adj = inv @ u_g
             score_g = (X_g * w_g[:, None]).T @ u_adj
             meat += np.outer(score_g, score_g)
-        return bread @ meat @ bread
+        return np.asarray(bread @ meat @ bread)
 
     # CR1 uses the unadjusted cluster-score sum.
     score = (residuals * weights)[:, None] * X      # (n, k)
@@ -252,7 +252,7 @@ def crve(
     V = bread @ meat @ bread
 
     c = (G / (G - 1.0)) * ((n - 1.0) / max(n - k - extra_df, 1))
-    return V * c
+    return np.asarray(V * c)
 
 
 # ---------------------------------------------------------------------------
@@ -1162,7 +1162,7 @@ def _htz_per_cluster_quantities(
     Asw_list: list = []
     A_raw_list: list = []
     X_g_list: list = []
-    Omega = np.zeros((q, q))
+    Omega: np.ndarray = np.zeros((q, q))
 
     for cg in range(G_clusters):
         mask = cluster_codes == cg

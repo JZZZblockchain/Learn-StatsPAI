@@ -306,9 +306,13 @@ def _construct_pseudo_outcome(
         mu1 = np.asarray(mu1).ravel()
         mu0 = np.asarray(mu0).ravel()
         mu_T = T * mu1 + (1 - T) * mu0
-        return (mu1 - mu0) + (T - e_hat) * (Y - mu_T) / (e_hat * (1 - e_hat))
+        return np.asarray(
+            (mu1 - mu0) + (T - e_hat) * (Y - mu_T) / (e_hat * (1 - e_hat))
+        )
     # Horvitz-Thompson signal (centered on e_hat-adjusted residual)
-    return T * (Y - m_hat) / e_hat - (1 - T) * (Y - m_hat) / (1 - e_hat)
+    return np.asarray(
+        T * (Y - m_hat) / e_hat - (1 - T) * (Y - m_hat) / (1 - e_hat)
+    )
 
 
 def _get_nuisances(
@@ -657,7 +661,7 @@ def average_treatment_effect(
     target_sample: str = "all",
     alpha: float = 0.05,
     clip: float = 0.01,
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.
 
     This mirrors the most-used ``grf::average_treatment_effect`` targets:
@@ -847,6 +851,8 @@ def average_treatment_effect(
     # of the (regularisation-shrunk) CATE predictions.
     m_insample = getattr(forest, "_m_insample", None)
     e_insample = getattr(forest, "_e_insample", None)
+    m_hat: np.ndarray
+    e_hat: np.ndarray
     if use_insample and m_insample is not None and e_insample is not None:
         m_hat = np.asarray(m_insample, dtype=np.float64).ravel()
         e_hat = np.asarray(e_insample, dtype=np.float64).ravel()
@@ -924,7 +930,7 @@ def _plug_in_average(
     e_hat: np.ndarray,
     target: str,
     alpha: float,
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Fallback weighted average of CATE predictions (no AIPW score).
 
     Used only when the doubly-robust influence function cannot be formed

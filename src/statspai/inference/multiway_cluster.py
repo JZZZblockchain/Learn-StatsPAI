@@ -33,7 +33,7 @@ inference: A guide to empirical practice." Journal of Econometrics. [@mackinnon2
 from __future__ import annotations
 
 from itertools import combinations
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -44,7 +44,7 @@ import pandas as pd
 # ======================================================================
 
 
-def _factorize(arr) -> Tuple[np.ndarray, int]:
+def _factorize(arr: Any) -> Tuple[np.ndarray, int]:
     codes, uniq = pd.factorize(arr, sort=False, use_na_sentinel=True)
     if (codes < 0).any():
         raise ValueError("NaN in cluster variable.")
@@ -106,7 +106,7 @@ def _project_psd(V: np.ndarray) -> np.ndarray:
     if (eigvals < 0).any():
         eigvals = np.maximum(eigvals, 0.0)
         V_sym = eigvecs @ np.diag(eigvals) @ eigvecs.T
-    return V_sym
+    return np.asarray(V_sym)
 
 
 # ======================================================================
@@ -196,7 +196,7 @@ def cluster_robust_se(
     X: np.ndarray,
     resid: np.ndarray,
     clusters: Union[np.ndarray, List[np.ndarray]],
-    **kwargs,
+    **kwargs: Any,
 ) -> np.ndarray:
     """Return cluster-robust standard errors (diagonal sqrt of vcov).
 
@@ -215,7 +215,7 @@ def cluster_robust_se(
     [0.061, 0.011]
     """
     V = multiway_cluster_vcov(X, resid, clusters, **kwargs)
-    return np.sqrt(np.maximum(np.diag(V), 0.0))
+    return np.asarray(np.sqrt(np.maximum(np.diag(V), 0.0)))
 
 
 # ======================================================================

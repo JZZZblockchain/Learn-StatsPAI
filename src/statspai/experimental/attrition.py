@@ -48,9 +48,9 @@ class AttritionResult:
     True
     """
 
-    def __init__(self, overall_rate, treat_rate, control_rate,
-                 diff_test_stat, diff_p_value, covariate_tests,
-                 n_total, n_attrit):
+    def __init__(self, overall_rate: Any, treat_rate: Any, control_rate: Any,
+                 diff_test_stat: Any, diff_p_value: Any, covariate_tests: Any,
+                 n_total: Any, n_attrit: Any) -> None:
         self.overall_rate = overall_rate
         self.treat_rate = treat_rate
         self.control_rate = control_rate
@@ -88,7 +88,7 @@ def attrition_test(
     data: pd.DataFrame,
     treatment: str,
     observed: str,
-    covariates: List[str] = None,
+    covariates: Optional[List[str]] = None,
 ) -> AttritionResult:
     """
     Test for differential attrition in an RCT.
@@ -186,7 +186,7 @@ def attrition_bounds(
     data: pd.DataFrame,
     y: str,
     treatment: str,
-    observed: str = None,
+    observed: Optional[str] = None,
     method: str = "lee",
     alpha: float = 0.05,
 ) -> Dict[str, Any]:

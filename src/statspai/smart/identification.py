@@ -526,7 +526,7 @@ def _check_clustering(
 
 
 def _check_dag_bad_controls(
-    dag,
+    dag: Any,
     treatment: str,
     outcome: str,
     covariates: Sequence[str],
@@ -778,7 +778,7 @@ def check_identification(
     cutoff: Optional[float] = None,
     design: Optional[str] = None,
     cohort: Optional[str] = None,
-    dag=None,
+    dag: Any = None,
     strict: bool = False,
 ) -> IdentificationReport:
     """Run design-level identification diagnostics before fitting an estimator.

@@ -178,12 +178,17 @@ def etable(
         raise ValueError(f"se_format={se_format!r}; expected paren|below")
     digits = _nonnegative_int(digits, name="digits")
 
+    col_names: List[str]
     if names is None:
-        names = [f"({i+1})" for i in range(len(fits))]
+        col_names = [f"({i+1})" for i in range(len(fits))]
     else:
-        names = _string_sequence(names, name="names", allow_none=False)
-    if len(names) != len(fits):
-        raise ValueError(f"len(names)={len(names)} but len(fits)={len(fits)}")
+        col_names = list(
+            _string_sequence(names, name="names", allow_none=False) or []
+        )
+    if len(col_names) != len(fits):
+        raise ValueError(
+            f"len(names)={len(col_names)} but len(fits)={len(fits)}"
+        )
     keep = _string_sequence(keep, name="keep")
     drop = _string_sequence(drop, name="drop")
 
@@ -278,7 +283,7 @@ def etable(
             rows.append([fmt_num.format(v) if v is not None else "" for v in vals])
             row_index.append(label)
 
-    df = pd.DataFrame(rows, index=row_index, columns=list(names))
+    df = pd.DataFrame(rows, index=row_index, columns=col_names)
 
     if format == "dataframe":
         return df

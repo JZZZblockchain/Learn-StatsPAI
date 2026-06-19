@@ -56,7 +56,7 @@ def _partial_out(X: np.ndarray, W: np.ndarray) -> np.ndarray:
     if W.size == 0 or W.shape[1] == 0:
         return X
     beta = np.linalg.lstsq(W, X, rcond=None)[0]
-    return X - W @ beta
+    return np.asarray(X - W @ beta)
 
 
 def _prep_matrices(
@@ -461,7 +461,7 @@ def anderson_rubin_test(
         rss = float(resid @ resid)
         if df2 <= 0 or rss <= 0:
             return np.nan
-        return (num_ss / df1) / (rss / df2)
+        return float((num_ss / df1) / (rss / df2))
 
     ar_f = _ar_f(h0)
     ar_p = float(1 - stats.f.cdf(ar_f, df1, df2)) if not np.isnan(ar_f) else np.nan
@@ -523,7 +523,7 @@ def anderson_rubin_test(
     }
 
 
-def _kstat_and_pvalue_at(k_cs, h0: float) -> Tuple[float, float]:
+def _kstat_and_pvalue_at(k_cs: Any, h0: float) -> Tuple[float, float]:
     """Pick the K-statistic and chi2(1) p-value at (nearest-grid) β=h0."""
     grid = np.asarray(k_cs.beta_grid)
     if grid.size == 0:

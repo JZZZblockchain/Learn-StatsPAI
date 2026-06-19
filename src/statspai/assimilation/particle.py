@@ -66,7 +66,9 @@ def _systematic_resample(weights: np.ndarray, rng: np.random.Generator) -> np.nd
 def _normal_log_pdf(x: np.ndarray, mu: np.ndarray, sd: float) -> np.ndarray:
     """Log pdf of N(mu, sd^2) evaluated at x — vectorised."""
     sd = max(float(sd), 1e-12)
-    return -0.5 * ((x - mu) / sd) ** 2 - np.log(sd) - 0.5 * np.log(2 * np.pi)
+    return np.asarray(
+        -0.5 * ((x - mu) / sd) ** 2 - np.log(sd) - 0.5 * np.log(2 * np.pi)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -168,16 +170,18 @@ def particle_filter(
     log_w = np.full(n_particles, -np.log(n_particles))
 
     # --- Transition & observation defaults -------------------------------
+    trans_fn: Callable[[np.ndarray, np.random.Generator], np.ndarray]
     if transition_sampler is None:
         sd_w = float(process_sd)
         def _default_trans(p: np.ndarray, r: np.random.Generator) -> np.ndarray:
             if sd_w <= 0:
                 return p
-            return p + r.normal(0.0, sd_w, size=p.shape)
+            return np.asarray(p + r.normal(0.0, sd_w, size=p.shape))
         trans_fn = _default_trans
     else:
         trans_fn = transition_sampler
 
+    obs_fn: Callable[[float, np.ndarray, float], np.ndarray]
     if observation_log_pdf is None:
         def _default_obs(y: float, p: np.ndarray, s: float) -> np.ndarray:
             return _normal_log_pdf(p, np.full_like(p, y), s)

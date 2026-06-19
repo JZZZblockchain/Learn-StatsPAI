@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 
 
-def _as_array(value, n: Optional[int] = None) -> Optional[np.ndarray]:
+def _as_array(value: Any, n: Optional[int] = None) -> Optional[np.ndarray]:
     if value is None:
         return None
     arr = np.asarray(value)
@@ -20,11 +20,11 @@ def _as_array(value, n: Optional[int] = None) -> Optional[np.ndarray]:
     return arr
 
 
-def _is_neural_result(result) -> bool:
+def _is_neural_result(result: Any) -> bool:
     return bool(getattr(result, "model_info", {}).get("neural_causal"))
 
 
-def _require_neural_result(result) -> None:
+def _require_neural_result(result: Any) -> None:
     if not _is_neural_result(result):
         raise ValueError(
             "Expected a StatsPAI neural causal CausalResult "
@@ -32,7 +32,9 @@ def _require_neural_result(result) -> None:
         )
 
 
-def neural_effects_frame(result, *, sort_by: Optional[str] = None) -> pd.DataFrame:
+def neural_effects_frame(
+    result: Any, *, sort_by: Optional[str] = None
+) -> pd.DataFrame:
     """Return unit-level neural causal predictions as a tidy DataFrame.
 
     Parameters
@@ -92,7 +94,7 @@ def neural_effects_frame(result, *, sort_by: Optional[str] = None) -> pd.DataFra
     return df
 
 
-def neural_summary_frame(result) -> pd.DataFrame:
+def neural_summary_frame(result: Any) -> pd.DataFrame:
     """Return a one-row summary table for a neural causal result.
 
     Examples
@@ -157,7 +159,7 @@ def neural_summary_frame(result) -> pd.DataFrame:
     return pd.DataFrame([row])
 
 
-def neural_training_frame(result) -> pd.DataFrame:
+def neural_training_frame(result: Any) -> pd.DataFrame:
     """Return per-epoch training diagnostics if recorded.
 
     Examples
@@ -185,7 +187,7 @@ def neural_training_frame(result) -> pd.DataFrame:
 
 
 def neural_causal_to_markdown(
-    result,
+    result: Any,
     path: Optional[str] = None,
     *,
     effects_head: int = 20,
@@ -231,7 +233,7 @@ def neural_causal_to_markdown(
 
 
 def neural_causal_to_html(
-    result,
+    result: Any,
     path: Optional[str] = None,
     *,
     effects_head: int = 50,
@@ -277,7 +279,7 @@ def neural_causal_to_html(
 
 
 def neural_causal_to_excel(
-    result,
+    result: Any,
     path: str,
     *,
     digits: int = 6,

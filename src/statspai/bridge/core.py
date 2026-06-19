@@ -28,9 +28,13 @@ from scipy import stats
 _BRIDGES: Dict[str, Callable[..., 'BridgeResult']] = {}
 
 
-def _register(kind: str):
+def _register(
+    kind: str,
+) -> Callable[[Callable[..., 'BridgeResult']], Callable[..., 'BridgeResult']]:
     """Decorator: register a bridge implementation under ``kind``."""
-    def deco(fn: Callable[..., 'BridgeResult']):
+    def deco(
+        fn: Callable[..., 'BridgeResult'],
+    ) -> Callable[..., 'BridgeResult']:
         _BRIDGES[kind] = fn
         return fn
     return deco
@@ -182,7 +186,7 @@ def _dr_combine(
     return float(est), se
 
 
-def bridge(kind: str, **kwargs) -> BridgeResult:
+def bridge(kind: str, **kwargs: Any) -> BridgeResult:
     """
     Run a bridging-theorem comparison.
 
@@ -230,12 +234,12 @@ def bridge(kind: str, **kwargs) -> BridgeResult:
     """
     # Lazy import: each bridge module registers itself on import.
     from . import (
-        did_sc as _,         # noqa: F401
-        ewm_cate as _,       # noqa: F401
-        cb_ipw as _,         # noqa: F401
-        kink_rdd as _,       # noqa: F401
-        dr_calib as _,       # noqa: F401
-        surrogate_pci as _,  # noqa: F401
+        did_sc as _did_sc,                # noqa: F401
+        ewm_cate as _ewm_cate,            # noqa: F401
+        cb_ipw as _cb_ipw,                # noqa: F401
+        kink_rdd as _kink_rdd,            # noqa: F401
+        dr_calib as _dr_calib,            # noqa: F401
+        surrogate_pci as _surrogate_pci,  # noqa: F401
     )
     if kind not in _BRIDGES:
         raise ValueError(

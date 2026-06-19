@@ -15,7 +15,7 @@ practice:
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ from typing import Any, Dict, Optional
 #   'diagnosis'   : what went wrong (for the agent to understand)
 #   'fix'         : concrete next action (what the agent should try)
 
-REMEDIATIONS = [
+REMEDIATIONS: List[Dict[str, Any]] = [
     # --- Column errors ---
     {
         # KeyError itself; any message inside (quoted column name);

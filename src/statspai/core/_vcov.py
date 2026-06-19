@@ -93,7 +93,7 @@ def sandwich_vcov(
                 f"Without clusters, correction must be 'none'/'hc0'/'hc1'; "
                 f"got {correction!r}."
             )
-        return c * (bread @ meat @ bread)
+        return np.asarray(c * (bread @ meat @ bread))
 
     labels = _cluster_labels_array(np.asarray(clusters), n)
     uniq = np.unique(labels)
@@ -109,7 +109,7 @@ def sandwich_vcov(
         c = float(dof_adjust)
     else:
         c = cluster_correction_factor(G, n, p, correction)
-    return c * (bread @ meat @ bread)
+    return np.asarray(c * (bread @ meat @ bread))
 
 
 def _cluster_labels_array(clusters: np.ndarray, n_obs: int) -> np.ndarray:
@@ -216,7 +216,7 @@ def cluster_robust_vcov(
         c = float(dof_adjust)
     else:
         c = cluster_correction_factor(n_clusters, n, k, correction)
-    return c * (XtX_inv @ meat @ XtX_inv)
+    return np.asarray(c * (XtX_inv @ meat @ XtX_inv))
 
 
 def hc_vcov(

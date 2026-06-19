@@ -245,12 +245,12 @@ def ipcw(
 
 def _censor_indicator(event: np.ndarray) -> np.ndarray:
     """Return 1 if NOT censored (event or still at risk), 0 if censored."""
-    return (event == 1).astype(float)
+    return np.asarray((event == 1).astype(float))
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
     z = np.clip(z, -35, 35)
-    return 1.0 / (1.0 + np.exp(-z))
+    return np.asarray(1.0 / (1.0 + np.exp(-z)))
 
 
 def _fit_logit(y: np.ndarray, X: np.ndarray, max_iter: int = 50, tol: float = 1e-8) -> np.ndarray:
@@ -321,4 +321,4 @@ def _cox_uncensored_survival(
         )
     )
     surv = np.exp(-haz_baseline * np.exp(np.clip(eta, -35, 35)))
-    return np.clip(surv, 1e-6, 1.0)
+    return np.asarray(np.clip(surv, 1e-6, 1.0))

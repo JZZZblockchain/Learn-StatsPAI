@@ -14,12 +14,12 @@ class BaseModel(ABC):
     Abstract base class for all econometric models
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.is_fitted = False
-        self._results = None
-    
+        self._results: Optional["EconometricResults"] = None
+
     @abstractmethod
-    def fit(self, **kwargs) -> "EconometricResults":
+    def fit(self, **kwargs: Any) -> "EconometricResults":
         """
         Fit the econometric model
         
@@ -58,7 +58,8 @@ class BaseModel(ABC):
         """
         if not self.is_fitted:
             raise ValueError("Model must be fitted before calling summary()")
-        return self._results.summary()
+        assert self._results is not None
+        return str(self._results.summary())
 
 
 class BaseEstimator(ABC):
@@ -67,7 +68,9 @@ class BaseEstimator(ABC):
     """
     
     @abstractmethod
-    def estimate(self, y: np.ndarray, X: np.ndarray, **kwargs) -> Dict[str, Any]:
+    def estimate(
+        self, y: np.ndarray, X: np.ndarray, **kwargs: Any
+    ) -> Dict[str, Any]:
         """
         Estimate model parameters
         

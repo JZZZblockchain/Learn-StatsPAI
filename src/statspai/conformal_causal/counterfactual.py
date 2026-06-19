@@ -273,7 +273,7 @@ def _weighted_quantile(values: np.ndarray, weights: np.ndarray, q: float) -> flo
     w = weights[order]
     cum = np.cumsum(w)
     cum /= cum[-1]
-    idx = np.searchsorted(cum, q, side="left")
+    idx = int(np.searchsorted(cum, q, side="left"))
     idx = min(idx, len(v) - 1)
     return float(v[idx])
 
@@ -303,7 +303,7 @@ def _fit_propensity(X: np.ndarray, T: np.ndarray) -> np.ndarray:
     lr = LogisticRegression(C=1e6, solver="lbfgs", max_iter=500)
     lr.fit(X, T)
     p = lr.predict_proba(X)[:, 1]
-    return np.clip(p, 1e-3, 1 - 1e-3)
+    return np.asarray(np.clip(p, 1e-3, 1 - 1e-3))
 
 
 def conformal_counterfactual(

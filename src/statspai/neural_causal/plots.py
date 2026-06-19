@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -10,19 +10,19 @@ from .exports import neural_effects_frame, neural_training_frame
 
 
 def neural_causal_plot(
-    result,
+    result: Any,
     type: str = "cate",
     *,
-    ax=None,
-    figsize=(8, 5),
+    ax: Any = None,
+    figsize: Any = (8, 5),
     bins: int = 30,
     color: str = "#2563EB",
     treated_color: str = "#DC2626",
     control_color: str = "#64748B",
     alpha: float = 0.72,
     title: Optional[str] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """Plot diagnostics for TARNet/CFRNet/DragonNet results.
 
     Parameters
