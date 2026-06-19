@@ -40,6 +40,14 @@ def test_render_dataframe_to_xlsx_applies_shared_booktab_style(tmp_path):
     assert ws["A2"].border.top.style == "medium"
     assert ws["A2"].border.bottom.style == "thin"
     assert ws["A3"].border.bottom.style == "medium"
+    assert ws.sheet_view.showGridLines is False
+    assert ws.freeze_panes == "B3"
+    assert ws.print_title_rows == "$2:$2"
+    assert "$A$1:$C$4" in str(ws.print_area)
+    assert ws.sheet_properties.pageSetUpPr.fitToPage
+    assert ws.page_setup.fitToWidth == 1
+    assert ws.page_setup.orientation == "portrait"
+    assert ws.page_margins.left == 0.5
 
 
 def test_render_dataframe_to_sheet_reuses_shared_style(tmp_path):
@@ -53,7 +61,7 @@ def test_render_dataframe_to_sheet_reuses_shared_style(tmp_path):
         ws,
         df,
         title="Panel A",
-        notes=["Panel note."],
+        notes="Panel note.",
         index_label="Variable",
     )
 
@@ -66,6 +74,12 @@ def test_render_dataframe_to_sheet_reuses_shared_style(tmp_path):
     assert ws["A2"].border.top.style == "medium"
     assert ws["A2"].border.bottom.style == "thin"
     assert ws["A3"].border.bottom.style == "medium"
+    assert ws.sheet_view.showGridLines is False
+    assert ws.freeze_panes == "B3"
+    assert ws.print_title_rows == "$2:$2"
+    assert ws.sheet_properties.pageSetUpPr.fitToPage
+    assert ws.page_setup.fitToWidth == 1
+    assert ws.page_margins.left == 0.5
 
 
 def test_safe_sheet_name_replaces_invalid_chars_and_collisions():
@@ -73,3 +87,4 @@ def test_safe_sheet_name_replaces_invalid_chars_and_collisions():
     assert safe_sheet_name("", existing=()) == "Table"
     assert safe_sheet_name("main/table", existing=["main_table"]) == "main_table_2"
     assert len(safe_sheet_name("x" * 80)) == 31
+    assert safe_sheet_name("x" * 31, existing=["x" * 31]).endswith("_2")

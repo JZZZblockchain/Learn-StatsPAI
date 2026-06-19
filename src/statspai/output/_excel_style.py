@@ -35,6 +35,9 @@ HEADER_PT = 11
 BODY_PT = 11
 NOTES_PT = 9
 _INVALID_SHEET_CHARS = set("[]:*?/\\")
+PRINT_MARGIN_SIDE_IN = 0.50
+PRINT_MARGIN_TOP_BOTTOM_IN = 0.75
+PRINT_MARGIN_HEADER_FOOTER_IN = 0.30
 
 
 def safe_sheet_name(name: object, existing: Sequence[str] = ()) -> str:
@@ -57,6 +60,15 @@ def safe_sheet_name(name: object, existing: Sequence[str] = ()) -> str:
         if candidate.lower() not in existing_lower:
             return candidate
     raise ValueError("Could not create a unique Excel sheet name")
+
+
+def _normalize_notes(notes: Optional[str | Sequence[str]]) -> list[str]:
+    """Return note lines without treating a bare string as a sequence."""
+    if notes is None:
+        return []
+    if isinstance(notes, str):
+        return [notes] if notes else []
+    return [str(note) for note in notes if note]
 
 
 def _styles() -> dict[str, Any]:
@@ -246,14 +258,15 @@ def apply_booktab_borders(
 def write_notes(
     ws: Any,
     row: int,
-    notes: Sequence[str],
+    notes: str | Sequence[str],
     n_cols: int = 1,
 ) -> int:
     """Write italic note rows at the bottom. Returns next row."""
-    if not notes:
+    note_lines = _normalize_notes(notes)
+    if not note_lines:
         return row
     s = _styles()
-    for note in notes:
+    for note in note_lines:
         cell = ws.cell(row=row, column=1, value=str(note))
         cell.font = s["notes_font"]
         cell.alignment = s["left"]
@@ -288,6 +301,55 @@ def autofit_columns(
         ws.column_dimensions[get_column_letter(col)].width = width
 
 
+def apply_publication_sheet_defaults(
+    ws: Any,
+    *,
+    header_top_row: int,
+    header_bot_row: int,
+    final_row: int,
+    n_cols: int,
+) -> None:
+    """Apply workbook-view and print defaults for publication tables.
+
+    These settings make exported workbooks usable as source files, not just
+    data dumps: no distracting gridlines, stable frozen headers, repeatable
+    header rows in print/PDF, fit-to-page width, and journal-friendly margins.
+    """
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.properties import PageSetupProperties
+
+    n_cols = max(int(n_cols), 1)
+    header_top_row = max(int(header_top_row), 1)
+    header_bot_row = max(int(header_bot_row), header_top_row)
+    final_row = max(int(final_row), header_bot_row + 1)
+
+    ws.sheet_view.showGridLines = False
+
+    freeze_col = 2 if n_cols > 1 else 1
+    ws.freeze_panes = ws.cell(
+        row=header_bot_row + 1,
+        column=freeze_col,
+    ).coordinate
+
+    ws.print_title_rows = f"{header_top_row}:{header_bot_row}"
+    last_col = get_column_letter(n_cols)
+    ws.print_area = f"A1:{last_col}{final_row}"
+
+    if ws.sheet_properties.pageSetUpPr is None:
+        ws.sheet_properties.pageSetUpPr = PageSetupProperties()
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_setup.orientation = "landscape" if n_cols > 6 else "portrait"
+
+    ws.page_margins.left = PRINT_MARGIN_SIDE_IN
+    ws.page_margins.right = PRINT_MARGIN_SIDE_IN
+    ws.page_margins.top = PRINT_MARGIN_TOP_BOTTOM_IN
+    ws.page_margins.bottom = PRINT_MARGIN_TOP_BOTTOM_IN
+    ws.page_margins.header = PRINT_MARGIN_HEADER_FOOTER_IN
+    ws.page_margins.footer = PRINT_MARGIN_HEADER_FOOTER_IN
+
+
 # ---------------------------------------------------------------------------
 # High-level convenience: render a DataFrame as a book-tab xlsx
 # ---------------------------------------------------------------------------
@@ -298,7 +360,7 @@ def render_dataframe_to_xlsx(
     filename: str,
     *,
     title: Optional[str] = None,
-    notes: Optional[Sequence[str]] = None,
+    notes: Optional[str | Sequence[str]] = None,
     sheet_name: str = "Table",
     index_label: str = "",
 ) -> None:
@@ -329,7 +391,7 @@ def render_dataframe_to_sheet(
     df: pd.DataFrame,
     *,
     title: Optional[str] = None,
-    notes: Optional[Sequence[str]] = None,
+    notes: Optional[str | Sequence[str]] = None,
     index_label: str = "",
     start_row: int = 1,
 ) -> int:
@@ -368,8 +430,16 @@ def render_dataframe_to_sheet(
         n_cols=n_cols,
     )
 
-    if notes:
-        row = write_notes(ws, body_bot + 1, list(notes), n_cols=n_cols)
+    note_lines = _normalize_notes(notes)
+    if note_lines:
+        row = write_notes(ws, body_bot + 1, note_lines, n_cols=n_cols)
 
     autofit_columns(ws, n_cols)
+    apply_publication_sheet_defaults(
+        ws,
+        header_top_row=header_top,
+        header_bot_row=header_bot,
+        final_row=max(row - 1, body_bot),
+        n_cols=n_cols,
+    )
     return row
