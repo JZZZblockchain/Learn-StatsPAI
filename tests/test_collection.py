@@ -245,6 +245,27 @@ def test_save_docx(tmp_path, models_and_df):
     assert "clustered at firm level" in text
 
 
+def test_save_docx_preserves_regtable_notes(tmp_path, models_and_df):
+    pytest.importorskip("docx")
+    _, m1, m2, _ = models_and_df
+    c = sp.collect("Doc").add_regression(
+        m1,
+        m2,
+        name="main",
+        title="Main results",
+        notes=["Clustered standard errors."],
+    )
+    out = tmp_path / "notes.docx"
+    c.save(str(out))
+
+    from docx import Document
+
+    doc = Document(str(out))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "Clustered standard errors." in text
+    assert "p<0.10" in text
+
+
 def test_save_xlsx_one_sheet_per_item(tmp_path, models_and_df):
     openpyxl = pytest.importorskip("openpyxl")
     df, m1, m2, _ = models_and_df
@@ -259,6 +280,73 @@ def test_save_xlsx_one_sheet_per_item(tmp_path, models_and_df):
     sheets = set(wb.sheetnames)
     assert "main" in sheets
     assert "desc" in sheets
+
+
+def test_save_xlsx_preserves_regtable_notes(tmp_path, models_and_df):
+    openpyxl = pytest.importorskip("openpyxl")
+    _, m1, m2, _ = models_and_df
+    c = sp.collect("Doc").add_regression(
+        m1,
+        m2,
+        name="main",
+        title="Main results",
+        notes=["Clustered standard errors."],
+    )
+    out = tmp_path / "notes.xlsx"
+    c.save(str(out))
+
+    ws = openpyxl.load_workbook(str(out))["main"]
+    values = [
+        cell
+        for row in ws.iter_rows(values_only=True)
+        for cell in row
+        if isinstance(cell, str)
+    ]
+    assert "Main results" in values
+    assert "Clustered standard errors." in values
+    assert any("p<0.10" in value for value in values)
+
+
+def test_save_xlsx_preserves_balance_star_note_and_format(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    df = pd.DataFrame({"treat": [0, 0, 1, 1], "x": [1.234, 2.345, 3.456, 4.567]})
+    c = sp.collect("Doc").add_balance(
+        df,
+        treatment="treat",
+        variables=["x"],
+        name="bal",
+        title="Balance",
+        fmt="%.1f",
+    )
+    out = tmp_path / "balance_notes.xlsx"
+    c.save(str(out))
+
+    ws = openpyxl.load_workbook(str(out))["bal"]
+    values = [
+        cell
+        for row in ws.iter_rows(values_only=True)
+        for cell in row
+        if isinstance(cell, str)
+    ]
+    assert any("p<0.10" in value for value in values)
+    assert "1.8" in values
+    assert "4.0" in values
+
+
+def test_save_xlsx_sanitizes_duplicate_sheet_names(tmp_path, models_and_df):
+    openpyxl = pytest.importorskip("openpyxl")
+    df, m1, _, _ = models_and_df
+    c = (
+        sp.collect("Doc")
+        .add_regression(m1, name="main/table")
+        .add_summary(df, vars=["x1"], name="main*table")
+    )
+    out = tmp_path / "safe_names.xlsx"
+    c.save(str(out))
+
+    wb = openpyxl.load_workbook(str(out))
+    assert "main_table" in wb.sheetnames
+    assert "main_table_2" in wb.sheetnames
 
 
 # ---------------------------------------------------------------------------

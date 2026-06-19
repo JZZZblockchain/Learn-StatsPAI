@@ -63,6 +63,20 @@ def test_paper_tables_to_docx_uses_booktab_borders(tmp_path, two_panels):
         assert top.get(qn("w:sz")) == "12"
 
 
+def test_paper_tables_docx_preserves_standard_notes(tmp_path, two_panels):
+    pytest.importorskip("docx")
+    from docx import Document
+
+    main, _ = two_panels
+    out = tmp_path / "notes.docx"
+    sp.paper_tables(main=main, template="qje").to_docx(str(out))
+
+    doc = Document(str(out))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "Robust standard errors in parentheses" in text
+    assert "p<0.10" in text
+
+
 def test_paper_tables_to_xlsx_writes_one_sheet_per_panel(tmp_path, two_panels):
     openpyxl = pytest.importorskip("openpyxl")
     main, het = two_panels
@@ -93,6 +107,27 @@ def test_paper_tables_xlsx_has_booktab_borders(tmp_path, two_panels):
     # Header top should be a medium border
     top_side = ws.cell(row=header_row, column=2).border.top
     assert top_side.style == "medium"
+
+
+def test_paper_tables_xlsx_uses_shared_font_and_notes(tmp_path, two_panels):
+    openpyxl = pytest.importorskip("openpyxl")
+    main, _ = two_panels
+    out = tmp_path / "shared.xlsx"
+    sp.paper_tables(main=main, template="qje").to_xlsx(str(out))
+
+    wb = openpyxl.load_workbook(str(out))
+    ws = wb["main"]
+    values = [
+        cell
+        for row in ws.iter_rows(values_only=True)
+        for cell in row
+        if isinstance(cell, str)
+    ]
+
+    assert ws["A1"].value == "Main results"
+    assert ws["A1"].font.name == "Times New Roman"
+    assert "Robust standard errors in parentheses" in values
+    assert any("p<0.10" in value for value in values)
 
 
 def test_paper_tables_kwargs_write_both_files(tmp_path, two_panels):

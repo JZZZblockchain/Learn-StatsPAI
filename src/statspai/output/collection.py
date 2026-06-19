@@ -618,11 +618,7 @@ class Collection:
                 "Install with: pip install python-docx"
             ) from e
 
-        from ._aer_style import (
-            apply_word_booktab_rules,
-            style_word_table_typography,
-            add_word_notes_paragraph,
-        )
+        from ._aer_style import render_dataframe_to_word_table
 
         doc = Document()
         if self.title:
@@ -656,73 +652,29 @@ class Collection:
 
             if it.kind == "summary":
                 df = it.payload.copy()
-                # sumstats puts the variable name in the index already
-                df_to_render = df.reset_index()
-                df_to_render.columns = ["Variable"] + list(df.columns)
-                self._write_aer_table_to_doc(
-                    doc, df_to_render,
-                    apply_word_booktab_rules, style_word_table_typography,
-                    notes=None,
+                render_dataframe_to_word_table(
+                    doc,
+                    df,
+                    index_label="Variable",
                 )
             elif it.kind == "balance":
-                df = it.payload.to_dataframe().reset_index()
-                self._write_aer_table_to_doc(
-                    doc, df,
-                    apply_word_booktab_rules, style_word_table_typography,
+                render_dataframe_to_word_table(
+                    doc,
+                    it.payload._formatted_dataframe(),
+                    index_label="Variable",
                     notes="* p<0.10, ** p<0.05, *** p<0.01",
-                    add_notes=add_word_notes_paragraph,
                 )
             else:  # regtable
                 rt = it.payload
-                df = rt.to_dataframe().reset_index()
-                # `to_dataframe()` uses unnamed index → reset_index gives 'index' col.
-                # Rename to '' so the first column has no header.
-                first_col = df.columns[0]
-                df = df.rename(columns={first_col: ""})
-                note_lines: List[str] = []
-                try:
-                    note_lines.append(f"{rt._se_label()} in parentheses")
-                except Exception:
-                    pass
-                if getattr(rt, "show_stars", True):
-                    try:
-                        note_lines.append(rt._star_note())
-                    except Exception:
-                        note_lines.append("* p<0.10, ** p<0.05, *** p<0.01")
-                for n in getattr(rt, "notes", []) or []:
-                    note_lines.append(n)
-                self._write_aer_table_to_doc(
-                    doc, df,
-                    apply_word_booktab_rules, style_word_table_typography,
-                    notes="\n".join(note_lines),
-                    add_notes=add_word_notes_paragraph,
+                df = rt.to_dataframe()
+                render_dataframe_to_word_table(
+                    doc,
+                    df,
+                    index_label="",
+                    notes=rt._footer_note_lines(),
                 )
         doc.save(path)
         return path
-
-    @staticmethod
-    def _write_aer_table_to_doc(
-        doc: Any,
-        df: pd.DataFrame,
-        apply_rules: Any,
-        style_typo: Any,
-        *,
-        notes: Optional[str] = None,
-        add_notes: Any = None,
-    ) -> None:
-        n_rows = len(df) + 1
-        n_cols = len(df.columns)
-        table = doc.add_table(rows=n_rows, cols=n_cols)
-        table.autofit = True
-        for j, col in enumerate(df.columns):
-            table.rows[0].cells[j].text = str(col)
-        for i, (_, row_data) in enumerate(df.iterrows(), 1):
-            for j, val in enumerate(row_data):
-                table.rows[i].cells[j].text = "" if pd.isna(val) else str(val)
-        style_typo(table, header_rows=(0,))
-        apply_rules(table, header_top_idx=0, header_bot_idx=0)
-        if notes and add_notes is not None:
-            add_notes(doc, notes)
 
     # ------------------------------------------------------------------
     # XLSX
@@ -732,124 +684,70 @@ class Collection:
         """Write the collection to a single workbook (one sheet per item)."""
         try:
             import openpyxl
-            from openpyxl.styles import Font, Alignment
+            from openpyxl.styles import Font
         except ImportError as e:
             raise ImportError(
                 "openpyxl is required for .xlsx export. "
                 "Install with: pip install openpyxl"
             ) from e
 
-        from ._aer_style import excel_booktab_borders
+        from ._excel_style import (
+            BODY_PT,
+            TIMES,
+            TITLE_PT,
+            render_dataframe_to_sheet,
+            safe_sheet_name,
+        )
 
-        top_rule, mid_rule, bottom_rule, _ = excel_booktab_borders()
-        header_font = Font(bold=True, name="Times New Roman", size=11)
-        body_font = Font(name="Times New Roman", size=11)
-        title_font = Font(bold=True, name="Times New Roman", size=12)
-        notes_font = Font(italic=True, name="Times New Roman", size=9)
-        center = Alignment(horizontal="center")
+        body_font = Font(name=TIMES, size=BODY_PT)
+        title_font = Font(bold=True, name=TIMES, size=TITLE_PT)
 
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
 
         if self.title:
-            ws = wb.create_sheet(title="overview")
+            ws = wb.create_sheet(title=safe_sheet_name("overview", wb.sheetnames))
             ws.cell(row=1, column=1, value=self.title).font = title_font
 
         for it in self.items:
             if it.kind == "heading":
                 continue  # headings collapse into the next sheet's title
-            sheet_name = it.name[:31]
+            sheet_name = safe_sheet_name(it.name, wb.sheetnames)
             ws = wb.create_sheet(title=sheet_name)
-            row = 1
-            if it.title:
-                ws.cell(row=row, column=1, value=str(it.title)).font = title_font
-                row += 2
             if it.kind == "text":
+                row = 1
+                if it.title:
+                    ws.cell(row=row, column=1, value=str(it.title)).font = title_font
+                    row += 1
                 ws.cell(row=row, column=1, value=str(it.payload)).font = body_font
                 continue
 
             if it.kind == "summary":
-                df = it.payload.reset_index()
-                df.columns = ["Variable"] + list(df.columns[1:])
+                df = it.payload.copy()
+                index_label = "Variable"
             elif it.kind == "balance":
-                df = it.payload.to_dataframe().reset_index()
+                df = it.payload._formatted_dataframe()
+                index_label = "Variable"
             else:  # regtable
-                df = it.payload.to_dataframe().reset_index()
-                df.columns = [""] + list(df.columns[1:])
-
-            self._write_aer_table_to_sheet(
-                ws, df, row,
-                top_rule=top_rule, mid_rule=mid_rule, bottom_rule=bottom_rule,
-                header_font=header_font, body_font=body_font, center=center,
-            )
+                df = it.payload.to_dataframe()
+                index_label = ""
 
             # Notes
-            note_row = row + len(df) + 2
-            if it.kind in {"regtable", "balance"}:
-                payload = it.payload
-                try:
-                    se_label = payload._se_label()
-                    ws.cell(row=note_row, column=1,
-                            value=f"{se_label} in parentheses").font = notes_font
-                    note_row += 1
-                except Exception:
-                    pass
-                if getattr(payload, "show_stars", True):
-                    try:
-                        ws.cell(row=note_row, column=1,
-                                value=payload._star_note()).font = notes_font
-                        note_row += 1
-                    except Exception:
-                        pass
-                for n in getattr(payload, "notes", []) or []:
-                    ws.cell(row=note_row, column=1, value=str(n)).font = notes_font
-                    note_row += 1
-
-            for col_cells in ws.columns:
-                width = max(
-                    (len(str(c.value)) for c in col_cells if c.value), default=8
-                )
-                ws.column_dimensions[col_cells[0].column_letter].width = min(
-                    width + 3, 28
-                )
+            notes: List[str] = []
+            if it.kind == "regtable":
+                notes = it.payload._footer_note_lines()
+            elif it.kind == "balance":
+                notes = ["* p<0.10, ** p<0.05, *** p<0.01"]
+            render_dataframe_to_sheet(
+                ws,
+                df,
+                title=it.title,
+                notes=notes,
+                index_label=index_label,
+            )
 
         wb.save(path)
         return path
-
-    @staticmethod
-    def _write_aer_table_to_sheet(
-        ws: Any,
-        df: pd.DataFrame,
-        start_row: int,
-        *,
-        top_rule: Any,
-        mid_rule: Any,
-        bottom_rule: Any,
-        header_font: Any,
-        body_font: Any,
-        center: Any,
-    ) -> None:
-        # Header
-        for j, col in enumerate(df.columns, 1):
-            cell = ws.cell(row=start_row, column=j, value=str(col))
-            cell.font = header_font
-            cell.alignment = center
-            cell.border = top_rule
-        # Mid rule
-        for j in range(1, len(df.columns) + 1):
-            ws.cell(row=start_row + 1, column=j).border = mid_rule
-        # Body
-        for i, (_, row_data) in enumerate(df.iterrows()):
-            r = start_row + 2 + i
-            for j, val in enumerate(row_data, 1):
-                cell = ws.cell(row=r, column=j, value="" if pd.isna(val) else str(val))
-                cell.font = body_font
-                if j > 1:
-                    cell.alignment = center
-        # Bottom rule
-        last_row = start_row + 1 + len(df)
-        for j in range(1, len(df.columns) + 1):
-            ws.cell(row=last_row, column=j).border = bottom_rule
 
     # ------------------------------------------------------------------
     # save (auto-detect)

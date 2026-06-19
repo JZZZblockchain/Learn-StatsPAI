@@ -180,9 +180,7 @@ class PaperTables:
             ) from e
 
         from ._aer_style import (
-            apply_word_booktab_rules,
-            style_word_table_typography,
-            add_word_notes_paragraph,
+            render_dataframe_to_word_table,
         )
 
         doc = Document()
@@ -199,38 +197,12 @@ class PaperTables:
             run.font.size = Pt(12)
 
             df = tbl.to_dataframe()
-            n_rows = len(df) + 1
-            n_cols = len(df.columns) + 1
-            table = doc.add_table(rows=n_rows, cols=n_cols)
-            table.autofit = True
-
-            # Header row
-            table.rows[0].cells[0].text = ""
-            for j, col in enumerate(df.columns, 1):
-                table.rows[0].cells[j].text = str(col)
-            # Body rows
-            for i, (row_idx, row_data) in enumerate(df.iterrows(), 1):
-                table.rows[i].cells[0].text = str(row_idx)
-                for j, val in enumerate(row_data, 1):
-                    table.rows[i].cells[j].text = str(val)
-
-            style_word_table_typography(table, header_rows=(0,))
-            apply_word_booktab_rules(table, header_top_idx=0, header_bot_idx=0)
-
-            # Notes
-            note_lines: List[str] = []
-            try:
-                note_lines.append(f"{tbl._se_label()} in parentheses")
-            except Exception:
-                pass
-            if getattr(tbl, "show_stars", True):
-                try:
-                    note_lines.append(tbl._star_note())
-                except Exception:
-                    note_lines.append("* p<0.10, ** p<0.05, *** p<0.01")
-            for n in getattr(tbl, "notes", []) or []:
-                note_lines.append(n)
-            add_word_notes_paragraph(doc, "\n".join(note_lines))
+            render_dataframe_to_word_table(
+                doc,
+                df,
+                index_label="",
+                notes=tbl._footer_note_lines(),
+            )
 
             if idx < len(panels) - 1:
                 doc.add_page_break()
@@ -250,88 +222,27 @@ class PaperTables:
         """
         try:
             import openpyxl
-            from openpyxl.styles import Font, Alignment
         except ImportError as e:
             raise ImportError(
                 "openpyxl is required for .xlsx export. "
                 "Install with: pip install openpyxl"
             ) from e
 
-        from ._aer_style import excel_booktab_borders
-
-        top_rule, mid_rule, bottom_rule, _ = excel_booktab_borders()
-        header_font = Font(bold=True, name="Times New Roman", size=11)
-        body_font = Font(name="Times New Roman", size=11)
-        title_font = Font(bold=True, name="Times New Roman", size=12)
-        notes_font = Font(italic=True, name="Times New Roman", size=9)
-        center = Alignment(horizontal="center")
+        from ._excel_style import render_dataframe_to_sheet, safe_sheet_name
 
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
 
         for name, tbl in self.panels().items():
-            ws = wb.create_sheet(title=name[:31])  # Excel: max 31 chars
+            ws = wb.create_sheet(title=safe_sheet_name(name, wb.sheetnames))
             df = tbl.to_dataframe()
-
-            row = 1
-            if getattr(tbl, "title", None):
-                ws.cell(row=row, column=1, value=str(tbl.title)).font = title_font
-                row += 2
-
-            ws.cell(row=row, column=1).border = top_rule
-            for j, col in enumerate(df.columns, 2):
-                cell = ws.cell(row=row, column=j, value=str(col))
-                cell.font = header_font
-                cell.alignment = center
-                cell.border = top_rule
-
-            row += 1
-            for j in range(1, len(df.columns) + 2):
-                ws.cell(row=row, column=j).border = mid_rule
-            mid_row = row
-
-            row = mid_row + 1
-            for i, (idx, row_data) in enumerate(df.iterrows()):
-                ws.cell(row=row, column=1, value=str(idx)).font = body_font
-                for j, val in enumerate(row_data, 2):
-                    cell = ws.cell(row=row, column=j, value=str(val))
-                    cell.font = body_font
-                    cell.alignment = center
-                row += 1
-
-            last_row = row - 1
-            for j in range(1, len(df.columns) + 2):
-                ws.cell(row=last_row, column=j).border = bottom_rule
-
-            # Notes — italic 9pt
-            note_row = last_row + 1
-            try:
-                ws.cell(
-                    row=note_row, column=1,
-                    value=f"{tbl._se_label()} in parentheses"
-                ).font = notes_font
-                note_row += 1
-            except Exception:
-                pass
-            if getattr(tbl, "show_stars", True):
-                try:
-                    ws.cell(row=note_row, column=1,
-                            value=tbl._star_note()).font = notes_font
-                    note_row += 1
-                except Exception:
-                    pass
-            for n in getattr(tbl, "notes", []) or []:
-                ws.cell(row=note_row, column=1, value=str(n)).font = notes_font
-                note_row += 1
-
-            # Auto-fit columns
-            for col_cells in ws.columns:
-                width = max(
-                    (len(str(c.value)) for c in col_cells if c.value), default=8
-                )
-                ws.column_dimensions[col_cells[0].column_letter].width = min(
-                    width + 3, 28
-                )
+            render_dataframe_to_sheet(
+                ws,
+                df,
+                title=getattr(tbl, "title", None),
+                notes=tbl._footer_note_lines(),
+                index_label="",
+            )
 
         wb.save(path)
         return path
