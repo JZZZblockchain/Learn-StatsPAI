@@ -46,8 +46,9 @@ class MICEResult:
     True
     """
 
-    def __init__(self, imputed_datasets, n_imputations, n_obs,
-                 n_missing, variables_imputed, methods, convergence):
+    def __init__(self, imputed_datasets: Any, n_imputations: Any, n_obs: Any,
+                 n_missing: Any, variables_imputed: Any, methods: Any,
+                 convergence: Any) -> None:
         self.imputed_datasets = imputed_datasets
         self.n_imputations = n_imputations
         self.n_obs = n_obs
@@ -143,7 +144,9 @@ def _rubins_rules(estimates: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _impute_pmm(y_obs, x_obs, x_miss, rng, k=5):
+def _impute_pmm(
+    y_obs: Any, x_obs: Any, x_miss: Any, rng: Any, k: int = 5
+) -> Any:
     """Predictive mean matching imputation."""
     n_obs = len(y_obs)
     if n_obs < 2:
@@ -181,7 +184,7 @@ def _impute_pmm(y_obs, x_obs, x_miss, rng, k=5):
     return imputed
 
 
-def _impute_norm(y_obs, x_obs, x_miss, rng):
+def _impute_norm(y_obs: Any, x_obs: Any, x_miss: Any, rng: Any) -> Any:
     """Normal (Bayesian linear regression) imputation."""
     n_obs = len(y_obs)
     X_obs = np.column_stack([np.ones(n_obs), x_obs])
@@ -202,14 +205,14 @@ def _impute_norm(y_obs, x_obs, x_miss, rng):
     return y_hat
 
 
-def _impute_logreg(y_obs, x_obs, x_miss, rng):
+def _impute_logreg(y_obs: Any, x_obs: Any, x_miss: Any, rng: Any) -> Any:
     """Logistic regression imputation for binary variables."""
     from scipy.optimize import minimize
 
     n_obs = len(y_obs)
     X_obs = np.column_stack([np.ones(n_obs), x_obs])
 
-    def neg_ll(beta):
+    def neg_ll(beta: Any) -> Any:
         xb = X_obs @ beta
         xb = np.clip(xb, -500, 500)
         p = 1 / (1 + np.exp(-xb))
@@ -236,8 +239,8 @@ def mice(
     m: int = 5,
     max_iter: int = 10,
     method: Union[str, Dict[str, str]] = "pmm",
-    predictors: Dict[str, List[str]] = None,
-    seed: int = None,
+    predictors: Optional[Dict[str, List[str]]] = None,
+    seed: Optional[int] = None,
     print_progress: bool = False,
 ) -> MICEResult:
     """

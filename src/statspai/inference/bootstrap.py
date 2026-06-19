@@ -238,7 +238,7 @@ def _resample(
         # Cluster bootstrap: resample clusters, keep all rows within
         clusters = data[cluster].unique()
         boot_clusters = rng.choice(clusters, size=len(clusters), replace=True)
-        frames = []
+        frames: List[pd.DataFrame] = []
         for i, c in enumerate(boot_clusters):
             chunk = data[data[cluster] == c].copy()
             # Relabel to avoid duplicate indices
@@ -282,7 +282,7 @@ def _bca_ci(
 
     # Acceleration factor a (jackknife)
     n = len(data)
-    jack_stats = np.empty(n)
+    jack_stats: np.ndarray = np.empty(n)
     for i in range(min(n, 200)):  # cap jackknife iterations
         jack_data = data.drop(data.index[i]).reset_index(drop=True)
         try:
