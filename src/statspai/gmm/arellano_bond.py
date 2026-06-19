@@ -54,6 +54,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import IdentificationFailure
 
 
 def _ab_H(eq_positions: np.ndarray) -> np.ndarray:
@@ -276,7 +277,7 @@ def xtabond(
     m = n_ycols + n_x  # total instruments
 
     if m < k:
-        raise ValueError(
+        raise IdentificationFailure(
             "Under-identified: fewer instruments than "
             "parameters. Loosen gmm_lags or add periods."
         )

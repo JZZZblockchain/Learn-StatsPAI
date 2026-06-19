@@ -390,7 +390,7 @@ def partial_identification(
     instrument: Optional[str] = None,
     assumptions: Optional[List[str]] = None,  # noqa: ARG001 — reserved
     **kwargs: Any,
-):
+) -> Any:
     """Partial identification of ATE — article alias for the ``bounds`` module.
 
     ``method='manski'``          → :func:`manski_bounds`   (worst-case bounds)
@@ -550,7 +550,7 @@ def partial_identification(
 # ---------------------------------------------------------------------------
 
 
-def anderson_rubin_ci(*args, **kwargs):
+def anderson_rubin_ci(*args: Any, **kwargs: Any) -> Any:
     """Anderson-Rubin confidence set — re-export of
     :func:`statspai.iv.weak_iv_ci.anderson_rubin_ci`.
 
@@ -580,7 +580,7 @@ def anderson_rubin_ci(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
-def conditional_lr_ci(*args, **kwargs):
+def conditional_lr_ci(*args: Any, **kwargs: Any) -> Any:
     """Moreira (2003) CLR confidence set — re-export of
     :func:`statspai.iv.weak_iv_ci.conditional_lr_ci`.
 
@@ -697,7 +697,7 @@ def matrix_completion(
     import importlib
 
     _mc = importlib.import_module("statspai.matrix_completion")
-    return _mc.mc_panel(
+    out: CausalResult = _mc.mc_panel(
         data=data,
         y=y,
         unit=unit,
@@ -705,6 +705,7 @@ def matrix_completion(
         treat=d,
         **kwargs,
     )
+    return out
 
 
 def causal_discovery(
@@ -712,7 +713,7 @@ def causal_discovery(
     method: str = "notears",
     variables: Optional[List[str]] = None,
     **kwargs: Any,
-):
+) -> Any:
     """Causal-discovery dispatcher — article-facing alias.
 
     ``method='notears'`` → :func:`statspai.causal_discovery.notears`
@@ -822,7 +823,7 @@ def mediation(
     import importlib
 
     _med = importlib.import_module("statspai.mediation")
-    return _med.mediate(
+    out: CausalResult = _med.mediate(
         data=data,
         y=y,
         treat=d,
@@ -830,6 +831,7 @@ def mediation(
         covariates=X,
         **kwargs,
     )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -915,7 +917,7 @@ def policy_tree(
     depth: Optional[int] = None,
     max_depth: Optional[int] = None,
     **kwargs: Any,
-):
+) -> Any:
     """Doubly-robust policy-tree — article-facing alias.
 
     Accepts **both** naming conventions so existing call sites keep

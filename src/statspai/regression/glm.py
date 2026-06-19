@@ -1413,6 +1413,7 @@ class GLMRegression(BaseModel):
                 recovery_hint="Call fit() before predict().",
                 diagnostics={"is_fitted": False},
             )
+        assert self._results is not None  # guaranteed by is_fitted
         valid_types = {"response", "link", "variance"}
         if not isinstance(type, str) or type not in valid_types:
             raise MethodIncompatibility(

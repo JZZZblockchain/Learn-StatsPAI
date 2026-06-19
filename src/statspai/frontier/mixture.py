@@ -38,6 +38,7 @@ from scipy.optimize import minimize
 
 from . import _core as _fc
 from .sfa import FrontierResult
+from ..exceptions import ConvergenceFailure
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +472,7 @@ def lcsf(
             best_fun = r.fun
             best_result = r
     if best_result is None:
-        raise RuntimeError("lcsf: all starts failed to converge.")
+        raise ConvergenceFailure("lcsf: all starts failed to converge.")
     result = best_result
     theta_hat = result.x.copy()
 

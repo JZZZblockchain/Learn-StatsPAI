@@ -60,6 +60,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import NumericalInstability
 
 
 def proximal(
@@ -193,10 +194,10 @@ def proximal(
             Y, regressors, instruments, k_exog
         )
     except np.linalg.LinAlgError as e:
-        raise RuntimeError(
+        raise NumericalInstability(
             f"Proximal 2SLS failed: {e}. Possible rank deficiency in "
             f"the proxy-instrument system — check completeness of Z/W."
-        )
+        ) from e
 
     # Treatment coefficient sits at position 1 (after the constant).
     tau = float(beta[1])

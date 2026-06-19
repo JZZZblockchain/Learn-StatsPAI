@@ -38,6 +38,7 @@ import pandas as pd
 from scipy import stats as sp_stats
 
 from ..core.results import CausalResult
+from ..exceptions import NumericalInstability
 from ._common import embed_texts
 
 
@@ -227,10 +228,10 @@ def text_treatment_effect(
     try:
         XtX_inv = np.linalg.pinv(XtX)
     except np.linalg.LinAlgError as exc:
-        raise RuntimeError(
+        raise NumericalInstability(
             f"OLS normal equations singular: {exc}. "
             "Try lowering n_components or removing collinear covariates."
-        )
+        ) from exc
     beta = XtX_inv @ (X.T @ y)
     yhat = X @ beta
     resid = y - yhat

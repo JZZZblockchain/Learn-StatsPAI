@@ -43,6 +43,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..exceptions import IdentificationFailure
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Data containers
@@ -223,7 +225,7 @@ def kleibergen_paap_rk(
     n, p = D.shape
     k = Z.shape[1]
     if k < p:
-        raise ValueError(
+        raise IdentificationFailure(
             f"Under-identified: only {k} instruments for {p} endogenous regressors."
         )
 
@@ -380,7 +382,7 @@ def sanderson_windmeijer(
     k = Z.shape[1]
 
     if k < p:
-        raise ValueError(
+        raise IdentificationFailure(
             f"Under-identified: only {k} instruments for {p} endogenous regressors."
         )
 

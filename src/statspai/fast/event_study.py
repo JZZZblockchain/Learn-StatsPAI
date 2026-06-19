@@ -39,7 +39,11 @@ from typing import Any, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
-from ..exceptions import DataInsufficient, MethodIncompatibility
+from ..exceptions import (
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 from .within import within as _within
 from .inference import crve as _crve
 from ._result_protocol import jsonable as _jsonable
@@ -313,7 +317,7 @@ def event_study(
     try:
         bread = np.linalg.inv(XtX)
     except np.linalg.LinAlgError as exc:
-        raise RuntimeError(
+        raise NumericalInstability(
             "event_study normal equations are singular. Likely cause: "
             "event-time dummies are perfectly collinear with the absorbed "
             "unit/time fixed effects after filtering."

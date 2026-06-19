@@ -918,6 +918,7 @@ class OLSRegression(BaseModel):
                 recovery_hint="Call fit() before predict().",
                 diagnostics={"is_fitted": False},
             )
+        assert self._results is not None  # guaranteed by is_fitted
         valid_what = {"mean", "confidence", "prediction"}
         if not isinstance(what, str) or what not in valid_what:
             raise MethodIncompatibility(

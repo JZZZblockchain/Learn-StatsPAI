@@ -38,7 +38,7 @@ from typing import Any, List, Optional, cast
 import numpy as np
 import pandas as pd
 
-from ..exceptions import MethodIncompatibility
+from ..exceptions import MethodIncompatibility, NumericalInstability
 from ._result_protocol import jsonable as _jsonable
 from ._result_protocol import tidy_records as _tidy_records
 from ._validation import (
@@ -490,7 +490,7 @@ def feols(
     try:
         XtWX_inv = np.linalg.inv(XtWX)
     except np.linalg.LinAlgError as exc:
-        raise RuntimeError(
+        raise NumericalInstability(
             f"Normal equations are singular: {exc}. Likely cause: "
             "perfect collinearity in regressors after FE residualisation."
         ) from exc

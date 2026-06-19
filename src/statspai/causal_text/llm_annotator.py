@@ -72,6 +72,7 @@ import pandas as pd
 from scipy import stats as sp_stats
 
 from ..core.results import CausalResult
+from ..exceptions import NumericalInstability
 
 
 __all__ = ['llm_annotator_correct', 'LLMAnnotatorResult']
@@ -265,9 +266,9 @@ def _ols_hc1(
     try:
         XtX_inv = np.linalg.pinv(XtX)
     except np.linalg.LinAlgError as exc:
-        raise RuntimeError(
+        raise NumericalInstability(
             f"OLS normal equations singular: {exc}"
-        )
+        ) from exc
     beta = XtX_inv @ (X.T @ y)
     resid = y - X @ beta
     # HC1 sandwich via the canonical core primitive (CLAUDE.md §4);

@@ -57,6 +57,7 @@ from ._core import (
     stage_one_phi,
 )
 from ._result import ProductionResult
+from ...exceptions import ConvergenceFailure
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +249,7 @@ def _estimate_proxy(
         except Exception:
             continue
     if best is None:
-        raise RuntimeError("All optimizer starts failed in stage 2.")
+        raise ConvergenceFailure("All optimizer starts failed in stage 2.")
     res = best
     beta_hat = res.x
 

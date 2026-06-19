@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
-from ..exceptions import MethodIncompatibility
+from ..exceptions import MethodIncompatibility, NumericalInstability
 from ._result_protocol import jsonable as _jsonable
 from ._result_protocol import tidy_records as _tidy_records
 from ._validation import (
@@ -1003,7 +1003,7 @@ def fepois(
             try:
                 beta = np.linalg.solve(XtWX, XtWz)
             except np.linalg.LinAlgError as exc:
-                raise RuntimeError(
+                raise NumericalInstability(
                     f"WLS step failed at iter {it}: {exc}. Check for "
                     "perfect collinearity or all-zero weights."
                 ) from exc
@@ -1050,7 +1050,7 @@ def fepois(
     try:
         XtWX_inv = np.linalg.inv(XtWX)
     except np.linalg.LinAlgError as exc:
-        raise RuntimeError(f"vcov inversion failed: {exc}") from exc
+        raise NumericalInstability(f"vcov inversion failed: {exc}") from exc
 
     # fixest / pyfixest small-sample correction: scale by n/(n-p-Σ(G_k-1))
     # so that absorbed FE coefficients are charged against degrees of
