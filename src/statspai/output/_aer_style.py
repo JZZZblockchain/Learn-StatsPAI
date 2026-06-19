@@ -20,7 +20,9 @@ QJE / RES regression tables.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Sequence
+
+import pandas as pd
 
 # OOXML border eighths-of-a-point sizes (sz attribute):
 #  - 4 = 0.5pt (thin)
@@ -216,6 +218,88 @@ def add_word_notes_paragraph(
     run.font.name = font_name
     run.font.size = Pt(pt_size)
     run.font.italic = True
+
+
+def _word_cell_text(value: Any) -> str:
+    """Return stable display text for a scalar Word table cell."""
+    if value is None:
+        return ""
+    try:
+        missing = pd.isna(value)
+        if bool(missing):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def render_dataframe_to_word_table(
+    doc: Any,
+    df: Any,
+    *,
+    index_label: Optional[str] = "",
+    notes: Optional[str | Sequence[str]] = None,
+    header_pt: int = HEADER_PT,
+    body_pt: int = BODY_PT,
+    align_first_col: str = "left",
+    align_data_cols: str = "center",
+) -> Any:
+    """Append a DataFrame as a Times/book-tab Word table.
+
+    The caller owns document-level title/heading/page-break decisions; this
+    helper centralizes the table body, typography, book-tab rules, missing
+    value handling, and optional notes paragraph.
+    """
+    try:
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+    except ImportError:
+        WD_TABLE_ALIGNMENT = None
+
+    if index_label is None:
+        header = list(df.columns)
+    else:
+        header = [index_label] + list(df.columns)
+    if not header:
+        header = [""]
+
+    body_rows = max(len(df), 1)
+    table = doc.add_table(rows=body_rows + 1, cols=len(header))
+    if WD_TABLE_ALIGNMENT is not None:
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = True
+
+    for j, col in enumerate(header):
+        table.rows[0].cells[j].text = str(col)
+
+    if len(df) == 0:
+        for j in range(len(header)):
+            table.rows[1].cells[j].text = ""
+    else:
+        for i, (idx, row_data) in enumerate(df.iterrows(), 1):
+            values = list(row_data)
+            if index_label is not None:
+                values = [idx] + values
+            for j, val in enumerate(values):
+                table.rows[i].cells[j].text = _word_cell_text(val)
+
+    style_word_table_typography(
+        table,
+        header_rows=(0,),
+        header_pt=header_pt,
+        body_pt=body_pt,
+        align_first_col=align_first_col,
+        align_data_cols=align_data_cols,
+    )
+    apply_word_booktab_rules(table, header_top_idx=0, header_bot_idx=0)
+
+    if notes:
+        if isinstance(notes, str):
+            note_text = notes
+        else:
+            note_text = "\n".join(str(note) for note in notes if note)
+        add_word_notes_paragraph(doc, note_text)
+
+    return table
 
 
 # ---------------------------------------------------------------------------

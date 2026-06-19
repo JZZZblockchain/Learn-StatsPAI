@@ -14,6 +14,7 @@ Covers
 import sys
 from io import BytesIO
 
+import pandas as pd
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -35,6 +36,7 @@ from statspai.output._aer_style import (  # noqa: E402
     apply_word_booktab_rules,
     style_word_table_typography,
     add_word_notes_paragraph,
+    render_dataframe_to_word_table,
     excel_booktab_borders,
     TOP_RULE_SZ,
     MID_RULE_SZ,
@@ -286,6 +288,44 @@ def test_notes_custom_font_size():
     add_word_notes_paragraph(d, "note", pt_size=6)
     run = d.paragraphs[-1].runs[0]
     assert run.font.size == Pt(6)
+
+
+# ---- render_dataframe_to_word_table --------------------------------------
+
+
+def test_render_dataframe_to_word_table_index_notes_and_rules():
+    """Shared DataFrame renderer writes index, notes, blanks, and booktabs."""
+    d = docx.Document()
+    df = pd.DataFrame({"Mean": ["1.23"], "SD": [None]}, index=["x"])
+
+    table = render_dataframe_to_word_table(
+        d,
+        df,
+        index_label="Variable",
+        notes=["Panel note."],
+    )
+
+    assert table.rows[0].cells[0].text == "Variable"
+    assert table.rows[0].cells[1].text == "Mean"
+    assert table.rows[1].cells[0].text == "x"
+    assert table.rows[1].cells[1].text == "1.23"
+    assert table.rows[1].cells[2].text == ""
+
+    top = table.rows[0].cells[0]._tc.find(qn("w:tcPr")).find(
+        qn("w:tcBorders")
+    ).find(qn("w:top"))
+    mid = table.rows[0].cells[0]._tc.find(qn("w:tcPr")).find(
+        qn("w:tcBorders")
+    ).find(qn("w:bottom"))
+    bottom = table.rows[-1].cells[0]._tc.find(qn("w:tcPr")).find(
+        qn("w:tcBorders")
+    ).find(qn("w:bottom"))
+
+    assert top.get(qn("w:sz")) == TOP_RULE_SZ
+    assert mid.get(qn("w:sz")) == MID_RULE_SZ
+    assert bottom.get(qn("w:sz")) == BOTTOM_RULE_SZ
+    assert d.paragraphs[-1].text == "Panel note."
+    assert d.paragraphs[-1].runs[0].italic
 
 
 # ---- XLSX helpers --------------------------------------------------------

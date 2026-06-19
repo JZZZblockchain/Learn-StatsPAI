@@ -34,6 +34,29 @@ TITLE_PT = 12
 HEADER_PT = 11
 BODY_PT = 11
 NOTES_PT = 9
+_INVALID_SHEET_CHARS = set("[]:*?/\\")
+
+
+def safe_sheet_name(name: object, existing: Sequence[str] = ()) -> str:
+    """Return an Excel-safe, unique worksheet name.
+
+    Excel sheet names are limited to 31 characters and cannot contain
+    ``[]:*?/\\``.  This helper keeps multi-sheet writers from each having
+    slightly different truncation and collision behavior.
+    """
+    raw = "" if name is None else str(name)
+    cleaned = "".join("_" if ch in _INVALID_SHEET_CHARS else ch for ch in raw)
+    cleaned = cleaned.strip("'").strip() or "Table"
+    base = cleaned[:31]
+    existing_lower = {str(x).lower() for x in existing}
+    if base.lower() not in existing_lower:
+        return base
+    for i in range(2, 1000):
+        suffix = f"_{i}"
+        candidate = f"{base[:31 - len(suffix)]}{suffix}"
+        if candidate.lower() not in existing_lower:
+            return candidate
+    raise ValueError("Could not create a unique Excel sheet name")
 
 
 def _styles() -> dict[str, Any]:
@@ -288,18 +311,53 @@ def render_dataframe_to_xlsx(
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = sheet_name[:31]  # Excel sheet name limit
+    ws.title = safe_sheet_name(sheet_name)
+
+    render_dataframe_to_sheet(
+        ws,
+        df,
+        title=title,
+        notes=notes,
+        index_label=index_label,
+    )
+
+    wb.save(filename)
+
+
+def render_dataframe_to_sheet(
+    ws: Any,
+    df: pd.DataFrame,
+    *,
+    title: Optional[str] = None,
+    notes: Optional[Sequence[str]] = None,
+    index_label: str = "",
+    start_row: int = 1,
+) -> int:
+    """Render a DataFrame into an existing worksheet.
+
+    Returns the next empty row after the rendered table and notes.  Multi-sheet
+    writers use this so every output path shares the same Times/book-tab
+    layout, column-width logic, MultiIndex header handling, and note styling.
+    """
 
     n_cols = len(df.columns) + 1  # +1 for the row-label column
 
-    row = 1
+    row = start_row
     if title:
         row = write_title(ws, row, n_cols, title)
         row += 0  # title row already advanced; no blank padding row
 
     header_top, header_bot = write_header(ws, row, df, index_label=index_label)
     row = header_bot + 1
-    body_top, body_bot = write_body(ws, row, df)
+    if df.empty:
+        body_top = row
+        body_bot = row
+        for col in range(1, n_cols + 1):
+            ws.cell(row=row, column=col, value="")
+        row += 1
+    else:
+        body_top, body_bot = write_body(ws, row, df)
+        row = body_bot + 1
 
     apply_booktab_borders(
         ws,
@@ -311,7 +369,7 @@ def render_dataframe_to_xlsx(
     )
 
     if notes:
-        write_notes(ws, body_bot + 1, list(notes), n_cols=n_cols)
+        row = write_notes(ws, body_bot + 1, list(notes), n_cols=n_cols)
 
     autofit_columns(ws, n_cols)
-    wb.save(filename)
+    return row

@@ -5,7 +5,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from statspai.output._excel_style import TIMES, render_dataframe_to_xlsx
+from statspai.output._excel_style import (
+    TIMES,
+    render_dataframe_to_sheet,
+    render_dataframe_to_xlsx,
+    safe_sheet_name,
+)
 
 
 def test_render_dataframe_to_xlsx_applies_shared_booktab_style(tmp_path):
@@ -35,3 +40,36 @@ def test_render_dataframe_to_xlsx_applies_shared_booktab_style(tmp_path):
     assert ws["A2"].border.top.style == "medium"
     assert ws["A2"].border.bottom.style == "thin"
     assert ws["A3"].border.bottom.style == "medium"
+
+
+def test_render_dataframe_to_sheet_reuses_shared_style(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    df = pd.DataFrame({"Mean": ["1.23"]}, index=["x"])
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Panel"
+
+    next_row = render_dataframe_to_sheet(
+        ws,
+        df,
+        title="Panel A",
+        notes=["Panel note."],
+        index_label="Variable",
+    )
+
+    assert next_row == 5
+    assert ws["A1"].value == "Panel A"
+    assert ws["A2"].value == "Variable"
+    assert ws["A3"].value == "x"
+    assert ws["A4"].value == "Panel note."
+    assert ws["A2"].font.name == TIMES
+    assert ws["A2"].border.top.style == "medium"
+    assert ws["A2"].border.bottom.style == "thin"
+    assert ws["A3"].border.bottom.style == "medium"
+
+
+def test_safe_sheet_name_replaces_invalid_chars_and_collisions():
+    assert safe_sheet_name("main/table*1") == "main_table_1"
+    assert safe_sheet_name("", existing=()) == "Table"
+    assert safe_sheet_name("main/table", existing=["main_table"]) == "main_table_2"
+    assert len(safe_sheet_name("x" * 80)) == 31
