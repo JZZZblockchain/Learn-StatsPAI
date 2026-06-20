@@ -33,13 +33,16 @@ All notable changes to StatsPAI will be documented in this file.
     pyfixest to machine precision (`max_rel ≈ 1e-15`) on OLS/IV/FE.
   - **Result object.** `CrossValidationResult` with `.summary()`, `.plot()`,
     `.to_markdown()`, `.to_latex()`, `.to_dict(detail="agent")` (verdict +
-    per-engine table + next steps + version `provenance`). Registered and
-    MCP-exposed.
+    per-engine table + next steps + version/data `provenance`,
+    `engine_status_counts`, and `can_claim_cross_engine_agreement`). Registered
+    and MCP-exposed.
 - **Data-source ingestion normalisers (`sp.from_worldbank` / `sp.from_fred` /
   `sp.from_sdmx`).** Reshape a payload a data MCP already fetched (World Bank
   Indicators, FRED series, OECD/Eurostat SDMX-JSON) into a tidy long/wide panel
   ready for `sp.detect_design` → `sp.recommend` → `sp.cross_validate`. Pure
-  normalisers — no network calls, deterministic and offline-testable.
+  normalisers — no network calls, deterministic and offline-testable. The
+  normalized frames carry `df.attrs["provenance"]`, which `sp.cross_validate`
+  preserves under `cv.provenance["data"]`.
 - **Social network analysis (`sp.network`).** A new numpy/scipy-native SNA
   module aligned with R's `igraph` / `sna` / `statnet` and Stata's
   `nwcommands` — no `networkx` dependency. Covers the full applied stack:
