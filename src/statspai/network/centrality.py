@@ -85,7 +85,7 @@ def degree_centrality(
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (1, 3)])
-    >>> sp.degree_centrality(g, normalized=False).loc[1]
+    >>> float(sp.degree_centrality(g, normalized=False).loc[1])
     3.0
     """
     g = as_graph(graph)
@@ -122,7 +122,7 @@ def closeness_centrality(graph: Any, weighted: Optional[bool] = None) -> pd.Seri
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (2, 3)])
-    >>> sp.closeness_centrality(g).idxmax()
+    >>> int(sp.closeness_centrality(g).idxmax())
     1
     """
     from ._core import shortest_path_lengths
@@ -233,7 +233,7 @@ def betweenness_centrality(
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (2, 3)])
-    >>> sp.betweenness_centrality(g, normalized=False).loc[1]
+    >>> float(sp.betweenness_centrality(g, normalized=False).loc[1])
     2.0
     """
     g = as_graph(graph)
@@ -285,7 +285,7 @@ def eigenvector_centrality(
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (1, 3)])
-    >>> sp.eigenvector_centrality(g).idxmax()
+    >>> int(sp.eigenvector_centrality(g).idxmax())
     1
     """
     g = as_graph(graph)
@@ -354,7 +354,7 @@ def katz_centrality(
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (1, 3)])
-    >>> sp.katz_centrality(g, alpha=0.05).idxmax()
+    >>> int(sp.katz_centrality(g, alpha=0.05).idxmax())
     1
     """
     g = as_graph(graph)
@@ -488,7 +488,7 @@ def bonacich_power(
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (1, 2), (1, 3)])
-    >>> sp.bonacich_power(g, beta=0).idxmax()
+    >>> int(sp.bonacich_power(g, beta=0).idxmax())
     1
     """
     g = as_graph(graph)
@@ -544,8 +544,8 @@ def hits(graph: Any, max_iter: int = 1000, tol: float = 1e-12) -> pd.DataFrame:
     --------
     >>> import statspai as sp
     >>> g = sp.network_graph(edges=[(0, 1), (0, 2)], directed=True)
-    >>> set(sp.hits(g).columns)
-    {'authority', 'hub'}
+    >>> sorted(sp.hits(g).columns)
+    ['authority', 'hub']
     """
     g = as_graph(graph)
     A = g.binary()
