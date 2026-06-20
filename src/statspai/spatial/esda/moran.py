@@ -97,7 +97,7 @@ def moran(
     den = float(z @ z)
     if den == 0:
         raise ValueError("Variable has zero variance.")
-    I = (n / S0) * (num / den)
+    I = (n / S0) * (num / den)  # noqa: E741 (Moran's I convention)
 
     EI = -1.0 / (n - 1)
     # Cliff-Ord randomisation variance

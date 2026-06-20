@@ -107,7 +107,7 @@ def impacts(result: Any, n_sim: int = 1000, seed: Optional[int] = None) -> pd.Da
     # store W on the result from the model code itself (post-fit hook).
     W_matrix = _fetch_W_from_result(result)
     n = W_matrix.shape[0]
-    I = np.eye(n)
+    I = np.eye(n)  # noqa: E741 (identity matrix)
 
     def _point_impacts(
         params_vec: np.ndarray,

@@ -19,10 +19,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from scipy import (
+from scipy import (  # noqa: F401  (sp_stats reserved for future SE work)
     sparse,
     stats as sp_stats,
-)  # noqa: F401  (sp_stats reserved for future SE work)
+)
 from scipy.optimize import minimize_scalar
 
 from ...core.results import EconometricResults

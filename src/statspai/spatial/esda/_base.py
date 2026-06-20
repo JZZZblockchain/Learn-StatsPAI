@@ -21,7 +21,7 @@ class SpatialStatistic:
     extras: dict = field(default_factory=dict)
 
     @property
-    def I(self) -> float:  # noqa: E741 (Moran convention)
+    def I(self) -> float:  # noqa: E743 (Moran's I convention)
         return self.value
 
     @property
