@@ -19,7 +19,7 @@ and Synthetic Controls."
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -269,23 +269,38 @@ def _conformal_avg_pvalue(
     T1: int,
 ) -> float:
     """
-    Conformal p-value for the average effect.
+    Moving-block conformal p-value for the *average* post-treatment effect.
 
-    Uses the average of absolute residuals as test statistic.
+    Chernozhukov, Wüthrich & Zhu (2021, JASA) — ``chernozhukov2021exact``.
+
+    The observed statistic is the absolute mean of the ``T1`` post-period gaps
+    centred at ``tau0``.  Because that is a ``T1``-averaged quantity, the null
+    distribution must use *length-``T1`` blocks* too — comparing it against
+    single pre-period residuals (as a naive leave-one-out would) mixes scales
+    (a ``T1``-average has ~``1/sqrt(T1)`` the spread of one residual) and
+    biases the p-value.  We therefore form the reference from all length-``T1``
+    cyclic blocks of the full residual series under H0 (pre-residuals stacked
+    with the centred post-residuals), which under H0 is approximately
+    exchangeable.  At ``T1 == 1`` this reduces exactly to the per-period
+    :func:`_conformal_pvalue` (the post block contributes the ``+1``).
     """
-    # Test statistic: mean of adjusted post-period residuals
-    stat_obs = abs(np.mean(post_gaps) - tau0)
+    post_resid = np.asarray(post_gaps, dtype=float).ravel() - tau0
+    u = np.concatenate([np.asarray(pre_residuals, dtype=float).ravel(),
+                        post_resid])
+    T = int(u.shape[0])
+    stat_obs = abs(float(np.mean(post_resid)))
 
-    # Compare to leave-one-out statistics from pre-period
-    n_extreme = 0
-    for s in range(T0):
-        # If this pre-period obs were "post-treatment"
-        remaining = np.delete(pre_residuals, s)
-        stat_s = abs(pre_residuals[s])
-        if stat_s >= stat_obs:
-            n_extreme += 1
+    if T1 < 1 or T1 > T:
+        return 1.0
 
-    return float((1 + n_extreme) / (T0 + 1))
+    # Length-T1 cyclic blocks over the full series; block_means[k] is the mean
+    # of the window starting at k (wrapping around). The window starting at T0
+    # is exactly the observed post-period, so it is always counted.
+    ext = np.concatenate([u, u[: T1 - 1]]) if T1 > 1 else u
+    csum = np.concatenate([[0.0], np.cumsum(ext)])
+    block_means = (csum[T1:T1 + T] - csum[:T]) / float(T1)
+    n_extreme = int(np.sum(np.abs(block_means) >= stat_obs - 1e-12))
+    return float(n_extreme / T)
 
 
 def _invert_conformal_test(

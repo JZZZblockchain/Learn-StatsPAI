@@ -151,9 +151,14 @@ def test_conformal_synth_basic(panel):
     assert np.isfinite(res.estimate)
     mi = res.model_info or {}
     assert 'period_results' in mi and mi['inference_method'].startswith('conformal')
+    # pvalue is the moving-block average-effect p-value (CWZ 2021). It moved
+    # 1/12 -> 1/18 when the avg-effect test was corrected from comparing a
+    # T1-averaged statistic against single pre-period residuals (a scale
+    # mismatch that pinned p at the old 1/(T0+1) floor) to proper length-T1
+    # cyclic blocks over the full residual series. estimate/se/CI unchanged.
     np.testing.assert_allclose(
         [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
-        [2.8031848526798764, 1.7123081037547074, -0.5528773611154243, 6.159247066475177, 0.08333333333333333],
+        [2.8031848526798764, 1.7123081037547074, -0.5528773611154243, 6.159247066475177, 0.05555555555555555],
         atol=1e-12,
     )
     np.testing.assert_allclose(
@@ -168,9 +173,11 @@ def test_conformal_synth_grid_range(panel):
                                     grid_size=15, grid_range=(-10.0, 10.0),
                                     penalization=0.1)
     assert np.isfinite(res.estimate)
+    # pvalue corrected to the moving-block average-effect p-value (CWZ 2021):
+    # 1/12 -> 1/18 (see test_conformal_synth_basic). estimate/se/CI unchanged.
     np.testing.assert_allclose(
         [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
-        [2.7956817105608613, 5.102134569246539, -10.0, 10.0, 0.08333333333333333],
+        [2.7956817105608613, 5.102134569246539, -10.0, 10.0, 0.05555555555555555],
         atol=1e-12,
     )
 
