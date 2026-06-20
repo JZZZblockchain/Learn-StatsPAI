@@ -123,6 +123,8 @@ nav:
       - "Social network analysis (centrality / community / QAP / ERGM)": guides/social_network_analysis.md
       - "Migrating from R to StatsPAI": guides/migration-from-r.md
       - "sp.dml and the DoubleML reference implementation": guides/sp_dml_vs_doubleml.md
+      - "Cross-engine validation (sp.cross_validate — StatsPAI vs R/Stata/pyfixest/DoubleML)": guides/cross_engine_validation.md
+      - "From a data MCP to an estimate (World Bank / FRED / OECD ingestion)": guides/data_mcp_ingestion.md
       - "Robustness workflow": guides/robustness_workflow.md
       - "Sensitivity analysis — which tool for which design": guides/sensitivity_analysis.md
       - "Mediation & causal pathways (ACME/ADE, front-door, Gelbach)": guides/mediation.md
@@ -147,6 +149,8 @@ nav:
       - "v1.7.2 LLM-DAG setup: providers, env vars, configure_llm(), sp.paper(llm='auto')": guides/llm_dag_setup.md
       - "v1.9.0 Agent-native API surface: detect_design / preflight / audit / brief / cite / examples / session / MCP prompts": guides/agent_api.md
       - "Driving StatsPAI as an agent — end-to-end workflow": guides/agent_native_workflow.md
+      - "MCP workflow for empirical economists": guides/economist_mcp_workflow.md
+      - "面向实证经济学的 MCP 工作流": guides/economist_mcp_workflow_zh.md
       - "v1.13 Stability tiers — parity-grade vs. frontier-grade (stable / experimental / deprecated + limitations)": guides/stability.md
       - "v1.14 GPU acceleration — neural causal (PyTorch) + JAX feols + vmap'd bootstrap": guides/gpu_acceleration.md
       - "v1.15 Decomposition family — 19 estimators incl. Yu-Elwert (2025) + unified Excel/Word/cite exports": guides/decomposition_family.md

@@ -138,7 +138,7 @@ StatsPAI's focus is **causal inference**. The grid below summarizes method-famil
 
 **Legend**: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.
 
-**StatsPAI at a glance**: 1,103 registered functions in the live agent registry · 82 submodules · 310k LOC (core) + 156k LOC (tests). All four numbers are reproducible from the canonical generator (`python scripts/registry_stats.py`); the per-module table in [`docs/stats.md`](docs/stats.md) is regenerated from the same script. For the API-breadth matrix (23 method families) and cross-ecosystem line-count comparison, see [`docs/stats.md`](docs/stats.md).
+**StatsPAI at a glance**: 1,108 registered functions in the live agent registry · 83 submodules · 330k LOC (core) + 158k LOC (tests). All four numbers are reproducible from the canonical generator (`python scripts/registry_stats.py`); the per-module table in [`docs/stats.md`](docs/stats.md) is regenerated from the same script. For the API-breadth matrix (23 method families) and cross-ecosystem line-count comparison, see [`docs/stats.md`](docs/stats.md).
 
 **Validation tiers matter**: `stability="stable"` means the public API is SemVer-stable; it does not by itself mean R/Stata/paper parity. Use `sp.list_functions(validation_status="certified")` for cross-language or published-reference evidence, and inspect `sp.describe_function(name)["limitations"]` before production use. See [`docs/guides/stability.md`](docs/guides/stability.md).
 
@@ -495,6 +495,37 @@ StatsPAI 1.4.0 is Sprint 2 of the 知识地图 v3 roadmap. Closes the four secon
 | Policy learning | None | `policytree` (standalone) | **`policy_tree()` + `policy_value()`** |
 | Result objects | Inconsistent across commands | Inconsistent across packages | **Unified `CausalResult` with `.summary()`, `.plot()`, `.to_latex()`, `.cite()`** |
 | Interactive plot editing | Graph Editor (no code export) | None | **`sp.interactive()` — GUI editing with auto-generated code** |
+
+---
+
+## Cross-engine validation — `sp.cross_validate`
+
+DiD researcher Scott Cunningham has argued that, when you let an AI run a causal
+model, you should make it estimate the **same specification with at least two
+independent packages and only trust the result when they agree**. StatsPAI ships
+that discipline as one call:
+
+```python
+cv = sp.cross_validate(df, "iv", y="wage", endog=["educ"], instruments=["qob"],
+                       engines=["statspai", "R::fixest", "pyfixest"])
+cv.verdict   # 'AGREE' / 'PARTIAL' / 'DISAGREE' / 'INSUFFICIENT'
+```
+
+It estimates one model with StatsPAI **and** pyfixest, linearmodels, DoubleML,
+R's `fixest` (via `Rscript`) and Stata (via batch `do`), then reports whether
+they reproduce the same coefficient — with a tolerance regime chosen and
+*explained* per estimand (closed-form vs randomised). This is the piece the
+Python causal-ML stack has been missing:
+
+| Library | What it gives you | What `cross_validate` adds |
+| --- | --- | --- |
+| **EconML** | Heterogeneous effects, DML, DR-learner | — |
+| **DoubleML** | Double/debiased ML (PLR/IRM/…) | — |
+| **DoWhy** | Causal graphs + refutation tests | — |
+| **causalml** | Uplift / CATE | — |
+| **StatsPAI** | All of the above families **under one API** | **the cross-language reproducibility layer that orchestrates R, Stata and the other Python engines around one estimand** |
+
+See the [cross-engine validation guide](docs/guides/cross_engine_validation.md).
 
 ---
 
