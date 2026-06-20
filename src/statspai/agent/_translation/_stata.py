@@ -674,6 +674,96 @@ def _h_teffects(cmd: StataCommand) -> Dict[str, Any]:
     return _emit(sp_fn, args, python)
 
 
+def _h_psmatch2(cmd: StataCommand) -> Dict[str, Any]:
+    """``psmatch2 d x, out(y) n(1)`` → ``sp.psmatch2``."""
+    if len(cmd.varlist) < 2:
+        return _emit_error(
+            "psmatch2 requires treatment plus covariates: `psmatch2 d x1 x2`",
+            command="psmatch2",
+        )
+    treat = cmd.varlist[0]
+    covariates = cmd.varlist[1:]
+    args: Dict[str, Any] = {"treat": treat, "covariates": covariates}
+    notes: List[str] = []
+
+    outcome = cmd.options.get("outcome") or cmd.options.get("out") or cmd.options.get("y")
+    if outcome:
+        args["outcome"] = outcome.split()[0]
+    else:
+        notes.append(
+            "psmatch2 outcome() omitted; sp.psmatch2 will build the matched "
+            "frame but the cross-sectional ATT is undefined."
+        )
+
+    neighbor = cmd.options.get("neighbor") or cmd.options.get("n")
+    if neighbor:
+        try:
+            args["neighbor"] = int(neighbor)
+        except (TypeError, ValueError):
+            notes.append(f"Could not parse neighbor count {neighbor!r}; using default 1.")
+
+    if "kernel" in cmd.options:
+        args["method"] = "kernel"
+        kernel = (cmd.options.get("kerneltype") or "epan").split()[0].lower()
+        if kernel == "epanechnikov":
+            kernel = "epan"
+        args["kernel"] = kernel
+        bwidth = cmd.options.get("bwidth") or cmd.options.get("bw")
+        if bwidth:
+            try:
+                args["bwidth"] = float(bwidth)
+            except (TypeError, ValueError):
+                notes.append(f"Could not parse bwidth {bwidth!r}; using default.")
+    elif "radius" in cmd.options:
+        args["method"] = "radius"
+
+    caliper = cmd.options.get("caliper")
+    if caliper:
+        try:
+            args["caliper"] = float(caliper)
+        except (TypeError, ValueError):
+            notes.append(f"Could not parse caliper {caliper!r}; ignoring it.")
+
+    if "common" in cmd.options:
+        args["common_support"] = "minmax"
+    ai = cmd.options.get("ai")
+    if ai:
+        try:
+            args["ai"] = int(ai)
+        except (TypeError, ValueError):
+            notes.append(f"Could not parse ai({ai}); using default standard error.")
+    if "noreplacement" in cmd.options or "noreplace" in cmd.options:
+        args["replace"] = False
+    if "probit" in cmd.options:
+        notes.append(
+            "Stata psmatch2 probit propensity-score option is not exposed "
+            "by sp.psmatch2; check parity before relying on this translation."
+        )
+    if "ate" in cmd.options:
+        notes.append("sp.psmatch2 is ATT-focused; use sp.match for ATE.")
+
+    code_pairs = [
+        "data=df",
+        f"treat={treat!r}",
+        f"covariates={covariates!r}",
+    ]
+    for key in (
+        "outcome",
+        "neighbor",
+        "method",
+        "kernel",
+        "bwidth",
+        "caliper",
+        "common_support",
+        "ai",
+        "replace",
+    ):
+        if key in args:
+            code_pairs.append(f"{key}={args[key]!r}")
+    python = f"sp.psmatch2({', '.join(code_pairs)})"
+    return _emit("psmatch2", args, python, notes)
+
+
 def _h_margins(cmd: StataCommand) -> Dict[str, Any]:
     """Stata `margins`/`marginsplot` — emit a hint to use sp.margins()."""
     targets = cmd.varlist or []
@@ -983,6 +1073,7 @@ STATA_COMMAND_MAP: Dict[str, Handler] = {
     "rdplot": _h_rdplot,
     "rddensity": _h_rddensity,
     "teffects": _h_teffects,
+    "psmatch2": _h_psmatch2,
     "margins": _h_margins,
     "marginsplot": _h_margins,
     "contrast": _h_contrast,

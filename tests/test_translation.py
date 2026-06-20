@@ -230,6 +230,37 @@ class TestRDispatchPolicy:
         assert out["ok"] is False
 
 
+class TestEconomistMigrationUseCases:
+    def test_reghdfe_and_feols_share_estimand_shape(self):
+        stata = from_stata(
+            "reghdfe y x1 x2, absorb(firm year) cluster(firm)"
+        )
+        r = from_r(
+            'feols(y ~ x1 + x2 | firm + year, data = df, cluster = "firm")'
+        )
+
+        assert stata["ok"] is True, stata
+        assert r["ok"] is True, r
+        assert stata["tool"] == r["tool"] == "fixest"
+        assert stata["arguments"] == r["arguments"]
+
+    def test_csdid_and_att_gt_share_timing_shape(self):
+        stata = from_stata(
+            "csdid lemp, ivar(countyreal) time(year) "
+            "gvar(first_treat) method(reg)"
+        )
+        r = from_r(
+            'att_gt(yname="lemp", tname="year", idname="countyreal", '
+            'gname="first_treat", est_method="reg", data=df)'
+        )
+
+        assert stata["ok"] is True, stata
+        assert r["ok"] is True, r
+        assert stata["tool"] == r["tool"] == "callaway_santanna"
+        for key in ("y", "i", "t", "g", "estimator"):
+            assert stata["arguments"][key] == r["arguments"][key]
+
+
 # ----------------------------------------------------------------------
 # MCP integration: workflow tool dispatch
 # ----------------------------------------------------------------------
@@ -241,6 +272,17 @@ class TestExecuteToolFromStata:
         assert out["ok"] is True
         assert out["tool"] == "fixest"
         assert out["source"] == "stata"
+
+    def test_psmatch2_via_execute_tool(self):
+        out = execute_tool(
+            "from_stata",
+            {"command": "psmatch2 d x, out(y) kernel bw(0.06)"},
+        )
+        assert out["ok"] is True
+        assert out["tool"] == "psmatch2"
+        assert out["source"] == "stata"
+        assert out["arguments"]["method"] == "kernel"
+        assert out["arguments"]["bwidth"] == 0.06
 
     def test_missing_command(self):
         out = execute_tool("from_stata", {})
@@ -322,6 +364,18 @@ TIER2_ROUND_TRIPS = [
     ("teffects nnmatch (y x1) (treat)",
      "match",
      {"y": "y", "treat": "treat", "method": "nn"}),
+    # Stata psmatch2 migration
+    ("psmatch2 d x, out(y) n(1) logit",
+     "psmatch2",
+     {"treat": "d", "outcome": "y", "covariates": ["x"], "neighbor": 1}),
+    ("psmatch2 d x, kernel kerneltype(epan) bwidth(0.06)",
+     "psmatch2",
+     {"treat": "d", "covariates": ["x"], "method": "kernel",
+      "kernel": "epan", "bwidth": 0.06}),
+    ("psmatch2 d x, radius caliper(0.05) common ai(2)",
+     "psmatch2",
+     {"treat": "d", "covariates": ["x"], "method": "radius",
+      "caliper": 0.05, "common_support": "minmax", "ai": 2}),
     # Postestimation
     ("margins, dydx(treat)",
      "margins", {"variables": [], "dydx": ["treat"]}),
@@ -446,6 +500,20 @@ class TestTier2EdgeCases:
         assert "lower" not in out["arguments"]
         assert "upper" not in out["arguments"]
 
+    def test_psmatch2_convention_changing_options_emit_notes(self):
+        out = from_stata("psmatch2 d x, out(y) probit ate")
+        assert out["ok"] is True
+        assert out["tool"] == "psmatch2"
+        assert any("probit" in note for note in out["notes"])
+        assert any("ATT-focused" in note for note in out["notes"])
+
+    def test_psmatch2_without_outcome_emits_matched_frame_note(self):
+        out = from_stata("psmatch2 d x1 x2, n(1)")
+        assert out["ok"] is True
+        assert out["tool"] == "psmatch2"
+        assert "outcome" not in out["arguments"]
+        assert any("matched frame" in note for note in out["notes"])
+
 
 # ----------------------------------------------------------------------
 # Coverage — every Tier-1 entry has a test
@@ -463,7 +531,7 @@ class TestStataHandlerCoverage:
             # Strip trailing punctuation: ``margins, dydx(...)`` →
             # ``margins`` (the comma is the option-separator, not part
             # of the command name).
-            cmd = re.sub(r"[^a-z_].*$", "", head.lower())
+            cmd = re.sub(r"[^a-z0-9_].*$", "", head.lower())
             covered.add(cmd)
         # Each handler should have at least one alias covered.
         handler_to_aliases = {}

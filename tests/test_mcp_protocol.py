@@ -19,6 +19,7 @@ Coverage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -231,7 +232,8 @@ class TestAnnotationsAndOutputSchema:
             "estimand", "method", "n_obs", "coefficients", "diagnostics",
             "violations", "warnings", "next_steps", "suggested_functions",
             "next_calls", "citations", "narrative", "result_id",
-            "result_uri", "error", "error_kind", "remediation",
+            "result_uri", "data_provenance", "error", "error_kind",
+            "remediation",
         }
         assert documented <= real, f"undocumented-key drift: {documented - real}"
 
@@ -288,6 +290,45 @@ class TestStructuredContent:
         assert result["isError"] is True
         assert isinstance(result.get("structuredContent"), dict)
         assert "error" in result["structuredContent"]
+
+    def test_local_data_path_provenance_reaches_result_resource(self, sample_csv):
+        expected_sha = hashlib.sha256(sample_csv.read_bytes()).hexdigest()
+        msg = _rpc("tools/call", {
+            "name": "regress",
+            "arguments": {
+                "formula": "y ~ x",
+                "data_path": str(sample_csv),
+                "data_columns": ["y", "x"],
+                "as_handle": True,
+            },
+        })
+        payload = msg["result"]["structuredContent"]
+        prov = payload["data_provenance"]
+        assert prov["source"] == str(sample_csv)
+        assert prov["format"] == "csv"
+        assert prov["columns_requested"] == ["y", "x"]
+        assert prov["size_bytes"] == sample_csv.stat().st_size
+        assert prov["sha256"] == expected_sha
+
+        rid = payload["result_id"]
+        read = _rpc("resources/read", {"uri": f"statspai://result/{rid}"})
+        body = json.loads(read["result"]["contents"][0]["text"])
+        cached_prov = body["provenance"]["arguments"]["_mcp_data_provenance"]
+        assert cached_prov["sha256"] == expected_sha
+        assert cached_prov["source"] == str(sample_csv)
+
+    def test_remote_data_provenance_strips_query_tokens(self):
+        from statspai.agent._data_loader import data_provenance
+
+        prov = data_provenance(
+            "https://data.example.org/panel.csv?token=secret#frag",
+            columns=["y"],
+            sample_n=10,
+        )
+        assert prov["source"] == "https://data.example.org/panel.csv"
+        assert prov["hash_status"] == "not_hashed_remote"
+        assert prov["columns_requested"] == ["y"]
+        assert prov["sample_seed"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +477,7 @@ class TestResources:
         uris = {r["uri"] for r in msg["result"]["resources"]}
         assert "statspai://catalog" in uris
         assert "statspai://functions" in uris
+        assert "statspai://parity/track-a-summary" in uris
 
     def test_read_catalog_returns_markdown(self):
         msg = _rpc("resources/read",
@@ -457,6 +499,29 @@ class TestResources:
         for entry in index[:5]:
             assert "name" in entry
             assert "description" in entry
+
+    def test_read_track_a_parity_summary_returns_compact_json(self):
+        msg = _rpc(
+            "resources/read",
+            {"uri": "statspai://parity/track-a-summary"},
+        )
+        content = msg["result"]["contents"][0]
+        assert content["mimeType"] == "application/json"
+        summary = json.loads(content["text"])
+        assert summary["available"] is True
+        assert summary["artifact"].endswith("parity_table_3way.md")
+        assert summary["strictness_tiers"]["machine"] >= 1
+        assert summary["module_count"] >= 50
+        by_module = {m["module"]: m for m in summary["modules"]}
+        assert by_module["04_csdid"]["strictness_tier"] == "machine"
+        assert "csdid" in by_module["04_csdid"]["stata_command"]
+        assert by_module["07_scm"]["strictness_tier"] == "methodological"
+        evidence = summary["tool_evidence"]
+        assert evidence["callaway_santanna"][0]["module"] == "04_csdid"
+        assert evidence["rdrobust"][0]["module"] == "06_rd"
+        assert any(row["module"] == "03_hdfe" for row in evidence["fixest"])
+        assert evidence["match"][0]["module"] == "11_psm"
+        assert "not a live Stata/R execution" in summary["caution"]
 
     def test_read_per_function_returns_agent_card(self):
         msg = _rpc("resources/read",
@@ -559,7 +624,8 @@ class TestPrompts:
         names = {p["name"] for p in prompts}
         # At least the 3 curated workflows must be present.
         for n in ("audit_did_result", "design_then_estimate",
-                  "robustness_followup"):
+                  "robustness_followup", "stata_command_workflow",
+                  "r_command_workflow", "cross_language_command_check"):
             assert n in names, f"prompt {n!r} missing from prompts/list"
 
     def test_each_prompt_has_required_metadata(self):
@@ -620,6 +686,41 @@ class TestPrompts:
         # And the actual {y} placeholder ELSEWHERE in the template
         # must still be substituted with "earnings".
         assert "y=earnings" in text
+
+    def test_stata_command_workflow_prompt_renders_dispatch_contract(self):
+        msg = _rpc("prompts/get", {
+            "name": "stata_command_workflow",
+            "arguments": {
+                "data_path": "/abs/panel.dta",
+                "command": "reghdfe y x, absorb(id year) cluster(id)",
+            },
+        }, request_id=87)
+        text = msg["result"]["messages"][0]["content"]["text"]
+        assert "from_stata" in text
+        assert "/abs/panel.dta" in text
+        assert "as_handle=true" in text
+        assert "audit_result" in text
+        assert "{command}" not in text
+
+    def test_cross_language_command_check_prompt_warns_no_live_external_run(self):
+        msg = _rpc("prompts/get", {
+            "name": "cross_language_command_check",
+            "arguments": {
+                "data_path": "/abs/panel.dta",
+                "stata_command": "csdid y, ivar(id) time(year) gvar(g)",
+                "r_expression": (
+                    'att_gt(yname="y", tname="year", '
+                    'idname="id", gname="g", data=df)'
+                ),
+            },
+        }, request_id=88)
+        text = msg["result"]["messages"][0]["content"]["text"]
+        assert "from_stata" in text
+        assert "from_r" in text
+        assert "convention mismatch" in text
+        assert "statspai://parity/track-a-summary" in text
+        assert "tool_evidence" in text
+        assert "do not claim live Stata or R execution" in text
 
     def test_get_unknown_prompt_returns_resource_not_found(self):
         msg = _rpc("prompts/get", {

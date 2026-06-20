@@ -70,6 +70,26 @@ class TestResultCache:
         assert meta["arguments"]["y"] == "wage"
         assert meta["arguments"]["post"] is True
 
+    def test_annotate_preserves_nested_json_metadata(self):
+        cache = ResultCache(max_size=2)
+        rid = cache.put({"hello": "world"}, tool="did", arguments={"y": "wage"})
+        ok = cache.annotate(
+            rid,
+            {
+                "_mcp_data_provenance": {
+                    "source": "/tmp/panel.csv",
+                    "sha256": "abc123",
+                    "columns_requested": ["y", "x"],
+                }
+            },
+        )
+        assert ok is True
+        meta = cache.get_entry(rid).to_metadata()
+        prov = meta["arguments"]["_mcp_data_provenance"]
+        assert prov["source"] == "/tmp/panel.csv"
+        assert prov["sha256"] == "abc123"
+        assert prov["columns_requested"] == ["y", "x"]
+
 
 # ----------------------------------------------------------------------
 # bibtex tool
@@ -243,6 +263,9 @@ class TestInitializeInstructions:
         assert "as_handle" in text
         assert "audit_result" in text
         assert "bibtex" in text
+        assert "stata_command_workflow" in text
+        assert "statspai://parity/track-a-summary" in text
+        assert "data_provenance" in text
 
 
 # ----------------------------------------------------------------------

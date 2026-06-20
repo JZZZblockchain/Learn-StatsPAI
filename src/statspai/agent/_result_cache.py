@@ -61,6 +61,23 @@ EVICT_LRU = "lru"
 EVICT_EXPLICIT = "explicit"
 
 
+def _metadata_value(value: Any) -> Any:
+    """Return a compact JSON-friendly value for cache metadata."""
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        if all(isinstance(x, (str, int, float, bool)) or x is None for x in value):
+            return list(value)
+        return f"<{type(value).__name__}, len={len(value)}>"
+    if isinstance(value, dict):
+        clean: Dict[str, Any] = {}
+        for k, v in value.items():
+            if isinstance(k, str):
+                clean[k] = _metadata_value(v)
+        return clean
+    return f"<{type(value).__name__}>"
+
+
 def _cache_size() -> int:
     raw = os.environ.get("STATSPAI_MCP_RESULT_CACHE_SIZE")
     if raw is None:
@@ -101,17 +118,9 @@ class CacheEntry:
         # Strip DataFrame / array / non-scalar arguments so the metadata
         # fits in an MCP resource without dragging the original dataset
         # back through the wire.
-        clean: Dict[str, Any] = {}
-        for k, v in self.arguments.items():
-            if isinstance(v, (str, int, float, bool)) or v is None:
-                clean[k] = v
-            elif isinstance(v, (list, tuple)):
-                if all(isinstance(x, (str, int, float, bool)) or x is None for x in v):
-                    clean[k] = list(v)
-                else:
-                    clean[k] = f"<{type(v).__name__}, len={len(v)}>"
-            else:
-                clean[k] = f"<{type(v).__name__}>"
+        clean: Dict[str, Any] = {
+            k: _metadata_value(v) for k, v in self.arguments.items()
+        }
         return {
             "tool": self.tool,
             "arguments": clean,
@@ -185,6 +194,19 @@ class ResultCache:
                 old_rid, _ = self._store.popitem(last=False)
                 self._record_eviction(old_rid, EVICT_LRU)
         return rid
+
+    def annotate(self, rid: str, arguments: Dict[str, Any]) -> bool:
+        """Merge additional provenance arguments into an existing entry."""
+        with self._lock:
+            entry = self._store.get(rid)
+            if entry is None or self._is_expired(entry):
+                if entry is not None:
+                    del self._store[rid]
+                    self._record_eviction(rid, EVICT_TTL)
+                return False
+            entry.arguments.update(arguments)
+            self._store.move_to_end(rid)
+            return True
 
     def get(self, rid: str) -> Optional[Any]:
         """Return the cached object for ``rid``, or ``None`` if absent/expired."""

@@ -341,6 +341,121 @@ PROMPTS: List[Dict[str, Any]] = [
             "run method='ffl' for the Firpo-Fortin-Lemieux variant."
         ),
     },
+    {
+        "name": "stata_command_workflow",
+        "description": (
+            "Translate one Stata command, run the matched StatsPAI "
+            "tool on the supplied data, then audit the fitted result. "
+            "Use when a user pastes commands such as reghdfe, csdid, "
+            "rdrobust, ivreg2, synth, psmatch2, or teffects workflows."
+        ),
+        "arguments": [
+            {
+                "name": "data_path",
+                "required": True,
+                "description": "Absolute path or URL to the data file.",
+            },
+            {
+                "name": "command",
+                "required": True,
+                "description": "One Stata command line, not a whole do-file.",
+            },
+        ],
+        "_template": (
+            "1. Call `from_stata` with command='{command}'. If it "
+            "returns ok=false, report the error and its suggestions; "
+            "do not guess a replacement command.\n"
+            "2. If ok=true, take the returned tool name and arguments, "
+            "merge in data_path={data_path}, as_handle=true, and "
+            "detail='agent', then dispatch that tool.\n"
+            "3. Call `audit_result` with the returned result_id. Run "
+            "the first high-importance next call only when it is "
+            "data-free or accepts result_id; otherwise tell the user "
+            "which data-bound follow-up remains.\n"
+            "4. Call `brief_result` and `bibtex` for the fitted "
+            "method's citation keys. Explain both the Stata command "
+            "translation and the StatsPAI estimate."
+        ),
+    },
+    {
+        "name": "r_command_workflow",
+        "description": (
+            "Translate one R / fixest / felm / did expression, run the "
+            "matched StatsPAI tool on the supplied data, then audit the "
+            "result. Use for users migrating R code into the MCP loop."
+        ),
+        "arguments": [
+            {
+                "name": "data_path",
+                "required": True,
+                "description": "Absolute path or URL to the data file.",
+            },
+            {
+                "name": "expression",
+                "required": True,
+                "description": "One R expression such as feols(...) or att_gt(...).",
+            },
+        ],
+        "_template": (
+            "1. Call `from_r` with expression='{expression}'. If it "
+            "returns ok=false, report the supported alternatives from "
+            "the response; do not fabricate an R parser result.\n"
+            "2. If ok=true, dispatch the returned StatsPAI tool with "
+            "data_path={data_path}, as_handle=true, and detail='agent'.\n"
+            "3. Call `audit_result` and `brief_result` on the result_id.\n"
+            "4. In the final answer, show the translated Python/StatsPAI "
+            "call, the estimate, key diagnostics, and any missing "
+            "reviewer checks."
+        ),
+    },
+    {
+        "name": "cross_language_command_check",
+        "description": (
+            "Compare one Stata command and one R expression through "
+            "StatsPAI's translators before fitting. This is a cheap "
+            "guard against Stata/R snippets targeting different "
+            "estimands or covariance conventions."
+        ),
+        "arguments": [
+            {
+                "name": "data_path",
+                "required": True,
+                "description": "Absolute path or URL to the shared data file.",
+            },
+            {
+                "name": "stata_command",
+                "required": True,
+                "description": "One Stata command line.",
+            },
+            {
+                "name": "r_expression",
+                "required": True,
+                "description": "One R expression.",
+            },
+        ],
+        "_template": (
+            "1. Call `from_stata` with command='{stata_command}' and "
+            "`from_r` with expression='{r_expression}'.\n"
+            "2. If either translator returns ok=false, stop and report "
+            "the unsupported side plus suggestions.\n"
+            "3. Compare the returned tool names, formulas, fixed effects, "
+            "clusters, treatment timing fields, and covariance settings. "
+            "If the estimands or covariance conventions differ, report "
+            "that as a convention mismatch before fitting.\n"
+            "4. If the translated calls are comparable, dispatch both "
+            "StatsPAI tools with data_path={data_path}, as_handle=true, "
+            "detail='standard', then call `brief_result` for each.\n"
+            "5. Read `statspai://parity/track-a-summary` and label whether "
+            "the translated tool appears in its `tool_evidence` index. "
+            "Treat the resource as committed Python/R/Stata evidence only, "
+            "not as a live external run.\n"
+            "6. Return a markdown table with method source, translated "
+            "tool, estimate, confidence interval, and any mismatch note. "
+            "Only call this a cross-language agreement check; do not "
+            "claim live Stata or R execution unless separate Stata/R "
+            "MCP servers were actually invoked."
+        ),
+    },
 ]
 
 

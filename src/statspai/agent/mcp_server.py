@@ -76,6 +76,7 @@ from ._data_loader import (
     DEFAULT_MAX_DATA_BYTES as _DEFAULT_MAX_DATA_BYTES,
     max_data_bytes as _max_data_bytes,
     is_remote_url as _is_remote_url,
+    data_provenance as _data_provenance,
     load_dataframe as _load_dataframe,
 )
 from ._errors import (
@@ -546,6 +547,16 @@ _RESULT_OUTPUT_SCHEMA: Dict[str, Any] = {
             "type": "string",
             "description": "statspai://result/<id> form of result_id.",
         },
+        "data_provenance": {
+            "type": "object",
+            "description": (
+                "MCP data_path source summary when a tool call loaded data "
+                "server-side: sanitized source, scheme, format, requested "
+                "columns/sample, and local file size/mtime/SHA-256 when "
+                "available."
+            ),
+            "additionalProperties": True,
+        },
         "error": {
             "type": "string",
             "description": "Error message when the call failed.",
@@ -937,6 +948,14 @@ _SESSION_INSTRUCTIONS = (
     "design-specific sensitivity (no need to ferry betas / sigma).\n"
     "  6. bibtex(keys=[...]) for verified citations — never invent "
     "references; paper.bib is the single source of truth.\n\n"
+    "Economist migration helpers: use prompts/list for "
+    "stata_command_workflow, r_command_workflow, and "
+    "cross_language_command_check. For cross-software evidence, read "
+    "statspai://parity/track-a-summary; it summarizes committed artifacts "
+    "only and is not a live Stata/R execution.\n\n"
+    "Data provenance: tools/call responses that load data_path include "
+    "data_provenance. Local files carry size, mtime, and SHA-256; remote "
+    "URLs are sanitized and not re-hashed.\n\n"
     "Token economy: pass detail='minimal' on cheap sub-step calls; "
     "default 'agent' carries violations + next_steps. Inline plots "
     "arrive as image content blocks for vision-capable clients."
@@ -1053,9 +1072,15 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     progress_token = meta.get("progressToken") if isinstance(meta, dict) else None
 
     df = None
+    data_prov = None
     if data_path:
         try:
             df = _load_dataframe(
+                data_path,
+                columns=data_columns,
+                sample_n=data_sample_n,
+            )
+            data_prov = _data_provenance(
                 data_path,
                 columns=data_columns,
                 sample_n=data_sample_n,
@@ -1110,6 +1135,14 @@ def _handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     # vision (and any MCP client supporting image content) will render
     # it inline; the bytes are stripped from the JSON payload above.
     result = payload
+    if isinstance(result, dict) and data_prov is not None:
+        result.setdefault("data_provenance", data_prov)
+        rid = result.get("result_id")
+        if isinstance(rid, str):
+            from ._result_cache import RESULT_CACHE
+
+            RESULT_CACHE.annotate(rid, {"_mcp_data_provenance": data_prov})
+
     plot_bytes = None
     result_for_text = result
     if isinstance(result, dict):

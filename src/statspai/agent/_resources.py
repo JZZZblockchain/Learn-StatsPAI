@@ -14,7 +14,7 @@ Public entry points
 * :func:`catalog_text` — markdown catalog body
 * :func:`functions_index` — JSON ``[{name, description}, ...]`` list
 * :func:`function_detail` — full agent card for one tool name
-* :func:`handle_resources_list` — the three top-level resources
+* :func:`handle_resources_list` — top-level resources
 * :func:`handle_resources_read` — URI dispatch (catalog / functions /
   function/<name> / result/<id>)
 * :func:`handle_resources_templates_list` — the parameterised URI
@@ -24,11 +24,14 @@ Public entry points
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type
 
 FUNCTION_URI_PREFIX = "statspai://function/"
 RESULT_URI_PREFIX = "statspai://result/"
+PARITY_TRACK_A_URI = "statspai://parity/track-a-summary"
 
 #: Fallback URI for the result-schema resource. ``mcp_server`` owns the
 #: canonical :data:`RESULT_SCHEMA_URI` (it must reference it early, before
@@ -166,6 +169,201 @@ def function_detail(name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _repo_root() -> Path:
+    """Best-effort source-checkout root for optional evidence artifacts."""
+    return Path(__file__).resolve().parents[3]
+
+
+def _field(block: str, key: str) -> Optional[str]:
+    """Extract a markdown bullet field of the form ``- **key**: value``."""
+    pattern = rf"^- \*\*{re.escape(key)}\*\*: (.+)$"
+    match = re.search(pattern, block, flags=re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def _unquote_markdown_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    if value.startswith("`"):
+        match = re.match(r"`([^`]+)`", value)
+        if match:
+            return match.group(1)
+    return value
+
+
+def _parity_tool_aliases(module: str) -> List[str]:
+    """Best-effort StatsPAI tool aliases for a Track A parity module."""
+    aliases = {
+        "01_ols": ["regress"],
+        "02_iv": ["ivreg"],
+        "03_hdfe": ["fixest", "reghdfe"],
+        "04_csdid": ["callaway_santanna", "csdid"],
+        "05_sunab": ["sunab"],
+        "06_rd": ["rdrobust"],
+        "07_scm": ["synth"],
+        "08_dml": ["dml"],
+        "09_rddensity": ["rddensity"],
+        "10_honest_did": ["honest_did"],
+        "11_psm": ["match", "psm"],
+        "12_sdid": ["sdid"],
+        "13_causal_forest": ["causal_forest"],
+        "14_ols_cluster": ["regress"],
+        "15_hdfe_cluster": ["fixest", "reghdfe"],
+        "16_bjs": ["did_imputation"],
+        "17_etwfe": ["etwfe"],
+        "18_augsynth": ["augsynth"],
+        "19_gsynth": ["gsynth"],
+        "20_bacon": ["bacon"],
+        "21_honest_relmags": ["honest_did"],
+        "22_sensemakr": ["sensemakr"],
+        "23_evalue": ["evalue"],
+        "24_coxph": ["coxph"],
+        "25_lmm": ["multilevel", "lmm"],
+        "26_glmm_logit": ["glmer", "glmm"],
+        "27_glmm_aghq": ["glmer", "glmm"],
+        "28_frontier": ["frontier"],
+        "29_panel_sfa": ["xtfrontier"],
+        "30_oaxaca": ["oaxaca"],
+        "31_dfl": ["dfl"],
+        "32_rif": ["rif"],
+        "33_var": ["var"],
+        "34_lp": ["local_projection", "lpirf"],
+        "35_panel": ["panel", "xtreg"],
+        "36_mediation": ["mediation"],
+        "37_ppmlhdfe": ["ppmlhdfe"],
+        "38_drdid": ["drdid"],
+        "39_arima": ["arima"],
+        "40_qreg": ["qreg"],
+        "41_tobit": ["tobit"],
+        "42_nbreg": ["nbreg"],
+        "43_heckman": ["heckman"],
+        "44_mlogit": ["mlogit"],
+        "45_ologit": ["ologit"],
+        "46_clogit": ["clogit"],
+        "47_ppmlhdfe_3fe": ["ppmlhdfe"],
+        "48_probit": ["probit"],
+        "49_oprobit": ["oprobit"],
+        "50_xtabond": ["xtabond"],
+        "51_newey": ["newey"],
+        "52_scm_unique": ["synth"],
+        "53_cr2": ["cr2"],
+        "54_twoway_cluster": ["regress"],
+        "55_hc2_hc3": ["regress"],
+        "56_multiway_cluster": ["fixest", "reghdfe"],
+        "57_logit": ["logit"],
+        "58_poisson": ["poisson"],
+        "59_liml": ["liml", "ivreg"],
+        "60_sureg": ["sureg"],
+        "61_betareg": ["betareg"],
+        "62_truncreg": ["truncreg"],
+        "63_zip": ["zip"],
+        "64_zinb": ["zinb"],
+    }
+    return aliases.get(module, [])
+
+
+@lru_cache(maxsize=1)
+def track_a_parity_summary() -> Dict[str, Any]:
+    """Return a compact machine-readable summary of committed parity evidence.
+
+    The full Track A report is a long markdown artifact for humans. MCP
+    clients need headline counts and per-module convention labels without
+    burning context on every table row. Wheels normally do not ship
+    ``tests/``, so this resource reports ``available=false`` rather than
+    pretending live R/Stata evidence exists.
+    """
+    rel = "tests/r_parity/results/parity_table_3way.md"
+    report = _repo_root() / rel
+    if not report.exists():
+        return {
+            "available": False,
+            "artifact": rel,
+            "summary": (
+                "Track A parity markdown is not present in this installed "
+                "environment. Use a source checkout or committed release "
+                "artifact to inspect cross-language evidence."
+            ),
+            "caution": (
+                "This resource summarizes committed artifacts only; it is "
+                "not a live Stata/R execution."
+            ),
+        }
+
+    text = report.read_text(encoding="utf-8")
+    strict_line = ""
+    for line in text.splitlines():
+        if line.startswith("**Strictness-tier breakdown**"):
+            strict_line = line
+            break
+
+    tiers: Dict[str, int] = {}
+    for key, pattern in {
+        "machine": r"(\d+)\s+machine-level",
+        "iterative_cross_fit": r"(\d+)\s+iterative/cross-fit",
+        "moderate": r"(\d+)\s+moderate",
+        "methodological": r"(\d+)\s+methodological/T4",
+    }.items():
+        match = re.search(pattern, strict_line)
+        if match:
+            tiers[key] = int(match.group(1))
+
+    modules: List[Dict[str, Any]] = []
+    tool_evidence: Dict[str, List[Dict[str, Any]]] = {}
+    for raw_block in text.split("\n## Module ")[1:]:
+        header, _, rest = raw_block.partition("\n")
+        module = header.strip()
+        row: Dict[str, Any] = {"module": module}
+        for key in (
+            "strictness_tier",
+            "method",
+            "formula",
+            "vcov",
+            "stata_command",
+            "validation_tier",
+            "reference_backend",
+            "parity_note",
+            "se_note",
+            "bandwidth_parity_note",
+            "native_note",
+            "stata_bridge_status",
+        ):
+            value = _unquote_markdown_value(_field(rest, key))
+            if value:
+                row[key] = value
+        modules.append(row)
+        evidence = {
+            k: row[k]
+            for k in (
+                "module",
+                "strictness_tier",
+                "method",
+                "stata_command",
+                "reference_backend",
+                "parity_note",
+            )
+            if k in row
+        }
+        for alias in _parity_tool_aliases(module):
+            tool_evidence.setdefault(alias, []).append(evidence)
+
+    return {
+        "available": True,
+        "artifact": rel,
+        "strictness_tiers": tiers,
+        "module_count": len(modules),
+        "modules": modules,
+        "tool_evidence": tool_evidence,
+        "caution": (
+            "Summary of committed Python/R/Stata artifacts. This is not a "
+            "live Stata/R execution, and methodological convention gaps "
+            "should be preserved in downstream claims."
+        ),
+    }
+
+
 # ----------------------------------------------------------------------
 # Handlers
 # ----------------------------------------------------------------------
@@ -209,6 +407,16 @@ def handle_resources_list(params: Dict[str, Any]) -> Dict[str, Any]:
                 "citations / error …). Each tool's "
                 "outputSchema points here for the full "
                 "field-by-field reference.",
+            },
+            {
+                "uri": PARITY_TRACK_A_URI,
+                "name": "StatsPAI Track A parity summary",
+                "mimeType": "application/json",
+                "description": "Machine-readable summary of committed "
+                "Python/R/Stata parity evidence: strictness-tier counts, "
+                "module ids, Stata commands, and convention notes where "
+                "available. This summarizes artifacts; it is not a live "
+                "external Stata/R run.",
             },
         ],
     }
@@ -272,6 +480,20 @@ def handle_resources_read(
                     "mimeType": "application/json",
                     "text": json.dumps(
                         _clean(_result_output_schema()),
+                        default=json_default,
+                        allow_nan=False,
+                    ),
+                },
+            ],
+        }
+    if uri == PARITY_TRACK_A_URI:
+        return {
+            "contents": [
+                {
+                    "uri": uri,
+                    "mimeType": "application/json",
+                    "text": json.dumps(
+                        _clean(track_a_parity_summary()),
                         default=json_default,
                         allow_nan=False,
                     ),
@@ -404,9 +626,11 @@ def handle_resources_templates_list(params: Dict[str, Any]) -> Dict[str, Any]:
 __all__ = [
     "FUNCTION_URI_PREFIX",
     "RESULT_URI_PREFIX",
+    "PARITY_TRACK_A_URI",
     "catalog_text",
     "functions_index",
     "function_detail",
+    "track_a_parity_summary",
     "handle_resources_list",
     "handle_resources_read",
     "handle_resources_templates_list",

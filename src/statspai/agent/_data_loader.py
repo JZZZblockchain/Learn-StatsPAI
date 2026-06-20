@@ -18,9 +18,12 @@ repeated tools/call invocations on the same file are O(1).
 
 from __future__ import annotations
 
+import hashlib
 import functools
 import os
-from typing import TYPE_CHECKING, List, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from urllib.parse import unquote, urlparse, urlunparse
 
 from ..exceptions import MethodIncompatibility
 
@@ -47,6 +50,69 @@ def max_data_bytes() -> int:
 
 def is_remote_url(path: str) -> bool:
     return path.startswith(("s3://", "gs://", "https://", "http://", "file://"))
+
+
+def _sanitize_url(url: str) -> str:
+    """Drop query/fragment tokens before echoing a remote URL to clients."""
+    parsed = urlparse(url)
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+
+@functools.lru_cache(maxsize=8)
+def _sha256_file(path: str, mtime_ns: int, size: int) -> str:
+    # mtime_ns and size are cache keys; the reader only needs the path.
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def data_provenance(
+    path: str,
+    columns: Optional[List[str]] = None,
+    sample_n: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Return a compact provenance record for an MCP ``data_path``.
+
+    Local files get size, mtime, and a full SHA-256 hash. Remote URLs are
+    deliberately not hashed by StatsPAI because the bytes may require
+    provider-specific auth and repeated downloads; the sanitized URL is
+    still recorded so table notes can point back to the upstream source.
+    """
+    parsed = urlparse(path)
+    scheme = parsed.scheme or "file"
+    suffix_source = unquote(parsed.path) if parsed.path else path
+    out: Dict[str, Any] = {
+        "source": path if scheme == "file" and not parsed.netloc else _sanitize_url(path),
+        "scheme": scheme,
+        "source_type": "local" if scheme == "file" else "remote",
+        "format": Path(suffix_source).suffix.lower().lstrip("."),
+    }
+    if columns:
+        out["columns_requested"] = list(columns)
+    if sample_n is not None:
+        out["sample_n"] = int(sample_n)
+        out["sample_seed"] = 0
+
+    if scheme != "file":
+        out["hash_status"] = "not_hashed_remote"
+        return out
+
+    local_path = unquote(parsed.path) if parsed.scheme == "file" else path
+    try:
+        stat = os.stat(local_path)
+        sha256 = _sha256_file(local_path, stat.st_mtime_ns, stat.st_size)
+    except OSError as e:
+        out["hash_status"] = f"unavailable: {type(e).__name__}"
+        return out
+
+    out["source"] = local_path
+    out["size_bytes"] = stat.st_size
+    out["mtime_ns"] = stat.st_mtime_ns
+    out["sha256"] = sha256
+    out["hash_status"] = "sha256"
+    return out
 
 
 def load_dataframe(
@@ -202,5 +268,6 @@ __all__ = [
     "DEFAULT_MAX_DATA_BYTES",
     "max_data_bytes",
     "is_remote_url",
+    "data_provenance",
     "load_dataframe",
 ]
