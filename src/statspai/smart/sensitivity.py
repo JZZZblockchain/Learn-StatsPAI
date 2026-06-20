@@ -92,6 +92,34 @@ class SensitivityDashboard:
         return "\n".join(lines)
 
 
+def _linear_design(result: Any) -> Optional[tuple]:
+    """Return ``(X, y, var_names)`` from a result's stored linear design, or
+    ``None`` when it does not expose a plain ``X``/``y`` an OLS re-fit can act
+    on (e.g. CausalResult families that carry no design matrix)."""
+    di = getattr(result, "data_info", {}) or {}
+    X, y, names = di.get("X"), di.get("y"), di.get("var_names")
+    if X is None or y is None or names is None:
+        return None
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float).ravel()
+    if X.ndim != 2 or X.shape[0] != y.shape[0] or X.shape[0] < 3:
+        return None
+    return X, y, list(names)
+
+
+def _refit_coef(
+    X: np.ndarray, y: np.ndarray, j: int, rows: np.ndarray
+) -> Optional[float]:
+    """Real OLS re-fit of coefficient ``j`` on ``rows``; ``None`` if singular."""
+    try:
+        beta, *_ = np.linalg.lstsq(X[rows], y[rows], rcond=None)
+    except np.linalg.LinAlgError:
+        return None
+    if j >= beta.shape[0] or not np.isfinite(beta[j]):
+        return None
+    return float(beta[j])
+
+
 def sensitivity_dashboard(
     result: Any,
     data: Optional[pd.DataFrame] = None,
@@ -145,6 +173,10 @@ def sensitivity_dashboard(
     # `.se`, (2) EconometricResults `.params` / `.std_errors`,
     # (3) PrincipalStratResult (which has neither) — pull the top
     # row of `.effects` instead.
+    # ``baseline_key`` is the name of the coefficient ``baseline_est``
+    # represents; it is set only on the regression (``.params``) paths so the
+    # subsample / outlier dimensions can re-fit *the same* coefficient.
+    baseline_key: Optional[str] = None
     if hasattr(result, 'estimate') and not isinstance(
         getattr(result, 'estimate', None), pd.Series
     ):
@@ -164,18 +196,27 @@ def sensitivity_dashboard(
         else:
             baseline_est, baseline_se = 0.0, 0.0
     elif hasattr(result, 'params') and len(result.params) > 1:
-        # Use first non-constant coefficient
-        non_const = [k for k in result.params.index if k != '_cons']
+        # Use first non-constant coefficient. Exclude every common intercept
+        # name — Stata's ``_cons``, patsy's ``Intercept`` and statsmodels'
+        # ``const`` — so the dashboard analyses the first real regressor
+        # (e.g. the treatment) rather than the intercept.
+        non_const = [
+            k for k in result.params.index
+            if str(k) not in ('_cons', 'Intercept', 'const')
+        ]
         if non_const:
             key = non_const[0]
             baseline_est = result.params[key]
             baseline_se = result.std_errors[key]
+            baseline_key = str(key)
         else:
             baseline_est = result.params.iloc[0]
             baseline_se = result.std_errors.iloc[0]
+            baseline_key = str(result.params.index[0])
     else:
         baseline_est = result.params.iloc[0]
         baseline_se = result.std_errors.iloc[0]
+        baseline_key = str(result.params.index[0])
 
     z_crit = 1.96
     baseline = {
@@ -185,6 +226,26 @@ def sensitivity_dashboard(
                baseline_est + z_crit * baseline_se),
         'significant': abs(baseline_est / baseline_se) > z_crit if baseline_se > 0 else False,
     }
+
+    # Real OLS re-fit support for the subsample / outlier dimensions. We can
+    # genuinely re-estimate the headline coefficient only when the result
+    # exposes a plain linear design (``data_info['X']``/``'y'``) whose OLS fit
+    # reproduces ``baseline_est``. The self-consistency check below fails for
+    # weighted / IV / non-linear results, in which case those dimensions are
+    # skipped (not applicable) rather than fabricated.
+    _refit_X: Optional[np.ndarray] = None
+    _refit_y: Optional[np.ndarray] = None
+    _refit_j: Optional[int] = None
+    _design = _linear_design(result)
+    if _design is not None and baseline_key is not None:
+        _dX, _dy, _dnames = _design
+        if baseline_key in _dnames:
+            _j = _dnames.index(baseline_key)
+            _full = _refit_coef(_dX, _dy, _j, np.arange(_dy.shape[0]))
+            if _full is not None and np.isclose(
+                _full, float(baseline_est), rtol=1e-4, atol=1e-6
+            ):
+                _refit_X, _refit_y, _refit_j = _dX, _dy, _j
 
     # Resolve a human-readable method label. Sprint-B CausalResult
     # objects store the label on ``.method`` (e.g. "Proximal Causal
@@ -226,71 +287,70 @@ def sensitivity_dashboard(
             dimensions.append('monotonicity')
 
     if data is not None:
-        n = len(data)
-
-        if 'sample' in dimensions:
-            # Random subsample sensitivity
+        if 'sample' in dimensions and _refit_j is not None:
+            # Subsample sensitivity via a *genuine* OLS re-fit of the headline
+            # coefficient on 20 draws of 80% of the rows. Only runs when the
+            # result exposes a plain linear design (see the ``_refit_j`` guard);
+            # for other result types the dimension is not applicable and is
+            # skipped rather than fabricated.
+            assert _refit_X is not None and _refit_y is not None
             rng = np.random.default_rng(42)
+            m = _refit_y.shape[0]
             subsample_ests = []
             for _ in range(20):
-                idx = rng.choice(n, size=int(n * 0.8), replace=False)
-                try:
-                    sub_data = data.iloc[idx]
-                    # Try to re-estimate
-                    import statspai as sp
-                    if hasattr(result, 'model_info') and 'formula' in str(result.model_info):
-                        pass  # Complex re-estimation
-                    # Simple: just use the params and bootstrap-like variation
-                    subsample_ests.append(
-                        baseline_est + rng.normal(0, baseline_se))
-                except Exception:
-                    continue
+                idx = rng.choice(m, size=max(int(m * 0.8), 2), replace=False)
+                est = _refit_coef(_refit_X, _refit_y, _refit_j, idx)
+                if est is not None:
+                    subsample_ests.append(est)
 
             if subsample_ests:
                 ests = np.array(subsample_ests)
+                mean_abs = max(abs(float(np.mean(ests))), 1e-10)
                 dim_results.append({
                     'dimension': 'Sample stability (80% subsamples)',
                     'n_variations': len(ests),
-                    'min_est': ests.min(),
-                    'max_est': ests.max(),
-                    'sign_stable': np.mean(np.sign(ests) == np.sign(baseline_est)),
-                    'sig_stable': np.mean(np.abs(ests / baseline_se) > z_crit),
-                    'stable': np.std(ests) / max(abs(np.mean(ests)), 1e-10) < 0.5,
-                    'remedy': 'Results are sample-dependent. Consider larger sample or bootstrap CI.',
+                    'min_est': float(ests.min()),
+                    'max_est': float(ests.max()),
+                    'sign_stable': float(
+                        np.mean(np.sign(ests) == np.sign(baseline_est))),
+                    'sig_stable': float(
+                        np.mean(np.abs(ests / baseline_se) > z_crit)
+                    ) if baseline_se > 0 else 0.0,
+                    'stable': bool(float(np.std(ests)) / mean_abs < 0.5),
+                    'remedy': 'Results are sample-dependent. Consider a '
+                              'larger sample or bootstrap CI.',
                 })
 
-        if 'outliers' in dimensions:
-            # Remove top/bottom 1%, 5% of outcome
-            try:
-                y_col = getattr(result, 'data_info', {}).get('dep_var', None)
-                if y_col and y_col in data.columns:
-                    y_vals = data[y_col].values
-                    outlier_ests = []
-                    for pct in [1, 2, 5]:
-                        low, high = np.percentile(y_vals, [pct, 100-pct])
-                        mask = (y_vals >= low) & (y_vals <= high)
-                        # Approximate effect on estimate
-                        frac_removed = 1 - mask.mean()
-                        outlier_ests.append(baseline_est * (1 + np.random.normal(0, frac_removed)))
+        if 'outliers' in dimensions and _refit_j is not None:
+            # Outcome-outlier sensitivity via a *genuine* OLS re-fit after
+            # trimming the outcome's tails at 1 / 2 / 5%. Only runs with a
+            # plain linear design; skipped (not applicable) otherwise.
+            assert _refit_X is not None and _refit_y is not None
+            outlier_ests = []
+            for pct in [1, 2, 5]:
+                low, high = np.percentile(_refit_y, [pct, 100 - pct])
+                rows = np.where((_refit_y >= low) & (_refit_y <= high))[0]
+                if rows.size >= _refit_X.shape[1] + 1:
+                    est = _refit_coef(_refit_X, _refit_y, _refit_j, rows)
+                    if est is not None:
+                        outlier_ests.append(est)
 
-                    if outlier_ests:
-                        ests = np.array(outlier_ests)
-                        dim_results.append({
-                            'dimension': 'Outlier sensitivity (trimming)',
-                            'n_variations': len(ests),
-                            'min_est': min(ests.min(), baseline_est),
-                            'max_est': max(ests.max(), baseline_est),
-                            'sign_stable': np.mean(np.sign(ests) == np.sign(baseline_est)),
-                            'sig_stable': 1.0,
-                            'stable': True,
-                            'remedy': 'Use sp.winsor() to winsorize outliers.',
-                        })
-            except Exception as exc:
-                record_degradation(
-                    None,
-                    section="sensitivity_dashboard: outlier dimension",
-                    exc=exc,
-                )
+            if outlier_ests:
+                ests = np.array(outlier_ests)
+                mean_abs = max(abs(float(np.mean(ests))), 1e-10)
+                dim_results.append({
+                    'dimension': 'Outlier sensitivity (trimming)',
+                    'n_variations': len(ests),
+                    'min_est': float(min(ests.min(), baseline_est)),
+                    'max_est': float(max(ests.max(), baseline_est)),
+                    'sign_stable': float(
+                        np.mean(np.sign(ests) == np.sign(baseline_est))),
+                    'sig_stable': float(
+                        np.mean(np.abs(ests / baseline_se) > z_crit)
+                    ) if baseline_se > 0 else 0.0,
+                    'stable': bool(float(np.std(ests)) / mean_abs < 0.5),
+                    'remedy': 'Use sp.winsor() to winsorize outliers.',
+                })
 
     if 'unobservables' in dimensions:
         # Oster-style sensitivity
@@ -359,58 +419,35 @@ def sensitivity_dashboard(
             })
 
     # MSM: sweep trim quantile and report how the marginal coefficient
-    # moves. Re-fits are cheap on typical panel sizes.
+    # MSM: report a weight-POSITIVITY readiness check. This is a positivity
+    # diagnostic (max stabilized weight), NOT a coefficient trim-sweep: a
+    # genuine sweep would have to re-fit the MSM at several trim levels, which
+    # the result object does not carry enough state to reproduce. We therefore
+    # surface only the real, already-computed ``sw_max`` signal and tie every
+    # reported flag to it, rather than fabricating a coefficient sweep.
     if 'marginal structural' in _method_low and (
         'trim_sweep' in dimensions or dimensions is None or 'msm' in dimensions
     ):
-        try:
-            import statspai as sp
-            # Re-fit at a grid of trim values. Recover the original
-            # call args from model_info / stored attributes. If we
-            # don't have enough context, skip gracefully.
-            _id = _info.get('cluster_var')
-            if _id and data is not None:
-                trim_grid = [0.0, 0.01, 0.02, 0.05]
-                _ests: list = []
-                for t in trim_grid:
-                    try:
-                        # We reach into the Sprint-B interface with
-                        # minimal assumptions: y / treat / id / time /
-                        # time_varying / baseline are all knowable
-                        # from model_info['coef_table'] + the panel
-                        # columns. If any piece is missing, bail.
-                        # (This is best-effort; advanced users should
-                        # re-fit manually for precise sweeps.)
-                        pass
-                    except Exception:
-                        break
-                # We can at least report the observed trim / sw_max
-                # stability as a proxy for sensitivity without a full
-                # re-fit; flag unstable when sw_max > 50 (the same
-                # positivity watchdog threshold as the diagnostic
-                # battery).
-                sw_max = _info.get('sw_max', 0.0)
-                dim_results.append({
-                    'dimension': 'MSM weight stability (trim readiness)',
-                    'n_variations': 1,
-                    'min_est': baseline_est,
-                    'max_est': baseline_est,
-                    'sign_stable': 1.0,
-                    'sig_stable': 1.0,
-                    'stable': float(sw_max) < 50.0,
-                    'remedy': (
-                        f'Max stabilized weight = {float(sw_max):.2f}. '
-                        + ('Positivity OK.' if float(sw_max) < 50.0
-                           else 'Extreme weight — re-fit with '
-                                'trim_per_period=True.')
-                    ),
-                })
-        except Exception as exc:
-            record_degradation(
-                None,
-                section="sensitivity_dashboard: MSM weight-stability dimension",
-                exc=exc,
-            )
+        _id = _info.get('cluster_var')
+        if _id and data is not None:
+            sw_max = float(_info.get('sw_max', 0.0))
+            _positivity_ok = sw_max < 50.0
+            dim_results.append({
+                'dimension': 'MSM weight stability (trim readiness)',
+                'n_variations': 1,
+                'min_est': baseline_est,
+                'max_est': baseline_est,
+                'sign_stable': 1.0 if _positivity_ok else 0.0,
+                'sig_stable': 1.0 if _positivity_ok else 0.0,
+                'stable': _positivity_ok,
+                'remedy': (
+                    f'Positivity check only (no coefficient sweep): max '
+                    f'stabilized weight = {sw_max:.2f}. '
+                    + ('Weights well-behaved.' if _positivity_ok
+                       else 'Extreme weight — re-fit with trim_per_period=True '
+                            'and compare estimates manually.')
+                ),
+            })
 
     # Principal stratification: flag monotonicity violation fraction
     # as its own sensitivity dimension (diagnostic-style, not a sweep).
