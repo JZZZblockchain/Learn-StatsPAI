@@ -12053,10 +12053,14 @@ _API_STABLE_TEST_EVIDENCE: Dict[str, List[str]] = {
     # numerical estimators.  Keep their validation_status at "api_stable" so
     # they do not inflate the JSS certified/validated denominator.
     "anthropic_client": ["tests/test_api_stable_evidence.py"],
+    "cross_validate": ["tests/test_cross_validate.py"],
     "dag_example": ["tests/test_api_stable_evidence.py"],
     "dag_recommend_estimator": ["tests/test_api_stable_evidence.py"],
     "echo_client": ["tests/test_api_stable_evidence.py"],
     "evidence_without_injustice": ["tests/test_api_stable_evidence.py"],
+    "from_fred": ["tests/test_ingest.py"],
+    "from_sdmx": ["tests/test_ingest.py"],
+    "from_worldbank": ["tests/test_ingest.py"],
     "gformula_ice_fn": ["tests/test_api_stable_evidence.py"],
     "openai_client": ["tests/test_api_stable_evidence.py"],
     "panel_compare": ["tests/test_api_stable_evidence.py"],
