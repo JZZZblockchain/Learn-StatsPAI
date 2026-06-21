@@ -268,6 +268,21 @@ def its(
         }
     )
 
+    # Fitted series and the no-intervention counterfactual: the counterfactual
+    # is the fitted model with the level-change and slope-change contributions
+    # removed (the pre-period trend and any seasonality continue unchanged).
+    # This backs the documented counterfactual plot and the shared
+    # ``sp.counterfactual_data`` / ``sp.counterfactual_plot`` contract.
+    fitted = X @ beta
+    counterfactual = fitted - beta[idx_level] * D - beta[idx_slope] * t_post
+    detail = {
+        "time": t,
+        "observed": Y,
+        "fitted": fitted,
+        "counterfactual": counterfactual,
+        "post": D.astype(bool),
+    }
+
     _result = ITSResult(
         level_change=level,
         slope_change=slope,
@@ -280,6 +295,7 @@ def its(
         coefficients=coef_df,
         n_obs=n,
         intervention_time=int(intervention),
+        detail=detail,
     )
     try:
         from ..output._lineage import attach_provenance as _attach_prov

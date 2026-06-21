@@ -375,6 +375,21 @@ class BayesianCausalResult:
         )
         return "\n".join(lines)
 
+    def effect_summary(
+        self,
+        *,
+        rope: Any = None,
+        sesoi: Optional[float] = None,
+        alpha: Optional[float] = None,
+        direction: str = "two-sided",
+    ) -> Any:
+        """Return a table-plus-text posterior effect summary."""
+        from ..core.effect_summary import bayesian_effect_summary
+
+        return bayesian_effect_summary(
+            self, rope=rope, sesoi=sesoi, alpha=alpha, direction=direction
+        )
+
     @staticmethod
     def _jsonable(value: Any) -> Any:
         """Coerce posterior payload values to strict JSON-safe primitives."""

@@ -2603,6 +2603,26 @@ class CausalResult:
 
         return decision_summary(self, rope=rope, sesoi=sesoi, alpha=alpha)
 
+    def effect_summary(
+        self,
+        *,
+        rope: Any = None,
+        sesoi: Optional[float] = None,
+        alpha: Optional[float] = None,
+        direction: str = "two-sided",
+    ) -> Any:
+        """Return a table-plus-text causal effect summary.
+
+        This is the stable cross-estimator summary surface for agents and
+        reports.  For frequentist ``CausalResult`` objects it delegates to
+        :meth:`decision_summary`, so ROPE / SESOI semantics and verdict codes
+        stay in one place.  ``direction`` is accepted for API parity with
+        Bayesian results and currently ignored.
+        """
+        from .effect_summary import causal_effect_summary
+
+        return causal_effect_summary(self, rope=rope, sesoi=sesoi, alpha=alpha)
+
     def to_dict(
         self, *, detail_head: int = 5, detail: str = "standard"
     ) -> Dict[str, Any]:

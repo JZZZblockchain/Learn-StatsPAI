@@ -170,6 +170,101 @@ def _coerce_optional_column_list(value: Any, name: str) -> Optional[List[str]]:
     return _coerce_column_list(value, name, allow_empty=True)
 
 
+def _rdrobust_bayes_engine(
+    data: pd.DataFrame,
+    *,
+    y: str,
+    x: str,
+    c: float,
+    fuzzy: Optional[str],
+    deriv: int,
+    p: int,
+    q: Optional[int],
+    kernel: str,
+    bwselect: str,
+    h: Optional[Bandwidth],
+    b: Optional[Bandwidth],
+    rho: Optional[float],
+    covs: Optional[List[str]],
+    cluster: Optional[str],
+    donut: float,
+    weights: Optional[str],
+    bootstrap: Optional[str],
+    alpha: float,
+    random_state: Optional[int],
+) -> "CausalResult":
+    """Route ``rdrobust(..., engine='bayes')`` to the Bayesian sharp-RD path.
+
+    The Bayesian estimator (:func:`statspai.bayes.bayes_rd`) is a sharp-RD
+    local-polynomial model with priors on the jump; it has no analogue for the
+    bias-correction / kernel / bandwidth-selection machinery, fuzzy IV, RKD,
+    covariates, clustering, weights, or bootstrap. Rather than silently drop
+    those options we fail loud and point to the right tool, then forward the
+    shared arguments with sensible NUTS defaults. For full prior / sampler
+    control, call ``sp.bayes_rd`` directly.
+    """
+    _unsupported = []
+    if fuzzy is not None:
+        _unsupported.append("fuzzy (use sp.bayes_fuzzy_rd)")
+    if deriv != 0:
+        _unsupported.append("deriv!=0 / RKD (use engine='ols')")
+    if q is not None:
+        _unsupported.append("q (bias-correction order)")
+    if b is not None:
+        _unsupported.append("b (bias bandwidth)")
+    if rho is not None:
+        _unsupported.append("rho")
+    if covs is not None:
+        _unsupported.append("covs")
+    if cluster is not None:
+        _unsupported.append("cluster")
+    if weights is not None:
+        _unsupported.append("weights")
+    if bootstrap is not None:
+        _unsupported.append("bootstrap")
+    if donut:
+        _unsupported.append("donut")
+    if kernel != "triangular":
+        _unsupported.append("kernel (bayes_rd uses a uniform-window prior fit)")
+    if bwselect != "mserd":
+        _unsupported.append("bwselect (bayes_rd takes a fixed bandwidth=)")
+    if _unsupported:
+        raise ValueError(
+            "engine='bayes' does not support these rdrobust options: "
+            + ", ".join(_unsupported)
+            + ". Drop them, or use engine='ols' / call sp.bayes_rd directly."
+        )
+
+    # Bandwidth: bayes_rd accepts a fixed numeric window only. A string here
+    # (a bwselect alias passed via h=) has no Bayesian analogue.
+    bandwidth: Optional[float]
+    if h is None:
+        bandwidth = None
+    elif isinstance(h, (int, float)) and not isinstance(h, bool):
+        bandwidth = float(h)
+    else:
+        raise ValueError(
+            "engine='bayes' needs a numeric h= (fixed bandwidth) or h=None; "
+            f"got h={h!r}. Data-driven bandwidth selection is OLS-only."
+        )
+
+    from ..bayes import bayes_rd
+
+    kwargs = {
+        "data": data,
+        "y": y,
+        "running": x,
+        "cutoff": float(c),
+        "poly": int(p),
+        "hdi_prob": 1.0 - float(alpha),
+    }
+    if bandwidth is not None:
+        kwargs["bandwidth"] = bandwidth
+    if random_state is not None:
+        kwargs["random_state"] = int(random_state)
+    return bayes_rd(**kwargs)
+
+
 # ======================================================================
 # Public API
 # ======================================================================
@@ -199,6 +294,7 @@ def rdrobust(
     random_state: Optional[int] = None,
     warn_mass_points: bool = True,
     warn_weak_first_stage: bool = True,
+    engine: str = "ols",
 ) -> CausalResult:
     """
     Local polynomial RD estimation with robust bias-corrected inference.
@@ -254,6 +350,15 @@ def rdrobust(
         ``b = h / rho``.  Common choices: ``rho=1`` (default, no
         oversmoothing), ``rho=0.5–1`` (mild oversmoothing reduces CI
         length).  Mutually exclusive with explicit ``b``.
+
+        .. note::
+           The default ``rho=1`` (``b = h``) reproduces the exact
+           Calonico–Cattaneo–Titiunik (2014) bias-corrected estimator and its
+           robust variance. For ``rho != 1`` (``b != h``) the "Robust" row is
+           currently the standalone order-``(p+1)`` fit at ``b`` rather than
+           ``μ̂_p(h) − bias(b)``; the two coincide only at ``b = h``, so the
+           bias-corrected **point** and SE differ slightly from R ``rdrobust``
+           when ``b != h``. Keep ``rho=1`` for the canonical CCT construction.
     covs : list of str, optional
         Covariate names for covariate-adjusted RD estimation.
         Covariates are included in the local polynomial regression
@@ -287,6 +392,16 @@ def rdrobust(
         the first-stage discontinuity F-statistic is below 10,
         recommending the bias-aware fuzzy CI of Noack & Rothe (2024)
         and the ITT report of Kaliski-Keane-Neal (2025).
+    engine : {'ols', 'bayes'}, default 'ols'
+        Inference backend for the same sharp-RD design. ``'ols'`` (default)
+        is the frequentist CCT local-polynomial estimator described above.
+        ``'bayes'`` routes to :func:`statspai.bayes.bayes_rd` (priors on the
+        jump, full posterior + HDI; requires the ``bayes`` extra) and returns
+        a :class:`~statspai.bayes.BayesianCausalResult`. Bias-correction,
+        kernel / bandwidth-selection, fuzzy, RKD, covariate, cluster, weight
+        and bootstrap options are OLS-only — setting them with
+        ``engine='bayes'`` raises. For full prior / sampler control call
+        ``sp.bayes_rd`` directly.
 
     Returns
     -------
@@ -329,6 +444,32 @@ def rdrobust(
     nonparametric confidence intervals for regression-discontinuity designs.
     *Econometrica*. [@calonico2014robust]
     """
+    if engine not in ("ols", "bayes"):
+        raise ValueError(f"engine must be 'ols' or 'bayes'; got {engine!r}.")
+    if engine == "bayes":
+        return _rdrobust_bayes_engine(
+            data,
+            y=y,
+            x=x,
+            c=c,
+            fuzzy=fuzzy,
+            deriv=deriv,
+            p=p,
+            q=q,
+            kernel=kernel,
+            bwselect=bwselect,
+            h=h,
+            b=b,
+            rho=rho,
+            covs=covs,
+            cluster=cluster,
+            donut=donut,
+            weights=weights,
+            bootstrap=bootstrap,
+            alpha=alpha,
+            random_state=random_state,
+        )
+
     _VALID_BW = {
         "mserd",
         "msetwo",

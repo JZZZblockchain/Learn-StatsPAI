@@ -22,6 +22,7 @@ from .brief import brief
 from .citations import bib_for, render_citation
 from .detect_design import detect_design
 from .examples import examples
+from .intake import IntakeResult, design_intake
 from .preflight import preflight
 from .session import session
 from .sensitivity import sensitivity_dashboard, SensitivityDashboard
@@ -51,6 +52,8 @@ __all__ = [
     "brief",
     "detect_design",
     "examples",
+    "IntakeResult",
+    "design_intake",
     "preflight",
     "render_citation",
     "session",

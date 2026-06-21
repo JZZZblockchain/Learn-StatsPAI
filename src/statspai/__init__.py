@@ -31,6 +31,7 @@ from ._citation import citation
 __citation__ = citation("bibtex")
 
 from .core.results import EconometricResults, CausalResult
+from .core.effect_summary import EffectSummary, effect_summary  # noqa: E402
 
 # Agent-native exception taxonomy (load early for registered estimators)
 from . import exceptions as exceptions  # noqa: F401
@@ -458,6 +459,7 @@ from .iv.continuous_late import continuous_iv_late, ContinuousLATEResult
 # Modern IV reporting bundle (post-2022 standard) — top-level for ergonomics.
 from .iv.iv_diag import iv_diag, iv_compare, IVDiagResult
 from .plots import binscatter, set_theme, list_themes, use_chinese
+from .plots import counterfactual_data, counterfactual_plot
 from .utils import (
     label_var,
     label_vars,
@@ -982,6 +984,8 @@ from .qte import (
 from .smart import (
     recommend,
     RecommendationResult,
+    design_intake,
+    IntakeResult,
     compare_estimators,
     ComparisonResult,
     assumption_audit,
@@ -1059,6 +1063,8 @@ __all__ = [
     # Core
     "EconometricResults",
     "CausalResult",
+    "EffectSummary",
+    "effect_summary",
     # Agent-native exception taxonomy
     "exceptions",
     "StatsPAIError",
@@ -1291,6 +1297,8 @@ __all__ = [
     "write_bib",
     # Plots
     "binscatter",
+    "counterfactual_data",
+    "counterfactual_plot",
     "set_theme",
     "list_themes",
     "use_chinese",
@@ -1720,6 +1728,8 @@ __all__ = [
     # === Smart Workflow Engine ===
     "recommend",
     "RecommendationResult",
+    "design_intake",
+    "IntakeResult",
     "check_identification",
     "IdentificationReport",
     "DiagnosticFinding",

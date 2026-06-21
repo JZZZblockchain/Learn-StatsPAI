@@ -13,6 +13,7 @@ Provides publication-quality academic plots:
 from typing import Any
 
 from .binscatter import binscatter
+from .counterfactual import counterfactual_data, counterfactual_plot
 from .themes import set_theme, list_themes, use_chinese, _register_cjk_fallback
 
 
@@ -113,6 +114,8 @@ _install_cjk_pyplot_hook()
 
 __all__ = [
     "binscatter",
+    "counterfactual_data",
+    "counterfactual_plot",
     "set_theme",
     "list_themes",
     "use_chinese",
