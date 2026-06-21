@@ -463,7 +463,7 @@ def bib_for(result: Any) -> Dict[str, Any]:
             payload = cite_fn(**{kw: "json"})
             if isinstance(payload, dict):
                 return payload
-        except Exception:
+        except (AttributeError, KeyError, TypeError, ValueError):
             pass
     bibtex = cite_fn()
     return cast(Dict[str, Any], render_citation(bibtex, fmt="json"))

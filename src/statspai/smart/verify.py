@@ -118,7 +118,7 @@ def _extract_estimate(result: Any, treat_name: Optional[str] = None) -> Optional
             arr = np.asarray(val).ravel()
             if arr.size == 1:
                 return float(arr[0])
-        except Exception:
+        except (TypeError, ValueError):
             pass
 
     # EconometricResults path: params is a pandas Series indexed by name
@@ -148,7 +148,7 @@ def _extract_pvalue(result: Any, treat_name: Optional[str] = None) -> Optional[f
             arr = np.asarray(val).ravel()
             if arr.size == 1:
                 return float(arr[0])
-        except Exception:
+        except (TypeError, ValueError):
             pass
 
     pvalues = getattr(result, "pvalues", None)

@@ -70,7 +70,7 @@ GENERIC_EXCEPTIONS = {
 # v1.17.x doc/API-surface hardening adds one more idiomatic defensive raise.
 # Keep the ratchet at the current audited count while taxonomy raises remain 76.
 GENERIC_RAISE_MAX = 1902
-BROAD_EXCEPT_MAX = 589
+BROAD_EXCEPT_MAX = 586
 TAXONOMY_RAISE_MIN = 42
 
 
