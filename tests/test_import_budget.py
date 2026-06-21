@@ -1,6 +1,7 @@
 """Cold-import budget checks for top-level ``import statspai``."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -8,6 +9,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 QUALITY_GATE = REPO_ROOT / "scripts" / "quality_gate.py"
+
+
+def _load_quality_gate_module():
+    spec = importlib.util.spec_from_file_location("statspai_quality_gate", QUALITY_GATE)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _run_python(code: str) -> subprocess.CompletedProcess[str]:
@@ -28,6 +39,25 @@ def test_import_budget_quality_gate_passes() -> None:
     )
     assert res.returncode == 0, res.stdout + res.stderr
     assert "import-budget: observed=0 baseline=0" in res.stdout
+
+
+def test_mypy_config_warning_fails_quality_gate(monkeypatch) -> None:
+    quality_gate = _load_quality_gate_module()
+
+    class Proc:
+        returncode = 0
+        stdout = (
+            "pyproject.toml: [mypy]: python_version: Python 3.9 is not "
+            "supported (must be 3.10 or higher)\n"
+        )
+
+    monkeypatch.setattr(quality_gate, "_run", lambda cmd: Proc())
+
+    result = quality_gate.run_mypy(max_errors=0)
+
+    assert result.count == 0
+    assert result.command_failed is True
+    assert result.passed is False
 
 
 def test_plain_import_keeps_heavy_optional_modules_lazy() -> None:

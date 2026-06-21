@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from typing import Optional, Sequence
 
 
-DEFAULT_FLAKE8_MAX = 4698
-DEFAULT_MYPY_MAX = 3521
+DEFAULT_FLAKE8_MAX = 1006
+DEFAULT_MYPY_MAX = 1058
+MYPY_CONFIG_WARNING_RE = re.compile(r"^.*: \[mypy\]: ", re.MULTILINE)
 FORBIDDEN_IMPORT_PREFIXES = (
     "numba",
     "sklearn",
@@ -101,7 +102,9 @@ def run_mypy(max_errors: int) -> GateResult:
     ]
     proc = _run(cmd)
     count = len(re.findall(r": error:", proc.stdout))
-    command_failed = proc.returncode != 0 and count == 0
+    command_failed = (proc.returncode != 0 and count == 0) or bool(
+        MYPY_CONFIG_WARNING_RE.search(proc.stdout)
+    )
     return GateResult(
         name="mypy",
         count=count,
