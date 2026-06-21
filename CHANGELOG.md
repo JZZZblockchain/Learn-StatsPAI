@@ -4,6 +4,8 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-06-20
+
 ### Added
 
 - **Cross-engine validation (`sp.cross_validate`).** Estimate one model with

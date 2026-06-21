@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional, Union
 
-NodeInput = str | Iterable[str] | None
+NodeInput = Optional[Union[str, Iterable[str]]]
 NodeSet = set[str]
 
 

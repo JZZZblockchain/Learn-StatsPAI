@@ -21,6 +21,8 @@ Sant'Anna, P.H.C. and Zhao, J. (2020).
 *Journal of Econometrics*, 219(1), 101-122.
 """
 
+from __future__ import annotations
+
 from numbers import Real
 from typing import Optional, List, Dict, Tuple, Any, Sequence
 

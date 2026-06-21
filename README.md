@@ -142,6 +142,22 @@ StatsPAI's focus is **causal inference**. The grid below summarizes method-famil
 
 **Validation tiers matter**: `stability="stable"` means the public API is SemVer-stable; it does not by itself mean R/Stata/paper parity. Use `sp.list_functions(validation_status="certified")` for cross-language or published-reference evidence, and inspect `sp.describe_function(name)["limitations"]` before production use. See [`docs/guides/stability.md`](docs/guides/stability.md).
 
+**📦 v1.19.0 (2026-06-20) — cross-engine validation, data-MCP ingestion, and social-network analysis**
+
+StatsPAI 1.19.0 adds `sp.cross_validate`, which runs the same OLS/FE/IV/DML/DiD
+estimand across StatsPAI, pyfixest, linearmodels, DoubleML, R, and Stata when
+available, returning explicit AGREE / PARTIAL / DISAGREE / INSUFFICIENT
+verdicts with provenance and degradation notes. It also ships offline data-MCP
+normalisers (`sp.from_worldbank`, `sp.from_fred`, `sp.from_sdmx`), a numpy/scipy
+social-network stack (`sp.network_graph`, centrality, communities, QAP/MRQAP,
+dyadic regression, ERGM MPLE, canonical datasets, plots), and economist-MCP
+workflow hardening including safe `ivreghdfe` migration. Correctness fixes cover
+`sp.conformal_synth` average-effect p-values and real re-estimation inside
+`sp.sensitivity_dashboard`. Full notes in [`CHANGELOG.md`](CHANGELOG.md) under
+`[1.19.0]`.
+
+---
+
 **📦 v1.18.0 (2026-06-15) — Stata `psmatch2` matching + a no-FE weights correctness fix**
 
 StatsPAI 1.18.0 adds `sp.psmatch2`, a Stata `psmatch2`-faithful propensity-score

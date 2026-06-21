@@ -18,6 +18,8 @@ Provides estimators for:
 - TWFE decomposition — Bacon (2021) + de Chaisemartin–D'Haultfoeuille (2020) weights
 """
 
+from __future__ import annotations
+
 from numbers import Real
 from typing import Any, Literal, Optional, List, Sequence, cast
 
