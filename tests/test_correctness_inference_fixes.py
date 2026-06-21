@@ -20,6 +20,8 @@ docstrings); Imbens & Manski (2004) Econometrica 72(6):1845-1857 was verified
 via Crossref and RePEc/IDEAS.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -167,3 +169,271 @@ class TestLeeBoundsCI:
         z_two = stats.norm.ppf(0.975)
         c_n = _imbens_manski_cn(ub - lb, 1.0, 0.05)  # any sigma>0; width>0 => <z_two
         assert c_n < z_two
+
+
+# ----------------------------------------------------------------------
+# Matching default-SE guidance (JOSS-safe: number unchanged, warning added)
+# ----------------------------------------------------------------------
+class TestMatchingDefaultSEWarning:
+    def _psm_data(self, seed=0, n=400):
+        rng = np.random.default_rng(seed)
+        x1 = rng.normal(size=n)
+        x2 = rng.normal(size=n)
+        d = (rng.uniform(size=n) < 1 / (1 + np.exp(-(0.5 * x1 + 0.3 * x2)))).astype(int)
+        y = 1.0 + 2.0 * d + x1 + 0.5 * x2 + rng.normal(size=n)
+        return pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+
+    def test_default_warns_but_number_unchanged(self):
+        df = self._psm_data()
+        with pytest.warns(UserWarning, match="anti-conservative"):
+            default = sp.match(
+                df, y="y", treat="d", covariates=["x1", "x2"], method="psm"
+            )
+        ai = sp.match(
+            df, y="y", treat="d", covariates=["x1", "x2"], method="psm", se_method="ai"
+        )
+        # JOSS-safe guarantee: the default SE number is identical to 'ai'.
+        assert default.se == pytest.approx(ai.se)
+
+    @staticmethod
+    def _anti_conservative_warned(rec):
+        return any("anti-conservative" in str(w.message) for w in rec)
+
+    def test_explicit_ai_does_not_warn(self):
+        df = self._psm_data()
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sp.match(
+                df,
+                y="y",
+                treat="d",
+                covariates=["x1", "x2"],
+                method="psm",
+                se_method="ai",
+            )
+        # explicit user choice -> no nagging guidance warning
+        assert not self._anti_conservative_warned(rec)
+
+    def test_abadie_imbens_does_not_warn_and_is_larger(self):
+        df = self._psm_data()
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            aimbens = sp.match(
+                df,
+                y="y",
+                treat="d",
+                covariates=["x1", "x2"],
+                method="psm",
+                se_method="abadie_imbens",
+            )
+        assert not self._anti_conservative_warned(rec)
+        ai = sp.match(
+            df, y="y", treat="d", covariates=["x1", "x2"], method="psm", se_method="ai"
+        )
+        # The rigorous SE is finite, positive, and (anti-conservative 'ai'
+        # being too small) generally >= the naive one on this DGP.
+        assert np.isfinite(aimbens.se) and aimbens.se > 0
+        assert aimbens.se >= ai.se - 1e-9
+
+
+# ----------------------------------------------------------------------
+# IV cluster=<Series> no longer crashes; accepts a Series or column name
+# ----------------------------------------------------------------------
+class TestIVClusterSeriesGuard:
+    def _iv_data(self, seed=0, n=600):
+        rng = np.random.default_rng(seed)
+        g = rng.integers(0, 40, n)
+        z = rng.normal(size=n)
+        x = 0.7 * z + rng.normal(size=n)
+        y = 1.0 + 2.0 * x + rng.normal(size=n)
+        return pd.DataFrame({"y": y, "x": x, "z": z, "g": g})
+
+    def test_series_cluster_matches_string_cluster(self):
+        df = self._iv_data()
+        rs = sp.iv("y ~ (x ~ z)", data=df, cluster="g")
+        rser = sp.iv("y ~ (x ~ z)", data=df, cluster=df["g"])
+        # Passing the column as a Series must reproduce the column-name path
+        # exactly (previously the Series raised "truth value ... ambiguous").
+        np.testing.assert_allclose(
+            np.atleast_1d(rs.std_errors), np.atleast_1d(rser.std_errors)
+        )
+
+    def test_length_mismatch_raises_clear_error(self):
+        df = self._iv_data()
+        # A misaligned cluster vector must fail loudly, not silently misalign.
+        with pytest.raises(Exception, match="length"):
+            sp.iv("y ~ (x ~ z)", data=df, cluster=df["g"].iloc[:500])
+
+
+# ----------------------------------------------------------------------
+# gardner_did: opt-in cluster bootstrap SE (default analytic understates)
+# ----------------------------------------------------------------------
+class TestGardnerBootstrapSE:
+    def _panel(self, seed=1, nu=60, nt=6):
+        rng = np.random.default_rng(seed)
+        unit = np.repeat(np.arange(nu), nt)
+        time = np.tile(np.arange(1, nt + 1), nu)
+        cohort = np.where(unit < nu // 2, 4, 0)  # half treated at t=4
+        first = cohort
+        d = ((first > 0) & (time >= first)).astype(float)
+        ui = np.repeat(rng.normal(size=nu), nt)
+        y = ui + 0.3 * time + 2.0 * d + rng.normal(size=nu * nt)
+        return pd.DataFrame({"y": y, "unit": unit, "time": time, "g": first})
+
+    def test_bootstrap_keeps_point_but_widens_se(self):
+        df = self._panel()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            a = sp.gardner_did(
+                df, y="y", group="unit", time="time", first_treat="g", vce="analytic"
+            )
+            b = sp.gardner_did(
+                df,
+                y="y",
+                group="unit",
+                time="time",
+                first_treat="g",
+                vce="bootstrap",
+                n_boot=199,
+                boot_seed=0,
+            )
+        # Bootstrap changes inference only, not the point estimate.
+        assert b.estimate == pytest.approx(a.estimate)
+        # ...and the analytic SE understates, so bootstrap is (weakly) larger.
+        assert b.se >= a.se - 1e-9
+        assert b.model_info["vce"] == "bootstrap"
+
+    def test_analytic_default_warns_bootstrap_does_not(self):
+        df = self._panel()
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sp.gardner_did(df, y="y", group="unit", time="time", first_treat="g")
+        assert any("Stage-1" in str(w.message) for w in rec)
+
+        with warnings.catch_warnings(record=True) as rec2:
+            warnings.simplefilter("always")
+            sp.gardner_did(
+                df,
+                y="y",
+                group="unit",
+                time="time",
+                first_treat="g",
+                vce="bootstrap",
+                n_boot=49,
+            )
+        assert not any("Stage-1" in str(w.message) for w in rec2)
+
+
+# ----------------------------------------------------------------------
+# did_imputation: opt-in cluster bootstrap for the overall-ATT SE
+# ----------------------------------------------------------------------
+class TestDidImputationBootstrapSE:
+    def _panel(self, seed=2, nu=60, nt=6):
+        rng = np.random.default_rng(seed)
+        unit = np.repeat(np.arange(nu), nt)
+        time = np.tile(np.arange(1, nt + 1), nu)
+        first = np.where(unit < nu // 2, 4, 0)
+        d = ((first > 0) & (time >= first)).astype(float)
+        ui = np.repeat(rng.normal(size=nu), nt)
+        y = ui + 0.3 * time + 2.0 * d + rng.normal(size=nu * nt)
+        return pd.DataFrame({"y": y, "unit": unit, "time": time, "g": first})
+
+    def test_bootstrap_keeps_point_but_widens_se(self):
+        df = self._panel()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            a = sp.did_imputation(
+                df, y="y", group="unit", time="time", first_treat="g", vce="analytic"
+            )
+            b = sp.did_imputation(
+                df,
+                y="y",
+                group="unit",
+                time="time",
+                first_treat="g",
+                vce="bootstrap",
+                n_boot=199,
+                boot_seed=0,
+            )
+        assert b.estimate == pytest.approx(a.estimate)
+        assert b.se >= a.se - 1e-9
+        assert b.model_info["vce"] == "bootstrap"
+
+    def test_analytic_default_warns(self):
+        df = self._panel()
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sp.did_imputation(df, y="y", group="unit", time="time", first_treat="g")
+        assert any("anti-conservative" in str(w.message) for w in rec)
+
+
+# ----------------------------------------------------------------------
+# Callaway-Sant'Anna pre-trend test: Hotelling-F finite-sample correction
+# ----------------------------------------------------------------------
+class TestCSPretrendFCorrection:
+    def _panel(self, seed=0, nu=51, nt=8):
+        rng = np.random.default_rng(seed)
+        cohort_by_unit = np.where(
+            np.arange(nu) % 3 == 0, 0, np.where(np.arange(nu) % 3 == 1, 4, 6)
+        )
+        unit = np.repeat(np.arange(nu), nt)
+        time = np.tile(np.arange(1, nt + 1), nu)
+        first = np.repeat(cohort_by_unit, nt)
+        d = ((first > 0) & (time >= first)).astype(float)
+        ui = np.repeat(rng.normal(size=nu), nt)
+        ti = np.tile(rng.normal(size=nt), nu)
+        y = ui + ti + 2.0 * d + rng.normal(size=nu * nt)
+        return pd.DataFrame({"y": y, "unit": unit, "time": time, "g": first})
+
+    def test_pretrend_pvalue_uses_hotelling_f_not_chi2(self):
+        df = self._panel()
+        res = sp.callaway_santanna(df, y="y", g="g", t="time", i="unit")
+        pt = res.model_info["pretrend_test"]
+        W, k = pt["statistic"], pt["df"]
+        assert k >= 1
+        G = int(df["unit"].nunique())
+        f_stat = W * (G - k) / (k * (G - 1))
+        # The reported p-value is the F(k, G-k) tail, not the chi²(k) tail.
+        assert pt["pvalue"] == pytest.approx(
+            float(stats.f.sf(f_stat, k, G - k)), rel=1e-6
+        )
+        # F-correction is (weakly) more conservative than the old chi² Wald.
+        assert pt["pvalue"] >= float(stats.chi2.sf(W, k)) - 1e-9
+
+
+# ----------------------------------------------------------------------
+# gardner_did event-study ATT is treated-obs-weighted (matches non-ES path)
+# ----------------------------------------------------------------------
+class TestGardnerEventStudyWeighting:
+    def _hetero_panel(self, seed=0, nu=90, nt=8):
+        rng = np.random.default_rng(seed)
+        rows = []
+        for u in range(nu):
+            first = [4, 6, 0][u % 3]
+            eff = {4: 1.0, 6: 3.0, 0: 0.0}[first]  # heterogeneous by cohort
+            for t in range(1, nt + 1):
+                d = first > 0 and t >= first
+                y = 0.3 * u + 0.4 * t + (eff if d else 0.0) + rng.normal()
+                rows.append({"unit": u, "time": t, "g": first, "y": y})
+        return pd.DataFrame(rows)
+
+    def test_event_study_overall_att_matches_non_event_study(self):
+        df = self._hetero_panel()
+        hz = list(range(-4, 5))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            a = sp.gardner_did(
+                df, y="y", group="unit", time="time", first_treat="g", event_study=False
+            )
+            b = sp.gardner_did(
+                df,
+                y="y",
+                group="unit",
+                time="time",
+                first_treat="g",
+                event_study=True,
+                horizon=hz,
+            )
+        # Obs-weighted ES aggregation must equal the (obs-weighted) non-ES ATT;
+        # the previous unweighted mean disagreed under heterogeneity.
+        assert b.estimate == pytest.approx(a.estimate, abs=1e-6)

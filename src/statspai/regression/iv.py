@@ -1066,30 +1066,44 @@ class IVRegression(BaseModel):
                 },
             )
 
-        # Cluster variable
+        # Cluster variable. Accept either a column-name string (looked up in
+        # the model data) or an array-like / pandas Series aligned with the
+        # estimation sample. The ``cluster is not None`` guard replaces a bare
+        # ``if cluster`` truth test that raised "truth value of a Series is
+        # ambiguous" when a Series was passed -- even though the public ``iv``
+        # signature documents ``cluster`` as a ``pd.Series``.
         cluster_var = None
-        if cluster and self.data is not None:
-            cluster = _require_string(cluster, "cluster")
-            if hasattr(self, "_clean_data"):
-                if cluster not in self._clean_data.columns:
+        if cluster is not None:
+            if isinstance(cluster, str):
+                src = getattr(self, "_clean_data", None)
+                if src is None:
+                    src = self.data
+                if src is None or cluster not in getattr(src, "columns", []):
                     raise MethodIncompatibility(
                         f"Cluster variable not found in data: {cluster!r}",
                         recovery_hint=(
-                            "Pass a cluster column present in the formula " "data."
+                            "Pass a cluster column present in the model data, "
+                            "or an array/Series aligned with the sample."
                         ),
                         diagnostics={"cluster": cluster},
                     )
-                cluster_var = self._clean_data[cluster]
+                cluster_var = src[cluster]
             else:
-                if cluster not in self.data.columns:
+                # Array-like / Series passed directly (one entry per obs).
+                cluster_var = pd.Series(np.asarray(cluster).reshape(-1))
+                if len(cluster_var) != len(y_fit):
                     raise MethodIncompatibility(
-                        f"Cluster variable not found in data: {cluster!r}",
+                        "Cluster vector length does not match the estimation "
+                        "sample.",
                         recovery_hint=(
-                            "Pass a cluster column present in the model data."
+                            "Pass a cluster column name, or an array/Series "
+                            "with exactly one entry per observation."
                         ),
-                        diagnostics={"cluster": cluster},
+                        diagnostics={
+                            "n_cluster": int(len(cluster_var)),
+                            "n_obs": int(len(y_fit)),
+                        },
                     )
-                cluster_var = self.data[cluster]
 
         # --- Dispatch to estimation method ---
         method = self.method

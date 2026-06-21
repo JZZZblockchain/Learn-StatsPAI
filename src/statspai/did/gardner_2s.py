@@ -2,8 +2,7 @@ r"""
 Gardner (2021) two-stage DID estimator (a.k.a. ``did2s``).
 
 The **two-stage DID** method of Gardner (2021) recovers the ATT under staggered
-treatment adoption by a two-step regression that propagates Stage-1 uncertainty
-into Stage-2 inference:
+treatment adoption by a two-step regression:
 
 1. **Stage 1 — Fit FE model on untreated rows only.**
    Using observations where the unit is *not yet* treated, regress the outcome
@@ -18,8 +17,11 @@ into Stage-2 inference:
 
        Y_tilde_it = tau * D_it + u_it.
 
-The standard errors are adjusted for first-stage residualisation via
-cluster-robust variance (clustered by unit).  This closely parallels the
+The default standard errors (``vce='analytic'``) cluster the Stage-2 residuals
+by unit but do **not** account for the variance from estimating the Stage-1
+fixed effects, so they understate uncertainty (≈0.78 coverage at a nominal 95%
+level in simulations). Pass ``vce='bootstrap'`` to resample whole clusters and
+re-run both stages for valid inference. The estimator closely parallels the
 Borusyak-Jaravel-Spiess (2024) imputation estimator numerically, but the
 two-step regression framing makes event studies and covariate interactions
 trivial.
@@ -34,7 +36,8 @@ Butts, K. and Gardner, J. (2022).  "did2s: Two-Stage Difference-in-Differences."
 
 from __future__ import annotations
 
-from typing import List, Optional
+import warnings
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -43,6 +46,80 @@ from scipy import stats as sp_stats
 from ..core.results import CausalResult
 
 __all__ = ["gardner_did", "did_2stage"]
+
+
+def _gardner_cluster_bootstrap(
+    df: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: List[str],
+    event_study: bool,
+    horizon: Optional[List[int]],
+    cluster: str,
+    names: List[str],
+    n_boot: int,
+    seed: int,
+) -> Tuple[Dict[str, float], float]:
+    """Pairs-cluster bootstrap of the *full* Gardner two-step procedure.
+
+    The analytic Stage-2 SE clusters the second-stage residuals as if the
+    imputed counterfactual were known data; it therefore omits the variance
+    contributed by estimating the Stage-1 fixed effects. Resampling whole
+    clusters and re-running both stages restores valid coverage (the SE the
+    module docstring refers to). Returns ``(per_coef_se, overall_att_se)``.
+    """
+    rng = np.random.default_rng(seed)
+    clusters = pd.unique(df[cluster])
+    n_g = len(clusters)
+    rows_by_cluster = {c: df[df[cluster] == c] for c in clusters}
+    ctrl = controls if controls else None
+
+    boot_overall: List[float] = []
+    boot_coefs: Dict[str, List[float]] = {nm: [] for nm in names}
+    for _ in range(int(n_boot)):
+        drawn = rng.choice(n_g, size=n_g, replace=True)
+        parts = []
+        for j, ci in enumerate(drawn):
+            sub = rows_by_cluster[clusters[ci]].copy()
+            # Fresh, globally-unique ids so a cluster drawn twice (and the
+            # units inside it) do not collide in the re-estimation.
+            sub[group] = sub[group].astype(str) + f"__b{j}"
+            sub["__bcl"] = j
+            parts.append(sub)
+        bd = pd.concat(parts, ignore_index=True)
+        try:
+            r = gardner_did(
+                bd,
+                y=y,
+                group=group,
+                time=time,
+                first_treat=first_treat,
+                controls=ctrl,
+                event_study=event_study,
+                horizon=horizon,
+                cluster="__bcl",
+                vce="none",
+            )
+        except Exception:
+            continue
+        if np.isfinite(r.estimate):
+            boot_overall.append(float(r.estimate))
+        es = r.model_info.get("event_study") if event_study else None
+        if es:
+            for nm in names:
+                boot_coefs[nm].append(float(es["coef"].get(nm, np.nan)))
+
+    arr = np.asarray(boot_overall, dtype=float)
+    overall_se = float(np.std(arr, ddof=1)) if arr.size > 1 else float("nan")
+    se_dict: Dict[str, float] = {}
+    for nm in names:
+        vals = np.asarray([v for v in boot_coefs[nm] if np.isfinite(v)], dtype=float)
+        se_dict[nm] = float(np.std(vals, ddof=1)) if vals.size > 1 else float("nan")
+    if not event_study and names:
+        se_dict[names[0]] = overall_se
+    return se_dict, overall_se
 
 
 def _cluster_vcov(
@@ -117,6 +194,9 @@ def gardner_did(
     horizon: Optional[List[int]] = None,
     cluster: Optional[str] = None,
     alpha: float = 0.05,
+    vce: str = "analytic",
+    n_boot: int = 199,
+    boot_seed: int = 0,
 ) -> CausalResult:
     """Gardner (2021) two-stage DID estimator.
 
@@ -145,6 +225,19 @@ def gardner_did(
         Cluster variable for Stage-2 SEs.  Defaults to ``group``.
     alpha : float, default 0.05
         Two-sided CI level.
+    vce : {'analytic', 'bootstrap'}, default 'analytic'
+        Standard-error mode. ``'analytic'`` clusters the Stage-2 residuals
+        (fast) but ignores the variance from estimating the Stage-1 fixed
+        effects and is **anti-conservative** (empirically ~0.78 coverage at a
+        nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``.
+        ``'bootstrap'`` resamples whole clusters and re-runs the full two-step
+        procedure (Gardner 2021 / ``did2s``), substantially improving coverage
+        (≈0.90 vs ≈0.78 in simulations; it approaches nominal as the number of
+        clusters grows). Point estimates are identical either way.
+    n_boot : int, default 199
+        Number of cluster-bootstrap replications when ``vce='bootstrap'``.
+    boot_seed : int, default 0
+        Seed for the cluster bootstrap (deterministic results).
 
     Returns
     -------
@@ -191,6 +284,8 @@ def gardner_did(
     >>> round(res.estimate, 2)  # true ATT = 2.0
     2.03
     """
+    if vce not in ("analytic", "bootstrap", "none"):
+        raise ValueError(f"vce must be 'analytic', 'bootstrap', or 'none'; got {vce!r}")
     if controls is None:
         controls = []
     df = data.copy()
@@ -275,12 +370,14 @@ def gardner_did(
                 horizon.append(0)
             horizon = sorted(set(horizon))
 
-        names, est_list, se_list = [], [], []
+        names, est_list, se_list, count_list = [], [], [], []
         for k in horizon:
             key = f"D_k{int(k):+d}"
             names.append(key)
             mask = rel_time == k
-            if mask.sum() == 0:
+            n_k = int(mask.sum())
+            count_list.append(n_k)
+            if n_k == 0:
                 est_list.append(float("nan"))
                 se_list.append(float("nan"))
                 continue
@@ -307,6 +404,7 @@ def gardner_did(
         se = np.array(se_list)
         coef_dict = dict(zip(names, est))
         se_dict = dict(zip(names, se))
+        count_dict = dict(zip(names, count_list))
     else:
         X2 = df["_D"].to_numpy(dtype=float).reshape(-1, 1)
         names = ["ATT"]
@@ -320,20 +418,69 @@ def gardner_did(
         coef_dict = dict(zip(names, est))
         se_dict = dict(zip(names, se))
 
+    # Standard-error mode. 'analytic' (default) clusters the Stage-2 residuals
+    # only; 'bootstrap' resamples whole clusters and re-runs both stages;
+    # 'none' skips the warning (used internally by the bootstrap to avoid
+    # recursion).
+    boot_overall_se: Optional[float] = None
+    if vce == "bootstrap":
+        se_dict, boot_overall_se = _gardner_cluster_bootstrap(
+            df,
+            y,
+            group,
+            time,
+            first_treat,
+            controls,
+            event_study,
+            horizon if event_study else None,
+            cluster,
+            names,
+            n_boot,
+            boot_seed,
+        )
+    elif vce == "analytic":
+        warnings.warn(
+            "gardner_did: the default analytic standard error clusters the "
+            "Stage-2 residuals and ignores the variance from estimating the "
+            "Stage-1 fixed effects, so it understates uncertainty "
+            "(empirically ~0.78 coverage at a nominal 95% level). For valid "
+            "inference pass vce='bootstrap' (a cluster bootstrap of the full "
+            "two-step procedure).",
+            UserWarning,
+            stacklevel=2,
+        )
+
     z = sp_stats.norm.ppf(1 - alpha / 2)
     ci = {
         k: (coef_dict[k] - z * se_dict[k], coef_dict[k] + z * se_dict[k]) for k in names
     }
 
     if event_study:
-        post_keys = [k for k in names if int(k.split("k")[1]) >= 0]
+        post_keys = [
+            k
+            for k in names
+            if int(k.split("k")[1]) >= 0
+            and np.isfinite(coef_dict[k])
+            and count_dict.get(k, 0) > 0
+        ]
         if post_keys:
-            # Unweighted mean of post-treatment event-study coefs
-            att_overall = float(np.mean([coef_dict[k] for k in post_keys]))
-            att_se = float(
-                np.sqrt(np.mean([se_dict[k] ** 2 for k in post_keys]))
-                / np.sqrt(len(post_keys))
-            )
+            # Treated-observation-weighted mean of the post-treatment coefs
+            # (the did2s aggregated-ATT convention). An *unweighted* mean
+            # disagrees with the non-event-study ATT whenever the horizons have
+            # unbalanced support / heterogeneous effects.
+            w = np.array([count_dict[k] for k in post_keys], dtype=float)
+            wn = w / w.sum()
+            coefs_post = np.array([coef_dict[k] for k in post_keys], dtype=float)
+            att_overall = float(np.dot(wn, coefs_post))
+            if vce == "bootstrap" and boot_overall_se is not None:
+                # Bootstrapping the overall ATT directly accounts for the
+                # cross-horizon correlation the analytic aggregation ignores.
+                att_se = float(boot_overall_se)
+            else:
+                # SE of the weighted average (horizons treated as independent;
+                # use vce='bootstrap' for the correlation-aware SE).
+                ses_post = np.array([se_dict[k] for k in post_keys], dtype=float)
+                att_se = float(np.sqrt(np.sum((wn * ses_post) ** 2)))
         else:
             att_overall, att_se = float("nan"), float("nan")
     else:
@@ -351,6 +498,7 @@ def gardner_did(
 
     model_info = {
         "method": "Gardner 2021 two-stage DID",
+        "vce": vce,
         "n_obs": int(len(df)),
         "n_units": n_units,
         "n_treated_units": n_treated_units,

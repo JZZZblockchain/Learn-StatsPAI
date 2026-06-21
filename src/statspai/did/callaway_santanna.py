@@ -969,11 +969,13 @@ def _pretrend_test(
     theta = pre["att"].values
     k = len(theta)
 
+    G = None
     if inf_matrix is not None:
         col_idx = np.where(pre_mask.values)[0]
         inf_pre = inf_matrix[:, col_idx]
         # Variance-covariance: V = (1/n²) IF' IF
         V = inf_pre.T @ inf_pre / (n_total**2)
+        G = int(inf_pre.shape[0])  # number of IF contributions (units)
     else:
         V = np.diag(pre["se"].values ** 2)
 
@@ -987,7 +989,20 @@ def _pretrend_test(
         V_inv = np.linalg.pinv(V)
         W = float(theta @ V_inv @ theta)
 
-    pvalue = float(1 - stats.chi2.cdf(W, k))
+    # The pre-period ATT(g,t) are strongly correlated (shared base period and
+    # control group), and V is *estimated*, so the plug-in chi²(k) Wald
+    # over-rejects in finite samples (≈0.14 at a nominal 5% level for ~60
+    # units, vs the Callaway–Sant'Anna multiplier-bootstrap pre-test which is
+    # correctly sized). Apply the Hotelling T² finite-sample correction:
+    #   F = W · (G − k) / (k · (G − 1))  ~  F(k, G − k)
+    # which is exact under (asymptotically) normal influence functions and
+    # converges to chi²(k)/k as G → ∞. Falls back to chi² when G is unknown
+    # or too small relative to k.
+    if G is not None and G > k + 1:
+        f_stat = W * (G - k) / (k * (G - 1))
+        pvalue = float(stats.f.sf(f_stat, k, G - k))
+    else:
+        pvalue = float(stats.chi2.sf(W, k))
 
     return {"statistic": W, "df": k, "pvalue": pvalue}
 

@@ -14,6 +14,7 @@ Borusyak, K., Jaravel, X. and Spiess, J. (2024).
 *Review of Economic Studies*, 91(6), 3253-3285. [@borusyak2024revisiting]
 """
 
+import warnings
 from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
@@ -22,6 +23,60 @@ from scipy import sparse, stats
 from scipy.sparse.linalg import lsqr
 
 from ..core.results import CausalResult
+
+
+def _didimp_cluster_bootstrap(
+    data: pd.DataFrame,
+    y: str,
+    group: str,
+    time: str,
+    first_treat: str,
+    controls: Optional[List[str]],
+    cluster: str,
+    n_boot: int,
+    seed: int,
+) -> float:
+    """Pairs-cluster bootstrap of the overall ATT for ``did_imputation``.
+
+    The analytic influence-function SE under-counts the variance from
+    estimating the unit/time fixed effects on the untreated sample. Resampling
+    whole clusters and re-running the full imputation estimator gives a valid
+    standard error for the headline ATT. Returns the bootstrap SD of the ATT.
+    """
+    rng = np.random.default_rng(seed)
+    clusters = pd.unique(data[cluster])
+    n_g = len(clusters)
+    rows_by_cluster = {c: data[data[cluster] == c] for c in clusters}
+    ctrl = controls if controls else None
+
+    boot: List[float] = []
+    for _ in range(int(n_boot)):
+        drawn = rng.choice(n_g, size=n_g, replace=True)
+        parts = []
+        for j, ci in enumerate(drawn):
+            sub = rows_by_cluster[clusters[ci]].copy()
+            sub[group] = sub[group].astype(str) + f"__b{j}"
+            sub["__bcl"] = j
+            parts.append(sub)
+        bd = pd.concat(parts, ignore_index=True)
+        try:
+            r = did_imputation(
+                bd,
+                y=y,
+                group=group,
+                time=time,
+                first_treat=first_treat,
+                controls=ctrl,
+                horizon=None,
+                cluster="__bcl",
+                vce="none",
+            )
+        except Exception:
+            continue
+        if np.isfinite(r.estimate):
+            boot.append(float(r.estimate))
+    arr = np.asarray(boot, dtype=float)
+    return float(np.std(arr, ddof=1)) if arr.size > 1 else float("nan")
 
 
 def did_imputation(
@@ -34,6 +89,9 @@ def did_imputation(
     horizon: Optional[List[int]] = None,
     cluster: Optional[str] = None,
     alpha: float = 0.05,
+    vce: str = "analytic",
+    n_boot: int = 199,
+    boot_seed: int = 0,
 ) -> CausalResult:
     """
     Borusyak, Jaravel & Spiess (2024) imputation DID estimator.
@@ -65,6 +123,18 @@ def did_imputation(
         Defaults to ``group`` (unit-level clustering).
     alpha : float, default 0.05
         Significance level for confidence intervals.
+    vce : {'analytic', 'bootstrap'}, default 'analytic'
+        Standard-error mode for the overall ATT. ``'analytic'`` uses the
+        influence-function cluster SE (fast) but under-counts the variance
+        from estimating the unit/time fixed effects and is **anti-conservative**
+        (≈0.87 coverage at a nominal 95% level); a ``UserWarning`` recommends
+        ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs
+        the full imputation estimator. Point estimates are identical either
+        way; per-horizon event-study SEs are unaffected.
+    n_boot : int, default 199
+        Number of cluster-bootstrap replications when ``vce='bootstrap'``.
+    boot_seed : int, default 0
+        Seed for the cluster bootstrap (deterministic results).
 
     Returns
     -------
@@ -126,6 +196,8 @@ def did_imputation(
         if col not in df.columns:
             raise ValueError(f"Control column '{col}' not found in data.")
 
+    if vce not in ("analytic", "bootstrap", "none"):
+        raise ValueError(f"vce must be 'analytic', 'bootstrap', or 'none'; got {vce!r}")
     if cluster is None:
         cluster = group
 
@@ -253,6 +325,29 @@ def did_imputation(
         n_times=n_times,
     )
 
+    # Standard-error mode for the overall ATT. The analytic influence-function
+    # SE under-counts the variance from estimating the unit/time fixed effects
+    # (≈0.87 coverage at a nominal 95% level); 'bootstrap' resamples whole
+    # clusters and re-runs the full imputation estimator. 'none' is internal
+    # (used by the bootstrap to avoid recursion / the warning).
+    if vce == "bootstrap":
+        se_boot = _didimp_cluster_bootstrap(
+            data, y, group, time, first_treat, controls, cluster, n_boot, boot_seed
+        )
+        if np.isfinite(se_boot):
+            se_att = se_boot
+    elif vce == "analytic":
+        warnings.warn(
+            "did_imputation: the default analytic standard error for the "
+            "overall ATT under-counts the variance from estimating the "
+            "unit/time fixed effects, so it is anti-conservative (~0.87 "
+            "coverage at a nominal 95% level). For valid inference on the "
+            "overall ATT pass vce='bootstrap' (a cluster bootstrap of the "
+            "full imputation estimator).",
+            UserWarning,
+            stacklevel=2,
+        )
+
     z_crit = stats.norm.ppf(1 - alpha / 2)
     pvalue_att = (
         float(2 * (1 - stats.norm.cdf(abs(att / se_att)))) if se_att > 0 else 1.0
@@ -343,6 +438,7 @@ def did_imputation(
         "n_time_periods": int(n_times),
         "n_never_treated": int(df["_never_treated"].sum() // max(n_times, 1)),
         "cluster_var": cluster,
+        "vce": vce,
     }
 
     if has_controls:

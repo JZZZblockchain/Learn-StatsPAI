@@ -241,13 +241,20 @@ def match(
         bandwidth is taken from ``caliper`` instead.
     se_method : {'auto', 'ai', 'psmatch2', 'abadie_imbens'}, default 'auto'
         Standard-error estimator. ``'ai'`` is the simple matched-pair SE (the
-        historical default for nearest-neighbour matching). ``'psmatch2'`` is
-        Stata psmatch2's homoskedastic analytic ATT SE
-        ``sqrt(var1/N1 + var0*Σw²/N1²)``. ``'abadie_imbens'`` is the
-        Abadie-Imbens (2006) heteroskedasticity-robust SE (Stata
-        ``psmatch2 , ai(J)``), with ``J = ai_matches`` within-arm matches.
-        ``'auto'`` keeps ``'ai'`` for nearest-neighbour matching and uses
-        ``'psmatch2'`` for kernel / radius matching.
+        historical default for nearest-neighbour matching). **It is
+        anti-conservative**: it treats matched pairs as independent and ignores
+        the extra variance from reusing controls under matching with
+        replacement (empirically ~0.68x the true sampling SD; ~81% coverage at
+        a nominal 95% level), so for valid inference prefer
+        ``'abadie_imbens'``. ``'psmatch2'`` is Stata psmatch2's homoskedastic
+        analytic ATT SE ``sqrt(var1/N1 + var0*Σw²/N1²)``. ``'abadie_imbens'``
+        is the Abadie-Imbens (2006) heteroskedasticity-robust SE (Stata
+        ``psmatch2 , ai(J)``), with ``J = ai_matches`` within-arm matches, and
+        is the recommended choice for nearest-neighbour inference.
+        ``'auto'`` keeps ``'ai'`` for nearest-neighbour matching -- a
+        deliberate JOSS-review-stability default that emits a ``UserWarning``
+        steering you to ``'abadie_imbens'`` -- and uses ``'psmatch2'`` for
+        kernel / radius matching.
     ai_matches : int, default 1
         Number of within-arm matches ``J`` used by the
         ``se_method='abadie_imbens'`` conditional-variance estimate
@@ -741,6 +748,25 @@ class MatchEstimator:
                 "psmatch2-style matched_data is omitted for estimand='ATE' "
                 "because Stata psmatch2 variables encode a treated-to-control "
                 "ATT assignment."
+            )
+
+        # The default nearest-neighbour SE ('ai') is the simple matched-pair
+        # SE, which is anti-conservative under matching with replacement
+        # (~81% coverage at a nominal 95% level; Abadie & Imbens 2006). The
+        # default *number* is intentionally left unchanged (matched-frame
+        # parity / JOSS-review stability); we only emit a one-line guidance
+        # warning steering users to the rigorous SE. An explicit
+        # ``se_method='ai'`` is the user's own choice and is not warned.
+        if self.se_method == "auto" and self.method not in ("kernel", "radius"):
+            warnings.warn(
+                "sp.match: the default standard error for nearest-neighbour "
+                "matching is the simple matched-pair SE ('ai'), which ignores "
+                "the extra variance from reusing controls under matching with "
+                "replacement and is anti-conservative (~81% coverage at a "
+                "nominal 95% level). For valid inference pass "
+                "se_method='abadie_imbens' (Abadie & Imbens 2006).",
+                UserWarning,
+                stacklevel=2,
             )
 
         # Inference (after the SE is finalized)
