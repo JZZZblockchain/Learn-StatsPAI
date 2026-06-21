@@ -4841,7 +4841,9 @@ def _build_registry() -> None:
                 ParamSpec("t", "str", False, description="DiD time column"),
                 ParamSpec("i", "str", False, description="DiD unit-id column"),
                 ParamSpec(
-                    "treatment", "str", False,
+                    "treatment",
+                    "str",
+                    False,
                     description="Focal regressor (default reconciled term)",
                 ),
                 ParamSpec("covariates", "list[str]", False),
@@ -8431,10 +8433,15 @@ def _build_registry() -> None:
                 "point feeding every sp.network analysis."
             ),
             params=[
-                ParamSpec("adjacency", "ndarray", False,
-                          description="Square adjacency (or scipy.sparse / W)"),
-                ParamSpec("edges", "list", False,
-                          description="Edge list of (u, v) pairs"),
+                ParamSpec(
+                    "adjacency",
+                    "ndarray",
+                    False,
+                    description="Square adjacency (or scipy.sparse / W)",
+                ),
+                ParamSpec(
+                    "edges", "list", False, description="Edge list of (u, v) pairs"
+                ),
                 ParamSpec("directed", "bool", False, False),
                 ParamSpec("node_labels", "list", False),
                 ParamSpec("weights", "list", False),
@@ -8474,10 +8481,23 @@ def _build_registry() -> None:
             ),
             params=[
                 ParamSpec("graph", "Graph", True),
-                ParamSpec("kind", "str", False, "all",
-                          "Measure(s) to compute",
-                          ["all", "degree", "closeness", "betweenness",
-                           "eigenvector", "katz", "pagerank", "bonacich"]),
+                ParamSpec(
+                    "kind",
+                    "str",
+                    False,
+                    "all",
+                    "Measure(s) to compute",
+                    [
+                        "all",
+                        "degree",
+                        "closeness",
+                        "betweenness",
+                        "eigenvector",
+                        "katz",
+                        "pagerank",
+                        "bonacich",
+                    ],
+                ),
                 ParamSpec("normalized", "bool", False, True),
             ],
             returns="CentralityResult",
@@ -8498,9 +8518,14 @@ def _build_registry() -> None:
             ),
             params=[
                 ParamSpec("graph", "Graph", True),
-                ParamSpec("method", "str", False, "louvain",
-                          "Detection algorithm",
-                          ["louvain", "greedy", "label_prop"]),
+                ParamSpec(
+                    "method",
+                    "str",
+                    False,
+                    "louvain",
+                    "Detection algorithm",
+                    ["louvain", "greedy", "label_prop"],
+                ),
                 ParamSpec("resolution", "float", False, 1.0),
                 ParamSpec("seed", "int", False),
             ],
@@ -8522,12 +8547,17 @@ def _build_registry() -> None:
             ),
             params=[
                 ParamSpec("y", "ndarray", True, description="Dependent network matrix"),
-                ParamSpec("predictors", "ndarray", True,
-                          description="Predictor matrix / list / {name: matrix}"),
+                ParamSpec(
+                    "predictors",
+                    "ndarray",
+                    True,
+                    description="Predictor matrix / list / {name: matrix}",
+                ),
                 ParamSpec("directed", "bool", False),
                 ParamSpec("nperm", "int", False, 1000),
-                ParamSpec("method", "str", False, "dsp", "Permutation scheme",
-                          ["dsp", "y"]),
+                ParamSpec(
+                    "method", "str", False, "dsp", "Permutation scheme", ["dsp", "y"]
+                ),
                 ParamSpec("seed", "int", False),
             ],
             returns="QAPResult",
@@ -8596,8 +8626,13 @@ def _build_registry() -> None:
             ),
             params=[
                 ParamSpec("graph", "Graph", True),
-                ParamSpec("terms", "list", False, ["edges"],
-                          description="ERGM terms, e.g. ['edges','nodematch:gender']"),
+                ParamSpec(
+                    "terms",
+                    "list",
+                    False,
+                    ["edges"],
+                    description="ERGM terms, e.g. ['edges','nodematch:gender']",
+                ),
                 ParamSpec("node_attrs", "DataFrame", False),
                 ParamSpec("directed", "bool", False),
                 ParamSpec("alpha", "float", False, 0.05),

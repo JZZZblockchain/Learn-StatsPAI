@@ -2359,7 +2359,7 @@ del _dedupe_public_exports
 # `model_y=` kwargs.  Same trick the package already uses on L127-129
 # to re-bind `sp.iv` to the submodule.
 # ---------------------------------------------------------------------
-from ._article_aliases import (
+from ._article_aliases import (  # noqa: E402,F811
     matrix_completion,
     causal_discovery,
     mediation,

@@ -84,7 +84,9 @@ def data_provenance(
     scheme = parsed.scheme or "file"
     suffix_source = unquote(parsed.path) if parsed.path else path
     out: Dict[str, Any] = {
-        "source": path if scheme == "file" and not parsed.netloc else _sanitize_url(path),
+        "source": (
+            path if scheme == "file" and not parsed.netloc else _sanitize_url(path)
+        ),
         "scheme": scheme,
         "source_type": "local" if scheme == "file" else "remote",
         "format": Path(suffix_source).suffix.lower().lstrip("."),

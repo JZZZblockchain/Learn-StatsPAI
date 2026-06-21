@@ -149,7 +149,8 @@ def from_worldbank(
             extra={
                 "value_name": value_name,
                 "indicator_ids": sorted(
-                    str(x) for x in long.get("indicator_id", pd.Series()).dropna().unique()
+                    str(x)
+                    for x in long.get("indicator_id", pd.Series()).dropna().unique()
                 ),
             },
         )

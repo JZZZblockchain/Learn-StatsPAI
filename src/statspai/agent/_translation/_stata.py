@@ -272,7 +272,9 @@ def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
 def _h_ivreghdfe(cmd: StataCommand) -> Dict[str, Any]:
     """``ivreghdfe y x (d = z), absorb(id year)`` → ``sp.fixest`` IV+FE."""
     if not cmd.varlist:
-        return _emit_error("ivreghdfe requires an outcome variable", command="ivreghdfe")
+        return _emit_error(
+            "ivreghdfe requires an outcome variable", command="ivreghdfe"
+        )
     joined = " ".join(cmd.varlist)
     import re
 
@@ -726,7 +728,9 @@ def _h_psmatch2(cmd: StataCommand) -> Dict[str, Any]:
     args: Dict[str, Any] = {"treat": treat, "covariates": covariates}
     notes: List[str] = []
 
-    outcome = cmd.options.get("outcome") or cmd.options.get("out") or cmd.options.get("y")
+    outcome = (
+        cmd.options.get("outcome") or cmd.options.get("out") or cmd.options.get("y")
+    )
     if outcome:
         args["outcome"] = outcome.split()[0]
     else:
@@ -740,7 +744,9 @@ def _h_psmatch2(cmd: StataCommand) -> Dict[str, Any]:
         try:
             args["neighbor"] = int(neighbor)
         except (TypeError, ValueError):
-            notes.append(f"Could not parse neighbor count {neighbor!r}; using default 1.")
+            notes.append(
+                f"Could not parse neighbor count {neighbor!r}; using default 1."
+            )
 
     if "kernel" in cmd.options:
         args["method"] = "kernel"
