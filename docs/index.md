@@ -11,13 +11,13 @@ mixed-effects, modern ML causal inference, the full three-school
 modules (bridging theorems, fairness, surrogates, PCMCI, TMLE survival,
 etc.), and manuscript/reporting output in Word / Excel / LaTeX / HTML.
 
-> **Current release: v1.16.0 (2026-05-29)** — correctness fixes
-> (`sp.qreg` √n standard-error fix and an `sp.xtabond` Arellano–Bond GMM
-> rebuild, both ⚠️ correctness — re-run affected analyses) plus a Track A
-> cross-language parity expansion from 36 to 51 R-aligned modules. The
-> current source snapshot has since expanded to 64 R-aligned modules with
-> 61 Stata references and no remaining R-side gap for `xtabond`. See the
-> [changelog](changelog.md) for detail.
+> **Current release: v1.19.0 (2026-06-20)** — cross-engine validation
+> (`sp.cross_validate` runs the same OLS/FE/IV/DML/DiD model through
+> StatsPAI, pyfixest, linearmodels, DoubleML, R `fixest`/`did`, and Stata,
+> then reports an honest AGREE / PARTIAL / DISAGREE verdict), data-MCP
+> ingestion normalisers (`sp.from_worldbank` / `sp.from_fred` /
+> `sp.from_sdmx`), and a numpy/scipy-native social-network-analysis module
+> (`sp.network`). See the [changelog](changelog.md) for detail.
 
 ```python
 import statspai as sp
@@ -168,7 +168,7 @@ reference — together with this package:
   title   = {StatsPAI: Validation-Tiered Causal Inference and
              Econometrics Workflows for Python},
   year    = {2026},
-  version = {1.16.0},
+  version = {1.19.0},
   url     = {https://github.com/brycewang-stanford/StatsPAI}
 }
 ```
