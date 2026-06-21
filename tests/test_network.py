@@ -158,6 +158,14 @@ def test_degree_sequence_karate():
     assert g.degree().astype(int).tolist() == KARATE_DEGREE
 
 
+def test_degree_centrality_path_graph_closed_form():
+    g = sp.network_graph(edges=[(0, 1), (1, 2), (1, 3)])
+    raw = sp.degree_centrality(g, normalized=False)
+    norm = sp.degree_centrality(g, normalized=True)
+    np.testing.assert_allclose(raw.values, [1.0, 3.0, 1.0, 1.0])
+    np.testing.assert_allclose(norm.values, [1.0 / 3.0, 1.0, 1.0 / 3.0, 1.0 / 3.0])
+
+
 def test_transitivity_and_clustering_helpers():
     g = sp.karate_club()
     assert sp.transitivity(g) == pytest.approx(KARATE["transitivity"], abs=1e-12)
@@ -173,6 +181,11 @@ def test_reciprocity_directed():
     assert sp.reciprocity(g) == pytest.approx(2.0 / 3.0)
 
 
+def test_assortativity_path_graph_closed_form():
+    g = sp.network_graph(edges=[(0, 1), (1, 2)])
+    assert sp.assortativity(g) == pytest.approx(-1.0)
+
+
 def test_components_disconnected():
     A = np.zeros((4, 4))
     A[0, 1] = A[1, 0] = 1
@@ -181,6 +194,19 @@ def test_components_disconnected():
     comp = sp.network_components(g)
     assert comp.n_components == 2
     assert comp.sizes == [2, 2]
+
+
+def test_network_components_membership_closed_form():
+    g = sp.network_graph(
+        edges=[("a", "b"), ("c", "d")],
+        node_labels=["a", "b", "c", "d", "e"],
+    )
+    comp = sp.network_components(g)
+    assert comp.n_components == 3
+    assert comp.sizes == [2, 2, 1]
+    assert comp.largest_size == 2
+    assert comp.membership.to_dict() == {"a": 0, "b": 0, "c": 1, "d": 1, "e": 2}
+    np.testing.assert_allclose(comp.membership.values, [0, 0, 1, 1, 2], atol=0.0)
 
 
 def test_complete_graph_descriptives():
@@ -278,6 +304,17 @@ def test_katz_reduces_to_degree_at_small_alpha():
     assert np.corrcoef(kz.values, deg)[0, 1] > 0.999
 
 
+def test_katz_centrality_solves_closed_form_linear_system():
+    g = sp.network_graph(edges=[(0, 1), (1, 2)])
+    kz = sp.katz_centrality(g, alpha=0.1, beta=2.0, normalized=False)
+    np.testing.assert_allclose(
+        kz.values,
+        [2.2448979591836733, 2.4489795918367347, 2.2448979591836733],
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
 def test_katz_raises_above_spectral_radius():
     g = sp.karate_club()
     with pytest.raises(ValueError, match="convergence"):
@@ -290,6 +327,17 @@ def test_bonacich_beta_zero_is_degree():
     assert np.corrcoef(bp.values, g.degree())[0, 1] > 0.999
 
 
+def test_bonacich_power_beta_zero_closed_form_normalisation():
+    g = sp.network_graph(edges=[(0, 1), (0, 2), (0, 3)])
+    bp = sp.bonacich_power(g, beta=0.0)
+    np.testing.assert_allclose(
+        bp.values,
+        [np.sqrt(3.0), 1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0)],
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
 def test_centrality_dispatcher():
     g = sp.karate_club()
     res = sp.centrality(g, kind=["degree", "betweenness", "pagerank"])
@@ -298,6 +346,20 @@ def test_centrality_dispatcher():
     assert res.top("pagerank", 1).index[0] == 33
     with pytest.raises(ValueError, match="unknown centrality"):
         sp.centrality(g, kind="nonsense")
+
+
+def test_centrality_dispatcher_matches_named_closed_form_scores():
+    g = sp.network_graph(edges=[(0, 1), (1, 2)])
+    res = sp.centrality(g, kind=["degree", "katz"], normalized=False, alpha=0.1)
+    np.testing.assert_allclose(
+        res.scores["degree"].values,
+        sp.degree_centrality(g, normalized=False).values,
+    )
+    np.testing.assert_allclose(
+        res.scores["katz"].values,
+        sp.katz_centrality(g, alpha=0.1).values,
+    )
+    assert res.most_central == {"degree": 1, "katz": 1}
 
 
 # ===================================================================== #
