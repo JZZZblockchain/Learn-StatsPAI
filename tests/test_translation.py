@@ -119,6 +119,20 @@ TIER1_ROUND_TRIPS = [
     ("ivreg2 y x1 (d = z1 z2)", "ivreg", {"formula": "y ~ x1 + (d ~ z1 z2)"}),
     ("ivregress y (d = z), cluster(id)", "ivreg", {"formula": "y ~ (d ~ z)"}),
     (
+        "ivregress 2sls y x1 (d = z), robust small",
+        "ivreg",
+        {"formula": "y ~ x1 + (d ~ z)", "method": "2sls", "robust": "hc1"},
+    ),
+    (
+        "ivregress liml y x1 (d = z1 z2), vce(cluster firm)",
+        "ivreg",
+        {
+            "formula": "y ~ x1 + (d ~ z1 z2)",
+            "method": "liml",
+            "cluster": "firm",
+        },
+    ),
+    (
         "ivreghdfe y x1 x2 (d = z1 z2), absorb(firm year) cluster(firm)",
         "fixest",
         {
@@ -132,6 +146,20 @@ TIER1_ROUND_TRIPS = [
         "csdid wage, ivar(worker_id) tvar(year) gvar(first_treat)",
         "callaway_santanna",
         {"y": "wage", "i": "worker_id", "t": "year", "g": "first_treat"},
+    ),
+    (
+        "didregress (wage education) (treated), group(worker_id) time(year) "
+        "vce(cluster worker_id)",
+        "did",
+        {
+            "y": "wage",
+            "treat": "treated",
+            "time": "year",
+            "id": "worker_id",
+            "method": "twfe",
+            "covariates": ["education"],
+            "cluster": "worker_id",
+        },
     ),
     # did_imputation
     (
@@ -467,12 +495,27 @@ TIER2_ROUND_TRIPS = [
     (
         "teffects ipw (y) (treat z1 z2)",
         "ipw",
-        {"y": "y", "treat": "treat", "covariates": ["z1", "z2"]},
+        {
+            "y": "y",
+            "treat": "treat",
+            "covariates": ["z1", "z2"],
+            "estimand": "ATE",
+        },
+    ),
+    (
+        "teffects aipw (y x1 x2) (treat z1 z2), atet",
+        "aipw",
+        {
+            "y": "y",
+            "treat": "treat",
+            "covariates": ["z1", "z2"],
+            "estimand": "ATT",
+        },
     ),
     (
         "teffects nnmatch (y x1) (treat)",
         "match",
-        {"y": "y", "treat": "treat", "method": "nn"},
+        {"y": "y", "treat": "treat", "method": "nn", "estimand": "ATE"},
     ),
     # Stata psmatch2 migration
     (
@@ -632,6 +675,18 @@ class TestTier2EdgeCases:
         out = from_stata("teffects ml (y x) (treat)")
         assert out["ok"] is False
         assert "ml" in out["error"]
+
+    def test_xtdidregress_notes_treatment_status_semantics(self):
+        out = from_stata("xtdidregress (y) (treated), group(id) time(year)")
+        assert out["ok"] is True
+        assert out["tool"] == "did"
+        assert out["arguments"]["method"] == "twfe"
+        assert any("treatment-status" in note for note in out["notes"])
+
+    def test_didregress_missing_group_or_time_is_error(self):
+        out = from_stata("didregress (y) (treated), group(id)")
+        assert out["ok"] is False
+        assert "time" in out["error"]
 
     def test_xtset_handles_time_only_form(self):
         out = from_stata("tsset year")

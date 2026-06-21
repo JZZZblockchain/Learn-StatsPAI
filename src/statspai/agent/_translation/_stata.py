@@ -4,10 +4,11 @@ Every entry in :data:`STATA_COMMAND_MAP` is ``stata_cmd → handler``.
 Each handler takes a parsed :class:`StataCommand` and returns the
 canonical translation dict ``{tool, arguments, python_code, notes}``.
 
-Tier 1 (this file): the 8 commands that cover ~60% of real Stata
-econometrics work — `regress` / `xtreg` / `reghdfe` / `ivreg2` /
-`csdid` / `did_imputation` / `synth` / `rdrobust`. The follow-up
-Tier-2 layer will plug in another 12 commands the same way.
+Tier 1 (this file): the commands that cover the bulk of real Stata
+econometrics work — `regress` / `xtreg` / `reghdfe` / `ivregress` /
+`ivreg2` / `csdid` / `didregress` / `did_imputation` / `synth` /
+`rdrobust` — plus follow-on migration helpers such as `teffects`,
+`psmatch2`, `ppmlhdfe`, and dynamic-panel commands.
 
 Design principles
 -----------------
@@ -227,7 +228,14 @@ def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
     # Re-join the original varlist tokens to recover the parens.
     if not cmd.varlist:
         return _emit_error("ivreg2 requires an outcome variable", command="ivreg2")
-    joined = " ".join(cmd.varlist)
+    tokens = list(cmd.varlist)
+    method: Optional[str] = None
+    if cmd.command == "ivregress" and tokens:
+        head = tokens[0].lower()
+        if head in {"2sls", "liml", "gmm"}:
+            method = head
+            tokens = tokens[1:]
+    joined = " ".join(tokens)
     # Accept either ``y x (d = z)`` or ``y (d = z)``.
     import re
 
@@ -248,23 +256,35 @@ def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
     if cluster:
         cluster = cluster.split()[0]
     args: Dict[str, Any] = {"formula": formula}
+    if method:
+        args["method"] = method
+    robust = _robust_kind(cmd)
+    if robust != "nonrobust":
+        args["robust"] = robust
     if cluster:
-        args["robust"] = "hc1"  # ivreg's robust, with cluster handled below
+        args["cluster"] = cluster
     notes: List[str] = []
     if cluster:
-        notes.append(
-            f"Stata cluster({cluster}) — sp.ivreg currently does "
-            f"not accept a `cluster=` kwarg; pass via the Python "
-            f"API: ``sp.ivreg(..., cluster={cluster!r})``."
-        )
+        notes.append(f"Mapped Stata cluster({cluster}) to sp.ivreg cluster=.")
     if "first" in cmd.options:
         notes.append(
             "`first` (first-stage display) not translated; the sp "
             "result already exposes first_stage_F via diagnostics."
         )
+    if "small" in cmd.options:
+        notes.append(
+            "Stata `small` changes finite-sample reporting conventions; "
+            "verify the SE/df convention if exact table reproduction matters."
+        )
+    if method in {"liml", "gmm"}:
+        notes.append(
+            f"Mapped official `ivregress {method}` syntax to "
+            f"sp.ivreg(..., method={method!r})."
+        )
     code_pairs = ["data=df"]
-    if "robust" in args:
-        code_pairs.append("robust='hc1'")
+    for key in ("method", "robust", "cluster"):
+        if key in args:
+            code_pairs.append(f"{key}={args[key]!r}")
     python = f"sp.ivreg({formula!r}, {', '.join(code_pairs)})"
     return _emit("ivreg", args, python, notes)
 
@@ -335,6 +355,103 @@ def _h_csdid(cmd: StataCommand) -> Dict[str, Any]:
         f"g={g!r}, estimator={args.get('estimator', 'dr')!r})"
     )
     return _emit("callaway_santanna", args, python)
+
+
+def _h_didregress(cmd: StataCommand) -> Dict[str, Any]:
+    """``didregress (y x) (treated), group(id) time(year)`` → ``sp.did``.
+
+    Stata's official ``didregress`` / ``xtdidregress`` commands take an
+    outcome equation and a treatment-status equation.  StatsPAI's staggered
+    DID APIs use cohort columns, so this translator deliberately routes the
+    official Stata treatment-status form through ``method='twfe'`` and emits a
+    note rather than silently treating a 0/1 treatment indicator as a cohort.
+    """
+    raw = cmd.raw or ""
+    import re
+
+    prefix = r"(?:by\s+[^:]*?:|capture\s*:|quietly\s*:|qui\s*:|noisily\s*:)?"
+    pattern = (
+        r"^\s*"
+        + prefix
+        + r"\s*(?:didregress|xtdidregress)\s+"
+        + r"\((.+?)\)\s+\((.+?)\)"
+    )
+    m = re.match(pattern, raw, flags=re.I | re.S)
+    if not m:
+        return _emit_error(
+            "didregress expects `(outcome [covariates]) (treatment)` equations.",
+            command=cmd.command,
+        )
+
+    outcome_tokens = [tok for tok in m.group(1).split() if tok]
+    treat_tokens = [tok for tok in m.group(2).split() if tok]
+    if not outcome_tokens or not treat_tokens:
+        return _emit_error(
+            "didregress outcome and treatment equations must be non-empty.",
+            command=cmd.command,
+        )
+
+    y = outcome_tokens[0]
+    covariates = outcome_tokens[1:]
+    treat = treat_tokens[0]
+    group = cmd.options.get("group") or cmd.options.get("ivar") or cmd.options.get("id")
+    time = cmd.options.get("time") or cmd.options.get("tvar")
+    missing = [
+        name for name, val in (("group", group), ("time", time)) if not val
+    ]
+    if missing:
+        return _emit_error(
+            f"{cmd.command} translation needs {missing} option(s); supply "
+            "`group()` and `time()`.",
+            command=cmd.command,
+        )
+
+    assert group is not None
+    assert time is not None
+    group = group.split()[0]
+    time = time.split()[0]
+    args: Dict[str, Any] = {
+        "y": y,
+        "treat": treat,
+        "time": time,
+        "id": group,
+        "method": "twfe",
+    }
+    if covariates:
+        args["covariates"] = covariates
+    cluster = _vce_cluster(cmd)
+    if cluster:
+        args["cluster"] = cluster
+    if "wboot" in cmd.options or "wildbootstrap" in cmd.options:
+        args["se_method"] = "wild_cluster_bootstrap"
+
+    notes = [
+        "Stata didregress/xtdidregress uses a treatment-status indicator; "
+        "StatsPAI staggered DID needs a first-treatment cohort column. "
+        "This translation uses sp.did(..., method='twfe') for the "
+        "treatment-status command shape.",
+    ]
+    if len(treat_tokens) > 1:
+        notes.append(
+            "Extra tokens inside the treatment equation were not translated; "
+            "put controls in the outcome equation or build the desired "
+            "StatsPAI call explicitly."
+        )
+
+    code_pairs = [
+        "data=df",
+        f"y={y!r}",
+        f"treat={treat!r}",
+        f"time={time!r}",
+        f"id={group!r}",
+        "method='twfe'",
+    ]
+    if covariates:
+        code_pairs.append(f"covariates={covariates!r}")
+    if cluster:
+        code_pairs.append(f"cluster={cluster!r}")
+    python = f"sp.did({', '.join(code_pairs)})"
+    return _emit("did", args, python, notes)
 
 
 def _h_did_imputation(cmd: StataCommand) -> Dict[str, Any]:
@@ -675,13 +792,20 @@ def _h_teffects(cmd: StataCommand) -> Dict[str, Any]:
     out_xs = out_eq_tokens[1:]
     treat = treat_eq_tokens[0]
     treat_xs = treat_eq_tokens[1:]
+    estimand = "ATT" if "atet" in cmd.options else "ATE"
 
     # Choose the closest sp helper per teffects method.
     if method in {"ipw", "ipwra"}:
         sp_fn = "ipw"
-        args: Dict[str, Any] = {"y": y, "treat": treat, "covariates": treat_xs}
+        args: Dict[str, Any] = {
+            "y": y,
+            "treat": treat,
+            "covariates": treat_xs,
+            "estimand": estimand,
+        }
         python = (
-            f"sp.ipw(data=df, y={y!r}, treat={treat!r}, " f"covariates={treat_xs!r})"
+            f"sp.ipw(data=df, y={y!r}, treat={treat!r}, "
+            f"covariates={treat_xs!r}, estimand={estimand!r})"
         )
     elif method in {"nnmatch", "psmatch", "match"}:
         sp_fn = "match"
@@ -690,11 +814,12 @@ def _h_teffects(cmd: StataCommand) -> Dict[str, Any]:
             "treat": treat,
             "covariates": treat_xs or out_xs,
             "method": ("ps" if method == "psmatch" else "nn"),
+            "estimand": estimand,
         }
         python = (
             f"sp.match(data=df, y={y!r}, treat={treat!r}, "
             f"covariates={args['covariates']!r}, "
-            f"method={args['method']!r})"
+            f"method={args['method']!r}, estimand={estimand!r})"
         )
     elif method == "ra":
         sp_fn = "regress"
@@ -703,9 +828,15 @@ def _h_teffects(cmd: StataCommand) -> Dict[str, Any]:
         python = f"sp.regress({formula!r}, data=df)"
     elif method in {"aipw", "drdid"}:
         sp_fn = "aipw"
-        args = {"y": y, "treat": treat, "covariates": treat_xs}
+        args = {
+            "y": y,
+            "treat": treat,
+            "covariates": treat_xs,
+            "estimand": estimand,
+        }
         python = (
-            f"sp.aipw(data=df, y={y!r}, treat={treat!r}, " f"covariates={treat_xs!r})"
+            f"sp.aipw(data=df, y={y!r}, treat={treat!r}, "
+            f"covariates={treat_xs!r}, estimand={estimand!r})"
         )
     else:
         return _emit_error(
@@ -1106,6 +1237,8 @@ STATA_COMMAND_MAP: Dict[str, Handler] = {
     "ivregress": _h_ivreg2,  # close-enough mapping
     "ivreghdfe": _h_ivreghdfe,
     "csdid": _h_csdid,
+    "didregress": _h_didregress,
+    "xtdidregress": _h_didregress,
     "did_imputation": _h_did_imputation,
     "synth": _h_synth,
     "rdrobust": _h_rdrobust,
