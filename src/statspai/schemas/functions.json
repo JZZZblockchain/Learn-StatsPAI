@@ -12056,6 +12056,75 @@
     }
   },
   {
+    "description": "Container for an effect summary table and human-readable text.",
+    "name": "EffectSummary",
+    "parameters": {
+      "properties": {
+        "kind": {
+          "default": "effect_summary",
+          "description": "kind parameter (str).",
+          "type": "string"
+        },
+        "metadata": {
+          "default": null,
+          "description": "metadata parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "table": {
+          "description": "table parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "text": {
+          "description": "text parameter (str).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Build a decision-ready summary for a fitted causal result.",
+    "name": "effect_summary",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Forwarded to frequentist ``CausalResult.decision_summary`` or used to describe Bayesian posterior ROPE probability when available.",
+          "type": "number"
+        },
+        "direction": {
+          "default": "two-sided",
+          "description": "Directional posterior probability reported for Bayesian results.",
+          "enum": [
+            "increase",
+            "decrease",
+            "two-sided"
+          ],
+          "type": "string"
+        },
+        "result": {
+          "description": "A StatsPAI result object. ``CausalResult`` and ``BayesianCausalResult`` are handled natively; any object exposing an ``effect_summary`` method is delegated to.",
+          "type": "string"
+        },
+        "rope": {
+          "description": "Forwarded to frequentist ``CausalResult.decision_summary`` or used to describe Bayesian posterior ROPE probability when available.",
+          "type": "string"
+        },
+        "sesoi": {
+          "description": "Forwarded to frequentist ``CausalResult.decision_summary`` or used to describe Bayesian posterior ROPE probability when available.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Base class for all StatsPAI exceptions.",
     "name": "StatsPAIError",
     "parameters": {
@@ -12569,6 +12638,11 @@
           "description": "Significance level for confidence intervals.",
           "type": "number"
         },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Variable for cluster-robust standard errors. Defaults to ``group`` (unit-level clustering).",
           "type": "string"
@@ -12599,8 +12673,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time period column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode for the overall ATT. ``'analytic'`` uses the influence-function cluster SE (fast) but under-counts the variance from estimating the unit/time fixed effects and is **anti-conservative** (~0.87 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full imputation estimator. Point estimates are identical either way; per-horizon event-study SEs are unaffected.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {
@@ -12628,6 +12716,11 @@
           "description": "Significance level for confidence intervals.",
           "type": "number"
         },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Variable for cluster-robust standard errors. Defaults to ``group`` (unit-level clustering).",
           "type": "string"
@@ -12658,8 +12751,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time period column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode for the overall ATT. ``'analytic'`` uses the influence-function cluster SE (fast) but under-counts the variance from estimating the unit/time fixed effects and is **anti-conservative** (~0.87 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full imputation estimator. Point estimates are identical either way; per-horizon event-study SEs are unaffected.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {
@@ -12686,6 +12793,11 @@
           "default": 0.05,
           "description": "Two-sided CI level.",
           "type": "number"
+        },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
         },
         "cluster": {
           "description": "Cluster variable for Stage-2 SEs. Defaults to ``group``.",
@@ -12722,8 +12834,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode. ``'analytic'`` clusters the Stage-2 residuals (fast) but ignores the variance from estimating the Stage-1 fixed effects and is **anti-conservative** (empirically ~0.78 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full two-step procedure (Gardner 2021 / ``did2s``), substantially improving coverage (~0.90 vs ~0.78 in simulations; it approaches nominal as the number of clusters grows). Point estimates are identical either way.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {
@@ -20541,6 +20667,57 @@
     }
   },
   {
+    "description": "Covariate-adjusted comparison of group means (ANCOVA).",
+    "name": "ancova",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for the reported confidence interval.",
+          "type": "number"
+        },
+        "cluster": {
+          "description": "Cluster-robust SE column.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Adjustment covariates. Non-numeric covariates enter as categorical (``C(col)``).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "One row per unit.",
+          "type": "string"
+        },
+        "group": {
+          "description": "Treatment-group column. A 0/1 numeric column is used directly; any other two-level column is encoded (pass ``group_value`` to name the treated level explicitly).",
+          "type": "string"
+        },
+        "group_value": {
+          "description": "The level of ``group`` that denotes treatment.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome column.",
+          "type": "string"
+        },
+        "robust": {
+          "default": "hc1",
+          "description": "Heteroskedasticity-robust SE type forwarded to :func:`sp.regress`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "outcome",
+        "group"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Binned scatter plot with optional residualization.",
     "name": "binscatter",
     "parameters": {
@@ -20667,6 +20844,132 @@
         "data",
         "y",
         "x"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Normalise a fitted result into a tidy counterfactual frame.",
+    "name": "counterfactual_data",
+    "parameters": {
+      "properties": {
+        "result": {
+          "description": "A StatsPAI result carrying an observed-vs-counterfactual time series: a ``sp.causal_impact`` result, any ``sp.synth`` family result, or an ``sp.its`` ``ITSResult``.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Plot observed vs counterfactual with an uncertainty band.",
+    "name": "counterfactual_plot",
+    "parameters": {
+      "properties": {
+        "ax": {
+          "description": "Draw the trajectory panel into this axis instead of a new figure. When given, the effect panel is suppressed (single-axis mode).",
+          "type": "string"
+        },
+        "bands": {
+          "default": true,
+          "description": "Shade the counterfactual / effect uncertainty bands when available.",
+          "type": "boolean"
+        },
+        "figsize": {
+          "default": [
+            10.0,
+            7.0
+          ],
+          "description": "Figure size when a new figure is created.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "result": {
+          "description": "Any result supported by :func:`counterfactual_data`.",
+          "type": "string"
+        },
+        "show_effect": {
+          "default": true,
+          "description": "Add the lower pointwise-effect panel.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "Figure title. Defaults to the result's method.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Pre/post non-equivalent group design (NEGD).",
+    "name": "negd",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "As in :func:`ancova`.",
+          "type": "number"
+        },
+        "cluster": {
+          "description": "As in :func:`ancova`.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Additional adjustment covariates.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "One row per unit (wide format: a ``pre`` and a ``post`` column).",
+          "type": "string"
+        },
+        "group": {
+          "description": "Treatment-group column (see :func:`ancova` for encoding).",
+          "type": "string"
+        },
+        "group_value": {
+          "description": "As in :func:`ancova`.",
+          "type": "string"
+        },
+        "method": {
+          "default": "ancova",
+          "description": "Estimator (see above).",
+          "enum": [
+            "ancova",
+            "change_score"
+          ],
+          "type": "string"
+        },
+        "post": {
+          "description": "Baseline and follow-up outcome columns.",
+          "type": "string"
+        },
+        "pre": {
+          "description": "Baseline and follow-up outcome columns.",
+          "type": "string"
+        },
+        "robust": {
+          "default": "hc1",
+          "description": "As in :func:`ancova`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "group",
+        "pre",
+        "post"
       ],
       "type": "object"
     }
@@ -34849,6 +35152,106 @@
         "data",
         "y",
         "treatment"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Route design facts to a method-selection status.",
+    "name": "design_intake",
+    "parameters": {
+      "properties": {
+        "assignment": {
+          "description": "assignment parameter (Optional[str]).",
+          "type": "string"
+        },
+        "controls": {
+          "description": "Control-variable column names.",
+          "type": "string"
+        },
+        "data_topology": {
+          "description": "data_topology parameter (Optional[str]).",
+          "type": "string"
+        },
+        "estimand": {
+          "description": "estimand parameter (Optional[str]).",
+          "type": "string"
+        },
+        "identification_support": {
+          "description": "identification_support parameter (Optional[str]).",
+          "type": "string"
+        },
+        "needs": {
+          "description": "needs parameter (Optional[str]).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Structured routing outcome before estimator selection.",
+    "name": "IntakeResult",
+    "parameters": {
+      "properties": {
+        "assumptions": {
+          "default": null,
+          "description": "assumptions parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "candidate_designs": {
+          "default": null,
+          "description": "candidate_designs parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deciding_question": {
+          "description": "deciding_question parameter (Optional[str]).",
+          "type": "string"
+        },
+        "next_step": {
+          "default": "",
+          "description": "next_step parameter (str).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        },
+        "recommended_design": {
+          "description": "recommended_design parameter (Optional[str]).",
+          "type": "string"
+        },
+        "required_data": {
+          "default": null,
+          "description": "required_data parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "risks": {
+          "default": null,
+          "description": "risks parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "why": {
+          "default": "",
+          "description": "why parameter (str).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
       ],
       "type": "object"
     }

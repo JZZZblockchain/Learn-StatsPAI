@@ -1622,6 +1622,11 @@
           "description": "Significance level for confidence intervals.",
           "type": "number"
         },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Variable for cluster-robust standard errors. Defaults to ``group`` (unit-level clustering).",
           "type": "string"
@@ -1648,8 +1653,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time period column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode for the overall ATT. ``'analytic'`` uses the influence-function cluster SE (fast) but under-counts the variance from estimating the unit/time fixed effects and is **anti-conservative** (~0.87 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full imputation estimator. Point estimates are identical either way; per-horizon event-study SEs are unaffected.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {
@@ -1834,6 +1853,11 @@
           "description": "Significance level for confidence intervals.",
           "type": "number"
         },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Variable for cluster-robust standard errors. Defaults to ``group`` (unit-level clustering).",
           "type": "string"
@@ -1860,8 +1884,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time period column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode for the overall ATT. ``'analytic'`` uses the influence-function cluster SE (fast) but under-counts the variance from estimating the unit/time fixed effects and is **anti-conservative** (~0.87 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full imputation estimator. Point estimates are identical either way; per-horizon event-study SEs are unaffected.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {
@@ -4479,6 +4517,40 @@
     "name": "demeaned_synth"
   },
   {
+    "description": "Route design facts to a method-selection status.",
+    "input_schema": {
+      "properties": {
+        "assignment": {
+          "description": "assignment parameter (Optional[str]).",
+          "type": "string"
+        },
+        "controls": {
+          "description": "Control-variable column names.",
+          "type": "string"
+        },
+        "data_topology": {
+          "description": "data_topology parameter (Optional[str]).",
+          "type": "string"
+        },
+        "estimand": {
+          "description": "estimand parameter (Optional[str]).",
+          "type": "string"
+        },
+        "identification_support": {
+          "description": "identification_support parameter (Optional[str]).",
+          "type": "string"
+        },
+        "needs": {
+          "description": "needs parameter (Optional[str]).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "design_intake"
+  },
+  {
     "description": "Design-robust event study with explicit negative-weight diagnostics per cohort x relative-time cell. Reports which event-study coefficients receive negative weights in TWFE and flags the affected horizons. Assumptions: Parallel trends across cohorts; treatment effects may be heterogeneous across cohort and time; No anticipation prior to the event time; Implicit TWFE comparison weights are non-negative (negative-weight contamination is diagnosed, not assumed away). Pre-conditions: Long-format panel with y, treat, time, id (same conventions as callaway_santanna); Staggered/variable treatment timing so the per-(cohort, time) weight diagnostic is meaningful; Event-time window (leads, lags) contained within observed pre/post coverage. Failure modes: model_info weights show large negative TWFE weights flagging forbidden comparisons -> Drop already-treated controls and use a heterogeneity-robust staggered estimator instead of TWFE; Too few treated units per cohort-time cell to identify weights or SEs -> Coarsen the event-time window or pool cohorts to raise per-cell counts. Alternatives: sp.sun_abraham, sp.bacon_decomposition, sp.cohort_anchored_event_study, sp.callaway_santanna. Typical...",
     "input_schema": {
       "properties": {
@@ -4725,6 +4797,11 @@
           "description": "Two-sided CI level.",
           "type": "number"
         },
+        "boot_seed": {
+          "default": 0,
+          "description": "Seed for the cluster bootstrap (deterministic results).",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Cluster variable for Stage-2 SEs. Defaults to ``group``.",
           "type": "string"
@@ -4756,8 +4833,22 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Number of cluster-bootstrap replications when ``vce='bootstrap'``.",
+          "type": "integer"
+        },
         "time": {
           "description": "Time column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard-error mode. ``'analytic'`` clusters the Stage-2 residuals (fast) but ignores the variance from estimating the Stage-1 fixed effects and is **anti-conservative** (empirically ~0.78 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full two-step procedure (Gardner 2021 / ``did2s``), substantially improving coverage (~0.90 vs ~0.78 in simulations; it approaches nominal as the number of clusters grows). Point estimates are identical either way.",
+          "enum": [
+            "analytic",
+            "bootstrap"
+          ],
           "type": "string"
         },
         "y": {

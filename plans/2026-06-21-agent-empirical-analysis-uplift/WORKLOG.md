@@ -135,7 +135,7 @@ Python 3.9 note:
 
 ## Batch 2 - Agent execution loop and function-name guard
 
-Status: implemented; verification pending.
+Status: implemented and focused verification passed.
 
 Intent:
 
@@ -169,8 +169,9 @@ Implemented:
 
 Boundary notes:
 
-- Did not touch `Paper-JSS/`, `CausalAgentBench/`, release/tag/PyPI state, or
-  active `quasi/` files that appeared in the tree while this batch was running.
+- Did not touch `Paper-JSS/`, `CausalAgentBench/`, or release/tag/PyPI state.
+- A parallel commit added the `quasi/` ANCOVA/NEGD lane while this batch was
+  running; this batch did not modify those files.
 
 ## Final Verification Snapshot
 
@@ -203,6 +204,3 @@ this goal:
 
 - `src/statspai/did/callaway_santanna.py`
 - `tests/test_effect_summary.py`
-- `src/statspai/quasi/__init__.py`
-- `src/statspai/quasi/ancova.py`
-- `tests/test_quasi_ancova_negd.py`
