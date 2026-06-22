@@ -15,15 +15,15 @@ the exact audit artifacts under `Paper-JSS/replication/results/`.
 - Package archive: <https://doi.org/10.5281/zenodo.19933900>
 - PyPI: <https://pypi.org/project/StatsPAI/>
 - License: MIT, with a plain-text `LICENSE` file in the repository.
-- JSS source-snapshot package metadata version: `1.18.0`; the final-publication release gate remains pending until a clean tagged release snapshot is cut.
+- JSS source-snapshot package metadata version: `1.19.0`; the final-publication release gate remains pending until a clean tagged release snapshot is cut.
 - JSS source-snapshot audit date: 2026-05-31.
 - Public GitHub repository creation date: 2025-07-26.
 
 ## Software Scope
 
 StatsPAI exposes a unified Python interface for causal inference and applied
-econometrics. The live registry reports 1,108 registered public functions
-across 82 submodules:
+econometrics. The live registry reports 1,119 registered public functions
+across 86 submodules:
 
 ```bash
 python scripts/registry_stats.py --check
@@ -36,9 +36,9 @@ does not mean every registered helper is numerically validated.
 
 ## Validation Boundary
 
-Current JSS source-snapshot audit counts: 61 `certified`, 49 `validated`, 995
+Current JSS source-snapshot audit counts: 61 `certified`, 49 `validated`, 1006
 `api_stable`, and 3 `experimental` registry symbols. The certified/validated
-surface is therefore 110 symbols, while 809 stable auto-registered symbols
+surface is therefore 110 symbols, while 820 stable auto-registered symbols
 remain API-stable but not parity-backed.
 
 The `validated` tier requires known-truth, reference-parity, external-parity,
