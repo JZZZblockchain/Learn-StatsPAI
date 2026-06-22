@@ -121,6 +121,34 @@ def _require_finite_outputs(context: str, **arrays: Any) -> None:
         )
 
 
+def _require_full_rank(context: str, bread: Any, dtype: Any) -> None:
+    """Reject rank-deficient designs (collinear regressors).
+
+    JAX >= 0.5 returns a *finite* least-norm solution for singular systems
+    rather than NaN/Inf, so :func:`_require_finite_outputs` alone no longer
+    catches perfect collinearity. The ``(p x p)`` bread ``(X'WX)^-1`` is
+    cheaply ill-conditioned when the design is rank-deficient (its condition
+    number blows past the dtype's numerical-singularity boundary), so flag it
+    explicitly. ``p`` is the number of regressors, so this is negligible next
+    to the solve itself.
+    """
+    bread_arr = np.asarray(bread, dtype=np.float64)
+    if bread_arr.size == 0:
+        return
+    cond = float(np.linalg.cond(bread_arr))
+    if not np.isfinite(cond) or cond > 1.0 / np.finfo(dtype).eps:
+        raise NumericalInstability(
+            f"{context}: design matrix is rank-deficient "
+            "(collinear regressors after fixed-effect residualisation)",
+            recovery_hint=(
+                "Drop collinear regressors (e.g. a duplicated column) or use "
+                "the native feols path to inspect the design matrix."
+            ),
+            diagnostics={"bread_condition_number": cond},
+            alternative_functions=["sp.fast.feols"],
+        )
+
+
 # ---------------------------------------------------------------------------
 # JIT-compiled core: WLS solve + iid/HC1 sandwich
 # ---------------------------------------------------------------------------
@@ -466,6 +494,7 @@ def feols_jax(
         tss=tss,
         bread=XtWX_inv,
     )
+    _require_full_rank("feols_jax", XtWX_inv, np_dtype)
     r_squared_within = 1.0 - rss / max(tss, 1e-30)
 
     df_resid = n - p - fe_dof
@@ -1178,6 +1207,7 @@ def feols_jax_bootstrap(
         residuals=resid_point,
         bread=XtWX_inv,
     )
+    _require_full_rank("feols_jax_bootstrap", XtWX_inv, np_dtype)
 
     # Bootstrap.
     (

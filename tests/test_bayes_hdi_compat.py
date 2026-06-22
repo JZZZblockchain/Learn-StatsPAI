@@ -40,7 +40,12 @@ def test_shim_handles_typeerror_and_falls_back_to_prob(monkeypatch):
         """Simulates future arviz: only accepts ``prob``."""
         if "hdi_prob" in kwargs:
             raise TypeError("hdi() got an unexpected keyword argument 'hdi_prob'")
-        return original_hdi(samples, hdi_prob=prob)
+        # Delegate to the real arviz with whichever kwarg this version accepts
+        # (arviz < 0.18 uses ``hdi_prob``; arviz >= 1.0 uses ``prob``).
+        try:
+            return original_hdi(samples, hdi_prob=prob)
+        except TypeError:
+            return original_hdi(samples, prob=prob)
 
     monkeypatch.setattr(az, "hdi", _future_hdi)
 
@@ -59,7 +64,12 @@ def test_shim_matches_direct_az_hdi_on_current_arviz():
     rng = np.random.default_rng(2)
     samples = rng.normal(size=500)
     via_shim = _az_hdi_compat(samples, hdi_prob=0.8)
-    via_direct = np.asarray(az.hdi(samples, hdi_prob=0.8)).ravel()
+    # Direct call must use whichever kwarg the installed arviz accepts
+    # (arviz < 0.18 uses ``hdi_prob``; arviz >= 1.0 uses ``prob``).
+    try:
+        via_direct = np.asarray(az.hdi(samples, hdi_prob=0.8)).ravel()
+    except TypeError:
+        via_direct = np.asarray(az.hdi(samples, prob=0.8)).ravel()
     np.testing.assert_allclose(via_shim, via_direct, atol=1e-12)
 
 

@@ -257,6 +257,10 @@ def test_multi_outcome_no_standardize_placebo(panel_cov):
         placebo=True,
     )
     assert np.isfinite(res.estimate)
+    # Coverage snapshot: ``atol=1e-12`` over-pinned these to one platform's
+    # last bit; a modest tolerance still guards against real regressions while
+    # tolerating BLAS-level cross-platform variance (~1e-4 observed). Parity is
+    # guarded by tests/reference_parity/.
     np.testing.assert_allclose(
         [res.estimate, res.se, res.ci[0], res.ci[1]],
         [
@@ -265,7 +269,8 @@ def test_multi_outcome_no_standardize_placebo(panel_cov):
             0.016945641955689705,
             2.649733570170557,
         ],
-        atol=1e-12,
+        rtol=1e-3,
+        atol=1e-5,
     )
     np.testing.assert_allclose(
         res.model_info["per_outcome_effects"]["att"].to_numpy(),

@@ -421,9 +421,10 @@ def execute_tool(
             try:
                 envelope["error_kind"] = e.code
                 envelope["error_payload"] = e.to_dict()
-            except (TypeError, ValueError, AttributeError):
+            except Exception:
                 # Defensive fallback: a malformed diagnostics dict (e.g.
-                # a live DataFrame) shouldn't crash the error handler
+                # a live DataFrame) or a user-overridden ``to_dict`` that
+                # raises any exception shouldn't crash the error handler
                 # and lose the original exception. ``e.code`` is a
                 # class attribute with a string default on every
                 # ``StatsPAIError`` subclass, so reading it cannot fail.

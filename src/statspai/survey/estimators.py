@@ -352,7 +352,11 @@ def svyglm(
     """
     from patsy import dmatrices
 
-    y_df, X_df = dmatrices(formula, data=design.data, return_type="dataframe")
+    from ..core.utils import _coerce_string_extension_dtypes
+
+    # pandas >= 3.0 string columns are StringDtype, which patsy cannot sniff.
+    _data = _coerce_string_extension_dtypes(design.data)
+    y_df, X_df = dmatrices(formula, data=_data, return_type="dataframe")
     y = y_df.values.ravel()
     X = X_df.values
     w = design.weights

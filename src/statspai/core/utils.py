@@ -208,6 +208,30 @@ def parse_formula(formula: str) -> Dict[str, Any]:
     return result
 
 
+def _coerce_string_extension_dtypes(data: pd.DataFrame) -> pd.DataFrame:
+    """Cast pandas string-extension columns to ``object`` for patsy.
+
+    pandas >= 3.0 makes ``StringDtype`` the default for text columns. patsy's
+    categorical sniffer calls ``np.issubdtype(col.dtype, np.bool_)``, which
+    raises ``TypeError: Cannot interpret '<StringDtype(...)>' as a data type``
+    on any pandas extension dtype. Casting the offending columns back to
+    ``object`` restores the pandas < 3.0 code path (object -> categorical) with
+    identical downstream design matrices. Numeric / bool / datetime columns are
+    left untouched, and the frame is copied only when a conversion is needed.
+    """
+    offenders = {}
+    for col in data.columns:
+        dtype = data[col].dtype
+        if isinstance(dtype, pd.StringDtype) or (
+            pd.api.types.is_extension_array_dtype(dtype)
+            and pd.api.types.is_string_dtype(dtype)
+        ):
+            offenders[col] = data[col].astype(object)
+    if offenders:
+        data = data.assign(**offenders)
+    return data
+
+
 def create_design_matrices(
     formula: str, data: pd.DataFrame, return_type: str = "dataframe"
 ) -> Tuple[Any, Any]:
@@ -231,6 +255,8 @@ def create_design_matrices(
     fast = _try_simple_numeric_design_matrices(formula, data, return_type)
     if fast is not None:
         return fast
+
+    data = _coerce_string_extension_dtypes(data)
 
     try:
         y, X = dmatrices(formula, data, return_type=return_type)

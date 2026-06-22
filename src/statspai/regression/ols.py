@@ -10,7 +10,7 @@ import warnings
 
 from ..core.base import BaseModel, BaseEstimator
 from ..core.results import EconometricResults
-from ..core.utils import create_design_matrices
+from ..core.utils import create_design_matrices, _coerce_string_extension_dtypes
 from ..exceptions import (
     DataInsufficient,
     MethodIncompatibility,
@@ -348,6 +348,16 @@ class OLSEstimator(BaseEstimator):
         """
         y, X = _validate_ols_arrays(y, X, context="OLSEstimator")
         n, k = X.shape
+        # A constant outcome has no variation to explain: R-squared is
+        # undefined and the fit is degenerate. Warn explicitly rather than
+        # relying on a NumPy divide-by-zero RuntimeWarning, which newer NumPy
+        # (>= 2.x) no longer reliably emits.
+        if n > 1 and float(np.ptp(np.asarray(y, dtype=float))) == 0.0:
+            warnings.warn(
+                "OLS outcome has zero variance (constant y): the model cannot "
+                "explain any variation and R-squared is undefined.",
+                stacklevel=2,
+            )
         if n <= k:
             raise DataInsufficient(
                 "OLS requires more observations than parameters to estimate "
@@ -973,6 +983,9 @@ class OLSRegression(BaseModel):
                     diagnostics={"missing_state": "var_names"},
                 )
             var_names = list(self.var_names)
+            # pandas >= 3.0 string columns are StringDtype, which patsy cannot
+            # sniff; coerce to object so prediction rebuilds the same design.
+            data = _coerce_string_extension_dtypes(data)
             try:
                 if self._design_info is not None:
                     X_df = build_design_matrices(

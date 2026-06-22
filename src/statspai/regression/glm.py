@@ -20,7 +20,7 @@ import warnings
 
 from ..core.base import BaseModel, BaseEstimator
 from ..core.results import EconometricResults
-from ..core.utils import create_design_matrices
+from ..core.utils import create_design_matrices, _coerce_string_extension_dtypes
 from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
@@ -1467,6 +1467,10 @@ class GLMRegression(BaseModel):
                 )
 
             from patsy import PatsyError, build_design_matrices, dmatrix
+
+            # pandas >= 3.0 string columns are StringDtype, which patsy cannot
+            # sniff; coerce to object so prediction rebuilds the same design.
+            data = _coerce_string_extension_dtypes(data)
 
             try:
                 if self._design_info is not None:

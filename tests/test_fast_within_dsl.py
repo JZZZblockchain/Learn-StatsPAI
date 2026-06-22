@@ -150,7 +150,10 @@ def test_within_transform_rejects_nonfinite_and_bad_shape():
     df = _panel(seed=14)
     wt = sp.fast.within(df, fe=["i", "t"], drop_singletons=False)
 
-    bad = df["y"].to_numpy()
+    # ``.copy()`` is required: under pandas Copy-on-Write (default in
+    # pandas 3.0) ``Series.to_numpy()`` returns a read-only view, so an
+    # in-place write would raise in test setup before ``transform`` runs.
+    bad = df["y"].to_numpy().copy()
     bad[0] = np.inf
     with pytest.raises(MethodIncompatibility, match="non-finite"):
         wt.transform(bad)

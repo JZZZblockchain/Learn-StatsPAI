@@ -10,6 +10,7 @@ the migration measurable by counting:
 
 The script parses source with ``ast`` and does not import ``statspai``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,7 +71,14 @@ GENERIC_EXCEPTIONS = {
 # v1.17.x doc/API-surface hardening adds one more idiomatic defensive raise.
 # Keep the ratchet at the current audited count while taxonomy raises remain 76.
 GENERIC_RAISE_MAX = 1902
-BROAD_EXCEPT_MAX = 586
+# v1.19.x pandas-3.0 hardening: the agent error-envelope builder
+# (agent/tools/_dispatch.py) widened its ``to_dict`` fallback from three
+# specific exception types to ``except Exception`` so a user-overridden
+# ``to_dict`` raising any error degrades gracefully instead of crashing the
+# dispatcher (the fallback only reads ``e.code`` / ``str(e)``, which cannot
+# fail). That is a justified best-effort error path, so the broad-handler
+# ceiling moves 586 -> 587.
+BROAD_EXCEPT_MAX = 587
 TAXONOMY_RAISE_MIN = 42
 
 
@@ -208,9 +216,7 @@ def render(report: dict[str, Any]) -> str:
     lines.append(f"  taxonomy exceptions     : {totals['taxonomy_raises']}")
     lines.append(f"  generic built-ins       : {totals['generic_raises']}")
     lines.append(f"  other/custom exceptions : {totals['other_raises']}")
-    lines.append(
-        f"Broad except handlers     : {totals['broad_exception_handlers']}"
-    )
+    lines.append(f"Broad except handlers     : {totals['broad_exception_handlers']}")
     lines.append("")
     lines.append("Most common raised exceptions")
     lines.append("-" * 50)

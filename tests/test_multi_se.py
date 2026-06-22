@@ -75,7 +75,9 @@ def test_multi_se_wrong_length_raises(two_models):
 
 def test_multi_se_invalid_entry_type_raises(two_models):
     m1, m2 = two_models
-    with pytest.raises(TypeError, match="multi_se"):
+    # Invalid entry types raise MethodIncompatibility (a StatsPAIError /
+    # ValueError per the package exception taxonomy), not a bare TypeError.
+    with pytest.raises(sp.MethodIncompatibility, match="multi_se"):
         sp.regtable(
             m1,
             m2,
