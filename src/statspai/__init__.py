@@ -460,6 +460,7 @@ from .iv.continuous_late import continuous_iv_late, ContinuousLATEResult
 from .iv.iv_diag import iv_diag, iv_compare, IVDiagResult
 from .plots import binscatter, set_theme, list_themes, use_chinese
 from .plots import counterfactual_data, counterfactual_plot
+from .quasi import ancova, negd
 from .utils import (
     label_var,
     label_vars,
@@ -1296,9 +1297,11 @@ __all__ = [
     "citations_to_bib_entries",
     "write_bib",
     # Plots
+    "ancova",
     "binscatter",
     "counterfactual_data",
     "counterfactual_plot",
+    "negd",
     "set_theme",
     "list_themes",
     "use_chinese",
