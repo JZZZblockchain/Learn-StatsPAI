@@ -50,6 +50,30 @@
     ],
     "human_review_required": true
   },
+  "agent_execution": {
+    "workflow_steps": [
+      "Run data_contract and detect_design before choosing an estimator.",
+      "Run preflight/design_intake for DID with the declared id, time, cohort, treatment, and outcome columns.",
+      "Fit the primary and sensitivity estimators with as_handle=true so downstream steps pass result_id handles rather than serialized arrays.",
+      "Run audit_result on every primary result handle before writing the findings.",
+      "Run robustness and sensitivity follow-ups for placebo outcomes, honest DID sensitivity, and alternative lead/lag windows.",
+      "Export Table 1, Table 2, robustness tables, figures, and the replication bundle.",
+      "Run validation gates and record all failures in the handoff worklog."
+    ],
+    "result_handle_policy": "Every fitted result must be created with as_handle=true when called through MCP; downstream audit_result, honest_did_from_result, sensitivity_from_result, and plot_from_result receive result_id handles from the server cache.",
+    "handoff_artifacts": [
+      "workflow spec JSON",
+      "sample log",
+      "empirical_strategy.md",
+      "agent worklog",
+      "replication README"
+    ],
+    "stop_conditions": [
+      "Stop on missing provenance or source hashes.",
+      "Stop on unidentified design choices or failed human review.",
+      "Stop on failing gates before exporting final tables."
+    ]
+  },
   "estimators": [
     {
       "name": "callaway_santanna_att",

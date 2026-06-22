@@ -36,11 +36,18 @@ DEFAULT_SPEC = (
     / "2026-06-21-agent-empirical-analysis-uplift"
     / "example_workflow_spec.json"
 )
+SCHEMA_FUNCTIONS = REPO_ROOT / "schemas" / "functions.json"
 
 REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
     "research_question": ("treatment", "outcome", "estimand", "population"),
     "data": ("sources", "unit_of_observation", "column_map", "sample_construction"),
     "identification": ("design", "assumptions", "threats"),
+    "agent_execution": (
+        "workflow_steps",
+        "result_handle_policy",
+        "handoff_artifacts",
+        "stop_conditions",
+    ),
     "outputs": ("tables", "figures", "export_formats", "replication_bundle"),
     "reproducibility": ("seed", "environment", "data_provenance"),
     "validation": ("gates", "failure_policy", "human_review_required"),
@@ -111,6 +118,25 @@ DESIGN_RULES: dict[str, dict[str, tuple[str, ...]]] = {
         "robustness_any": ("e-value", "negative control", "tmle", "g-formula"),
     },
 }
+
+REQUIRED_AGENT_STEP_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("preflight", ("preflight", "data_contract", "detect_design", "design_intake")),
+    ("fit", ("fit", "estimate", "pipeline_", "as_handle")),
+    ("audit", ("audit_result", "audit", "diagnostic", "review")),
+    ("robustness", ("robustness", "sensitivity", "placebo", "honest", "spec_curve")),
+    ("export", ("export", "replication", "regtable", "collect", "paper_tables")),
+    ("validation", ("validation", "pytest", "quality_gate", "diff --check", "gate")),
+)
+
+STOP_CONDITION_KEYWORDS = (
+    "missing provenance",
+    "failing gate",
+    "fail",
+    "unidentified",
+    "not identifiable",
+    "human review",
+    "stop",
+)
 
 
 @dataclass(frozen=True)
@@ -263,7 +289,12 @@ def _check_design_rules(
             )
 
 
-def _check_estimators(spec: Mapping[str, Any], issues: list[Issue]) -> None:
+def _check_estimators(
+    spec: Mapping[str, Any],
+    issues: list[Issue],
+    *,
+    available_functions: Optional[set[str]],
+) -> None:
     estimators = _as_list(spec.get("estimators"))
     if not estimators:
         _add(
@@ -295,6 +326,16 @@ def _check_estimators(spec: Mapping[str, Any], issues: list[Issue]) -> None:
                 f"{path}.statspai_function",
                 "estimator must name a public sp.* StatsPAI function",
             )
+        elif available_functions is not None:
+            public_name = function.removeprefix("sp.")
+            if public_name not in available_functions:
+                _add(
+                    issues,
+                    "estimator_function_known",
+                    "error",
+                    f"{path}.statspai_function",
+                    f"{function!r} is not present in schemas/functions.json",
+                )
         target = str(estimator.get("target_estimand", "")).lower()
         if estimand and target and target != estimand:
             _add(
@@ -317,6 +358,57 @@ def _check_estimators(spec: Mapping[str, Any], issues: list[Issue]) -> None:
                 path,
                 "estimator should declare args or formula so an agent can reproduce it",
             )
+
+
+def _check_agent_execution(spec: Mapping[str, Any], issues: list[Issue]) -> None:
+    execution = _section(spec, "agent_execution")
+    steps = execution.get("workflow_steps")
+    missing_groups = [
+        group
+        for group, needles in REQUIRED_AGENT_STEP_GROUPS
+        if not _contains_any(steps, needles)
+    ]
+    if missing_groups:
+        _add(
+            issues,
+            "agent_execution_steps",
+            "error",
+            "agent_execution.workflow_steps",
+            (
+                "agent workflow must cover the full loop; missing step groups: "
+                + ", ".join(missing_groups)
+            ),
+        )
+    if not _contains_any(
+        execution.get("result_handle_policy"),
+        ("result_id", "as_handle", "handle", "cache"),
+    ):
+        _add(
+            issues,
+            "result_handle_policy",
+            "error",
+            "agent_execution.result_handle_policy",
+            "workflow must say how fitted results are passed by handle/result_id",
+        )
+    if not _contains_any(
+        execution.get("handoff_artifacts"),
+        ("workflow spec", "worklog", "README", "sample log", "replication"),
+    ):
+        _add(
+            issues,
+            "handoff_artifacts",
+            "warning",
+            "agent_execution.handoff_artifacts",
+            "declare reviewable handoff artifacts for humans and later agents",
+        )
+    if not _contains_any(execution.get("stop_conditions"), STOP_CONDITION_KEYWORDS):
+        _add(
+            issues,
+            "stop_conditions",
+            "error",
+            "agent_execution.stop_conditions",
+            "workflow must declare stop conditions for missing evidence or failed gates",
+        )
 
 
 def _check_outputs(spec: Mapping[str, Any], issues: list[Issue]) -> None:
@@ -412,7 +504,11 @@ def _check_validation(spec: Mapping[str, Any], issues: list[Issue]) -> None:
         )
 
 
-def audit_workflow_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
+def audit_workflow_spec(
+    spec: Mapping[str, Any],
+    *,
+    available_functions: Optional[set[str]] = None,
+) -> dict[str, Any]:
     """Return a structured audit report for a workflow spec mapping."""
     issues: list[Issue] = []
     if not isinstance(spec, Mapping):
@@ -422,7 +518,8 @@ def audit_workflow_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
     raw_design = str(_section(spec, "identification").get("design", ""))
     design_key = _design_key(raw_design)
     _check_design_rules(spec, issues, design_key)
-    _check_estimators(spec, issues)
+    _check_estimators(spec, issues, available_functions=available_functions)
+    _check_agent_execution(spec, issues)
     _check_outputs(spec, issues)
     _check_reproducibility(spec, issues)
     _check_validation(spec, issues)
@@ -450,6 +547,26 @@ def load_spec(path: Path) -> MutableMapping[str, Any]:
     if not isinstance(payload, MutableMapping):
         raise SystemExit(f"{path}: top-level JSON value must be an object")
     return payload
+
+
+def load_available_functions(path: Path = SCHEMA_FUNCTIONS) -> Optional[set[str]]:
+    """Load public function names from the offline schema bundle if present."""
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{path}: invalid JSON: {exc}") from exc
+    if not isinstance(payload, list):
+        raise SystemExit(f"{path}: top-level JSON value must be a list")
+    names: set[str] = set()
+    for idx, item in enumerate(payload):
+        if not isinstance(item, Mapping):
+            raise SystemExit(f"{path}: entry {idx} must be an object")
+        name = item.get("name")
+        if isinstance(name, str) and name:
+            names.add(name)
+    return names
 
 
 def render(report: Mapping[str, Any], *, path: Path) -> str:
@@ -495,7 +612,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     spec = load_spec(args.spec)
-    report = audit_workflow_spec(spec)
+    available_functions = load_available_functions()
+    report = audit_workflow_spec(spec, available_functions=available_functions)
     if args.json:
         json.dump(report, sys.stdout, indent=2, sort_keys=True)
         print()
