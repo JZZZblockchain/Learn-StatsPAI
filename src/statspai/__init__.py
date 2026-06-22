@@ -461,6 +461,7 @@ from .iv.iv_diag import iv_diag, iv_compare, IVDiagResult
 from .plots import binscatter, set_theme, list_themes, use_chinese
 from .plots import counterfactual_data, counterfactual_plot
 from .quasi import ancova, negd
+from .geolift import geolift
 from .utils import (
     label_var,
     label_vars,
@@ -1301,6 +1302,7 @@ __all__ = [
     "binscatter",
     "counterfactual_data",
     "counterfactual_plot",
+    "geolift",
     "negd",
     "set_theme",
     "list_themes",
@@ -1450,6 +1452,8 @@ __all__ = [
     # Bayesian Causal Models
     "bayes_did",
     "bayes_rd",
+    "bayes_its",
+    "bayes_synth",
     "bayes_iv",
     "bayes_fuzzy_rd",
     "bayes_hte_iv",
@@ -2479,6 +2483,8 @@ _register_lazy(
     "bayes",
     "bayes_did",
     "bayes_rd",
+    "bayes_its",
+    "bayes_synth",
     "bayes_iv",
     "bayes_fuzzy_rd",
     "bayes_hte_iv",

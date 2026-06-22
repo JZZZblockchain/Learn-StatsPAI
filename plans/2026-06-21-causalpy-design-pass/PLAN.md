@@ -154,3 +154,81 @@
   (count regen / schemas / CHANGELOG) unchanged — still held for the concurrent
   agent on `__init__.py`/`schemas/`/`CHANGELOG.md`. **Not committed** (gate).
 - Next: W3.1 `bayes_synth`, W3.2 `bayes_its` (need PyMC for happy-path tests).
+- 2026-06-21 (eve): installed PyMC 6.0.1 / ArviZ 1.2.0 into the test interpreter
+  (`--user`, reversible) so Bayesian happy-paths run for real. Existing bayes
+  suite passes under these majors EXCEPT one **pre-existing stale test**
+  (`test_low_cov_battery.py::test_bayes_did_smoke` calls `bayes_did(group=,
+  first_treat=, random_seed=)` — none are current params; unrelated to this pass,
+  not a pymc6 break). Flagged, not fixed (out of scope / bayes may be concurrently
+  owned).
+- 2026-06-21 (eve): **W3.1 + W3.2 DONE.**
+  - `src/statspai/bayes/its.py` — `bayes_its`: segmented Bayesian ITS mirroring
+    `sp.its`'s design; estimand = immediate **level change**, slope-change summary
+    + posterior-predictive counterfactual (credible bands) in model_info/detail.
+  - `src/statspai/bayes/synth.py` — `bayes_synth`: Bayesian synthetic control,
+    Dirichlet-simplex donor weights fit to the pre-period, estimand = ATT, posterior
+    counterfactual trajectory with credible bands.
+  - Extended `plots/counterfactual.py` with a `_from_bayes_series` reader so both
+    Bayesian designs join `sp.counterfactual_data` / `counterfactual_plot`.
+  - Wired via `_register_lazy("bayes", ...)` + `__all__`. Tests
+    `tests/test_bayes_its_synth.py` — 11 pass (recovers +3 ITS level / negative
+    Prop99 ATT, rhat≈1.005; simplex check; counterfactual contract w/ bands;
+    fail-loud validation). Module skips if PyMC absent.
+- 2026-06-21 (eve): **W4.1 DONE.** New `src/statspai/geolift/` package. `geolift`
+  aggregates treated markets and builds a synthetic counterfactual from untreated
+  markets via `sp.synth` (reuses tested machinery; inherits the counterfactual
+  contract). estimand=ATT + `relative_lift_pct`. Tests `tests/test_geolift.py` —
+  10 pass (recovers +5 lift on a hull-respecting multi-market panel; scalar/sum
+  agg; fail-loud validation). black + flake8 clean.
+- 2026-06-21 (eve): **W4.3 DONE.** New guide
+  `docs/guides/unified_quasi_experiments.md` (the convergence story: counterfactual
+  contract, decision layer, engine switch, ancova/negd, geolift, bayes
+  counterparts) + nav entry in `mkdocs.yml`. Markdown only — no mkdocs build-dep
+  change (mkdocs-jupyter notebook execution left as an optional follow-up).
+- 2026-06-21 (eve): **W4.2 SPEC'd, not built (deliberate).** The estimand-first
+  entry already exists (`sp.causal_question(...).estimate()` → `_dispatch_estimator`).
+  Adding `engine="bayes"` there is a clean *spec* — route `regression_discontinuity`
+  → `bayes_rd` and `synthetic_control` → `bayes_synth`, raising for design+engine
+  combos without a Bayesian path (DiD still needs the `post` adapter from W2.1).
+  Deliberately NOT bolted onto P1-owned `_dispatch_estimator` under a concurrent
+  agent — same correctness discipline as the deferred DiD engine switch. Warrants
+  its own focused pass; all building blocks (engine pattern, bayes_synth/its) now
+  exist.
+- 2026-06-21 (late): **Both deferrals NOW DONE.**
+  - **DiD engine switch** built on `did_2x2` (the clean 2×2 entry, not the giant
+    `did` dispatcher): `did_2x2(..., engine='bayes')` → `bayes_did(treat=treat,
+    post=time, ...)` — the 2×2 params map exactly. OLS path byte-identical;
+    `cluster`/`weights` rejected under bayes; sampler/prior `**kwargs` forwarded
+    only under bayes (OLS still rejects unknown kwargs). `src/statspai/did/did_2x2.py`.
+  - **Estimand-first engine= facade**: `sp.causal_question(..., engine='bayes')`
+    + `_dispatch_bayes_estimator` routes `regression_discontinuity` → `bayes_rd`,
+    wrapping the posterior in `EstimationResult` (estimate=posterior_mean,
+    ci=HDI). Designs whose `CausalQuestion` fields don't map (synth/DiD need
+    treated_unit/treatment_time/post not carried by the question) raise a clear
+    pointer to the direct `sp.bayes_*` entry. `src/statspai/question/question.py`.
+  - Tests `tests/test_did_facade_engine.py` — 10 pass (OLS unchanged; recovers +5
+    DiD ATT / +3 RD jump under bayes; fail-loud validation before PyMC import).
+    Existing did_2x2 + question suites 135 pass — no regression.
+- 2026-06-21 (late): **Integration steps — partially done, rest correctly deferred.**
+  - **CHANGELOG**: `### Added` entry under `[Unreleased]` documenting the whole
+    convergence layer + engine switches. (CHANGELOG was not concurrently edited.)
+  - **Count artifacts (docs/stats.md table + README/README_CN/docs at-a-glance
+    1,119 fns / 86 submodules)**: left for commit-time regen via
+    `registry_stats.py`. They are auto-derived, already inconsistent in-repo
+    (README cites 1,116/1,020/1,000+ in different lines), reflect the concurrent
+    agent's uncommitted registry flux, and are enforced by `registry_stats.py
+    --check` at commit — hand-editing now is premature churn.
+  - **schemas/*.json**: NOT touched — the concurrent agent has them checked out as
+    modified; regenerating would overwrite their uncommitted work.
+- 2026-06-21 (late): **ROADMAP COMPLETE.** All of W1–W4 plus both prior deferrals
+  shipped, tested, lint-clean, zero regressions, JOSS-safe (pure additions; no
+  existing numeric output changed). New tests this session total: 90 (7 files) +
+  the W1/W2 set already counted = **121 new tests**. Registry 1112→1119. Still
+  **not committed** (gate); remaining work is the commit-time count regen + (by
+  the other agent) schemas.
+- 2026-06-21 (eve): **Roadmap complete (W1–W4) bar the two documented deferrals**
+  (DiD engine switch adapter; estimand-first engine= facade). Registry 1116→1119
+  (+bayes_its, bayes_synth, geolift). New tests this session: 90 (W1–W2) + 21
+  (W3+W4 = 11 bayes + 10 geolift) = **111 pass**, 0 regressions. **Not committed**
+  (gate). Pending integration steps (count regen / schemas / CHANGELOG) still held
+  for the concurrent agent.

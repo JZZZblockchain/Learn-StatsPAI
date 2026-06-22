@@ -50,6 +50,29 @@ estimates. See `MIGRATION.md` for per-function detail.
 
 ### Added
 
+- **CausalPy-inspired convergence layer (one contract across quasi-experiments).**
+  - **`sp.counterfactual_data` / `sp.counterfactual_plot`** — one contract that
+    normalises any observed-vs-counterfactual result (causal impact, synthetic
+    control, interrupted time series, and the Bayesian time-series designs) into a
+    tidy frame and a two-panel observed-vs-counterfactual + pointwise-effect plot
+    with uncertainty bands. `sp.its` now stores the observed/fitted/counterfactual
+    series so it joins the contract (previously its `detail` was empty).
+  - **`sp.ancova` / `sp.negd`** — lightweight pre/post quasi-experiment wrappers
+    (covariate-adjusted ANCOVA; non-equivalent group design via ANCOVA or
+    change-score) returning the unified `CausalResult` with surfaced assumptions.
+  - **`sp.geolift`** — geo-experiment lift measurement: aggregates treated markets
+    and builds a synthetic counterfactual from untreated markets (via `sp.synth`),
+    reporting ATT + relative lift % and feeding `counterfactual_plot`.
+  - **`sp.bayes_its` / `sp.bayes_synth`** — Bayesian interrupted time series
+    (segmented; estimand = level change) and Bayesian synthetic control
+    (Dirichlet-simplex donor weights; estimand = ATT). Both return posterior
+    counterfactual trajectories with credible bands and require the `bayes` extra.
+  - **Inference engine switch.** `sp.rdrobust(..., engine='bayes')` and
+    `sp.did_2x2(..., engine='bayes')` route the same design to the Bayesian
+    backend (`sp.bayes_rd` / `sp.bayes_did`); options with no Bayesian analogue
+    raise rather than being silently dropped. `sp.causal_question(..., engine=
+    'bayes')` routes regression-discontinuity questions to `sp.bayes_rd`.
+    `engine='ols'` (default) is unchanged.
 - **`gardner_did(vce='bootstrap')` and `did_imputation(vce='bootstrap')`** —
   a pairs-cluster bootstrap of the *full* estimator for valid overall-ATT
   inference. The analytic defaults cluster only the second-stage / imputation

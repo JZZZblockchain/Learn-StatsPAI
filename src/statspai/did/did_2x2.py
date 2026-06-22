@@ -22,6 +22,51 @@ from scipy import stats
 from ..core.results import CausalResult
 
 
+def _did2x2_bayes_engine(
+    data: pd.DataFrame,
+    *,
+    y: str,
+    treat: str,
+    time: str,
+    covariates: Optional[List[str]],
+    cluster: Optional[str],
+    weights: Optional[str],
+    alpha: float,
+    **kwargs,
+):
+    """Route ``did_2x2(..., engine='bayes')`` to the Bayesian 2×2 DiD.
+
+    The 2×2 parameterisation maps exactly: ``treat`` is the treated-group
+    indicator and ``time`` is the pre/post indicator, which are precisely
+    ``bayes_did``'s ``treat`` and ``post`` arguments. Cluster-robust SEs and
+    analytic weights have no Bayesian analogue here, so they fail loud. Extra
+    keyword arguments (priors, ``draws``/``tune``/``chains`` etc.) are forwarded
+    to :func:`sp.bayes_did`.
+    """
+    unsupported = []
+    if cluster is not None:
+        unsupported.append("cluster")
+    if weights is not None:
+        unsupported.append("weights")
+    if unsupported:
+        raise ValueError(
+            "engine='bayes' does not support these did_2x2 options: "
+            + ", ".join(unsupported)
+            + ". Drop them, or use engine='ols' / call sp.bayes_did directly."
+        )
+    from ..bayes import bayes_did
+
+    return bayes_did(
+        data,
+        y=y,
+        treat=treat,
+        post=time,
+        covariates=list(covariates) if covariates else None,
+        hdi_prob=1.0 - float(alpha),
+        **kwargs,
+    )
+
+
 def did_2x2(
     data: pd.DataFrame,
     y: str,
@@ -32,6 +77,8 @@ def did_2x2(
     robust: bool = True,
     alpha: float = 0.05,
     weights: Optional[str] = None,
+    engine: str = "ols",
+    **kwargs,
 ) -> CausalResult:
     """
     Classic 2×2 Difference-in-Differences estimator.
@@ -58,6 +105,14 @@ def did_2x2(
         Column name for analytical weights (e.g. population weights).
         Observations are weighted proportionally — equivalent to Stata's
         ``[aweight=...]`` or R's ``weights=`` in ``lm()``.
+    engine : {'ols', 'bayes'}, default 'ols'
+        Inference backend for the same 2×2 design. ``'ols'`` (default) is the
+        frequentist OLS estimator above. ``'bayes'`` routes to
+        :func:`statspai.bayes.bayes_did` (``treat`` → group, ``time`` → post),
+        returning a :class:`~statspai.bayes.BayesianDIDResult` with the full
+        posterior + HDI (requires the ``bayes`` extra). ``cluster`` / ``weights``
+        are OLS-only and raise under ``engine='bayes'``; for full prior / sampler
+        control call ``sp.bayes_did`` directly.
 
     Returns
     -------
@@ -78,6 +133,27 @@ def did_2x2(
     >>> bool(abs(result.estimate - 5.0) < 1.0)
     True
     """
+    if engine not in ("ols", "bayes"):
+        raise ValueError(f"engine must be 'ols' or 'bayes'; got {engine!r}.")
+    if engine == "bayes":
+        return _did2x2_bayes_engine(
+            data,
+            y=y,
+            treat=treat,
+            time=time,
+            covariates=covariates,
+            cluster=cluster,
+            weights=weights,
+            alpha=alpha,
+            **kwargs,
+        )
+    if kwargs:
+        raise TypeError(
+            "did_2x2() got unexpected keyword argument(s): "
+            f"{sorted(kwargs)}. Sampler/prior kwargs are only valid with "
+            "engine='bayes'."
+        )
+
     df = data.copy()
 
     # Validate binary variables

@@ -20910,6 +20910,69 @@
     }
   },
   {
+    "description": "Estimate geo-experiment lift via synthetic control.",
+    "name": "geolift",
+    "parameters": {
+      "properties": {
+        "agg": {
+          "default": "mean",
+          "description": "How to aggregate multiple treated geos into one treated series.",
+          "enum": [
+            "mean",
+            "sum"
+          ],
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level forwarded to :func:`sp.synth`.",
+          "type": "number"
+        },
+        "data": {
+          "description": "Long panel: one row per (geo, time).",
+          "type": "string"
+        },
+        "geo": {
+          "description": "Geography (market) id column.",
+          "type": "string"
+        },
+        "method": {
+          "default": "classic",
+          "description": "Synthetic-control method passed to :func:`sp.synth` (e.g. ``'classic'``, ``'augmented'``, ``'sdid'``).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome / KPI column (e.g. sales, conversions).",
+          "type": "string"
+        },
+        "time": {
+          "description": "Time column.",
+          "type": "string"
+        },
+        "treated_geos": {
+          "description": "The geography (or geographies) the intervention was switched on in.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "treatment_time": {
+          "description": "First treated period (inclusive). Earlier periods train the synthetic control.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "outcome",
+        "geo",
+        "time",
+        "treated_geos",
+        "treatment_time"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Pre/post non-equivalent group design (NEGD).",
     "name": "negd",
     "parameters": {
@@ -25357,6 +25420,223 @@
         "y",
         "treat",
         "covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Bayesian interrupted time series (segmented regression).",
+    "name": "bayes_its",
+    "parameters": {
+      "properties": {
+        "advi_iterations": {
+          "default": 20000,
+          "description": "advi_iterations parameter (int).",
+          "type": "integer"
+        },
+        "chains": {
+          "default": 4,
+          "description": "chains parameter (int).",
+          "type": "integer"
+        },
+        "data": {
+          "description": "Observed series, sorted in time.",
+          "type": "string"
+        },
+        "draws": {
+          "default": 2000,
+          "description": "draws parameter (int).",
+          "type": "integer"
+        },
+        "hdi_prob": {
+          "default": 0.95,
+          "description": "Sampler controls; see :func:`sp.bayes_did`.",
+          "type": "number"
+        },
+        "inference": {
+          "default": "nuts",
+          "description": "inference parameter (str).",
+          "type": "string"
+        },
+        "intervention": {
+          "description": "Integer row position where the intervention begins (``0 < intervention < n``).",
+          "type": "integer"
+        },
+        "prior_level": {
+          "default": [
+            0.0,
+            10.0
+          ],
+          "description": "Mean / SD of the Normal prior on the level change (the estimand).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prior_noise": {
+          "default": 5.0,
+          "description": "Prior scales for the slope change, the pre-trend, and the residual SD.",
+          "type": "number"
+        },
+        "prior_slope_sigma": {
+          "default": 10.0,
+          "description": "Prior scales for the slope change, the pre-trend, and the residual SD.",
+          "type": "number"
+        },
+        "prior_trend_sigma": {
+          "default": 10.0,
+          "description": "Prior scales for the slope change, the pre-trend, and the residual SD.",
+          "type": "number"
+        },
+        "progressbar": {
+          "default": false,
+          "description": "progressbar parameter (bool).",
+          "type": "boolean"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "rope": {
+          "description": "Region of practical equivalence for the level change.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target_accept": {
+          "default": 0.9,
+          "description": "target_accept parameter (float).",
+          "type": "number"
+        },
+        "time": {
+          "description": "Time column (used for the trend term and the x-axis). Defaults to the row index.",
+          "type": "string"
+        },
+        "tune": {
+          "default": 1000,
+          "description": "tune parameter (int).",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Bayesian synthetic control.",
+    "name": "bayes_synth",
+    "parameters": {
+      "properties": {
+        "advi_iterations": {
+          "default": 20000,
+          "description": "advi_iterations parameter (int).",
+          "type": "integer"
+        },
+        "chains": {
+          "default": 4,
+          "description": "chains parameter (int).",
+          "type": "integer"
+        },
+        "data": {
+          "description": "Long panel (one row per unit-time).",
+          "type": "string"
+        },
+        "donors": {
+          "description": "Donor pool. Defaults to every unit except the treated one.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "draws": {
+          "default": 2000,
+          "description": "draws parameter (int).",
+          "type": "integer"
+        },
+        "hdi_prob": {
+          "default": 0.95,
+          "description": "Sampler controls; see :func:`sp.bayes_did`.",
+          "type": "number"
+        },
+        "inference": {
+          "default": "nuts",
+          "description": "inference parameter (str).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome, unit-id and time column names.",
+          "type": "string"
+        },
+        "prior_noise": {
+          "default": 5.0,
+          "description": "Half-Normal scale for the pre-period fit residual SD.",
+          "type": "number"
+        },
+        "prior_weights_alpha": {
+          "default": 1.0,
+          "description": "Dirichlet concentration. ``1.0`` is uniform over the simplex; ``<1`` favours sparse weights.",
+          "type": "number"
+        },
+        "progressbar": {
+          "default": false,
+          "description": "progressbar parameter (bool).",
+          "type": "boolean"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "rope": {
+          "description": "Region of practical equivalence for the ATT.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target_accept": {
+          "default": 0.9,
+          "description": "target_accept parameter (float).",
+          "type": "number"
+        },
+        "time": {
+          "description": "Outcome, unit-id and time column names.",
+          "type": "string"
+        },
+        "treated_unit": {
+          "description": "The treated unit's id.",
+          "type": "string"
+        },
+        "treatment_time": {
+          "description": "First treated period (inclusive); periods ``< treatment_time`` are the pre-treatment fitting window.",
+          "type": "string"
+        },
+        "tune": {
+          "default": 1000,
+          "description": "tune parameter (int).",
+          "type": "integer"
+        },
+        "unit": {
+          "description": "Outcome, unit-id and time column names.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "outcome",
+        "unit",
+        "time",
+        "treated_unit",
+        "treatment_time"
       ],
       "type": "object"
     }
@@ -46248,6 +46528,11 @@
         "design": {
           "default": "auto",
           "description": "design parameter (str).",
+          "type": "string"
+        },
+        "engine": {
+          "default": "ols",
+          "description": "engine parameter (str).",
           "type": "string"
         },
         "estimand": {

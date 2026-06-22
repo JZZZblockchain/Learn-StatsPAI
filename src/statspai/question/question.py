@@ -282,6 +282,7 @@ class CausalQuestion:
     cutoff: Optional[float] = None
     cohort: Optional[str] = None
     notes: str = ""
+    engine: str = "ols"
 
     # Filled by identify() / estimate()
     _plan: Optional[IdentificationPlan] = None
@@ -439,6 +440,7 @@ def causal_question(
     cutoff: Optional[float] = None,
     cohort: Optional[str] = None,
     notes: str = "",
+    engine: str = "ols",
 ) -> CausalQuestion:
     """Declare a causal question (see :class:`CausalQuestion`).
 
@@ -520,6 +522,12 @@ def causal_question(
             f"time_structure must be one of {_VALID_TIME}; got {time_structure!r}",
             diagnostics={"time_structure": time_structure},
         )
+    engine = _require_string_option(engine, "engine")
+    if engine not in ("ols", "bayes"):
+        raise MethodIncompatibility(
+            f"engine must be 'ols' or 'bayes'; got {engine!r}",
+            diagnostics={"engine": engine},
+        )
     return CausalQuestion(
         treatment=treatment,
         outcome=outcome,
@@ -536,6 +544,7 @@ def causal_question(
         cutoff=cutoff,
         cohort=cohort,
         notes=notes,
+        engine=engine,
     )
 
 
@@ -962,6 +971,61 @@ def _auto_design(q: CausalQuestion) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def _dispatch_bayes_estimator(
+    q: CausalQuestion,
+    plan: IdentificationPlan,
+    data: pd.DataFrame,
+    n: int,
+    **kwargs: Any,
+) -> EstimationResult:
+    """Route ``engine='bayes'`` questions to a Bayesian estimator.
+
+    Only designs whose ``CausalQuestion`` fields map cleanly to a Bayesian
+    estimator are supported here; the rest fail loud with a pointer to the
+    direct ``sp.bayes_*`` entry point. Regression discontinuity maps cleanly
+    (``running_variable`` + ``cutoff``); designs needing fields the question
+    does not carry (e.g. synthetic control's treated_unit / treatment_time, or
+    DiD's post indicator) are deferred.
+    """
+    design = q.design
+    if design == "regression_discontinuity":
+        if q.running_variable is None or q.cutoff is None:
+            raise MethodIncompatibility(
+                "design='regression_discontinuity' with engine='bayes' "
+                "requires running_variable=... and cutoff=....",
+                diagnostics={
+                    "running_variable": q.running_variable,
+                    "cutoff": q.cutoff,
+                },
+            )
+        from ..bayes import bayes_rd
+
+        res = bayes_rd(
+            data,
+            y=q.outcome,
+            running=q.running_variable,
+            cutoff=float(q.cutoff),
+            **kwargs,
+        )
+        return EstimationResult(
+            estimand=plan.estimand,
+            estimator="bayes_rd",
+            estimate=float(res.posterior_mean),
+            se=float(res.posterior_sd),
+            ci=(float(res.hdi_lower), float(res.hdi_upper)),
+            n=n,
+            underlying=res,
+            plan=plan,
+        )
+    raise MethodIncompatibility(
+        f"engine='bayes' via the causal_question facade is not yet wired for "
+        f"design={design!r}. Supported: 'regression_discontinuity'. For other "
+        "designs call the Bayesian estimator directly (e.g. sp.bayes_did, "
+        "sp.bayes_synth, sp.bayes_its, sp.bayes_iv).",
+        diagnostics={"design": design, "engine": "bayes"},
+    )
+
+
 def _dispatch_estimator(
     q: CausalQuestion, plan: IdentificationPlan, **kwargs: Any
 ) -> EstimationResult:
@@ -976,6 +1040,9 @@ def _dispatch_estimator(
     data = _require_dataframe(q.data, "data")
     n = int(len(data))
     res: Any
+
+    if getattr(q, "engine", "ols") == "bayes":
+        return _dispatch_bayes_estimator(q, plan, data, n, **kwargs)
 
     if est_name == "regress":
         formula_parts = [q.outcome, "~", q.treatment]

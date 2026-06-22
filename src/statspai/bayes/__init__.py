@@ -30,6 +30,8 @@ from ._base import (
 )
 from .did import bayes_did
 from .rd import bayes_rd
+from .its import bayes_its
+from .synth import bayes_synth
 from .iv import bayes_iv
 from .fuzzy_rd import bayes_fuzzy_rd
 from .hte_iv import bayes_hte_iv
@@ -46,6 +48,8 @@ from .policy_weights import (
 __all__ = [
     "bayes_did",
     "bayes_rd",
+    "bayes_its",
+    "bayes_synth",
     "bayes_iv",
     "bayes_fuzzy_rd",
     "bayes_hte_iv",

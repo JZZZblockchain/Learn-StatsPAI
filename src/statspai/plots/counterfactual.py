@@ -124,6 +124,32 @@ def _from_its(result: Any) -> Optional[pd.DataFrame]:
     return _add_cumulative(out)
 
 
+def _from_bayes_series(result: Any) -> Optional[pd.DataFrame]:
+    """Bayesian time-series results (bayes_its / bayes_synth) store the
+    observed / counterfactual series + credible bands on ``model_info``."""
+    mi = getattr(result, "model_info", None)
+    if not isinstance(mi, dict):
+        return None
+    detail = mi.get("detail")
+    if not isinstance(detail, dict) or "observed" not in detail:
+        return None
+    observed = np.asarray(detail["observed"], dtype=float)
+    out = pd.DataFrame(
+        {
+            "time": _coerce_times(detail.get("time"), len(observed)),
+            "observed": observed,
+            "counterfactual": np.asarray(detail["counterfactual"], dtype=float),
+        }
+    )
+    out["point_effect"] = out["observed"] - out["counterfactual"]
+    if "post" in detail:
+        out["post"] = np.asarray(detail["post"], dtype=bool)
+    if "cf_lower" in detail and "cf_upper" in detail:
+        out["cf_lower"] = np.asarray(detail["cf_lower"], dtype=float)
+        out["cf_upper"] = np.asarray(detail["cf_upper"], dtype=float)
+    return _add_cumulative(out)
+
+
 def _from_synth(result: Any) -> Optional[pd.DataFrame]:
     try:
         from ..synth.exports import _gap_table
@@ -178,7 +204,12 @@ def counterfactual_data(result: Any) -> pd.DataFrame:
     >>> sp.counterfactual_data(res).columns.tolist()  # doctest: +SKIP
     ['time', 'observed', 'counterfactual', 'point_effect', 'post', ...]
     """
-    for reader in (_from_causal_impact, _from_its, _from_synth):
+    for reader in (
+        _from_causal_impact,
+        _from_its,
+        _from_bayes_series,
+        _from_synth,
+    ):
         out = reader(result)
         if out is not None:
             return out
