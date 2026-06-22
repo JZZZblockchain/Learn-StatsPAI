@@ -410,15 +410,18 @@ def _bayes_did_panel():
     n_units, n_per = 30, 6
     rows = []
     for u in range(n_units):
-        ft = 4 if u < 15 else np.inf
+        treated = 1 if u < 15 else 0
         for t in range(n_per):
-            post = t >= ft
+            post = 1 if t >= 4 else 0
             rows.append(
                 {
                     "unit": u,
                     "time": t,
-                    "first_treat": ft if np.isfinite(ft) else np.nan,
-                    "y": 0.5 * t + (2.0 if post else 0.0) + 0.1 * rng.normal(),
+                    "treat": treated,
+                    "post": post,
+                    "y": 0.5 * t
+                    + (2.0 if (treated and post) else 0.0)
+                    + 0.1 * rng.normal(),
                 }
             )
     return pd.DataFrame(rows)
@@ -430,17 +433,18 @@ def test_bayes_did_smoke():
     res = sp.bayes_did(
         df,
         y="y",
-        group="unit",
+        treat="treat",
+        post="post",
+        unit="unit",
         time="time",
-        first_treat="first_treat",
         draws=200,
         tune=200,
         chains=1,
         target_accept=0.9,
-        random_seed=0,
+        random_state=0,
     )
-    # Only assert the result has the expected shape; we don't pin
-    # numerical values because Bayes draws will differ across pymc versions.
-    assert hasattr(res, "estimate")
-    assert hasattr(res, "ci")
-    assert np.isfinite(float(res.estimate))
+    # Shape-only assertions on the BayesianDIDResult; Bayes draws vary across
+    # pymc versions so we don't pin numbers (the true ATT is +2.0).
+    assert hasattr(res, "posterior_mean")
+    assert np.isfinite(float(res.posterior_mean))
+    assert res.hdi_lower <= res.posterior_mean <= res.hdi_upper
