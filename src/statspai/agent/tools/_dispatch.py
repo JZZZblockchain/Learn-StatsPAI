@@ -154,6 +154,54 @@ def _resolve_fn(fn_name: str) -> Callable[..., Any]:
     return cast(Callable[..., Any], fn)
 
 
+def _filter_to_signature(
+    fn: Callable[..., Any],
+    kwargs: Dict[str, Any],
+) -> "tuple[Dict[str, Any], List[str]]":
+    """Drop kwargs the resolved function cannot bind.
+
+    Mirrors the auto-dispatch path (``dispatch_registry_tool``) so the
+    curated branch is equally robust to schema↔signature drift: a
+    hand-written tool schema that advertises a parameter the estimator
+    no longer accepts (e.g. a legacy ``betas``/``sigma`` honest-DiD
+    schema kept after the estimator moved to a ``result`` object) would
+    otherwise raise an opaque ``TypeError: got an unexpected keyword
+    argument`` mid-workflow.
+
+    Returns the filtered kwargs plus the sorted list of dropped names so
+    the caller can surface them under ``_unsupported_args`` — the
+    degradation is transparent, never silent (CLAUDE.md §3.7).
+
+    Functions whose signature cannot be introspected, or that declare
+    ``**kwargs``, are left untouched (they accept anything).
+    """
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return kwargs, []
+    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return kwargs, []
+    accepted = set(params)
+    kept = {k: v for k, v in kwargs.items() if k in accepted}
+    dropped = sorted(k for k in kwargs if k not in accepted)
+    return kept, dropped
+
+
+def _accepts_param(fn: Callable[..., Any], name: str) -> bool:
+    """True if ``fn`` can bind a keyword ``name`` (named param or **kwargs)."""
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    if name in params:
+        return True
+    return any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
 def execute_tool(
     name: str,
     arguments: Dict[str, Any],
@@ -262,7 +310,26 @@ def execute_tool(
     # ``agent.tools._dispatch`` instead.
     from . import _resolve_fn as _public_resolve_fn  # re-export pointer
 
-    fn = _public_resolve_fn(spec["statspai_fn"])
+    try:
+        fn = _public_resolve_fn(spec["statspai_fn"])
+    except (ValueError, ImportError, AttributeError) as e:
+        # A curated spec whose ``statspai_fn`` no longer resolves to a
+        # public callable (rename / removal) must not crash the dispatch
+        # loop — an agent following the advertised manifest would get an
+        # unhandled JSON-RPC ``-32000`` instead of an actionable hint.
+        from ..remediation import remediate as _remediate
+
+        return {
+            "error": f"{type(e).__name__}: {e}",
+            "tool": name,
+            "remediation": _remediate(e, context={"tool": name}),
+            "hint": (
+                f"Tool {name!r} is registered but its implementation "
+                f"({spec['statspai_fn']!r}) is not available on the "
+                "statspai package. Read statspai://functions for the "
+                "current machine-readable callable index."
+            ),
+        }
     serialize = spec.get("serializer", _default_serializer)
 
     # Most tools take `data=` as first positional (or kwarg).
@@ -270,6 +337,27 @@ def execute_tool(
     kwargs = dict(arguments)
     if data is not None:
         kwargs["data"] = data
+
+    # Result-handle input. If a ``result_id`` was supplied and the
+    # function operates on a fitted ``result`` (e.g. honest_did,
+    # unified_sensitivity), resolve the cached object and inject it. This
+    # extends the result-handle chaining contract (fit ``as_handle`` →
+    # ``result_id`` → downstream tool) to curated estimators that consume
+    # a result, not just the dedicated ``*_from_result`` workflow tools.
+    if result_id and "result" not in kwargs and _accepts_param(fn, "result"):
+        from .._result_cache import RESULT_CACHE
+
+        cached = RESULT_CACHE.get(result_id)
+        if cached is not None:
+            kwargs["result"] = cached
+
+    # Drop kwargs the resolved function cannot bind (schema↔signature
+    # drift guard). Surfaced transparently below via ``_unsupported_args``.
+    # ``data`` is a server-side injection, not an agent-advertised arg, so
+    # dropping it (for tools that take a ``result`` handle instead of a
+    # frame) is not reported as drift.
+    kwargs, _dropped = _filter_to_signature(fn, kwargs)
+    _unsupported_args = [k for k in _dropped if k != "data"]
 
     def _serialize(result_obj: Any) -> Any:
         """Invoke ``serialize`` with ``detail=`` when supported.
@@ -315,6 +403,12 @@ def execute_tool(
                 context={"tool": name, "arguments": arguments},
             ),
         }
+        # If the call failed after we dropped advertised-but-unaccepted
+        # args, tell the agent — the failure may be because a parameter
+        # it relied on never reached the estimator (schema drift), not a
+        # genuine data problem.
+        if _unsupported_args:
+            envelope["_unsupported_args"] = _unsupported_args
         # Surface the structured StatsPAIError payload alongside the
         # legacy fields so MCP-mediated agents can branch on
         # ``error_kind`` (e.g. ``"assumption_violation"``,
@@ -358,6 +452,12 @@ def execute_tool(
 
     if not isinstance(out, dict):
         out = {"value": out}
+
+    # Surface any advertised-but-unaccepted args we dropped, so the
+    # caller can see the call ran with a reduced argument set rather than
+    # silently assuming every advertised parameter took effect.
+    if _unsupported_args:
+        out["_unsupported_args"] = _unsupported_args
 
     # Result-handle caching. When ``as_handle=True`` we stash the live
     # fitted result in the process-local LRU cache and surface a handle

@@ -8,6 +8,8 @@ import pytest
 
 from statspai.agent import execute_tool
 from statspai.agent._enrichment import (
+    _FOLLOWUP_BY_TOOL,
+    _required_args_by_tool,
     build_next_calls,
     build_citations,
     fetch_bibtex,
@@ -41,6 +43,7 @@ class TestBuildNextCalls:
         first = out[0]
         assert first["tool"] == "audit_result"
         assert first["arguments"]["result_id"] == "r_abc"
+        assert first["ready"] is True
         # Forwarded base args
         assert first["arguments"].get("y") == "wage"
 
@@ -49,6 +52,9 @@ class TestBuildNextCalls:
         names = [c["tool"] for c in out]
         assert "effective_f_test" in names
         assert "anderson_rubin_test" in names
+        weak_iv = next(c for c in out if c["tool"] == "effective_f_test")
+        assert weak_iv["ready"] is False
+        assert set(weak_iv["missing_arguments"]) >= {"endog", "instruments"}
 
     def test_unknown_tool_returns_empty(self):
         assert build_next_calls("not_a_real_tool") == []
@@ -62,6 +68,58 @@ class TestBuildNextCalls:
         for c in out:
             if c["tool"] == "honest_did_from_result":
                 assert c["arguments"]["method"] == "SD"
+
+    def test_rd_aliases_make_followups_ready(self):
+        out = build_next_calls(
+            "rdrobust",
+            result_id="r_rd",
+            base_args={"y": "y", "running_var": "score", "data_path": "/tmp/rd.csv"},
+        )
+        by_tool = {c["tool"]: c for c in out}
+        assert by_tool["rdplot"]["arguments"]["x"] == "score"
+        assert by_tool["rddensity"]["arguments"]["x"] == "score"
+        assert by_tool["rdsensitivity"]["arguments"]["x"] == "score"
+        assert by_tool["rdplot"]["ready"] is True
+        assert by_tool["rddensity"]["ready"] is True
+        assert by_tool["rdsensitivity"]["ready"] is True
+
+    def test_result_object_followups_expose_missing_argument(self):
+        out = build_next_calls("causal_forest", result_id="r_cf")
+        cate = next(c for c in out if c["tool"] == "cate_summary")
+        assert cate["ready"] is False
+        assert "result" in cate["missing_arguments"]
+        assert "hint" in cate
+
+    def test_all_followups_carry_schema_consistent_readiness(self):
+        required_by_tool = _required_args_by_tool()
+        assert required_by_tool
+        base_args = {
+            "data_path": "/tmp/panel.csv",
+            "y": "y",
+            "treat": "treat",
+            "time": "time",
+            "id": "id",
+            "running_var": "score",
+            "instrument": "z",
+            "endog": "d",
+            "covariates": ["x1", "x2"],
+        }
+        for source in sorted(_FOLLOWUP_BY_TOOL):
+            for call in build_next_calls(
+                source,
+                result_id="r_followup",
+                base_args=base_args,
+            ):
+                tool = call["tool"]
+                args = call.get("arguments") or {}
+                required = required_by_tool.get(tool, set())
+                expected_missing = sorted(required - set(args))
+                assert call.get("ready") is (not expected_missing), (source, call)
+                if expected_missing:
+                    assert call["missing_arguments"] == expected_missing
+                    assert call.get("hint")
+                else:
+                    assert "missing_arguments" not in call
 
 
 # ----------------------------------------------------------------------

@@ -522,10 +522,26 @@ _RESULT_OUTPUT_SCHEMA: Dict[str, Any] = {
         "next_calls": {
             "type": "array",
             "description": (
-                "Ready-to-dispatch JSON-RPC tools/call payloads "
-                "for the recommended follow-ups (enrichment)."
+                "JSON-RPC tools/call payloads for recommended "
+                "follow-ups. Each item carries ready=true when it can "
+                "be dispatched as-is; otherwise ready=false plus "
+                "missing_arguments lists the fields an agent must fill."
             ),
-            "items": {"type": "object", "additionalProperties": True},
+            "items": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "tool": {"type": "string"},
+                    "arguments": {"type": "object", "additionalProperties": True},
+                    "ready": {"type": "boolean"},
+                    "missing_arguments": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "rationale": {"type": "string"},
+                    "hint": {"type": "string"},
+                },
+            },
         },
         "citations": {
             "type": "array",
@@ -946,7 +962,9 @@ _SESSION_INSTRUCTIONS = (
     "checks; for each, call the suggest_function it emits.\n"
     "  5. honest_did_from_result / sensitivity_from_result for "
     "design-specific sensitivity (no need to ferry betas / sigma).\n"
-    "  6. bibtex(keys=[...]) for verified citations — never invent "
+    "  6. For any next_calls item, dispatch it directly only when "
+    "ready=true; when ready=false, fill missing_arguments first.\n"
+    "  7. bibtex(keys=[...]) for verified citations — never invent "
     "references; paper.bib is the single source of truth.\n\n"
     "Economist migration helpers: use prompts/list for "
     "stata_command_workflow, r_command_workflow, and "

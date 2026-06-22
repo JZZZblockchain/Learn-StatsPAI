@@ -9092,46 +9092,37 @@
     "name": "holm"
   },
   {
-    "description": "Rambachan-Roth (2023) 'honest' DID sensitivity analysis. Takes an existing DID / event-study estimate and returns honest confidence intervals under varying degrees of parallel-trends violation (smoothness or relative-magnitude restrictions). Call this when a pre-trend test rejects at low power instead of abandoning the design. Validation: certified parity evidence.",
+    "description": "Rambachan-Roth (2023) 'honest' DID sensitivity analysis. Operates on a fitted event-study / DID result: pass ``result_id`` from a prior ``sp.event_study`` / ``sp.callaway_santanna`` / ``sp.did_imputation`` / ``sp.sun_abraham`` fit run with ``as_handle=true`` (or use the ``honest_did_from_result`` tool, which auto-extracts the event-study coefficients). Returns honest confidence intervals under varying degrees of parallel-trends violation (smoothness or relative-magnitude restrictions). Call this when a pre-trend test rejects at low power instead of abandoning the design. Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
-        "betas": {
-          "description": "Event-study coefficients.",
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for the honest CI.",
+          "type": "number"
+        },
+        "e": {
+          "default": 0,
+          "description": "Event-time period (post-treatment horizon) to build the honest CI for.",
+          "type": "integer"
+        },
+        "m_grid": {
+          "description": "Grid of M bounds on the parallel-trends violation to sweep.",
           "items": {
             "type": "number"
           },
           "type": "array"
         },
-        "m_bar": {
-          "description": "Bound on deviation magnitude.",
-          "type": "number"
-        },
         "method": {
-          "default": "SD",
-          "description": "SD = smoothness deviation; RM = relative magnitude.",
+          "default": "smoothness",
+          "description": "Restriction family: 'smoothness' (second differences) or 'relative_magnitude'.",
           "enum": [
-            "SD",
-            "RM"
+            "smoothness",
+            "relative_magnitude"
           ],
           "type": "string"
-        },
-        "num_post_periods": {
-          "type": "integer"
-        },
-        "num_pre_periods": {
-          "type": "integer"
-        },
-        "sigma": {
-          "description": "Covariance matrix of betas (square 2-D array).",
-          "type": "array"
         }
       },
-      "required": [
-        "betas",
-        "sigma",
-        "num_pre_periods",
-        "num_post_periods"
-      ],
+      "required": [],
       "type": "object"
     },
     "name": "honest_did"
@@ -19739,25 +19730,40 @@
     "description": "Unified sensitivity analysis for observational causal estimates -- supports Oster (2019) delta/R-max, Cinelli-Hazlett (2020) omitted-variable bias bounds, and E-values (VanderWeele-Ding 2017). Tells the agent how strong an unobserved confounder would have to be to overturn the result.",
     "input_schema": {
       "properties": {
-        "benchmark_covariate": {
-          "description": "Covariate used as the benchmark for unobserved-confounder strength.",
-          "type": "string"
+        "controls": {
+          "description": "Observed control columns.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
-        "method": {
-          "default": "auto",
-          "enum": [
-            "oster",
-            "cinelli_hazlett",
-            "evalue",
-            "auto"
-          ],
-          "type": "string"
+        "include_oster": {
+          "default": true,
+          "type": "boolean"
+        },
+        "include_rosenbaum": {
+          "default": true,
+          "type": "boolean"
+        },
+        "include_sensemakr": {
+          "default": true,
+          "type": "boolean"
         },
         "result": {
-          "description": "Fitted regression / causal result handle (set by the caller).",
+          "description": "Fitted regression / causal result handle (result_id from a prior fit run with as_handle=true). Required -- the bounds are computed relative to this estimate.",
           "type": "string"
         },
-        "treatment": {
+        "rho_max": {
+          "default": 1.0,
+          "description": "Max correlation between the omitted confounder and treatment, for the Oster bound.",
+          "type": "number"
+        },
+        "treat": {
+          "description": "Treatment column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column (lets the bound recompute covariate R^2 from data alongside the result).",
           "type": "string"
         }
       },
@@ -20122,39 +20128,43 @@
     "description": "Specification-curve analysis (Simonsohn et al. 2020): enumerates every combination of model choices the user declares defensible, runs them all, and returns the sign/magnitude distribution. Use when an agent needs to report robustness across a researcher-degree-of-freedom multiverse.",
     "input_schema": {
       "properties": {
-        "covariates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "alpha": {
+          "default": 0.05,
+          "type": "number"
         },
-        "model_family": {
-          "default": "ols",
-          "enum": [
-            "ols",
-            "did",
-            "iv",
-            "panel"
-          ],
+        "cluster_var": {
+          "description": "Cluster column for clustered SEs.",
           "type": "string"
         },
-        "subsample_vars": {
-          "description": "Variables defining subsample splits to include in the curve.",
+        "controls": {
+          "description": "The multiverse of control sets: a list of control-column lists, one per specification.",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "se_types": {
+          "description": "Standard-error flavours to sweep (e.g. 'classical', 'hc1', 'cluster').",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
-        "treatment": {
+        "x": {
+          "description": "Focal regressor (treatment) column.",
           "type": "string"
         },
         "y": {
+          "description": "Outcome column.",
           "type": "string"
         }
       },
       "required": [
         "y",
-        "treatment"
+        "x"
       ],
       "type": "object"
     },

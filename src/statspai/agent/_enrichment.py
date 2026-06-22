@@ -4,9 +4,10 @@ The bare ``to_dict(detail='agent')`` payload from a fitted result is
 correct but lean. With token budgets relaxed (per-call billing rather
 than per-token), we can ship more value-per-roundtrip:
 
-* ``next_calls`` — a list of ready-to-dispatch JSON-RPC ``tools/call``
-  payloads the agent can copy-paste verbatim. Eliminates the "what do
-  I call next?" reflection step.
+* ``next_calls`` — a list of JSON-RPC ``tools/call`` payloads annotated
+  with ``ready`` / ``missing_arguments``. Complete calls can be
+  copy-pasted verbatim; incomplete calls say exactly what the agent must
+  ask for or infer before dispatch.
 * ``citations`` — bib keys for the methods used + verified BibTeX
   bodies pulled from ``paper.bib``. Closes the citation-hallucination
   loophole at the source.
@@ -20,7 +21,8 @@ result object lacks the expected fields.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from functools import lru_cache
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 # ----------------------------------------------------------------------
 # next_calls: pre-built JSON-RPC payloads
@@ -28,9 +30,11 @@ from typing import Any, Dict, Iterable, List, Optional
 
 #: Map from tool family → list of follow-up tool calls. Each entry is
 #: a templated tools/call payload; the caller substitutes ``result_id``
-#: and any required arg values. The order encodes "what should you do
-#: next" — most-important first, so an agent on a tight token budget
-#: can stop reading after entry [0] and still make a defensible move.
+#: and any known arg values. Readiness metadata is added after alias
+#: propagation so incomplete calls are explicit, not implied runnable.
+#: The order encodes "what should you do next" -- most-important first,
+#: so an agent on a tight token budget can stop reading after entry [0]
+#: and still make a defensible move.
 _FOLLOWUP_BY_TOOL: Dict[str, List[Dict[str, Any]]] = {
     "did": [
         {
@@ -145,13 +149,98 @@ _FOLLOWUP_BY_TOOL: Dict[str, List[Dict[str, Any]]] = {
 }
 
 
+@lru_cache(maxsize=1)
+def _required_args_by_tool() -> Dict[str, Set[str]]:
+    """Return required manifest args for advertised tools.
+
+    Prefer the generated ``schemas/tools.json`` snapshot because this is
+    the offline contract agents inspect and it avoids importing the full
+    live registry inside result enrichment. If the snapshot is absent,
+    fall back to the live manifest. Enrichment must never make the
+    primary estimator fail merely because readiness metadata could not
+    be built.
+    """
+    required_by_tool: Dict[str, Set[str]] = {}
+    try:
+        import json
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parents[3]
+        snapshot = repo_root / "schemas" / "tools.json"
+        if snapshot.exists():
+            manifest = json.loads(snapshot.read_text(encoding="utf-8"))
+            for tool in manifest:
+                schema = tool.get("input_schema") or tool.get("inputSchema") or {}
+                required_by_tool[str(tool.get("name"))] = set(
+                    schema.get("required") or []
+                )
+            return required_by_tool
+    except Exception:
+        required_by_tool = {}
+
+    try:
+        from .tools import tool_manifest
+
+        manifest = tool_manifest()
+    except Exception:
+        return required_by_tool
+
+    for tool in manifest:
+        schema = tool.get("input_schema") or tool.get("inputSchema") or {}
+        required_by_tool[str(tool.get("name"))] = set(schema.get("required") or [])
+    return required_by_tool
+
+
+def _followup_base_args(base_args: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize common column aliases for chained follow-up calls."""
+    out = dict(base_args)
+    aliases = (
+        ("running_var", "x"),
+        ("x", "running_var"),
+        ("treat", "treatment"),
+        ("treatment", "treat"),
+        ("id", "unit"),
+        ("id", "entity"),
+        ("unit", "id"),
+        ("unit", "entity"),
+        ("cohort", "g"),
+        ("g", "cohort"),
+        ("time", "t"),
+        ("t", "time"),
+        ("instrument", "instruments"),
+        ("instruments", "instrument"),
+    )
+    for source, target in aliases:
+        if source in out and target not in out:
+            out[target] = out[source]
+    return out
+
+
+def _annotate_readiness(out: Dict[str, Any]) -> Dict[str, Any]:
+    """Mark whether a follow-up payload has all required manifest args."""
+    tool = str(out.get("tool") or "")
+    required = _required_args_by_tool().get(tool, set())
+    args = out.get("arguments") or {}
+    missing = sorted(required - set(args))
+    if missing:
+        out["ready"] = False
+        out["missing_arguments"] = missing
+        out.setdefault(
+            "hint",
+            "Supply missing_arguments before dispatching this follow-up.",
+        )
+    else:
+        out["ready"] = True
+    return out
+
+
 def _instantiate_followup(
     template: Dict[str, Any],
     *,
     result_id: Optional[str],
     base_args: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Materialise a follow-up template into a callable tools/call payload."""
+    """Materialise a follow-up template and annotate dispatch readiness."""
     out: Dict[str, Any] = {
         "tool": template["tool"],
         "arguments": dict(template.get("arguments") or {}),
@@ -164,10 +253,30 @@ def _instantiate_followup(
     # (e.g. agents commonly want the same outcome / treatment / time
     # column names without restating them). We never overwrite an
     # explicit value the template carries.
-    for key in ("y", "treat", "time", "id", "data_path", "running_var", "instrument"):
-        if key in base_args and key not in out["arguments"]:
-            out["arguments"][key] = base_args[key]
-    return out
+    normalized_base_args = _followup_base_args(base_args)
+    for key in (
+        "y",
+        "x",
+        "treat",
+        "treatment",
+        "time",
+        "t",
+        "id",
+        "unit",
+        "entity",
+        "cohort",
+        "g",
+        "covariates",
+        "data_path",
+        "running_var",
+        "instrument",
+        "instruments",
+        "endog",
+        "formula",
+    ):
+        if key in normalized_base_args and key not in out["arguments"]:
+            out["arguments"][key] = normalized_base_args[key]
+    return _annotate_readiness(out)
 
 
 def build_next_calls(
@@ -176,7 +285,7 @@ def build_next_calls(
     result_id: Optional[str] = None,
     base_args: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Return a list of pre-filled tools/call payloads for follow-ups."""
+    """Return pre-filled follow-up calls with readiness metadata."""
     base_args = base_args or {}
     templates = _FOLLOWUP_BY_TOOL.get(tool_name, [])
     return [

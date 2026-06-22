@@ -76,42 +76,51 @@ SPECS: List[Dict[str, Any]] = [
         "name": "honest_did",
         "description": (
             "Rambachan-Roth (2023) 'honest' DID sensitivity analysis. "
-            "Takes an existing DID / event-study estimate and returns "
-            "honest confidence intervals under varying degrees of "
-            "parallel-trends violation (smoothness or relative-magnitude "
-            "restrictions).  Call this when a pre-trend test rejects "
-            "at low power instead of abandoning the design."
+            "Operates on a fitted event-study / DID result: pass "
+            "``result_id`` from a prior ``sp.event_study`` / "
+            "``sp.callaway_santanna`` / ``sp.did_imputation`` / "
+            "``sp.sun_abraham`` fit run with ``as_handle=true`` (or use "
+            "the ``honest_did_from_result`` tool, which auto-extracts the "
+            "event-study coefficients). Returns honest confidence "
+            "intervals under varying degrees of parallel-trends violation "
+            "(smoothness or relative-magnitude restrictions). Call this "
+            "when a pre-trend test rejects at low power instead of "
+            "abandoning the design."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "betas": {
+                "e": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": (
+                        "Event-time period (post-treatment horizon) to "
+                        "build the honest CI for."
+                    ),
+                },
+                "m_grid": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Event-study coefficients.",
-                },
-                "sigma": {
-                    "type": "array",
                     "description": (
-                        "Covariance matrix of betas " "(square 2-D array)."
+                        "Grid of M bounds on the parallel-trends " "violation to sweep."
                     ),
                 },
-                "num_pre_periods": {"type": "integer"},
-                "num_post_periods": {"type": "integer"},
                 "method": {
                     "type": "string",
-                    "enum": ["SD", "RM"],
-                    "default": "SD",
+                    "enum": ["smoothness", "relative_magnitude"],
+                    "default": "smoothness",
                     "description": (
-                        "SD = smoothness deviation; " "RM = relative magnitude."
+                        "Restriction family: 'smoothness' (second "
+                        "differences) or 'relative_magnitude'."
                     ),
                 },
-                "m_bar": {
+                "alpha": {
                     "type": "number",
-                    "description": "Bound on deviation magnitude.",
+                    "default": 0.05,
+                    "description": "Significance level for the honest CI.",
                 },
             },
-            "required": ["betas", "sigma", "num_pre_periods", "num_post_periods"],
+            "required": [],
         },
         "statspai_fn": "honest_did",
         "serializer": _default_serializer,

@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
 
 import numpy as np
 import pandas as pd
@@ -242,6 +241,9 @@ class TestAnnotationsAndOutputSchema:
         # The full envelope IS documented here (just not per-tool).
         for key in ("estimate", "std_error", "violations", "error_kind"):
             assert key in schema["properties"]
+        next_call_props = schema["properties"]["next_calls"]["items"]["properties"]
+        assert "ready" in next_call_props
+        assert "missing_arguments" in next_call_props
 
     def test_output_schema_documents_only_real_fields(self):
         # Guard against documenting invented keys: every documented

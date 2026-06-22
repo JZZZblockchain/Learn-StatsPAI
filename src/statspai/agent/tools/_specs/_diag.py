@@ -67,27 +67,45 @@ SPECS: List[Dict[str, Any]] = [
                 "result": {
                     "type": "string",
                     "description": (
-                        "Fitted regression / causal result "
-                        "handle (set by the caller)."
+                        "Fitted regression / causal result handle "
+                        "(result_id from a prior fit run with "
+                        "as_handle=true). Required — the bounds are "
+                        "computed relative to this estimate."
                     ),
                 },
-                "method": {
-                    "type": "string",
-                    "enum": ["oster", "cinelli_hazlett", "evalue", "auto"],
-                    "default": "auto",
-                },
-                "treatment": {"type": "string"},
-                "benchmark_covariate": {
+                "y": {
                     "type": "string",
                     "description": (
-                        "Covariate used as the benchmark "
-                        "for unobserved-confounder strength."
+                        "Outcome column (lets the bound recompute "
+                        "covariate R^2 from data alongside the result)."
                     ),
                 },
+                "treat": {"type": "string", "description": "Treatment column."},
+                "controls": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Observed control columns.",
+                },
+                "rho_max": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": (
+                        "Max correlation between the omitted confounder "
+                        "and treatment, for the Oster bound."
+                    ),
+                },
+                "include_oster": {"type": "boolean", "default": True},
+                "include_rosenbaum": {"type": "boolean", "default": True},
+                "include_sensemakr": {"type": "boolean", "default": True},
             },
             "required": [],
         },
-        "statspai_fn": "sensitivity",
+        # The description names the unified Oster / Cinelli-Hazlett /
+        # E-value dashboard, which is ``sp.unified_sensitivity``. The
+        # legacy ``"sensitivity"`` target did not exist on the package
+        # (agents hit an unhandled error); the schema above is faithful to
+        # ``sp.unified_sensitivity``'s signature.
+        "statspai_fn": "unified_sensitivity",
         "serializer": _default_serializer,
     },
     {
@@ -102,27 +120,34 @@ SPECS: List[Dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "y": {"type": "string"},
-                "treatment": {"type": "string"},
-                "covariates": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "model_family": {
+                "y": {"type": "string", "description": "Outcome column."},
+                "x": {
                     "type": "string",
-                    "enum": ["ols", "did", "iv", "panel"],
-                    "default": "ols",
+                    "description": "Focal regressor (treatment) column.",
                 },
-                "subsample_vars": {
+                "controls": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "string"}},
+                    "description": (
+                        "The multiverse of control sets: a list of "
+                        "control-column lists, one per specification."
+                    ),
+                },
+                "se_types": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": (
-                        "Variables defining subsample splits "
-                        "to include in the curve."
+                        "Standard-error flavours to sweep (e.g. "
+                        "'classical', 'hc1', 'cluster')."
                     ),
                 },
+                "cluster_var": {
+                    "type": "string",
+                    "description": "Cluster column for clustered SEs.",
+                },
+                "alpha": {"type": "number", "default": 0.05},
             },
-            "required": ["y", "treatment"],
+            "required": ["y", "x"],
         },
         "statspai_fn": "spec_curve",
         "serializer": _default_serializer,

@@ -1134,7 +1134,13 @@ def _tool_detect_design(
     fn = getattr(sp, "detect_design", None)
     if fn is None:
         return {"error": "sp.detect_design is not available"}
-    kwargs = {k: v for k, v in arguments.items() if v is not None}
+    # The advertised schema uses agent-facing hint names
+    # (``id_col_hint`` / ``time_col_hint``); the underlying
+    # ``sp.detect_design`` takes ``unit`` / ``time``. Translate so an
+    # agent following the manifest does not hit a TypeError. Honoring the
+    # advertised schema in dispatch keeps schemas/*.json byte-identical.
+    _HINT_MAP = {"id_col_hint": "unit", "time_col_hint": "time"}
+    kwargs = {_HINT_MAP.get(k, k): v for k, v in arguments.items() if v is not None}
     try:
         out = fn(data, **kwargs)
     except Exception as e:
