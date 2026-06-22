@@ -136,6 +136,45 @@ same fail-silently bug existed independently in the OLS estimator.
 
 ---
 
+<a id="hdfe-cluster-nested-fe"></a>
+
+## Unreleased — ⚠️ `sp.hdfe_ols` cluster-robust SE inflated when an absorbed FE was nested in the cluster
+
+**What changed.** The native HDFE backend (`sp.hdfe_ols` / `sp.absorb_ols`,
+**not** the pyfixest path) built the CRV1 finite-sample factor
+`(N−1)/(N−K) · G/(G−1)` with `K` counting **every** absorbed fixed-effect level
+(plus the regressors). When a fixed-effect dimension is fully nested in the
+cluster variable — the canonical `absorb(unit + time) + cluster(unit)` case,
+where each `unit` maps to exactly one cluster — the cluster-robust sandwich
+already accounts for arbitrary within-cluster correlation, so counting that
+FE's `(G−1)` levels again in `K` double-penalises the degrees of freedom and
+inflates the standard error. The backend now detects nested dimensions (every
+FE level maps to a single cluster level) and drops their levels from the cluster
+DOF, matching Stata `reghdfe`, `pyfixest`, and `sp.feols`. Non-nested
+dimensions (e.g. `time` under `cluster(unit)`) are charged exactly as before;
+when *all* absorbed FEs are nested, one degree of freedom is retained for the
+intercept.
+
+**Who is affected.** Anyone reading clustered standard errors / t-stats /
+p-values / CIs from `sp.hdfe_ols(..., cluster=…)` or `sp.absorb_ols(...,
+cluster=…)` where an absorbed FE is nested in the cluster — the very common
+`absorb(entity, time) + cluster(entity)` design. The inflation grew with the
+ratio of absorbed FE levels to `N`: ≈5.4% on the reporter's MRE panel and ≈6.3%
+on a 37,869-row firm-year panel. Point estimates and `iid` / `hetero` SEs are
+unchanged; only clustered SEs change, and they get **smaller** (less
+conservative), so results that were marginally non-significant may now cross
+conventional thresholds.
+
+**Action required.** Re-run any `sp.hdfe_ols` / `sp.absorb_ols` fits that
+combined absorbed FEs with clustering on (or nested in) one of those FE
+dimensions; the previous clustered SEs were systematically too large. The
+corrected FE dof charged to CRV1 is exposed as `dof_fe_cluster`, and the
+detected nested dimensions as `nested_fe` (in `cluster_info`) /
+`nested_fe_in_cluster` (raw result), so you can confirm what was reclassified.
+`sp.feols` (pyfixest backend) was already correct and is unchanged.
+
+---
+
 <a id="feols-nofe-weights"></a>
 
 ## 1.18.0 — ⚠️ `sp.feols` ignored `weights=` when no fixed effects were absorbed

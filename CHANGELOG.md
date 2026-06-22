@@ -38,6 +38,22 @@ estimates. See `MIGRATION.md` for per-function detail.
   `did2s` convention), matching the non-event-study path exactly. Previously an
   *unweighted* mean disagreed with the non-ES ATT under heterogeneous effects /
   unbalanced horizon support (e.g. 1.63 vs 1.75).
+- **`sp.hdfe_ols` / `sp.absorb_ols` cluster-robust SEs (native HDFE backend)** —
+  the CRV1 finite-sample factor `(N−1)/(N−K) · G/(G−1)` no longer counts, in
+  `K`, fixed-effect levels that are **nested within the cluster variable**. In
+  the canonical `absorb(unit + time) + cluster(unit)` layout the absorbed
+  `unit` FE is fully nested in `cluster(unit)`, so the cluster-robust sandwich
+  already captures that within-cluster correlation; charging `unit`'s `(G−1)`
+  levels again in `K` inflated every clustered SE. The native backend now omits
+  nested-FE levels from the cluster DOF (matching the `reghdfe` / `pyfixest` /
+  `sp.feols` convention) while still charging non-nested levels (e.g. `time`).
+  Point estimates and non-clustered (`iid` / `hetero`) SEs are unchanged; only
+  `cluster=` SEs change — they get *smaller*. The reporter's MRE (#26) now gives
+  `sp.hdfe_ols` and `sp.feols` identical SEs (ratio 1.0); the prior inflation
+  was ≈5.4% on the synthetic panel and ≈6.3% on a 37,869-row firm-year panel.
+  Two new result fields expose the correction: `dof_fe_cluster` (FE dof actually
+  charged to CRV1) and `nested_fe` / `nested_fe_in_cluster` (which absorbed
+  dimensions were detected as nested in the cluster).
 
 ### Known limitations
 
@@ -116,6 +132,42 @@ estimates. See `MIGRATION.md` for per-function detail.
   nominal 95% level) and recommend `se_method='abadie_imbens'`. The default
   *number* is unchanged (JOSS-review stability); the internal `_ai_se`
   docstring no longer mislabels the simple SE as Abadie–Imbens (2006).
+
+### Fixed
+
+- **pandas 3.0 compatibility (formulas with string categoricals).** pandas 3.0
+  makes `StringDtype` the default for text columns, which patsy's categorical
+  sniffer cannot interpret — so any formula with a string categorical
+  (e.g. `y ~ x + C(group)`) raised `TypeError: Cannot interpret
+  '<StringDtype>' as a data type` in `sp.regress` / `sp.ols` / `sp.glm` /
+  `sp.svyglm` at both `fit` and `predict`. String-extension columns are now
+  coerced to `object` at every patsy entry point. No-op on pandas < 3.0;
+  point estimates and standard errors are unchanged.
+- **`sp.fast.feols(..., backend='jax')` rank-deficiency detection.** Newer JAX
+  returns a finite least-norm solution for a singular design instead of
+  `NaN`/`Inf`, so perfectly collinear regressors silently produced output. The
+  JAX path now raises `NumericalInstability` on a rank-deficient design (via the
+  bread condition number), matching the native `feols` behaviour.
+- **`sp.regress` / `sp.ols` constant-outcome warning.** A zero-variance outcome
+  now emits an explicit `UserWarning` (R² is undefined); previously this relied
+  on an incidental NumPy divide warning that newer NumPy no longer raises.
+- **Agent tool error envelope.** `execute_tool` no longer crashes if a custom
+  result's `to_dict()` raises an unexpected exception type; the error-handling
+  fallback now degrades gracefully on any exception.
+
+### Internal
+
+- **Test-suite forward-compatibility (no library behaviour change).** The
+  default `pytest` run is now clean under pandas 3.0 and across BLAS backends:
+  the `error_taxonomy` governance ratchet moved from the default suite to a
+  dedicated CI step (so a fresh clone is not gated by a drifting count); a CoW
+  read-only test-setup bug was fixed (`Series.to_numpy().copy()`); platform-
+  sensitive RD/synthetic-control coverage snapshots now check data-driven
+  standard errors / optimiser outputs for validity while keeping point
+  estimates pinned (cross-language numerical parity is still guarded by
+  `tests/reference_parity/`); and arviz/PyMC/exception-type test assumptions
+  were made version-agnostic. A new CI lane runs the full suite under pandas
+  3.x on every push/PR.
 
 ## [1.19.0] — 2026-06-20
 
