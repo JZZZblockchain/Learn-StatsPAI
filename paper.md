@@ -192,10 +192,10 @@ per-method specialization.
 `StatsPAI` ships a concrete validation and community-readiness dossier
 built from two complementary tracks. The first is a cross-language
 parity harness: `StatsPAI`, R, and Stata are run on the same input data
-and their numerical output is compared directly. The harness checks 51
-modules against a reference R implementation on identical input bytes;
-43 of these are also checked against Stata, and one further module
-(`xtabond`) against Stata only, for 44 Stata comparisons in total. On closed-form estimators
+and their numerical output is compared directly. The harness checks
+more than sixty estimator modules against a reference R implementation
+on identical input bytes, the large majority of which are also checked
+against Stata. On closed-form estimators
 the three languages agree to machine precision; iterative and
 machine-learning estimators agree within pre-registered, documented
 tolerances, and the few remaining convention gaps are disclosed rather
