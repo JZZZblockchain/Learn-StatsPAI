@@ -4,6 +4,8 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-06-22
+
 ### ⚠️ Correctness
 
 These change *inference output* (standard errors / p-values / CIs), not point

@@ -7,7 +7,7 @@ Internal version-to-version migrations are at the top; the long-form
 
 <a id="cusum-boundary"></a>
 
-## Unreleased — ⚠️ `sp.cusum_test` used the wrong CUSUM boundary
+## 1.20.0 — ⚠️ `sp.cusum_test` used the wrong CUSUM boundary
 
 **What changed.** The recursive-residual CUSUM test compared the CUSUM path
 against a **constant** critical value (`1.358` at 5%). That constant is the
@@ -29,7 +29,7 @@ the returned `reject` instead. Point estimates / the CUSUM path are unchanged.
 
 <a id="lee-imbens-manski"></a>
 
-## Unreleased — ⚠️ `sp.lee_bounds` reported a Horowitz–Manski CI labelled "Imbens–Manski"
+## 1.20.0 — ⚠️ `sp.lee_bounds` reported a Horowitz–Manski CI labelled "Imbens–Manski"
 
 **What changed.** The confidence interval padded *both* bound endpoints by the
 two-sided `z_{1−α/2}`. That is the Horowitz–Manski interval for the identified
@@ -51,7 +51,7 @@ conservative (too wide).
 
 <a id="rd-hc-variance"></a>
 
-## Unreleased — ⚠️ RD heteroskedasticity-robust standard errors were inflated
+## 1.20.0 — ⚠️ RD heteroskedasticity-robust standard errors were inflated
 
 **What changed.** The local-polynomial HC ("conventional"/"robust") variance
 built its sandwich *meat* with the kernel weight to the **first** power
@@ -73,7 +73,7 @@ conservative (too wide). Re-run if you reported their exact width.
 
 <a id="cs-pretrend-f"></a>
 
-## Unreleased — ⚠️ `sp.callaway_santanna` pre-trend Wald test over-rejected
+## 1.20.0 — ⚠️ `sp.callaway_santanna` pre-trend Wald test over-rejected
 
 **What changed.** The joint pre-trend test (`model_info["pretrend_test"]`)
 referred its Wald statistic `W = θ̂'V̂⁻¹θ̂` to `χ²(k)`. Because the pre-period
@@ -94,7 +94,7 @@ likely to spuriously reject parallel trends).
 
 <a id="gardner-es-weighting"></a>
 
-## Unreleased — ⚠️ `gardner_did(event_study=True)` overall ATT was unweighted
+## 1.20.0 — ⚠️ `gardner_did(event_study=True)` overall ATT was unweighted
 
 **What changed.** In event-study mode the overall ATT was the *unweighted* mean
 of the post-period coefficients. It is now the treated-observation-**weighted**
@@ -114,7 +114,7 @@ matches the obs-weighted (non-event-study) value.
 
 <a id="regress-weights"></a>
 
-## Unreleased — ⚠️ `sp.regress` ignored `weights=` (silently fit unweighted OLS)
+## 1.20.0 — ⚠️ `sp.regress` ignored `weights=` (silently fit unweighted OLS)
 
 **What changed.** `sp.regress(..., weights=col)` accepted the `weights`
 argument through `**kwargs` and then never used it — the returned fit was
@@ -138,7 +138,7 @@ same fail-silently bug existed independently in the OLS estimator.
 
 <a id="hdfe-cluster-nested-fe"></a>
 
-## Unreleased — ⚠️ `sp.hdfe_ols` cluster-robust SE inflated when an absorbed FE was nested in the cluster
+## 1.20.0 — ⚠️ `sp.hdfe_ols` cluster-robust SE inflated when an absorbed FE was nested in the cluster
 
 **What changed.** The native HDFE backend (`sp.hdfe_ols` / `sp.absorb_ols`,
 **not** the pyfixest path) built the CRV1 finite-sample factor
