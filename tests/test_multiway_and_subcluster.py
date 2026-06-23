@@ -68,8 +68,11 @@ def test_twoway_cluster_intersection_labels_do_not_string_collide():
     n = len(g1)
     x = rng.standard_normal(n)
     effects = {
+        # No strict=: zip's strict kwarg is Python 3.10+, but the package
+        # supports 3.9. The two iterables are equal-length by construction
+        # (size=len(pairs)), so strict was redundant here anyway.
         pair: value
-        for pair, value in zip(pairs, rng.normal(size=len(pairs)), strict=True)
+        for pair, value in zip(pairs, rng.normal(size=len(pairs)))
     }
     y = 1.0 + 0.4 * x + np.array([effects[(a, b)] for a, b in zip(g1, g2)])
     y = y + rng.normal(scale=0.2, size=n)

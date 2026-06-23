@@ -97,14 +97,17 @@ def test_causal_discovery_dispatch_notears():
     assert "adjacency" in out
     assert "edges" in out
     np.testing.assert_allclose([out["n_edges"], out["h_value"]], [2, 0.0], atol=1e-12)
-    # atol relaxed from 5e-7 to 1e-5: the NOTEARS augmented-Lagrangian solution
-    # drifts at the ~1e-6 level across BLAS backends / numpy versions (the
-    # 6-dp reference itself carries ~5e-7 rounding error). 1e-5 still pins the
-    # recovered edge weights to 4 sig figs.
+    # atol relaxed to 1e-3: the NOTEARS augmented-Lagrangian solution drifts up
+    # to ~3e-5 across BLAS backends. The 2026-06-23 full-matrix run measured
+    # 0.63092973 on macOS / Windows / ubuntu-3.9 vs 0.63096134 on ubuntu-3.11+
+    # (~3e-5 spread), which overran the previous 1e-5 pin. The edge STRUCTURE is
+    # already locked by the n_edges==2 / h_value==0 assertion above; this check
+    # only pins the recovered weights, so 1e-3 (3 sig figs) is the right
+    # granularity for a cross-platform golden value on a non-convex solver.
     np.testing.assert_allclose(
         out["adjacency"].loc[["x2", "x3"], ["x1", "x2"]].to_numpy(),
         np.array([[0.630961, 0.0], [0.0, 0.386646]]),
-        atol=1e-5,
+        atol=1e-3,
     )
 
 
