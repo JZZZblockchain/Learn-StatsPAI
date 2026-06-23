@@ -1,5 +1,5 @@
 {
-  "aggregate_sha256": "2b9361d406643b5e051ef9ec491a5a8dcea05c0075d6afd746501610d6feef90",
+  "aggregate_sha256": "20960f407ce65e07c94176aba0869e5c18cd7c47bc2d4f005e4d53c4dfce0a7c",
   "counts": {
     "files": 463,
     "input_csvs": 61,
@@ -13,9 +13,9 @@
   "description": "Hash lock for the Track/Tier A parity scripts, fixture inputs, golden outputs, rendered tables, and R/Stata reference environment files.",
   "files": [
     {
-      "bytes": 7593,
+      "bytes": 8308,
       "path": "scripts/tier_a_fixture_lock.py",
-      "sha256": "f2f32fa241df2416381c2f51702e3679c55976dd64a3d519a8036b78e0dd761e"
+      "sha256": "0405ec078eb3741854d2890f060946ea73aecb55632dced67012b6d6b16d1cee"
     },
     {
       "bytes": 132,

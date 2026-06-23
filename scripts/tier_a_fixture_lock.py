@@ -4,6 +4,7 @@ This lock is intentionally hash-level: changing a parity script, input CSV,
 golden JSON, rendered table, or reference-environment file must be paired with
 an explicit refresh of ``tests/r_parity/TIER_A_FIXTURE_LOCK.json``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,7 +13,6 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests" / "r_parity" / "TIER_A_FIXTURE_LOCK.json"
@@ -57,12 +57,23 @@ def _rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def _read_normalized(path: Path) -> bytes:
+    """Read a locked file with line endings normalized to LF.
+
+    Every file the lock covers is text (.R / .py / .csv / .json / .do /
+    .gitignore). Hashing the raw bytes made the lock platform-dependent:
+    a Windows checkout under ``core.autocrlf`` materializes CRLF, so each
+    fixture hashed differently and the aggregate lock failed (surfaced by
+    the 2026-06-23 full-matrix run on windows-latest). Normalizing CRLF/CR
+    to LF makes the lock stable across OSes; on a LF checkout it is a
+    no-op, so the committed manifest stays valid without a rewrite.
+    """
+    data = path.read_bytes()
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(_read_normalized(path)).hexdigest()
 
 
 def discover_files() -> list[Path]:
@@ -111,7 +122,9 @@ def build_manifest() -> dict[str, Any]:
     files = [
         {
             "path": _rel(path),
-            "bytes": path.stat().st_size,
+            # Newline-normalized length (not st_size) so the lock matches
+            # across LF/CRLF checkouts — see _read_normalized.
+            "bytes": len(_read_normalized(path)),
             "sha256": _sha256(path),
         }
         for path in discover_files()
@@ -169,8 +182,7 @@ def format_diffs(expected: dict[str, Any], actual: dict[str, Any]) -> str:
         )
     if actual.get("counts") != expected.get("counts"):
         lines.append(
-            "counts differ: "
-            f"{actual.get('counts')} != {expected.get('counts')}"
+            "counts differ: " f"{actual.get('counts')} != {expected.get('counts')}"
         )
     if actual.get("aggregate_sha256") != expected.get("aggregate_sha256"):
         lines.append(
@@ -226,8 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "Tier A parity fixture lock is stale; run "
         "`python scripts/tier_a_fixture_lock.py --write` after reviewing "
-        "the fixture change.\n"
-        + diff,
+        "the fixture change.\n" + diff,
         file=sys.stderr,
     )
     return 1
