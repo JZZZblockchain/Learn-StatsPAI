@@ -28,7 +28,7 @@ It places Python-native implementations, selected R-style causal workflows, and 
 StatsPAI is currently under review at JOSS. Use the path that matches
 your role:
 
-1. **Current JOSS review** — install and smoke-test the package with [`docs/joss_reviewer_guide.md`](docs/joss_reviewer_guide.md), then inspect validation evidence in [`docs/joss_validation_dossier.md`](docs/joss_validation_dossier.md).
+1. **Current JOSS review** — install and smoke-test the package with [`docs/joss_reviewer_guide.md`](docs/joss_reviewer_guide.md), then inspect validation evidence in [`docs/joss_validation_dossier.md`](docs/joss_validation_dossier.md). Design rationale and frequently-raised questions — scope, state of the field, and the build-vs-contribute case — are answered in [`docs/joss_reviewer_qa.md`](docs/joss_reviewer_qa.md).
 2. Run representative offline examples from [`examples/`](examples/).
 3. Check contribution and support pathways in [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SUPPORT.md`](SUPPORT.md), and the GitHub issue templates under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/).
 
