@@ -80,16 +80,42 @@ def data_provenance(
     provider-specific auth and repeated downloads; the sanitized URL is
     still recorded so table notes can point back to the upstream source.
     """
-    parsed = urlparse(path)
-    scheme = parsed.scheme or "file"
-    suffix_source = unquote(parsed.path) if parsed.path else path
-    out: Dict[str, Any] = {
-        "source": (
-            path if scheme == "file" and not parsed.netloc else _sanitize_url(path)
-        ),
-        "scheme": scheme,
-        "source_type": "local" if scheme == "file" else "remote",
-        "format": Path(suffix_source).suffix.lower().lstrip("."),
+    # Local vs remote must NOT be decided via urlparse's scheme detection:
+    # urlparse(r"C:\data\x.csv") reads the Windows drive letter as a
+    # single-char scheme ("c") and strips the drive from .path, which made
+    # data_provenance tag a local Windows file as remote and skip the
+    # SHA-256 (a real bug surfaced by the 2026-06-23 full-matrix run on
+    # windows-latest — local paths worked on POSIX only because an empty
+    # urlparse scheme falls back to "file"). Decide with the same prefix
+    # test load_dataframe uses; treat file:// as local since it is hashable.
+    if path.startswith(("s3://", "gs://", "https://", "http://")):
+        suffix_source = unquote(urlparse(path).path) or path
+        out: Dict[str, Any] = {
+            "source": _sanitize_url(path),
+            "scheme": urlparse(path).scheme,
+            "source_type": "remote",
+            "format": Path(suffix_source).suffix.lower().lstrip("."),
+        }
+        if columns:
+            out["columns_requested"] = list(columns)
+        if sample_n is not None:
+            out["sample_n"] = int(sample_n)
+            out["sample_seed"] = 0
+        out["hash_status"] = "not_hashed_remote"
+        return out
+
+    # Local: a bare absolute path (POSIX or Windows) or a file:// URL.
+    # Echo a bare caller path verbatim so provenance round-trips exactly
+    # (no drive-letter case folding); only file:// is unwrapped to a path.
+    if path.startswith("file://"):
+        local_path = unquote(urlparse(path).path)
+    else:
+        local_path = path
+    out = {
+        "source": local_path,
+        "scheme": "file",
+        "source_type": "local",
+        "format": Path(local_path).suffix.lower().lstrip("."),
     }
     if columns:
         out["columns_requested"] = list(columns)
@@ -97,11 +123,6 @@ def data_provenance(
         out["sample_n"] = int(sample_n)
         out["sample_seed"] = 0
 
-    if scheme != "file":
-        out["hash_status"] = "not_hashed_remote"
-        return out
-
-    local_path = unquote(parsed.path) if parsed.scheme == "file" else path
     try:
         stat = os.stat(local_path)
         sha256 = _sha256_file(local_path, stat.st_mtime_ns, stat.st_size)
@@ -109,7 +130,6 @@ def data_provenance(
         out["hash_status"] = f"unavailable: {type(e).__name__}"
         return out
 
-    out["source"] = local_path
     out["size_bytes"] = stat.st_size
     out["mtime_ns"] = stat.st_mtime_ns
     out["sha256"] = sha256
