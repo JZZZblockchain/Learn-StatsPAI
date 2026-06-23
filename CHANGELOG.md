@@ -150,6 +150,14 @@ estimates. See `MIGRATION.md` for per-function detail.
   symmetric on rank-deficient designs (and differed across platforms). It is now
   symmetrised by construction. Variances (the diagonal / reported SEs) and point
   estimates are unchanged — a ~1e-15 no-op on well-conditioned fits.
+- **Nonlinear (Fairlie/Yun) decomposition probit singular-information
+  fallback.** `_probit_fit` now chooses the SVD pseudo-inverse from the
+  information-matrix condition number instead of relying on `np.linalg.inv` to
+  raise on rank-deficient designs. Some OpenBLAS/LAPACK builds returned an
+  indefinite inverse-like matrix with huge negative variances rather than
+  raising, which made the singular-design regression fail in the pandas-3 CI
+  lane. Well-conditioned fits keep the exact `inv` path, so point estimates and
+  regular-design covariance output are unchanged.
 - **`sp.fast.feols(..., backend='jax')` rank-deficiency detection.** Newer JAX
   returns a finite least-norm solution for a singular design instead of
   `NaN`/`Inf`, so perfectly collinear regressors silently produced output. The

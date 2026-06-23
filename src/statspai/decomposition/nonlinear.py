@@ -78,9 +78,17 @@ def _probit_fit(
     Phi = np.clip(norm.cdf(eta), 1e-10, 1 - 1e-10)
     w = phi**2 / (Phi * (1 - Phi))
     info = (X * w[:, None]).T @ X
-    try:
+    # info = X'WX is symmetric positive-semidefinite by construction, so a valid
+    # covariance has a non-negative diagonal. On a rank-deficient (collinear)
+    # design info is numerically singular; whether np.linalg.inv *raises*
+    # LinAlgError there is LAPACK/BLAS-backend dependent — some builds silently
+    # return an indefinite garbage matrix (huge negative variances) instead of
+    # raising. Guard on the condition number rather than trusting the exception,
+    # and fall back to the SVD pseudo-inverse, which stays PSD. Well-conditioned
+    # fits keep the exact np.linalg.inv path, so their numbers are unchanged.
+    if np.linalg.cond(info) < 1.0 / np.finfo(info.dtype).eps:
         vcov = np.linalg.inv(info)
-    except np.linalg.LinAlgError:
+    else:
         vcov = np.linalg.pinv(info)
     # A covariance is symmetric by definition; inv/pinv of the (symmetric)
     # information matrix can pick up asymmetric float noise on singular or

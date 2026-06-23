@@ -5,9 +5,10 @@ Targets currently-uncovered branches in
 alternate ``reference`` branches, default-grid construction, validation
 raises, degenerate-numeric fallbacks, and plot rendering branches.
 
-All numeric assertions check genuine algebraic identities of the
-decomposition (gap = composition + structure, etc.) or exact structure of
-the returned matplotlib artists.  No numerical path is mocked.
+Numeric assertions check genuine algebraic identities of the decomposition
+(gap = composition + structure, etc.) or exact structure of the returned
+matplotlib artists. Branch-dispatch tests may mock a low-level linear-algebra
+routine to prove the intended fallback is selected deterministically.
 """
 
 from __future__ import annotations
@@ -356,8 +357,8 @@ def test_bauer_sinning_zero_total_weights():
     assert np.allclose(res.detailed["contribution"].to_numpy(), 0.0)
 
 
-def test_probit_fit_singular_hessian_fallback():
-    """nonlinear.py 72-73 (solve→lstsq) and 86-87 (inv→pinv) on a singular
+def test_probit_fit_singular_hessian_fallback(monkeypatch):
+    """nonlinear.py 72-73 (solve→lstsq) and 86-87 (cond→pinv) on a singular
     design.  Collinear columns make both the Newton step and the info matrix
     singular; the estimate and vcov must still be finite and well-shaped."""
     rng = np.random.default_rng(2)
@@ -365,6 +366,11 @@ def test_probit_fit_singular_hessian_fallback():
     x = rng.normal(size=n)
     X = np.column_stack([np.ones(n), x, 2.0 * x])  # collinear → singular
     y = (x + rng.normal(scale=0.3, size=n) > 0).astype(float)
+
+    def fail_if_inv_called(_info):
+        raise AssertionError("singular information matrix must use pinv")
+
+    monkeypatch.setattr(np.linalg, "inv", fail_if_inv_called)
     beta, vcov = nl_mod._probit_fit(y, X, max_iter=5)
     assert beta.shape == (3,)
     assert vcov.shape == (3, 3)
