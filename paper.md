@@ -66,11 +66,11 @@ and archived on Zenodo [@wang2026statspai].
 Applied researchers face a fragmented software landscape. Stata offers
 an integrated workflow, but it is proprietary and does not expose a
 typed, machine-readable interface for AI-assisted analysis. R provides
-excellent method-specific packages such as `did`, `rdrobust`, `Synth`,
-`grf`, and `lme4`, but these packages use different APIs, object
-systems, output conventions, and diagnostic workflows
-[@callaway2021difference; @calonico2014robust; @abadie2010synthetic;
-@wager2018estimation; @bates2015lme4]. Python has strong pieces of the
+excellent method-specific packages such as `did`
+[@callaway2021difference], `rdrobust` [@calonico2014robust], `Synth`
+[@abadie2010synthetic], `grf` [@athey2019generalized], and `lme4`
+[@bates2015lme4], but these packages use different APIs, object
+systems, output conventions, and diagnostic workflows. Python has strong pieces of the
 causal inference ecosystem, including `DoWhy` for graphical causal
 models [@sharma2020dowhy], `EconML` for machine-learning treatment
 effect estimation [@econml], `CausalML` for uplift modeling
@@ -181,7 +181,13 @@ and reaches for PyTorch, JAX, or a Rust kernel only when they are
 present, falling back transparently otherwise — which keeps the default
 small and inspectable at the cost of leaving peak performance to an
 optional, environment-dependent layer whose accelerated paths are held
-to the same documented numerical tolerances as the fallbacks. We accept
+to the same documented numerical tolerances as the fallbacks. The
+Rust/PyO3 kernel in particular adds a compiled-language component to the
+build: shipping it requires platform-specific wheels (or a Rust
+toolchain to compile from source) and a separately maintained crate, a
+maintenance cost we contain by keeping the kernel optional and
+transparently falling back to the pure-Python implementation wherever
+the compiled extension is absent. We accept
 these costs deliberately: for researchers who must compare estimators,
 switch designs, and produce reproducible output within one project, a
 single coherent, agent-addressable interface outweighs the loss of
