@@ -57,13 +57,14 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from scipy import stats
 
-
 # ═══════════════════════════════════════════════════════════════════════
 #  Penalty / control defaults (mirror hdm::rlasso.default)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _default_penalty(n: int, post: bool, user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _default_penalty(
+    n: int, post: bool, user: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
     """Resolve the ``penalty`` list exactly as ``hdm::rlasso.default`` does.
 
     hdm default is
@@ -115,7 +116,7 @@ def _init_values(
     yc = y - y.mean()
     Xc = X - X.mean(axis=0)
     denom_y = float(np.sqrt(yc @ yc))
-    col = np.sqrt((Xc ** 2).sum(axis=0))
+    col = np.sqrt((Xc**2).sum(axis=0))
     with np.errstate(invalid="ignore", divide="ignore"):
         corr = np.abs((yc @ Xc) / (denom_y * col))
     # R: order(corr, decreasing = TRUE) — NA sorted last, ties stable.
@@ -158,6 +159,7 @@ def _lasso_shooting(
     Minimizes ``‖y − Xβ‖² + Σⱼ λⱼ|βⱼ|`` (per-coordinate penalty ``λⱼ``).
     """
     p = X.shape[1]
+    beta: np.ndarray
     if beta_start is None:
         beta = _init_values(X, y, intercept=False)["coefficients"].astype(float).copy()
     else:
@@ -168,7 +170,7 @@ def _lasso_shooting(
 
     m = 1
     while m < max_iter:
-        beta_old = beta.copy()
+        beta_old: np.ndarray = beta.copy()
         for j in range(p):
             S0 = float(XX2[j, :] @ beta - XX2[j, j] * beta[j] - Xy2[j])
             if np.isnan(S0):
@@ -221,7 +223,7 @@ def _lambda_calculation(
         num_sim = penalty.get("numSim", 5000)
         if rng is None:
             rng = np.random.default_rng()
-        psi = (X ** 2).mean(axis=0)
+        psi = (X**2).mean(axis=0)
         tX = X / np.sqrt(psi)
         sim = np.empty(num_sim)
         for ell in range(num_sim):
@@ -232,35 +234,39 @@ def _lambda_calculation(
         lam = np.full(p, lambda0 * Ups0)
     elif homo is False and xdep is False:
         lambda0 = 2.0 * c * np.sqrt(n) * stats.norm.ppf(1.0 - gamma / (2.0 * p))
-        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y ** 2) @ (X ** 2))
+        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y**2) @ (X**2))
         lam = lambda0 * Ups0
     elif homo is False and xdep is True:
         num_sim = penalty.get("numSim", 5000)
         if rng is None:
             rng = np.random.default_rng()
         xehat = X * y[:, None]
-        psi = (xehat ** 2).mean(axis=0)
+        psi = (xehat**2).mean(axis=0)
         tXe = xehat / np.sqrt(psi)
         sim = np.empty(num_sim)
         for ell in range(num_sim):
             g = rng.standard_normal(n)
             sim[ell] = n * np.max(2.0 * np.abs((tXe * g[:, None]).mean(axis=0)))
         lambda0 = c * np.quantile(sim, 1.0 - gamma)
-        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y ** 2) @ (X ** 2))
+        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y**2) @ (X**2))
         lam = lambda0 * Ups0
     elif homo == "none":
         lstart = penalty.get("lambda.start", None)
         if lstart is None:
             raise ValueError('For method "none" lambda.start must be provided')
         lambda0 = float(lstart)
-        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y ** 2) @ (X ** 2))
+        Ups0 = (1.0 / np.sqrt(n)) * np.sqrt((y**2) @ (X**2))
         lam = lambda0 * Ups0
     else:  # pragma: no cover - defensive
         raise ValueError(f"Unsupported penalty combination: {penalty!r}")
 
     lstart = penalty.get("lambda.start", None)
     if lstart is not None and homo != "none":
-        lam = np.full(p, float(lstart)) if np.ndim(lstart) == 0 else np.asarray(lstart, float)
+        lam = (
+            np.full(p, float(lstart))
+            if np.ndim(lstart) == 0
+            else np.asarray(lstart, float)
+        )
 
     return {"lambda0": lambda0, "lambda": np.asarray(lam, float), "Ups0": Ups0}
 
@@ -273,7 +279,7 @@ def _update_loadings(
     lambda0: float,
     n: int,
     rng: Optional[np.random.Generator] = None,
-):
+) -> tuple:
     """In-loop loading/penalty refresh (the per-branch updates in rlasso)."""
     homo = penalty.get("homoscedastic", False)
     xdep = penalty.get("X.dependent.lambda", False)
@@ -284,17 +290,17 @@ def _update_loadings(
         Ups1 = s1 * Psi
         lam = lambda0 * Ups1
     elif homo is False and xdep is False:
-        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1 ** 2) @ (X ** 2))
+        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1**2) @ (X**2))
         lam = lambda0 * Ups1
     elif homo is False and xdep is True:
         lc = _lambda_calculation(penalty, y=e1, X=X, rng=rng)
         Ups1 = lc["Ups0"]
         lam = lc["lambda"]
     elif homo == "none":
-        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1 ** 2) @ (X ** 2))
+        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1**2) @ (X**2))
         lam = lambda0 * Ups1
     else:  # pragma: no cover
-        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1 ** 2) @ (X ** 2))
+        Ups1 = (1.0 / np.sqrt(n)) * np.sqrt((e1**2) @ (X**2))
         lam = lambda0 * Ups1
     return np.asarray(Ups1, float), np.asarray(lam, float), s1
 
@@ -334,17 +340,16 @@ class RLassoFit:
     def selected(self) -> List[str]:
         return [self.colnames[j] for j in np.where(self.index)[0]]
 
-    def predict(self, newX: Optional[np.ndarray] = None) -> np.ndarray:
+    def predict(self, newX: np.ndarray) -> np.ndarray:
         """Predict on the original (uncentered) scale — ``hdm::predict.rlasso``."""
-        if newX is None:
-            # fitted values: centered-x %*% beta + mu
-            return None  # type: ignore[return-value]
         Xn = np.asarray(newX, dtype=float)
         if Xn.ndim == 1:
             Xn = Xn.reshape(-1, 1)
         if self.intercept_flag:
-            return Xn @ self.beta + self.intercept
-        return Xn @ self.beta
+            out: np.ndarray = Xn @ self.beta + self.intercept
+        else:
+            out = Xn @ self.beta
+        return out
 
     def summary(self) -> str:
         head = [
@@ -434,7 +439,7 @@ def rlasso(
         mu = 0.0
         yc = y
 
-    Psi = (Xc ** 2).mean(axis=0)
+    Psi = (Xc**2).mean(axis=0)
     XX = Xc.T @ Xc
     Xy = Xc.T @ yc
 

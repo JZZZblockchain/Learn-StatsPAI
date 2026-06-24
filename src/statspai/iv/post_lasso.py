@@ -289,6 +289,16 @@ def bch_post_lasso_iv(
     """
     Post-Lasso 2SLS with rigorous, data-driven penalty.
 
+    .. note::
+       This is StatsPAI's *original* reconstruction of the BCH (2012)
+       pipeline.  For numerical agreement with R's ``hdm`` package —
+       including the canonical eminent-domain application and selection
+       on both instruments and controls — use :func:`statspai.rlasso_iv`
+       (a faithful, parity-tested port of ``hdm::rlassoIV``).  The two
+       differ in penalty construction (asymptotic ``√{2n log(2p/α)}``
+       here vs. hdm's exact ``2c√n·Φ⁻¹(1−γ/2p)``) and in control
+       selection, so their numbers are not interchangeable.
+
     Recipe (BCH 2012 §3):
 
     1. Partial out controls ``exog`` from ``y``, ``endog``, and every

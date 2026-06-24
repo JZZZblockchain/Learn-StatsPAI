@@ -889,7 +889,7 @@ from .regression.zeroinflated import zip_model, zinb, hurdle
 from .regression.advanced_iv import liml, jive, lasso_iv
 
 # Rigorous (data-driven) Lasso — faithful port of R's hdm package
-from .rlasso import (
+from .rlasso import (  # noqa: E402
     rlasso,
     rlasso_effect,
     rlasso_effects,

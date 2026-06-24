@@ -186,10 +186,13 @@ def test_rlasso_iv_dataframe_inputs(iv_dgp):
         + [f"z{j}" for j in range(Z.shape[1])],
     )
     res = rlasso_iv(
-        y="y", d="d",
+        y="y",
+        d="d",
         x=[f"x{j}" for j in range(X.shape[1])],
         z=[f"z{j}" for j in range(Z.shape[1])],
-        data=df, select_Z=True, select_X=False,
+        data=df,
+        select_Z=True,
+        select_X=False,
     )
     assert res.treat_names == ["d"]
     assert abs(res.coef[0] - beta) < 0.3
@@ -261,7 +264,13 @@ def test_dml_plr_with_rlasso_learner_recovers_effect():
     df["y"] = y
     df["d"] = d
     res = sp.dml(
-        data=df, y="y", treat="d", covariates=[f"x{j}" for j in range(p)],
-        model="plr", ml_g="rlasso", ml_m="rlasso", n_folds=5,
+        data=df,
+        y="y",
+        treat="d",
+        covariates=[f"x{j}" for j in range(p)],
+        model="plr",
+        ml_g="rlasso",
+        ml_m="rlasso",
+        n_folds=5,
     )
     assert abs(float(res.estimate) - theta) < 0.25

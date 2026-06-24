@@ -55,7 +55,8 @@ _GINV_TOL = float(np.sqrt(np.finfo(float).eps))
 
 def _ginv(A: np.ndarray) -> np.ndarray:
     """Moore-Penrose pseudo-inverse with MASS::ginv's tolerance."""
-    return np.linalg.pinv(np.asarray(A, dtype=float), rcond=_GINV_TOL)
+    out: np.ndarray = np.linalg.pinv(np.asarray(A, dtype=float), rcond=_GINV_TOL)
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -110,9 +111,9 @@ def _tsls(
 
     e = y - X @ b
     if homoscedastic:
-        VC1 = float((e ** 2).sum() / (n - k)) * M
+        VC1 = float((e**2).sum() / (n - k)) * M
     else:
-        S = (Z * (e ** 2)).T @ Z / n  # (1/n) Σ e_i² z_i z_i'
+        S = (Z * (e**2)).T @ Z / n  # (1/n) Σ e_i² z_i z_i'
         VC1 = n * M @ (Mxz @ Mzz @ S @ Mzz @ Mxz.T) @ M
 
     se = np.sqrt(np.diag(VC1))
@@ -147,15 +148,20 @@ class RLassoIVResult:
     @property
     def tstat(self) -> np.ndarray:
         with np.errstate(divide="ignore", invalid="ignore"):
-            return self.coef / self.se
+            out: np.ndarray = self.coef / self.se
+        return out
 
     @property
     def pvalue(self) -> np.ndarray:
-        return 2.0 * stats.norm.cdf(-np.abs(self.tstat))
+        out: np.ndarray = 2.0 * stats.norm.cdf(-np.abs(self.tstat))
+        return out
 
     def conf_int(self, level: float = 0.95) -> np.ndarray:
-        zc = stats.norm.ppf(0.5 + level / 2.0)
-        return np.column_stack([self.coef - zc * self.se, self.coef + zc * self.se])
+        zc = float(stats.norm.ppf(0.5 + level / 2.0))
+        out: np.ndarray = np.column_stack(
+            [self.coef - zc * self.se, self.coef + zc * self.se]
+        )
+        return out
 
     def summary(self) -> str:
         ci = self.conf_int()
@@ -212,8 +218,9 @@ def _select_z(
     flag_const = 0
     for i in range(ke):
         di = d[:, i]
-        fit = rlasso(Z, di, post=post, intercept=intercept,
-                     penalty=penalty, control=control)
+        fit = rlasso(
+            Z, di, post=post, intercept=intercept, penalty=penalty, control=control
+        )
         if fit.index.sum() == 0:
             dihat = np.full(n, di.mean())
             flag_const += 1
@@ -232,7 +239,7 @@ def _select_z(
 
     alpha = _ginv(Dhat.T @ d_aug) @ (Dhat.T @ y)
     residuals = y - d_aug @ alpha
-    Omega = Dhat.T @ (Dhat * (residuals ** 2)[:, None])
+    Omega = Dhat.T @ (Dhat * (residuals**2)[:, None])
     Qinv = _ginv(d_aug.T @ Dhat)
     vcov_full = Qinv @ Omega @ Qinv.T
 
@@ -241,9 +248,16 @@ def _select_z(
     vcov = vcov_full[:ke, :ke]
     n_sel = int(np.sum([s.sum() for s in select_mat]))
     return RLassoIVResult(
-        coef=coef, se=se, vcov=vcov, method="select Z (rlassoIVselectZ)",
-        n_obs=n, treat_names=treat_names,
-        selection={"n_selected_Z": n_sel, "selection_matrix_Z": np.column_stack(select_mat)},
+        coef=coef,
+        se=se,
+        vcov=vcov,
+        method="select Z (rlassoIVselectZ)",
+        n_obs=n,
+        treat_names=treat_names,
+        selection={
+            "n_selected_Z": n_sel,
+            "selection_matrix_Z": np.column_stack(select_mat),
+        },
         residuals=residuals,
     )
 
@@ -288,7 +302,8 @@ def _select_x(
         se=np.atleast_1d(res["se"]),
         vcov=np.atleast_2d(res["vcov"]),
         method="select X (rlassoIVselectX)",
-        n_obs=n, treat_names=treat_names,
+        n_obs=n,
+        treat_names=treat_names,
         selection={"n_selected_X": nsel_x},
         residuals=res["residuals"],
     )
@@ -318,9 +333,12 @@ def _select_both(
 
     if lasso_d_zx.index.sum() == 0:
         return RLassoIVResult(
-            coef=np.array([np.nan]), se=np.array([np.nan]),
-            vcov=np.array([[np.nan]]), method="select Z & X (rlassoIV)",
-            n_obs=n, treat_names=treat_names,
+            coef=np.array([np.nan]),
+            se=np.array([np.nan]),
+            vcov=np.array([[np.nan]]),
+            method="select Z & X (rlassoIV)",
+            n_obs=n,
+            treat_names=treat_names,
             selection={"note": "no variables selected in d ~ [z, x]"},
         )
 
@@ -347,8 +365,12 @@ def _select_both(
         se=np.atleast_1d(res["se"]),
         vcov=np.atleast_2d(res["vcov"]),
         method="select Z & X (rlassoIV)",
-        n_obs=n, treat_names=treat_names,
-        selection={"n_selected_Z": n_sel_z, "n_selected_X": int(lasso_PZ_x.index.sum())},
+        n_obs=n,
+        treat_names=treat_names,
+        selection={
+            "n_selected_Z": n_sel_z,
+            "n_selected_X": int(lasso_PZ_x.index.sum()),
+        },
         residuals=res["residuals"],
     )
 
@@ -359,11 +381,16 @@ def _select_both(
 
 
 def _grab(v: Any, data: Optional[pd.DataFrame], cols: bool = False) -> np.ndarray:
+    out: np.ndarray
     if isinstance(v, str):
-        return np.asarray(data[v].values, dtype=float)
-    if cols and isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v):
-        return np.asarray(data[list(v)].values, dtype=float)
-    return np.asarray(v, dtype=float)
+        assert data is not None, "string column reference requires `data`"
+        out = np.asarray(data[v].values, dtype=float)
+    elif cols and isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v):
+        assert data is not None, "column-name reference requires `data`"
+        out = np.asarray(data[list(v)].values, dtype=float)
+    else:
+        out = np.asarray(v, dtype=float)
+    return out
 
 
 def rlasso_iv(
@@ -433,9 +460,14 @@ def rlasso_iv(
         if Xmat.ndim == 1:
             Xmat = Xmat.reshape(-1, 1)
 
-    treat_names = [d] if isinstance(d, str) else (
-        [getattr(d, "name", None) or "d"] if D.ndim == 1 else
-        [f"d{i + 1}" for i in range(D.shape[1])]
+    treat_names = (
+        [d]
+        if isinstance(d, str)
+        else (
+            [getattr(d, "name", None) or "d"]
+            if D.ndim == 1
+            else [f"d{i + 1}" for i in range(D.shape[1])]
+        )
     )
 
     if not select_Z and not select_X:
@@ -446,11 +478,14 @@ def rlasso_iv(
             se=np.atleast_1d(res["se"])[:a1],
             vcov=np.atleast_2d(res["vcov"])[:a1, :a1],
             method="plain 2SLS (tsls)",
-            n_obs=len(Y), treat_names=treat_names,
+            n_obs=len(Y),
+            treat_names=treat_names,
             residuals=res["residuals"],
         )
     if select_Z and not select_X:
-        return _select_z(Xmat, D, Y, Zmat, post, intercept, penalty, control, treat_names)
+        return _select_z(
+            Xmat, D, Y, Zmat, post, intercept, penalty, control, treat_names
+        )
     if select_X and not select_Z:
         if Xmat is None:
             raise ValueError("select_X=True requires controls `x`.")

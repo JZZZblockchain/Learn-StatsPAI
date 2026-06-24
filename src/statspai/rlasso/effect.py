@@ -33,7 +33,7 @@ Chernozhukov, V., Hansen, C. and Spindler, M. (2016). "hdm:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -61,19 +61,21 @@ class RLassoEffectResult:
 
     def summary(self) -> str:
         lo, hi = self.conf_int()
-        return "\n".join([
-            f"Rigorous-Lasso treatment effect  ({self.method})",
-            "-" * 60,
-            f"  Observations         : {self.n_obs}",
-            f"  Controls selected    : {int(self.selection_index.sum())}",
-            "",
-            "             coef     std.err      z      P>|z|      95% CI",
-            f"  {self.target:<8}{self.alpha:>10.4f}  {self.se:>9.4f}"
-            f"  {self.tstat:>7.3f}  {self.pvalue:>8.4f}  [{lo:.3f}, {hi:.3f}]",
-        ])
+        return "\n".join(
+            [
+                f"Rigorous-Lasso treatment effect  ({self.method})",
+                "-" * 60,
+                f"  Observations         : {self.n_obs}",
+                f"  Controls selected    : {int(self.selection_index.sum())}",
+                "",
+                "             coef     std.err      z      P>|z|      95% CI",
+                f"  {self.target:<8}{self.alpha:>10.4f}  {self.se:>9.4f}"
+                f"  {self.tstat:>7.3f}  {self.pvalue:>8.4f}  [{lo:.3f}, {hi:.3f}]",
+            ]
+        )
 
 
-def _ols(y: np.ndarray, X: np.ndarray):
+def _ols(y: np.ndarray, X: np.ndarray) -> tuple:
     """OLS with intercept; returns (coef[incl intercept], resid, XtX_inv, dof)."""
     n = len(y)
     A = np.column_stack([np.ones(n), X])
@@ -118,11 +120,21 @@ def rlasso_effect(
     RLassoEffectResult
     """
     if data is not None:
-        X = np.asarray(data[list(x)].values, dtype=float) if (
-            isinstance(x, (list, tuple)) and all(isinstance(c, str) for c in x)
-        ) else np.asarray(x, dtype=float)
-        yv = np.asarray(data[y].values, dtype=float) if isinstance(y, str) else np.asarray(y, dtype=float)
-        dv = np.asarray(data[d].values, dtype=float) if isinstance(d, str) else np.asarray(d, dtype=float)
+        X = (
+            np.asarray(data[list(x)].values, dtype=float)
+            if (isinstance(x, (list, tuple)) and all(isinstance(c, str) for c in x))
+            else np.asarray(x, dtype=float)
+        )
+        yv = (
+            np.asarray(data[y].values, dtype=float)
+            if isinstance(y, str)
+            else np.asarray(y, dtype=float)
+        )
+        dv = (
+            np.asarray(data[d].values, dtype=float)
+            if isinstance(d, str)
+            else np.asarray(d, dtype=float)
+        )
         target = d if isinstance(d, str) else "d"
     else:
         X = np.asarray(x, dtype=float)
@@ -151,10 +163,12 @@ def rlasso_effect(
         I1 = rlasso(X, dv, post=post, penalty=penalty, control=control).index
         I2 = rlasso(X, yv, post=post, penalty=penalty, control=control).index
         if I3 is not None:
-            I = np.asarray(I1, bool) | np.asarray(I2, bool) | np.asarray(I3, bool)
+            idx_union = (
+                np.asarray(I1, bool) | np.asarray(I2, bool) | np.asarray(I3, bool)
+            )
         else:
-            I = np.asarray(I1, bool) | np.asarray(I2, bool)
-        sum_I = int(I.sum())
+            idx_union = np.asarray(I1, bool) | np.asarray(I2, bool)
+        sum_I = int(idx_union.sum())
         if sum_I == 0:
             Xsel = dv.reshape(-1, 1)
             beta, resid, _, _ = _ols(yv, Xsel)
@@ -162,16 +176,16 @@ def rlasso_effect(
             xi = resid * np.sqrt(n / (n - sum_I - 1))
             v = dv - dv.mean()
         else:
-            Xsel = np.column_stack([dv, X[:, I]])
+            Xsel = np.column_stack([dv, X[:, idx_union]])
             beta, resid, _, _ = _ols(yv, Xsel)
             alpha = float(beta[1])
             xi = resid * np.sqrt(n / (n - sum_I - 1))
-            # reg2 <- lm(d ~ selected controls)  (drop d column → X[:, I])
-            _, v, _, _ = _ols(dv, X[:, I])
-        mv2 = float(np.mean(v ** 2))
-        var = (1.0 / n) * (1.0 / mv2) * float(np.mean(v ** 2 * xi ** 2)) * (1.0 / mv2)
+            # reg2 <- lm(d ~ selected controls)  (drop d column → X[:, union])
+            _, v, _, _ = _ols(dv, X[:, idx_union])
+        mv2 = float(np.mean(v**2))
+        var = (1.0 / n) * (1.0 / mv2) * float(np.mean(v**2 * xi**2)) * (1.0 / mv2)
         se = float(np.sqrt(var))
-        sel = I
+        sel = idx_union
     else:
         raise ValueError(
             f"method must be 'partialling out' or 'double selection', got {method!r}"
@@ -180,8 +194,14 @@ def rlasso_effect(
     tval = alpha / se if se > 0 else np.nan
     pval = 2.0 * float(stats.norm.cdf(-abs(tval)))
     return RLassoEffectResult(
-        alpha=alpha, se=se, tstat=float(tval), pvalue=pval,
-        method=method, n_obs=n, selection_index=sel, target=target,
+        alpha=alpha,
+        se=se,
+        tstat=float(tval),
+        pvalue=pval,
+        method=method,
+        n_obs=n,
+        selection_index=sel,
+        target=target,
     )
 
 
@@ -215,8 +235,9 @@ def rlasso_effects(
     else:
         Xv = np.asarray(X, dtype=float)
         cols = [f"V{j + 1}" for j in range(Xv.shape[1])]
-    yv = np.asarray(data[y].values if (data is not None and isinstance(y, str)) else y,
-                    dtype=float).ravel()
+    yv = np.asarray(
+        data[y].values if (data is not None and isinstance(y, str)) else y, dtype=float
+    ).ravel()
 
     if index is None:
         index = list(range(Xv.shape[1]))
@@ -225,8 +246,9 @@ def rlasso_effects(
     for j in index:
         d = Xv[:, j]
         Xt = np.delete(Xv, j, axis=1)
-        res = rlasso_effect(Xt, yv, d, method=method, post=post,
-                            penalty=penalty, control=control)
+        res = rlasso_effect(
+            Xt, yv, d, method=method, post=post, penalty=penalty, control=control
+        )
         res.target = cols[j]
         out[cols[j]] = res
     return out

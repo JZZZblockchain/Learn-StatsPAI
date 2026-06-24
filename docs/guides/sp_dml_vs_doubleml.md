@@ -194,21 +194,29 @@ cross-validated one; the canonical implementation is the `rlasso` /
 `rlassoIV` family in the R `hdm` package (Chernozhukov, Hansen &
 Spindler, *The R Journal* 8(2), 2016 [@chernozhukov2016hdm]). StatsPAI
 implements the Belloni–Chernozhukov–Hansen rigorous-penalty machinery
-on the **IV** side — `sp.lasso_iv` / `bch_post_lasso_iv` (post-Lasso
-2SLS with the data-driven `λ = 2c√{2n log(2p/α)}` and iterated
-heteroskedastic loadings). `sp.dml` does **not** yet expose a rigorous
-lasso as a drop-in *nuisance learner* (the `ml_g`/`ml_m` slot): a
-hand-rolled `rlasso` we trialled matched `hdm`'s `λ` and the
-coefficients of selected variables, but its **selection at the
-sparsity boundary diverges from `hdm`** (it is more conservative), and
-on a weak-instrument design such as the BCH eminent-domain application
-`bch_post_lasso_iv` selects fewer instruments than `hdm::rlassoIV` —
-both implementations agree the effect is statistically insignificant,
-but the point estimates differ. Exact `hdm` selection parity, and a
-validated `'rlasso'` nuisance alias, are tracked on the roadmap; until
-then `LassoCV` (CV-tuned) is the supported sparse-linear nuisance and
-the rigorous-penalty path is `sp.lasso_iv`. We flag this openly rather
-than ship an unvalidated numeric path.
+via the dedicated `sp.rlasso` module — a **faithful, parity-tested port
+of `hdm`** (`hdm::rlasso` / `rlassoEffect` / `rlassoIV`). As of this
+release:
+
+- `sp.rlasso(X, y)` matches `hdm::rlasso` to **machine precision**
+  (coefficients, `λ₀`, loadings, residuals and selected support are
+  bit-exact across `post`/`intercept`/`homoscedastic` variants);
+- `sp.rlasso_iv(y, d, z, x, select_Z=, select_X=)` reproduces
+  `hdm::rlassoIV` on the BCH eminent-domain application **exactly**
+  (`coef 0.2274`, `SE 0.2466`), across all four selection regimes;
+- `sp.dml(model='plr', ml_g='rlasso', ml_m='rlasso')` now wires the
+  rigorous Lasso in as a drop-in nuisance learner
+  (`sp.RlassoRegressor` / `sp.RlassoClassifier`, clone-safe across
+  folds).
+
+This **resolves** the previously-tracked divergence: the earlier
+hand-rolled reconstruction (`iv.bch_post_lasso_iv`, with the asymptotic
+penalty `λ = 2c√{2n log(2p/α)}`) was ~17× off `hdm` on eminent domain
+(0.013 vs 0.227) because it used a different penalty and selected only
+instruments. `iv.bch_post_lasso_iv` retains its original numerics for
+backward compatibility, but `sp.rlasso_iv` is the hdm-faithful path; see
+[`docs/guides/rigorous_lasso_hdm.md`](rigorous_lasso_hdm.md). `LassoCV`
+(CV-tuned) remains available as the alternative sparse-linear nuisance.
 
 ## Scope and known limitations
 
@@ -343,8 +351,10 @@ tracked but not yet shipped:
   `sp.dml_panel`.
 - **Nested-CV learner tuning** (DoubleML's `.tune()`). Today, pass a
   pre-tuned scikit-learn `Pipeline` / `GridSearchCV` estimator.
-- **Rigorous-lasso (`hdm`) nuisance learner** with validated `hdm`
-  selection parity (see *Rigorous / plug-in lasso* above).
+- ~~**Rigorous-lasso (`hdm`) nuisance learner**~~ — **done**: `sp.rlasso`
+  ports `hdm` to machine precision and `ml_g='rlasso'` / `ml_m='rlasso'`
+  are validated nuisance aliases (see *Rigorous / plug-in lasso* above
+  and [`docs/guides/rigorous_lasso_hdm.md`](rigorous_lasso_hdm.md)).
 - **Automatic debiased ML / Riesz representers** (Chernozhukov, Newey &
   Singh) — a forward direction shared with the DoubleML ecosystem.
 

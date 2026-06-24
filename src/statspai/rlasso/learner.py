@@ -90,26 +90,31 @@ class RlassoRegressor(BaseEstimator, RegressorMixin):
         self.tol = tol
         self.lambda_start = lambda_start
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X: Any, y: Any, sample_weight: Any = None) -> "RlassoRegressor":
         X = np.asarray(X, dtype=float)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
         y = np.asarray(y, dtype=float).ravel()
         control = {"numIter": self.num_iter, "tol": self.tol}
         self.fit_ = rlasso(
-            X, y, post=self.post, intercept=self.intercept,
-            penalty=_penalty_dict(self), control=control,
+            X,
+            y,
+            post=self.post,
+            intercept=self.intercept,
+            penalty=_penalty_dict(self),
+            control=control,
         )
         self.coef_ = self.fit_.beta
         self.intercept_ = self.fit_.intercept
         self.n_features_in_ = X.shape[1]
         return self
 
-    def predict(self, X):
+    def predict(self, X: Any) -> np.ndarray:
         X = np.asarray(X, dtype=float)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
-        return self.fit_.predict(X)
+        out: np.ndarray = self.fit_.predict(X)
+        return out
 
 
 class RlassoClassifier(BaseEstimator, ClassifierMixin):
@@ -144,7 +149,7 @@ class RlassoClassifier(BaseEstimator, ClassifierMixin):
         self.lambda_start = lambda_start
         self.clip = clip
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X: Any, y: Any, sample_weight: Any = None) -> "RlassoClassifier":
         X = np.asarray(X, dtype=float)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
@@ -152,20 +157,26 @@ class RlassoClassifier(BaseEstimator, ClassifierMixin):
         self.classes_ = np.unique(y)
         control = {"numIter": self.num_iter, "tol": self.tol}
         self.fit_ = rlasso(
-            X, y, post=self.post, intercept=self.intercept,
-            penalty=_penalty_dict(self), control=control,
+            X,
+            y,
+            post=self.post,
+            intercept=self.intercept,
+            penalty=_penalty_dict(self),
+            control=control,
         )
         self.coef_ = self.fit_.beta
         self.intercept_ = self.fit_.intercept
         self.n_features_in_ = X.shape[1]
         return self
 
-    def predict_proba(self, X):
+    def predict_proba(self, X: Any) -> np.ndarray:
         X = np.asarray(X, dtype=float)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
         p1 = np.clip(self.fit_.predict(X), self.clip, 1.0 - self.clip)
-        return np.column_stack([1.0 - p1, p1])
+        out: np.ndarray = np.column_stack([1.0 - p1, p1])
+        return out
 
-    def predict(self, X):
-        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+    def predict(self, X: Any) -> np.ndarray:
+        out: np.ndarray = (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+        return out
