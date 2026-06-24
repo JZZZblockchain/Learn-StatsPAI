@@ -39,6 +39,8 @@ _REGRESSOR_ALIASES = {
     "gradient_boosting",
     "gradientboosting",
     "lasso",
+    "rlasso",
+    "rigorous_lasso",
     "ridge",
     "linear",
     "ols",
@@ -57,6 +59,8 @@ _CLASSIFIER_ALIASES = {
     "gradient_boosting",
     "gradientboosting",
     "lasso",
+    "rlasso",
+    "rigorous_lasso",
     "ridge",
     "linear",
     "logistic",
@@ -96,6 +100,10 @@ def _build_regressor(alias: str) -> Any:
         from sklearn.linear_model import LassoCV
 
         return LassoCV(cv=5, random_state=42)
+    if a in {"rlasso", "rigorous_lasso"}:
+        from ..rlasso.learner import RlassoRegressor
+
+        return RlassoRegressor()
     if a == "ridge":
         from sklearn.linear_model import RidgeCV
 
@@ -168,6 +176,11 @@ def _build_classifier(alias: str) -> Any:
             max_iter=2000,
             random_state=42,
         )
+    if a in {"rlasso", "rigorous_lasso"}:
+        # Linear-probability propensity backed by the rigorous Lasso.
+        from ..rlasso.learner import RlassoClassifier
+
+        return RlassoClassifier()
     if a == "ridge":
         from sklearn.linear_model import LogisticRegressionCV
 

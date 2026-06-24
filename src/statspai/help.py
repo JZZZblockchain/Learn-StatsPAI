@@ -155,6 +155,7 @@ _MODULE_CATEGORY_PREFIXES: List[tuple[str, str]] = [
     ("statspai.synth", "causal"),
     ("statspai.matching", "causal"),
     ("statspai.dml", "causal"),
+    ("statspai.rlasso", "causal"),
     ("statspai.deepiv", "causal"),
     ("statspai.iv", "causal"),
     ("statspai.metalearners", "causal"),

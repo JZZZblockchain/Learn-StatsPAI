@@ -888,6 +888,16 @@ from .regression.zeroinflated import zip_model, zinb, hurdle
 # Advanced IV
 from .regression.advanced_iv import liml, jive, lasso_iv
 
+# Rigorous (data-driven) Lasso — faithful port of R's hdm package
+from .rlasso import (
+    rlasso,
+    rlasso_effect,
+    rlasso_effects,
+    rlasso_iv,
+    RlassoRegressor,
+    RlassoClassifier,
+)
+
 # High-dimensional fixed effects (pyfixest backend)
 # These are thin wrappers; actual import of pyfixest is deferred to call time
 # via fixest.wrapper._check_pyfixest, so top-level import never fails.
@@ -1637,6 +1647,12 @@ __all__ = [
     "liml",
     "jive",
     "lasso_iv",
+    "rlasso",
+    "rlasso_effect",
+    "rlasso_effects",
+    "rlasso_iv",
+    "RlassoRegressor",
+    "RlassoClassifier",
     # High-dimensional FE (pyfixest backend, optional)
     "feols",
     "fepois",

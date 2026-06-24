@@ -18882,6 +18882,217 @@
     "name": "rkd"
   },
   {
+    "description": "Rigorous Lasso / post-Lasso -- a faithful port of ``hdm::rlasso``.",
+    "input_schema": {
+      "properties": {
+        "X": {
+          "description": "Design matrix of candidate covariates (``p`` may exceed ``n``).",
+          "type": "string"
+        },
+        "colnames": {
+          "description": "Names for the columns of ``X`` (default ``V1..Vp``).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "control": {
+          "description": "Overrides for ``numIter`` (default 15), ``tol`` (default 1e-5) and ``threshold`` (default ``None``).",
+          "type": "object"
+        },
+        "intercept": {
+          "default": true,
+          "description": "Center ``X`` and ``y`` and report an intercept on the original scale.",
+          "type": "boolean"
+        },
+        "penalty": {
+          "description": "Overrides for ``homoscedastic`` (``True`` / ``False`` / ``\"none\"``), ``X.dependent.lambda`` (bool), ``c`` (slack, default 1.1), ``gamma`` (default ``0.1/log(n)``), ``lambda.start`` and ``numSim``. Defaults reproduce hdm exactly.",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "If ``True``, re-estimate the selected support by OLS (post-Lasso).",
+          "type": "boolean"
+        },
+        "rng": {
+          "description": "Only used when ``X.dependent.lambda`` simulation is requested.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Response.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlasso"
+  },
+  {
+    "description": "Effect of ``d`` on ``y`` after Lasso-selecting controls ``x``.",
+    "input_schema": {
+      "properties": {
+        "I3": {
+          "description": "Amelioration set forced into the control set (double-selection only) -- hdm's ``I3`` argument.",
+          "type": "string"
+        },
+        "control": {
+          "description": "Forwarded to :func:`statspai.rlasso.rlasso`.",
+          "type": "object"
+        },
+        "d": {
+          "description": "d parameter (Union[np.ndarray, pd.Series, str]).",
+          "type": "string"
+        },
+        "method": {
+          "default": "partialling out",
+          "description": "See the module docstring.",
+          "type": "string"
+        },
+        "penalty": {
+          "description": "Forwarded to :func:`statspai.rlasso.rlasso`.",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "Post-Lasso inside the selection steps.",
+          "type": "boolean"
+        },
+        "x": {
+          "description": "Primary running variable, regressor, or feature input for this estimator.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "d",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlasso_effect"
+  },
+  {
+    "description": "Estimate the effect of each targeted column of ``X`` on ``y``.",
+    "input_schema": {
+      "properties": {
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "control": {
+          "description": "control parameter (Optional[Dict[str, Any]]).",
+          "type": "object"
+        },
+        "index": {
+          "description": "index parameter (Optional[Sequence[int]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "method": {
+          "default": "partialling out",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "penalty": {
+          "description": "penalty parameter (Optional[Dict[str, Any]]).",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "post parameter (bool).",
+          "type": "boolean"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlasso_effects"
+  },
+  {
+    "description": "Instrumental-variables estimation with rigorous-Lasso selection.",
+    "input_schema": {
+      "properties": {
+        "control": {
+          "description": "Forwarded to :func:`statspai.rlasso.rlasso` (penalty level, loadings, iteration controls).",
+          "type": "object"
+        },
+        "d": {
+          "description": "name).",
+          "type": "string"
+        },
+        "intercept": {
+          "default": true,
+          "description": "Passed to the underlying ``rlasso`` first stages.",
+          "type": "boolean"
+        },
+        "penalty": {
+          "description": "Forwarded to :func:`statspai.rlasso.rlasso` (penalty level, loadings, iteration controls).",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "Post-Lasso (OLS refit) inside every selection step.",
+          "type": "boolean"
+        },
+        "select_X": {
+          "default": true,
+          "description": "Lasso-select among the controls (partialling-out).",
+          "type": "boolean"
+        },
+        "select_Z": {
+          "default": true,
+          "description": "Lasso-select among the instruments.",
+          "type": "boolean"
+        },
+        "x": {
+          "description": "Primary running variable, regressor, or feature input for this estimator.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "name).",
+          "type": "string"
+        },
+        "z": {
+          "description": "Instrument, proxy, or auxiliary variable used by this estimator.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "d",
+        "y",
+        "z"
+      ],
+      "type": "object"
+    },
+    "name": "rlasso_iv"
+  },
+  {
     "description": "Robust / unconstrained Synthetic Control. Assumptions: A convex (or regularized) combination of donor units reproduces the treated unit's pre-treatment outcome path; No interference: the treatment does not affect the donor units (SUTVA); No anticipation before the treatment date. Pre-conditions: Panel of one or more treated units plus an untreated donor pool, observed over time; Pre-treatment window long enough to fit donor weights (rule of thumb: more pre-periods than donors used); Outcome observed for every unit in every period. Failure modes: Large pre-treatment RMSPE -- the synthetic unit fails to track the treated unit before treatment -> Add donors / predictors, lengthen the pre-period, or use a bias-corrected estimator (sdid, augsynth); Placebo / permutation inference shows the estimate is not extreme relative to donors -> Report the placebo distribution honestly; the effect may not be distinguishable from noise. Alternatives: sp.sdid, sp.augsynth, sp.gsynth, sp.callaway_santanna. Typical minimum N: 15.",
     "input_schema": {
       "properties": {

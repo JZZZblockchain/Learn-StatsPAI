@@ -1,0 +1,267 @@
+"""Unit tests for the rigorous-Lasso module (``statspai.rlasso``).
+
+These are R-free behavioural / edge-case tests (the numerical-parity
+contract against ``hdm`` lives in
+``tests/reference_parity/test_rlasso_parity.py``).
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+import statspai as sp
+from statspai.rlasso import (
+    RlassoClassifier,
+    RlassoRegressor,
+    rlasso,
+    rlasso_effect,
+    rlasso_effects,
+    rlasso_iv,
+)
+
+
+@pytest.fixture
+def sparse_reg():
+    """High-dim sparse regression: n=200, p=50, 4 true signals."""
+    rng = np.random.default_rng(11)
+    n, p = 200, 50
+    X = rng.normal(size=(n, p))
+    beta = np.zeros(p)
+    beta[:4] = [3.0, -2.0, 1.5, 1.0]
+    y = X @ beta + rng.normal(size=n)
+    return X, y, beta
+
+
+@pytest.fixture
+def iv_dgp():
+    """Many-instrument IV: n=300, 25 instruments (3 strong), 10 controls."""
+    rng = np.random.default_rng(22)
+    n, px, pz = 300, 10, 25
+    X = rng.normal(size=(n, px))
+    Z = rng.normal(size=(n, pz))
+    piz = np.zeros(pz)
+    piz[:3] = [1.2, -1.0, 0.8]
+    gx = np.zeros(px)
+    gx[:3] = [0.7, -0.5, 0.4]
+    u = rng.normal(size=n)
+    d = Z @ piz + X @ gx + 0.7 * u + rng.normal(size=n)
+    beta = 1.5
+    y = beta * d + X @ gx + u + rng.normal(size=n)
+    return X, Z, d, y, beta
+
+
+# ─────────────────────────────── public API ───────────────────────────────
+
+
+def test_public_symbols_exported():
+    for name in ["rlasso", "rlasso_effect", "rlasso_iv"]:
+        assert hasattr(sp, name), f"sp.{name} not exported"
+
+
+def test_rlasso_recovers_sparse_support(sparse_reg):
+    X, y, beta = sparse_reg
+    fit = rlasso(X, y, post=True)
+    # the 4 true signals must be selected
+    assert set(range(4)).issubset(set(np.where(fit.index)[0]))
+    # post-Lasso coefficients close to truth on the support
+    np.testing.assert_allclose(fit.beta[:4], beta[:4], atol=0.3)
+
+
+def test_rlasso_post_vs_lasso_shrinkage(sparse_reg):
+    X, y, _ = sparse_reg
+    post = rlasso(X, y, post=True)
+    lasso = rlasso(X, y, post=False)
+    # post-Lasso un-shrinks: larger |coef| on the shared support
+    shared = post.index & lasso.index
+    assert np.sum(np.abs(post.beta[shared])) >= np.sum(np.abs(lasso.beta[shared]))
+
+
+def test_rlasso_predict_residual_identity(sparse_reg):
+    X, y, _ = sparse_reg
+    fit = rlasso(X, y, post=True)
+    # residuals == y - predict(X), the relation rlassoIV/rlassoEffect rely on
+    np.testing.assert_allclose(fit.residuals, y - fit.predict(X), atol=1e-10)
+
+
+def test_rlasso_intercept_recovered():
+    rng = np.random.default_rng(5)
+    n, p = 150, 20
+    X = rng.normal(size=(n, p))
+    beta = np.zeros(p)
+    beta[:3] = [2.0, -1.0, 1.5]
+    y = 7.0 + X @ beta + rng.normal(size=n)
+    fit = rlasso(X, y, post=True, intercept=True)
+    assert abs(fit.intercept - 7.0) < 0.5
+
+
+def test_rlasso_no_signal_returns_empty_support():
+    rng = np.random.default_rng(9)
+    X = rng.normal(size=(120, 30))
+    y = rng.normal(size=120)  # pure noise, uncorrelated with X
+    fit = rlasso(X, y, post=True)
+    # almost surely nothing (or very little) selected; never errors
+    assert fit.n_selected <= 3
+    assert np.isfinite(fit.sigma)
+
+
+def test_rlasso_dataframe_colnames_flow_through(sparse_reg):
+    X, y, _ = sparse_reg
+    cols = [f"feat{j}" for j in range(X.shape[1])]
+    fit = rlasso(X, y, colnames=cols)
+    assert all(s.startswith("feat") for s in fit.selected)
+    assert fit.summary().startswith("Rigorous Lasso")
+
+
+def test_penalty_c_controls_sparsity(sparse_reg):
+    X, y, _ = sparse_reg
+    loose = rlasso(X, y, penalty={"c": 0.5})
+    tight = rlasso(X, y, penalty={"c": 3.0})
+    # a bigger slack constant c ⇒ bigger penalty ⇒ fewer selected
+    assert tight.n_selected <= loose.n_selected
+
+
+# ─────────────────────────────── rlasso_effect ─────────────────────────────
+
+
+def test_rlasso_effect_recovers_partial_effect():
+    rng = np.random.default_rng(33)
+    n, p = 250, 40
+    X = rng.normal(size=(n, p))
+    g = np.zeros(p)
+    g[:3] = [1.0, -0.8, 0.6]
+    d = X @ g + rng.normal(size=n)
+    alpha = 2.0
+    y = alpha * d + X @ g + rng.normal(size=n)
+    for method in ("partialling out", "double selection"):
+        res = rlasso_effect(X, y, d, method=method)
+        assert abs(res.alpha - alpha) < 0.25, method
+        assert res.se > 0
+        lo, hi = res.conf_int()
+        assert lo < res.alpha < hi
+
+
+def test_rlasso_effect_invalid_method_raises(sparse_reg):
+    X, y, _ = sparse_reg
+    with pytest.raises(ValueError, match="partialling out"):
+        rlasso_effect(X, y, X[:, 0], method="bogus")
+
+
+def test_rlasso_effects_multiple_targets(sparse_reg):
+    X, y, _ = sparse_reg
+    out = rlasso_effects(X[:, :5], y, index=[0, 1], method="partialling out")
+    assert set(out.keys()) == {"V1", "V2"}
+    for r in out.values():
+        assert np.isfinite(r.alpha) and r.se > 0
+
+
+# ─────────────────────────────── rlasso_iv ─────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(select_Z=True, select_X=False),
+        dict(select_Z=False, select_X=True),
+        dict(select_Z=True, select_X=True),
+        dict(select_Z=False, select_X=False),
+    ],
+)
+def test_rlasso_iv_recovers_effect(iv_dgp, kwargs):
+    X, Z, d, y, beta = iv_dgp
+    res = rlasso_iv(y=y, d=d, z=Z, x=X, **kwargs)
+    assert abs(res.coef[0] - beta) < 0.3, kwargs
+    assert res.se[0] > 0
+    ci = res.conf_int()
+    assert ci[0, 0] < res.coef[0] < ci[0, 1]
+
+
+def test_rlasso_iv_dataframe_inputs(iv_dgp):
+    X, Z, d, y, beta = iv_dgp
+    df = pd.DataFrame(
+        np.column_stack([y, d, X, Z]),
+        columns=["y", "d"]
+        + [f"x{j}" for j in range(X.shape[1])]
+        + [f"z{j}" for j in range(Z.shape[1])],
+    )
+    res = rlasso_iv(
+        y="y", d="d",
+        x=[f"x{j}" for j in range(X.shape[1])],
+        z=[f"z{j}" for j in range(Z.shape[1])],
+        data=df, select_Z=True, select_X=False,
+    )
+    assert res.treat_names == ["d"]
+    assert abs(res.coef[0] - beta) < 0.3
+    assert "Rigorous-Lasso IV" in res.summary()
+
+
+def test_rlasso_iv_select_x_requires_controls(iv_dgp):
+    X, Z, d, y, _ = iv_dgp
+    with pytest.raises(ValueError, match="requires controls"):
+        rlasso_iv(y=y, d=d, z=Z, x=None, select_Z=False, select_X=True)
+
+
+def test_rlasso_iv_pvalue_and_tstat(iv_dgp):
+    X, Z, d, y, _ = iv_dgp
+    res = rlasso_iv(y=y, d=d, z=Z, x=X, select_Z=True, select_X=False)
+    np.testing.assert_allclose(res.tstat[0], res.coef[0] / res.se[0])
+    assert 0.0 <= res.pvalue[0] <= 1.0
+
+
+# ────────────────────────── DML nuisance learner ──────────────────────────
+
+
+def test_rlasso_regressor_sklearn_contract(sparse_reg):
+    from sklearn.base import clone
+
+    X, y, _ = sparse_reg
+    est = RlassoRegressor(post=True, c=1.1)
+    cloned = clone(est)  # DML cross-fitting clones every fold
+    assert cloned.get_params() == est.get_params()
+    est.fit(X, y)
+    assert est.predict(X).shape == (X.shape[0],)
+    assert hasattr(est, "coef_") and hasattr(est, "intercept_")
+
+
+def test_rlasso_classifier_valid_probabilities(sparse_reg):
+    X, y, _ = sparse_reg
+    d = (y > np.median(y)).astype(int)
+    clf = RlassoClassifier().fit(X, d)
+    proba = clf.predict_proba(X)
+    assert proba.shape == (X.shape[0], 2)
+    assert np.all((proba > 0) & (proba < 1))
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    assert set(np.unique(clf.predict(X))).issubset({0, 1})
+
+
+def test_dml_accepts_rlasso_alias():
+    from statspai.dml._learners import resolve_learner
+
+    assert isinstance(
+        resolve_learner("rlasso", kind="regressor", role="ml_g"), RlassoRegressor
+    )
+    assert isinstance(
+        resolve_learner("rlasso", kind="classifier", role="ml_m"), RlassoClassifier
+    )
+
+
+def test_dml_plr_with_rlasso_learner_recovers_effect():
+    rng = np.random.default_rng(44)
+    n, p = 400, 20
+    X = rng.normal(size=(n, p))
+    g = np.zeros(p)
+    g[:3] = [1.0, -0.7, 0.5]
+    m = np.zeros(p)
+    m[:3] = [0.8, 0.6, -0.4]
+    d = X @ m + rng.normal(size=n)
+    theta = 1.5
+    y = theta * d + X @ g + rng.normal(size=n)
+    df = pd.DataFrame(X, columns=[f"x{j}" for j in range(p)])
+    df["y"] = y
+    df["d"] = d
+    res = sp.dml(
+        data=df, y="y", treat="d", covariates=[f"x{j}" for j in range(p)],
+        model="plr", ml_g="rlasso", ml_m="rlasso", n_folds=5,
+    )
+    assert abs(float(res.estimate) - theta) < 0.25
