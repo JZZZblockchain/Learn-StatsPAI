@@ -18983,7 +18983,7 @@
     "name": "rlasso_effect"
   },
   {
-    "description": "Estimate the effect of each targeted column of ``X`` on ``y``.",
+    "description": "Estimate the effect of each targeted column of ``X`` on ``y``. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "X": {
