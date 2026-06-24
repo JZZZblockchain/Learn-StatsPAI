@@ -97,6 +97,21 @@ out$effect <- list(
   double_selection = eff_to_list(rlassoEffect(X2, y2, d2, method = "double selection"))
 )
 
+# rlassoEffects: each targeted column of X2 as a treatment, rest as controls.
+effM_po <- rlassoEffects(X2, y2, index = c(1, 2, 3, 4), method = "partialling out")
+effM_ds <- rlassoEffects(X2, y2, index = c(1, 2, 3, 4), method = "double selection")
+out$effects_multi <- list(
+  index = c(1, 2, 3, 4),
+  partialling_out = list(alpha = as.numeric(effM_po$coefficients),
+                         se = as.numeric(effM_po$se),
+                         t = as.numeric(effM_po$t),
+                         pval = as.numeric(effM_po$pval)),
+  double_selection = list(alpha = as.numeric(effM_ds$coefficients),
+                          se = as.numeric(effM_ds$se),
+                          t = as.numeric(effM_ds$t),
+                          pval = as.numeric(effM_ds$pval))
+)
+
 ## ───────────────── Fixture C: EminentDomain rlassoIV (logGDP) ─────────────
 ed <- EminentDomain$logGDP
 x <- ed$x; y3 <- as.numeric(ed$y); d3 <- as.numeric(ed$d); z <- ed$z

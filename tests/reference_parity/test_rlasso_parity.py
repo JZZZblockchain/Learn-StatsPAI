@@ -53,7 +53,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from statspai.rlasso import rlasso, rlasso_effect, rlasso_iv
+from statspai.rlasso import rlasso, rlasso_effect, rlasso_effects, rlasso_iv
 
 _FIXTURE_DIR = pathlib.Path(__file__).parent / "_fixtures"
 
@@ -158,6 +158,25 @@ def test_rlasso_effect_matches_hdm(effect_df, R, method, key):
     np.testing.assert_allclose(res.se, exp["se"], atol=1e-6)
     np.testing.assert_allclose(res.tstat, exp["t"], atol=1e-5)
     np.testing.assert_allclose(res.pvalue, exp["pval"], atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "method,key",
+    [
+        ("partialling out", "partialling_out"),
+        ("double selection", "double_selection"),
+    ],
+)
+def test_rlasso_effects_multi_target_matches_hdm(effect_df, R, method, key):
+    """sp.rlasso_effects (many targets) vs hdm::rlassoEffects."""
+    y, _, X = effect_df
+    exp = R["effects_multi"][key]
+    # R index is 1-based c(1,2,3,4); Python is 0-based.
+    out = rlasso_effects(X, y, index=[0, 1, 2, 3], method=method)
+    vals = list(out.values())
+    np.testing.assert_allclose([v.alpha for v in vals], exp["alpha"], atol=1e-6)
+    np.testing.assert_allclose([v.se for v in vals], exp["se"], atol=1e-6)
+    np.testing.assert_allclose([v.tstat for v in vals], exp["t"], atol=1e-5)
 
 
 # ─────────────────────── rlasso_iv (synthetic, 4 paths) ────────────────────

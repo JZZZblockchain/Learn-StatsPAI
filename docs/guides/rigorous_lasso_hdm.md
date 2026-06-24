@@ -123,10 +123,34 @@ a calibrated classifier when propensity calibration matters.
 
 ## Relationship to `iv.bch_post_lasso_iv`
 
-`iv.bch_post_lasso_iv` is the original reconstruction and is **kept for
-backward compatibility with its existing numerics**. For agreement with
-`hdm` — and for selection on both instruments and controls — use
-`sp.rlasso_iv`. The two are not numerically interchangeable.
+`iv.bch_post_lasso_iv` is the original reconstruction and is **deprecated**
+(it emits a `DeprecationWarning`); it is kept only for backward
+compatibility with its existing numerics. For agreement with `hdm` — and
+for selection on both instruments and controls — use `sp.rlasso_iv`. The
+two are not numerically interchangeable.
+
+## What is and isn't ported
+
+Ported and parity-tested against `hdm`: `rlasso`, `rlassoEffect` /
+`rlassoEffects` (single and multi-target), `rlassoIV` (all four selection
+regimes), `tsls`, and the data-driven `lambdaCalculation` for the
+homoskedastic and heteroskedastic (X-independent) penalties.
+
+**Not yet ported — `rlassologit`** (the *logistic* rigorous Lasso and its
+`rlassologitEffect(s)`). `hdm::rlassologit` delegates the penalized fit to
+`glmnet::glmnet(family="binomial")` at a single data-driven `λ`. Reproducing
+it faithfully means matching glmnet's logistic-lasso solution — its
+standardization, intercept handling and objective scaling differ from
+scikit-learn's L1 logistic regression at a fixed `λ` — which is a separate
+parity exercise. Rather than ship an unvalidated approximation (the very
+failure mode this module was built to avoid), it is intentionally left out
+until it can be pinned against `glmnet`. For a binary treatment under
+Double-ML, use `sp.dml(model='irm', ...)` with a genuine classifier.
+
+**X-dependent penalty simulation** (`penalty={"X.dependent.lambda": True}`)
+is implemented but matches `hdm` only *in distribution* — R's
+Mersenne-Twister stream is not reproduced — so it is not bit-exact. The
+default (X-independent) path is.
 
 ## Regenerating the parity fixtures
 
