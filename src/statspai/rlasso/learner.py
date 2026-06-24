@@ -66,6 +66,20 @@ class RlassoRegressor(BaseEstimator, RegressorMixin):
 
     Parameters mirror :func:`statspai.rlasso.rlasso`.  Suitable as
     ``ml_g`` / ``ml_m`` in ``sp.dml(model='plr', ...)``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.standard_normal((100, 20))
+    >>> beta = np.zeros(20); beta[:3] = [1.0, -1.0, 0.5]
+    >>> y = X @ beta + 0.5 * rng.standard_normal(100)
+    >>> est = sp.RlassoRegressor(post=True).fit(X, y)
+    >>> est.predict(X).shape
+    (100,)
+    >>> est.coef_.shape
+    (20,)
     """
 
     def __init__(
@@ -123,6 +137,18 @@ class RlassoClassifier(BaseEstimator, ClassifierMixin):
     Fits ``rlasso`` to the 0/1 label and exposes clipped
     ``predict_proba``.  Use only when a linear-probability propensity is
     acceptable; for calibrated propensities use a genuine classifier.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.standard_normal((200, 20))
+    >>> lin = X[:, 0] - 0.5 * X[:, 1]
+    >>> d = (rng.uniform(size=200) < 1.0 / (1.0 + np.exp(-lin))).astype(float)
+    >>> clf = sp.RlassoClassifier().fit(X, d)
+    >>> clf.predict_proba(X).shape  # columns: P(0), P(1)
+    (200, 2)
     """
 
     def __init__(
