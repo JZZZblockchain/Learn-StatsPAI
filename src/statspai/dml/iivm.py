@@ -78,7 +78,16 @@ class DoubleMLIIVM(_DoubleMLBase):
     _ML_M_TARGET_BINARY = True
     _ML_R_TARGET_BINARY = True
     _SUPPORTS_SAMPLE_WEIGHT = True
-    # Instrument-propensity clip — same role as the IRM propensity clip.
+    # IIVM has a single (LATE) score but honours the IPW knobs:
+    # trimming_threshold sets the symmetric instrument-propensity clip
+    # and normalize_ipw self-normalizes the IPW weights (DoubleML IIVM).
+    # Defaults (0.01 clip, no normalization) preserve historical output.
+    _VALID_SCORES = {"LATE"}
+    _DEFAULT_SCORE = "LATE"
+    _USES_IPW = True
+    # Instrument-propensity clip default — superseded by
+    # ``self.trimming_threshold`` (same 0.01 value) at fit time; kept for
+    # backwards-compatible documentation of the historical clip.
     _PSCORE_CLIP_LO = 0.01
     _PSCORE_CLIP_HI = 0.99
     # First-stage compliance clip — r1, r0 do NOT appear in denominators
@@ -216,8 +225,17 @@ class DoubleMLIIVM(_DoubleMLBase):
             else:
                 m_hat[test_idx] = ml_m.predict(X_te)
 
+        lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
         m_hat_raw = m_hat.copy()
-        m_hat = np.clip(m_hat, self._PSCORE_CLIP_LO, self._PSCORE_CLIP_HI)
+        m_hat = np.clip(m_hat, lo, hi)
+        # Optional DoubleML-style self-normalization of the IPW weights.
+        # NB: DoubleML's IIVM uses the *treatment* D — not the instrument
+        # Z — as the indicator in _normalize_ipw, even though
+        # m̂ = P(Z=1|X). We mirror that exactly for parity.
+        if self.normalize_ipw:
+            mean_t1 = float(np.mean(D / m_hat))
+            mean_t0 = float(np.mean((1.0 - D) / (1.0 - m_hat)))
+            m_hat = D * (m_hat * mean_t1) + (1.0 - D) * (1.0 - (1.0 - m_hat) * mean_t0)
         r1 = np.clip(r1, self._COMPLIANCE_CLIP_LO, self._COMPLIANCE_CLIP_HI)
         r0 = np.clip(r0, self._COMPLIANCE_CLIP_LO, self._COMPLIANCE_CLIP_HI)
 
@@ -250,8 +268,8 @@ class DoubleMLIIVM(_DoubleMLBase):
             den_var = abs(float(np.sum(w * psi_b)))
             se = float(np.sqrt(num_var)) / den_var if den_var > 0 else 0.0
 
-        n_clipped_lo = int(np.sum(m_hat_raw < self._PSCORE_CLIP_LO))
-        n_clipped_hi = int(np.sum(m_hat_raw > self._PSCORE_CLIP_HI))
+        n_clipped_lo = int(np.sum(m_hat_raw < lo))
+        n_clipped_hi = int(np.sum(m_hat_raw > hi))
         self._last_rep_diagnostics = {
             "pscore_z_min": float(np.min(m_hat_raw)),
             "pscore_z_max": float(np.max(m_hat_raw)),

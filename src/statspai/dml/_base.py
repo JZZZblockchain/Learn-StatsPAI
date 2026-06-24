@@ -87,6 +87,15 @@ class _DoubleMLBase:
     # raise ``NotImplementedError`` if a non-trivial weight vector is
     # supplied — better than silently ignoring it.
     _SUPPORTS_SAMPLE_WEIGHT: bool = False
+    # Score / IPW options. ``_VALID_SCORES = None`` means the model does
+    # not accept a ``score=`` argument; otherwise it is the set of legal
+    # score strings and ``_DEFAULT_SCORE`` the one used when ``score`` is
+    # left at ``None``. ``_USES_IPW`` marks models whose orthogonal score
+    # divides by a propensity (IRM, IIVM) and therefore honour
+    # ``normalize_ipw`` / ``trimming_threshold`` (DoubleML semantics).
+    _VALID_SCORES: Optional[set] = None
+    _DEFAULT_SCORE: Optional[str] = None
+    _USES_IPW: bool = False
 
     def __init__(
         self,
@@ -104,6 +113,9 @@ class _DoubleMLBase:
         random_state: int = 42,
         sample_weight: Optional[Any] = None,
         fold_indices: Optional[Any] = None,
+        score: Optional[str] = None,
+        normalize_ipw: bool = False,
+        trimming_threshold: float = 1e-2,
     ):
         context = f"dml.{self._MODEL_TAG.lower() or 'base'}"
         if not isinstance(data, pd.DataFrame):
@@ -142,6 +154,55 @@ class _DoubleMLBase:
             raise MethodIncompatibility(
                 f"{context}: random_state must be integer-like"
             ) from exc
+
+        # ----- score / IPW options (DoubleML-compatible) --------------
+        if score is None:
+            self.score = self._DEFAULT_SCORE
+        else:
+            if self._VALID_SCORES is None:
+                raise MethodIncompatibility(
+                    f"{context}: model='{self._MODEL_TAG.lower()}' does not accept "
+                    f"a 'score' argument."
+                )
+            score_str = str(score)
+            if score_str not in self._VALID_SCORES:
+                raise MethodIncompatibility(
+                    f"{context}: score must be one of {sorted(self._VALID_SCORES)}, "
+                    f"got {score_str!r}.",
+                    diagnostics={"valid_scores": sorted(self._VALID_SCORES)},
+                )
+            self.score = score_str
+        if not isinstance(normalize_ipw, bool):
+            raise MethodIncompatibility(
+                f"{context}: normalize_ipw must be a bool, got "
+                f"{type(normalize_ipw).__name__}."
+            )
+        if normalize_ipw and not self._USES_IPW:
+            raise MethodIncompatibility(
+                f"{context}: normalize_ipw only applies to inverse-propensity "
+                f"scores (model in {{'irm', 'iivm'}}); model="
+                f"'{self._MODEL_TAG.lower()}' does not divide by a propensity."
+            )
+        self.normalize_ipw = normalize_ipw
+        try:
+            tt = float(trimming_threshold)
+        except (TypeError, ValueError) as exc:
+            raise MethodIncompatibility(
+                f"{context}: trimming_threshold must be a float in (0, 0.5)."
+            ) from exc
+        if not (0.0 < tt < 0.5):
+            raise MethodIncompatibility(
+                f"{context}: trimming_threshold must be in the open interval "
+                f"(0, 0.5), got {tt}."
+            )
+        if tt != 1e-2 and not self._USES_IPW:
+            raise MethodIncompatibility(
+                f"{context}: trimming_threshold only applies to IPW-based models "
+                f"(model in {{'irm', 'iivm'}}); model="
+                f"'{self._MODEL_TAG.lower()}' does not trim a propensity."
+            )
+        self.trimming_threshold = tt
+
         if fold_indices is not None and self._MODEL_TAG != "PLR":
             raise MethodIncompatibility(
                 f"{context}: explicit fold_indices are currently supported for "
@@ -540,6 +601,11 @@ class _DoubleMLBase:
             "n_covariates": len(self.covariates),
             "fold_source": fold_source,
         }
+        if self.score is not None:
+            model_info["score"] = self.score
+        if self._USES_IPW:
+            model_info["normalize_ipw"] = self.normalize_ipw
+            model_info["trimming_threshold"] = self.trimming_threshold
         if self._REQUIRES_INSTRUMENT:
             if self.instrument is None:  # pragma: no cover
                 raise MethodIncompatibility(

@@ -54,6 +54,9 @@ def dml(
     random_state: int = 42,
     sample_weight: Optional[Any] = None,
     fold_indices: Optional[Any] = None,
+    score: Optional[str] = None,
+    normalize_ipw: bool = False,
+    trimming_threshold: float = 1e-2,
 ) -> CausalResult:
     """
     Estimate causal effect using Double/Debiased Machine Learning.
@@ -110,6 +113,25 @@ def dml(
         a 1-D array of length ``len(data)`` or a column name. When
         provided, ``n_rep`` must be 1 and the labels must define exactly
         ``n_folds`` non-empty folds.
+    score : str, optional
+        Orthogonal score variant (DoubleML-compatible). Model-specific:
+
+        - ``model='plr'`` : ``'partialling out'`` (default) or ``'IV-type'``
+        - ``model='irm'`` : ``'ATE'`` (default) or ``'ATTE'`` (effect on
+          the treated)
+
+        ``None`` selects each model's default; the defaults reproduce the
+        historical StatsPAI output exactly. Invalid for ``pliv`` /
+        ``iivm`` beyond their single native score.
+    normalize_ipw : bool, default False
+        Self-normalize the inverse-propensity weights (Hájek-style) for
+        the IPW-based models ``irm`` / ``iivm``. Matches DoubleML's
+        ``normalize_ipw``. Ignored (and rejected) for ``plr`` / ``pliv``.
+    trimming_threshold : float, default 0.01
+        Symmetric propensity-score trimming for ``irm`` / ``iivm``: the
+        estimated propensity is clipped to ``[t, 1 - t]``. The default
+        ``0.01`` reproduces the historical clip and matches DoubleML's
+        ``trimming_threshold`` with ``trimming_rule='truncate'``.
 
     Returns
     -------
@@ -184,6 +206,9 @@ def dml(
         random_state=random_state,
         sample_weight=sample_weight,
         fold_indices=fold_indices,
+        score=score,
+        normalize_ipw=normalize_ipw,
+        trimming_threshold=trimming_threshold,
     )
     _result = estimator.fit()
     try:
@@ -204,6 +229,9 @@ def dml(
                 "n_rep": n_rep,
                 "alpha": alpha,
                 "random_state": int(random_state),
+                "score": score,
+                "normalize_ipw": normalize_ipw,
+                "trimming_threshold": trimming_threshold,
                 "fold_indices": (
                     fold_indices if isinstance(fold_indices, str) else None
                 ),
@@ -276,6 +304,9 @@ class DoubleML:
         random_state: int = 42,
         sample_weight: Optional[Any] = None,
         fold_indices: Optional[Any] = None,
+        score: Optional[str] = None,
+        normalize_ipw: bool = False,
+        trimming_threshold: float = 1e-2,
     ):
         key = str(model).lower()
         if key not in _MODEL_REGISTRY:
@@ -298,6 +329,9 @@ class DoubleML:
             random_state=random_state,
             sample_weight=sample_weight,
             fold_indices=fold_indices,
+            score=score,
+            normalize_ipw=normalize_ipw,
+            trimming_threshold=trimming_threshold,
         )
 
     def fit(self) -> CausalResult:

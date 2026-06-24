@@ -92,7 +92,51 @@ are pinned against `doubleml-for-py`.
 
 All four pins were re-verified on 2026-06-12 with StatsPAI 1.17.0
 against `doubleml-for-py` 0.11.3 / scikit-learn 1.7.2 (4/4 passing,
-PLR and PLIV at machine precision).
+PLR and PLIV at machine precision); the three score/IPW option pins
+below were added against the same `doubleml-for-py` 0.11.3 (7/7
+passing).
+
+## DoubleML-compatible score and IPW options
+
+`sp.dml` exposes the same score and inverse-propensity options as
+DoubleML, with **defaults that reproduce the historical StatsPAI
+estimate bit-for-bit** (so upgrading never moves a default result):
+
+| Option | Models | Values (default **bold**) | DoubleML equivalent |
+| --- | --- | --- | --- |
+| `score` | `plr` | **`'partialling out'`**, `'IV-type'` | `DoubleMLPLR(score=...)` |
+| `score` | `irm` | **`'ATE'`**, `'ATTE'` | `DoubleMLIRM(score=...)` |
+| `normalize_ipw` | `irm`, `iivm` | **`False`**, `True` | `normalize_ipw=` |
+| `trimming_threshold` | `irm`, `iivm` | **`0.01`** | `trimming_threshold=` (rule `'truncate'`) |
+
+Each option is pinned against `doubleml-for-py` 0.11.3 in
+[`tests/external_parity/test_dml_python_parity.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/tests/external_parity/test_dml_python_parity.py),
+with same-seed agreement (the residual is fold-construction noise, the
+same source as the IRM/IIVM pins):
+
+| Option path | `sp.dml` vs `doubleml-for-py` |
+| --- | --- |
+| PLR `score='partialling out'` (default) | machine precision (\|Δ\| = 0) |
+| PLR `score='IV-type'` | ≈ 0.011 (fold construction; not fold-invariant) |
+| IRM `score='ATE'` (default) | ≈ 6 × 10⁻⁴ |
+| IRM `score='ATTE'` | ≈ 0.011 |
+| IRM / IIVM `normalize_ipw=True` | tracks DoubleML's shift (≤ 0.01) |
+
+Two implementation notes worth stating for an auditor:
+
+- **PLR `'IV-type'`** swaps the moment denominator from `Σ v̂²` to
+  `Σ v̂·D` (`v̂ = D − m̂(X)`), reusing the same `E[Y|X]` outcome
+  nuisance — no extra learner. Unlike partialling-out it is *not*
+  fold-invariant, hence the ≈ 0.011 fold gap rather than machine
+  precision.
+- **`normalize_ipw`** mirrors DoubleML's `_normalize_ipw` exactly,
+  including the (initially surprising) detail that DoubleML's **IIVM**
+  self-normalizes using the *treatment* `D` as the indicator — not the
+  instrument `Z` — even though the propensity being normalized is
+  `m̂ = P(Z=1|X)`. StatsPAI reproduces that convention for parity.
+- **`score='ATTE'` with `sample_weight`** is rejected loudly: DoubleML's
+  `weights` object is a GATE construct, not a survey weight, so the two
+  are not silently combined.
 
 ## When to expect divergence
 
@@ -101,12 +145,13 @@ details that the original Chernozhukov et al. (2018) score leaves
 unspecified:
 
 1. **Propensity trimming**: `sp.dml` clips propensities to
-   `[0.01, 0.99]`; `doubleml-for-py` applies no clip by default. On this
-   fixture few propensities approach the boundary, so the clip is *not*
-   what drives the small IRM gap — matching the thresholds (or removing
-   the clip) leaves both estimates unchanged. Trimming matters only when
-   the estimated propensity has mass near 0 or 1, where the AIPW score is
-   numerically unstable.
+   `[0.01, 0.99]`; `doubleml-for-py`'s IRM/IIVM default is *identical* —
+   `trimming_rule='truncate'`, `trimming_threshold=0.01` — so the clip is
+   *not* a source of divergence (and both are now adjustable via
+   `trimming_threshold=`). On this fixture few propensities approach the
+   boundary, so the clip is *not* what drives the small IRM gap. Trimming
+   matters only when the estimated propensity has mass near 0 or 1, where
+   the AIPW score is numerically unstable.
 2. **Repeated cross-fitting aggregation**: `n_rep > 1` aggregates by
    median in both. With `n_rep=1` the seed fully determines folds.
 3. **Convenience defaults**: `sp.dml`'s string aliases
@@ -139,14 +184,31 @@ agree closely and DML2 is the recommended default.
 **Nuisance learners.** Any scikit-learn-compatible estimator can be
 passed to `ml_g` / `ml_m` / `ml_r`, exactly as in DoubleML; string
 aliases (`'lasso'`, `'rf'`, `'gbm'`, …) are convenience shortcuts for
-common configurations. `sp.dml` does **not** ship a theory-driven
-"rigorous"/plug-in lasso (the `hdm` `rlasso` of Belloni–Chernozhukov–
-Hansen): that estimator is specific to the R `hdm` package, and
-`doubleml-for-py` likewise relies on scikit-learn learners rather than
-bundling it. The scikit-learn cross-validated `LassoCV` is the
-Python-ecosystem analogue for a sparse linear nuisance, and a user who
-wants plug-in penalty selection can pass any custom estimator that
-implements the scikit-learn `fit`/`predict` API.
+common configurations. The scikit-learn cross-validated `LassoCV` is
+the default sparse-linear nuisance, and any custom estimator with a
+`fit`/`predict` API can be supplied.
+
+**Rigorous / plug-in lasso (`hdm`).** The DML rate conditions are
+stated for a theory-driven *plug-in* (rigorous) penalty rather than a
+cross-validated one; the canonical implementation is the `rlasso` /
+`rlassoIV` family in the R `hdm` package (Chernozhukov, Hansen &
+Spindler, *The R Journal* 8(2), 2016 [@chernozhukov2016hdm]). StatsPAI
+implements the Belloni–Chernozhukov–Hansen rigorous-penalty machinery
+on the **IV** side — `sp.lasso_iv` / `bch_post_lasso_iv` (post-Lasso
+2SLS with the data-driven `λ = 2c√{2n log(2p/α)}` and iterated
+heteroskedastic loadings). `sp.dml` does **not** yet expose a rigorous
+lasso as a drop-in *nuisance learner* (the `ml_g`/`ml_m` slot): a
+hand-rolled `rlasso` we trialled matched `hdm`'s `λ` and the
+coefficients of selected variables, but its **selection at the
+sparsity boundary diverges from `hdm`** (it is more conservative), and
+on a weak-instrument design such as the BCH eminent-domain application
+`bch_post_lasso_iv` selects fewer instruments than `hdm::rlassoIV` —
+both implementations agree the effect is statistically insignificant,
+but the point estimates differ. Exact `hdm` selection parity, and a
+validated `'rlasso'` nuisance alias, are tracked on the roadmap; until
+then `LassoCV` (CV-tuned) is the supported sparse-linear nuisance and
+the rigorous-penalty path is `sp.lasso_iv`. We flag this openly rather
+than ship an unvalidated numeric path.
 
 ## Scope and known limitations
 
@@ -170,9 +232,13 @@ never silently.
    estimates one treatment per call. For several treatments, call
    `sp.dml` per treatment and adjust with `sp.romano_wolf` /
    `sp.adjust_pvalues` if simultaneous inference is needed.
-3. **PLR exposes the partialling-out score only.** DoubleML's
-   alternative `score='IV-type'` for PLR is not exposed; `sp.dml`
-   implements the partialling-out score that both libraries default to.
+3. **Named scores, not arbitrary callables.** Both PLR scores
+   (`'partialling out'`, `'IV-type'`) and both IRM scores (`'ATE'`,
+   `'ATTE'`) are exposed via `score=` (see *DoubleML-compatible score
+   and IPW options* above). DoubleML additionally accepts a fully custom
+   callable score; `sp.dml` exposes the named scores, and a bespoke
+   orthogonal score is added by subclassing `_DoubleMLBase` (see
+   *Extending sp.dml with a custom score* below).
 4. **DML2 only.** The pooled-moment DML2 procedure (both libraries'
    default) is the only one implemented; per-fold DML1 is not exposed
    (see [Estimation procedure](#estimation-procedure-and-nuisance-learners)).
@@ -218,13 +284,82 @@ Beyond the four estimator classes that mirror DoubleML one-to-one,
   agent-side audit chain (`sp.audit_result`) work the same as for every
   other StatsPAI estimator.
 
+## Extending `sp.dml` with a custom score
+
+DoubleML's object-oriented design lets users plug in a custom callable
+score. StatsPAI's analogue is subclassing `_DoubleMLBase`: set the model
+metadata as class attributes and implement `_fit_one_rep`, which returns
+`(theta, se)` for one cross-fitting repetition. The base class handles
+data validation, learner resolution, repeated-cross-fit (median)
+aggregation, and the `CausalResult` wrapping — so a new orthogonal score
+is ~20 lines:
+
+```python
+import numpy as np
+from sklearn.model_selection import KFold
+from statspai.dml._base import _DoubleMLBase
+
+class MyPLR(_DoubleMLBase):
+    """Partially-linear DML with a custom Neyman-orthogonal score."""
+    _MODEL_TAG = "MYPLR"
+    _ESTIMAND = "ATE"
+
+    def _fit_one_rep(self, Y, D, X, Z, n, rng_seed,
+                     sample_weight=None, fold_indices=None):
+        kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=rng_seed)
+        y_res, d_res = np.zeros(n), np.zeros(n)
+        for tr, te in kf.split(X):
+            g = self._fit_weighted(self.ml_g, X[tr], Y[tr], None)
+            m = self._fit_weighted(self.ml_m, X[tr], D[tr], None)
+            y_res[te] = Y[te] - g.predict(X[te])
+            d_res[te] = D[te] - m.predict(X[te])
+        theta = float(np.sum(d_res * y_res) / np.sum(d_res**2))
+        psi = (y_res - theta * d_res) * d_res
+        J = -np.mean(d_res**2)
+        se = float(np.sqrt(np.mean(psi**2) / (J**2 * n)))
+        return theta, se
+
+est = MyPLR(df, y="y", treat="d", covariates=cols,
+            ml_g="linear", ml_m="linear", n_folds=5)
+result = est.fit()          # -> a standard CausalResult
+```
+
+The four shipped models (`plr` / `irm` / `pliv` / `iivm`) are exactly
+such subclasses; reading `src/statspai/dml/plr.py` is the recommended
+template.
+
+## Roadmap
+
+Items where `doubleml-for-py` is broader and StatsPAI alignment is
+tracked but not yet shipped:
+
+- **Multiplier-bootstrap simultaneous inference** across several
+  treatments (DoubleML's `bootstrap()` + joint `confint`). Today, run
+  `sp.dml` per treatment and combine with `sp.romano_wolf` /
+  `sp.adjust_pvalues`.
+- **Multiway cluster-robust cross-fitting** (Chiang, Kato, Ma & Sasaki,
+  *JBES* 40(3), 2022 [@chiang2022multiway]). Cross-sectional `sp.dml` reports the
+  heteroskedastic sandwich SE; unit-clustered panel DML is available via
+  `sp.dml_panel`.
+- **Nested-CV learner tuning** (DoubleML's `.tune()`). Today, pass a
+  pre-tuned scikit-learn `Pipeline` / `GridSearchCV` estimator.
+- **Rigorous-lasso (`hdm`) nuisance learner** with validated `hdm`
+  selection parity (see *Rigorous / plug-in lasso* above).
+- **Automatic debiased ML / Riesz representers** (Chernozhukov, Newey &
+  Singh) — a forward direction shared with the DoubleML ecosystem.
+
 ## Running the parity tests yourself
 
 ```bash
 pip install -e ".[dev,parity]"   # the parity extra adds doubleml-for-py
-                                  # (not a runtime dependency of StatsPAI)
+                                  # (not a runtime dependency of StatsPAI);
+                                  # pins were last verified against
+                                  # doubleml-for-py 0.11.3.
 
-# Python-side parity (sp.dml vs doubleml-for-py) — runs to machine precision.
+# Python-side parity (sp.dml vs doubleml-for-py): 7 pins — 4 core models
+# plus the score/IPW options (PLR IV-type, IRM ATTE, normalize_ipw). The
+# partialling-out models match to machine precision; AIPW / IV-type paths
+# match within the documented fold-construction tolerance.
 # Without the parity extra this test skips cleanly instead of failing.
 pytest tests/external_parity/test_dml_python_parity.py -v
 

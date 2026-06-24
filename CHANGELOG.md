@@ -4,6 +4,41 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`sp.dml` — DoubleML-compatible score & IPW options.** Additive
+  options on `sp.dml` / the per-model classes, matching `doubleml-for-py`:
+  - `score='IV-type'` for `model='plr'` (moment denominator `Σ v̂·D`
+    instead of `Σ v̂²`); default stays `'partialling out'`.
+  - `score='ATTE'` for `model='irm'` (effect on the treated); default
+    stays `'ATE'`.
+  - `normalize_ipw=` (Hájek self-normalized IPW) and
+    `trimming_threshold=` (symmetric propensity clip) for `irm` / `iivm`.
+  Each new path is pinned against `doubleml-for-py` 0.11.3 in
+  `tests/external_parity/test_dml_python_parity.py` (7 pins total) and
+  guarded by `tests/test_dml_score_options.py`. **Defaults reproduce the
+  previous output bit-for-bit** — `score=None` / `normalize_ipw=False` /
+  `trimming_threshold=0.01` is the historical estimator (verified PLR
+  partialling-out and IRM ATE both unchanged to machine precision). This
+  is a feature addition, **not** a correctness change to any default.
+  New options are surfaced in `result.model_info` (`score`,
+  `normalize_ipw`, `trimming_threshold`). See the expanded guide
+  [`docs/guides/sp_dml_vs_doubleml.md`](docs/guides/sp_dml_vs_doubleml.md),
+  which also adds a custom-orthogonal-score extension recipe and a
+  DoubleML-alignment roadmap.
+
+### Changed
+
+- **Docs / citations.** Added the verified `hdm` (Chernozhukov, Hansen &
+  Spindler, *The R Journal* 8(2), 2016, doi `10.32614/RJ-2016-040`) and
+  Chiang–Kato–Ma–Sasaki (*JBES* 40(3), 2022, doi
+  `10.1080/07350015.2021.1895815`) references to `paper.bib`; cite `hdm`
+  from the post-Lasso IV / RD-lasso modules that implement its methods.
+  The DML guide now documents the relationship to `hdm` openly, including
+  that `sp.lasso_iv` / `bch_post_lasso_iv` can select fewer instruments
+  than `hdm::rlassoIV` on weak-instrument designs (a tracked roadmap item,
+  not a silent divergence).
+
 ## [1.20.0] — 2026-06-22
 
 ### ⚠️ Correctness

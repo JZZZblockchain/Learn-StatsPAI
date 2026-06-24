@@ -58,6 +58,13 @@ class DoubleMLPLR(_DoubleMLBase):
     _REQUIRES_INSTRUMENT = False
     _ML_M_TARGET_BINARY = False  # PLR is agnostic to D type
     _SUPPORTS_SAMPLE_WEIGHT = True
+    # DoubleML-compatible score variants. 'partialling out' (default)
+    # reproduces the historical StatsPAI estimator bit-for-bit; 'IV-type'
+    # swaps the moment denominator from Σ v̂² to Σ v̂·D (Chernozhukov
+    # et al. 2018; DoubleML PLR). Both use ĝ = E[Y|X] as the outcome
+    # nuisance, so no extra learner is required.
+    _VALID_SCORES = {"partialling out", "IV-type"}
+    _DEFAULT_SCORE = "partialling out"
 
     def _fit_one_rep(
         self,
@@ -94,7 +101,29 @@ class DoubleMLPLR(_DoubleMLBase):
             ml_m = self._fit_weighted(self.ml_m, X[train_idx], D[train_idx], w_train)
             d_resid[test_idx] = D[test_idx] - ml_m.predict(X[test_idx])
 
-        if sample_weight is None:
+        if self.score == "IV-type":
+            # DoubleML IV-type PLR score: same numerator Σ v̂·û but the
+            # moment denominator is Σ v̂·D instead of Σ v̂². ĝ = E[Y|X] is
+            # the same outcome nuisance as partialling-out (here y_resid).
+            if sample_weight is not None:
+                from statspai.exceptions import MethodIncompatibility
+
+                raise MethodIncompatibility(
+                    "dml.plr: score='IV-type' does not support sample_weight; "
+                    "use score='partialling out' (the default) for weighted PLR."
+                )
+            psi_a = -d_resid * D
+            psi_b = d_resid * y_resid
+            mean_a = float(np.mean(psi_a))
+            if abs(mean_a) < 1e-12:
+                raise RuntimeError(  # pragma: no cover
+                    "PLR IV-type denominator ≈ 0; check covariate "
+                    "informativeness or treatment overlap."
+                )
+            theta = float(-np.mean(psi_b) / mean_a)
+            psi_score = psi_a * theta + psi_b
+            se = float(np.sqrt(np.mean(psi_score**2) / (mean_a**2) / n))
+        elif sample_weight is None:
             denom = float(np.sum(d_resid * d_resid))
             if denom < 1e-12:
                 raise RuntimeError(  # pragma: no cover

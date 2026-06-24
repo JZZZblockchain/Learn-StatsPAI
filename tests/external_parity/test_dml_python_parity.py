@@ -53,6 +53,7 @@ References
   for treatment and structural parameters. *The Econometrics
   Journal*, 21(1), C1-C68. [@chernozhukov2018double]
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -65,7 +66,6 @@ import statspai as sp
 
 doubleml = pytest.importorskip("doubleml")
 from sklearn.linear_model import LassoCV, LogisticRegressionCV
-
 
 _FIXTURE_DIR = pathlib.Path(__file__).parent.parent / "reference_parity" / "_fixtures"
 _FIXTURE = _FIXTURE_DIR / "dml_data.csv"
@@ -93,11 +93,16 @@ def test_plr_matches_doubleml_for_py(dml_data, x_cols):
     """sp.dml(model='plr') ≡ doubleml.DoubleMLPLR under identical learners."""
     np.random.seed(42)
     sp_res = sp.dml(
-        data=dml_data, y="y", treat="d", covariates=x_cols,
+        data=dml_data,
+        y="y",
+        treat="d",
+        covariates=x_cols,
         model="plr",
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LassoCV(cv=5, random_state=42),
-        n_folds=5, n_rep=1, random_state=42,
+        n_folds=5,
+        n_rep=1,
+        random_state=42,
     )
     sp_coef = float(sp_res.estimate)
     sp_se = float(sp_res.se if np.isscalar(sp_res.se) else np.asarray(sp_res.se)[0])
@@ -108,29 +113,35 @@ def test_plr_matches_doubleml_for_py(dml_data, x_cols):
         dml_data_obj,
         ml_l=LassoCV(cv=5, random_state=42),
         ml_m=LassoCV(cv=5, random_state=42),
-        n_folds=5, n_rep=1,
+        n_folds=5,
+        n_rep=1,
     )
     dml_plr.fit()
     ref_coef = float(dml_plr.coef[0])
     ref_se = float(dml_plr.se[0])
 
-    assert abs(sp_coef - ref_coef) < 1e-3, (
-        f"PLR coef mismatch: sp.dml={sp_coef:.6f}, doubleml-py={ref_coef:.6f}"
-    )
-    assert abs(sp_se - ref_se) < 1e-3, (
-        f"PLR SE mismatch: sp.dml={sp_se:.6f}, doubleml-py={ref_se:.6f}"
-    )
+    assert (
+        abs(sp_coef - ref_coef) < 1e-3
+    ), f"PLR coef mismatch: sp.dml={sp_coef:.6f}, doubleml-py={ref_coef:.6f}"
+    assert (
+        abs(sp_se - ref_se) < 1e-3
+    ), f"PLR SE mismatch: sp.dml={sp_se:.6f}, doubleml-py={ref_se:.6f}"
 
 
 def test_irm_matches_doubleml_for_py(dml_data, x_cols):
     """sp.dml(model='irm') agrees with doubleml.DoubleMLIRM (binary D, AIPW)."""
     np.random.seed(42)
     sp_res = sp.dml(
-        data=dml_data, y="y", treat="d_bin", covariates=x_cols,
+        data=dml_data,
+        y="y",
+        treat="d_bin",
+        covariates=x_cols,
         model="irm",
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
-        n_folds=5, n_rep=1, random_state=42,
+        n_folds=5,
+        n_rep=1,
+        random_state=42,
     )
     sp_coef = float(sp_res.estimate)
 
@@ -142,7 +153,8 @@ def test_irm_matches_doubleml_for_py(dml_data, x_cols):
         dml_data_obj,
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
-        n_folds=5, n_rep=1,
+        n_folds=5,
+        n_rep=1,
     )
     dml_irm.fit()
     ref_coef = float(dml_irm.coef[0])
@@ -165,12 +177,18 @@ def test_pliv_matches_doubleml_for_py(iv_data, x_cols):
     """
     np.random.seed(42)
     sp_res = sp.dml(
-        data=iv_data, y="y_pliv", d="d_c", X=x_cols,
-        model="pliv", instrument="z_c",
+        data=iv_data,
+        y="y_pliv",
+        d="d_c",
+        X=x_cols,
+        model="pliv",
+        instrument="z_c",
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LassoCV(cv=5, random_state=42),
         ml_r=LassoCV(cv=5, random_state=42),
-        n_folds=5, n_rep=1, random_state=42,
+        n_folds=5,
+        n_rep=1,
+        random_state=42,
     )
     sp_coef = float(sp_res.estimate)
     sp_se = float(sp_res.se if np.isscalar(sp_res.se) else np.asarray(sp_res.se)[0])
@@ -187,18 +205,19 @@ def test_pliv_matches_doubleml_for_py(iv_data, x_cols):
         ml_l=LassoCV(cv=5, random_state=42),
         ml_m=LassoCV(cv=5, random_state=42),
         ml_r=LassoCV(cv=5, random_state=42),
-        n_folds=5, n_rep=1,
+        n_folds=5,
+        n_rep=1,
     )
     dml_pliv.fit()
     ref_coef = float(dml_pliv.coef[0])
     ref_se = float(dml_pliv.se[0])
 
-    assert abs(sp_coef - ref_coef) < 1e-3, (
-        f"PLIV coef mismatch: sp.dml={sp_coef:.6f}, doubleml-py={ref_coef:.6f}"
-    )
-    assert abs(sp_se - ref_se) < 1e-3, (
-        f"PLIV SE mismatch: sp.dml={sp_se:.6f}, doubleml-py={ref_se:.6f}"
-    )
+    assert (
+        abs(sp_coef - ref_coef) < 1e-3
+    ), f"PLIV coef mismatch: sp.dml={sp_coef:.6f}, doubleml-py={ref_coef:.6f}"
+    assert (
+        abs(sp_se - ref_se) < 1e-3
+    ), f"PLIV SE mismatch: sp.dml={sp_se:.6f}, doubleml-py={ref_se:.6f}"
 
 
 def test_iivm_matches_doubleml_for_py(iv_data, x_cols):
@@ -212,12 +231,18 @@ def test_iivm_matches_doubleml_for_py(iv_data, x_cols):
     """
     np.random.seed(42)
     sp_res = sp.dml(
-        data=iv_data, y="y_iivm", d="d_b", X=x_cols,
-        model="iivm", instrument="z_b",
+        data=iv_data,
+        y="y_iivm",
+        d="d_b",
+        X=x_cols,
+        model="iivm",
+        instrument="z_b",
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=3000),
         ml_r=LogisticRegressionCV(cv=5, random_state=42, max_iter=3000),
-        n_folds=5, n_rep=1, random_state=42,
+        n_folds=5,
+        n_rep=1,
+        random_state=42,
     )
     sp_coef = float(sp_res.estimate)
 
@@ -230,7 +255,8 @@ def test_iivm_matches_doubleml_for_py(iv_data, x_cols):
         ml_g=LassoCV(cv=5, random_state=42),
         ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=3000),
         ml_r=LogisticRegressionCV(cv=5, random_state=42, max_iter=3000),
-        n_folds=5, n_rep=1,
+        n_folds=5,
+        n_rep=1,
     )
     dml_iivm.fit()
     ref_coef = float(dml_iivm.coef[0])
@@ -241,4 +267,124 @@ def test_iivm_matches_doubleml_for_py(iv_data, x_cols):
     assert abs(sp_coef - ref_coef) < 0.05, (
         f"IIVM coef diverged beyond 0.05 absolute: "
         f"sp.dml={sp_coef:.6f}, doubleml-py={ref_coef:.6f}"
+    )
+
+
+# --------------------------------------------------------------------- #
+#  DoubleML-compatible score / IPW options (added alongside the
+#  reviewer-facing alignment). The defaults reproduce the historical
+#  StatsPAI score exactly (see tests/test_dml_score_options.py); these
+#  pins check that the *new* option paths track doubleml-for-py within
+#  the same fold-construction tolerance regime as the IRM/IIVM pins.
+# --------------------------------------------------------------------- #
+def test_irm_atte_matches_doubleml_for_py(dml_data, x_cols):
+    """sp.dml(model='irm', score='ATTE') tracks doubleml.DoubleMLIRM ATTE."""
+    np.random.seed(42)
+    sp_coef = float(
+        sp.dml(
+            data=dml_data,
+            y="y",
+            treat="d_bin",
+            covariates=x_cols,
+            model="irm",
+            ml_g=LassoCV(cv=5, random_state=42),
+            ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
+            n_folds=5,
+            n_rep=1,
+            random_state=42,
+            score="ATTE",
+        ).estimate
+    )
+    np.random.seed(42)
+    dml_obj = doubleml.DoubleMLData(dml_data, y_col="y", d_cols="d_bin", x_cols=x_cols)
+    ref = doubleml.DoubleMLIRM(
+        dml_obj,
+        ml_g=LassoCV(cv=5, random_state=42),
+        ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
+        n_folds=5,
+        n_rep=1,
+        score="ATTE",
+    )
+    ref.fit()
+    assert (
+        abs(sp_coef - float(ref.coef[0])) < 0.05
+    ), f"IRM ATTE diverged: sp.dml={sp_coef:.6f}, doubleml-py={float(ref.coef[0]):.6f}"
+
+
+def test_irm_normalize_ipw_matches_doubleml_for_py(dml_data, x_cols):
+    """sp.dml(model='irm', normalize_ipw=True) tracks doubleml IRM."""
+    np.random.seed(42)
+    sp_coef = float(
+        sp.dml(
+            data=dml_data,
+            y="y",
+            treat="d_bin",
+            covariates=x_cols,
+            model="irm",
+            ml_g=LassoCV(cv=5, random_state=42),
+            ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
+            n_folds=5,
+            n_rep=1,
+            random_state=42,
+            normalize_ipw=True,
+        ).estimate
+    )
+    np.random.seed(42)
+    dml_obj = doubleml.DoubleMLData(dml_data, y_col="y", d_cols="d_bin", x_cols=x_cols)
+    ref = doubleml.DoubleMLIRM(
+        dml_obj,
+        ml_g=LassoCV(cv=5, random_state=42),
+        ml_m=LogisticRegressionCV(cv=5, random_state=42, max_iter=2000),
+        n_folds=5,
+        n_rep=1,
+        normalize_ipw=True,
+    )
+    ref.fit()
+    assert abs(sp_coef - float(ref.coef[0])) < 0.05, (
+        f"IRM normalize_ipw diverged: sp.dml={sp_coef:.6f}, "
+        f"doubleml-py={float(ref.coef[0]):.6f}"
+    )
+
+
+def test_plr_ivtype_matches_doubleml_for_py(dml_data, x_cols):
+    """sp.dml(model='plr', score='IV-type') tracks doubleml PLR IV-type.
+
+    The IV-type moment swaps the denominator Σ v̂² → Σ v̂·D, so unlike
+    partialling-out it is not fold-invariant; the two engines agree
+    within the IRM-style 0.05 fold-construction tolerance.
+    """
+    from sklearn.base import clone
+
+    ml = LassoCV(cv=5, random_state=42)
+    np.random.seed(42)
+    sp_coef = float(
+        sp.dml(
+            data=dml_data,
+            y="y",
+            treat="d",
+            covariates=x_cols,
+            model="plr",
+            ml_g=clone(ml),
+            ml_m=clone(ml),
+            n_folds=5,
+            n_rep=1,
+            random_state=42,
+            score="IV-type",
+        ).estimate
+    )
+    np.random.seed(42)
+    dml_obj = doubleml.DoubleMLData(dml_data, y_col="y", d_cols="d", x_cols=x_cols)
+    ref = doubleml.DoubleMLPLR(
+        dml_obj,
+        ml_l=clone(ml),
+        ml_m=clone(ml),
+        ml_g=clone(ml),
+        n_folds=5,
+        n_rep=1,
+        score="IV-type",
+    )
+    ref.fit()
+    assert abs(sp_coef - float(ref.coef[0])) < 0.05, (
+        f"PLR IV-type diverged: sp.dml={sp_coef:.6f}, "
+        f"doubleml-py={float(ref.coef[0]):.6f}"
     )

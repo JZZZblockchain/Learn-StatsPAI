@@ -5,6 +5,19 @@ arXiv 2503.03530, R package IVDML).
 Combines DML with an ML-selected efficient instrument (using the
 Belloni-Chernozhukov-Hansen 2012 LASSO-IV style first stage), then
 estimates conditional ATT via kernel-smoothed Wald.
+
+References
+----------
+Scheidegger, C., Guo, Z. and Bühlmann, P. (2025). "Inference for
+    Heterogeneous Treatment Effects with Efficient Instruments and
+    Machine Learning." arXiv:2503.03530 (R package ``IVDML``).
+Belloni, A., Chen, D., Chernozhukov, V. and Hansen, C. (2012).
+    "Sparse Models and Methods for Optimal Instruments." *Econometrica*,
+    80(6), 2369-2429. [@belloni2011sparse]
+Chernozhukov, V., Hansen, C. and Spindler, M. (2016). "hdm:
+    High-Dimensional Metrics." *The R Journal*, 8(2), 185-199.
+    [@chernozhukov2016hdm] — reference R implementation of the
+    rigorous-lasso first stage.
 """
 
 from __future__ import annotations

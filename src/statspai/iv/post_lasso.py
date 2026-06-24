@@ -29,6 +29,11 @@ Belloni, A., Chen, D., Chernozhukov, V. and Hansen, C. (2012).
 Belloni, A., Chernozhukov, V. and Hansen, C. (2014). "Inference on
     Treatment Effects After Selection Among High-Dimensional Controls."
     *Review of Economic Studies*, 81(2), 608-650. [@belloni2014inference]
+
+Chernozhukov, V., Hansen, C. and Spindler, M. (2016). "hdm:
+    High-Dimensional Metrics." *The R Journal*, 8(2), 185-199.
+    [@chernozhukov2016hdm] — the reference R implementation
+    (``rlassoIV`` / ``rlassoEffects``) StatsPAI aligns against.
 """
 
 from __future__ import annotations

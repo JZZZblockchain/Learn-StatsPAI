@@ -20,6 +20,11 @@ Athey, S., Tibshirani, J. and Wager, S. (2019).
 Belloni, A., Chernozhukov, V. and Hansen, C. (2014).
 "Inference on Treatment Effects after Selection among High-Dimensional
 Controls." *Review of Economic Studies*, 81(2), 608-650. [@belloni2014inference]
+
+Chernozhukov, V., Hansen, C. and Spindler, M. (2016). "hdm:
+High-Dimensional Metrics." *The R Journal*, 8(2), 185-199.
+[@chernozhukov2016hdm] — reference R implementation of the
+post-double-selection / rigorous-lasso machinery used here.
 """
 
 from __future__ import annotations

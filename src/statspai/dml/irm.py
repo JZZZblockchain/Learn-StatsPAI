@@ -57,6 +57,14 @@ class DoubleMLIRM(_DoubleMLBase):
     _ESTIMAND = "ATE"
     _REQUIRES_INSTRUMENT = False
     _ML_M_TARGET_BINARY = True  # ml_m models D ∈ {0, 1}
+    # DoubleML-compatible score / IPW options. score='ATE' (default)
+    # reproduces the historical StatsPAI AIPW score bit-for-bit;
+    # score='ATTE' targets the effect on the treated. normalize_ipw and
+    # trimming_threshold mirror DoubleML's IRM knobs (defaults =
+    # historical behaviour: no normalization, symmetric 0.01 trim).
+    _VALID_SCORES = {"ATE", "ATTE"}
+    _DEFAULT_SCORE = "ATE"
+    _USES_IPW = True
     # Subgroups (rows with D=1 / D=0 in the training fold) below this
     # size fall back to the subgroup mean rather than fitting a flexible
     # GBM. Mirrors the same protection in DoubleMLIIVM — fitting 100
@@ -131,15 +139,25 @@ class DoubleMLIRM(_DoubleMLBase):
             shuffle=True,
             random_state=rng_seed,
         )
-        psi_scores: np.ndarray = np.zeros(n, dtype=float)
+        # Accumulate the cross-fitted nuisance predictions over folds;
+        # trimming / IPW-normalization / the (ATE or ATTE) score are then
+        # applied once on the full out-of-fold vectors so that
+        # full-sample quantities (p̂ = mean(D), the IPW normalizing
+        # constants) match DoubleML exactly.
+        g1_full: np.ndarray = np.zeros(n, dtype=float)
+        g0_full: np.ndarray = np.zeros(n, dtype=float)
         m_hat_full: np.ndarray = np.zeros(n, dtype=float)
         min_fit = self._MIN_SUBGROUP_FIT
         n_fallback_g1 = 0
         n_fallback_g0 = 0
 
         for train_idx, test_idx in skf.split(X, D):
-            D_tr, D_te = D[train_idx], D[test_idx]
-            Y_tr, Y_te = Y[train_idx], Y[test_idx]
+            # Test-fold Y/D are no longer needed inside the loop: the
+            # score is assembled once on the full out-of-fold vectors
+            # after cross-fitting (see below). Only training-fold rows
+            # are used here to fit the nuisances.
+            D_tr = D[train_idx]
+            Y_tr = Y[train_idx]
             X_tr, X_te = X[train_idx], X[test_idx]
             w_tr = sample_weight[train_idx] if sample_weight is not None else None
 
@@ -220,32 +238,83 @@ class DoubleMLIRM(_DoubleMLBase):
                 m_hat = ml_m.predict_proba(X_te)[:, 1]
             else:
                 m_hat = ml_m.predict(X_te)
+            g1_full[test_idx] = g1_hat
+            g0_full[test_idx] = g0_hat
             m_hat_full[test_idx] = m_hat
-            m_hat = np.clip(m_hat, self._PSCORE_CLIP_LO, self._PSCORE_CLIP_HI)
 
-            psi_scores[test_idx] = (
-                g1_hat
-                - g0_hat
-                + D_te * (Y_te - g1_hat) / m_hat
-                - (1 - D_te) * (Y_te - g0_hat) / (1 - m_hat)
+        # ---- trimming + IPW normalization + score (full-vector) ------
+        lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
+        m_clip = np.clip(m_hat_full, lo, hi)
+        u1 = Y - g1_full
+        u0 = Y - g0_full
+
+        if self.score == "ATE" and not self.normalize_ipw:
+            # Historical StatsPAI AIPW-ATE score — preserved bit-for-bit
+            # so default ``sp.dml(model='irm')`` output never moves.
+            psi_scores = (
+                g1_full - g0_full + D * u1 / m_clip - (1 - D) * u0 / (1 - m_clip)
             )
-
-        if sample_weight is None:
-            theta = float(np.mean(psi_scores))
-            se = float(np.std(psi_scores, ddof=1) / np.sqrt(n))
+            if sample_weight is None:
+                theta = float(np.mean(psi_scores))
+                se = float(np.std(psi_scores, ddof=1) / np.sqrt(n))
+            else:
+                # Weighted Z-estimator: θ̂ = Σ w ψ / Σ w; sandwich SE
+                # Var(θ̂) = Σ w_i² (ψ_i − θ̂)² / (Σ w_i)².
+                w = sample_weight
+                W = float(np.sum(w))
+                theta = float(np.sum(w * psi_scores) / W)
+                num = float(np.sum((w**2) * (psi_scores - theta) ** 2))
+                se = float(np.sqrt(num)) / W
         else:
-            # Weighted Z-estimator: θ̂ = Σ w ψ / Σ w; sandwich SE
-            # Var(θ̂) = Σ w_i² (ψ_i − θ̂)² / (Σ w_i)².
-            w = sample_weight
-            W = float(np.sum(w))
-            theta = float(np.sum(w * psi_scores) / W)
-            num = float(np.sum((w**2) * (psi_scores - theta) ** 2))
-            se = float(np.sqrt(num)) / W
+            # ATTE and/or normalize_ipw — DoubleML-matching orthogonal
+            # score. Sample weights are not combined with these (the
+            # DoubleML 'weights' object is a GATE construct, not survey
+            # weights) — fail loudly rather than mix conventions.
+            if sample_weight is not None:
+                from statspai.exceptions import MethodIncompatibility
+
+                raise MethodIncompatibility(
+                    "dml.irm: sample_weight is currently supported only for "
+                    "score='ATE' with normalize_ipw=False. For weighted ATTE "
+                    "or normalized-IPW estimands, drop sample_weight."
+                )
+            # DoubleML _propensity_score_adjustment: optionally renormalize
+            # the IPW weights so each arm's inverse-propensity mass is 1.
+            if self.normalize_ipw:
+                mean_t1 = float(np.mean(D / m_clip))
+                mean_t0 = float(np.mean((1.0 - D) / (1.0 - m_clip)))
+                m_use = D * (m_clip * mean_t1) + (1.0 - D) * (
+                    1.0 - (1.0 - m_clip) * mean_t0
+                )
+            else:
+                m_use = m_clip
+            ipw_term = D * u1 / m_use - (1.0 - D) * u0 / (1.0 - m_use)
+            if self.score == "ATE":
+                psi_b = (g1_full - g0_full) + ipw_term
+                psi_a = -np.ones(n, dtype=float)
+            else:  # ATTE
+                p_hat = float(np.mean(D))
+                weights = D / p_hat
+                weights_bar = m_use / p_hat
+                psi_b = weights * (g1_full - g0_full) + weights_bar * ipw_term
+                psi_a = -weights / float(np.mean(weights))
+            mean_a = float(np.mean(psi_a))
+            theta = float(-np.mean(psi_b) / mean_a)
+            psi = psi_a * theta + psi_b
+            # DoubleML asymptotic variance: σ̂² = E[ψ²]/E[ψ_a]²; SE = √(σ̂²/n).
+            sigma2 = float(np.mean(psi**2) / (mean_a**2))
+            se = float(np.sqrt(sigma2 / n))
+            # Stash so that ``psi_scores - theta`` equals the influence
+            # function ψ (= ψ_a·θ + ψ_b), keeping the residual block below
+            # score-agnostic.
+            psi_scores = psi + theta
+
+        m_hat = m_clip  # legacy alias kept for the diagnostics block below
 
         # Overlap diagnostics: how many propensities were clipped, and
         # the empirical distribution. Surface to the user via model_info.
-        n_clipped_lo = int(np.sum(m_hat_full < self._PSCORE_CLIP_LO))
-        n_clipped_hi = int(np.sum(m_hat_full > self._PSCORE_CLIP_HI))
+        n_clipped_lo = int(np.sum(m_hat_full < lo))
+        n_clipped_hi = int(np.sum(m_hat_full > hi))
         self._last_rep_diagnostics = {
             "pscore_min": float(np.min(m_hat_full)),
             "pscore_max": float(np.max(m_hat_full)),

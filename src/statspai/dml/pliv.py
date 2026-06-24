@@ -60,6 +60,10 @@ class DoubleMLPLIV(_DoubleMLBase):
     _ML_M_TARGET_BINARY = False
     _ML_R_TARGET_BINARY = False
     _SUPPORTS_SAMPLE_WEIGHT = True
+    # PLIV has a single (partialling-out) score; declared so the option
+    # is accepted and surfaced in model_info, matching DoubleML's PLIV.
+    _VALID_SCORES = {"partialling out"}
+    _DEFAULT_SCORE = "partialling out"
 
     # First-stage degeneracy threshold on |corr(z̃, d̃)|. Below this
     # the instrument is functionally orthogonal to the residualised
