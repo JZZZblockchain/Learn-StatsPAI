@@ -26,9 +26,10 @@ Chernozhukov, V., Hansen, C. and Spindler, M. (2016). "hdm:
 from __future__ import annotations
 
 from ._core import RLassoFit, rlasso
+from ._logit import RLassoLogitFit, rlassologit
 from .effect import RLassoEffectResult, rlasso_effect, rlasso_effects
 from .iv import RLassoIVResult, rlasso_iv
-from .learner import RlassoClassifier, RlassoRegressor
+from .learner import RlassoClassifier, RlassologitClassifier, RlassoRegressor
 
 __all__ = [
     "rlasso",
@@ -38,6 +39,9 @@ __all__ = [
     "RLassoEffectResult",
     "rlasso_iv",
     "RLassoIVResult",
+    "rlassologit",
+    "RLassoLogitFit",
+    "RlassologitClassifier",
     "RlassoRegressor",
     "RlassoClassifier",
 ]

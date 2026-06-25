@@ -61,6 +61,9 @@ _CLASSIFIER_ALIASES = {
     "lasso",
     "rlasso",
     "rigorous_lasso",
+    "rlassologit",
+    "rigorous_logit",
+    "logit_lasso",
     "ridge",
     "linear",
     "logistic",
@@ -176,6 +179,11 @@ def _build_classifier(alias: str) -> Any:
             max_iter=2000,
             random_state=42,
         )
+    if a in {"rlassologit", "rigorous_logit", "logit_lasso"}:
+        # Genuine logistic (glmnet-aligned) rigorous-Lasso propensity.
+        from ..rlasso.learner import RlassologitClassifier
+
+        return RlassologitClassifier()
     if a in {"rlasso", "rigorous_lasso"}:
         # Linear-probability propensity backed by the rigorous Lasso.
         from ..rlasso.learner import RlassoClassifier

@@ -355,3 +355,96 @@ def test_iv_dispatcher_routes_rlasso(iv_dgp):
     )
     fr = sp.iv("y ~ (d ~ " + "+".join(zcols) + ")", data=df, method="rlasso")
     np.testing.assert_allclose(fr.coef[0], routed.coef[0], atol=1e-12)
+
+
+# ─────────────────────────────── rlassologit ──────────────────────────────
+
+
+@pytest.fixture
+def logit_dgp():
+    """Binary outcome, n=400, p=30, 3 true signals."""
+    rng = np.random.default_rng(7)
+    n, p = 400, 30
+    X = rng.standard_normal((n, p))
+    b = np.zeros(p)
+    b[:3] = [1.8, -1.4, 1.0]
+    prob = 1.0 / (1.0 + np.exp(-(X @ b)))
+    y = (rng.uniform(size=n) < prob).astype(float)
+    return X, y, b
+
+
+def test_rlassologit_recovers_support(logit_dgp):
+    from statspai.rlasso import rlassologit
+
+    X, y, _ = logit_dgp
+    fit = rlassologit(X, y, post=True)
+    assert set(range(3)).issubset(set(np.where(fit.index)[0]))
+    # predict returns valid probabilities + log-odds
+    pr = fit.predict(X, type="response")
+    assert pr.min() > 0 and pr.max() < 1
+    link = fit.predict(X, type="link")
+    np.testing.assert_allclose(pr, 1.0 / (1.0 + np.exp(-link)), atol=1e-12)
+    assert fit.summary().startswith("Logistic Rigorous Lasso")
+
+
+def test_rlassologit_result_contract(logit_dgp):
+    from statspai.rlasso import rlassologit
+
+    X, y, _ = logit_dgp
+    fit = rlassologit(X, y)
+    assert isinstance(fit.to_dict(), dict)
+    assert fit.to_latex().startswith("\\begin{table}")
+    assert fit.cite() == "chernozhukov2016hdm"
+
+
+def test_rlassologit_predict_type_validation(logit_dgp):
+    from statspai.rlasso import rlassologit
+
+    X, y, _ = logit_dgp
+    fit = rlassologit(X, y)
+    with pytest.raises(ValueError, match="response.*link|link"):
+        fit.predict(X, type="bogus")
+
+
+def test_rlassologit_classifier_is_genuine_logistic(logit_dgp):
+    from statspai.rlasso import RlassologitClassifier, rlassologit
+
+    X, y, _ = logit_dgp
+    clf = RlassologitClassifier().fit(X, y)
+    proba = clf.predict_proba(X)
+    assert proba.shape == (X.shape[0], 2)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    # proba[:,1] is the logistic response of the underlying rlassologit fit
+    np.testing.assert_allclose(
+        proba[:, 1], rlassologit(X, y).predict(X, type="response"), atol=1e-10
+    )
+    # clone-safe params
+    params = clf.get_params()
+    assert RlassologitClassifier(**params).get_params() == params
+
+
+def test_dml_irm_with_rlassologit_propensity(logit_dgp):
+    rng = np.random.default_rng(8)
+    n, p = 600, 15
+    X = rng.standard_normal((n, p))
+    m = np.zeros(p)
+    m[:3] = [1.0, -0.8, 0.6]
+    ps = 1.0 / (1.0 + np.exp(-(X @ m)))
+    d = (rng.uniform(size=n) < ps).astype(int)
+    g = np.zeros(p)
+    g[:3] = [1.0, 0.5, -0.7]
+    y = 0.8 * d + X @ g + rng.standard_normal(n)
+    df = pd.DataFrame(X, columns=[f"x{j}" for j in range(p)])
+    df["y"] = y
+    df["d"] = d
+    res = sp.dml(
+        data=df,
+        y="y",
+        treat="d",
+        covariates=[f"x{j}" for j in range(p)],
+        model="irm",
+        ml_g="rlasso",
+        ml_m="rlassologit",
+        n_folds=5,
+    )
+    assert abs(float(res.estimate) - 0.8) < 0.35

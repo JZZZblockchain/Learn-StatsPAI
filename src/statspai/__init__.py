@@ -894,8 +894,10 @@ from .rlasso import (  # noqa: E402
     rlasso_effect,
     rlasso_effects,
     rlasso_iv,
+    rlassologit,
     RlassoRegressor,
     RlassoClassifier,
+    RlassologitClassifier,
 )
 
 # High-dimensional fixed effects (pyfixest backend)
@@ -1651,8 +1653,10 @@ __all__ = [
     "rlasso_effect",
     "rlasso_effects",
     "rlasso_iv",
+    "rlassologit",
     "RlassoRegressor",
     "RlassoClassifier",
+    "RlassologitClassifier",
     # High-dimensional FE (pyfixest backend, optional)
     "feols",
     "fepois",

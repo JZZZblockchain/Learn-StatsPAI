@@ -19093,6 +19093,56 @@
     "name": "rlasso_iv"
   },
   {
+    "description": "Logistic rigorous (post-)Lasso -- a faithful port of ``hdm::rlassologit``.",
+    "input_schema": {
+      "properties": {
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "colnames": {
+          "description": "Column names (default ``V1..Vp``).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "control": {
+          "description": "``threshold`` -- coefficients below it are zeroed (default None).",
+          "type": "object"
+        },
+        "intercept": {
+          "default": true,
+          "description": "Include an intercept.",
+          "type": "boolean"
+        },
+        "penalty": {
+          "description": "Overrides for ``c`` (slack; default 1.1 for ``post=True``, else 0.5), ``gamma`` (default ``0.1/log n``) and ``lambda`` (raw penalty; bypasses the data-driven level).",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "If ``True``, refit the selected support by *unpenalized* logistic regression (post-Lasso); else keep the glmnet-penalized fit.",
+          "type": "boolean"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlassologit"
+  },
+  {
     "description": "Robust / unconstrained Synthetic Control. Assumptions: A convex (or regularized) combination of donor units reproduces the treated unit's pre-treatment outcome path; No interference: the treatment does not affect the donor units (SUTVA); No anticipation before the treatment date. Pre-conditions: Panel of one or more treated units plus an untreated donor pool, observed over time; Pre-treatment window long enough to fit donor weights (rule of thumb: more pre-periods than donors used); Outcome observed for every unit in every period. Failure modes: Large pre-treatment RMSPE -- the synthetic unit fails to track the treated unit before treatment -> Add donors / predictors, lengthen the pre-period, or use a bias-corrected estimator (sdid, augsynth); Placebo / permutation inference shows the estimate is not extreme relative to donors -> Report the placebo distribution honestly; the effect may not be distinguishable from noise. Alternatives: sp.sdid, sp.augsynth, sp.gsynth, sp.callaway_santanna. Typical minimum N: 15.",
     "input_schema": {
       "properties": {

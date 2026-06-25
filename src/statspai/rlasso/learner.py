@@ -36,7 +36,6 @@ import numpy as np
 
 from ._core import rlasso
 
-
 # ---------------------------------------------------------------------------
 # Duck-typed sklearn-estimator base (imports NO sklearn at module load).
 #
@@ -238,6 +237,85 @@ class RlassoClassifier(_SklearnCompatEstimator):
         if X.ndim == 1:
             X = X.reshape(-1, 1)
         p1 = np.clip(self.fit_.predict(X), self.clip, 1.0 - self.clip)
+        out: np.ndarray = np.column_stack([1.0 - p1, p1])
+        return out
+
+    def predict(self, X: Any) -> np.ndarray:
+        out: np.ndarray = (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+        return out
+
+
+class RlassologitClassifier(_SklearnCompatEstimator):
+    """Logistic rigorous-Lasso classifier — a genuine (calibrated) propensity.
+
+    Unlike :class:`RlassoClassifier` (a clipped linear-probability model),
+    this fits ``rlassologit`` (the logistic rigorous Lasso, glmnet-aligned)
+    and exposes proper logistic ``predict_proba``.  It is the principled
+    sparse nuisance learner for binary treatments / instruments in
+    ``sp.dml(model='irm'/'iivm', ml_m='rlassologit')``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.standard_normal((300, 20))
+    >>> p = 1 / (1 + np.exp(-(X[:, 0] - X[:, 1])))
+    >>> d = (rng.uniform(size=300) < p).astype(float)
+    >>> clf = sp.RlassologitClassifier().fit(X, d)
+    >>> clf.predict_proba(X).shape  # columns: P(0), P(1)
+    (300, 2)
+    """
+
+    _estimator_type = "classifier"
+
+    def __init__(
+        self,
+        post: bool = True,
+        intercept: bool = True,
+        c: Optional[float] = None,
+        gamma: Optional[float] = None,
+        lambda_: Optional[float] = None,
+        clip: float = 1e-5,
+    ):
+        self.post = post
+        self.intercept = intercept
+        self.c = c
+        self.gamma = gamma
+        self.lambda_ = lambda_
+        self.clip = clip
+
+    def _penalty(self) -> Optional[Dict[str, Any]]:
+        pen: Dict[str, Any] = {}
+        if self.c is not None:
+            pen["c"] = self.c
+        if self.gamma is not None:
+            pen["gamma"] = self.gamma
+        if self.lambda_ is not None:
+            pen["lambda"] = self.lambda_
+        return pen or None
+
+    def fit(self, X: Any, y: Any, sample_weight: Any = None) -> "RlassologitClassifier":
+        from ._logit import rlassologit
+
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        y = np.asarray(y, dtype=float).ravel()
+        self.classes_ = np.unique(y)
+        self.fit_ = rlassologit(
+            X, y, post=self.post, intercept=self.intercept, penalty=self._penalty()
+        )
+        self.coef_ = self.fit_.beta
+        self.intercept_ = self.fit_.intercept
+        self.n_features_in_ = X.shape[1]
+        return self
+
+    def predict_proba(self, X: Any) -> np.ndarray:
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        p1 = np.clip(self.fit_.predict(X, type="response"), self.clip, 1.0 - self.clip)
         out: np.ndarray = np.column_stack([1.0 - p1, p1])
         return out
 

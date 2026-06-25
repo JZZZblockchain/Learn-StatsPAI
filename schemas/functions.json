@@ -32549,6 +32549,56 @@
     }
   },
   {
+    "description": "Logistic rigorous (post-)Lasso -- a faithful port of ``hdm::rlassologit``.",
+    "name": "rlassologit",
+    "parameters": {
+      "properties": {
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "colnames": {
+          "description": "Column names (default ``V1..Vp``).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "control": {
+          "description": "``threshold`` -- coefficients below it are zeroed (default None).",
+          "type": "object"
+        },
+        "intercept": {
+          "default": true,
+          "description": "Include an intercept.",
+          "type": "boolean"
+        },
+        "penalty": {
+          "description": "Overrides for ``c`` (slack; default 1.1 for ``post=True``, else 0.5), ``gamma`` (default ``0.1/log n``) and ``lambda`` (raw penalty; bypasses the data-driven level).",
+          "type": "object"
+        },
+        "post": {
+          "default": true,
+          "description": "If ``True``, refit the selected support by *unpenalized* logistic regression (post-Lasso); else keep the glmnet-penalized fit.",
+          "type": "boolean"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Rigorous (post-)Lasso as a scikit-learn regressor.",
     "name": "RlassoRegressor",
     "parameters": {
@@ -32652,6 +32702,43 @@
         "x_dependent": {
           "default": false,
           "description": "x_dependent parameter (bool).",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Logistic rigorous-Lasso classifier -- a genuine (calibrated) propensity.",
+    "name": "RlassologitClassifier",
+    "parameters": {
+      "properties": {
+        "c": {
+          "description": "c parameter (Optional[float]).",
+          "type": "number"
+        },
+        "clip": {
+          "default": 1e-05,
+          "description": "clip parameter (float).",
+          "type": "number"
+        },
+        "gamma": {
+          "description": "gamma parameter (Optional[float]).",
+          "type": "number"
+        },
+        "intercept": {
+          "default": true,
+          "description": "intercept parameter (bool).",
+          "type": "boolean"
+        },
+        "lambda_": {
+          "description": "lambda_ parameter (Optional[float]).",
+          "type": "number"
+        },
+        "post": {
+          "default": true,
+          "description": "post parameter (bool).",
           "type": "boolean"
         }
       },

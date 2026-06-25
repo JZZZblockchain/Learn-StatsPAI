@@ -140,19 +140,44 @@ two are not numerically interchangeable.
 
 Ported and parity-tested against `hdm`: `rlasso`, `rlassoEffect` /
 `rlassoEffects` (single and multi-target), `rlassoIV` (all four selection
-regimes), `tsls`, and the data-driven `lambdaCalculation` for the
-homoskedastic and heteroskedastic (X-independent) penalties.
+regimes), `tsls`, `rlassologit` (the logistic rigorous Lasso), and the
+data-driven `lambdaCalculation` for the homoskedastic and heteroskedastic
+(X-independent) penalties.
 
-**Not yet ported — `rlassologit`** (the *logistic* rigorous Lasso and its
-`rlassologitEffect(s)`). `hdm::rlassologit` delegates the penalized fit to
-`glmnet::glmnet(family="binomial")` at a single data-driven `λ`. Reproducing
-it faithfully means matching glmnet's logistic-lasso solution — its
-standardization, intercept handling and objective scaling differ from
-scikit-learn's L1 logistic regression at a fixed `λ` — which is a separate
-parity exercise. Rather than ship an unvalidated approximation (the very
-failure mode this module was built to avoid), it is intentionally left out
-until it can be pinned against `glmnet`. For a binary treatment under
-Double-ML, use `sp.dml(model='irm', ...)` with a genuine classifier.
+### `sp.rlassologit` — the logistic rigorous Lasso
+
+`hdm::rlassologit` is the binary-outcome analogue of `rlasso`: its
+penalized fit is `glmnet(family="binomial", alpha=1, lambda=λ,
+standardize=TRUE)` at a single data-driven `λ`. StatsPAI reproduces
+glmnet's binomial lasso at that `λ` **directly** — an IRLS outer loop, a
+weighted coordinate-descent inner loop, the `1/n`-scaled deviance
+objective, population-variance standardization and glmnet's `pmin`
+probability clamp — rather than substituting scikit-learn's L1 logistic
+(whose objective/standardization differ at a fixed `λ`).
+
+```python
+fit = sp.rlassologit(X, y, post=True)   # y binary
+fit.predict(X, type="response")          # probabilities  (or "link" = log-odds)
+sp.RlassologitClassifier()               # genuine logistic propensity for sp.dml
+```
+
+Parity (vs `hdm` 0.3.2 / `glmnet` 4.1): the **selected support matches
+exactly**; the glmnet engine's coefficients match to ~1e-6 (glmnet's own
+convergence tolerance — no tighter ground truth exists); and `post=True`
+(the default) coefficients/intercept/residuals — coming from an
+*unpenalized* logistic refit on the selected set — match to ~1e-9.
+
+`sp.RlassologitClassifier` is the principled binary nuisance learner for
+Double-ML: `sp.dml(model='irm', ml_m='rlassologit')` uses a *calibrated*
+logistic propensity (unlike the linear-probability `RlassoClassifier`).
+
+**Not yet ported — `rlassologitEffect(s)`**, the high-dimensional
+*logistic treatment effect* (BCW double-selection with `√σ²`-weighting and
+a max-of-two sandwich variance). It layers several `rlassologit` /
+`rlasso` fits plus a glm with non-obvious internals; it is a separate
+multi-day parity exercise and is intentionally left out rather than
+shipped unvalidated. For a binary-treatment causal effect, use
+`sp.dml(model='irm', ml_m='rlassologit')`.
 
 **X-dependent penalty simulation** (`penalty={"X.dependent.lambda": True}`)
 is implemented but matches `hdm` only *in distribution* — R's
