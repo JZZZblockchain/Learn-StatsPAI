@@ -26,7 +26,11 @@ Sub-method coverage (``method=`` keyword, all aliases lowercased):
   ``jive_mw``, ``many_weak_ar``.
 - **Lasso / post-Lasso**:
   ``lasso`` (``regression.advanced_iv.lasso_iv``),
-  ``post_lasso`` / ``bch`` (``iv.post_lasso.bch_post_lasso_iv``).
+  ``rlasso`` / ``rigorous_lasso`` (``rlasso.rlasso_iv`` — faithful
+  ``hdm::rlassoIV`` port; instrument selection by default, double
+  selection when ``exog=`` controls are given),
+  ``post_lasso`` / ``bch`` (``iv.post_lasso.bch_post_lasso_iv``,
+  **deprecated** — superseded by ``rlasso``).
 - **ML / nonparametric**:
   ``kernel`` (``iv.kernel_iv``), ``npiv`` (``iv.npiv``),
   ``ivdml`` (``iv.ivdml``), ``deepiv`` (``deepiv.deepiv``, optional).
@@ -224,6 +228,9 @@ _METHOD_ALIASES: Dict[str, str] = {
     "post_lasso": "post_lasso",
     "bch": "post_lasso",
     "bch_lasso": "post_lasso",
+    "rlasso": "rlasso",
+    "rigorous_lasso": "rlasso",
+    "rlasso_iv": "rlasso",
     # ML / nonparametric
     "kernel": "kernel",
     "kernel_iv": "kernel",
@@ -396,6 +403,29 @@ def _dispatch(
         return lasso_iv(**kwargs)
     if canon == "post_lasso":
         return bch_post_lasso_iv(data=data, **kwargs)
+    if canon == "rlasso":
+        # Faithful hdm::rlassoIV port. Map the dispatcher's canonical
+        # ``endog``/``instruments``/``exog`` onto rlasso_iv's
+        # ``d``/``z``/``x``; ``d`` is a single endogenous regressor.
+        from ..rlasso import rlasso_iv
+
+        _rename(kwargs, {"endog": "d", "instruments": "z", "exog": "x"})
+        if formula is not None and data is not None and "d" not in kwargs:
+            y_, endog_, instruments_, exog_ = _formula_to_parts(formula, data)
+            kwargs.setdefault("y", y_)
+            kwargs["d"] = endog_
+            kwargs["z"] = instruments_
+            if exog_:
+                kwargs.setdefault("x", exog_)
+        _unwrap_singleton_str(kwargs, "d")
+        # Ergonomic default: with no controls, do instrument selection only
+        # (the canonical BCH eminent-domain use); with controls, hdm's
+        # double-selection default applies.
+        if kwargs.get("x") is None and "select_X" not in kwargs:
+            kwargs["select_X"] = False
+        if data is not None:
+            kwargs.setdefault("data", data)
+        return rlasso_iv(**kwargs)
 
     # ── 5. ML / nonparametric ────────────────────────────────────────
     if canon == "kernel":

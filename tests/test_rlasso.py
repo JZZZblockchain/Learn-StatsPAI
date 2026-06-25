@@ -315,3 +315,43 @@ def test_result_cite_keys_are_in_paper_bib():
     for cls in (RLassoFit, RLassoEffectResult, RLassoIVResult):
         for key in cls._citation_keys:
             assert key in have, f"{cls.__name__} cites missing bib key {key!r}"
+
+
+# ───────────────────── sp.iv(method='rlasso') dispatcher ───────────────────
+
+
+def test_iv_dispatcher_routes_rlasso(iv_dgp):
+    """sp.iv(method='rlasso') routes to rlasso_iv and matches a direct call."""
+    X, Z, d, y, _ = iv_dgp
+    df = pd.DataFrame(
+        np.column_stack([y, d, X, Z]),
+        columns=["y", "d"]
+        + [f"x{j}" for j in range(X.shape[1])]
+        + [f"z{j}" for j in range(Z.shape[1])],
+    )
+    xcols = [f"x{j}" for j in range(X.shape[1])]
+    zcols = [f"z{j}" for j in range(Z.shape[1])]
+
+    # no controls -> instrument selection (ergonomic default)
+    routed = sp.iv(method="rlasso", y="y", endog="d", instruments=zcols, data=df)
+    direct = rlasso_iv(y="y", d="d", z=zcols, data=df, select_Z=True, select_X=False)
+    assert type(routed).__name__ == "RLassoIVResult"
+    np.testing.assert_allclose(routed.coef[0], direct.coef[0], atol=1e-12)
+
+    # with controls -> hdm double-selection default
+    routed_x = sp.iv(
+        method="rlasso", y="y", endog="d", instruments=zcols, exog=xcols, data=df
+    )
+    direct_x = rlasso_iv(
+        y="y", d="d", z=zcols, x=xcols, data=df, select_Z=True, select_X=True
+    )
+    np.testing.assert_allclose(routed_x.coef[0], direct_x.coef[0], atol=1e-12)
+
+    # alias + formula path both resolve
+    assert np.isfinite(
+        sp.iv(
+            method="rigorous_lasso", y="y", endog="d", instruments=zcols, data=df
+        ).coef[0]
+    )
+    fr = sp.iv("y ~ (d ~ " + "+".join(zcols) + ")", data=df, method="rlasso")
+    np.testing.assert_allclose(fr.coef[0], routed.coef[0], atol=1e-12)
