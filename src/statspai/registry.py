@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -343,9 +343,13 @@ class FunctionSpec:
             alternatives = list(self.alternatives)
             typical_n_min = self.typical_n_min
         else:
-            assumptions, pre_conditions, failure_modes, alternatives, typical_n_min = (
-                merged
-            )
+            (
+                assumptions,
+                pre_conditions,
+                failure_modes,
+                alternatives,
+                typical_n_min,
+            ) = merged
 
         signature = self.to_openai_schema()
 
@@ -9491,8 +9495,10 @@ def _build_registry() -> None:
             category="causal",
             description=(
                 "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API "
-                "mirroring the R etwfe package. Alias for sp.wooldridge_did; "
-                "same numerical output."
+                "mirroring the R etwfe package. The headline reports the "
+                "treated-observation-weighted simple ATT from "
+                "etwfe::emfx(type='simple') / Stata jwdid, with cgroup "
+                "selecting not-yet-treated or never-treated controls."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -11886,15 +11892,15 @@ _CERTIFIED_VARIANT_LIMITATIONS: Dict[str, Dict[str, List[str]]] = {
     },
     "etwfe": {
         "limitations": [
-            "The top-level sp.etwfe estimate preserves StatsPAI's historical "
-            "cohort-share weighting convention. For R etwfe::emfx(type='simple') "
-            "point-estimate parity, use sp.etwfe(..., panel=False) followed "
-            "by sp.etwfe_emfx(..., weighting='treated').",
+            "cgroup='nevertreated' combined with panel=False (repeated "
+            "cross-sections) is not yet supported. Use panel=True with "
+            "cgroup='nevertreated' or panel=False with cgroup='notyet'.",
         ],
         "validation_notes": [
-            "ETWFE certification uses the explicit emfx-compatible "
-            "aggregation path; cohort-share and treated-observation "
-            "summaries remain separately labelled.",
+            "Default cgroup='notyet' and cgroup='nevertreated' are pinned "
+            "against R etwfe / Stata jwdid simple ATT values on did::mpdta. "
+            "The historical cohort-share summary remains available via "
+            "etwfe_emfx(..., weighting='cohort').",
         ],
     },
 }

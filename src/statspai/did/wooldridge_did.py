@@ -36,7 +36,7 @@ de Chaisemartin, C. and D'Haultfoeuille, X. (2020).
     *American Economic Review*, 110(9), 2964–2996. [@dechaisemartin2020two]
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -456,7 +456,7 @@ def etwfe(
     >>> df = sp.dgp_did(n_units=120, n_periods=8, staggered=True, seed=42)
     >>> res = sp.etwfe(df, y='y', group='unit', time='time',
     ...                first_treat='first_treat')
-    >>> res.estimate > 0  # cohort-size-weighted ATT (true effect 0.5)
+    >>> res.estimate > 0  # R/Stata simple ATT (true effect 0.5)
     True
     >>> res.detail is not None  # cohort-specific ATTs
     True
@@ -500,6 +500,49 @@ def etwfe(
     return _result
 
 
+def _etwfe_with_simple_headline(
+    result: CausalResult,
+    *,
+    cgroup: str,
+    panel: bool,
+    alpha: float,
+    method: str,
+    source_branch: str,
+) -> CausalResult:
+    """Return an ETWFE result whose headline matches R ``emfx(type='simple')``.
+
+    The low-level ETWFE branches keep cohort/event coefficients in
+    ``detail``/``model_info``.  R ``etwfe`` and Stata ``jwdid`` report the
+    simple ATT as a treated-observation-weighted average over post-treatment
+    cohort-time marginal effects, so the public ``sp.etwfe`` headline should
+    use the same aggregation instead of the older cohort-size average.
+    """
+    simple = etwfe_emfx(result, type="simple", alpha=alpha, weighting="treated")
+    model_info = dict(result.model_info or {})
+    model_info.update(
+        {
+            "cgroup": cgroup,
+            "panel": panel,
+            "headline_aggregation": "emfx_simple",
+            "headline_weighting": "treated_observations",
+            "headline_source_branch": source_branch,
+        }
+    )
+    return CausalResult(
+        method=method,
+        estimand="Overall ATT (treated-observation weighted)",
+        estimate=float(simple.estimate),
+        se=float(simple.se),
+        pvalue=float(simple.pvalue) if simple.pvalue is not None else np.nan,
+        ci=simple.ci,
+        alpha=alpha,
+        n_obs=int(result.n_obs),
+        detail=result.detail,
+        model_info=model_info,
+        _citation_key="wooldridge_twfe",
+    )
+
+
 def _dispatch_etwfe_impl(
     data: pd.DataFrame,
     y: str,
@@ -517,9 +560,11 @@ def _dispatch_etwfe_impl(
     Extended Two-Way Fixed Effects (ETWFE) — Wooldridge (2021).
 
     Explicit API matching the R package ``etwfe`` (McDermott, 2023).
-    This is an alias for :func:`wooldridge_did`; both estimate the same
-    saturated TWFE regression with cohort × post interactions that
-    recovers valid ATT under heterogeneous treatment effects.
+    The public headline matches R ``etwfe::emfx(type='simple')`` /
+    Stata ``jwdid, estat simple``: a treated-observation-weighted simple
+    ATT.  The ``cgroup`` argument governs the identifying comparison
+    group (``'notyet'`` by default, ``'nevertreated'`` for never-treated
+    controls).
 
     Parameters
     ----------
@@ -543,8 +588,8 @@ def _dispatch_etwfe_impl(
     Returns
     -------
     CausalResult
-        Cohort-size-weighted ATT with cohort-level detail and event-study
-        coefficients in ``model_info['event_study']``.
+        Treated-observation-weighted simple ATT with cohort-level detail
+        and event-study coefficients in ``model_info['event_study']``.
 
     Notes
     -----
@@ -561,9 +606,8 @@ def _dispatch_etwfe_impl(
     ``vcov = ~cluster``           ``cluster='cluster'``
     ============================  ========================================
 
-    For aggregated marginal effects (R ``emfx`` equivalents), combine with
-    :func:`statspai.did.aggte` on a Callaway–Sant'Anna object, or inspect
-    ``result.model_info['event_study']`` directly.
+    For aggregated marginal effects (R ``emfx`` equivalents), call
+    :func:`statspai.did.etwfe_emfx` on the returned result.
 
     References
     ----------
@@ -583,7 +627,7 @@ def _dispatch_etwfe_impl(
 
     See Also
     --------
-    wooldridge_did : Identical estimator; this is a naming alias.
+    wooldridge_did : Historical saturated TWFE helper.
     callaway_santanna : CS (2021) group-time ATT estimator.
     aggte : Aggregation of group-time ATTs (event/group/calendar/simple).
     """
@@ -625,7 +669,7 @@ def _dispatch_etwfe_impl(
     # Dispatch to the right implementation.
     if not panel:
         # Repeated cross-section: no unit FE, replace with cohort dummies.
-        return _etwfe_repeated_cs(
+        base = _etwfe_repeated_cs(
             data=data,
             y=y,
             time=time,
@@ -636,31 +680,84 @@ def _dispatch_etwfe_impl(
             alpha=alpha,
             cgroup=cgroup,
         )
-    if cgroup == "nevertreated":
-        # Per-cohort regressions restricted to cohort + never-treated.
-        return _etwfe_never_only(
-            data=data,
-            y=y,
-            group=group,
-            time=time,
-            first_treat=first_treat,
-            xvar=xvar_list,
-            controls=controls,
-            cluster=cluster,
+        return _etwfe_with_simple_headline(
+            base,
+            cgroup=cgroup,
+            panel=False,
             alpha=alpha,
+            method="Wooldridge (2021) ETWFE — repeated cross-section",
+            source_branch="repeated_cross_section",
+        )
+    if cgroup == "nevertreated":
+        ft_local = data[first_treat].replace(0, np.nan)
+        if not ft_local.isna().any():
+            raise DataInsufficient(
+                "cgroup='nevertreated' requires at least one never-treated "
+                "unit (first_treat NaN / 0), but none were found."
+            )
+        # R etwfe(cgroup='never') / Stata jwdid never-control semantics are
+        # represented by the full saturated event-cell branch.  Promote the
+        # headline to the treated-observation-weighted simple marginal effect.
+        if xvar_list is not None:
+            base = _etwfe_with_xvar(
+                data=data,
+                y=y,
+                group=group,
+                time=time,
+                first_treat=first_treat,
+                xvar=xvar_list,
+                controls=controls,
+                cluster=cluster,
+                alpha=alpha,
+            )
+        else:
+            base = wooldridge_did(
+                data=data,
+                y=y,
+                group=group,
+                time=time,
+                first_treat=first_treat,
+                controls=controls,
+                cluster=cluster,
+                alpha=alpha,
+            )
+        return _etwfe_with_simple_headline(
+            base,
+            cgroup="nevertreated",
+            panel=True,
+            alpha=alpha,
+            method="Wooldridge (2021) ETWFE — never-treated control",
+            source_branch="never_treated_event_cells",
         )
     if xvar_list is None:
-        return wooldridge_did(
+        # R etwfe's default cgroup='notyet' and Stata jwdid identify the
+        # simple marginal effect from cohort-time event cells, with treated
+        # observations as aggregation weights.  The repeated-CS design branch
+        # implements that event-cell basis; for panel calls, default inference
+        # still clusters on the unit id unless the user supplied cluster=.
+        base = _etwfe_repeated_cs(
             data=data,
             y=y,
-            group=group,
             time=time,
             first_treat=first_treat,
+            xvar=None,
             controls=controls,
-            cluster=cluster,
+            cluster=cluster or group,
             alpha=alpha,
+            cgroup="notyet",
         )
-    return _etwfe_with_xvar(
+        return _etwfe_with_simple_headline(
+            base,
+            cgroup="notyet",
+            panel=True,
+            alpha=alpha,
+            method="Wooldridge (2021) ETWFE — not-yet-treated control",
+            source_branch="notyet_event_cells",
+        )
+    # Covariate-moderated ETWFE preserves the historical xvar branch (including
+    # slope columns in result.detail), then reports the same treated-observation
+    # weighted simple headline as R emfx.
+    base = _etwfe_with_xvar(
         data=data,
         y=y,
         group=group,
@@ -670,6 +767,14 @@ def _dispatch_etwfe_impl(
         controls=controls,
         cluster=cluster,
         alpha=alpha,
+    )
+    return _etwfe_with_simple_headline(
+        base,
+        cgroup="notyet",
+        panel=True,
+        alpha=alpha,
+        method="Wooldridge (2021) ETWFE — not-yet-treated control",
+        source_branch="notyet_covariate_branch",
     )
 
 
@@ -1038,7 +1143,11 @@ def _etwfe_repeated_cs(
             ):
                 idx_j = event_start + j
                 n_treated_ev = int(
-                    ((ev_dfv["_ft"] == coh_val) & (ev_dfv[time] == time_val)).sum()
+                    (
+                        (ev_dfv["_ft"] == coh_val)
+                        & (ev_dfv[time] == time_val)
+                        & (ev_dfv[time] >= coh_val)
+                    ).sum()
                 )
                 ev_rows.append(
                     {
@@ -2050,7 +2159,7 @@ def etwfe_emfx(
     type: str = "simple",
     alpha: float = 0.05,
     include_leads: bool = False,
-    weighting: str = "cohort",
+    weighting: str = "treated",
 ) -> CausalResult:
     """
     R ``etwfe::emfx``-style aggregated marginal effects for an ETWFE fit.
@@ -2061,7 +2170,8 @@ def etwfe_emfx(
     ================  ========================================================
     ``type``          Aggregation
     ================  ========================================================
-    ``'simple'``      Overall cohort-size-weighted ATT (same as ``result.estimate``).
+    ``'simple'``      Overall treated-observation-weighted ATT (same as
+                      ``result.estimate`` for current ``sp.etwfe`` results).
     ``'group'``       ATT per treatment cohort ``g``.
     ``'event'``       ATT per event time ``e = t - g``, averaged across cohorts.
     ``'calendar'``    ATT per calendar time ``t``, averaged across cohorts for
@@ -2085,11 +2195,11 @@ def etwfe_emfx(
         event-study output matching the R ``etwfe::emfx(type='event')``
         default. ``rel_time = -1`` is always the reference category
         and is excluded.
-    weighting : {'cohort', 'treated'}, default 'cohort'
-        Aggregation weights for cohort-level marginal effects. ``'cohort'``
-        preserves the historical StatsPAI cohort-share weighting. ``'treated'``
-        uses the number of treated post-period observations in each cohort,
-        matching R ``etwfe::emfx(type='simple')`` on balanced staggered panels.
+    weighting : {'cohort', 'treated'}, default 'treated'
+        Aggregation weights for cohort-level marginal effects. ``'treated'``
+        uses the number of treated post-period observations, matching R
+        ``etwfe::emfx(type='simple')`` and Stata ``jwdid, estat simple``.
+        ``'cohort'`` preserves the historical StatsPAI cohort-share weighting.
 
     Returns
     -------
@@ -2331,7 +2441,9 @@ def etwfe_emfx(
         out_det = pd.DataFrame(rows)
         # H2 fix: the group aggregation's headline == simple overall ATT
         # under the caller-selected aggregation weighting.
-        headline_est, headline_se, p_head, ci_head, weight_info = _weighted_headline()
+        headline_est, headline_se, p_head, ci_head, weight_info = _weighted_headline(
+            use_event_cells=True
+        )
         return CausalResult(
             method="ETWFE — group aggregation (ATT per cohort)",
             estimand="ATT(g) per cohort",

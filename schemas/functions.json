@@ -9937,7 +9937,7 @@
     }
   },
   {
-    "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. Alias for sp.wooldridge_did; same numerical output. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; The top-level sp.etwfe estimate preserves StatsPAI's historical cohort-share weighting convention. For R etwfe::emfx(type='simple') point-estimate parity, use sp.etwfe(..., panel=False) followed by sp.etwfe_emfx(..., weighting='treated').",
+    "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. The headline reports the treated-observation-weighted simple ATT from etwfe::emfx(type='simple') / Stata jwdid, with cgroup selecting not-yet-treated or never-treated controls. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported. Use panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'.",
     "name": "etwfe",
     "parameters": {
       "properties": {
@@ -13613,8 +13613,8 @@
           "type": "string"
         },
         "weighting": {
-          "default": "cohort",
-          "description": "Aggregation weights for cohort-level marginal effects. ``'cohort'`` preserves the historical StatsPAI cohort-share weighting. ``'treated'`` uses the number of treated post-period observations in each cohort, matching R ``etwfe::emfx(type='simple')`` on balanced staggered panels.",
+          "default": "treated",
+          "description": "Aggregation weights for cohort-level marginal effects. ``'treated'`` uses the number of treated post-period observations, matching R ``etwfe::emfx(type='simple')`` and Stata ``jwdid, estat simple``. ``'cohort'`` preserves the historical StatsPAI cohort-share weighting.",
           "enum": [
             "cohort",
             "treated"

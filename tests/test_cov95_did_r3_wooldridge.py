@@ -97,12 +97,16 @@ def test_wooldridge_no_cohorts_raises():
 # ----------------------------------------------------------------------
 # etwfe dispatcher
 # ----------------------------------------------------------------------
-def test_etwfe_alias_matches_wooldridge(panel):
+def test_etwfe_public_headline_uses_r_emfx_weighting(panel):
     a = sp.etwfe(panel, y="y", group="unit", time="time", first_treat="first_treat")
     b = sp.wooldridge_did(
         panel, y="y", group="unit", time="time", first_treat="first_treat"
     )
-    assert a.estimate == pytest.approx(b.estimate, rel=1e-9)
+    assert a.model_info["headline_weighting"] == "treated_observations"
+    assert a.model_info["cgroup"] == "notyet"
+    # ``wooldridge_did`` keeps the historical saturated-TWFE cohort headline;
+    # public ``etwfe`` follows R etwfe::emfx(type='simple') / Stata jwdid.
+    assert a.estimate != pytest.approx(b.estimate, rel=1e-9)
 
 
 def test_etwfe_bad_cgroup_raises(panel):
@@ -433,6 +437,18 @@ def fit(panel):
     return sp.etwfe(panel, y="y", group="unit", time="time", first_treat="first_treat")
 
 
+@pytest.fixture(scope="module")
+def fit_never(panel):
+    return sp.etwfe(
+        panel,
+        y="y",
+        group="unit",
+        time="time",
+        first_treat="first_treat",
+        cgroup="nevertreated",
+    )
+
+
 def test_emfx_simple(fit):
     e = sp.etwfe_emfx(fit, type="simple")
     assert e.detail.shape[0] == 1
@@ -452,10 +468,10 @@ def test_emfx_event(fit):
     assert (e.detail["event_time"] >= 0).all()
 
 
-def test_emfx_event_include_leads(fit):
-    e = sp.etwfe_emfx(fit, type="event", include_leads=True)
+def test_emfx_event_include_leads(fit_never):
+    e = sp.etwfe_emfx(fit_never, type="event", include_leads=True)
     assert "event_time" in e.detail.columns
-    # leads (negative rel-time) now present
+    # The never-treated branch retains the full lead/lag event-study design.
     assert (e.detail["event_time"] < 0).any()
 
 

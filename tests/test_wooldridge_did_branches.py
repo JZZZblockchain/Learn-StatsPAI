@@ -427,9 +427,10 @@ def test_etwfe_emfx_event_include_leads(staggered_panel):
         group="unit",
         time="time",
         first_treat="first_treat",
+        cgroup="nevertreated",
     )
     e = etwfe_emfx(fit, type="event", include_leads=True)
-    # With leads we should now see at least one negative event time
+    # The never-treated branch retains the full lead/lag event-study design.
     assert (e.detail["event_time"] < 0).any()
 
 

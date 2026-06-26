@@ -30,7 +30,7 @@ Example
 >>> print(summary.detail)
 """
 
-from typing import Callable, Optional, List, Union
+from typing import Callable, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -128,8 +128,8 @@ def _run_cs(
     cluster: Optional[str],
     alpha: float,
 ) -> CausalResult:
-    from .callaway_santanna import callaway_santanna
     from .aggte import aggte
+    from .callaway_santanna import callaway_santanna
 
     cs = callaway_santanna(
         data,
@@ -328,8 +328,9 @@ def did_summary(
 
     - CS ``aggte(type='simple')`` averages ATT(g, t) for post-treatment
       :math:`t \\geq g`, weighted by cohort size × exposure length.
-    - SA / ETWFE / BJS / Stacked report cohort-size-weighted averages
-      by construction.
+    - ETWFE reports the R/Stata treated-observation-weighted simple ATT.
+    - SA / BJS / Stacked report their estimator-specific overall ATT
+      aggregations.
 
     Differences across methods are informative about heterogeneity,
     model specification, and the sensitivity of conclusions to the
@@ -394,8 +395,8 @@ def did_summary(
             print(f"  running {name} ({label})...", flush=True)
         try:
             if name == "cs" and include_sensitivity:
-                from .callaway_santanna import callaway_santanna
                 from .aggte import aggte as _aggte
+                from .callaway_santanna import callaway_santanna
 
                 cs_raw = callaway_santanna(
                     data,
@@ -453,9 +454,9 @@ def did_summary(
                         r["note"] = f"breakdown M* = {breakdown_m_value:.3f}"
                     break
         except Exception as exc:
-            failed["__sensitivity__"] = (
-                f"breakdown_m failed: {type(exc).__name__}: {str(exc)[:120]}"
-            )
+            failed[
+                "__sensitivity__"
+            ] = f"breakdown_m failed: {type(exc).__name__}: {str(exc)[:120]}"
 
     for i, r in enumerate(rows):
         r["breakdown_m"] = breakdown_m_col[i]

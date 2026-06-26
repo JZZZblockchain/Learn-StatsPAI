@@ -17796,19 +17796,19 @@
     ],
     "assumptions": [],
     "category": "causal",
-    "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. Alias for sp.wooldridge_did; same numerical output. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; The top-level sp.etwfe estimate preserves StatsPAI's historical cohort-share weighting convention. For R etwfe::emfx(type='simple') point-estimate parity, use sp.etwfe(..., panel=False) followed by sp.etwfe_emfx(..., weighting='treated').",
+    "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. The headline reports the treated-observation-weighted simple ATT from etwfe::emfx(type='simple') / Stata jwdid, with cgroup selecting not-yet-treated or never-treated controls. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported. Use panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'.",
     "example": "sp.etwfe(df, y=\"y\", group=\"i\", time=\"t\", first_treat=\"g\")",
     "failure_modes": [],
     "inherits_from": null,
     "limitations": [
       "cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'",
-      "The top-level sp.etwfe estimate preserves StatsPAI's historical cohort-share weighting convention. For R etwfe::emfx(type='simple') point-estimate parity, use sp.etwfe(..., panel=False) followed by sp.etwfe_emfx(..., weighting='treated')."
+      "cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported. Use panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'."
     ],
     "name": "etwfe",
     "pre_conditions": [],
     "reference": "Wooldridge (2021) [@wooldridge2021two]",
     "signature": {
-      "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. Alias for sp.wooldridge_did; same numerical output. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; The top-level sp.etwfe estimate preserves StatsPAI's historical cohort-share weighting convention. For R etwfe::emfx(type='simple') point-estimate parity, use sp.etwfe(..., panel=False) followed by sp.etwfe_emfx(..., weighting='treated').",
+      "description": "Extended Two-Way Fixed Effects (Wooldridge 2021). Explicit API mirroring the R etwfe package. The headline reports the treated-observation-weighted simple ATT from etwfe::emfx(type='simple') / Stata jwdid, with cgroup selecting not-yet-treated or never-treated controls. Known limitations: cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported; pass either panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'; cgroup='nevertreated' combined with panel=False (repeated cross-sections) is not yet supported. Use panel=True with cgroup='nevertreated' or panel=False with cgroup='notyet'.",
       "name": "etwfe",
       "parameters": {
         "properties": {
@@ -17883,7 +17883,7 @@
     "stability": "stable",
     "typical_n_min": 50,
     "validation_notes": [
-      "ETWFE certification uses the explicit emfx-compatible aggregation path; cohort-share and treated-observation summaries remain separately labelled."
+      "Default cgroup='notyet' and cgroup='nevertreated' are pinned against R etwfe / Stata jwdid simple ATT values on did::mpdta. The historical cohort-share summary remains available via etwfe_emfx(..., weighting='cohort')."
     ],
     "validation_status": "api_stable"
   },
@@ -22083,8 +22083,8 @@
             "type": "string"
           },
           "weighting": {
-            "default": "cohort",
-            "description": "Aggregation weights for cohort-level marginal effects. ``'cohort'`` preserves the historical StatsPAI cohort-share weighting. ``'treated'`` uses the number of treated post-period observations in each cohort, matching R ``etwfe::emfx(type='simple')`` on balanced staggered panels.",
+            "default": "treated",
+            "description": "Aggregation weights for cohort-level marginal effects. ``'treated'`` uses the number of treated post-period observations, matching R ``etwfe::emfx(type='simple')`` and Stata ``jwdid, estat simple``. ``'cohort'`` preserves the historical StatsPAI cohort-share weighting.",
             "enum": [
               "cohort",
               "treated"
