@@ -215,7 +215,14 @@ against Stata. On closed-form estimators
 the three languages agree to machine precision; iterative and
 machine-learning estimators agree within pre-registered, documented
 tolerances, and the few remaining convention gaps are disclosed rather
-than hidden. The second track calibrates the simulated teaching
+than hidden. Within this harness, the high-dimensional methods reproduce
+the published worked examples of the `hdm` package [@chernozhukov2016hdm]
+— its growth-convergence, institutions-and-development, and
+gender-wage-gap applications — and the double-machine-learning estimators
+are checked against `DoubleML` [@bach2022doubleml; @bach2024doubleml] on
+shared data, giving an independent check against the established
+reference implementations for high-dimensional and debiased estimation.
+The second track calibrates the simulated teaching
 datasets bundled in `sp.datasets` so that the canonical estimator
 recovers values in the neighbourhood of well-known published results:
 returns-to-schooling IV (Card), job-training effects

@@ -178,6 +178,75 @@ Environment of record for the numbers above: StatsPAI 1.16.1, `doubleml-for-py`
 The API mapping between `sp.dml(model=...)` and the DoubleML classes, plus the
 full divergence discussion, is in `docs/guides/sp_dml_vs_doubleml.md`.
 
+## Rigorous Lasso (`hdm`) Parity
+
+The high-dimensional / rigorous-Lasso side of the same workflow is a
+**faithful port of the R `hdm` package** (Chernozhukov, Hansen & Spindler,
+*The R Journal* 8(2), 2016). Unlike a cross-validated Lasso, `hdm` uses a
+data-driven, theory-justified penalty, so its output is deterministic — which
+makes it a *hard* fixture, not a tolerance band. `sp.rlasso` and its family are
+pinned directly against `hdm` 0.3.2 output (generated on R 4.5.2 / `glmnet`
+4.1.10) in `tests/reference_parity/test_rlasso_parity.py`,
+`test_rlassologit_parity.py`, and `test_rlasso_vignette_parity.py`
+(**29 parity tests, all passing**).
+
+| `hdm` surface (`sp.*`) | Quantities pinned | Pin tolerance | Observed agreement |
+| --- | --- | --- | --- |
+| `rlasso` (`post`/`intercept`/`homoscedastic` variants) | coefficients, `λ₀`, loadings, residuals, σ | `atol=1e-6` | ~1e-13; **selected support exact** |
+| `rlasso_effect` (partialling-out & double-selection) | α, SE, t | `atol=1e-6` | ~1e-14 |
+| `rlasso_effects` (multi-target) | α, SE, t per target | `atol=1e-6` | ~1e-14 |
+| `rlasso_iv` — eminent domain, `select_Z` (BCH 2012) | coef = 0.227394, SE = 0.246620, 5 instruments | `atol=1e-4` | ~1e-9 |
+| `rlassologit` | selected support; glmnet engine; `post` refit | support exact | engine ~1e-6, `post` ~1e-9 |
+| `rlasso_effect` / `rlasso_iv` — `hdm` vignette (Growth, AJR, cps2012) | published coefficients (see below) | `atol=1e-6` | ~1e-10 / exact |
+
+- **The rigorous penalty is ported exactly, not approximated.** The data-driven
+  `λ₀`, the heteroskedasticity-robust per-coefficient loadings (refined by
+  iteration), the no-`1/n` LassoShooting objective, and the post-Lasso OLS refit
+  all match `hdm` to ~1e-13. The selected support is **bit-identical**, which is
+  the property that actually matters for a selection estimator.
+- **The eminent-domain IV application reproduces the published BCH (2012)
+  number** (`coef 0.2274`, `SE 0.2466`) across all four selection regimes. The
+  rank-deficient control block requires matching `hdm`'s `MASS::ginv`
+  singular-value cutoff (√ε ≈ 1.49 × 10⁻⁸) rather than NumPy's default `pinv`
+  tolerance; doing so restores agreement to ~1e-9.
+- **All three `hdm` vignette applications reproduce exactly.** On the
+  Barro-Lee growth panel (`hdm::GrowthData`), `sp.rlasso_effect` recovers
+  the conditional-convergence coefficient `hdm` reports — `-0.04981` (SE
+  `0.01394`) partialling-out, `-0.05001` (SE `0.01579`) double-selection.
+  On the Acemoglu-Johnson-Robinson institutions data (`hdm::AJR`),
+  `sp.rlasso_iv` (select among high-dim controls, settler-mortality
+  instrument) recovers `0.84503` (SE `0.26993`). On the CPS 2012 gender
+  wage gap (`hdm::cps2012`), `sp.rlasso_effects` recovers the female
+  coefficient `-0.15492` across the full 29,217-row sample (all 16 female
+  targets match `hdm` exactly). These match `hdm` to ~1e-10
+  (`test_rlasso_vignette_parity.py`); the data are public, published
+  economic facts. The cps2012 committed fixture is a deterministic 800-row
+  subsample (the full 27 MB design is not bundled), pinning the robust
+  female main effect; the full-sample number is recorded and regenerable.
+- **End to end as a DML nuisance.** `sp.dml(model='plr', ml_g='rlasso',
+  ml_m='rlasso')` reproduces a manual rigorous-Lasso DML-PLR fit whose nuisances
+  are `hdm::rlasso`: on the seed-fixed fixture (`n=400`, `p=20`, `n_folds=5`,
+  true `θ=1.5`) it matches R DoubleML's `θ̂ = 1.44867`, `SE = 0.04502` to machine
+  precision (`test_dml_rlasso_learner_matches_r_doubleml`). So the rigorous-Lasso
+  path is validated learner-by-learner *and* in the full cross-fit assembly.
+
+Both surfaces are exercised by committed tests, not asserted in prose:
+
+```bash
+python -m pytest tests/reference_parity/test_rlasso_parity.py -v           # sp.rlasso / rlasso_effect / rlasso_iv vs hdm
+python -m pytest tests/reference_parity/test_rlassologit_parity.py -v      # sp.rlassologit vs hdm / glmnet
+python -m pytest tests/reference_parity/test_rlasso_vignette_parity.py -v  # Growth + AJR + cps2012 hdm-vignette applications
+```
+
+These fixtures need no R at run time (the `hdm` reference is committed as JSON);
+regenerate only on a contract change via `tests/reference_parity/_generate_rlasso.R`
+(core/effect/IV/logit) and `_generate_rlasso_vignette.R` (Growth + AJR + cps2012).
+Environment of record: StatsPAI 1.20.0 against `hdm` 0.3.2 fixtures. The full
+`hdm` ↔ StatsPAI function map and the rigorous-penalty derivation are in
+`docs/guides/rigorous_lasso_hdm.md`; the canonical 401(k) reproduction that
+exercises both the DML and rigorous-Lasso paths on real data is in
+`docs/guides/case_study_401k.md`.
+
 ## Research Use
 
 At submission time, StatsPAI is being used in working-paper workflows connected

@@ -221,6 +221,42 @@ is implemented but matches `hdm` only *in distribution* — R's
 Mersenne-Twister stream is not reproduced — so it is not bit-exact. The
 default (X-independent) path is.
 
+## Reproducing the `hdm` vignette
+
+The three headline worked examples in the `hdm` vignette reproduce
+**exactly** in StatsPAI — same data, same numbers:
+
+| `hdm` vignette example | call | StatsPAI = `hdm` |
+| --- | --- | --- |
+| **Growth** — conditional convergence (Barro-Lee `GrowthData`) | `sp.rlasso_effect(X, y, d)` | coef **−0.04981** (SE 0.01394) partialling-out; **−0.05001** (SE 0.01579) double-selection |
+| **AJR** — institutions → GDP, settler-mortality IV (`AJR`) | `sp.rlasso_iv(y, d, z, x, select_X=True, select_Z=False)` | coef **0.84503** (SE 0.26993) |
+| **cps2012** — gender wage gap (`cps2012`) | `sp.rlasso_effects(X, y, index=female_cols)` | female coef **−0.15492** (SE 0.05016); all 16 female targets match `hdm` |
+
+```python
+import statspai as sp, pandas as pd
+
+# Growth: effect of (log) initial GDP on growth, selecting ~60 controls
+g = pd.read_csv("hdm_growth_data.csv")
+y, d = g["Outcome"].to_numpy(), g["gdpsh465"].to_numpy()
+X = g.drop(columns=["Outcome", "intercept", "gdpsh465"]).to_numpy()
+sp.rlasso_effect(X, y, d, method="partialling out").alpha   # -> -0.04981
+
+# AJR: expropriation risk on GDP, instrumented by settler mortality
+a = pd.read_csv("hdm_ajr_data.csv")
+y, d, z = a["GDP"].to_numpy(), a["Exprop"].to_numpy(), a["logMort"].to_numpy()
+Xa = a.drop(columns=["GDP", "Exprop", "logMort"]).to_numpy()
+sp.rlasso_iv(y, d, z, x=Xa, select_Z=False, select_X=True).coef  # -> 0.84503
+```
+
+All three are pinned to `hdm` in
+[`tests/reference_parity/test_rlasso_vignette_parity.py`](https://github.com/brycewang-stanford/StatsPAI/blob/main/tests/reference_parity/test_rlasso_vignette_parity.py).
+The datasets are public, published economic facts (AJR: Acemoglu,
+Johnson & Robinson 2001, *AER* 91(5); Growth: Barro & Lee; cps2012: U.S.
+CPS 2012). Growth and AJR are bundled in full; for cps2012 the committed
+fixture is a deterministic 800-row subsample (the full 27 MB expanded
+design is not bundled) that pins the female main effect, while the
+full-sample number above is reproduced and recorded at generation time.
+
 ## Regenerating the parity fixtures
 
 The `hdm` reference numbers are deterministic (no cross-validation, no
@@ -228,8 +264,9 @@ RNG on the default penalty path), so the fixtures are a hard contract.
 Regenerate only when the algorithm changes:
 
 ```bash
-Rscript tests/reference_parity/_generate_rlasso.R
-pytest tests/reference_parity/test_rlasso_parity.py -q
+Rscript tests/reference_parity/_generate_rlasso.R           # core / effect / IV / logit
+Rscript tests/reference_parity/_generate_rlasso_vignette.R  # Growth + AJR vignette
+pytest tests/reference_parity/test_rlasso_parity.py tests/reference_parity/test_rlasso_vignette_parity.py -q
 ```
 
 ## References
