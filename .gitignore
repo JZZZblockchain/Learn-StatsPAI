@@ -169,7 +169,7 @@ test-notebooks/
 !test-notebooks/demo_causal_inference.ipynb
 StatsPAI/statspai-推文-agent时代的统计包生态.md
 社媒文档/
-test-notebooks/ 
+test-notebooks/
 /Users/brycewang/Documents/GitHub/StatsPAI/test-notebooks/demo_causal_inference.ipynb
 test-notebooks/demo_causal_inference.ipynb
 
@@ -187,6 +187,7 @@ audit_report.json
 
 # Local generated report scratch
 /report.md
+/Rplots.pdf
 
 # Ad-hoc citation-audit scratch (not from the tool)
 .citation_audit/
@@ -230,3 +231,5 @@ tests/orig_parity/data/*_nhefs_*.csv
 
 .parity_expansion*.js
 statspai-parity*.js
+
+Paper-DiD-JAE/
