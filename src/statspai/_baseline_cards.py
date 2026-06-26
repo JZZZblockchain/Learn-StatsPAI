@@ -856,6 +856,10 @@ BASELINE_CARDS: Dict[str, Dict[str, Any]] = {
         "example": "sp.bib_for(r)",
         "tags": ["smart"],
     },
+    "bibtex": {
+        "example": "sp.bibtex(['chernozhukov2016hdm'])",
+        "tags": ["smart"],
+    },
     "binscatter": {
         "example": "sp.binscatter(df, y='wage', x='education')",
         "tags": ["plots"],

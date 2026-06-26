@@ -36460,6 +36460,25 @@
     }
   },
   {
+    "description": "Resolve verified BibTeX entries from ``paper.bib`` by citation key.",
+    "name": "bibtex",
+    "parameters": {
+      "properties": {
+        "keys": {
+          "description": "One or more BibTeX keys, e.g. ``\"chernozhukov2016hdm\"`` or ``[\"callaway2021difference\", \"rambachan2023more\"]``.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "keys"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Render a one-line status summary of a fitted result.",
     "name": "brief",
     "parameters": {

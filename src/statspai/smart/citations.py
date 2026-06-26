@@ -23,7 +23,7 @@ Supported formats
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, Iterable, List, Optional, Union, cast
 
 # ---------------------------------------------------------------------------
 #  BibTeX parser (intentionally minimal — handles only the shape
@@ -469,4 +469,84 @@ def bib_for(result: Any) -> Dict[str, Any]:
     return cast(Dict[str, Any], render_citation(bibtex, fmt="json"))
 
 
-__all__ = ["render_citation", "bib_for"]
+def bibtex(keys: Union[str, Iterable[str]]) -> str:
+    """Resolve verified BibTeX entries from ``paper.bib`` by citation key.
+
+    The Python twin of the ``bibtex`` MCP tool, and the resolver that
+    :func:`bib_for` and ``result.cite(format="json")`` advertise in their
+    ``resolve_with`` hint: feed the ``citation_keys`` they return straight
+    into ``sp.bibtex`` to obtain the full, verified ``@article{...}``
+    entries from the project's single bibliographic source of truth
+    (``paper.bib``). Entries are returned **verbatim** — never reformatted
+    or invented (CLAUDE.md §10 zero-hallucination rule).
+
+    Parameters
+    ----------
+    keys : str or iterable of str
+        One or more BibTeX keys, e.g. ``"chernozhukov2016hdm"`` or
+        ``["callaway2021difference", "rambachan2023more"]``.
+
+    Returns
+    -------
+    str
+        The matching entries in the order requested, separated by a blank
+        line, ready to paste into a ``.bib`` file.
+
+    Raises
+    ------
+    ValueError
+        If ``keys`` is empty.
+    KeyError
+        If any requested key is absent from ``paper.bib``; the message
+        lists the missing keys together with any close matches, so a typo
+        is corrected rather than papered over with a fabricated entry.
+
+    See Also
+    --------
+    bib_for : structured citation payload (and ``citation_keys``) for a
+        fitted result; pipe its keys into this function.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> entry = sp.bibtex("chernozhukov2016hdm")
+    >>> "Spindler" in entry and "10.32614/RJ-2016-040" in entry
+    True
+    """
+    if isinstance(keys, str):
+        keys = [keys]
+    key_list = [str(k) for k in keys]
+    if not key_list:
+        raise ValueError("`keys` must be a non-empty bib key or list of keys.")
+
+    # Reuse the single paper.bib resolver that backs the MCP `bibtex`
+    # tool, so the Python and MCP surfaces return identical entries.
+    from statspai.agent.workflow_tools import _load_bibtex_index
+
+    index = _load_bibtex_index()
+    resolved: List[str] = []
+    missing: List[str] = []
+    for key in key_list:
+        entry = index.get(key)
+        if entry:
+            resolved.append(entry)
+        else:
+            missing.append(key)
+
+    if missing:
+        from difflib import get_close_matches
+
+        hints: Dict[str, List[str]] = {}
+        for key in missing:
+            close = get_close_matches(key, list(index), n=3, cutoff=0.55)
+            if close:
+                hints[key] = close
+        message = f"bib key(s) not found in paper.bib: {missing}"
+        if hints:
+            message += f"; closest matches: {hints}"
+        raise KeyError(message)
+
+    return "\n\n".join(resolved)
+
+
+__all__ = ["render_citation", "bib_for", "bibtex"]

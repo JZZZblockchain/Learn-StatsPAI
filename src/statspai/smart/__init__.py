@@ -19,7 +19,7 @@ from .compare import compare_estimators, ComparisonResult
 from .assumptions import assumption_audit, AssumptionResult
 from .audit import audit
 from .brief import brief
-from .citations import bib_for, render_citation
+from .citations import bib_for, bibtex, render_citation
 from .detect_design import detect_design
 from .examples import examples
 from .intake import IntakeResult, design_intake
@@ -49,6 +49,7 @@ __all__ = [
     "AssumptionResult",
     "audit",
     "bib_for",
+    "bibtex",
     "brief",
     "detect_design",
     "examples",
