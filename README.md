@@ -34,12 +34,13 @@ your role:
 
 The examples use bundled teaching datasets and require no network access after installation.
 
-**Reproduce the high-dimensional / double-ML numerical evidence** (the part most relevant to that literature): StatsPAI's rigorous-Lasso port reproduces `hdm`'s three vignette applications — Barro–Lee growth convergence, Acemoglu–Johnson–Robinson institutions IV, and the CPS 2012 gender wage gap — and its double-machine-learning estimators are pinned against `DoubleML`.
+**Reproduce the high-dimensional / double-ML numerical evidence** (the part most relevant to that literature): StatsPAI's rigorous-Lasso port reproduces `hdm`'s three vignette applications — Barro–Lee growth convergence, Acemoglu–Johnson–Robinson institutions IV, and the CPS 2012 gender wage gap — provides a faithful port of `hdm`'s logistic high-dimensional effects (`rlassologit_effect`), and pins its double-machine-learning estimators against `DoubleML`.
 
 ```bash
 # rigorous-Lasso (hdm) parity — no R or extras needed (reference committed as JSON)
 pytest tests/reference_parity/test_rlasso_parity.py \
-       tests/reference_parity/test_rlasso_vignette_parity.py -q
+       tests/reference_parity/test_rlasso_vignette_parity.py \
+       tests/reference_parity/test_rlassologit_effect_parity.py -q
 
 # DoubleML parity (optional: needs the `parity` extra = doubleml-for-py)
 pip install -e ".[dev,parity]" && pytest tests/external_parity/test_dml_python_parity.py -q
@@ -151,7 +152,7 @@ StatsPAI's focus is **causal inference**. The grid below summarizes method-famil
 
 **Legend**: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.
 
-**StatsPAI at a glance**: 1,128 registered functions in the live agent registry · 87 submodules · 333k LOC (core) + 178k LOC (tests). All four numbers are reproducible from the canonical generator (`python scripts/registry_stats.py`); the per-module table in [`docs/stats.md`](docs/stats.md) is regenerated from the same script. For the API-breadth matrix (23 method families) and cross-ecosystem line-count comparison, see [`docs/stats.md`](docs/stats.md).
+**StatsPAI at a glance**: 1,130 registered functions in the live agent registry · 87 submodules · 333k LOC (core) + 178k LOC (tests). All four numbers are reproducible from the canonical generator (`python scripts/registry_stats.py`); the per-module table in [`docs/stats.md`](docs/stats.md) is regenerated from the same script. For the API-breadth matrix (23 method families) and cross-ecosystem line-count comparison, see [`docs/stats.md`](docs/stats.md).
 
 **Validation tiers matter**: `stability="stable"` means the public API is SemVer-stable; it does not by itself mean R/Stata/paper parity. Use `sp.list_functions(validation_status="certified")` for cross-language or published-reference evidence, and inspect `sp.describe_function(name)["limitations"]` before production use. See [`docs/guides/stability.md`](docs/guides/stability.md).
 

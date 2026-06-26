@@ -69,7 +69,7 @@ claimed bit-for-bit).
 | `rlassoATET` | `sp.dml(model='irm', score='ATTE', …)` | same score family; cross-fitted |
 | `rlassoLATE` | `sp.dml(model='iivm', ml_g='rlasso', ml_m='rlassologit')` | same LATE Wald-ratio score family; cross-fitted |
 | `rlassoLATET` | `sp.dml(model='iivm', …)` | covered by the IIVM score; a LATET-specific variant is not separately exposed |
-| `rlassologitEffect`, `rlassologitEffects` | *not ported* → `sp.dml(model='irm', ml_m='rlassologit')` | see "What is and isn't ported" below |
+| `rlassologitEffect`, `rlassologitEffects` | `sp.rlassologit_effect` / `sp.rlassologit_effects` | **faithful port** — coef & post SE ~1e-14, multi-target ~1e-15 |
 | `print` / `summary` / `confint` / `predict` | `.summary()` / `.conf_int()` / `.predict()` | result-object methods |
 | dataset `EminentDomain` | parity fixture in `tests/reference_parity/` | used to pin `rlasso_iv` |
 | datasets `pension`, `GrowthData`, `AJR`, `cps2012`, `BLP` | not yet bundled as `sp.datasets` | on the roadmap (canonical-case reproduction) |
@@ -208,13 +208,25 @@ convergence tolerance — no tighter ground truth exists); and `post=True`
 Double-ML: `sp.dml(model='irm', ml_m='rlassologit')` uses a *calibrated*
 logistic propensity (unlike the linear-probability `RlassoClassifier`).
 
-**Not yet ported — `rlassologitEffect(s)`**, the high-dimensional
-*logistic treatment effect* (BCW double-selection with `√σ²`-weighting and
-a max-of-two sandwich variance). It layers several `rlassologit` /
-`rlasso` fits plus a glm with non-obvious internals; it is a separate
-multi-day parity exercise and is intentionally left out rather than
-shipped unvalidated. For a binary-treatment causal effect, use
-`sp.dml(model='irm', ml_m='rlassologit')`.
+### `sp.rlassologit_effect` / `rlassologit_effects` — logistic treatment effects
+
+The high-dimensional *logistic treatment effect* (Belloni–Chernozhukov–Wei
+2016 double-selection for GLMs: a `√σ²`-weighted union of a logistic and a
+linear rigorous-Lasso selection, refit by a low-dimensional logit, with a
+max-of-two sandwich variance) is now a **faithful port of
+`hdm::rlassologitEffect(s)`**:
+
+```python
+res = sp.rlassologit_effect(X, y, d)          # binary y, treatment d, controls X
+res.alpha, res.se, res.pvalue, res.conf_int()
+out = sp.rlassologit_effects(X, y, index=[0, 1])   # each X column as the target
+```
+
+Parity vs `hdm` 0.3.2 (`tests/reference_parity/test_rlassologit_effect_parity.py`):
+the coefficient and the post-Lasso standard error match to ~1e-14, the
+multi-target effects to ~1e-15, and the non-post SE to ~1e-7 (the non-post
+LassoShooting tolerance). For a plain binary-treatment causal effect you can
+still use `sp.dml(model='irm', ml_m='rlassologit')`.
 
 **X-dependent penalty simulation** (`penalty={"X.dependent.lambda": True}`)
 is implemented but matches `hdm` only *in distribution* — R's

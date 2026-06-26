@@ -43,3 +43,18 @@ The scripts cover canonical causal-inference designs:
   (1995): partially linear and partially linear IV models for the return to
   schooling, recovering the classic pattern that the IV estimate exceeds the
   partialling-out one. The DoubleML-aligned, high-dimensional entry point.
+
+## Networked notebook (requires internet + `doubleml`)
+
+One reviewer notebook is **not** offline — it fetches the canonical 401(k)
+data from DoubleML's public distribution (StatsPAI bundles no copy):
+
+- `notebooks/reproduce_401k_doubleml.ipynb` - reproduces the DoubleML / `hdm`
+  401(k) result with `sp.dml`, side by side with `doubleml-for-py` on the same
+  data. The partially linear estimates match to the displayed precision; the
+  committed notebook ships its executed outputs.
+
+```bash
+python -m pip install statspai doubleml scikit-learn jupyter
+jupyter nbconvert --to notebook --execute --inplace examples/notebooks/reproduce_401k_doubleml.ipynb
+```
