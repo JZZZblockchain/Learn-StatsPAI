@@ -69,7 +69,7 @@ These are machine-readable through `sp.describe_function(name)["limitations"]` a
 - `synth`: ADH/Synth parity requires the same `special_predictors` recipe; SDID/augmented/gsynth rows include documented regularisation or local-optimum convention gaps.
 - `causal_forest`: the NSW-DW parity row is overlap-diagnostic evidence, not a clean ATT point-estimate parity claim.
 - `did_imputation`: parity is aggregation-convention sensitive; inspect `sp.parity_gap_report()` before reporting exact cross-language equality.
-- `etwfe`: the default top-level estimate is cohort-share weighted; use `sp.etwfe(..., panel=False, cluster=...)` followed by `sp.etwfe_emfx(..., weighting="treated")` for R `etwfe::emfx(type="simple")` point-estimate and clustered-SE parity.
+- `etwfe`: the default panel estimate now reports the R `etwfe::emfx(type="simple")` / Stata `jwdid, estat simple` treated-observation-weighted simple ATT for `cgroup="notyet"`; use `cgroup="nevertreated"` for the R `cgroup="never"` estimand, or `sp.etwfe_emfx(..., weighting="cohort")` for the historical StatsPAI cohort-share summary.
 - `hal_tmle`: `variant="projection"` is reserved and raises `NotImplementedError`.
 - `network_exposure`: only `design="bernoulli"` is implemented.
 - `etwfe`: `panel=False` with `cgroup="nevertreated"` is not implemented.

@@ -5,6 +5,73 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="did-multiplegt-baseline-conditioning"></a>
+
+## Unreleased — ⚠️ `sp.did_multiplegt` now baseline-conditions switcher/stayer cells
+
+**What changed.** `sp.did_multiplegt` now computes DID_M, dynamic effects, and
+placebo effects within each baseline-treatment cell `d_{t-1}`. Switchers are
+compared only to stayers with the same baseline treatment; switch-off cells are
+sign-flipped so the reported estimand is the effect of gaining treatment. The
+dynamic path additionally uses robust stayers that keep the baseline treatment
+unchanged through the full horizon `[t, t+h]`, and placebo effects use the Stata
+`did_multiplegt (old)` mirror sign convention.
+
+**Why.** Pooling all stayers in a period let already-treated stayers contaminate
+untreated control trends and mixed switch-on / switch-off effects under one
+majority sign. The static path is pinned to Stata reference values, and the
+dynamic/placebo path is guarded by small hand-computable panels that isolate the
+robust-stayer and placebo-sign requirements.
+
+**Who is affected.** Any `sp.did_multiplegt` run with multiple baseline
+treatment values, switch-off events, dynamic effects, or placebo effects can
+change. Designs with only switch-on events and a single valid same-baseline
+stayer set may be unchanged.
+
+**Action required.** Re-run reported `did_multiplegt` estimates, especially if
+they used `dynamic=` or `placebo=`. No call-site change is required; this is a
+numerical correction. For release/JOSS notes, flag this as a correctness fix
+that can change point estimates.
+
+---
+
+<a id="etwfe-cgroup-simple-att"></a>
+
+## Unreleased — ⚠️ `sp.etwfe` now honors `cgroup` and reports the R/Stata simple ATT
+
+**What changed.** The public `sp.etwfe` headline now matches R
+`etwfe::emfx(type="simple")` and Stata `jwdid, estat simple`: a
+treated-observation-weighted simple ATT over post-treatment cohort-time effects.
+The default `cgroup="notyet"` now uses not-yet-treated comparisons, while
+`cgroup="nevertreated"` matches R `etwfe(cgroup="never")`.
+
+**Why.** The previous public default was labelled `cgroup="notyet"` but behaved
+like a never-treated-style estimand under a different aggregation. On the
+canonical `did::mpdta` panel, this produced about `-0.0385` for the default
+instead of the R/Stata not-yet-treated simple ATT `-0.047709918`. The corrected
+`cgroup="nevertreated"` path matches the R never-treated value
+`-0.039951275`.
+
+**Who is affected.** Any code using `sp.etwfe(...).estimate`, `se`, `pvalue`, or
+CI can change. The lower-level `sp.wooldridge_did` helper keeps its historical
+saturated-TWFE cohort headline. `sp.etwfe_emfx` now defaults to
+`weighting="treated"`; pass `weighting="cohort"` when you need the historical
+cohort-share aggregation for comparison.
+
+**Migration.**
+
+| Before | After |
+|---|---|
+| R/Stata-compatible simple ATT via `sp.etwfe(..., panel=False)` + `sp.etwfe_emfx(..., weighting="treated")` | `sp.etwfe(...)` directly for the default not-yet-treated panel estimand |
+| Previous never-treated-style default comparison | `sp.etwfe(..., cgroup="nevertreated")` |
+| Historical saturated-TWFE helper output | `sp.wooldridge_did(...)` |
+| Historical cohort-share emfx aggregation | `sp.etwfe_emfx(fit, weighting="cohort")` |
+
+For release/JOSS notes, flag this as a correctness fix because the public
+default point estimate changes on staggered panels.
+
+---
+
 <a id="bch-post-lasso-iv-deprecation"></a>
 
 ## Unreleased — Deprecation: `iv.bch_post_lasso_iv` → `sp.rlasso_iv`

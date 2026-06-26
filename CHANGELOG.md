@@ -4,6 +4,28 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### ⚠️ Correctness
+
+These change DiD point estimates for affected staggered/switching designs. See
+`MIGRATION.md` before comparing new output to earlier StatsPAI runs.
+
+- **`sp.did_multiplegt` DID_M / dynamic / placebo** now conditions
+  switcher-vs-stayer cells on the baseline treatment `d_{t-1}`, matching the
+  de Chaisemartin–D'Haultfoeuille estimator and Stata
+  `did_multiplegt (old)`. Static DID_M no longer pools already-treated stayers
+  with untreated stayers, switch-off cells enter with the treatment-gain sign,
+  dynamic effects use robust stayers that keep the baseline treatment through
+  the full horizon, and placebo effects use the Stata mirror sign convention.
+  New parity guards cover both Stata-pinned static panels and hand-checkable
+  dynamic/placebo regressions.
+- **`sp.etwfe` control-group and headline aggregation** now honors the public
+  `cgroup` contract. The default `cgroup="notyet"` headline is the
+  treated-observation-weighted simple ATT used by R `etwfe::emfx(type="simple")`
+  and Stata `jwdid, estat simple`; `cgroup="nevertreated"` now matches R
+  `etwfe(cgroup="never")`. `sp.wooldridge_did` remains the historical saturated
+  TWFE helper, and `sp.etwfe_emfx(..., weighting=)` still exposes the historical
+  cohort-share aggregation through `weighting="cohort"`.
+
 ### Added
 
 - **`sp.rlasso` — rigorous (data-driven) Lasso, a faithful port of R's
