@@ -32599,6 +32599,89 @@
     }
   },
   {
+    "description": "Effect of ``d`` on a binary ``y`` after Lasso-selecting controls ``x``.",
+    "name": "rlassologit_effect",
+    "parameters": {
+      "properties": {
+        "I3": {
+          "description": "Amelioration set forced into the control set (hdm's ``I3``).",
+          "type": "string"
+        },
+        "d": {
+          "description": "d parameter (Union[np.ndarray, pd.Series, str]).",
+          "type": "string"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "post": {
+          "default": true,
+          "description": "Post-Lasso inside the two selection steps.",
+          "type": "boolean"
+        },
+        "x": {
+          "description": "Primary running variable, regressor, or feature input for this estimator.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "d"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Logistic high-dimensional effect of each targeted column of ``X``.",
+    "name": "rlassologit_effects",
+    "parameters": {
+      "properties": {
+        "I3": {
+          "description": "I3 parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "index": {
+          "description": "index parameter (Optional[Sequence[int]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "post": {
+          "default": true,
+          "description": "post parameter (bool).",
+          "type": "boolean"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Rigorous (post-)Lasso as a scikit-learn regressor.",
     "name": "RlassoRegressor",
     "parameters": {

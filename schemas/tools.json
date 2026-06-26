@@ -19143,6 +19143,81 @@
     "name": "rlassologit"
   },
   {
+    "description": "Effect of ``d`` on a binary ``y`` after Lasso-selecting controls ``x``.",
+    "input_schema": {
+      "properties": {
+        "I3": {
+          "description": "Amelioration set forced into the control set (hdm's ``I3``).",
+          "type": "string"
+        },
+        "d": {
+          "description": "d parameter (Union[np.ndarray, pd.Series, str]).",
+          "type": "string"
+        },
+        "post": {
+          "default": true,
+          "description": "Post-Lasso inside the two selection steps.",
+          "type": "boolean"
+        },
+        "x": {
+          "description": "Primary running variable, regressor, or feature input for this estimator.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "d",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlassologit_effect"
+  },
+  {
+    "description": "Logistic high-dimensional effect of each targeted column of ``X``.",
+    "input_schema": {
+      "properties": {
+        "I3": {
+          "description": "I3 parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "X": {
+          "description": "Feature matrix or covariate DataFrame.",
+          "type": "string"
+        },
+        "index": {
+          "description": "index parameter (Optional[Sequence[int]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "post": {
+          "default": true,
+          "description": "post parameter (bool).",
+          "type": "boolean"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "X",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "rlassologit_effects"
+  },
+  {
     "description": "Robust / unconstrained Synthetic Control. Assumptions: A convex (or regularized) combination of donor units reproduces the treated unit's pre-treatment outcome path; No interference: the treatment does not affect the donor units (SUTVA); No anticipation before the treatment date. Pre-conditions: Panel of one or more treated units plus an untreated donor pool, observed over time; Pre-treatment window long enough to fit donor weights (rule of thumb: more pre-periods than donors used); Outcome observed for every unit in every period. Failure modes: Large pre-treatment RMSPE -- the synthetic unit fails to track the treated unit before treatment -> Add donors / predictors, lengthen the pre-period, or use a bias-corrected estimator (sdid, augsynth); Placebo / permutation inference shows the estimate is not extreme relative to donors -> Report the placebo distribution honestly; the effect may not be distinguishable from noise. Alternatives: sp.sdid, sp.augsynth, sp.gsynth, sp.callaway_santanna. Typical minimum N: 15.",
     "input_schema": {
       "properties": {
