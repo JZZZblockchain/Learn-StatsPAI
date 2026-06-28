@@ -17,9 +17,9 @@ captured live on 2026-06-16 from an identical deterministic dataset (seed
    match ``ivregress 2sls, small`` / ``ivregress 2sls, robust small`` (the
    finite-sample t convention StatsPAI uses) to machine precision.
 
-Stata reference values are hard-coded constants (the gold standard); the data
-is regenerated deterministically so the test is hermetic (no Stata needed at
-run time).
+Stata reference values are hard-coded constants (the audited reference
+baseline); the data is regenerated deterministically so the test is hermetic
+(no Stata needed at run time).
 """
 
 from __future__ import annotations
