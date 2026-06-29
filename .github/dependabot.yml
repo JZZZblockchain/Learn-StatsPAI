@@ -15,6 +15,12 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # StatsPAI still supports Python 3.9. mypy 2.x no longer supports
+      # `python_version = "3.9"` in its config, so keep this pinned below 2
+      # until the runtime support floor is raised deliberately.
+      - dependency-name: "mypy"
+        versions: [">=2.0.0"]
 
   # GitHub Actions pins
   - package-ecosystem: github-actions
