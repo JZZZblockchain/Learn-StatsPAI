@@ -178,6 +178,25 @@ extend-exclude = '''
 /tests/(r_parity|stata_parity|external_parity)/
 '''
 
+[tool.isort]
+# ``profile = "black"`` makes isort's import wrapping byte-compatible with black
+# (multi_line_output=3, trailing comma, parens, line_length=88), so the two stop
+# fighting over multi-line imports — the recurring "black wants vertical, isort
+# wants hanging-indent" churn that kept re-modifying staged files (e.g.
+# policy_tree.py's sklearn import). This is the single source of truth for both
+# the pre-commit hook and a bare ``isort`` invocation.
+#
+# isort is enforced ONLY as a pre-commit auto-fixer on STAGED files — there is
+# no repo-wide ``isort --check`` in CI or scripts/ — so adopting the profile
+# reformats imports incrementally as files are touched; no mass reorder of the
+# existing tree is required (or wanted, during JOSS review).
+profile = "black"
+line_length = 88
+# Mirror black's extend-exclude: these trees are SHA-locked / verbatim-asserted
+# parity fixtures (scripts/tier_a_fixture_lock.py,
+# tests/test_ci_exact_parity_contract.py) — never let a formatter rewrite them.
+extend_skip_glob = ["tests/r_parity/*", "tests/stata_parity/*", "tests/external_parity/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
