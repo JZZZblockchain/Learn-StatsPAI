@@ -36580,6 +36580,10 @@
         "result": {
           "description": "Any fitted StatsPAI result with ``model_info`` attached.",
           "type": "string"
+        },
+        "treatment": {
+          "description": "Name of the treatment variable when ``result`` is a plain regression used for causal adjustment on a selection-on-observables design. When supplied, the audit additionally asks for overlap / common-support, post-adjustment balance, and omitted-variable sensitivity -- the checks a referee demands on an observational design but that a bare OLS would otherwise escape. Has no effect on designs whose family already carries these checks (matching / DML / IV / ...). Descriptive regressions (no treatment declared) are never flagged.",
+          "type": "string"
         }
       },
       "required": [
@@ -36632,6 +36636,11 @@
         "include_diagnostics": {
           "default": true,
           "description": "Include the inference block (SE method, clustering, bandwidth, F, CI).",
+          "type": "boolean"
+        },
+        "include_provenance": {
+          "default": true,
+          "description": "Append a one-line provenance trace (StatsPAI version + estimator identity + methods-spec key) -- the \"exact code path\" leg of the formula / citation / code-path traceability triple.",
           "type": "boolean"
         },
         "results": {

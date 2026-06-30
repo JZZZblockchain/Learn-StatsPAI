@@ -12529,6 +12529,11 @@
           "description": "Include the inference block (SE method, clustering, bandwidth, F, CI).",
           "type": "boolean"
         },
+        "include_provenance": {
+          "default": true,
+          "description": "Append a one-line provenance trace (StatsPAI version + estimator identity + methods-spec key) -- the \"exact code path\" leg of the formula / citation / code-path traceability triple.",
+          "type": "boolean"
+        },
         "results": {
           "description": "One or more fitted result objects exposing ``method`` / ``model_info`` / ``cite``.",
           "items": {
