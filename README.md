@@ -29,6 +29,17 @@ It is meant to be a practical replacement path for new Python-first work:
   `MatchIt`, `modelsummary`, `broom`.
 - Python-native outputs: `.summary()`, `.tidy()`, `.plot()`, `.to_latex()`,
   `.to_docx()`, `.to_agent_summary()` where supported by the result object.
+- Companion Stata tooling: our own
+  [`stata-code`](https://github.com/brycewang-stanford/stata-code/) can work
+  with StatsPAI so agents can understand existing Stata workflows, translate
+  them into Python, and cross-check results more smoothly.
+- Companion skill repos:
+  [`Auto-Empirical-Research-Skills`](https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills),
+  [`AER-Skills`](https://github.com/brycewang-stanford/AER-Skills),
+  [`Awesome-Journal-Skills`](https://github.com/brycewang-stanford/Awesome-Journal-Skills),
+  and [`Paper-WorkFlow`](https://github.com/brycewang-stanford/Paper-WorkFlow)
+  can work alongside StatsPAI and an agent as the methods, journal, manuscript,
+  and reproducibility skill layer.
 
 StatsPAI is not a promise that every Stata/R command is bit-for-bit identical.
 When exact external parity matters, use the `validation_status` metadata,
