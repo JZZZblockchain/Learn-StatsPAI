@@ -21213,6 +21213,57 @@
     }
   },
   {
+    "description": "Translate a Stata command line to a StatsPAI tool-call payload.",
+    "name": "from_stata",
+    "parameters": {
+      "properties": {
+        "line": {
+          "description": "One Stata command. Multi-line ``do`` files must be split by the caller.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Translate one R / fixest / felm call to a StatsPAI tool-call payload.",
+    "name": "from_r",
+    "parameters": {
+      "properties": {
+        "line": {
+          "description": "Single R expression of the form ``fn(...)``. Multi-line scripts must be split by the caller.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Coverage matrix for the ``sp.from_stata`` / ``sp.from_r`` translators.",
+    "name": "translation_coverage",
+    "parameters": {
+      "properties": {
+        "fmt": {
+          "default": "dict",
+          "description": "``\"dict\"`` returns a structured mapping (agent / JSON friendly); ``\"markdown\"`` returns a ready-to-publish table string.",
+          "enum": [
+            "dict",
+            "markdown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
     "description": "Attach a human-readable label to a variable.",
     "name": "label_var",
     "parameters": {
@@ -21877,7 +21928,7 @@
     }
   },
   {
-    "description": "Complementary log-log regression via maximum likelihood.",
+    "description": "Complementary log-log regression via maximum likelihood. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "cloglog",
     "parameters": {
       "properties": {
@@ -32145,7 +32196,7 @@
     }
   },
   {
-    "description": "Hurdle (two-part) model for count data.",
+    "description": "Hurdle (two-part) model for count data. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "hurdle",
     "parameters": {
       "properties": {
@@ -35308,7 +35359,7 @@
     }
   },
   {
-    "description": "Fractional response model (Papke & Wooldridge 1996).",
+    "description": "Fractional response model (Papke & Wooldridge 1996). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "fracreg",
     "parameters": {
       "properties": {

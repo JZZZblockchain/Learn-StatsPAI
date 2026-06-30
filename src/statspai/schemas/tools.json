@@ -3032,7 +3032,7 @@
     "name": "clogit"
   },
   {
-    "description": "Complementary log-log regression via maximum likelihood.",
+    "description": "Complementary log-log regression via maximum likelihood. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -7794,7 +7794,7 @@
     "name": "fortified_pci"
   },
   {
-    "description": "Fractional response model (Papke & Wooldridge 1996).",
+    "description": "Fractional response model (Papke & Wooldridge 1996). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -9281,7 +9281,7 @@
     "name": "horowitz_manski"
   },
   {
-    "description": "Hurdle (two-part) model for count data.",
+    "description": "Hurdle (two-part) model for count data. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
