@@ -58,6 +58,15 @@ _OVERLAP_MIN = 0.05
 #: remedy. 30 is the conservative end of the common 30-50 rule of thumb.
 _FEW_CLUSTERS_MIN = 30
 
+#: Synthetic-control pre-fit quality: pre-treatment RMSPE divided by the
+#: pre-period SD of the treated outcome. Deliberately conservative (0.6 ⇒ the
+#: synthetic unit explains < ~64% of pre-period variance) so it clears the
+#: canonical *good* example — California Prop-99 sits at ~0.42 — and only fires
+#: on genuinely poor fits (an unmatchable treated trend lands ~2.7). A poor
+#: pre-fit means the synthetic control does not track the treated unit before
+#: treatment, so the post-period gap cannot be read as a treatment effect.
+_SYNTH_PREFIT_RATIO_MAX = 0.6
+
 
 # ====================================================================== #
 #  CausalResult helpers
@@ -197,6 +206,53 @@ def causal_violations(result: Any) -> List[Dict[str, Any]]:
                 ],
             }
         )
+
+    # --- Synthetic control: poor pre-treatment fit ----------------------
+    # Gated on synth-specific keys rather than family detection. The ratio is
+    # scale-free (pre-RMSPE / pre-period SD of the treated outcome); see
+    # _SYNTH_PREFIT_RATIO_MAX for the calibration.
+    pre_rmspe = _as_float(mi.get("pre_treatment_rmse"))
+    if (
+        pre_rmspe is not None
+        and "n_donors" in mi
+        and mi.get("Y_treated") is not None
+        and mi.get("times") is not None
+        and mi.get("treatment_time") is not None
+    ):
+        try:
+            y_treated = np.asarray(mi["Y_treated"], dtype=float)
+            times = np.asarray(mi["times"])
+            pre = y_treated[times < mi["treatment_time"]]
+            pre_sd = float(np.std(pre, ddof=1)) if pre.size >= 2 else 0.0
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            pre_sd = 0.0
+        ratio = pre_rmspe / pre_sd if pre_sd > 0 else None
+        if ratio is not None and ratio > _SYNTH_PREFIT_RATIO_MAX:
+            out.append(
+                {
+                    "kind": "assumption",
+                    "severity": "warning",
+                    "test": "synth_prefit",
+                    "value": ratio,
+                    "threshold": _SYNTH_PREFIT_RATIO_MAX,
+                    "message": (
+                        f"Pre-treatment fit is poor: RMSPE / pre-period SD = "
+                        f"{ratio:.2f} > {_SYNTH_PREFIT_RATIO_MAX}. The synthetic "
+                        "control does not track the treated unit before "
+                        "treatment, so the post-period gap is unreliable."
+                    ),
+                    "recovery_hint": (
+                        "Improve the donor pool / predictors, compare estimators "
+                        "with sp.synth_compare, try sp.augsynth (ridge-augmented), "
+                        "and gauge robustness with sp.synth_sensitivity."
+                    ),
+                    "alternatives": [
+                        "sp.synth_compare",
+                        "sp.augsynth",
+                        "sp.synth_sensitivity",
+                    ],
+                }
+            )
 
     # --- Matching: covariate balance ------------------------------------
     smd_max = _as_float(_safe_get(mi, "balance", "max_smd_after"))

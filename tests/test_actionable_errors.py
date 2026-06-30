@@ -139,6 +139,55 @@ class TestFewClusters:
 
 
 # --------------------------------------------------------------------------- #
+#  Synthetic control — poor pre-treatment fit
+# --------------------------------------------------------------------------- #
+
+
+class TestSynthPreFit:
+    def test_canonical_good_synth_is_clean(self):
+        """California Prop-99 is the textbook *good* synth — it must NOT fire,
+        or the warning would cry wolf on the field's canonical example."""
+        r = sp.synth(
+            sp.california_prop99(),
+            unit="state",
+            time="year",
+            outcome="packspercapita",
+            treated_unit="California",
+            treatment_time=1989,
+        )
+        assert not [v for v in r.violations() if v.get("test") == "synth_prefit"]
+
+    def test_unmatchable_treated_trend_is_flagged(self):
+        """A treated unit whose pre-trend no donor can match → poor pre-fit,
+        surfaced with concrete alternatives."""
+        rng = np.random.default_rng(3)
+        rows = []
+        for u in ["T"] + [f"D{i}" for i in range(8)]:
+            base = 50 if u == "T" else rng.uniform(10, 30)
+            slope = 5.0 if u == "T" else rng.uniform(-1, 1)
+            for yr in range(1980, 1995):
+                rows.append(
+                    {
+                        "u": u,
+                        "yr": yr,
+                        "y": base + slope * (yr - 1980) + rng.normal(0, 1),
+                    }
+                )
+        r = sp.synth(
+            pd.DataFrame(rows),
+            unit="u",
+            time="yr",
+            outcome="y",
+            treated_unit="T",
+            treatment_time=1990,
+        )
+        flagged = [v for v in r.violations() if v.get("test") == "synth_prefit"]
+        assert flagged, "an unmatchable treated trend should flag poor pre-fit"
+        assert flagged[0]["value"] > flagged[0]["threshold"]
+        assert "sp.synth_compare" in flagged[0]["alternatives"]
+
+
+# --------------------------------------------------------------------------- #
 #  Taxonomy — IdentificationError is catchable through the central taxonomy
 # --------------------------------------------------------------------------- #
 
