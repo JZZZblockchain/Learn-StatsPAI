@@ -55,18 +55,27 @@ spellings: `vce` (SE), `y` (outcome), `treat` (treatment).
   `hc_vcov`) as the single backend; retire per-estimator sandwich re-implementations.
 - ⚠ Collision risk: `core/results.py` is edited by the parallel window — rebase/merge carefully.
 
+- **D4b-cont — native `feols(vce="wild")`** (done; see commits on main).
+- **IV-WRE — native `ivreg(vce="wild")`** (done). 2SLS structure stored on the
+  result under `data_info['iv']`; `inference/iv_wild.py` implements the WRE
+  (wild restricted efficient) bootstrap of Davidson-MacKinnon (2010), validated
+  against Stata `ivreg2`+`boottest` across strong-IV (0.2016 vs 0.20155) and
+  weak-IV (0.3415 vs 0.3412) regimes (the weak case confirms the *efficient*
+  reduced form). Matrix: ivreg `wild_cluster_boot` flipped `unsafe → native`
+  (native cells 35→36, unsafe 5→4). `tests/reference_parity/test_iv_wild_*`.
+
 ### D4b-cont — remaining SE-menu cells  *(touches estimators)*
 Against the `se_menu_matrix` gate:
 - **feols `cr2_cr3`**: held at `na`. The within-transform CR2 omits the FE
   projection from the leverage adjustment, so it is NOT guaranteed equal to
   `clubSandwich`'s absorbed-FE CR2. Flip only after an R `clubSandwich` parity
   test (needs the absorbed-FE hat-matrix correction).
-- **Native `vce=` on feols**: promote the standalone wild/conley to a native
-  `feols(..., vce="wild")` parameter and unify the two `feols` doors (pyfixest
-  vs panel) so their SE menus match.
-- **`ivreg`**: two-stage-aware wild/CR2 (kill the 5 ⚠ cells); the standalone
-  helpers currently refit plain OLS and drop the IV structure. Needs the 2SLS
-  projected design stored on the result, then parity vs Stata `ivreg2`/`boottest`.
+- **Unify the two `feols` doors** (pyfixest vs panel) so their SE menus match.
+- **`ivreg` remaining ⚠ cells** (twoway / CR2 / Conley / jackknife): the OLS
+  standalone helpers refit plain OLS and drop the IV structure. Lower priority
+  than wild (now native); each needs an IV-aware implementation + Stata parity.
+- **Multi-endogenous WRE**: `iv_wild_bootstrap` currently supports a single
+  endogenous regressor; extend to the multi-endogenous case.
 
 ### D5 — unify the result contract  *(collision risk: results.py)*
 - One §3-true protocol: `summary`/`plot`/`to_latex`/`to_word`/`to_excel`/`cite`

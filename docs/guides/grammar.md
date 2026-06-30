@@ -80,7 +80,7 @@ estimator, or only on `feols`?* The honest answer, tracked in
 | `fepois` | ✓ | ✓ | ✓ | ✓ | · | · | · | · |
 | `feglm` | ✓ | ✓ | ✓ | ✓ | · | · | · | · |
 | `regress` | ✓ | ✓ | ✓ | ○ | ○ | ○ | ○ | ○ |
-| `ivreg` | ✓ | ✓ | ✓ | ⚠ | ⚠ | ⚠ | ⚠ | ⚠ |
+| `ivreg` | ✓ | ✓ | ✓ | ⚠ | ⚠ | ✓ | ⚠ | ⚠ |
 | `ppmlhdfe` | ✓ | ✓ | ✓ | · | · | · | · | · |
 | `panel` | ✓ | ✓ | ✓ | · | · | · | · | · |
 | `callaway_santanna` | · | · | ✓ | · | · | · | · | · |
@@ -113,9 +113,23 @@ What the matrix makes explicit today:
   and CRV1 cluster SE match `reghdfe` to ~1e-9, and the wild p-value matches
   `boottest`'s exact 2¹⁵ Rademacher enumeration to Monte-Carlo error (0.0265 vs
   0.0263). See `tests/reference_parity/test_feols_wild_boottest_parity.py`.
-- **`ivreg`'s ⚠ cells are a trap:** the standalone helpers refit plain OLS and
-  silently drop the two-stage structure, so their SEs are not trustworthy. The
-  matrix flags these so they cannot be mistaken for support.
+- **`ivreg` has native wild via `vce="wild"`** — the **WRE** bootstrap
+  (Davidson-MacKinnon 2010), the IV-correct procedure that resamples both the
+  structural and reduced-form residuals and refits 2SLS:
+
+  ```python
+  sp.ivreg("y ~ w + (d ~ z1 + z2)", data=df, vce="wild", cluster="firm")
+  # the endogenous coefficient gets a wild-bootstrap p-value & CI
+  ```
+
+  **Validated against Stata `boottest` after `ivreg2`** across strong-IV (p
+  0.2016 vs 0.20155) and weak-IV (p 0.3415 vs 0.3412) regimes — the weak-IV
+  case rules out the naive reduced form (which gives 0.426). See
+  `tests/reference_parity/test_iv_wild_boottest_parity.py`.
+- **`ivreg`'s remaining ⚠ cells are still a trap:** the OLS standalone helpers
+  (twoway / CR2 / Conley / jackknife) refit plain OLS and silently drop the
+  two-stage structure, so their SEs are not trustworthy. The matrix flags these
+  so they cannot be mistaken for support.
 
 This is the gap the SE-menu wiring work closes, estimator by estimator. The
 matrix is the scoreboard: the CI gate ratchets the **native** count up and the
