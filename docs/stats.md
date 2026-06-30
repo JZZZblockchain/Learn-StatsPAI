@@ -42,26 +42,26 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `synth` | 22,371 | 31 | 54 |
 | `did` | 20,835 | 33 | 60 |
 | `rd` | 16,114 | 25 | 53 |
-| `regression` | 14,848 | 20 | 37 |
+| `regression` | 14,849 | 20 | 37 |
+| `smart` | 12,699 | 20 | 31 |
 | `output` | 11,948 | 21 | 40 |
-| `smart` | 11,608 | 19 | 30 |
-| `agent` | 11,525 | 30 | 0 |
+| `agent` | 11,701 | 31 | 0 |
 | `decomposition` | 8,784 | 18 | 31 |
 | `fast` | 7,564 | 16 | 0 |
 | `iv` | 7,383 | 16 | 8 |
 | `diagnostics` | 7,120 | 12 | 25 |
 | `matching` | 7,004 | 11 | 25 |
-| `core` | 6,784 | 12 | 4 |
+| `core` | 6,908 | 12 | 4 |
 | `spatial` | 6,431 | 29 | 35 |
-| `panel` | 6,129 | 12 | 17 |
+| `panel` | 6,185 | 12 | 17 |
 | `plots` | 6,002 | 7 | 8 |
 | `inference` | 5,572 | 15 | 24 |
 | `bayes` | 5,166 | 12 | 19 |
 | `dml` | 4,968 | 12 | 14 |
 | `frontier` | 4,799 | 8 | 12 |
 | `multilevel` | 4,419 | 8 | 11 |
+| `workflow` | 4,356 | 5 | 3 |
 | `mendelian` | 4,349 | 13 | 38 |
-| `workflow` | 4,288 | 5 | 3 |
 | `causal_discovery` | 3,985 | 11 | 20 |
 | `metalearners` | 3,904 | 8 | 23 |
 | `dag` | 3,498 | 9 | 23 |
@@ -126,7 +126,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `checks` | 152 | 2 | 0 |
 | `causal` | 111 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **338,669** | **698** | **1135** |
+| **Total** | **340,208** | **700** | **1136** |
 ## 3 · Causal-inference coverage matrix (full)
 
 Legend: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.
