@@ -355,6 +355,67 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "aligned). Regenerate via _generate_glm_ext_R.R."
         ),
     },
+    "odds_ratio": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Woolf logit; = epiR::epi.2by2)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate, se_log, CI 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_parity.py",
+            "tests/reference_parity/_fixtures/epi_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Woolf-logit odds ratio + CI match the canonical "
+            "base-R closed form exactly. Regenerate via _generate_epi_R.R."
+        ),
+    },
+    "relative_risk": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Katz-log; = epiR::epi.2by2 / Stata epitab)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate, se_log, CI 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_parity.py",
+            "tests/reference_parity/_fixtures/epi_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Katz-log relative risk + CI match the canonical "
+            "base-R closed form exactly. Regenerate via _generate_epi_R.R."
+        ),
+    },
+    "risk_difference": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Wald; = epiR::epi.2by2 / Stata epitab)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate, se, CI 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_parity.py",
+            "tests/reference_parity/_fixtures/epi_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Wald risk difference + CI match the canonical "
+            "base-R closed form exactly. Regenerate via _generate_epi_R.R."
+        ),
+    },
+    "mantel_haenszel": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Robins-Breslow-Greenland MH; = epiR)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate, se_log, CI 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_parity.py",
+            "tests/reference_parity/_fixtures/epi_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Mantel-Haenszel OR + Robins-Breslow-Greenland CI "
+            "match the canonical base-R closed form exactly. Regenerate via "
+            "_generate_epi_R.R."
+        ),
+    },
 }
 
 
