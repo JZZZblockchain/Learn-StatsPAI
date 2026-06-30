@@ -97,7 +97,9 @@ class MethodSpec:
 #  matching/weighting, DML/TMLE, event-study, DDD, gsynth, imputation DiD,
 #  CiC, LP-DiD, QTE, mediation, front-door, g-computation, Manski bounds,
 #  continuous-treatment DiD, Bartik/shift-share, proximal, RKD, bunching,
-#  augmented SC, matrix completion, IV quantile regression, GMM) plus the
+#  augmented SC, matrix completion, IV quantile regression, GMM, causal
+#  forest, meta-learners, R-learner, Mendelian randomization, dose-response,
+#  Cox PH) plus the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
 #
@@ -1073,6 +1075,154 @@ _SPECS: List[MethodSpec] = [
             "Regularity (finite moment covariance, smoothness).",
         ],
         aliases=["generalized_method_of_moments", "gmm_estimator", "two_step_gmm"],
+    ),
+    MethodSpec(
+        key="causal_forest",
+        name="Causal Forest (Generalized Random Forest)",
+        estimand_latex=r"\tau(x) = \mathbb{E}[Y(1) - Y(0) \mid X=x]",
+        estimator_latex=(
+            r"\hat\tau(x): \sum_i \alpha_i(x)\Big[(Y_i - \hat m(X_i)) "
+            r"- (W_i - \hat e(X_i))\,\tau(x)\Big] = 0"
+        ),
+        prose=(
+            "Estimates heterogeneous (conditional) treatment effects with an "
+            "honest random forest whose adaptive neighborhood weights "
+            "alpha_i(x) localize a residual-on-residual moment condition; this "
+            "yields pointwise CATE estimates with valid confidence intervals "
+            "(Wager & Athey; Athey, Tibshirani & Wager)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "Overlap: 0 < e(X) < 1.",
+            "Honesty (separate samples for splitting and estimation).",
+        ],
+        aliases=[
+            "causal_forests",
+            "grf",
+            "generalized_random_forest",
+            "cforest",
+        ],
+    ),
+    MethodSpec(
+        key="metalearner",
+        name="Meta-Learners (S/T/X-Learner)",
+        estimand_latex=r"\tau(x) = \mathbb{E}[Y(1) - Y(0) \mid X=x]",
+        estimator_latex=(
+            r"\hat\tau^{T}(x) = \hat\mu_1(x) - \hat\mu_0(x);\quad "
+            r"\hat\tau^{X}(x) = g(x)\hat\tau_0(x) + (1-g(x))\hat\tau_1(x)"
+        ),
+        prose=(
+            "Reduces CATE estimation to off-the-shelf supervised learning: the "
+            "T-learner fits separate response surfaces and differences them; the "
+            "X-learner imputes individual effects and combines them with a "
+            "propensity weight g(x); the S-learner fits a single model with "
+            "treatment as a feature (Kunzel, Sekhon, Bickel & Yu)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "Overlap: 0 < e(X) < 1.",
+        ],
+        aliases=[
+            "metalearners",
+            "meta_learner",
+            "s_learner",
+            "t_learner",
+            "x_learner",
+            "xlearner",
+        ],
+    ),
+    MethodSpec(
+        key="r_learner",
+        name="R-Learner (Quasi-Oracle CATE)",
+        estimand_latex=r"\tau(x) = \mathbb{E}[Y(1) - Y(0) \mid X=x]",
+        estimator_latex=(
+            r"\hat\tau = \arg\min_{\tau}\;\frac{1}{n}\sum_i\Big["
+            r"(Y_i - \hat m(X_i)) - (W_i - \hat e(X_i))\,\tau(X_i)\Big]^2"
+        ),
+        prose=(
+            "Estimates the CATE by minimizing the Robinson-style R-loss on "
+            "cross-fitted outcome and propensity residuals, so first-stage "
+            "nuisance error enters only at second order (the quasi-oracle "
+            "property of Nie & Wager)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "Overlap: 0 < e(X) < 1.",
+            "Cross-fitting / Neyman-orthogonality of the R-loss.",
+        ],
+        aliases=["rlearner", "r_loss", "robinson_learner"],
+    ),
+    MethodSpec(
+        key="mr",
+        name="Mendelian Randomization (IVW)",
+        estimand_latex=(r"\beta \;\;(\text{causal effect of exposure on outcome})"),
+        estimator_latex=(
+            r"\hat\beta_{\mathrm{IVW}} = "
+            r"\frac{\sum_j \gamma_{Xj}\,\gamma_{Yj}\,\sigma_{Yj}^{-2}}"
+            r"{\sum_j \gamma_{Xj}^2\,\sigma_{Yj}^{-2}}"
+        ),
+        prose=(
+            "Uses genetic variants as instruments for a modifiable exposure: the "
+            "inverse-variance-weighted estimator combines the per-variant "
+            "Wald ratios (outcome association gamma_Y over exposure association "
+            "gamma_X) weighted by precision (Burgess, Butterworth & Thompson)."
+        ),
+        assumptions=[
+            "Relevance: the variants associate with the exposure.",
+            "Independence: the variants are unconfounded with the outcome.",
+            "Exclusion: the variants affect the outcome only via the exposure.",
+        ],
+        aliases=["mendelian_randomization", "ivw", "two_sample_mr", "mr_egger"],
+    ),
+    MethodSpec(
+        key="dose_response",
+        name="Continuous-Treatment Dose-Response (GPS)",
+        estimand_latex=r"\mu(t) = \mathbb{E}[Y(t)],\quad t \in \mathcal{T}",
+        estimator_latex=(
+            r"R = r(t, X)\;\;(\text{GPS});\quad "
+            r"\hat\mu(t) = \mathbb{E}_X\big[\,\mathbb{E}(Y \mid T=t, r(t,X))\,\big]"
+        ),
+        prose=(
+            "Estimates the dose-response curve for a continuous treatment using "
+            "the generalized propensity score R = r(t, X): model the outcome "
+            "given the dose and the GPS, then average over the covariate "
+            "distribution at each dose level (Hirano & Imbens)."
+        ),
+        assumptions=[
+            "Weak unconfoundedness given the generalized propensity score.",
+            "Overlap across the dose range.",
+            "Correctly specified GPS model.",
+        ],
+        aliases=[
+            "gps_dose_response",
+            "continuous_treatment_gps",
+            "drf",
+            "generalized_propensity_score",
+        ],
+    ),
+    MethodSpec(
+        key="cox",
+        name="Cox Proportional Hazards",
+        estimand_latex=(
+            r"\mathrm{HR} = e^{\beta},\quad "
+            r"\lambda(t\mid X) = \lambda_0(t)\,e^{X'\beta}"
+        ),
+        estimator_latex=(
+            r"\hat\beta = \arg\max_{\beta}\;\prod_{i:\,\delta_i=1} "
+            r"\frac{e^{X_i'\beta}}{\sum_{j\in R(t_i)} e^{X_j'\beta}}"
+        ),
+        prose=(
+            "Models the hazard as a baseline hazard times an exponential index "
+            "of covariates; the coefficients (log hazard ratios) are estimated "
+            "by maximizing the partial likelihood over the risk sets, leaving "
+            "the baseline hazard unspecified (Cox)."
+        ),
+        assumptions=[
+            "Proportional hazards (time-invariant covariate effects).",
+            "Non-informative (independent) censoring.",
+            "Correct functional form of the linear index.",
+        ],
+        aliases=["cox_ph", "coxph", "proportional_hazards", "cox_regression"],
     ),
 ]
 

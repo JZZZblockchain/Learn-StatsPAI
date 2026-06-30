@@ -113,6 +113,26 @@ def test_econometric_result_method_present():
         ("shift_share", "bartik"),
         ("proximal", "proximal"),
         ("pci", "proximal"),
+        # Design / estimator batch-2
+        ("rkd", "rkd"),
+        ("regression_kink", "rkd"),
+        ("bunching", "bunching"),
+        ("augsynth", "augsynth"),
+        ("mc_panel", "mc_panel"),
+        ("matrix_completion", "mc_panel"),
+        ("ivqr", "ivqr"),
+        ("gmm", "gmm"),
+        # HTE / genetics-IV / dose-response / survival batch-3
+        ("causal_forest", "causal_forest"),
+        ("grf", "causal_forest"),
+        ("metalearner", "metalearner"),
+        ("xlearner", "metalearner"),
+        ("r_learner", "r_learner"),
+        ("mr", "mr"),
+        ("ivw", "mr"),
+        ("dose_response", "dose_response"),
+        ("cox", "cox"),
+        ("coxph", "cox"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -366,6 +386,34 @@ def test_newly_cited_specs_carry_doi():
         ("lp_did", "Dube"),
         ("psm", "Rosenbaum"),
         ("ddd", "Møen"),  # exercises the {\o} -> ø diacritic path
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_working_paper_citations_upgraded_to_published():
+    """RKD and augmented-SC citations point to the published journals, not the
+    SSRN working-paper versions."""
+    for key, venue in [
+        ("rkd", "Econometrica"),
+        ("augsynth", "Journal of the American Statistical Association"),
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        apa = r.cite(format="apa")
+        assert venue in apa, f"{key}: expected {venue!r} in {apa!r}"
+        assert "SSRN" not in apa, f"{key}: still cites SSRN"
+
+
+def test_batch3_estimators_carry_verified_citation():
+    for key, token in [
+        ("causal_forest", "Wager"),
+        ("metalearner", "Künzel"),  # exercises {\"u} -> ü diacritic
+        ("r_learner", "Nie"),
+        ("mr", "Burgess"),
+        ("dose_response", "Hirano"),
+        ("cox", "Cox"),
     ]:
         r = _causal(key)
         r._citation_key = key
