@@ -93,7 +93,10 @@ class MethodSpec:
 
 
 # ---------------------------------------------------------------------------
-#  Curated methods table — ~15 core causal estimators.
+#  Curated methods table — core causal estimators (DiD family, RD, IV, SCM,
+#  matching/weighting, DML/TMLE, event-study, DDD, gsynth, imputation DiD,
+#  CiC, LP-DiD) plus the common regression families (OLS, Poisson, logit,
+#  probit, panel fixed effects).
 #
 #  Every formula is a standard definition from the primary source cited via
 #  result.cite(); see module docstring. SE math is intentionally omitted and
@@ -488,6 +491,247 @@ _SPECS: List[MethodSpec] = [
             "Consistency if either the outcome or propensity model is correct.",
         ],
         aliases=["targeted_mle", "tmle_ate", "ltmle", "hal_tmle"],
+    ),
+    MethodSpec(
+        key="event_study",
+        name="Event-Study (Dynamic TWFE)",
+        estimand_latex=(
+            r"\tau_\ell = \mathbb{E}\!\left[Y_{i,e+\ell}(e) "
+            r"- Y_{i,e+\ell}(0)\right]"
+        ),
+        estimator_latex=(
+            r"Y_{it} = \alpha_i + \lambda_t "
+            r"+ \sum_{\ell \neq -1} \beta_\ell \mathbf{1}\{t - E_i = \ell\} "
+            r"+ \varepsilon_{it}"
+        ),
+        prose=(
+            "Dynamic event-study specification: regress the outcome on a full "
+            "set of leads and lags in event time relative to a normalized "
+            "baseline period (here ell = -1). Leads probe pre-trends; lags trace "
+            "the dynamic path of the effect. Under heterogeneous timing prefer an "
+            "interaction-weighted estimator (Sun & Abraham)."
+        ),
+        assumptions=[
+            "Parallel trends across event-time periods.",
+            "No anticipation before the baseline period.",
+            "Baseline-period normalization of the coefficient path.",
+        ],
+        aliases=["eventstudy", "dynamic_did", "leads_lags", "es_did"],
+    ),
+    MethodSpec(
+        key="ddd",
+        name="Triple Differences (DDD)",
+        estimand_latex=r"\tau_{\mathrm{ATT}}",
+        estimator_latex=(
+            r"\hat\tau = \mathrm{DiD}_{\text{eligible}} "
+            r"- \mathrm{DiD}_{\text{ineligible}}"
+        ),
+        prose=(
+            "Triple-difference estimator: the difference between a "
+            "difference-in-differences computed for an eligible (treated-"
+            "exposed) group and one computed for an ineligible comparison "
+            "group, netting out group-specific shocks that a single DiD would "
+            "absorb into the trend."
+        ),
+        assumptions=[
+            "Parallel trends in the third (eligibility) difference.",
+            "No anticipation.",
+            "Stable composition across the three differencing dimensions.",
+        ],
+        aliases=["triple_diff", "triple_difference", "ddd_heterogeneous"],
+    ),
+    MethodSpec(
+        key="gsynth",
+        name="Generalized Synthetic Control (Interactive FE)",
+        estimand_latex=r"\tau_{it} = Y_{it}(1) - Y_{it}(0),\quad t > T_0",
+        estimator_latex=(
+            r"Y_{it}(0) = x_{it}'\beta + \lambda_i' f_t + \varepsilon_{it};"
+            r"\quad \hat\tau_{it} = Y_{it} - \hat Y_{it}(0)"
+        ),
+        prose=(
+            "Fits an interactive fixed-effects (latent factor) model on the "
+            "control units, then imputes each treated unit's counterfactual from "
+            "the estimated loadings and factors (Xu, 2017). Generalizes "
+            "synthetic control to multiple treated units, covariates, and "
+            "staggered adoption."
+        ),
+        assumptions=[
+            "Low-rank factor structure correctly captures untreated outcomes.",
+            "No anticipation and no interference.",
+            "Treatment ignorable given latent factors and covariates.",
+        ],
+        aliases=[
+            "generalized_synthetic_control",
+            "interactive_fe",
+            "interactive_fixed_effects",
+            "ife",
+            "gsc",
+        ],
+    ),
+    MethodSpec(
+        key="did_imputation",
+        name="Imputation DiD (Borusyak-Jaravel-Spiess)",
+        estimand_latex=r"\tau = \textstyle\sum_{it:\,D_{it}=1} w_{it}\,\tau_{it}",
+        estimator_latex=(
+            r"\hat Y_{it}(0) = \hat\alpha_i + \hat\lambda_t "
+            r"\;\;(\text{fit on } D=0);\quad "
+            r"\hat\tau_{it} = Y_{it} - \hat Y_{it}(0)"
+        ),
+        prose=(
+            "Estimates the two-way (plus covariate) model on untreated "
+            "observations only, imputes each treated observation's untreated "
+            "potential outcome, and averages the gaps with efficient weights. "
+            "Robust to heterogeneous timing and efficient under homoskedasticity "
+            "(Borusyak, Jaravel & Spiess)."
+        ),
+        assumptions=[
+            "Parallel trends and no anticipation.",
+            "Correctly specified two-way (plus covariate) model for Y(0).",
+        ],
+        aliases=["bjs", "imputation_did", "borusyak_jaravel_spiess"],
+    ),
+    MethodSpec(
+        key="cic",
+        name="Changes-in-Changes (Athey-Imbens)",
+        estimand_latex=(
+            r"\mathrm{QTT}(\tau) = " r"F^{-1}_{Y_1(1)}(\tau) - F^{-1}_{Y_1(0)}(\tau)"
+        ),
+        estimator_latex=(
+            r"\hat F_{Y_1(0)}(y) = "
+            r"\hat F_{Y_{01}}\!\big(\hat F_{Y_{00}}^{-1}(\hat F_{Y_{10}}(y))\big)"
+        ),
+        prose=(
+            "Nonparametric distributional generalization of DiD: maps the "
+            "treated group's pre-period outcome distribution through the control "
+            "group's observed change to construct the treated counterfactual "
+            "distribution, yielding quantile treatment effects (Athey & Imbens)."
+        ),
+        assumptions=[
+            "Scalar monotone production function in an unobservable.",
+            "Time-invariant rank distribution within group.",
+            "Common support of the outcome across groups and periods.",
+        ],
+        aliases=["changes_in_changes", "athey_imbens"],
+    ),
+    MethodSpec(
+        key="lp_did",
+        name="Local Projections DiD",
+        estimand_latex=r"\tau_h \;\; (\text{dynamic ATT at horizon } h)",
+        estimator_latex=(
+            r"Y_{i,t+h} - Y_{i,t-1} = \alpha + \tau_h\,\Delta D_{it} "
+            r"+ \text{controls} + \varepsilon_{it}"
+        ),
+        prose=(
+            "Estimates dynamic treatment effects horizon by horizon by "
+            "regressing the cumulative outcome change at each horizon on the "
+            "treatment change, using not-yet-treated units as clean controls "
+            "(Dube, Girardi, Jorda & Taylor)."
+        ),
+        assumptions=[
+            "Parallel trends and no anticipation.",
+            "A valid clean (not-yet-treated) control group at each horizon.",
+        ],
+        aliases=["local_projection_did", "lpdid", "dube_girardi"],
+    ),
+    MethodSpec(
+        key="ols",
+        name="Ordinary Least Squares",
+        estimand_latex=r"\beta = \arg\min_b\,\mathbb{E}\!\left[(Y - X'b)^2\right]",
+        estimator_latex=r"\hat\beta = (X'X)^{-1} X'Y",
+        prose=(
+            "Linear regression by minimizing the sum of squared residuals. The "
+            "coefficient is the conditional-expectation slope under correct "
+            "specification, and the best linear approximation otherwise."
+        ),
+        assumptions=[
+            "Linearity in parameters and correct specification.",
+            "Exogeneity: E[epsilon | X] = 0.",
+            "No perfect collinearity; homoskedasticity for classical SE "
+            "(else use robust / clustered SE).",
+        ],
+        aliases=["regress", "lm", "linear_regression", "least_squares"],
+    ),
+    MethodSpec(
+        key="poisson",
+        name="Poisson Regression",
+        estimand_latex=r"\mathbb{E}[Y \mid X] = \exp(X'\beta)",
+        estimator_latex=(
+            r"\hat\beta:\;\; "
+            r"\textstyle\sum_i \left(Y_i - \exp(X_i'\beta)\right) X_i = 0"
+        ),
+        prose=(
+            "Exponential-mean regression for counts, fit by maximum likelihood. "
+            "As the Poisson pseudo-MLE it is consistent for the conditional mean "
+            "even when the data are not Poisson (e.g. PPML for multiplicative "
+            "models)."
+        ),
+        assumptions=[
+            "Correct exponential conditional-mean specification.",
+            "Equidispersion for classical SE (else use robust SE).",
+        ],
+        aliases=["fepois", "ppml", "ppmlhdfe", "poisson_regression"],
+    ),
+    MethodSpec(
+        key="logit",
+        name="Logistic Regression",
+        estimand_latex=(
+            r"\Pr(Y=1 \mid X) = \Lambda(X'\beta) " r"= \frac{1}{1 + e^{-X'\beta}}"
+        ),
+        estimator_latex=r"\hat\beta = \arg\max_\beta\,\ell(\beta)\;\;(\text{MLE})",
+        prose=(
+            "Binary-outcome regression with the logistic link, fit by maximum "
+            "likelihood. Coefficients are log-odds; marginal effects require "
+            "post-estimation transformation."
+        ),
+        assumptions=[
+            "Correct link and linear-index specification.",
+            "Independent observations.",
+            "No perfect separation.",
+        ],
+        aliases=["logistic", "logistic_regression"],
+    ),
+    MethodSpec(
+        key="probit",
+        name="Probit Regression",
+        estimand_latex=r"\Pr(Y=1 \mid X) = \Phi(X'\beta)",
+        estimator_latex=r"\hat\beta = \arg\max_\beta\,\ell(\beta)\;\;(\text{MLE})",
+        prose=(
+            "Binary-outcome regression with the probit (standard-normal CDF) "
+            "link, fit by maximum likelihood. Phi denotes the standard normal "
+            "CDF; coefficients index a latent-variable threshold-crossing model."
+        ),
+        assumptions=[
+            "Correct link and linear-index specification.",
+            "Independent observations with homoskedastic latent errors.",
+        ],
+        aliases=["probit_regression"],
+    ),
+    MethodSpec(
+        key="fe",
+        name="Panel Fixed Effects (Within Estimator)",
+        estimand_latex=r"\beta \;\; (\text{within-unit slope})",
+        estimator_latex=(
+            r"\ddot Z_{it} = Z_{it} - \bar Z_i;\quad "
+            r"\hat\beta = (\ddot X'\ddot X)^{-1}\ddot X'\ddot Y"
+        ),
+        prose=(
+            "Controls for time-invariant unit heterogeneity by demeaning each "
+            "variable within units (the within / LSDV estimator). Identifies the "
+            "slope purely from within-unit variation."
+        ),
+        assumptions=[
+            "Strict exogeneity of regressors given the unit effects.",
+            "Within-unit variation in the regressors of interest.",
+            "No time-varying confounders correlated with the regressors.",
+        ],
+        aliases=[
+            "fixed_effects",
+            "within",
+            "feols",
+            "panel_fe",
+            "lsdv",
+            "twfe_ols",
+        ],
     ),
 ]
 
