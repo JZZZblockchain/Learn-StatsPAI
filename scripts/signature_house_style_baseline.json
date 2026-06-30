@@ -10,10 +10,10 @@
   },
   "coverage": {
     "cluster": {
-      "canonical": 98,
+      "canonical": 99,
       "canonical_pct": 98.0,
       "legacy": 2,
-      "total": 100
+      "total": 101
     },
     "data": {
       "canonical": 486,
@@ -47,9 +47,9 @@
     }
   },
   "totals": {
-    "acknowledged_false_friends": 40,
-    "introspected": 820,
-    "public_callables": 850,
+    "acknowledged_false_friends": 41,
+    "introspected": 822,
+    "public_callables": 852,
     "violations": 187
   }
 }
