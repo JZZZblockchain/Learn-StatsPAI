@@ -25,12 +25,14 @@ raising. Calls translate one command at a time — multi-command
 
 from __future__ import annotations
 
-from ._stata import from_stata, STATA_COMMAND_MAP
-from ._r import from_r, R_FUNCTION_MAP
+from ._coverage import translation_coverage
+from ._r import R_FUNCTION_MAP, from_r
+from ._stata import STATA_COMMAND_MAP, from_stata
 
 __all__ = [
     "from_stata",
     "from_r",
+    "translation_coverage",
     "STATA_COMMAND_MAP",
     "R_FUNCTION_MAP",
 ]

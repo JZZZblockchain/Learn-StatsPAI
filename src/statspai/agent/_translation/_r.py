@@ -430,6 +430,15 @@ def from_r(line: str) -> Dict[str, Any]:
     -------
     dict
         Same shape as :func:`from_stata`.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> out = sp.from_r("feols(y ~ x | id, data = df)")
+    >>> out["ok"]
+    True
+    >>> out["python_code"].startswith("sp.fixest")
+    True
     """
     parsed = _parse_call(line)
     if parsed is None:

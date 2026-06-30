@@ -28,7 +28,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from ._stata_lexer import parse as _parse_stata, StataCommand, StataParseError
+from ._stata_lexer import StataCommand, StataParseError
+from ._stata_lexer import parse as _parse_stata
 
 Handler = Callable[[StataCommand], Dict[str, Any]]
 
@@ -396,9 +397,7 @@ def _h_didregress(cmd: StataCommand) -> Dict[str, Any]:
     treat = treat_tokens[0]
     group = cmd.options.get("group") or cmd.options.get("ivar") or cmd.options.get("id")
     time = cmd.options.get("time") or cmd.options.get("tvar")
-    missing = [
-        name for name, val in (("group", group), ("time", time)) if not val
-    ]
+    missing = [name for name, val in (("group", group), ("time", time)) if not val]
     if missing:
         return _emit_error(
             f"{cmd.command} translation needs {missing} option(s); supply "
@@ -1319,6 +1318,17 @@ def from_stata(line: str) -> Dict[str, Any]:
                 "command": "<recognised stata command name or null>",
                 "suggestions": [<close-match command names>],
             }
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> out = sp.from_stata("reghdfe y x, absorb(id year) vce(cluster id)")
+    >>> out["ok"]
+    True
+    >>> out["python_code"].startswith("sp.fixest")
+    True
+    >>> sp.from_stata("notacommand y x")["ok"]
+    False
     """
     try:
         parsed = _parse_stata(line)

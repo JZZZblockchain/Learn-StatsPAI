@@ -1331,6 +1331,10 @@ __all__ = [
     "use_chinese",
     "interactive",
     "get_code",
+    # Stata / R migration on-ramps
+    "from_stata",
+    "from_r",
+    "translation_coverage",
     # Utils
     "label_var",
     "label_vars",
@@ -2513,6 +2517,14 @@ def _register_lazy(modname, *names):
 
 _LAZY_ATTRS: dict = {}
 
+# Stata / R migration on-ramps (and their coverage matrix). Lazily exposed so a
+# Python user can call ``sp.from_stata(...)`` / ``sp.from_r(...)`` directly,
+# mirroring the MCP translator tools. Bound to the leaf modules (not the
+# ``agent._translation`` package facade) so resolution is robust to changes in
+# the package ``__init__`` re-exports.
+_register_lazy("agent._translation._stata", "from_stata")
+_register_lazy("agent._translation._r", "from_r")
+_register_lazy("agent._translation._coverage", "translation_coverage")
 _register_lazy(
     "plots.interactive",
     "interactive",
