@@ -1817,6 +1817,89 @@ class CausalResult:
             "  doi={10.1111/j.2517-6161.1972.tb00899.x}\n"
             "}"
         ),
+        # --- batch 4 methods-appendix coverage (survival / partial-ID /
+        #     policy learning / sensitivity / inference; verified via
+        #     paper.bib / Crossref) ---
+        "kaplan_meier": (
+            "@article{kaplan1958nonparametric,\n"
+            "  title={Nonparametric Estimation from Incomplete "
+            "Observations},\n"
+            "  author={Kaplan, E. L. and Meier, Paul},\n"
+            "  journal={Journal of the American Statistical "
+            "Association},\n"
+            "  volume={53},\n"
+            "  number={282},\n"
+            "  pages={457--481},\n"
+            "  year={1958},\n"
+            "  doi={10.1080/01621459.1958.10501452}\n"
+            "}"
+        ),
+        "lee_bounds": (
+            "@article{lee2009training,\n"
+            "  title={Training, wages, and sample selection: "
+            "Estimating sharp bounds on treatment effects},\n"
+            "  author={Lee, David S.},\n"
+            "  journal={Review of Economic Studies},\n"
+            "  volume={76},\n"
+            "  number={3},\n"
+            "  pages={1071--1102},\n"
+            "  year={2009},\n"
+            "  publisher={Oxford University Press},\n"
+            "  doi={10.1111/j.1467-937X.2009.00536.x}\n"
+            "}"
+        ),
+        "policy_tree": (
+            "@article{athey2021policy,\n"
+            "  title={Policy learning with observational data},\n"
+            "  author={Athey, Susan and Wager, Stefan},\n"
+            "  journal={Econometrica},\n"
+            "  volume={89},\n"
+            "  number={1},\n"
+            "  pages={133--161},\n"
+            "  year={2021},\n"
+            "  publisher={Wiley},\n"
+            "  doi={10.3982/ECTA15732}\n"
+            "}"
+        ),
+        "honest_did": (
+            "@article{rambachan2023more,\n"
+            "  title={A more credible approach to parallel trends},\n"
+            "  author={Rambachan, Ashesh and Roth, Jonathan},\n"
+            "  journal={Review of Economic Studies},\n"
+            "  volume={90},\n"
+            "  number={5},\n"
+            "  pages={2555--2591},\n"
+            "  year={2023},\n"
+            "  publisher={Oxford University Press},\n"
+            "  doi={10.1093/restud/rdad018}\n"
+            "}"
+        ),
+        "oster": (
+            "@article{oster2019unobservable,\n"
+            "  title={Unobservable selection and coefficient "
+            "stability: Theory and evidence},\n"
+            "  author={Oster, Emily},\n"
+            "  journal={Journal of Business \\& Economic "
+            "Statistics},\n"
+            "  volume={37},\n"
+            "  number={2},\n"
+            "  pages={187--204},\n"
+            "  year={2019},\n"
+            "  publisher={Taylor \\& Francis},\n"
+            "  doi={10.1080/07350015.2016.1227711}\n"
+            "}"
+        ),
+        "wild_cluster_bootstrap": (
+            "@article{cameron2008bootstrap,\n"
+            "  title={Bootstrap-Based Improvements for Inference "
+            "with Clustered Errors},\n"
+            "  author={Cameron, A. Colin and Gelbach, Jonah B. and "
+            "Miller, Douglas L.},\n"
+            "  journal={Review of Economics and Statistics},\n"
+            "  year={2008},\n"
+            "  doi={10.1162/rest.90.3.414}\n"
+            "}"
+        ),
     }
 
     def __init__(

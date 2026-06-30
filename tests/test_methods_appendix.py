@@ -133,6 +133,19 @@ def test_econometric_result_method_present():
         ("dose_response", "dose_response"),
         ("cox", "cox"),
         ("coxph", "cox"),
+        # Survival / partial-ID / policy / sensitivity / inference batch-4
+        ("kaplan_meier", "kaplan_meier"),
+        ("km", "kaplan_meier"),
+        ("lee_bounds", "lee_bounds"),
+        ("lee_trimming", "lee_bounds"),
+        ("policy_tree", "policy_tree"),
+        ("policy_learning", "policy_tree"),
+        ("honest_did", "honest_did"),
+        ("rambachan_roth", "honest_did"),
+        ("oster", "oster"),
+        ("oster_bounds", "oster"),
+        ("wild_cluster_bootstrap", "wild_cluster_bootstrap"),
+        ("wcb", "wild_cluster_bootstrap"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -414,6 +427,20 @@ def test_batch3_estimators_carry_verified_citation():
         ("mr", "Burgess"),
         ("dose_response", "Hirano"),
         ("cox", "Cox"),
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_batch4_estimators_carry_verified_citation():
+    for key, token in [
+        ("kaplan_meier", "Kaplan"),
+        ("lee_bounds", "Lee"),
+        ("policy_tree", "Athey"),
+        ("honest_did", "Rambachan"),
+        ("oster", "Oster"),
+        ("wild_cluster_bootstrap", "Cameron"),
     ]:
         r = _causal(key)
         r._citation_key = key

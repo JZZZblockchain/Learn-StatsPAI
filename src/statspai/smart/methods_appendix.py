@@ -99,7 +99,8 @@ class MethodSpec:
 #  continuous-treatment DiD, Bartik/shift-share, proximal, RKD, bunching,
 #  augmented SC, matrix completion, IV quantile regression, GMM, causal
 #  forest, meta-learners, R-learner, Mendelian randomization, dose-response,
-#  Cox PH) plus the
+#  Cox PH, Kaplan-Meier, Lee bounds, policy learning, honest DiD, Oster
+#  bounds, wild cluster bootstrap) plus the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
 #
@@ -1223,6 +1224,150 @@ _SPECS: List[MethodSpec] = [
             "Correct functional form of the linear index.",
         ],
         aliases=["cox_ph", "coxph", "proportional_hazards", "cox_regression"],
+    ),
+    MethodSpec(
+        key="kaplan_meier",
+        name="Kaplan-Meier (Product-Limit) Estimator",
+        estimand_latex=r"S(t) = \Pr(T > t)",
+        estimator_latex=(
+            r"\hat S(t) = \prod_{t_i \le t}\left(1 - \frac{d_i}{n_i}\right)"
+        ),
+        prose=(
+            "Nonparametric product-limit estimator of the survival function "
+            "from right-censored data: at each observed event time t_i it "
+            "multiplies in the conditional survival (1 - deaths d_i over at-risk "
+            "n_i), giving a step-function estimate of S(t) (Kaplan & Meier)."
+        ),
+        assumptions=[
+            "Non-informative (independent) censoring.",
+            "Survival times are identically distributed.",
+        ],
+        aliases=["km", "product_limit", "survival_function", "km_estimator"],
+    ),
+    MethodSpec(
+        key="lee_bounds",
+        name="Lee Bounds (Sample-Selection Trimming)",
+        estimand_latex=(
+            r"\mathrm{ATE}_{\text{selected}} \in "
+            r"[\underline{\tau},\ \overline{\tau}]"
+        ),
+        estimator_latex=(
+            r"p_0 = \frac{s_1 - s_0}{s_1};\quad "
+            r"\overline{\tau},\underline{\tau} = "
+            r"\mathbb{E}[Y\mid D{=}1,\text{trim } p_0\text{ tail}] - "
+            r"\mathbb{E}[Y\mid D{=}0]"
+        ),
+        prose=(
+            "Sharp bounds on the treatment effect for the always-selected "
+            "subpopulation under sample selection: trim the over-selected "
+            "treatment arm by the difference in selection rates p_0 from each "
+            "tail, then contrast the trimmed means against the control (Lee)."
+        ),
+        assumptions=[
+            "Monotonicity: treatment moves selection in one direction.",
+            "Random assignment of treatment.",
+            "SUTVA (no interference).",
+        ],
+        aliases=["lee_trimming", "trimming_bounds", "lee_2009"],
+    ),
+    MethodSpec(
+        key="policy_tree",
+        name="Policy Learning (Optimal Assignment Rule)",
+        estimand_latex=(r"\pi^{*} = \arg\max_{\pi \in \Pi}\;\mathbb{E}[Y(\pi(X))]"),
+        estimator_latex=(
+            r"\hat\pi = \arg\max_{\pi \in \Pi}\;\frac{1}{n}\sum_i "
+            r"\big(2\pi(X_i)-1\big)\,\hat\Gamma_i,\quad "
+            r"\hat\Gamma_i = \text{AIPW score}"
+        ),
+        prose=(
+            "Learns a treatment-assignment rule from a constrained policy class "
+            "(e.g. a shallow decision tree) by maximizing a doubly-robust "
+            "estimate of policy value, with regret guarantees relative to the "
+            "best in-class rule (Athey & Wager)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "Overlap: 0 < e(X) < 1.",
+            "A restricted (finite-complexity) policy class.",
+        ],
+        aliases=["policy_learning", "policytree", "optimal_policy", "policy_value"],
+    ),
+    MethodSpec(
+        key="honest_did",
+        name="Honest DiD (Robust to Parallel-Trends Violations)",
+        estimand_latex=(
+            r"\theta \in \mathcal{S}(\bar M)\;\;" r"(\text{robust identified set})"
+        ),
+        estimator_latex=(
+            r"\delta_{\text{post}} \in \Delta(\bar M);\quad "
+            r"\mathcal{C}_{1-\alpha} = "
+            r"\{\theta : \text{feasible under } \Delta(\bar M)\}"
+        ),
+        prose=(
+            "Relaxes exact parallel trends to a bounded class of violations — "
+            "smoothness restrictions or magnitudes relative to the observed "
+            "pre-trends — and reports the robust confidence set and the "
+            "breakdown value M-bar at which significance is lost (Rambachan & "
+            "Roth)."
+        ),
+        assumptions=[
+            "Post-treatment trend violation lies in the chosen restriction set "
+            "Delta(M-bar).",
+            "Valid event-study estimates and their covariance.",
+        ],
+        aliases=["rambachan_roth", "robust_did", "honest_parallel_trends"],
+    ),
+    MethodSpec(
+        key="oster",
+        name="Oster Bounds (Coefficient Stability)",
+        estimand_latex=(
+            r"\beta^{*}(\delta, R_{\max})\;\;" r"(\text{bias-adjusted effect})"
+        ),
+        estimator_latex=(
+            r"\beta^{*} \approx \tilde\beta - \delta\,"
+            r"(\mathring\beta - \tilde\beta)\,"
+            r"\frac{R_{\max} - \tilde R}{\tilde R - \mathring R};\quad "
+            r"\delta^{*}: \beta^{*}=0"
+        ),
+        prose=(
+            "Bounds omitted-variable bias by assuming selection on unobservables "
+            "is proportional (coefficient delta) to selection on observables, "
+            "scaled to a maximum R-squared; reports the bias-adjusted effect and "
+            "the delta that would explain the result away (Oster)."
+        ),
+        assumptions=[
+            "Proportional selection (delta) on observables vs unobservables.",
+            "A posited maximum R-squared (R_max).",
+        ],
+        aliases=["oster_bounds", "oster_delta", "coefficient_stability"],
+    ),
+    MethodSpec(
+        key="wild_cluster_bootstrap",
+        name="Wild Cluster Bootstrap",
+        estimand_latex=(r"\text{cluster-robust CI / } p\text{-value for } \beta"),
+        estimator_latex=(
+            r"y_g^{*} = X_g\hat\beta_{H_0} + \hat\varepsilon_g\,w_g,\;"
+            r"w_g \in \{-1,+1\};\quad "
+            r"\{t^{*(b)}\}\text{ build the null distribution}"
+        ),
+        prose=(
+            "Improves inference with few clusters by resampling cluster "
+            "residuals with random signs (Rademacher weights) under the imposed "
+            "null, recomputing the cluster-robust t-statistic to form an "
+            "accurate bootstrap distribution where cluster-robust asymptotics "
+            "fail (Cameron, Gelbach & Miller)."
+        ),
+        assumptions=[
+            "Independence across clusters.",
+            "The wild (sign-flip) bootstrap DGP approximates the error "
+            "distribution.",
+        ],
+        aliases=[
+            "wcb",
+            "wild_bootstrap",
+            "cgm_bootstrap",
+            "wild_cluster_boot",
+        ],
     ),
 ]
 
