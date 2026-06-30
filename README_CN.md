@@ -238,6 +238,40 @@ Nevada   0.1580
 
 ---
 
+## 交互式图表编辑
+
+如果你怀念 Stata 的 Graph Editor，可以对 StatsPAI 返回的任意 matplotlib 图使用
+`sp.interactive(fig)`。它会在 Jupyter 里打开一个带实时预览的编辑面板，新手不用先记住
+matplotlib 的所有参数，也能把图调到适合论文或汇报的样子。
+
+它适合做这些事：
+
+- 修改标题、坐标轴标签、字体、颜色、点线样式、网格、图例、坐标范围、图尺寸和导出 DPI；
+- 一键切换学术论文、ggplot 风格、FiveThirtyEight 风格、深色演示等主题；
+- 保护数据图层，只编辑外观元素；
+- 自动导出可复现 Python 代码，避免最终图只停留在手工截图里。
+
+```python
+import statspai as sp
+
+mp = sp.datasets.mpdta()
+gt = sp.callaway_santanna(data=mp, y="lemp", t="year",
+                          i="countyreal", g="first_treat")
+agg = sp.aggte(gt, type="dynamic", bstrap=False)
+fig, ax = sp.ggdid(agg)
+
+editor = sp.interactive(fig)   # 在 Jupyter 里编辑图表
+print(editor.generate_code())  # 复制可复现的 matplotlib 编辑代码
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/StatsPAI-interactive.png" alt="StatsPAI 交互式图表编辑器截图" width="820">
+</p>
+
+上面的截图展示了典型使用方式：一边预览图，一边调参数，最后导出可复现代码。
+
+---
+
 ## 日常工作流
 
 ```python

@@ -263,6 +263,45 @@ the intervention in this replica.
 
 ---
 
+## Interactive Plot Editing
+
+If you miss Stata's Graph Editor, use `sp.interactive(fig)` on any matplotlib
+figure returned by StatsPAI. It opens a Jupyter editing panel with a live
+preview, so beginners can adjust a figure without learning every matplotlib
+option first.
+
+What it is for:
+
+- change titles, labels, fonts, colors, markers, line widths, grids, legends,
+  axis limits, figure size, and export DPI;
+- switch among publication-oriented themes, including academic, ggplot-like,
+  FiveThirtyEight-style, and dark presentation styles;
+- keep the data layer protected while editing cosmetic elements;
+- export reproducible Python code for the edits, so the final figure can be
+  regenerated from a script instead of being only a manual screenshot.
+
+```python
+import statspai as sp
+
+mp = sp.datasets.mpdta()
+gt = sp.callaway_santanna(data=mp, y="lemp", t="year",
+                          i="countyreal", g="first_treat")
+agg = sp.aggte(gt, type="dynamic", bstrap=False)
+fig, ax = sp.ggdid(agg)
+
+editor = sp.interactive(fig)   # edit the plot in Jupyter
+print(editor.generate_code())  # copy reproducible matplotlib edits
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/StatsPAI-interactive.png" alt="StatsPAI interactive plot editor screenshot" width="820">
+</p>
+
+The screenshot above shows the intended workflow: preview on one side, editing
+controls on the other, and code export for reproducibility.
+
+---
+
 ## Everyday Workflow
 
 ```python
