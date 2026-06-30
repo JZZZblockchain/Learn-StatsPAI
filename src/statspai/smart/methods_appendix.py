@@ -624,7 +624,7 @@ def _provenance_line(result: Any, spec: Optional[MethodSpec]) -> str:
         from .. import __version__
 
         _ver = __version__
-    except Exception:  # noqa: BLE001 - version is best-effort metadata
+    except (AttributeError, ImportError):  # version is best-effort metadata
         _ver = None
     ver = f"StatsPAI v{_ver}" if _ver else "StatsPAI"
     ident = _method_identity(result)
@@ -732,7 +732,7 @@ def _one_section(
         if callable(cite_fn):
             try:
                 apa = cite_fn(format="apa")
-            except Exception:  # noqa: BLE001 - cite() is best-effort here
+            except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
                 apa = None
             if apa and not str(apa).lstrip().startswith("%"):
                 if fmt == "markdown":
