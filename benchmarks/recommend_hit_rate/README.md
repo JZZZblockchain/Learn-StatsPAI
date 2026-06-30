@@ -32,14 +32,31 @@ designs (`corpus.yaml`):
 
 ## Architecture
 
+The scoring engine is a registered, agent-native function —
+`sp.recommend_benchmark()` (in `statspai/smart/recommend_benchmark.py`) — so
+humans and agents query the hit-rate the same way. This directory holds the
+corpus, the CLI wrapper, and the generated artifacts.
+
 ```
 benchmarks/recommend_hit_rate/
 ├── README.md       — this file (design + roadmap)
 ├── corpus.yaml     — ground-truth corpus (versioned, citation-disciplined)
-├── harness.py      — scorer: recommend hit-rate + audit coverage → scorecard
+├── harness.py      — thin CLI over sp.recommend_benchmark() → writes scorecard
 ├── scorecard.md    — generated, human-readable
 ├── scorecard.json  — generated, machine-readable (CI / dashboards)
 └── FINDINGS.md     — concrete correctness gaps surfaced, most-actionable first
+
+statspai/smart/recommend_benchmark.py   — the scoring engine (sp.recommend_benchmark)
+.github/workflows/recommend-benchmark.yml — CI ratchet (hard-miss=0 + hit-rate floor)
+docs/recommend_benchmark.md             — public methodology + scorecard page
+```
+
+Query it like any other agent-native function:
+
+```python
+import statspai as sp
+card = sp.recommend_benchmark()           # full run
+card["summary"]["hit_rate_top1"], card["summary"]["hard_miss_rate"]
 ```
 
 ### Corpus tiers

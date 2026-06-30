@@ -18,6 +18,7 @@
     {
       "id": "callaway_santanna_2021_mpdta",
       "design": "staggered_did",
+      "status": "HIT",
       "detected_design": "did",
       "ranked_labels": [
         "Callaway-Sant'Anna (2021) \u2014 staggered DID",
@@ -27,7 +28,6 @@
         "callaway_santanna",
         "sun_abraham"
       ],
-      "status": "HIT",
       "top1_tag": "callaway_santanna",
       "hit_top1": true,
       "hit_topk": true,
@@ -50,6 +50,7 @@
     {
       "id": "angrist_krueger_1991_qob",
       "design": "iv",
+      "status": "HIT",
       "detected_design": "iv",
       "ranked_labels": [
         "2SLS (two-stage least squares)",
@@ -59,7 +60,6 @@
         "twosls",
         "liml"
       ],
-      "status": "HIT",
       "top1_tag": "twosls",
       "hit_top1": true,
       "hit_topk": true,
@@ -77,6 +77,7 @@
     {
       "id": "card_1995_proximity",
       "design": "iv",
+      "status": "HIT",
       "detected_design": "iv",
       "ranked_labels": [
         "2SLS (two-stage least squares)",
@@ -86,7 +87,6 @@
         "twosls",
         "liml"
       ],
-      "status": "HIT",
       "top1_tag": "twosls",
       "hit_top1": true,
       "hit_topk": true,
@@ -102,6 +102,7 @@
     {
       "id": "lee_2008_senate_rd",
       "design": "rd",
+      "status": "HIT",
       "detected_design": "rd",
       "ranked_labels": [
         "Local polynomial RD (CCT 2014)"
@@ -109,7 +110,6 @@
       "ranked_tags": [
         "local_polynomial_rd"
       ],
-      "status": "HIT",
       "top1_tag": "local_polynomial_rd",
       "hit_top1": true,
       "hit_topk": true,
@@ -124,6 +124,7 @@
     {
       "id": "abadie_2010_prop99",
       "design": "synth",
+      "status": "HIT",
       "detected_design": "synth",
       "ranked_labels": [
         "Synthetic Control (Abadie, Diamond & Hainmueller 2010)",
@@ -135,7 +136,6 @@
         "augsynth",
         "synthdid"
       ],
-      "status": "HIT",
       "top1_tag": "synth",
       "hit_top1": true,
       "hit_topk": true,
@@ -152,6 +152,7 @@
     {
       "id": "abadie_2003_basque",
       "design": "synth",
+      "status": "HIT",
       "detected_design": "synth",
       "ranked_labels": [
         "Synthetic Control (Abadie, Diamond & Hainmueller 2010)",
@@ -163,7 +164,6 @@
         "augsynth",
         "synthdid"
       ],
-      "status": "HIT",
       "top1_tag": "synth",
       "hit_top1": true,
       "hit_topk": true,
@@ -180,6 +180,7 @@
     {
       "id": "abadie_2015_german",
       "design": "synth",
+      "status": "HIT",
       "detected_design": "synth",
       "ranked_labels": [
         "Synthetic Control (Abadie, Diamond & Hainmueller 2010)",
@@ -191,7 +192,6 @@
         "augsynth",
         "synthdid"
       ],
-      "status": "HIT",
       "top1_tag": "synth",
       "hit_top1": true,
       "hit_topk": true,
@@ -208,6 +208,7 @@
     {
       "id": "dehejia_wahba_1999_nsw",
       "design": "observational",
+      "status": "HIT",
       "detected_design": "observational",
       "ranked_labels": [
         "Propensity Score Matching (selection on observables)",
@@ -221,7 +222,6 @@
         "ols",
         "g_computation"
       ],
-      "status": "HIT",
       "top1_tag": "psm",
       "hit_top1": true,
       "hit_topk": true,
@@ -241,6 +241,7 @@
     {
       "id": "trap_staggered_heterogeneous_twfe",
       "design": "staggered_did",
+      "status": "HIT",
       "detected_design": "did",
       "ranked_labels": [
         "Callaway-Sant'Anna (2021) \u2014 staggered DID",
@@ -250,7 +251,6 @@
         "callaway_santanna",
         "sun_abraham"
       ],
-      "status": "HIT",
       "top1_tag": "callaway_santanna",
       "hit_top1": true,
       "hit_topk": true,
@@ -273,6 +273,7 @@
     {
       "id": "trap_did_2x2_common_timing",
       "design": "did",
+      "status": "HIT",
       "detected_design": "did",
       "ranked_labels": [
         "Classic 2\u00d72 DID"
@@ -280,7 +281,6 @@
       "ranked_tags": [
         "classic_2x2"
       ],
-      "status": "HIT",
       "top1_tag": "classic_2x2",
       "hit_top1": true,
       "hit_topk": true,
@@ -298,6 +298,7 @@
     {
       "id": "trap_weak_instrument",
       "design": "iv",
+      "status": "HIT",
       "detected_design": "iv",
       "ranked_labels": [
         "LIML (robust to weak instruments)",
@@ -309,7 +310,6 @@
         "anderson_rubin",
         "twosls"
       ],
-      "status": "HIT",
       "top1_tag": "liml",
       "hit_top1": true,
       "hit_topk": true,
@@ -327,6 +327,7 @@
     {
       "id": "archetype_strong_instrument",
       "design": "iv",
+      "status": "HIT",
       "detected_design": "iv",
       "ranked_labels": [
         "2SLS (two-stage least squares)",
@@ -336,7 +337,6 @@
         "twosls",
         "liml"
       ],
-      "status": "HIT",
       "top1_tag": "twosls",
       "hit_top1": true,
       "hit_topk": true,
@@ -354,6 +354,7 @@
     {
       "id": "archetype_sharp_rd",
       "design": "rd",
+      "status": "HIT",
       "detected_design": "rd",
       "ranked_labels": [
         "Local polynomial RD (CCT 2014)"
@@ -361,7 +362,6 @@
       "ranked_tags": [
         "local_polynomial_rd"
       ],
-      "status": "HIT",
       "top1_tag": "local_polynomial_rd",
       "hit_top1": true,
       "hit_topk": true,
@@ -376,6 +376,7 @@
     {
       "id": "trap_fuzzy_rd",
       "design": "rd",
+      "status": "HIT",
       "detected_design": "rd",
       "ranked_labels": [
         "Local polynomial RD (CCT 2014)"
@@ -383,7 +384,6 @@
       "ranked_tags": [
         "local_polynomial_rd"
       ],
-      "status": "HIT",
       "top1_tag": "local_polynomial_rd",
       "hit_top1": true,
       "hit_topk": true,
@@ -398,6 +398,7 @@
     {
       "id": "trap_observational_strong_confounding",
       "design": "observational",
+      "status": "HIT",
       "detected_design": "observational",
       "ranked_labels": [
         "Propensity Score Matching (selection on observables)",
@@ -411,7 +412,6 @@
         "ols",
         "g_computation"
       ],
-      "status": "HIT",
       "top1_tag": "psm",
       "hit_top1": true,
       "hit_topk": true,
@@ -434,16 +434,6 @@
     {
       "id": "callaway_santanna_2021_mpdta",
       "audit_family": "did",
-      "gt_checks": [
-        "parallel_trends",
-        "bacon_decomposition",
-        "honest_did"
-      ],
-      "scored_checks": [
-        "parallel_trends",
-        "bacon_decomposition",
-        "honest_did"
-      ],
       "covered": [
         "parallel_trends",
         "bacon_decomposition",
@@ -455,16 +445,6 @@
     {
       "id": "angrist_krueger_1991_qob",
       "audit_family": "iv",
-      "gt_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci",
-        "overid_test"
-      ],
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci",
-        "overid_test"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci",
@@ -476,14 +456,6 @@
     {
       "id": "card_1995_proximity",
       "audit_family": "iv",
-      "gt_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci"
@@ -494,16 +466,6 @@
     {
       "id": "lee_2008_senate_rd",
       "audit_family": "rd",
-      "gt_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity",
@@ -515,14 +477,6 @@
     {
       "id": "abadie_2010_prop99",
       "audit_family": "synth",
-      "gt_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -533,14 +487,6 @@
     {
       "id": "abadie_2003_basque",
       "audit_family": "synth",
-      "gt_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -551,14 +497,6 @@
     {
       "id": "abadie_2015_german",
       "audit_family": "synth",
-      "gt_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -569,16 +507,6 @@
     {
       "id": "dehejia_wahba_1999_nsw",
       "audit_family": "matching",
-      "gt_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
-      "scored_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
       "covered": [
         "overlap",
         "balance_after",
@@ -590,16 +518,6 @@
     {
       "id": "trap_staggered_heterogeneous_twfe",
       "audit_family": "did",
-      "gt_checks": [
-        "bacon_decomposition",
-        "parallel_trends",
-        "honest_did"
-      ],
-      "scored_checks": [
-        "bacon_decomposition",
-        "parallel_trends",
-        "honest_did"
-      ],
       "covered": [
         "bacon_decomposition",
         "parallel_trends",
@@ -611,12 +529,6 @@
     {
       "id": "trap_did_2x2_common_timing",
       "audit_family": "did",
-      "gt_checks": [
-        "parallel_trends"
-      ],
-      "scored_checks": [
-        "parallel_trends"
-      ],
       "covered": [
         "parallel_trends"
       ],
@@ -626,14 +538,6 @@
     {
       "id": "trap_weak_instrument",
       "audit_family": "iv",
-      "gt_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci"
@@ -644,12 +548,6 @@
     {
       "id": "archetype_strong_instrument",
       "audit_family": "iv",
-      "gt_checks": [
-        "weak_instrument"
-      ],
-      "scored_checks": [
-        "weak_instrument"
-      ],
       "covered": [
         "weak_instrument"
       ],
@@ -659,16 +557,6 @@
     {
       "id": "archetype_sharp_rd",
       "audit_family": "rd",
-      "gt_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity",
@@ -680,14 +568,6 @@
     {
       "id": "trap_fuzzy_rd",
       "audit_family": "rd",
-      "gt_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity"
-      ],
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity"
@@ -698,16 +578,6 @@
     {
       "id": "trap_observational_strong_confounding",
       "audit_family": "matching",
-      "gt_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
-      "scored_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
       "covered": [
         "overlap",
         "balance_after",
@@ -722,11 +592,6 @@
       "id": "callaway_santanna_2021_mpdta",
       "status": "OK",
       "audit_family": "did",
-      "scored_checks": [
-        "parallel_trends",
-        "bacon_decomposition",
-        "honest_did"
-      ],
       "covered": [
         "parallel_trends",
         "bacon_decomposition",
@@ -743,11 +608,6 @@
       "id": "angrist_krueger_1991_qob",
       "status": "OK",
       "audit_family": "iv",
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci",
-        "overid_test"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci",
@@ -764,10 +624,6 @@
       "id": "card_1995_proximity",
       "status": "OK",
       "audit_family": "iv",
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci"
@@ -782,11 +638,6 @@
       "id": "lee_2008_senate_rd",
       "status": "OK",
       "audit_family": "rd",
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity",
@@ -804,10 +655,6 @@
       "id": "abadie_2010_prop99",
       "status": "OK",
       "audit_family": "synth",
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -822,10 +669,6 @@
       "id": "abadie_2003_basque",
       "status": "OK",
       "audit_family": "synth",
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -840,10 +683,6 @@
       "id": "abadie_2015_german",
       "status": "OK",
       "audit_family": "synth",
-      "scored_checks": [
-        "pretreatment_fit",
-        "placebo_inference"
-      ],
       "covered": [
         "pretreatment_fit",
         "placebo_inference"
@@ -858,11 +697,6 @@
       "id": "dehejia_wahba_1999_nsw",
       "status": "OK",
       "audit_family": "matching",
-      "scored_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
       "covered": [
         "overlap",
         "balance_after",
@@ -880,11 +714,6 @@
       "id": "trap_staggered_heterogeneous_twfe",
       "status": "OK",
       "audit_family": "did",
-      "scored_checks": [
-        "bacon_decomposition",
-        "parallel_trends",
-        "honest_did"
-      ],
       "covered": [
         "bacon_decomposition",
         "parallel_trends",
@@ -901,9 +730,6 @@
       "id": "trap_did_2x2_common_timing",
       "status": "OK",
       "audit_family": "did",
-      "scored_checks": [
-        "parallel_trends"
-      ],
       "covered": [
         "parallel_trends"
       ],
@@ -917,10 +743,6 @@
       "id": "trap_weak_instrument",
       "status": "OK",
       "audit_family": "iv",
-      "scored_checks": [
-        "weak_instrument",
-        "anderson_rubin_ci"
-      ],
       "covered": [
         "weak_instrument",
         "anderson_rubin_ci"
@@ -935,9 +757,6 @@
       "id": "archetype_strong_instrument",
       "status": "OK",
       "audit_family": "iv",
-      "scored_checks": [
-        "weak_instrument"
-      ],
       "covered": [
         "weak_instrument"
       ],
@@ -949,11 +768,6 @@
       "id": "archetype_sharp_rd",
       "status": "OK",
       "audit_family": "rd",
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity",
-        "placebo_cutoff"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity",
@@ -971,10 +785,6 @@
       "id": "trap_fuzzy_rd",
       "status": "OK",
       "audit_family": "rd",
-      "scored_checks": [
-        "mccrary_density",
-        "bandwidth_sensitivity"
-      ],
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity"
@@ -990,11 +800,6 @@
       "id": "trap_observational_strong_confounding",
       "status": "OK",
       "audit_family": "matching",
-      "scored_checks": [
-        "overlap",
-        "balance_after",
-        "ovb_sensitivity"
-      ],
       "covered": [
         "overlap",
         "balance_after",

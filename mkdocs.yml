@@ -148,6 +148,7 @@ nav:
       - "Family guide: Mendelian Randomization (IVW / Egger / median / mode / MR-PRESSO / MVMR / BMA)": guides/mendelian_family.md
       - "v1.6 P1: LLM-assisted causal discovery — closed loop (constrained PC + CI validate)": guides/llm_dag_family.md
       - "v1.6 P1: sp.paper() — data → publication-draft pipeline": guides/paper_pipeline.md
+      - "Methods and Formulas appendix — traceable estimand/formula/inference/citation per result": guides/methods_appendix.md
       - "v1.6 P1: Causal text MVP (text-as-treatment / LLM-annotator MEC) — experimental": guides/causal_text_family.md
       - "v1.7.2 export trinity: replication_pack + Provenance + Quarto + great_tables + CSL": guides/replication_workflow.md
       - "v1.7.2 LLM-DAG setup: providers, env vars, configure_llm(), sp.paper(llm='auto')": guides/llm_dag_setup.md
