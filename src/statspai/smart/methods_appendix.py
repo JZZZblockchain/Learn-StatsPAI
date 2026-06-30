@@ -96,8 +96,10 @@ class MethodSpec:
 #  Curated methods table — core causal estimators (DiD family, RD, IV, SCM,
 #  matching/weighting, DML/TMLE, event-study, DDD, gsynth, imputation DiD,
 #  CiC, LP-DiD, QTE, mediation, front-door, g-computation, Manski bounds,
-#  continuous-treatment DiD, Bartik/shift-share, proximal) plus the common
-#  regression families (OLS, Poisson, logit, probit, panel fixed effects).
+#  continuous-treatment DiD, Bartik/shift-share, proximal, RKD, bunching,
+#  augmented SC, matrix completion, IV quantile regression, GMM) plus the
+#  common regression families (OLS, Poisson, logit, probit, panel fixed
+#  effects).
 #
 #  Every formula is a standard definition from the primary source cited via
 #  result.cite(); see module docstring. SE math is intentionally omitted and
@@ -933,6 +935,144 @@ _SPECS: List[MethodSpec] = [
             "Overlap.",
         ],
         aliases=["proximal_causal", "negative_controls", "pci", "bridge_function"],
+    ),
+    MethodSpec(
+        key="rkd",
+        name="Regression Kink Design",
+        estimand_latex=(
+            r"\tau_{\mathrm{RKD}} = "
+            r"\frac{m'_{+}(0) - m'_{-}(0)}{b'_{+}(0) - b'_{-}(0)}"
+        ),
+        estimator_latex=(
+            r"\hat m'_{\pm}(0)\text{: local-polynomial one-sided slopes "
+            r"within bandwidth } h;\quad "
+            r"\hat\tau = \frac{\hat m'_{+} - \hat m'_{-}}{b'_{+} - b'_{-}}"
+        ),
+        prose=(
+            "Identifies a causal effect from a kink (slope change) in a "
+            "deterministic policy rule: the ratio of the change in the slope of "
+            "the outcome's conditional mean at the threshold to the change in "
+            "the slope of the policy. Estimated by one-sided local-polynomial "
+            "derivatives (Card, Lee, Pei & Weber)."
+        ),
+        assumptions=[
+            "Smooth (continuously differentiable) density of the running "
+            "variable at the kink.",
+            "Conditional-mean derivative continuous absent the kink.",
+            "Deterministic, kinked policy (sharp design) or a first-stage kink "
+            "(fuzzy design).",
+        ],
+        aliases=["regression_kink", "kink_design", "rkd_sharp", "rkd_fuzzy"],
+    ),
+    MethodSpec(
+        key="bunching",
+        name="Bunching Estimator",
+        estimand_latex=(
+            r"e \;\;(\text{behavioral elasticity from " r"excess mass at a kink/notch})"
+        ),
+        estimator_latex=(
+            r"\hat B = \sum_{z\in[z^{*}-\delta,\,z^{*}]} "
+            r"\big(c_z - \hat c_z^{0}\big);\quad "
+            r"\hat e \approx \frac{\hat b^{*}}{z^{*}\,\Delta\log(1-\tau)}"
+        ),
+        prose=(
+            "Recovers a behavioral elasticity from the excess mass (bunching) "
+            "that piles up just below a kink or notch in a budget set, relative "
+            "to a smooth counterfactual density. Normalized excess bunching maps "
+            "to the elasticity via the kink's tax-rate change (Saez)."
+        ),
+        assumptions=[
+            "Smooth counterfactual density absent the kink/notch.",
+            "Structural model linking bunching mass to the elasticity.",
+            "Optimization frictions are absent or bounded.",
+        ],
+        aliases=["bunching_estimator", "notch", "kink_bunching", "general_bunching"],
+    ),
+    MethodSpec(
+        key="augsynth",
+        name="Augmented Synthetic Control",
+        estimand_latex=r"\tau_{1t} = Y_{1t}(1) - Y_{1t}(0),\quad t > T_0",
+        estimator_latex=(
+            r"\hat\tau_t = \Big(Y_{1t} - \sum_j \hat\omega_j Y_{jt}\Big) "
+            r"- \Big(\hat m_t(X_1) - \sum_j \hat\omega_j \hat m_t(X_j)\Big)"
+        ),
+        prose=(
+            "Augments the synthetic-control gap with an outcome-model (e.g. "
+            "ridge) bias-correction term that absorbs the residual pre-treatment "
+            "imbalance the SC weights leave behind — de-biasing SC when a perfect "
+            "convex fit is unavailable (Ben-Michael, Feller & Rothstein)."
+        ),
+        assumptions=[
+            "Synthetic-control assumptions (no anticipation, no interference).",
+            "The outcome model captures the residual imbalance / bias term.",
+        ],
+        aliases=["augmented_synthetic_control", "augmented_sc", "ridge_asc", "asc"],
+    ),
+    MethodSpec(
+        key="mc_panel",
+        name="Matrix Completion (Causal Panel)",
+        estimand_latex=r"\tau = \mathbb{E}[Y_{it}(1) - Y_{it}(0) \mid D_{it}=1]",
+        estimator_latex=(
+            r"\hat L = \arg\min_{L} \sum_{(i,t)\in\mathcal{O}} "
+            r"(Y_{it}-L_{it})^2 + \lambda\|L\|_{*};\quad "
+            r"\hat\tau = \mathrm{mean}_{(i,t):D=1}\big(Y_{it} - \hat L_{it}\big)"
+        ),
+        prose=(
+            "Imputes the missing untreated potential outcomes by completing a "
+            "low-rank matrix of Y(0) via nuclear-norm-regularized regression on "
+            "the observed (untreated) cells, then averages the gaps over treated "
+            "cells (Athey, Bayati, Doudchenko, Imbens & Khosravi)."
+        ),
+        assumptions=[
+            "Low-rank (factor) structure of the untreated potential outcomes.",
+            "Treatment / missingness ignorable given the factor structure.",
+        ],
+        aliases=["matrix_completion", "mc_synth", "mc_nnm", "nuclear_norm"],
+    ),
+    MethodSpec(
+        key="ivqr",
+        name="IV Quantile Regression",
+        estimand_latex=(
+            r"\beta(\tau)\;\;(\text{structural } \tau\text{-quantile effect})"
+        ),
+        estimator_latex=(
+            r"\Pr\!\big[Y \le D'\beta(\tau) + X'\gamma(\tau) \,\big|\, Z, X\big] "
+            r"= \tau,\quad Z \text{ excluded from the structural quantile}"
+        ),
+        prose=(
+            "Estimates quantile treatment effects under endogeneity: for each "
+            "quantile, the structural coefficient is chosen so that the "
+            "instrument carries no residual explanatory power in the conditional "
+            "quantile of the structural equation (Chernozhukov & Hansen)."
+        ),
+        assumptions=[
+            "Rank similarity / invariance across the treatment.",
+            "Instrument relevance and exclusion.",
+            "Monotonicity of the structural quantile function.",
+        ],
+        aliases=["iv_quantile", "ivqreg", "instrumental_quantile", "ch_iv_quantile"],
+    ),
+    MethodSpec(
+        key="gmm",
+        name="Generalized Method of Moments",
+        estimand_latex=r"\theta_0:\;\; \mathbb{E}[g(W,\theta_0)] = 0",
+        estimator_latex=(
+            r"\hat\theta = \arg\min_{\theta}\; "
+            r"\bar g_n(\theta)' W_n \bar g_n(\theta),\quad "
+            r"\bar g_n(\theta) = \tfrac{1}{n}\sum_i g(W_i,\theta)"
+        ),
+        prose=(
+            "Estimates a parameter by making the sample analogue of a set of "
+            "population moment conditions as close to zero as possible in a "
+            "weighted quadratic norm; the efficient weight is the inverse "
+            "moment-covariance (Hansen)."
+        ),
+        assumptions=[
+            "Correct moment conditions: E[g(W, theta_0)] = 0.",
+            "Global identification (the moments uniquely pin down theta_0).",
+            "Regularity (finite moment covariance, smoothness).",
+        ],
+        aliases=["generalized_method_of_moments", "gmm_estimator", "two_step_gmm"],
     ),
 ]
 

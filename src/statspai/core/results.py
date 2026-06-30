@@ -1654,6 +1654,78 @@ class CausalResult:
             "  doi={10.3386/w32117}\n"
             "}"
         ),
+        # --- batch 2 methods-appendix coverage (verified via paper.bib /
+        #     Crossref; CLAUDE.md §10) ---
+        "rkd": (
+            "@article{card2015inference,\n"
+            "  title={Inference on Causal Effects in a Generalized "
+            "Regression Kink Design},\n"
+            "  author={Card, David and Pei, Zhuan and Lee, David and "
+            "Weber, Andrea},\n"
+            "  journal={SSRN Electronic Journal},\n"
+            "  year={2015},\n"
+            "  doi={10.2139/ssrn.2553874}\n"
+            "}"
+        ),
+        "bunching": (
+            "@article{saez2010taxpayers,\n"
+            "  title={Do Taxpayers Bunch at Kink Points?},\n"
+            "  author={Saez, Emmanuel},\n"
+            "  journal={American Economic Journal: Economic Policy},\n"
+            "  volume={2},\n"
+            "  number={3},\n"
+            "  pages={180--212},\n"
+            "  year={2010},\n"
+            "  doi={10.1257/pol.2.3.180}\n"
+            "}"
+        ),
+        "augsynth": (
+            "@article{benmichael2021augmented,\n"
+            "  title={The Augmented Synthetic Control Method},\n"
+            "  author={Ben-Michael, Eli and Feller, Avi and "
+            "Rothstein, Jesse},\n"
+            "  journal={SSRN Electronic Journal},\n"
+            "  year={2021},\n"
+            "  doi={10.2139/ssrn.3861414}\n"
+            "}"
+        ),
+        "mc_panel": (
+            "@article{athey2021matrix,\n"
+            "  title={Matrix completion methods for causal panel "
+            "data models},\n"
+            "  author={Athey, Susan and Bayati, Mohsen and "
+            "Doudchenko, Nikolay and Imbens, Guido and Khosravi, "
+            "Khashayar},\n"
+            "  journal={Journal of the American Statistical "
+            "Association},\n"
+            "  volume={116},\n"
+            "  number={536},\n"
+            "  pages={1716--1730},\n"
+            "  year={2021},\n"
+            "  publisher={Taylor \\& Francis},\n"
+            "  doi={10.1080/01621459.2021.1891924}\n"
+            "}"
+        ),
+        "ivqr": (
+            "@article{chernozhukov2006instrumental,\n"
+            "  title={Instrumental quantile regression inference for "
+            "structural and treatment effect models},\n"
+            "  author={Chernozhukov, Victor and Hansen, Christian},\n"
+            "  journal={Journal of Econometrics},\n"
+            "  year={2006},\n"
+            "  doi={10.1016/j.jeconom.2005.02.009}\n"
+            "}"
+        ),
+        "gmm": (
+            "@article{hansen1982large,\n"
+            "  title={Large Sample Properties of Generalized Method "
+            "of Moments Estimators},\n"
+            "  author={Hansen, Lars Peter},\n"
+            "  journal={Econometrica},\n"
+            "  year={1982},\n"
+            "  doi={10.2307/1912775}\n"
+            "}"
+        ),
     }
 
     def __init__(
