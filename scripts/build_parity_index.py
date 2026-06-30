@@ -269,6 +269,44 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "precision. Regenerate via _generate_diagnostics_R.R."
         ),
     },
+    "survreg": {
+        "status": "aligned",
+        "reference": "survival::survreg (Weibull AFT)",
+        "reference_versions": {
+            "R": "R version 4.5.2 (2025-10-31)",
+            "survival": "3.8.3",
+        },
+        "tolerance": "coefficients & log-scale 5e-5 abs (observed ~1e-5)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_aft_parity.py",
+            "tests/reference_parity/_fixtures/aft_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Weibull AFT log-time coefficients + log-scale "
+            "match survival::survreg to iterative-MLE convergence tolerance "
+            "(graded aligned, not bit-exact). Regenerate via _generate_aft_R.R."
+        ),
+    },
+    "aft": {
+        "status": "aligned",
+        "reference": "survival::survreg (Weibull AFT)",
+        "reference_versions": {
+            "R": "R version 4.5.2 (2025-10-31)",
+            "survival": "3.8.3",
+        },
+        "tolerance": "coefficients & log-scale 5e-5 abs (observed ~1e-5)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_aft_parity.py",
+            "tests/reference_parity/_fixtures/aft_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Weibull AFT (formula API) matches survival::survreg "
+            "to iterative-MLE convergence tolerance (graded aligned). Regenerate "
+            "via _generate_aft_R.R."
+        ),
+    },
 }
 
 

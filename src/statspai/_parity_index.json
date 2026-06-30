@@ -26,6 +26,31 @@
       "tolerance": "exact (atol 1e-15; observed 0)"
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "aft",
+      "notes": [
+        "Frozen-R fixture: Weibull AFT (formula API) matches survival::survreg to iterative-MLE convergence tolerance (graded aligned). Regenerate via _generate_aft_R.R."
+      ],
+      "reference": "survival::survreg (Weibull AFT)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "survival": "3.8.3"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "aligned",
+      "test": [
+        "tests/reference_parity/test_aft_parity.py",
+        "tests/reference_parity/_fixtures/aft_R.json"
+      ],
+      "tolerance": "coefficients & log-scale 5e-5 abs (observed ~1e-5)"
+    },
+    {
       "function": "aggte",
       "notes": [
         "Reproduces published-paper numbers on a calibrated replica. See tests/external_parity/PUBLISHED_REFERENCE_VALUES.md."
@@ -3562,6 +3587,31 @@
         "tests/reference_parity/test_principal_strat_parity.py"
       ],
       "tolerance": ""
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "survreg",
+      "notes": [
+        "Frozen-R fixture: Weibull AFT log-time coefficients + log-scale match survival::survreg to iterative-MLE convergence tolerance (graded aligned, not bit-exact). Regenerate via _generate_aft_R.R."
+      ],
+      "reference": "survival::survreg (Weibull AFT)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "survival": "3.8.3"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "aligned",
+      "test": [
+        "tests/reference_parity/test_aft_parity.py",
+        "tests/reference_parity/_fixtures/aft_R.json"
+      ],
+      "tolerance": "coefficients & log-scale 5e-5 abs (observed ~1e-5)"
     },
     {
       "additional_tests": [

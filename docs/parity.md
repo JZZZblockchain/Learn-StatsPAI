@@ -26,12 +26,12 @@ sp.parity_summary()           # honest coverage counts
 | status | functions |
 | --- | ---: |
 | bit-exact | 66 |
-| aligned | 4 |
+| aligned | 6 |
 | analytical-only | 45 |
 | external-replication | 4 |
-| **verified (subtotal)** | **119** |
-| unverified | 1020 |
-| **total registered** | **1139** |
+| **verified (subtotal)** | **121** |
+| unverified | 1015 |
+| **total registered** | **1136** |
 
 ## bit-exact — 66 functions
 
@@ -106,14 +106,16 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `xtabond` | plm::pgmm | R 4.5.2; plm 2.6.7 | rel_est<=1e-06, rel_se<=1e-06 | 9.0e-16 / 1.4e-15 | [`50_xtabond.py`](../tests/r_parity/50_xtabond.py) (+2) |
 | `zip_model` | pscl::zeroinfl(dist="poisson") | R 4.5.2; pscl 1.5.9 | rel_est<=1e-06, rel_se<=0.0001 | 7.7e-08 / 1.1e-07 | [`63_zip.py`](../tests/r_parity/63_zip.py) (+2) |
 
-## aligned — 4 functions
+## aligned — 6 functions
 
 Agreement within a documented, pre-registered looser tolerance.
 
 | function | reference | versions | tolerance | rel err (R / Stata) | test |
 | --- | --- | --- | --- | --- | --- |
+| `aft` | survival::survreg (Weibull AFT) | R 4.5.2; survival 3.8.3 | coefficients & log-scale 5e-5 abs (observed ~1e-5) | — / — | [`test_aft_parity.py`](../tests/reference_parity/test_aft_parity.py) (+1) |
 | `augsynth` | augsynth::augsynth | R 4.5.2; augsynth 0.2.0 | rel_est<=2e-05, rel_se<=1e-06 | 7.9e-06 / — | [`18_augsynth.py`](../tests/r_parity/18_augsynth.py) (+1) |
 | `causal_forest` | grf::causal_forest | R 4.5.2; grf 2.6.1 | rel_est<=0.005, rel_se<=0.5 | 1.9e-03 / — | [`13_causal_forest.py`](../tests/r_parity/13_causal_forest.py) (+1) |
+| `survreg` | survival::survreg (Weibull AFT) | R 4.5.2; survival 3.8.3 | coefficients & log-scale 5e-5 abs (observed ~1e-5) | — / — | [`test_aft_parity.py`](../tests/reference_parity/test_aft_parity.py) (+1) |
 | `xtfrontier` | frontier::sfa | R 4.5.2; frontier 1.1.8 | rel_est<=0.001, rel_se<=0.001 | 2.8e-06 / 8.6e-04 | [`29_panel_sfa.py`](../tests/r_parity/29_panel_sfa.py) (+2) |
 | `zinb` | pscl::zeroinfl(dist="negbin") | R 4.5.2; pscl 1.5.9 | rel_est<=1e-05, rel_se<=0.001 | 1.1e-06 / 2.1e-07 | [`64_zinb.py`](../tests/r_parity/64_zinb.py) (+2) |
 
@@ -180,6 +182,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `survivor_average_causal_effect` | [`test_principal_strat_parity.py`](../tests/reference_parity/test_principal_strat_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 1020 functions
+## unverified — 1015 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

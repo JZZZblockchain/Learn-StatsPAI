@@ -17,15 +17,18 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 119 | 964 | **12.3%** |
+| **estimator functions** (parity-applicable) | 121 | 964 | **12.6%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
-| all registered | 119 | 1135 | 10.5% |
+| all registered | 121 | 1135 | 10.7% |
 
-> Recent coverage gains (all bit-exact vs R): +`kaplan_meier`, +`logrank_test`
-> (`survival::survfit`/`survdiff`); +`bonferroni`, +`holm`,
-> +`benjamini_hochberg`, +`adjust_pvalues` (base R `stats::p.adjust`);
-> +`het_test`, +`reset_test` (`lmtest::bptest`/`resettest`). See the closing
-> loop below.
+> Recent coverage gains (vs R): +`kaplan_meier`, +`logrank_test`
+> (`survival::survfit`/`survdiff`, bit-exact); +`bonferroni`, +`holm`,
+> +`benjamini_hochberg`, +`adjust_pvalues` (base R `stats::p.adjust`, bit-exact);
+> +`het_test`, +`reset_test` (`lmtest::bptest`/`resettest`, bit-exact);
+> +`survreg`, +`aft` (`survival::survreg` Weibull AFT, aligned ~1e-5).
+> Probed but excluded (convention mismatch, kept honest): `johansen`
+> (lag/sample convention vs `urca::ca.jo`), `granger_causality` (VAR-based vs
+> pairwise `lmtest::grangertest`), `vif` (rounded output). See the closing loop.
 
 So the real coverage metric to drive to is **verified / 964 estimators**, and
 the north-star is to raise it release over release.
@@ -57,7 +60,7 @@ functions at once.
 | structural | 0 / 12 | **EMPTY** |
 | postestimation | 0 / 12 | analytical-feasible (margins/contrasts vs Stata) |
 | power | 0 / 12 | analytical-feasible (closed-form / Stata `power`) |
-| survival | 3 / 12 | Cox + KM + log-rank bit-exact (vs R `survival`); AFT/competing-risks open |
+| survival | 5 / 12 | Cox/KM/log-rank bit-exact + Weibull AFT (survreg/aft) aligned, all vs R `survival`; competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
 | robustness | 0 / 11 | sensitivity bounds — analytical-feasible |
 | target_trial / transport / survey / longitudinal / bartik | 0 each | alignable against established packages |
