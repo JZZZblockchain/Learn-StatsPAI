@@ -1804,6 +1804,7 @@ __all__ = [
     "verify",
     "verify_recommendation",
     "verify_benchmark",
+    "recommend_benchmark",
     # === v0.6 Round 3 ===
     "truncreg",
     "sureg",
@@ -3011,6 +3012,11 @@ def __getattr__(name):
 
         globals()["verify_benchmark"] = _vb
         return _vb
+    if name == "recommend_benchmark":
+        from .smart.recommend_benchmark import recommend_benchmark as _rb
+
+        globals()["recommend_benchmark"] = _rb
+        return _rb
     if name == "fast":
         # Submodule — load on demand so the Phase 1 Rust extension import
         # (and its NumPy fallback path) only fires if a user touches
