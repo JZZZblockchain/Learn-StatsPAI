@@ -123,6 +123,46 @@ first-stage check.
 
 ---
 
+## F-004 · design families recommend cannot yet route (corpus frontier)  ○ ROADMAP
+
+**Symptom.** Surveying real published designs for corpus growth surfaced a set
+of design families `detect_design`/`recommend` has no branch for — so they would
+score `MISS` today. They are NOT yet added as failing corpus entries (that would
+break the ratchet); they are the prioritized expansion frontier, each pending
+(a) a recommend branch and (b) a `gap_probe` scoring mode so they can be tracked
+without depressing the headline hit-rate.
+
+**Frontier designs + a verified anchor paper in paper.bib:**
+- **Bunching / kink** — Chetty, Friedman, Olsen & Pistaferri (2011)
+  [chetty2011adjustment]. No bunching branch; `sp.bunching` exists but is
+  unreachable from recommend.
+- **Distributional decomposition** — DiNardo, Fortin & Lemieux (1996)
+  [dinardo1996labor]. recommend has no decomposition branch (`sp.decompose`
+  dispatcher exists).
+- **Repeated cross-sections DiD** (no panel unit id) — recommend's DiD branch
+  derives a cohort from the unit id; without one it may misroute.
+- **Triple-difference (DDD)** — `sp.ddd` exists, unreachable from recommend.
+- **RD kink (RKD)** / **RD with discrete running variable** — recommend returns
+  the sharp-RD card for all RD variants (see also F-003).
+- **Shift-share / Bartik IV** — `sp.bartik` exists, unreachable from recommend.
+- **Event study / dynamic effects** — surfaced only inside the DiD card's
+  robustness text, not as a first-class recommendation.
+
+**Why it matters.** Each is a real design a user might hand to `sp.recommend`.
+Until routed, the agent gets a plausible-but-wrong (or no) recommendation. These
+are the highest-value engine extensions the benchmark has identified.
+
+**Proposed fix.** (1) Add a `gap_probe: true` corpus field + a separate
+"frontier coverage" metric in `recommend_benchmark()` (scored apart from the
+headline hit-rate). (2) Add recommend branches for the families above, wiring
+the already-shipping estimators (`sp.bunching` / `sp.decompose` / `sp.ddd` /
+`sp.bartik` / RKD). (3) Promote each frontier design from F-004 to a scored
+corpus entry as its branch lands.
+
+**Status.** OPEN (roadmap; tracked for the next engine-expansion phase).
+
+---
+
 ## (template for future findings)
 ## F-00X · <one-line symptom>  <severity>
 **Symptom.** …

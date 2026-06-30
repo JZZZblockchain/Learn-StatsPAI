@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.2.0-tierB"
+corpus_version: "0.3.0-applied"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -402,3 +402,56 @@ entries:
         - {check: balance_after,   provenance: methodological_followup, source: "covariate balance after adjustment"}
         - {check: ovb_sensitivity, provenance: methodological_followup, source: "unobserved-confounding sensitivity (Oster)"}
     notes: "Strong confounding: leading with bare OLS = MISS (ols is disqualifying here). Validates the F-002 fix on synthetic data."
+
+  # ---------------------------------------------------------------------------
+  # TIER A — experimental (RCT) NSW sample. The randomized benchmark Dehejia-
+  # Wahba's observational reanalysis targets. recommend detects observational
+  # (it cannot know assignment was randomized from data alone); a balancing
+  # estimator is acceptable, OLS/difference-in-means is the gold standard.
+  # ---------------------------------------------------------------------------
+  - id: lalonde_1986_nsw_experimental
+    paper:
+      citation: "LaLonde, R. J. (1986). Evaluating the Econometric Evaluations of Training Programs with Experimental Data. American Economic Review. (Experimental NSW sample; see Dehejia & Wahba 1999.)"
+      bib_key: dehejia1999causal
+    design:
+      label: observational
+      fingerprint: {experimental: true, randomized: true, treatment_binary: true}
+    data:
+      tier: A
+      loader: "sp.datasets.nsw_lalonde()"
+      args: {y: re78, treatment: treat, covariates: [age, education, black, hispanic, married, nodegree, re74, re75]}
+    ground_truth:
+      estimator:
+        primary: ols
+        acceptable: [ols, psm, dml, ipw, aipw, matching, drdid]
+        disqualifying: []
+      robustness_checks:
+        - {check: overlap,       provenance: methodological_followup, source: "common support across arms"}
+        - {check: balance_after, provenance: paper_section,           source: "randomization balance check"}
+    notes: "Experimental NSW: difference-in-means is the gold standard; a balancing estimator is also valid. No disqualifying estimator (randomized)."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — real applied DiD. Acemoglu-Angrist (2001) studied the ADA's effect
+  # on disabled employment with a difference-in-differences design (common
+  # treatment timing). With common timing TWFE is unbiased, so nothing is
+  # disqualifying — this contrasts with the staggered traps where TWFE is.
+  # ---------------------------------------------------------------------------
+  - id: acemoglu_angrist_2001_ada
+    paper:
+      citation: "Acemoglu, D. & Angrist, J. D. (2001). Consequences of Employment Protection? The Case of the Americans with Disabilities Act. Journal of Political Economy."
+      bib_key: acemoglu2001consequences
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 160, n_periods: 5, staggered: false, common_timing: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=160, n_periods=5, staggered=False, seed=21)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: classic_2x2
+        acceptable: [callaway_santanna, sun_abraham, classic_2x2, twfe, did, drdid, did_imputation]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "Acemoglu & Angrist (2001) pre-trend / event-study"}
+    notes: "Real applied DiD with COMMON treatment timing — TWFE is unbiased here (no negative-weights trap), so nothing is disqualifying. Contrast with the staggered-DiD traps."

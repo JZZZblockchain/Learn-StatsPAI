@@ -98,22 +98,22 @@ python3 benchmarks/recommend_hit_rate/harness.py --check    # CI gate (exit 1 on
 
 ## Results
 
-| metric | Day-1 (8, pre-fix) | after Phase 2 (8) | Phase 3 (15) |
+| metric | Day-1 (8, pre-fix) | after Phase 2 (8) | Phase 3 (17) |
 | --- | --- | --- | --- |
-| entries | 8 Tier-A | 8 Tier-A | 8 Tier-A + 7 Tier-B |
-| top-1 hit-rate | 0.625 (5/8) | 1.0 (8/8) | **1.0** (15/15) |
+| entries | 8 Tier-A | 8 Tier-A | 9 Tier-A + 8 Tier-B |
+| top-1 hit-rate | 0.625 (5/8) | 1.0 (8/8) | **1.0** (17/17) |
 | top-k hit-rate | 0.625 | 1.0 | 1.0 |
 | hard-miss rate | 0.0 | 0.0 | **0.0** |
 | errors | 0 | 0 | 0 |
 | audit catalog mean recall (static) | 1.0 | 1.0 | 1.0 |
-| audit dynamic mean recall (fit+audit) | — | 1.0 (8/8) | **1.0** (15/15) |
+| audit dynamic mean recall (fit+audit) | — | 1.0 (8/8) | **1.0** (17/17) |
 
 Phase 3 added 7 Tier-B adversarial design archetypes (synthetic stubs via
 `sp.dgp_*`, each anchored to a DOI-verified method/critique paper in
 `paper.bib`): the TWFE negative-weights trap (staggered + heterogeneous),
 weak-instrument (→ LIML) vs strong-instrument (→ 2SLS), sharp vs fuzzy RD, a
 clean 2×2, and strong-confounding selection-on-observables (→ PSM). **The
-engine resisted every trap — 0 hard-misses across all 15 designs.**
+engine resisted every trap — 0 hard-misses across all 17 designs.**
 
 **What works (verified on real data):** staggered DiD → Callaway-Sant'Anna
 (never TWFE); weak & moderate IV → 2SLS with live first-stage F; sharp RD →
