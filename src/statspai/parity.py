@@ -76,7 +76,7 @@ def _registered_functions() -> List[str]:
         import statspai as sp
 
         return list(sp.list_functions())
-    except Exception:  # pragma: no cover - registry unavailable
+    except (AttributeError, ImportError):  # pragma: no cover - registry unavailable
         return list(_records_by_function())
 
 
@@ -85,6 +85,17 @@ class ParityStatus(dict):
 
     Behaves as an ordinary ``dict`` for agents/JSON, but prints a compact
     summary for humans at the REPL and in notebooks.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> status = sp.parity_status("regress")
+    >>> isinstance(status, dict)          # plain dict for agents / JSON
+    True
+    >>> "function" in status
+    True
+    >>> isinstance(status.summary(), str)  # one-line human rendering
+    True
     """
 
     def summary(self) -> str:
