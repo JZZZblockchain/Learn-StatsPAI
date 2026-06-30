@@ -135,6 +135,44 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "fluctuation score. See tests/reference_parity/REFERENCES.md."
         ),
     },
+    "kaplan_meier": {
+        "status": "bit-exact",
+        "reference": "survival::survfit",
+        "reference_versions": {
+            "R": "R version 4.5.2 (2025-10-31)",
+            "survival": "3.8.3",
+        },
+        "tolerance": "S(t) at every event time 1e-12 (observed ~3e-17); median exact",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survival_km_parity.py",
+            "tests/reference_parity/_fixtures/survival_km_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: the Kaplan-Meier survival curve and median match "
+            "R survival::survfit to machine precision on a committed two-group "
+            "dataset. Regenerate via _generate_survival_km.R."
+        ),
+    },
+    "logrank_test": {
+        "status": "bit-exact",
+        "reference": "survival::survdiff",
+        "reference_versions": {
+            "R": "R version 4.5.2 (2025-10-31)",
+            "survival": "3.8.3",
+        },
+        "tolerance": "chi-square 1e-10 rel (observed ~8e-16); p-value 1e-10 abs",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survival_km_parity.py",
+            "tests/reference_parity/_fixtures/survival_km_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: the log-rank chi-square, p-value, and per-group "
+            "observed/expected events match R survival::survdiff to machine "
+            "precision. Regenerate via _generate_survival_km.R."
+        ),
+    },
 }
 
 
@@ -499,7 +537,7 @@ def build_frozen_promotion_records() -> List[Dict[str, Any]]:
                 "status": meta["status"],
                 "source": "reference_parity_frozen",
                 "reference": meta["reference"],
-                "reference_versions": {},
+                "reference_versions": meta.get("reference_versions", {}),
                 "tolerance": meta["tolerance"],
                 "sides": meta.get("sides", ["py", "R"]),
                 "test": meta["test"],

@@ -17,9 +17,12 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 111 | 964 | **11.5%** |
+| **estimator functions** (parity-applicable) | 113 | 964 | **11.7%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
-| all registered | 111 | 1135 | 9.8% |
+| all registered | 113 | 1135 | 9.9% |
+
+> Last coverage change: +`kaplan_meier`, +`logrank_test` (bit-exact vs R
+> `survival::survfit` / `survdiff`) — see the closing loop below.
 
 So the real coverage metric to drive to is **verified / 964 estimators**, and
 the north-star is to raise it release over release.
@@ -51,7 +54,7 @@ functions at once.
 | structural | 0 / 12 | **EMPTY** |
 | postestimation | 0 / 12 | analytical-feasible (margins/contrasts vs Stata) |
 | power | 0 / 12 | analytical-feasible (closed-form / Stata `power`) |
-| survival | 1 / 12 | Cox bit-exact; KM/AFT/competing-risks open |
+| survival | 3 / 12 | Cox + KM + log-rank bit-exact (vs R `survival`); AFT/competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
 | robustness | 0 / 11 | sensitivity bounds — analytical-feasible |
 | target_trial / transport / survey / longitudinal / bartik | 0 each | alignable against established packages |

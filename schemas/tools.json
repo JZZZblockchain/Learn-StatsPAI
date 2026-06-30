@@ -10214,7 +10214,7 @@
     "name": "kan_dlate"
   },
   {
-    "description": "Kaplan-Meier non-parametric survival function estimator.",
+    "description": "Kaplan-Meier non-parametric survival function estimator. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -10952,7 +10952,7 @@
     "name": "logit"
   },
   {
-    "description": "Log-rank test for equality of survival distributions across groups.",
+    "description": "Log-rank test for equality of survival distributions across groups. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "duration": {
