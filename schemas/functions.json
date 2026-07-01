@@ -22259,7 +22259,7 @@
     }
   },
   {
-    "description": "Compute marginal effects from a fitted model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Compute marginal effects from a fitted model.",
     "name": "margins",
     "parameters": {
       "properties": {
@@ -22587,7 +22587,7 @@
     }
   },
   {
-    "description": "Wald test for linear restrictions on coefficients. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Wald test for linear restrictions on coefficients.",
     "name": "test",
     "parameters": {
       "properties": {
@@ -22608,7 +22608,7 @@
     }
   },
   {
-    "description": "Estimate a linear combination of coefficients with inference. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Estimate a linear combination of coefficients with inference.",
     "name": "lincom",
     "parameters": {
       "properties": {
