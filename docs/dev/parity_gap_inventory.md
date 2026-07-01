@@ -17,9 +17,9 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 140 | 964 | **14.5%** |
+| **estimator functions** (parity-applicable) | 143 | 964 | **14.8%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
-| all registered | 140 | 1139 | 12.3% |
+| all registered | 143 | 1139 | 12.6% |
 
 > Recent coverage gains (vs R): +`kaplan_meier`, +`logrank_test`
 > (`survival::survfit`/`survdiff`, bit-exact); +`bonferroni`, +`holm`,
@@ -59,7 +59,7 @@ functions at once.
 | interference | 0 / 16 | **EMPTY** |
 | structural | 0 / 12 | **EMPTY** |
 | postestimation | 3 / 12 | lincom/test(Wald)/margins analytical-only (closed-form identities); contrast/pwcompare open |
-| power | 0 / 12 | analytical-feasible (closed-form / Stata `power`) |
+| power | 3 / 12 | power_rct/two_proportions/logrank bit-exact (base-R z-approx); DiD/RD/IV/cluster open |
 | survival | 5 / 12 | Cox/KM/log-rank bit-exact + Weibull AFT (survreg/aft) aligned, all vs R `survival`; competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
 | robustness | 0 / 11 | sensitivity bounds — analytical-feasible |

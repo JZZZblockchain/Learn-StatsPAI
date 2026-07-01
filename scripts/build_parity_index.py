@@ -511,6 +511,52 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "not pinned). Regenerate via _generate_epi_extra_R.R."
         ),
     },
+    "power_rct": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (two-sample pooled-sigma z-approx power)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "power 1e-12 abs (observed ~2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_power_parity.py",
+            "tests/reference_parity/_fixtures/power_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: two-sample RCT power matches the canonical "
+            "large-sample z-approximation exactly. Regenerate via "
+            "_generate_power_R.R."
+        ),
+    },
+    "power_two_proportions": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (unpooled Wald two-proportion z-approx)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "power 1e-12 abs (observed ~2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_power_parity.py",
+            "tests/reference_parity/_fixtures/power_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: two-proportion power (unpooled Wald z-approx) "
+            "matches base R exactly. Regenerate via _generate_power_R.R."
+        ),
+    },
+    "power_logrank": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Schoenfeld log-rank power)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "power 1e-12 abs (observed ~2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_power_parity.py",
+            "tests/reference_parity/_fixtures/power_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: Schoenfeld log-rank power matches base R exactly. "
+            "Regenerate via _generate_power_R.R."
+        ),
+    },
 }
 
 

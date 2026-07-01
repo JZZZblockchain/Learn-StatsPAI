@@ -29696,7 +29696,7 @@
     }
   },
   {
-    "description": "Power for a two-arm Randomised Controlled Trial.",
+    "description": "Power for a two-arm Randomised Controlled Trial. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "power_rct",
     "parameters": {
       "properties": {
@@ -29974,7 +29974,7 @@
     }
   },
   {
-    "description": "Power (or sample size) to detect a difference between two proportions.",
+    "description": "Power (or sample size) to detect a difference between two proportions. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "power_two_proportions",
     "parameters": {
       "properties": {
@@ -30021,7 +30021,7 @@
     }
   },
   {
-    "description": "Power (or sample size) for a two-arm log-rank / survival comparison.",
+    "description": "Power (or sample size) for a two-arm log-rank / survival comparison. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "power_logrank",
     "parameters": {
       "properties": {
