@@ -1,6 +1,6 @@
 # Recommendation Hit-Rate Scorecard
 
-- corpus: `0.17.0-batch10`  |  statspai: `1.20.0`  |  entries: **44** (37 core + 7 frontier; 10 Tier-A + 34 Tier-B)
+- corpus: `0.18.0-batch11`  |  statspai: `1.20.0`  |  entries: **46** (39 core + 7 frontier; 10 Tier-A + 36 Tier-B)
 - **core top-1 hit-rate: 1.0**  |  top-k: 1.0  |  hard-miss rate: 0.0  |  errors: 0
 - audit catalog mean recall (static): 1.0  |  audit dynamic mean recall (fit+audit): 1.0  |  audit errors: 0
 - frontier coverage (gap-probe designs recommend is being taught): **1.0** (7/7)
@@ -49,6 +49,8 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | iv | `oreopoulos_2006_schooling_iv` | ✓ HIT | iv | `twosls` |
 | did | `galiani_2005_water_did` | ✓ HIT | did | `callaway_santanna` |
 | rd | `card_dobkin_maestas_2008_medicare_rd` | ✓ HIT | rd | `local_polynomial_rd` |
+| did | `almond_2006_flu_did` | ✓ HIT | did | `callaway_santanna` |
+| did | `bleakley_2007_hookworm_did` | ✓ HIT | did | `callaway_santanna` |
 | bunching ⊕ | `frontier_bunching_saez2010` | ✓ HIT | bunching | `bunching` |
 | rkd ⊕ | `frontier_rkd_card2015` | ✓ HIT | rkd | `rkd` |
 | ddd ⊕ | `frontier_ddd_gruber1994` | ✓ HIT | ddd | `ddd` |
@@ -98,6 +100,8 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | `oreopoulos_2006_schooling_iv` | iv | 1.0 | anderson_rubin_ci |
 | `galiani_2005_water_did` | did | 1.0 | — |
 | `card_dobkin_maestas_2008_medicare_rd` | rd | 1.0 | bandwidth_sensitivity |
+| `almond_2006_flu_did` | did | 1.0 | — |
+| `bleakley_2007_hookworm_did` | did | 1.0 | — |
 | `frontier_bunching_saez2010` | rd | 0.0 | — |
 | `frontier_rkd_card2015` | rd | 1.0 | bandwidth_sensitivity |
 | `frontier_ddd_gruber1994` | — | ERR | TypeError("ddd() missing 1 required positional argument: 'su |

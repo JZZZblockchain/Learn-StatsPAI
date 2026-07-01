@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.17.0-batch10"
+corpus_version: "0.18.0-batch11"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -996,6 +996,56 @@ entries:
         - {check: mccrary_density,       provenance: methodological_followup, source: "density continuity at age 65"}
         - {check: bandwidth_sensitivity, provenance: paper_section,           source: "Card et al. (2008) bandwidth robustness"}
     notes: "Real applied age-65 Medicare RD (coverage/utilization jump). rdrobust / local-polynomial expected."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Almond (2006) 1918-influenza in-utero-exposure cohort DiD (affected
+  # birth cohorts vs adjacent cohorts). Citation + DOI verified via
+  # journals.uchicago.edu (10.1086/507154) + RePEc.
+  # ---------------------------------------------------------------------------
+  - id: almond_2006_flu_did
+    paper:
+      citation: "Almond, D. (2006). Is the 1918 Influenza Pandemic Over? Long-Term Effects of In Utero Influenza Exposure in the Post-1940 U.S. Population. Journal of Political Economy 114(4), 672-712."
+      bib_key: almond2006influenza
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 160, n_periods: 5, staggered: false, cohort_exposure: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=160, n_periods=5, staggered=False, seed=206)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: classic_2x2
+        acceptable: [callaway_santanna, sun_abraham, classic_2x2, twfe, did, drdid, did_imputation]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "Almond (2006) adjacent-cohort comparability"}
+    notes: "Real applied cohort DiD (in-utero 1918-flu exposure vs adjacent cohorts). Common exposure timing → nothing disqualifying."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Bleakley (2007) hookworm-eradication DiD (Southern areas by pre-
+  # eradication infection intensity × cohort). Citation verified via
+  # academic.oup.com + ideas.repec.org (QJE 122(1):73-117; DOI omitted per §10).
+  # ---------------------------------------------------------------------------
+  - id: bleakley_2007_hookworm_did
+    paper:
+      citation: "Bleakley, H. (2007). Disease and Development: Evidence from Hookworm Eradication in the American South. Quarterly Journal of Economics 122(1), 73-117."
+      bib_key: bleakley2007disease
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 150, n_periods: 5, staggered: true, intensity_x_cohort: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=150, n_periods=5, staggered=True, seed=207)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: callaway_santanna
+        acceptable: [callaway_santanna, sun_abraham, did_imputation, gardner, borusyak_jaravel_spiess, stacked_did, dcdh, drdid, classic_2x2, twfe, did]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "Bleakley (2007) pre-eradication trends by infection intensity"}
+    notes: "Real applied DiD (pre-eradication hookworm intensity × cohort exposure). Heterogeneity-robust or classic DiD valid."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now

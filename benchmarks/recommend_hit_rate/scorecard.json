@@ -1,10 +1,10 @@
 {
-  "corpus_version": "0.17.0-batch10",
+  "corpus_version": "0.18.0-batch11",
   "statspai_version": "1.20.0",
-  "n_entries": 44,
-  "n_core": 37,
+  "n_entries": 46,
+  "n_core": 39,
   "n_tier_a": 10,
-  "n_tier_b": 34,
+  "n_tier_b": 36,
   "summary": {
     "hit_rate_top1": 1.0,
     "hit_rate_topk": 1.0,
@@ -1106,6 +1106,72 @@
       "gap_probe": false
     },
     {
+      "id": "almond_2006_flu_did",
+      "design": "did",
+      "status": "HIT",
+      "detected_design": "did",
+      "ranked_labels": [
+        "Callaway-Sant'Anna (2021) \u2014 staggered DID",
+        "Sun-Abraham (2021) \u2014 interaction-weighted",
+        "Event-study (dynamic treatment effects)"
+      ],
+      "ranked_tags": [
+        "callaway_santanna",
+        "sun_abraham",
+        "unknown:Event-study (dynamic treatment effects)"
+      ],
+      "top1_tag": "callaway_santanna",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "callaway_santanna",
+        "classic_2x2",
+        "did",
+        "did_imputation",
+        "drdid",
+        "sun_abraham",
+        "twfe"
+      ],
+      "disqualifying": [],
+      "gap_probe": false
+    },
+    {
+      "id": "bleakley_2007_hookworm_did",
+      "design": "did",
+      "status": "HIT",
+      "detected_design": "did",
+      "ranked_labels": [
+        "Callaway-Sant'Anna (2021) \u2014 staggered DID",
+        "Sun-Abraham (2021) \u2014 interaction-weighted",
+        "Event-study (dynamic treatment effects)"
+      ],
+      "ranked_tags": [
+        "callaway_santanna",
+        "sun_abraham",
+        "unknown:Event-study (dynamic treatment effects)"
+      ],
+      "top1_tag": "callaway_santanna",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "borusyak_jaravel_spiess",
+        "callaway_santanna",
+        "classic_2x2",
+        "dcdh",
+        "did",
+        "did_imputation",
+        "drdid",
+        "gardner",
+        "stacked_did",
+        "sun_abraham",
+        "twfe"
+      ],
+      "disqualifying": [],
+      "gap_probe": false
+    },
+    {
       "id": "frontier_bunching_saez2010",
       "design": "bunching",
       "status": "HIT",
@@ -1610,6 +1676,24 @@
       "covered": [
         "mccrary_density",
         "bandwidth_sensitivity"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "almond_2006_flu_did",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "bleakley_2007_hookworm_did",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
       ],
       "missing_from_catalog": [],
       "catalog_recall": 1.0
@@ -2194,6 +2278,28 @@
       "actionable_next_steps": [
         "bandwidth_sensitivity"
       ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "almond_2006_flu_did",
+      "status": "OK",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "bleakley_2007_hookworm_did",
+      "status": "OK",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [],
       "dynamic_recall": 1.0
     },
     {
