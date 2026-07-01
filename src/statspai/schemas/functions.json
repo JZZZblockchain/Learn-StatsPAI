@@ -29867,7 +29867,7 @@
     }
   },
   {
-    "description": "Power for a Cluster-Randomised Controlled Trial.",
+    "description": "Power for a Cluster-Randomised Controlled Trial. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "power_cluster_rct",
     "parameters": {
       "properties": {
@@ -29949,7 +29949,7 @@
     }
   },
   {
-    "description": "Compute the Minimum Detectable Effect (MDE) for a given design.",
+    "description": "Compute the Minimum Detectable Effect (MDE) for a given design. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mde",
     "parameters": {
       "properties": {

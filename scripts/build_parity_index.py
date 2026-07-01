@@ -557,6 +557,38 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "Regenerate via _generate_power_R.R."
         ),
     },
+    "mde": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (RCT minimum detectable effect)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "effect size 1e-6 abs (output rounded to 6 dp; observed ~2e-8)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_power_extra_parity.py",
+            "tests/reference_parity/_fixtures/power_extra_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: MDE = (z_{1-a/2}+z_pow)/sqrt(n_g/2) matches the "
+            "closed-form inverse of the two-sample power (sp rounds to 6 dp). "
+            "Regenerate via _generate_power_extra_R.R."
+        ),
+    },
+    "power_cluster_rct": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (design-effect-inflated z-approx power)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "power 1e-12 abs (observed ~2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_power_extra_parity.py",
+            "tests/reference_parity/_fixtures/power_extra_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: cluster-RCT power with design effect "
+            "1+(m-1)*icc matches base R exactly. Regenerate via "
+            "_generate_power_extra_R.R."
+        ),
+    },
 }
 
 
