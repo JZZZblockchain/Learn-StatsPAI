@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.6.0-rdfuzzy"
+corpus_version: "0.7.0-cardkrueger"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -455,6 +455,31 @@ entries:
       robustness_checks:
         - {check: parallel_trends, provenance: paper_section, source: "Acemoglu & Angrist (2001) pre-trend / event-study"}
     notes: "Real applied DiD with COMMON treatment timing — TWFE is unbiased here (no negative-weights trap), so nothing is disqualifying. Contrast with the staggered-DiD traps."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — the canonical applied DiD. Card & Krueger (1994) NJ/PA minimum-wage
+  # study: one treated group (NJ), one control (PA), common before/after timing.
+  # Citation verified via aeaweb.org + ideas.repec.org (see paper.bib note).
+  # ---------------------------------------------------------------------------
+  - id: card_krueger_1994_minwage
+    paper:
+      citation: "Card, D. & Krueger, A. B. (1994). Minimum Wages and Employment: A Case Study of the Fast-Food Industry in New Jersey and Pennsylvania. American Economic Review 84(4), 772-793."
+      bib_key: cardkrueger1994minimum
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 200, n_periods: 2, staggered: false, common_timing: true, treated_group: "New Jersey", control_group: "Pennsylvania"}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=200, n_periods=2, staggered=False, seed=94)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: classic_2x2
+        acceptable: [classic_2x2, did, twfe, callaway_santanna, sun_abraham, drdid]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: methodological_followup, source: "pre-trend / placebo check on the 2x2 DiD"}
+    notes: "Canonical 2x2 DiD (Card-Krueger NJ/PA minimum wage). Common timing → TWFE unbiased, nothing disqualifying."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now

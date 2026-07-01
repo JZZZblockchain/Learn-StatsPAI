@@ -1,10 +1,10 @@
 {
-  "corpus_version": "0.6.0-rdfuzzy",
+  "corpus_version": "0.7.0-cardkrueger",
   "statspai_version": "1.20.0",
-  "n_entries": 23,
-  "n_core": 17,
+  "n_entries": 24,
+  "n_core": 18,
   "n_tier_a": 10,
-  "n_tier_b": 13,
+  "n_tier_b": 14,
   "summary": {
     "hit_rate_top1": 1.0,
     "hit_rate_topk": 1.0,
@@ -527,6 +527,32 @@
       "gap_probe": false
     },
     {
+      "id": "card_krueger_1994_minwage",
+      "design": "did",
+      "status": "HIT",
+      "detected_design": "did",
+      "ranked_labels": [
+        "Classic 2\u00d72 DID"
+      ],
+      "ranked_tags": [
+        "classic_2x2"
+      ],
+      "top1_tag": "classic_2x2",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "callaway_santanna",
+        "classic_2x2",
+        "did",
+        "drdid",
+        "sun_abraham",
+        "twfe"
+      ],
+      "disqualifying": [],
+      "gap_probe": false
+    },
+    {
       "id": "frontier_bunching_saez2010",
       "design": "bunching",
       "status": "HIT",
@@ -834,6 +860,15 @@
       "catalog_recall": 1.0
     },
     {
+      "id": "card_krueger_1994_minwage",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
       "id": "frontier_bunching_saez2010",
       "audit_family": "generic",
       "covered": [],
@@ -1128,6 +1163,19 @@
     },
     {
       "id": "acemoglu_angrist_2001_ada",
+      "status": "OK",
+      "audit_family": "did",
+      "covered": [
+        "parallel_trends"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [
+        "parallel_trends"
+      ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "card_krueger_1994_minwage",
       "status": "OK",
       "audit_family": "did",
       "covered": [

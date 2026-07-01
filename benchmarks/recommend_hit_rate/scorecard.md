@@ -1,6 +1,6 @@
 # Recommendation Hit-Rate Scorecard
 
-- corpus: `0.6.0-rdfuzzy`  |  statspai: `1.20.0`  |  entries: **23** (17 core + 6 frontier; 10 Tier-A + 13 Tier-B)
+- corpus: `0.7.0-cardkrueger`  |  statspai: `1.20.0`  |  entries: **24** (18 core + 6 frontier; 10 Tier-A + 14 Tier-B)
 - **core top-1 hit-rate: 1.0**  |  top-k: 1.0  |  hard-miss rate: 0.0  |  errors: 0
 - audit catalog mean recall (static): 1.0  |  audit dynamic mean recall (fit+audit): 1.0  |  audit errors: 0
 - frontier coverage (gap-probe designs recommend is being taught): **1.0** (6/6)
@@ -28,6 +28,7 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | observational | `trap_observational_strong_confounding` | ✓ HIT | observational | `psm` |
 | observational | `lalonde_1986_nsw_experimental` | ✓ HIT | observational | `psm` |
 | did | `acemoglu_angrist_2001_ada` | ✓ HIT | did | `callaway_santanna` |
+| did | `card_krueger_1994_minwage` | ✓ HIT | did | `classic_2x2` |
 | bunching ⊕ | `frontier_bunching_saez2010` | ✓ HIT | bunching | `bunching` |
 | rkd ⊕ | `frontier_rkd_card2015` | ✓ HIT | rkd | `rkd` |
 | ddd ⊕ | `frontier_ddd_gruber1994` | ✓ HIT | ddd | `ddd` |
@@ -56,6 +57,7 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | `trap_observational_strong_confounding` | matching | 1.0 | overlap, balance_after, ovb_sensitivity |
 | `lalonde_1986_nsw_experimental` | matching | 1.0 | overlap, balance_after |
 | `acemoglu_angrist_2001_ada` | did | 1.0 | parallel_trends |
+| `card_krueger_1994_minwage` | did | 1.0 | parallel_trends |
 | `frontier_bunching_saez2010` | rd | 0.0 | — |
 | `frontier_rkd_card2015` | rd | 1.0 | bandwidth_sensitivity |
 | `frontier_ddd_gruber1994` | — | ERR | TypeError("ddd() missing 1 required positional argument: 'su |
