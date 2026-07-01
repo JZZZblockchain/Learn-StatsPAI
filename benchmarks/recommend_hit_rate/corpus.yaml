@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.12.0-batch5"
+corpus_version: "0.13.0-batch6"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -737,6 +737,59 @@ entries:
         - {check: weak_instrument,   provenance: paper_section,           source: "Miguel et al. (2004) rainfall first-stage strength"}
         - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust CI as a guardrail"}
     notes: "Real applied IV (rainfall-growth instrument for economic growth → conflict). recommend should lead with 2SLS."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Angrist & Lavy (1999) Maimonides-rule class-size fuzzy RD (class
+  # size drops discontinuously as enrollment crosses multiples of 40). Citation
+  # + DOI verified via academic.oup.com (10.1162/003355399556061) + RePEc.
+  # ---------------------------------------------------------------------------
+  - id: angrist_lavy_1999_classsize_rd
+    paper:
+      citation: "Angrist, J. D. & Lavy, V. (1999). Using Maimonides' Rule to Estimate the Effect of Class Size on Scholastic Achievement. Quarterly Journal of Economics 114(2), 533-575."
+      bib_key: angrist1999maimonides
+    design:
+      label: rd
+      fingerprint: {synthetic: true, running_var: enrollment, fuzzy: true, maimonides_rule: true}
+    data:
+      tier: B
+      loader: "sp.dgp_rd(n=1500, fuzzy=True, cutoff=0.0, seed=99)"
+      args: {y: y, running_var: x, cutoff: 0.0, treatment: treatment}
+    ground_truth:
+      estimator:
+        primary: rdrobust
+        acceptable: [rdrobust, cct, local_polynomial_rd]
+        disqualifying: []
+      robustness_checks:
+        - {check: mccrary_density,       provenance: methodological_followup, source: "density of enrollment at the 40-multiples"}
+        - {check: bandwidth_sensitivity, provenance: paper_section,           source: "Angrist & Lavy (1999) bandwidth robustness"}
+    notes: "Real applied fuzzy RD (Maimonides' rule: class size jumps at enrollment multiples of 40). rdrobust / fuzzy RD expected."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Card (1990) Mariel Boatlift, the canonical single-treated-unit
+  # comparative case study (Miami vs comparison cities). Card used a DiD; the
+  # modern estimator is synthetic control (Peri & Yasenov 2019). Citation + DOI
+  # verified via journals.sagepub.com (10.1177/001979399004300205) + NBER w3069.
+  # ---------------------------------------------------------------------------
+  - id: card_1990_mariel_boatlift
+    paper:
+      citation: "Card, D. (1990). The Impact of the Mariel Boatlift on the Miami Labor Market. Industrial and Labor Relations Review 43(2), 245-257."
+      bib_key: card1990mariel
+    design:
+      label: synth
+      fingerprint: {synthetic: true, n_treated: 1, treated_unit: Miami, comparative_case_study: true}
+    data:
+      tier: B
+      loader: "sp.dgp_synth(n_units=20, n_periods=30, treated_unit=0, treatment_time=20, seed=90)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: synth
+        acceptable: [synth, augsynth, synthdid, gsynth, mc_panel, classic_2x2, did]
+        disqualifying: []
+      robustness_checks:
+        - {check: pretreatment_fit,  provenance: methodological_followup, source: "pre-treatment fit vs comparison cities"}
+        - {check: placebo_inference, provenance: methodological_followup, source: "placebo/in-space inference (Peri & Yasenov 2019 synth redo)"}
+    notes: "Single-treated-unit comparative case study (Mariel). Card used DiD with comparison cities; modern practice uses synthetic control — recommend detects synth. Both families acceptable."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now
