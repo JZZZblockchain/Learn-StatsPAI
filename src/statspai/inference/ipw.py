@@ -135,6 +135,7 @@ def ipw(
 
     # --- Estimate propensity scores ---
     pscore = _estimate_propensity(X, T)
+    pscore_raw = np.asarray(pscore, dtype=float).copy()  # pre-trim, for overlap
 
     # --- Trim ---
     if trim > 0:
@@ -176,6 +177,11 @@ def ipw(
         "pscore_min": float(pscore.min()),
         "pscore_max": float(pscore.max()),
         "trim": trim,
+        # Raw propensity distribution so result.violations() can assess overlap
+        # (IPW is the most overlap-sensitive estimator). Read via the shared
+        # _propensity_extreme_share helper; the trimming bound defaults to 0.01.
+        "_pscore": pscore_raw,
+        "trimming_threshold": trim,
         "normalized": normalize,
         "n_bootstrap": n_bootstrap,
     }

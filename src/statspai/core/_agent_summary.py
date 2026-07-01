@@ -173,6 +173,29 @@ def _max_covariate_smd(mi: Dict[str, Any]) -> Optional[float]:
     return None
 
 
+def _propensity_extreme_share(mi: Dict[str, Any]) -> Optional[float]:
+    """Fraction of units with a near-degenerate propensity (at or beyond the
+    overlap bound), read from whichever convention the estimator stored:
+
+    * the cross-fitted propensity array + ``trimming_threshold`` (DML IRM), or
+    * the pre-computed ``propensity_diagnostics['clip_share']`` (TMLE).
+
+    Returns ``None`` when no propensity distribution is available (e.g. AIPW
+    stores only the mean), so overlap simply is not asserted rather than
+    guessed."""
+    trim = _as_float(mi.get("trimming_threshold")) or 0.01
+    psc = mi.get("_pscore")
+    if psc is not None:
+        try:
+            arr = np.asarray(psc, dtype=float)
+            arr = arr[np.isfinite(arr)]
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            arr = np.empty(0)
+        if arr.size:
+            return float(np.mean((arr < trim) | (arr > 1.0 - trim)))
+    return _as_float(_safe_get(mi, "propensity_diagnostics", "clip_share"))
+
+
 def causal_violations(result: Any) -> List[Dict[str, Any]]:
     """Detect assumption / diagnostic violations on a ``CausalResult``.
 
@@ -381,48 +404,39 @@ def causal_violations(result: Any) -> List[Dict[str, Any]]:
             }
         )
 
-    # --- DML / AIPW: propensity overlap ---------------------------------
-    # Gated on the IRM/AIPW-specific keys: the cross-fitted propensity scores
-    # and the trimming bound the estimator already stored. A large share of
-    # units at/beyond that bound means near-degenerate inverse-propensity
-    # weights, so the estimate rests on a handful of influential observations.
-    _pscore = mi.get("_pscore")
-    if _pscore is not None and mi.get("trimming_threshold") is not None:
-        try:
-            psc = np.asarray(_pscore, dtype=float)
-            psc = psc[np.isfinite(psc)]
-        except (TypeError, ValueError):  # pragma: no cover - defensive
-            psc = np.empty(0)
-        trim = _as_float(mi.get("trimming_threshold")) or 0.01
-        if psc.size:
-            extreme = float(np.mean((psc < trim) | (psc > 1.0 - trim)))
-            if extreme > _DML_OVERLAP_EXTREME_SHARE:
-                out.append(
-                    {
-                        "kind": "assumption",
-                        "severity": "warning",
-                        "test": "dml_overlap",
-                        "value": extreme,
-                        "threshold": _DML_OVERLAP_EXTREME_SHARE,
-                        "message": (
-                            f"{extreme:.1%} of units have a propensity score at "
-                            f"or beyond the trimming bound ({trim:g}) — weak "
-                            "overlap, so the IRM/AIPW estimate leans on a few "
-                            "near-degenerate-weight units."
-                        ),
-                        "recovery_hint": (
-                            "Narrow the estimand to the overlap region with "
-                            "sp.trimming (Crump 2009), reweight with "
-                            "sp.overlap_weights (Li et al. 2018), or improve the "
-                            "propensity model (sp.cbps)."
-                        ),
-                        "alternatives": [
-                            "sp.trimming",
-                            "sp.overlap_weights",
-                            "sp.cbps",
-                        ],
-                    }
-                )
+    # --- DML / AIPW / TMLE: propensity overlap --------------------------
+    # A large share of units with a near-degenerate propensity (at/beyond the
+    # overlap bound) means unstable inverse-propensity weights, so the estimate
+    # rests on a handful of influential observations. Read the share from
+    # whichever convention the estimator stored: the cross-fitted propensity
+    # array + trimming bound (DML IRM) or the pre-computed clipped share (TMLE).
+    extreme = _propensity_extreme_share(mi)
+    if extreme is not None and extreme > _DML_OVERLAP_EXTREME_SHARE:
+        out.append(
+            {
+                "kind": "assumption",
+                "severity": "warning",
+                "test": "dml_overlap",
+                "value": extreme,
+                "threshold": _DML_OVERLAP_EXTREME_SHARE,
+                "message": (
+                    f"{extreme:.1%} of units have a near-degenerate propensity "
+                    "score (at or beyond the overlap bound) — weak overlap, so "
+                    "the estimate leans on a few near-degenerate-weight units."
+                ),
+                "recovery_hint": (
+                    "Narrow the estimand to the overlap region with "
+                    "sp.trimming (Crump 2009), reweight with "
+                    "sp.overlap_weights (Li et al. 2018), or improve the "
+                    "propensity model (sp.cbps)."
+                ),
+                "alternatives": [
+                    "sp.trimming",
+                    "sp.overlap_weights",
+                    "sp.cbps",
+                ],
+            }
+        )
 
     # --- Heckman: selection correction ---------------------------------
     # Gated on the two-step selection keys the estimator stores.

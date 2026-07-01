@@ -152,3 +152,125 @@ def test_poisson_flags_overdispersion_and_excess_zeros():
     assert "excess_zeros" in {v["test"] for v in zi.violations()}
     clean_tests = {v["test"] for v in clean.violations()}
     assert "overdispersion" not in clean_tests and "excess_zeros" not in clean_tests
+
+
+# --------------------------------------------------------------------------- #
+#  DML / IPW / TMLE — propensity overlap
+# --------------------------------------------------------------------------- #
+
+
+def _confounded_overlap(strength: float, n: int = 1500, seed: int = 0) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    x1, x2 = rng.normal(size=n), rng.normal(size=n)
+    ps = 1 / (1 + np.exp(-(strength * x1 + 0.6 * strength * x2)))
+    d = (rng.uniform(size=n) < ps).astype(int)
+    y = 1 + 2 * d + x1 + x2 + rng.normal(size=n)
+    return pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+
+
+_OVERLAP_ESTIMATORS = [
+    (
+        "dml_irm",
+        lambda df: sp.dml(df, y="y", treat="d", covariates=["x1", "x2"], model="irm"),
+    ),
+    ("tmle", lambda df: sp.tmle(df, y="y", treat="d", covariates=["x1", "x2"])),
+    ("ipw", lambda df: sp.ipw(df, y="y", treat="d", covariates=["x1", "x2"])),
+]
+
+
+@pytest.mark.parametrize(
+    "name,fit", _OVERLAP_ESTIMATORS, ids=[e[0] for e in _OVERLAP_ESTIMATORS]
+)
+def test_propensity_estimator_flags_weak_overlap(name, fit):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        strong = fit(_confounded_overlap(4.0))
+        good = fit(_confounded_overlap(0.6))
+    assert "dml_overlap" in {
+        v["test"] for v in strong.violations()
+    }, f"{name}: weak overlap did not surface in violations()"
+    assert "dml_overlap" not in {
+        v["test"] for v in good.violations()
+    }, f"{name}: false-positive overlap flag on a well-overlapped design"
+
+
+# --------------------------------------------------------------------------- #
+#  Synthetic control — pre-fit diagnostics are recorded
+# --------------------------------------------------------------------------- #
+
+
+def _synth_bad_fit() -> pd.DataFrame:
+    rng = np.random.default_rng(3)
+    rows = []
+    for u in ["T"] + [f"D{i}" for i in range(8)]:
+        base = 50 if u == "T" else rng.uniform(10, 30)
+        slope = 5.0 if u == "T" else rng.uniform(-1, 1)
+        for yr in range(1980, 1995):
+            rows.append(
+                {"u": u, "yr": yr, "y": base + slope * (yr - 1980) + rng.normal(0, 1)}
+            )
+    return pd.DataFrame(rows)
+
+
+@pytest.mark.parametrize(
+    "name,fit",
+    [
+        (
+            "synth",
+            lambda df: sp.synth(
+                df,
+                unit="u",
+                time="yr",
+                outcome="y",
+                treated_unit="T",
+                treatment_time=1990,
+            ),
+        ),
+        (
+            "augsynth",
+            lambda df: sp.augsynth(
+                df,
+                unit="u",
+                time="yr",
+                outcome="y",
+                treated_unit="T",
+                treatment_time=1990,
+            ),
+        ),
+        (
+            "gsynth",
+            lambda df: sp.gsynth(
+                df,
+                unit="u",
+                time="yr",
+                outcome="y",
+                treated_unit="T",
+                treatment_time=1990,
+            ),
+        ),
+    ],
+)
+def test_synth_records_prefit_diagnostics(name, fit):
+    """Every SCM variant must record the pre-fit inputs so synth_prefit can be
+    assessed (augsynth/gsynth fit the pre-period well, so they need not fire —
+    but they must not be blind)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = fit(_synth_bad_fit())
+    mi = r.model_info
+    for key in ("pre_treatment_rmse", "Y_treated", "times", "treatment_time"):
+        assert mi.get(key) is not None, f"{name}: model_info['{key}'] missing"
+
+
+def test_plain_scm_flags_unmatchable_pre_trend():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = sp.synth(
+            _synth_bad_fit(),
+            unit="u",
+            time="yr",
+            outcome="y",
+            treated_unit="T",
+            treatment_time=1990,
+        )
+    assert "synth_prefit" in {v["test"] for v in r.violations()}
