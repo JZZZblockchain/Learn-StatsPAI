@@ -29,10 +29,11 @@ High-Dimensional Metrics." *The R Journal*, 8(2), 185-199.
 [@chernozhukov2016hdm] — reference R implementation (``rlassoIV``).
 """
 
-from typing import Optional, List
+import warnings
+from typing import List, Optional
+
 import numpy as np
 import pandas as pd
-import warnings
 
 from ..core.results import EconometricResults
 from ..exceptions import MethodIncompatibility
@@ -249,6 +250,23 @@ def liml(
 
     model_name = "LIML" if fuller is None else f"Fuller (a={fuller})"
 
+    # First-stage strength: the binding (weakest) excluded-instrument F across
+    # endogenous regressors, so result.violations() flags weak instruments even
+    # when the workflow picks LIML (the weak-IV-robust estimator). Additive —
+    # does not touch the LIML point estimate or SE.
+    try:
+        from .iv import _first_stage_diagnostics
+
+        _fs = _first_stage_diagnostics(X_exog, X_endog, Z_all, n, Z_excl.shape[1])
+        _fvals = [
+            fs["f_statistic"]
+            for fs in _fs
+            if fs.get("f_statistic") is not None and np.isfinite(fs["f_statistic"])
+        ]
+    except (np.linalg.LinAlgError, ValueError, KeyError):
+        _fvals = []
+    first_stage_f = float(min(_fvals)) if _fvals else None
+
     _result = EconometricResults(
         params=params,
         std_errors=std_errors,
@@ -259,6 +277,7 @@ def liml(
             "fuller_constant": fuller,
             "endog_vars": x_endog,
             "instruments": z,
+            "first_stage_f": first_stage_f,
         },
         data_info={
             "n_obs": n,
@@ -560,7 +579,7 @@ def lasso_iv(
         x_j = X_endog_tilde[:, j]
 
         # Cross-validated LASSO
-        from sklearn.linear_model import LassoCV, Lasso
+        from sklearn.linear_model import Lasso, LassoCV
 
         if penalty == "cv":
             lasso = LassoCV(cv=5, max_iter=10000, random_state=42)

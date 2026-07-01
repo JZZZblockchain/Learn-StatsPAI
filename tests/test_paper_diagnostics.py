@@ -44,3 +44,33 @@ def test_robustness_section_reports_a_clean_self_audit():
     assert "Automatic diagnostic checks" in rob
     # a well-behaved fit must not manufacture a balance violation
     assert "notable residual" not in rob.lower()
+
+
+def _iv_design(first_stage_coef: float, n: int = 800, seed: int = 0) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    z = rng.normal(size=n)
+    u = rng.normal(size=n)
+    d = first_stage_coef * z + u + rng.normal(size=n)
+    y = 1.0 * d + u + rng.normal(size=n)
+    return pd.DataFrame({"y": y, "d": d, "z": z})
+
+
+def test_liml_records_first_stage_f_so_weak_iv_is_flagged():
+    """The workflow picks LIML for IV designs; it must still record the
+    first-stage F so a weak instrument surfaces (previously silent)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        weak = sp.liml("y ~ (d ~ z)", data=_iv_design(0.03))
+        strong = sp.liml("y ~ (d ~ z)", data=_iv_design(2.0))
+    assert weak.model_info["first_stage_f"] < 10
+    assert "weak_instrument" in {v["test"] for v in weak.violations()}
+    assert strong.model_info["first_stage_f"] > 10
+    assert "weak_instrument" not in {v["test"] for v in strong.violations()}
+
+
+def test_paper_robustness_flags_weak_instrument():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        draft = sp.paper(_iv_design(0.03), y="y", treatment="d", instrument="z")
+    rob = draft.sections.get("Robustness", "").lower()
+    assert "weak instrument" in rob
