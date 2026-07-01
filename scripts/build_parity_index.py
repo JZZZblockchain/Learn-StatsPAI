@@ -664,6 +664,34 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "indirect standardization exactly."
         ),
     },
+    "auc": {
+        "status": "bit-exact",
+        "reference": "Mann-Whitney rank AUC (= pROC::auc / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "AUC 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_auc_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: AUC equals the mid-rank Mann-Whitney "
+            "statistic (ties handled), identical to pROC::auc and sklearn."
+        ),
+    },
+    "roc_curve": {
+        "status": "bit-exact",
+        "reference": "Mann-Whitney rank AUC (= pROC::auc / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "AUC 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_auc_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the ROC-curve AUC equals the mid-rank "
+            "Mann-Whitney statistic (= pROC::auc / sklearn). Curve/CI not pinned."
+        ),
+    },
 }
 
 

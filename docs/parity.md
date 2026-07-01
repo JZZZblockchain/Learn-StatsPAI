@@ -25,15 +25,15 @@ sp.parity_summary()           # honest coverage counts
 
 | status | functions |
 | --- | ---: |
-| bit-exact | 88 |
+| bit-exact | 90 |
 | aligned | 7 |
 | analytical-only | 51 |
 | external-replication | 4 |
-| **verified (subtotal)** | **150** |
-| unverified | 989 |
+| **verified (subtotal)** | **152** |
+| unverified | 987 |
 | **total registered** | **1139** |
 
-## bit-exact — 88 functions
+## bit-exact — 90 functions
 
 Machine-tolerance agreement with a named R/Stata reference.
 
@@ -42,6 +42,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `adjust_pvalues` | base R stats::p.adjust (bonferroni/holm/BH) | R 4.5.2 | exact (atol 1e-15; observed 0) | — / — | [`test_mht_parity.py`](../tests/reference_parity/test_mht_parity.py) (+1) |
 | `arima` | stats::arima | R 4.5.2; stats 4.5.2 | rel_est<=1e-06, rel_se<=1e-06 | 7.4e-07 / 9.3e-09 | [`39_arima.py`](../tests/r_parity/39_arima.py) (+2) |
 | `attributable_risk` | base-R closed form (attributable fraction exposed + PAF) | R 4.5.2 | AFE + PAF point estimates 1e-12 abs (observed 0); CI not pinned | — / — | [`test_epi_extra_parity.py`](../tests/reference_parity/test_epi_extra_parity.py) (+1) |
+| `auc` | Mann-Whitney rank AUC (= pROC::auc / sklearn) | R 4.5.2 | AUC 1e-12 abs (observed 0) | — / — | [`test_auc_parity.py`](../tests/reference_parity/test_auc_parity.py) |
 | `bacon_decomposition` | bacondecomp::bacon | R 4.5.2; bacondecomp 0.1.1 | rel_est<=1e-06, rel_se<=1e-06 | 5.6e-16 / 9.6e-09 | [`20_bacon.py`](../tests/r_parity/20_bacon.py) (+2) |
 | `benjamini_hochberg` | base R stats::p.adjust(method='BH') | R 4.5.2 | exact (atol 1e-15; observed 0) | — / — | [`test_mht_parity.py`](../tests/reference_parity/test_mht_parity.py) (+1) |
 | `betareg` | betareg::betareg(link.phi="log") | R 4.5.2; betareg 3.2.4 | rel_est<=1e-06, rel_se<=0.01 | 2.2e-08 / 3.1e-08 | [`61_betareg.py`](../tests/r_parity/61_betareg.py) (+2) |
@@ -114,6 +115,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `reset_test` | lmtest::resettest(power=2:3, type='fitted') | R 4.5.2; lmtest 0.9.40 | F-statistic & p-value 1e-10 rel (observed ~1e-13) | — / — | [`test_diagnostics_parity.py`](../tests/reference_parity/test_diagnostics_parity.py) (+1) |
 | `rif_decomposition` | dineq::rif + manual OLS | R 4.5.2; dineq 0.1.0 | rel_est<=1e-06, rel_se<=1e-06 | 2.2e-15 / 1.4e-16 | [`32_rif.py`](../tests/r_parity/32_rif.py) (+2) |
 | `risk_difference` | base-R closed form (Wald; = epiR::epi.2by2 / Stata epitab) | R 4.5.2 | estimate, se, CI 1e-12 abs (observed 0) | — / — | [`test_epi_parity.py`](../tests/reference_parity/test_epi_parity.py) (+1) |
+| `roc_curve` | Mann-Whitney rank AUC (= pROC::auc / sklearn) | R 4.5.2 | AUC 1e-12 abs (observed 0) | — / — | [`test_auc_parity.py`](../tests/reference_parity/test_auc_parity.py) |
 | `sdid` | synthdid::synthdid_estimate | R 4.5.2; synthdid 0.0.9 | rel_est<=1e-06, rel_se<=1e-06 | 2.6e-15 / 7.2e-08 | [`12_sdid.py`](../tests/r_parity/12_sdid.py) (+2) |
 | `sensemakr` | sensemakr::sensemakr | R 4.5.2; sensemakr 0.1.6 | rel_est<=1e-06, rel_se<=1e-06 | 5.0e-08 / 5.0e-08 | [`22_sensemakr.py`](../tests/r_parity/22_sensemakr.py) (+2) |
 | `sensitivity_specificity` | base closed form (2x2 diagnostic accuracy; = epiR) | R 4.5.2 | sens/spec/PPV/NPV/LR 1e-12 abs (observed 0) | — / — | [`test_epi_diag_parity.py`](../tests/reference_parity/test_epi_diag_parity.py) |
@@ -211,6 +213,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `test` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 989 functions
+## unverified — 987 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

@@ -17,7 +17,7 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 150 | 964 | **15.6%** |
+| **estimator functions** (parity-applicable) | 152 | 964 | **15.8%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
 | all registered | 143 | 1139 | 12.6% |
 
@@ -51,7 +51,7 @@ functions at once.
 | inference | 7 / 26 | cluster/HAC/multiway + MHT (Bonferroni/Holm/BH vs base R) covered; bootstrap open |
 | diagnostics | 5 / 25 | Breusch-Pagan + RESET bit-exact (vs lmtest); rest analytical-feasible |
 | dag | 0 / 23 | **EMPTY** |
-| epi | 12 / 20 | 2x2 measures + kappa/attributable_risk + sens/spec + direct/indirect standardization bit-exact (base-R closed form) |
+| epi | 14 / 20 | 2x2 measures + kappa/AR + sens/spec + standardization + auc/roc bit-exact (base-R/Mann-Whitney closed form) |
 | timeseries | 3 / 20 | VAR/LP/ARIMA covered; cointegration/GARCH open |
 | bayes | 0 / 19 | **EMPTY** (convergence-diagnostic, not numeric-parity, ceiling) |
 | conformal_causal | 0 / 17 | **EMPTY** (frontier) |
