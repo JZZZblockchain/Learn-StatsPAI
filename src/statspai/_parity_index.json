@@ -1513,6 +1513,23 @@
       "tolerance": ""
     },
     {
+      "function": "genmatch",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_matching_recovery_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "gmm",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -3710,6 +3727,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_rlasso_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "sbw",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_matching_recovery_parity.py"
       ],
       "tolerance": ""
     },

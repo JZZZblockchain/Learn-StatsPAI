@@ -17,9 +17,9 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 138 | 964 | **14.3%** |
+| **estimator functions** (parity-applicable) | 140 | 964 | **14.5%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
-| all registered | 138 | 1135 | 12.2% |
+| all registered | 140 | 1139 | 12.3% |
 
 > Recent coverage gains (vs R): +`kaplan_meier`, +`logrank_test`
 > (`survival::survfit`/`survdiff`, bit-exact); +`bonferroni`, +`holm`,
