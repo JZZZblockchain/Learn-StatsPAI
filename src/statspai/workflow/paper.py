@@ -1056,6 +1056,41 @@ def _section_from_workflow(
             else:
                 lines.append("No robustness findings produced.")
             rendered = "\n".join(lines)
+        # Automatic diagnostic self-audit — surface the fitted result's
+        # result.violations() so the robustness section states plainly what
+        # was checked and what flagged, with the sp.* to switch to. Narrow
+        # catch (violations() only inspects stored diagnostics, never re-fits)
+        # + degradation record rather than crash the draft (§7).
+        _res = getattr(workflow, "result", None)
+        if _res is not None and hasattr(_res, "violations"):
+            try:
+                _viols = _res.violations()
+            except (
+                AttributeError,
+                TypeError,
+                KeyError,
+                ValueError,
+                RuntimeError,
+            ) as exc:
+                record_degradation(
+                    degradations, section="Diagnostic self-audit", exc=exc
+                )
+                _viols = None
+            if _viols is not None:
+                _dlines = ["", "**Automatic diagnostic checks.**", ""]
+                if _viols:
+                    for _v in _viols:
+                        _sev = _v.get("severity", "warning")
+                        _msg = _v.get("message", _v.get("test", ""))
+                        _alts = _v.get("alternatives") or []
+                        _sug = f" Consider `{_alts[0]}`." if _alts else ""
+                        _dlines.append(f"- ({_sev}) {_msg}{_sug}")
+                else:
+                    _dlines.append(
+                        "- All automatic assumption / diagnostic checks passed "
+                        "(`result.violations()` is empty)."
+                    )
+                rendered = rendered.rstrip() + "\n" + "\n".join(_dlines)
         sections["Robustness"] = rendered
 
     return sections
