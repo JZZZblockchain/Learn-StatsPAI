@@ -30,11 +30,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..core._agent_summary import (  # Threshold constants imported (not re-stated) so audit's verdict; cannot drift from violations() when a future correctness fix; updates a cutoff. Single source of truth for numerical thresholds.
+    _COX_PH_ALPHA,
     _ESS_MIN,
+    _HECKMAN_RHO_BOUNDARY,
     _OVERLAP_MIN,
     _PRETREND_ALPHA,
     _RHAT_MAX,
     _SMD_MAX,
+    _TOBIT_CENSOR_PCT_MAX,
     _WEAK_IV_F,
     _as_float,
     _safe_get,
@@ -79,6 +82,8 @@ class _Check:
 
         - ``"greater_passes"`` — value > threshold → passed
         - ``"less_passes"``    — value < threshold → passed
+        - ``"abs_less_passes"`` — abs(value) < threshold → passed
+                                  (two-sided magnitude, e.g. Heckman rho).
         - ``"exists"``          — non-empty dict at the path → passed.
                                    Strict-dict-only intentionally — a
                                    bare ``False`` / ``0`` / ``""``
@@ -102,6 +107,14 @@ class _Check:
         status branch.
     rationale : str
         One-sentence reviewer justification: *why* this check matters.
+    model_type_any : tuple[str, ...]
+        Optional model-type gate. When non-empty, the check applies only if
+        one of these substrings appears in the result's model_type / method
+        signature (case-insensitive). Lets a family-level pool carry a check
+        that is specific to one estimator within the family — e.g. the
+        proportional-hazards check lives in the regression pool but must fire
+        only for Cox, never for a plain OLS. Empty (the default) means the
+        check applies to every result its ``applies_to`` family admits.
     """
 
     name: str
@@ -113,6 +126,7 @@ class _Check:
     suggest_function: Optional[str]
     importance: str
     rationale: str
+    model_type_any: Tuple[str, ...] = ()
 
 
 def _p(*keys: str) -> EvidencePaths:
@@ -376,6 +390,39 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         "confounders; sensitivity bounds tell readers how "
         "strong such confounding would have to be.",
     ),
+    # --- Limited-dependent (generic pool, model-type-gated) --------- #
+    # Tobit and Heckman route to the generic family; gate each on the model
+    # signature so only the estimator that carries the diagnostic is asked.
+    _Check(
+        name="extreme_censoring",
+        question="Is the censoring share below the point where Tobit "
+        "identification degrades (< 90%)?",
+        applies_to=("generic",),
+        model_type_any=("tobit", "censored"),
+        evidence_paths=_p("censor_pct"),
+        threshold=_TOBIT_CENSOR_PCT_MAX,
+        compare="less_passes",
+        suggest_function=None,
+        importance="high",
+        rationale="When almost all observations pile at the censoring limit "
+        "there is little uncensored variation left to identify the "
+        "latent-variable coefficients.",
+    ),
+    _Check(
+        name="heckman_rho_boundary",
+        question="Is the selection-outcome error correlation rho inside the "
+        "(-1, 1) interior (numerically identified)?",
+        applies_to=("generic",),
+        model_type_any=("heckman", "selection"),
+        evidence_paths=_p("rho"),
+        threshold=_HECKMAN_RHO_BOUNDARY,
+        compare="abs_less_passes",
+        suggest_function=None,
+        importance="high",
+        rationale="A rho pinned at the +-1 boundary means the two-step / MLE "
+        "did not find an interior optimum; the selection correction "
+        "is numerically degenerate, not identified.",
+    ),
 )
 
 
@@ -415,6 +462,22 @@ _REGRESSION_CHECKS: Tuple[_Check, ...] = (
         importance="low",
         rationale="The robustness-value diagnostic complements Oster "
         "and is easier to interpret graphically.",
+    ),
+    # --- Cox proportional hazards (regression pool, Cox-gated) ------- #
+    _Check(
+        name="proportional_hazards",
+        question="Does the proportional-hazards test hold (Schoenfeld p ≥ 0.05)?",
+        applies_to=("regression",),
+        # Cox routes to the regression family (model_type-derived); gate on the
+        # model_type so a plain OLS is never asked this survival-only question.
+        model_type_any=("cox", "hazard"),
+        evidence_paths=_p("ph_test", "min_pvalue"),
+        threshold=_COX_PH_ALPHA,
+        compare="greater_passes",
+        suggest_function="sp.aft",
+        importance="high",
+        rationale="If the hazard ratio is not constant over time the Cox "
+        "coefficient is a time-averaged blur, not the reported effect.",
     ),
 )
 
@@ -472,7 +535,7 @@ def _evaluate(check: _Check, model_info: Dict[str, Any]) -> Tuple[str, Any]:
         return "passed", raw
 
     # Numeric comparisons
-    if check.compare in ("greater_passes", "less_passes"):
+    if check.compare in ("greater_passes", "less_passes", "abs_less_passes"):
         val = _as_float(raw)
         if val is None:
             return "missing", None
@@ -481,6 +544,10 @@ def _evaluate(check: _Check, model_info: Dict[str, Any]) -> Tuple[str, Any]:
             return "missing", val
         if check.compare == "greater_passes":
             return ("passed" if val > thr else "failed"), val
+        if check.compare == "abs_less_passes":
+            # Magnitude test — e.g. Heckman rho hitting the +-1 boundary is a
+            # numerical red flag in either direction.
+            return ("passed" if abs(val) < thr else "failed"), val
         return ("passed" if val < thr else "failed"), val
 
     # Unknown compare verb — surface as missing rather than raise.
@@ -661,8 +728,15 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> Dict[str, Any]:
             }
         )
 
+    # Model-type signature for checks that are specific to one estimator within
+    # a family (e.g. Cox / Tobit / Heckman all share a broad family but each
+    # carries a diagnostic the others must not be asked about).
+    signature = (f"{method_label} {model_info.get('model_type', '')}").lower()
+
     for chk in pool:
         if family not in chk.applies_to:
+            continue
+        if chk.model_type_any and not any(s in signature for s in chk.model_type_any):
             continue
         _record(chk)
 

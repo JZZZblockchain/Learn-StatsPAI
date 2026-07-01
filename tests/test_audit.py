@@ -434,3 +434,95 @@ class TestSeverityImportanceSeparation:
         assert check["importance"] == "low"
         # Low-importance missing → severity stays at info, not warning.
         assert check["severity"] == "info"
+
+
+class TestModelTypeGatedChecks:
+    """Cox / Tobit / Heckman each route to a broad family (regression /
+    generic) they share with plain OLS, but carry a signature assumption the
+    others must not be asked about. The ``model_type_any`` gate makes audit
+    surface each proactively — ``passed`` when the assumption holds, ``failed``
+    when violated — while a plain OLS never sees the survival/limited-dep
+    question. Pins that audit stays a faithful, non-crying-wolf superset of
+    result.violations() for these estimators."""
+
+    @staticmethod
+    def _status(result, name):
+        for c in sp.audit(result)["checks"]:
+            if c["name"] == name:
+                return c["status"]
+        return "ABSENT"
+
+    @staticmethod
+    def _is_superset(result):
+        names = {c["name"] for c in sp.audit(result)["checks"]}
+        return {v["test"] for v in result.violations()} <= names
+
+    def test_cox_proportional_hazards_passed_and_failed(self):
+        n = 700
+        # PH holds: textbook proportional-hazards DGP.
+        xg = np.random.default_rng(3).normal(size=n)
+        tg = -np.log(np.random.default_rng(3).uniform(size=n)) / np.exp(0.8 * xg)
+        good = sp.cox(
+            data=pd.DataFrame({"t": tg + 0.001, "d": np.ones(n, int), "x": xg}),
+            duration="t",
+            event="d",
+            x=["x"],
+        )
+        # PH violated: covariate trends with failure time.
+        rb = np.random.default_rng(11)
+        tb = np.sort(rb.exponential(1.0, n)) + 0.01
+        xb = np.linspace(-2, 2, n) + rb.normal(0, 0.3, n)
+        bad = sp.cox(
+            data=pd.DataFrame({"t": tb, "d": np.ones(n, int), "x": xb}),
+            duration="t",
+            event="d",
+            x=["x"],
+        )
+        assert self._status(good, "proportional_hazards") == "passed"
+        assert self._status(bad, "proportional_hazards") == "failed"
+        # No double-count when the violation also fires the fold-in.
+        names = [c["name"] for c in sp.audit(bad)["checks"]]
+        assert names.count("proportional_hazards") == 1
+        assert self._is_superset(good) and self._is_superset(bad)
+
+    def test_plain_ols_never_asked_proportional_hazards(self):
+        rng = np.random.default_rng(1)
+        x = rng.normal(size=400)
+        ols = sp.regress(
+            "y ~ x", data=pd.DataFrame({"y": x + rng.normal(size=400), "x": x})
+        )
+        assert self._status(ols, "proportional_hazards") == "ABSENT"
+
+    def test_tobit_extreme_censoring_passed_and_failed(self):
+        x = np.random.default_rng(5).normal(size=800)
+        y_good = np.maximum(1 + 2 * x + np.random.default_rng(6).normal(size=800), 0)
+        y_bad = np.maximum(-3 + x + np.random.default_rng(6).normal(size=800), 0)
+        good = sp.tobit(pd.DataFrame({"y": y_good, "x": x}), y="y", x=["x"], ll=0)
+        bad = sp.tobit(pd.DataFrame({"y": y_bad, "x": x}), y="y", x=["x"], ll=0)
+        assert self._status(good, "extreme_censoring") == "passed"
+        assert self._status(bad, "extreme_censoring") == "failed"
+        assert self._is_superset(bad)
+
+    def test_heckman_rho_boundary_passed_and_failed(self):
+        r5 = np.random.default_rng(5)
+        m = 2000
+        zc, xc, uc = r5.normal(size=m), r5.normal(size=m), r5.normal(size=m)
+        eps = 0.6 * uc + np.sqrt(1 - 0.36) * r5.normal(size=m)  # rho ~ 0.6, interior
+        selc = 0.3 + zc + 0.5 * xc + uc > 0
+        yc = 1 + 2 * xc + 3 * eps
+        gdf = pd.DataFrame(
+            {"y": np.where(selc, yc, np.nan), "x": xc, "z": zc, "s": selc.astype(int)}
+        )
+        good = sp.heckman(gdf, y="y", x=["x"], select="s", z=["z"])
+        r9 = np.random.default_rng(9)
+        k = 600
+        zb, xb, ub = r9.normal(size=k), r9.normal(size=k), r9.normal(size=k)
+        selb = 0.5 + 0.8 * zb + ub > 0
+        yb = 1 + 2 * xb + 3 * ub  # outcome error == selection error => rho -> 1
+        bdf = pd.DataFrame(
+            {"y": np.where(selb, yb, np.nan), "x": xb, "z": zb, "s": selb.astype(int)}
+        )
+        bad = sp.heckman(bdf, y="y", x=["x"], select="s", z=["z"])
+        assert self._status(good, "heckman_rho_boundary") == "passed"
+        assert self._status(bad, "heckman_rho_boundary") == "failed"
+        assert self._is_superset(bad)
