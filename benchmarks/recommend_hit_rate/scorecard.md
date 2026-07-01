@@ -1,9 +1,9 @@
 # Recommendation Hit-Rate Scorecard
 
-- corpus: `0.12.0-batch5`  |  statspai: `1.20.0`  |  entries: **34** (28 core + 6 frontier; 10 Tier-A + 24 Tier-B)
+- corpus: `1.0.0-fifty`  |  statspai: `1.20.0`  |  entries: **50** (43 core + 7 frontier; 10 Tier-A + 40 Tier-B)
 - **core top-1 hit-rate: 1.0**  |  top-k: 1.0  |  hard-miss rate: 0.0  |  errors: 0
 - audit catalog mean recall (static): 1.0  |  audit dynamic mean recall (fit+audit): 1.0  |  audit errors: 0
-- frontier coverage (gap-probe designs recommend is being taught): **1.0** (6/6)
+- frontier coverage (gap-probe designs recommend is being taught): **1.0** (7/7)
 
 ## recommend hit-rate (dynamic — runs on real / synthetic data)
 
@@ -39,6 +39,22 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | did | `meyer_viscusi_durbin_1995_did` | ✓ HIT | did | `classic_2x2` |
 | rd | `ludwig_miller_2007_headstart_rd` | ✓ HIT | rd | `local_polynomial_rd` |
 | iv | `miguel_2004_rainfall_iv` | ✓ HIT | iv | `twosls` |
+| rd | `angrist_lavy_1999_classsize_rd` | ✓ HIT | rd | `local_polynomial_rd` |
+| synth | `card_1990_mariel_boatlift` | ✓ HIT | synth | `synth` |
+| did | `dube_lester_reich_2010_border_did` | ✓ HIT | did | `callaway_santanna` |
+| did | `ditella_schargrodsky_2004_police_did` | ✓ HIT | did | `classic_2x2` |
+| iv | `angrist_evans_1998_familysize_iv` | ✓ HIT | iv | `twosls` |
+| observational | `imbens_2001_lottery_obs` | ✓ HIT | observational | `psm` |
+| iv ⊕ | `autor_dorn_hanson_2013_bartik` | ✓ HIT | bartik | `bartik` |
+| iv | `oreopoulos_2006_schooling_iv` | ✓ HIT | iv | `twosls` |
+| did | `galiani_2005_water_did` | ✓ HIT | did | `callaway_santanna` |
+| rd | `card_dobkin_maestas_2008_medicare_rd` | ✓ HIT | rd | `local_polynomial_rd` |
+| did | `almond_2006_flu_did` | ✓ HIT | did | `callaway_santanna` |
+| did | `bleakley_2007_hookworm_did` | ✓ HIT | did | `callaway_santanna` |
+| rd | `black_1999_school_boundary_rd` | ✓ HIT | rd | `local_polynomial_rd` |
+| iv | `chay_greenstone_2005_airquality_iv` | ✓ HIT | iv | `twosls` |
+| observational | `chetty_looney_kroft_2009_salience` | ✓ HIT | observational | `psm` |
+| did | `finkelstein_2007_medicare_did` | ✓ HIT | did | `callaway_santanna` |
 | bunching ⊕ | `frontier_bunching_saez2010` | ✓ HIT | bunching | `bunching` |
 | rkd ⊕ | `frontier_rkd_card2015` | ✓ HIT | rkd | `rkd` |
 | ddd ⊕ | `frontier_ddd_gruber1994` | ✓ HIT | ddd | `ddd` |
@@ -78,6 +94,22 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | `meyer_viscusi_durbin_1995_did` | did | 1.0 | parallel_trends |
 | `ludwig_miller_2007_headstart_rd` | rd | 1.0 | bandwidth_sensitivity |
 | `miguel_2004_rainfall_iv` | iv | 1.0 | anderson_rubin_ci |
+| `angrist_lavy_1999_classsize_rd` | rd | 1.0 | bandwidth_sensitivity |
+| `card_1990_mariel_boatlift` | synth | 1.0 | placebo_inference |
+| `dube_lester_reich_2010_border_did` | did | 1.0 | — |
+| `ditella_schargrodsky_2004_police_did` | did | 1.0 | parallel_trends |
+| `angrist_evans_1998_familysize_iv` | iv | 1.0 | anderson_rubin_ci |
+| `imbens_2001_lottery_obs` | matching | 1.0 | overlap, balance_after |
+| `autor_dorn_hanson_2013_bartik` | — | ERR | TypeError("bartik() missing 2 required positional arguments: |
+| `oreopoulos_2006_schooling_iv` | iv | 1.0 | anderson_rubin_ci |
+| `galiani_2005_water_did` | did | 1.0 | — |
+| `card_dobkin_maestas_2008_medicare_rd` | rd | 1.0 | bandwidth_sensitivity |
+| `almond_2006_flu_did` | did | 1.0 | — |
+| `bleakley_2007_hookworm_did` | did | 1.0 | — |
+| `black_1999_school_boundary_rd` | rd | 1.0 | bandwidth_sensitivity |
+| `chay_greenstone_2005_airquality_iv` | iv | 1.0 | anderson_rubin_ci |
+| `chetty_looney_kroft_2009_salience` | matching | 1.0 | balance_after |
+| `finkelstein_2007_medicare_did` | did | 1.0 | — |
 | `frontier_bunching_saez2010` | rd | 0.0 | — |
 | `frontier_rkd_card2015` | rd | 1.0 | bandwidth_sensitivity |
 | `frontier_ddd_gruber1994` | — | ERR | TypeError("ddd() missing 1 required positional argument: 'su |

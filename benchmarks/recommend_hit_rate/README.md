@@ -98,23 +98,33 @@ python3 benchmarks/recommend_hit_rate/harness.py --check    # CI gate (exit 1 on
 
 ## Results
 
-| metric | Day-1 (8) | Phase 2 (8) | Phase 3 (17) | + F-004 frontier (22) |
-| --- | --- | --- | --- |
-| entries | 8 Tier-A | 8 Tier-A | 17 core | 17 core + 5 frontier |
-| core top-1 hit-rate | 0.625 (5/8) | 1.0 (8/8) | 1.0 (17/17) | **1.0** (17/17) |
+| metric | Day-1 (8) | Phase 2 (8) | F-004 frontier (22) | 50 designs |
+| --- | --- | --- | --- | --- |
+| entries | 8 Tier-A | 8 Tier-A | 17 core + 5 frontier | **43 core + 7 frontier** |
+| core top-1 hit-rate | 0.625 (5/8) | 1.0 (8/8) | 1.0 (17/17) | **1.0** (43/43) |
 | top-k hit-rate | 0.625 | 1.0 | 1.0 | 1.0 |
 | hard-miss rate | 0.0 | 0.0 | 0.0 | **0.0** |
 | errors | 0 | 0 | 0 | 0 |
 | audit catalog mean recall (static) | 1.0 | 1.0 | 1.0 | 1.0 |
-| audit dynamic mean recall (fit+audit) | — | 1.0 (8/8) | 1.0 (17/17) | **1.0** (17/17) |
-| frontier coverage (gap-probe) | — | — | — | **1.0** (5/5) |
+| audit dynamic mean recall (fit+audit) | — | 1.0 (8/8) | 1.0 (17/17) | **1.0** (43/43) |
+| frontier coverage (gap-probe) | — | — | 1.0 (5/5) | **1.0** (7/7) |
 
-Phase 3 added 7 Tier-B adversarial design archetypes (synthetic stubs via
-`sp.dgp_*`, each anchored to a DOI-verified method/critique paper in
-`paper.bib`): the TWFE negative-weights trap (staggered + heterogeneous),
-weak-instrument (→ LIML) vs strong-instrument (→ 2SLS), sharp vs fuzzy RD, a
-clean 2×2, and strong-confounding selection-on-observables (→ PSM). **The
-engine resisted every trap — 0 hard-misses across all 17 designs.**
+The corpus reached **50 designs** (`corpus_version 1.0.0-fifty`): 43 core + 7
+frontier. Of these, ~29 are real published empirical papers (10 bundled
+Tier-A + ~19 Tier-B applied studies) and the rest are adversarial design
+archetypes. Every cited paper was verified via two independent sources (and a
+DOI where cleanly available) **before** its citation entered `paper.bib` — no
+DOI was ever fabricated; where a clean DOI could not be confirmed (e.g. some
+pre-2000 AER/QJE articles) the verified fields are recorded without one, per
+CLAUDE.md §10. **The engine resisted every adversarial trap — 0 hard-misses
+across all 50 designs.** Real-paper coverage spans DiD (Card-Krueger, Duflo,
+Dube-Lester-Reich, Di Tella-Schargrodsky, Almond, Bleakley, Galiani et al.,
+Finkelstein), IV (Angrist-Krueger, Card, AJR, Nunn-Wantchekon, Miguel et al.,
+Angrist-Evans, Oreopoulos, Chay-Greenstone, Autor-Dorn-Hanson shift-share), RD
+(Lee, Dell, Carpenter-Dobkin, Ludwig-Miller, Angrist-Lavy, Card-Dobkin-Maestas,
+Black), synthetic control (Abadie et al., Card Mariel), and observational /
+field experiments (Dehejia-Wahba, Bertrand-Mullainathan, Imbens et al.,
+Chetty-Looney-Kroft).
 
 **What works (verified on real data):** staggered DiD → Callaway-Sant'Anna
 (never TWFE); weak & moderate IV → 2SLS with live first-stage F; sharp RD →

@@ -427,10 +427,208 @@ class TestSeverityImportanceSeparation:
         assert check["importance"] == "high"
 
     def test_missing_low_importance_check_has_info_severity(self):
-        r = _bare_did_result()  # empty
-        # ess_bulk is universal-applies and importance="low"
+        # A Bayesian DID result that wrote the diagnostics dict but omitted
+        # ess_bulk: still missing, still low-importance, still info severity.
+        r = _bare_did_result(
+            model_info={
+                "model_type": "Bayesian DID",
+                "rhat_max": 1.001,
+                # no ess_bulk_min
+            }
+        )
         check = next(c for c in sp.audit(r)["checks"] if c["name"] == "ess_bulk")
         assert check["status"] == "missing"
         assert check["importance"] == "low"
         # Low-importance missing → severity stays at info, not warning.
         assert check["severity"] == "info"
+
+
+class TestModelTypeGatedChecks:
+    """Cox / Tobit / Heckman each route to a broad family (regression /
+    generic) they share with plain OLS, but carry a signature assumption the
+    others must not be asked about. The ``model_type_any`` gate makes audit
+    surface each proactively — ``passed`` when the assumption holds, ``failed``
+    when violated — while a plain OLS never sees the survival/limited-dep
+    question. Pins that audit stays a faithful, non-crying-wolf superset of
+    result.violations() for these estimators."""
+
+    @staticmethod
+    def _status(result, name):
+        for c in sp.audit(result)["checks"]:
+            if c["name"] == name:
+                return c["status"]
+        return "ABSENT"
+
+    @staticmethod
+    def _is_superset(result):
+        names = {c["name"] for c in sp.audit(result)["checks"]}
+        return {v["test"] for v in result.violations()} <= names
+
+    def test_cox_proportional_hazards_passed_and_failed(self):
+        n = 700
+        # PH holds: textbook proportional-hazards DGP.
+        xg = np.random.default_rng(3).normal(size=n)
+        tg = -np.log(np.random.default_rng(3).uniform(size=n)) / np.exp(0.8 * xg)
+        good = sp.cox(
+            data=pd.DataFrame({"t": tg + 0.001, "d": np.ones(n, int), "x": xg}),
+            duration="t",
+            event="d",
+            x=["x"],
+        )
+        # PH violated: covariate trends with failure time.
+        rb = np.random.default_rng(11)
+        tb = np.sort(rb.exponential(1.0, n)) + 0.01
+        xb = np.linspace(-2, 2, n) + rb.normal(0, 0.3, n)
+        bad = sp.cox(
+            data=pd.DataFrame({"t": tb, "d": np.ones(n, int), "x": xb}),
+            duration="t",
+            event="d",
+            x=["x"],
+        )
+        assert self._status(good, "proportional_hazards") == "passed"
+        assert self._status(bad, "proportional_hazards") == "failed"
+        # No double-count when the violation also fires the fold-in.
+        names = [c["name"] for c in sp.audit(bad)["checks"]]
+        assert names.count("proportional_hazards") == 1
+        assert self._is_superset(good) and self._is_superset(bad)
+
+    def test_plain_ols_never_asked_proportional_hazards(self):
+        rng = np.random.default_rng(1)
+        x = rng.normal(size=400)
+        ols = sp.regress(
+            "y ~ x", data=pd.DataFrame({"y": x + rng.normal(size=400), "x": x})
+        )
+        assert self._status(ols, "proportional_hazards") == "ABSENT"
+
+    def test_tobit_extreme_censoring_passed_and_failed(self):
+        x = np.random.default_rng(5).normal(size=800)
+        y_good = np.maximum(1 + 2 * x + np.random.default_rng(6).normal(size=800), 0)
+        y_bad = np.maximum(-3 + x + np.random.default_rng(6).normal(size=800), 0)
+        good = sp.tobit(pd.DataFrame({"y": y_good, "x": x}), y="y", x=["x"], ll=0)
+        bad = sp.tobit(pd.DataFrame({"y": y_bad, "x": x}), y="y", x=["x"], ll=0)
+        assert self._status(good, "extreme_censoring") == "passed"
+        assert self._status(bad, "extreme_censoring") == "failed"
+        assert self._is_superset(bad)
+
+    def test_heckman_rho_boundary_passed_and_failed(self):
+        r5 = np.random.default_rng(5)
+        m = 2000
+        zc, xc, uc = r5.normal(size=m), r5.normal(size=m), r5.normal(size=m)
+        eps = 0.6 * uc + np.sqrt(1 - 0.36) * r5.normal(size=m)  # rho ~ 0.6, interior
+        selc = 0.3 + zc + 0.5 * xc + uc > 0
+        yc = 1 + 2 * xc + 3 * eps
+        gdf = pd.DataFrame(
+            {"y": np.where(selc, yc, np.nan), "x": xc, "z": zc, "s": selc.astype(int)}
+        )
+        good = sp.heckman(gdf, y="y", x=["x"], select="s", z=["z"])
+        r9 = np.random.default_rng(9)
+        k = 600
+        zb, xb, ub = r9.normal(size=k), r9.normal(size=k), r9.normal(size=k)
+        selb = 0.5 + 0.8 * zb + ub > 0
+        yb = 1 + 2 * xb + 3 * ub  # outcome error == selection error => rho -> 1
+        bdf = pd.DataFrame(
+            {"y": np.where(selb, yb, np.nan), "x": xb, "z": zb, "s": selb.astype(int)}
+        )
+        bad = sp.heckman(bdf, y="y", x=["x"], select="s", z=["z"])
+        assert self._status(good, "heckman_rho_boundary") == "passed"
+        assert self._status(bad, "heckman_rho_boundary") == "failed"
+        assert self._is_superset(bad)
+
+
+class TestMcmcGate:
+    """MCMC convergence checks (rhat / ess) only apply when the result could
+    actually report them. On a frequentist MLE that has no sampler, "missing
+    convergence_rhat" is noise — a reviewer asked "has your OLS converged?"
+    is being told something that doesn't exist. The gate keeps the check
+    *live* for Bayesian results (so an actually-converged / non-converged
+    verdict is still surfaced) and silences it for everyone else."""
+
+    @staticmethod
+    def _names(result):
+        return {c["name"] for c in sp.audit(result)["checks"]}
+
+    def test_frequentist_ols_has_no_mcmc_checks(self):
+        rng = np.random.default_rng(1)
+        x = rng.normal(size=400)
+        ols = sp.regress(
+            "y ~ x", data=pd.DataFrame({"y": x + rng.normal(size=400), "x": x})
+        )
+        names = self._names(ols)
+        assert "convergence_rhat" not in names
+        assert "ess_bulk" not in names
+
+    def test_frequentist_tobit_has_no_mcmc_checks(self):
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=400)
+        y = np.maximum(1 + 2 * x + rng.normal(size=400), 0)
+        tb = sp.tobit(pd.DataFrame({"y": y, "x": x}), y="y", x=["x"], ll=0)
+        names = self._names(tb)
+        assert "convergence_rhat" not in names
+        assert "ess_bulk" not in names
+
+    def test_bayesian_did_surfaces_mcmc_checks(self):
+        # A DID result that carries rhat evidence should keep the MCMC checks
+        # surfaced (a high rhat would then be a real "failed" finding).
+        r = _bare_did_result(
+            model_info={
+                "model_type": "Bayesian DID",
+                "rhat_max": 1.001,
+                "ess_bulk_min": 800,
+            }
+        )
+        names = self._names(r)
+        assert "convergence_rhat" in names
+        assert "ess_bulk" in names
+        rhat = next(c for c in sp.audit(r)["checks"] if c["name"] == "convergence_rhat")
+        ess = next(c for c in sp.audit(r)["checks"] if c["name"] == "ess_bulk")
+        assert rhat["status"] == "passed"
+        assert ess["status"] == "passed"
+
+    def test_bayesian_method_signature_unlocks_mcmc(self):
+        # A result with no model_info rhat but a "Bayesian" method label
+        # is also treated as Bayesian — the signature alone is sufficient.
+        r = _bare_did_result(model_info={})
+        # Override method to a Bayesian signature without touching model_info
+        r.method = "Bayesian DiD"
+        r.model_info["model_type"] = "Bayesian DiD"
+        names = self._names(r)
+        assert "convergence_rhat" in names
+        assert "ess_bulk" in names
+
+
+class TestRequiresEvidenceGate:
+    """The requires_evidence / requires_signature gates let a check be
+    scoped to a regime whose data may or may not be present. The
+    motivating use is MCMC convergence (rhat/ess only on Bayesian
+    results) but the same mechanism must work for any future
+    "this assumption only matters when the model collected X" check.
+    Pins the OR semantics (evidence OR signature), the diagnostic
+    sub-dict fallback, and the empty-gate pass-through."""
+
+    def test_evidence_gate_fires_on_stored_key(self):
+        # n_clusters is the canonical example: a "panel few-clusters"
+        # check should be silent on a plain OLS that never recorded one.
+        from statspai.smart.audit import _check_evidence_predicate
+
+        assert _check_evidence_predicate(("n_clusters",), {"n_clusters": 12}, {})
+        assert not _check_evidence_predicate(("n_clusters",), {"x": 1}, {})
+
+    def test_evidence_gate_falls_back_to_diagnostics(self):
+        # panel OLS exposes n_clusters in diagnostics (not model_info);
+        # the gate must look at the merged view, not just model_info.
+        from statspai.smart.audit import _check_evidence_predicate
+
+        assert _check_evidence_predicate(("n_clusters",), {}, {"n_clusters": 12})
+
+    def test_evidence_gate_empty_is_no_op(self):
+        from statspai.smart.audit import _check_evidence_predicate
+
+        assert _check_evidence_predicate((), {"x": 1}, {})  # pass-through
+
+    def test_signature_gate_substring_match(self):
+        from statspai.smart.audit import _check_signature_predicate
+
+        assert _check_signature_predicate(("bayes", "mcmc"), "bayesian did")
+        assert _check_signature_predicate(("bayes", "mcmc"), "MCMC sampler")
+        assert not _check_signature_predicate(("bayes", "mcmc"), "did_2x2")
+        assert _check_signature_predicate((), "anything")  # pass-through

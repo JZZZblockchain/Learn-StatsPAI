@@ -17,7 +17,7 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 157 | 964 | **16.3%** |
+| **estimator functions** (parity-applicable) | 162 | 964 | **16.8%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
 | all registered | 143 | 1139 | 12.6% |
 
@@ -51,7 +51,7 @@ functions at once.
 | inference | 7 / 26 | cluster/HAC/multiway + MHT (Bonferroni/Holm/BH vs base R) covered; bootstrap open |
 | diagnostics | 5 / 25 | Breusch-Pagan + RESET bit-exact (vs lmtest); rest analytical-feasible |
 | dag | 0 / 23 | **EMPTY** |
-| epi | 9 / 20 | OR/RR/RD/MH/PR/NNT/IRR + cohen_kappa/attributable_risk bit-exact (base-R closed form); standardization open |
+| epi | 14 / 20 | 2x2 measures + kappa/AR + sens/spec + standardization + auc/roc bit-exact (base-R/Mann-Whitney closed form) |
 | timeseries | 3 / 20 | VAR/LP/ARIMA covered; cointegration/GARCH open |
 | bayes | 0 / 19 | **EMPTY** (convergence-diagnostic, not numeric-parity, ceiling) |
 | conformal_causal | 0 / 17 | **EMPTY** (frontier) |
@@ -63,7 +63,8 @@ functions at once.
 | survival | 5 / 12 | Cox/KM/log-rank bit-exact + Weibull AFT (survreg/aft) aligned, all vs R `survival`; competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
 | robustness | 0 / 11 | sensitivity bounds — analytical-feasible |
-| target_trial / transport / survey / longitudinal / bartik | 0 each | alignable against established packages |
+| survey | 4 / 7 | svymean/svytotal/svyglm bit-exact (vs R `survey`, HT/Hajek + linearization SE) + svydesign; calibration/rake open |
+| target_trial / transport / longitudinal / bartik | 0 each | alignable against established packages |
 | neural / llm / rl / text / fairness / ope / surrogate / bridge | 0 each | frontier; analytical/simulation ceiling |
 
 ## Prioritization — where to spend alignment effort

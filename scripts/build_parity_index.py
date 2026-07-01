@@ -634,6 +634,129 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "exactly."
         ),
     },
+    "direct_standardize": {
+        "status": "bit-exact",
+        "reference": "base closed form (directly standardized rate; = Stata dstdize)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "DSR 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_standardize_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: DSR = sum(w_i * r_i)/sum(w_i) over strata "
+            "matches the canonical direct standardization exactly (point rate "
+            "pinned; CI not pinned)."
+        ),
+    },
+    "indirect_standardize": {
+        "status": "bit-exact",
+        "reference": "base closed form (SMR / indirect std.; = Stata istdize)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "expected + SMR 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_standardize_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: expected = sum(reference_rate_i * "
+            "study_pop_i) and SMR = observed/expected match the canonical "
+            "indirect standardization exactly."
+        ),
+    },
+    "auc": {
+        "status": "bit-exact",
+        "reference": "Mann-Whitney rank AUC (= pROC::auc / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "AUC 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_auc_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: AUC equals the mid-rank Mann-Whitney "
+            "statistic (ties handled), identical to pROC::auc and sklearn."
+        ),
+    },
+    "roc_curve": {
+        "status": "bit-exact",
+        "reference": "Mann-Whitney rank AUC (= pROC::auc / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "AUC 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_auc_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the ROC-curve AUC equals the mid-rank "
+            "Mann-Whitney statistic (= pROC::auc / sklearn). Curve/CI not pinned."
+        ),
+    },
+    "svymean": {
+        "status": "bit-exact",
+        "reference": "survey::svymean (Horvitz-Thompson/Hajek + Taylor SE)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate + SE 1e-10 abs (observed ~5e-15 / 8e-17)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survey_parity.py",
+            "tests/reference_parity/_fixtures/survey_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: weights-only design survey mean + "
+            "Taylor-linearization SE match R survey::svymean to machine "
+            "precision. Regenerate via _generate_survey_R.R."
+        ),
+    },
+    "svytotal": {
+        "status": "bit-exact",
+        "reference": "survey::svytotal (Horvitz-Thompson + Taylor SE)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate 1e-12 rel; SE 1e-10 rel (observed ~2e-12 / 1e-14)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survey_parity.py",
+            "tests/reference_parity/_fixtures/survey_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: weights-only design survey total + "
+            "Taylor-linearization SE match R survey::svytotal to machine "
+            "precision. Regenerate via _generate_survey_R.R."
+        ),
+    },
+    "svyglm": {
+        "status": "bit-exact",
+        "reference": "survey::svyglm (design-based GLM + linearization SE)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "coefficients + SE 1e-10 abs (observed ~2e-15 / 6e-15)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survey_parity.py",
+            "tests/reference_parity/_fixtures/survey_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: survey-weighted GLM coefficients and "
+            "design-based (linearization) standard errors match R "
+            "survey::svyglm to machine precision. Regenerate via "
+            "_generate_survey_R.R."
+        ),
+    },
+    "kdensity": {
+        "status": "bit-exact",
+        "reference": "Gaussian KDE closed form (= stats::density / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "density 1e-12 abs (observed ~3e-18 / 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_kdensity_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: Gaussian KDE f(x0) = (1/nh) * sum_i "
+            "phi((x0-x_i)/h)/sqrt(2pi) matches the kernel-density value at every "
+            "grid point to machine precision (Silverman 1986). Bandwidth "
+            "selector not pinned."
+        ),
+    },
 }
 
 
