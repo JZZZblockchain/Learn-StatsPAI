@@ -224,6 +224,16 @@ def test_econometric_result_method_present():
         ("ar_test", "anderson_rubin"),
         ("local_projections", "local_projections"),
         ("jorda_lp", "local_projections"),
+        # Principal strat / target trial / VAR / transport / overlap batch-12
+        ("principal_strat", "principal_strat"),
+        ("target_trial", "target_trial"),
+        ("bacon_decomposition", "bacon_decomposition"),
+        ("goodman_bacon", "bacon_decomposition"),
+        ("var", "var"),
+        ("svar", "var"),
+        ("transport", "transport"),
+        ("transportability", "transport"),
+        ("overlap_weights", "overlap_weights"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -618,6 +628,20 @@ def test_batch11_estimators_carry_verified_citation():
         ("ges", "Chickering"),
         ("anderson_rubin", "Anderson"),
         ("local_projections", "Jordà"),  # exercises {\`a} -> à diacritic
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_batch12_estimators_carry_verified_citation():
+    for key, token in [
+        ("principal_strat", "Frangakis"),
+        ("target_trial", "Hernán"),
+        ("bacon_decomposition", "Goodman-Bacon"),
+        ("var", "Sims"),
+        ("transport", "Bareinboim"),
+        ("overlap_weights", "Li"),
     ]:
         r = _causal(key)
         r._citation_key = key

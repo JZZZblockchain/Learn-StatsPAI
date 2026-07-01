@@ -2399,6 +2399,75 @@ class CausalResult:
             "  doi={10.1257/0002828053828518}\n"
             "}"
         ),
+        # --- batch 12 methods-appendix coverage (principal stratification /
+        #     target trial / VAR / transportability / overlap weights; verified
+        #     via paper.bib / Crossref) ---
+        "principal_strat": (
+            "@article{frangakis2002principal,\n"
+            "  title={Principal Stratification in Causal "
+            "Inference},\n"
+            "  author={Frangakis, Constantine E. and Rubin, "
+            "Donald B.},\n"
+            "  journal={Biometrics},\n"
+            "  year={2002},\n"
+            "  doi={10.1111/j.0006-341x.2002.00021.x}\n"
+            "}"
+        ),
+        "target_trial": (
+            "@article{hernan2016using,\n"
+            "  title={Using Big Data to Emulate a Target Trial When "
+            "a Randomized Trial Is Not Available},\n"
+            "  author={Hern{\\'a}n, Miguel A. and Robins, "
+            "James M.},\n"
+            "  journal={American Journal of Epidemiology},\n"
+            "  volume={183},\n"
+            "  number={8},\n"
+            "  pages={758--764},\n"
+            "  year={2016},\n"
+            "  doi={10.1093/aje/kwv254}\n"
+            "}"
+        ),
+        "var": (
+            "@article{sims1980macroeconomics,\n"
+            "  title={Macroeconomics and Reality},\n"
+            "  author={Sims, Christopher A.},\n"
+            "  journal={Econometrica},\n"
+            "  volume={48},\n"
+            "  number={1},\n"
+            "  pages={1--48},\n"
+            "  year={1980},\n"
+            "  doi={10.2307/1912017}\n"
+            "}"
+        ),
+        "transport": (
+            "@article{bareinboim2016causal,\n"
+            "  title={Causal inference and the data-fusion "
+            "problem},\n"
+            "  author={Bareinboim, Elias and Pearl, Judea},\n"
+            "  journal={Proceedings of the National Academy of "
+            "Sciences},\n"
+            "  volume={113},\n"
+            "  number={27},\n"
+            "  pages={7345--7352},\n"
+            "  year={2016},\n"
+            "  doi={10.1073/pnas.1510507113}\n"
+            "}"
+        ),
+        "overlap_weights": (
+            "@article{li2018balancing,\n"
+            "  title={Balancing Covariates via Propensity Score "
+            "Weighting},\n"
+            "  author={Li, Fan and Morgan, Kari Lock and "
+            "Zaslavsky, Alan M.},\n"
+            "  journal={Journal of the American Statistical "
+            "Association},\n"
+            "  volume={113},\n"
+            "  number={521},\n"
+            "  pages={390--400},\n"
+            "  year={2018},\n"
+            "  doi={10.1080/01621459.2016.1260466}\n"
+            "}"
+        ),
     }
 
     def __init__(

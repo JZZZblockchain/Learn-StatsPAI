@@ -110,7 +110,8 @@ class MethodSpec:
 #  super learner, Balke-Pearl bounds, Horowitz-Manski bounds, causal impact
 #  (BSTS), Conley spatial HAC, NOTEARS structure learning, extended TWFE, PC /
 #  FCI / LiNGAM / GES causal discovery, Anderson-Rubin weak-IV test, local
-#  projections) plus
+#  projections, principal stratification, target-trial emulation, VAR,
+#  transportability, overlap weights) plus
 #  the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
@@ -2315,6 +2316,145 @@ _SPECS: List[MethodSpec] = [
             "HAC inference for the induced serial correlation.",
         ],
         aliases=["lp_impulse_response", "jorda_lp", "local_projection"],
+    ),
+    MethodSpec(
+        key="principal_strat",
+        name="Principal Stratification",
+        estimand_latex=(
+            r"\mathrm{PCE} = \mathbb{E}[Y(1) - Y(0)\mid " r"S(0){=}s_0, S(1){=}s_1]"
+        ),
+        estimator_latex=(
+            r"\text{stratify by the joint }(S(0),S(1))\ "
+            r"(\text{potential post-treatment } S);\ "
+            r"\text{effects within principal strata}"
+        ),
+        prose=(
+            "Defines causal effects within principal strata — subgroups fixed by "
+            "the joint potential values of a post-treatment variable S(0), S(1) "
+            "(e.g. survival, compliance) — so comparisons condition on a quantity "
+            "unaffected by treatment assignment (Frangakis & Rubin)."
+        ),
+        assumptions=[
+            "SUTVA and (typically) randomized/ignorable assignment.",
+            "Principal strata are latent; identification needs extra "
+            "assumptions (e.g. monotonicity, exclusion).",
+        ],
+        aliases=["principal_stratification", "frangakis_rubin", "psa"],
+    ),
+    MethodSpec(
+        key="target_trial",
+        name="Target Trial Emulation",
+        estimand_latex=(
+            r"\text{ITT / per-protocol effect of a specified " r"hypothetical trial}"
+        ),
+        estimator_latex=(
+            r"\text{specify protocol (eligibility, strategies, "
+            r"assignment, outcome);}\ \text{emulate each component "
+            r"in observational data}"
+        ),
+        prose=(
+            "Makes an observational analysis explicit by specifying the protocol "
+            "of the hypothetical randomized trial it emulates — eligibility, "
+            "treatment strategies, assignment, follow-up, and estimand — then "
+            "estimating that effect with g-methods, avoiding immortal-time and "
+            "alignment biases (Hernán & Robins)."
+        ),
+        assumptions=[
+            "Exchangeability (no unmeasured confounding) at baseline / over time.",
+            "Positivity and consistency; correct protocol specification.",
+        ],
+        aliases=["target_trial_emulation", "trial_emulation", "emulated_trial"],
+    ),
+    MethodSpec(
+        key="bacon_decomposition",
+        name="Goodman-Bacon Decomposition",
+        estimand_latex=(
+            r"\hat\beta^{\mathrm{TWFE}} = \sum_k s_k\," r"\hat\beta_k^{2\times2}"
+        ),
+        estimator_latex=(
+            r"s_k \propto n_k\,\bar D_k(1-\bar D_k);\ "
+            r"\hat\beta_k^{2\times2}:\ \text{each timing-group 2x2 DiD "
+            r"comparison}"
+        ),
+        prose=(
+            "Decomposes the two-way fixed-effects DiD coefficient into a "
+            "variance-weighted average of all possible 2x2 DiD comparisons "
+            "between timing groups — exposing the 'forbidden' comparisons "
+            "(already-treated as controls) that can bias TWFE under staggered "
+            "adoption (Goodman-Bacon)."
+        ),
+        assumptions=[
+            "Diagnostic decomposition of a fitted TWFE estimator (an identity).",
+            "Interpreted under (variation-in-timing) DiD assumptions.",
+        ],
+        aliases=["goodman_bacon", "bacon", "twfe_decomposition"],
+    ),
+    MethodSpec(
+        key="var",
+        name="Vector Autoregression",
+        estimand_latex=(r"y_t = c + \sum_{\ell=1}^{p} A_\ell\,y_{t-\ell} + u_t"),
+        estimator_latex=(
+            r"\hat A_\ell\ \text{by equation-by-equation OLS};\ "
+            r"\text{IRFs / FEVD from the (identified) MA representation}"
+        ),
+        prose=(
+            "Models a vector of time series as linear functions of their own "
+            "lags, estimated equation-by-equation by OLS; identified structural "
+            "shocks (e.g. via a Cholesky/short-run scheme) yield impulse "
+            "responses and forecast-error variance decompositions (Sims)."
+        ),
+        assumptions=[
+            "Covariance-stationary (or suitably differenced) series.",
+            "Correct lag order; an identification scheme for structural shocks.",
+        ],
+        aliases=["vector_autoregression", "svar", "var_model"],
+    ),
+    MethodSpec(
+        key="transport",
+        name="Transportability / Data Fusion",
+        estimand_latex=(r"P^{*}(Y\mid \mathrm{do}(X))\ \text{in a target domain}"),
+        estimator_latex=(
+            r"\text{selection diagram} \Rightarrow \text{transport formula: "
+            r"reweight source } P(Y\mid \mathrm{do}(X),W)\ \text{by target } "
+            r"P^{*}(W)"
+        ),
+        prose=(
+            "Licenses transferring causal effects across populations by encoding "
+            "domain differences in a selection diagram and deriving a transport "
+            "formula that combines experimental and observational data from "
+            "multiple sources — the do-calculus solution to the data-fusion "
+            "problem (Bareinboim & Pearl)."
+        ),
+        assumptions=[
+            "A correct selection diagram encoding source-target differences.",
+            "Transportability is identifiable (a valid transport formula exists).",
+        ],
+        aliases=["transportability", "data_fusion", "external_validity"],
+    ),
+    MethodSpec(
+        key="overlap_weights",
+        name="Overlap Weights",
+        estimand_latex=(
+            r"\tau_{\mathrm{ATO}} = \frac{\mathbb{E}[h(X)\tau(X)]}"
+            r"{\mathbb{E}[h(X)]},\quad h(X) = e(X)(1-e(X))"
+        ),
+        estimator_latex=(
+            r"w_i = 1 - \hat e(X_i)\ (\text{treated}),\ "
+            r"w_i = \hat e(X_i)\ (\text{control})"
+        ),
+        prose=(
+            "Propensity-score weights proportional to the probability of the "
+            "opposite assignment, e(X)(1-e(X)); they target the "
+            "overlap-weighted average treatment effect (ATO), give exact mean "
+            "balance for the propensity model, and avoid the extreme weights of "
+            "IPW (Li, Morgan & Zaslavsky)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "The ATO estimand (effect in the region of good overlap) is of "
+            "interest.",
+        ],
+        aliases=["overlap_weighting", "ato_weights", "li_morgan_zaslavsky"],
     ),
 ]
 
