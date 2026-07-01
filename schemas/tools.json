@@ -12004,7 +12004,7 @@
     "name": "mediation"
   },
   {
-    "description": "Linear nested-models mediation decomposition (VanderWeele 2014",
+    "description": "Linear nested-models mediation decomposition (VanderWeele 2014 Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
