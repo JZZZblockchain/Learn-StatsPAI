@@ -2630,6 +2630,29 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "function": "manski_bounds",
+      "notes": [
+        "Closed-form identity: the no-assumption ATE bound width equals the outcome range y_upper - y_lower exactly, and each bound reconstructs from the cell means and treatment share (Manski 1990)."
+      ],
+      "reference": "Manski (1990) no-assumption worst-case ATE bound identity",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_manski_bounds_parity.py"
+      ],
+      "tolerance": "width == y_upper - y_lower 1e-12 abs (observed 0)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "mantel_haenszel",
       "notes": [
         "Frozen-R fixture: Mantel-Haenszel OR + Robins-Breslow-Greenland CI match the canonical base-R closed form exactly. Regenerate via _generate_epi_R.R."
@@ -4156,6 +4179,7 @@
         "tests/external_parity/test_whatif_nhefs.py",
         "tests/reference_parity/test_assimilation_parity.py",
         "tests/reference_parity/test_cross_estimator_parity.py",
+        "tests/reference_parity/test_feols_bias_reduced_parity.py",
         "tests/reference_parity/test_ols_se_external_parity.py",
         "tests/reference_parity/test_postestimation_parity.py",
         "tests/reference_parity/test_recovery_batch2_parity.py",

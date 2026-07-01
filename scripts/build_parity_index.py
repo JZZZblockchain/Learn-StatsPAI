@@ -847,6 +847,21 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "Gini (Lerman & Yitzhaki 1985)."
         ),
     },
+    "manski_bounds": {
+        "status": "bit-exact",
+        "reference": "Manski (1990) no-assumption worst-case ATE bound identity",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "width == y_upper - y_lower 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_manski_bounds_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the no-assumption ATE bound width equals the "
+            "outcome range y_upper - y_lower exactly, and each bound "
+            "reconstructs from the cell means and treatment share (Manski 1990)."
+        ),
+    },
 }
 
 
