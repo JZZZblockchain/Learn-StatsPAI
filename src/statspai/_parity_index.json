@@ -958,6 +958,29 @@
       "tolerance": ""
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "direct_standardize",
+      "notes": [
+        "Closed-form identity: DSR = sum(w_i * r_i)/sum(w_i) over strata matches the canonical direct standardization exactly (point rate pinned; CI not pinned)."
+      ],
+      "reference": "base closed form (directly standardized rate; = Stata dstdize)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_standardize_parity.py"
+      ],
+      "tolerance": "DSR 1e-12 abs (observed 0)"
+    },
+    {
       "function": "discos",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -1837,6 +1860,29 @@
         "tests/reference_parity/_fixtures/epi_R.json"
       ],
       "tolerance": "estimate 1e-12; exact CI 1e-10 abs (observed ~3e-15)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "indirect_standardize",
+      "notes": [
+        "Closed-form identity: expected = sum(reference_rate_i * study_pop_i) and SMR = observed/expected match the canonical indirect standardization exactly."
+      ],
+      "reference": "base closed form (SMR / indirect std.; = Stata istdize)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_standardize_parity.py"
+      ],
+      "tolerance": "expected + SMR 1e-12 abs (observed 0)"
     },
     {
       "also_verified_by": [

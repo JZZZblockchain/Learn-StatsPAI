@@ -634,6 +634,36 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "exactly."
         ),
     },
+    "direct_standardize": {
+        "status": "bit-exact",
+        "reference": "base closed form (directly standardized rate; = Stata dstdize)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "DSR 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_standardize_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: DSR = sum(w_i * r_i)/sum(w_i) over strata "
+            "matches the canonical direct standardization exactly (point rate "
+            "pinned; CI not pinned)."
+        ),
+    },
+    "indirect_standardize": {
+        "status": "bit-exact",
+        "reference": "base closed form (SMR / indirect std.; = Stata istdize)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "expected + SMR 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_standardize_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: expected = sum(reference_rate_i * "
+            "study_pop_i) and SMR = observed/expected match the canonical "
+            "indirect standardization exactly."
+        ),
+    },
 }
 
 
