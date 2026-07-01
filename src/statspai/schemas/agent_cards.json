@@ -7111,7 +7111,7 @@
       "Standard weights and study strata are aligned to the same stratum definitions and ordering."
     ],
     "category": "epi",
-    "description": "Direct age/covariate standardization of a rate using external standard-population weights.",
+    "description": "Direct age/covariate standardization of a rate using external standard-population weights. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -7136,7 +7136,7 @@
     ],
     "reference": "Rothman, Greenland & Lash (2008) ch. 3",
     "signature": {
-      "description": "Direct age/covariate standardization of a rate using external standard-population weights.",
+      "description": "Direct age/covariate standardization of a rate using external standard-population weights. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "direct_standardize",
       "parameters": {
         "properties": {
@@ -7178,9 +7178,10 @@
     "stability": "stable",
     "typical_n_min": 50,
     "validation_notes": [
+      "tests/reference_parity/test_standardize_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -7194,7 +7195,7 @@
       "Reference rates are estimated precisely enough to be treated as fixed (no propagation of reference-rate uncertainty)."
     ],
     "category": "epi",
-    "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI.",
+    "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -7219,7 +7220,7 @@
     ],
     "reference": "Breslow & Day (1987) Vol. II",
     "signature": {
-      "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI.",
+      "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "indirect_standardize",
       "parameters": {
         "properties": {
@@ -7266,9 +7267,10 @@
     "stability": "stable",
     "typical_n_min": 50,
     "validation_notes": [
+      "tests/reference_parity/test_standardize_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -8678,7 +8680,7 @@
       "Class labels are correctly specified (mislabeling inverts the curve below the diagonal)."
     ],
     "category": "epi",
-    "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error.",
+    "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -8703,7 +8705,7 @@
     ],
     "reference": "Hanley & McNeil (1982)",
     "signature": {
-      "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error.",
+      "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "roc_curve",
       "parameters": {
         "properties": {
@@ -8731,9 +8733,10 @@
     "stability": "stable",
     "typical_n_min": 50,
     "validation_notes": [
+      "tests/reference_parity/test_auc_parity.py",
       "API/unit contract evidence: tests/test_epi_diagnostic.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

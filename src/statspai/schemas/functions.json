@@ -3867,7 +3867,7 @@
     }
   },
   {
-    "description": "Direct age/covariate standardization of a rate using external standard-population weights.",
+    "description": "Direct age/covariate standardization of a rate using external standard-population weights. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "direct_standardize",
     "parameters": {
       "properties": {
@@ -3907,7 +3907,7 @@
     }
   },
   {
-    "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI.",
+    "description": "Indirect standardization -> SMR (standardized morbidity / mortality ratio) with Garwood exact Poisson CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "indirect_standardize",
     "parameters": {
       "properties": {
@@ -4665,7 +4665,7 @@
     }
   },
   {
-    "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error.",
+    "description": "ROC curve with AUC (trapezoidal) and Hanley-McNeil (1982) standard error. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "roc_curve",
     "parameters": {
       "properties": {
@@ -46613,7 +46613,7 @@
     }
   },
   {
-    "description": "Shortcut: just return the AUC.",
+    "description": "Shortcut: just return the AUC. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "auc",
     "parameters": {
       "properties": {
