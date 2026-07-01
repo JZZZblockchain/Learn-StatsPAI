@@ -604,6 +604,36 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "(sp.evalue is bit-exact against it via Track A module 23)."
         ),
     },
+    "sensitivity_specificity": {
+        "status": "bit-exact",
+        "reference": "base closed form (2x2 diagnostic accuracy; = epiR)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "sens/spec/PPV/NPV/LR 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_diag_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: sensitivity/specificity/PPV/NPV/likelihood "
+            "ratios are exact ratios of the 2x2 diagnostic table (= epiR / "
+            "standard). Point estimates pinned; CIs not pinned."
+        ),
+    },
+    "power_case_control": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (case-control OR power, 2-prop z)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "power 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_diag_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: case exposure prevalence from the odds ratio "
+            "then unpooled-Wald two-proportion z-approx power. Matches base R "
+            "exactly."
+        ),
+    },
 }
 
 

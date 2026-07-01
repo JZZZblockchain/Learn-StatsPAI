@@ -4626,7 +4626,7 @@
     }
   },
   {
-    "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts.",
+    "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "sensitivity_specificity",
     "parameters": {
       "properties": {
@@ -30068,7 +30068,7 @@
     }
   },
   {
-    "description": "Power (or number of cases) for an unmatched case-control study.",
+    "description": "Power (or number of cases) for an unmatched case-control study. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "power_case_control",
     "parameters": {
       "properties": {

@@ -3170,6 +3170,29 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "function": "power_case_control",
+      "notes": [
+        "Closed-form identity: case exposure prevalence from the odds ratio then unpooled-Wald two-proportion z-approx power. Matches base R exactly."
+      ],
+      "reference": "base-R closed form (case-control OR power, 2-prop z)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_epi_diag_parity.py"
+      ],
+      "tolerance": "power 1e-12 abs (observed 0)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "power_cluster_rct",
       "notes": [
         "Frozen-R fixture: cluster-RCT power with design effect 1+(m-1)*icc matches base R exactly. Regenerate via _generate_power_extra_R.R."
@@ -3984,6 +4007,29 @@
       ],
       "tier": "machine",
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "sensitivity_specificity",
+      "notes": [
+        "Closed-form identity: sensitivity/specificity/PPV/NPV/likelihood ratios are exact ratios of the 2x2 diagnostic table (= epiR / standard). Point estimates pinned; CIs not pinned."
+      ],
+      "reference": "base closed form (2x2 diagnostic accuracy; = epiR)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_epi_diag_parity.py"
+      ],
+      "tolerance": "sens/spec/PPV/NPV/LR 1e-12 abs (observed 0)"
     },
     {
       "function": "spillover",

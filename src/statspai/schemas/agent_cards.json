@@ -8596,7 +8596,7 @@
       "Wilson-score CIs assume independent binary classifications."
     ],
     "category": "epi",
-    "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts.",
+    "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -8621,7 +8621,7 @@
     ],
     "reference": "Altman & Bland (1994)",
     "signature": {
-      "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts.",
+      "description": "Sensitivity, specificity, PPV, NPV, LR+ / LR- with Wilson score CIs. Accepts either raw binary labels or pre-computed confusion counts. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "sensitivity_specificity",
       "parameters": {
         "properties": {
@@ -8662,9 +8662,10 @@
     "stability": "stable",
     "typical_n_min": 30,
     "validation_notes": [
+      "tests/reference_parity/test_epi_diag_parity.py",
       "API/unit contract evidence: tests/test_epi_diagnostic.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
