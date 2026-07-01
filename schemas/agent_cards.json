@@ -4735,7 +4735,7 @@
       "Correct specification of the treatment and/or outcome models."
     ],
     "category": "causal",
-    "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation.",
+    "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.front_door(df, y=\"y\", treat=\"d\", mediator=\"m\", covariates=[\"x\"])",
     "failure_modes": [
       {
@@ -4754,7 +4754,7 @@
     ],
     "reference": "Pearl (1995); Fulcher et al. (2020)",
     "signature": {
-      "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation.",
+      "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "front_door",
       "parameters": {
         "properties": {
@@ -4813,10 +4813,11 @@
     "stability": "stable",
     "typical_n_min": 300,
     "validation_notes": [
+      "tests/reference_parity/test_front_door_parity.py",
       "API/unit contract evidence: tests/test_front_door.py",
       "API/unit contract evidence: tests/test_review_fixes_round2.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -14264,7 +14265,7 @@
       "Linear additivity of own-treatment and neighbour-exposure effects"
     ],
     "category": "causal",
-    "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters.",
+    "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.cluster_cross_interference(df, y=\"y\", cluster=\"city\", treat=\"d\", neighbour_treat_share=\"neighbour_d\")",
     "failure_modes": [
       {
@@ -14290,7 +14291,7 @@
     ],
     "reference": "Leung (2023). arXiv:2310.18836.",
     "signature": {
-      "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters.",
+      "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "cluster_cross_interference",
       "parameters": {
         "properties": {
@@ -14328,9 +14329,10 @@
     "stability": "stable",
     "typical_n_min": 30,
     "validation_notes": [
+      "tests/reference_parity/test_cluster_cross_interference_parity.py",
       "API/unit contract evidence: tests/test_cluster_rct.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

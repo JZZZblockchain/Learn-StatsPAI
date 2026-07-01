@@ -2536,7 +2536,7 @@
     }
   },
   {
-    "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation.",
+    "description": "Pearl's front-door adjustment: identifies ATE with unmeasured confounding when a mediator fully transmits the effect of D on Y. Supports binary or continuous mediator; integrate_by controls Pearl (marginal) vs Fulcher et al. (conditional) aggregation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "front_door",
     "parameters": {
       "properties": {
@@ -7527,7 +7527,7 @@
     }
   },
   {
-    "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters.",
+    "description": "Cluster-randomised trial under cross-cluster interference (Ding et al. 2025). Estimates direct + spillover effects when treatment of one cluster affects outcomes in adjacent clusters. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "cluster_cross_interference",
     "parameters": {
       "properties": {
