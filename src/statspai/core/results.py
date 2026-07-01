@@ -1900,6 +1900,70 @@ class CausalResult:
             "  doi={10.1162/rest.90.3.414}\n"
             "}"
         ),
+        # --- batch 5 methods-appendix coverage (neural IV / interference /
+        #     time-varying confounding / stacked DiD / surrogate; verified
+        #     via paper.bib) ---
+        "deepiv": (
+            "@inproceedings{hartford2017deep,\n"
+            "  title={Deep IV: A flexible approach for "
+            "counterfactual prediction},\n"
+            "  author={Hartford, Jason and Lewis, Greg and "
+            "Leyton-Brown, Kevin and Taddy, Matt},\n"
+            "  booktitle={Proceedings of the 34th International "
+            "Conference on Machine Learning},\n"
+            "  pages={1414--1423},\n"
+            "  year={2017},\n"
+            "  doi={10.48550/arXiv.1612.09596}\n"
+            "}"
+        ),
+        "interference": (
+            "@article{hudgens2008toward,\n"
+            "  title={Toward causal inference with interference},\n"
+            "  author={Hudgens, Michael G. and Halloran, "
+            "M. Elizabeth},\n"
+            "  journal={Journal of the American Statistical "
+            "Association},\n"
+            "  volume={103},\n"
+            "  number={482},\n"
+            "  pages={832--842},\n"
+            "  year={2008},\n"
+            "  publisher={Taylor \\& Francis},\n"
+            "  doi={10.1198/016214508000000292}\n"
+            "}"
+        ),
+        "msm": (
+            "@article{robins2000marginal,\n"
+            "  title={Marginal Structural Models and Causal "
+            "Inference in Epidemiology},\n"
+            "  author={Robins, James M. and Hernán, "
+            "Miguel Ángel and Brumback, Babette},\n"
+            "  journal={Epidemiology},\n"
+            "  year={2000},\n"
+            "  doi={10.1097/00001648-200009000-00011}\n"
+            "}"
+        ),
+        "network_exposure": (
+            "@article{aronow2017estimating,\n"
+            "  title={Estimating average causal effects under "
+            "general interference, with application to a social "
+            "network experiment},\n"
+            "  author={Aronow, Peter M. and Samii, Cyrus},\n"
+            "  journal={The Annals of Applied Statistics},\n"
+            "  year={2017},\n"
+            "  doi={10.1214/16-aoas1005}\n"
+            "}"
+        ),
+        "surrogate": (
+            "@techreport{athey2019surrogate,\n"
+            "  title={The Surrogate Index: Combining Short-Term "
+            "Proxies to Estimate Long-Term Treatment Effects More "
+            "Rapidly and Precisely},\n"
+            "  author={Athey, Susan and Chetty, Raj and Imbens, "
+            "Guido and Kang, Hyunseung},\n"
+            "  year={2019},\n"
+            "  doi={10.3386/w26463}\n"
+            "}"
+        ),
     }
 
     def __init__(

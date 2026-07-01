@@ -146,6 +146,18 @@ def test_econometric_result_method_present():
         ("oster_bounds", "oster"),
         ("wild_cluster_bootstrap", "wild_cluster_bootstrap"),
         ("wcb", "wild_cluster_bootstrap"),
+        # Neural IV / interference / time-varying confounding batch-5
+        ("deepiv", "deepiv"),
+        ("neural_iv", "deepiv"),
+        ("interference", "interference"),
+        ("spillover", "interference"),
+        ("msm", "msm"),
+        ("marginal_structural_model", "msm"),
+        ("network_exposure", "network_exposure"),
+        ("aronow_samii", "network_exposure"),
+        ("stacked_did", "stacked_did"),
+        ("surrogate", "surrogate"),
+        ("surrogate_index", "surrogate"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -441,6 +453,20 @@ def test_batch4_estimators_carry_verified_citation():
         ("honest_did", "Rambachan"),
         ("oster", "Oster"),
         ("wild_cluster_bootstrap", "Cameron"),
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_batch5_estimators_carry_verified_citation():
+    for key, token in [
+        ("deepiv", "Hartford"),
+        ("interference", "Hudgens"),
+        ("msm", "Hernán"),  # exercises unicode author path
+        ("network_exposure", "Aronow"),
+        ("stacked_did", "Cengiz"),
+        ("surrogate", "Athey"),
     ]:
         r = _causal(key)
         r._citation_key = key

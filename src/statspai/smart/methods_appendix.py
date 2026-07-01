@@ -100,7 +100,8 @@ class MethodSpec:
 #  augmented SC, matrix completion, IV quantile regression, GMM, causal
 #  forest, meta-learners, R-learner, Mendelian randomization, dose-response,
 #  Cox PH, Kaplan-Meier, Lee bounds, policy learning, honest DiD, Oster
-#  bounds, wild cluster bootstrap) plus the
+#  bounds, wild cluster bootstrap, deep IV, interference, marginal structural
+#  models, network exposure, stacked DiD, surrogate index) plus the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
 #
@@ -1368,6 +1369,148 @@ _SPECS: List[MethodSpec] = [
             "cgm_bootstrap",
             "wild_cluster_boot",
         ],
+    ),
+    MethodSpec(
+        key="deepiv",
+        name="Deep IV (Neural Instrumental Variables)",
+        estimand_latex=(r"h(p,x) = \mathbb{E}[Y \mid \mathrm{do}(P=p), X=x]"),
+        estimator_latex=(
+            r"\text{(1) } \hat F(p\mid x,z);\quad "
+            r"\text{(2) } \hat h = \arg\min_h \sum_i "
+            r"\Big(Y_i - \int h(p,X_i)\,d\hat F(p\mid X_i,Z_i)\Big)^2"
+        ),
+        prose=(
+            "Two-stage neural IV: first estimate the conditional treatment "
+            "density given instruments and covariates with a mixture-density "
+            "network, then fit the structural response function h by minimizing "
+            "the integrated prediction loss against it (Hartford, Lewis, "
+            "Leyton-Brown & Taddy)."
+        ),
+        assumptions=[
+            "Instrument validity (relevance, exclusion, independence).",
+            "The structural function lies in the neural hypothesis class.",
+        ],
+        aliases=["deep_iv", "neural_iv"],
+    ),
+    MethodSpec(
+        key="interference",
+        name="Causal Inference under Interference (Partial)",
+        estimand_latex=(
+            r"\mathrm{DE}(\alpha),\ \mathrm{IE}(\alpha_1,\alpha_0)\;\;"
+            r"(\text{direct \& indirect effects})"
+        ),
+        estimator_latex=(
+            r"\bar Y(\alpha) = \frac{1}{N}\sum_g \bar Y_g(\alpha);\quad "
+            r"\widehat{\mathrm{DE}} = \bar Y(1;\alpha) - \bar Y(0;\alpha)"
+        ),
+        prose=(
+            "Defines and estimates direct, indirect, total, and overall effects "
+            "under partial interference (units interfere within groups but not "
+            "across) via group-level average potential outcomes at coverage "
+            "level alpha (Hudgens & Halloran)."
+        ),
+        assumptions=[
+            "Partial interference: no interference across groups.",
+            "A specified (counterfactual) treatment-allocation policy alpha.",
+            "Stratified/two-stage randomization for identification.",
+        ],
+        aliases=["partial_interference", "spillover", "hudgens_halloran"],
+    ),
+    MethodSpec(
+        key="msm",
+        name="Marginal Structural Model (IPTW)",
+        estimand_latex=(r"\mathbb{E}[Y(\bar a)] = g(\bar a;\beta)"),
+        estimator_latex=(
+            r"SW_i = \prod_t \frac{\Pr(A_t\mid \bar A_{t-1})}"
+            r"{\Pr(A_t\mid \bar A_{t-1}, \bar L_t)};\quad "
+            r"\hat\beta:\ \text{weighted regression of } Y \text{ on } \bar a"
+        ),
+        prose=(
+            "Models the marginal mean of the outcome under a treatment history "
+            "and fits it by inverse-probability-of-treatment weighting with "
+            "stabilized weights — adjusting for time-varying confounders that "
+            "are also mediators, which standard regression cannot (Robins, "
+            "Hernán & Brumback)."
+        ),
+        assumptions=[
+            "Sequential exchangeability (no unmeasured time-varying " "confounding).",
+            "Positivity at each time point.",
+            "Correctly specified treatment (weight) models.",
+        ],
+        aliases=["marginal_structural_model", "iptw", "msm_ipw"],
+    ),
+    MethodSpec(
+        key="network_exposure",
+        name="Causal Effects under Network Interference",
+        estimand_latex=(
+            r"\tau(a,a') = \mathbb{E}\big[Y_i(f_i{=}a) - Y_i(f_i{=}a')\big]"
+        ),
+        estimator_latex=(
+            r"\hat\mu(a) = \frac{1}{N}\sum_i "
+            r"\frac{\mathbf{1}\{f_i = a\}\,Y_i}{\pi_i(a)}\;\;"
+            r"(\text{Horvitz-Thompson over exposure } f_i)"
+        ),
+        prose=(
+            "Generalizes causal estimands to arbitrary network interference via "
+            "an exposure mapping f_i that summarizes a unit's treatment "
+            "neighborhood, then estimates exposure-specific means by "
+            "inverse-probability (Horvitz-Thompson) weighting on the exposure "
+            "probabilities (Aronow & Samii)."
+        ),
+        assumptions=[
+            "A correctly specified exposure mapping.",
+            "Known / estimable exposure probabilities from the design.",
+            "Positivity of each exposure condition.",
+        ],
+        aliases=["aronow_samii", "network_interference", "exposure_mapping"],
+    ),
+    MethodSpec(
+        key="stacked_did",
+        name="Stacked (Event-Specific) DiD",
+        estimand_latex=r"\tau\;\;(\text{clean-comparison ATT})",
+        estimator_latex=(
+            r"\text{stack per-event sub-experiments (treated + "
+            r"clean controls),}\ \text{then a single TWFE on the stack:}\ "
+            r"Y = \alpha_{i,e} + \lambda_{t,e} + \tau D + \varepsilon"
+        ),
+        prose=(
+            "Builds a separate sub-experiment around each treatment event — the "
+            "cohort plus not-yet/never-treated clean controls in an event-time "
+            "window — stacks them, and runs one TWFE with event-specific fixed "
+            "effects, avoiding the forbidden comparisons of pooled TWFE (Cengiz, "
+            "Dube, Lindner & Zipperer)."
+        ),
+        assumptions=[
+            "Parallel trends within each event-specific sub-experiment.",
+            "No anticipation; clean controls per event window.",
+        ],
+        aliases=["stacked_regression_did", "stacked_event_study", "cengiz"],
+    ),
+    MethodSpec(
+        key="surrogate",
+        name="Surrogate Index",
+        estimand_latex=(
+            r"\tau_{\text{long}} = \mathbb{E}[Y_{\text{long}}(1) - "
+            r"Y_{\text{long}}(0)]"
+        ),
+        estimator_latex=(
+            r"S_i = \mathbb{E}[Y_{\text{long}}\mid \text{surrogates } "
+            r"X_i]\ (\text{obs. sample});\quad "
+            r"\hat\tau = \mathbb{E}[S\mid D{=}1] - \mathbb{E}[S\mid D{=}0]"
+        ),
+        prose=(
+            "Estimates a long-term treatment effect from short-term surrogates "
+            "by building a surrogate index — the predicted long-term outcome "
+            "given the surrogates, learned in an observational sample — and "
+            "contrasting it across arms in the experimental sample (Athey, "
+            "Chetty, Imbens & Kang)."
+        ),
+        assumptions=[
+            "Surrogacy: surrogates fully mediate treatment's effect on the "
+            "long-term outcome.",
+            "Comparability of the surrogate-outcome link across samples.",
+        ],
+        aliases=["surrogate_index", "surrogate_outcome", "long_term_effect"],
     ),
 ]
 
