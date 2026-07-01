@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.10.0-batch3"
+corpus_version: "0.11.0-batch4"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -634,6 +634,57 @@ entries:
       robustness_checks:
         - {check: balance_after, provenance: paper_section, source: "randomization balance across name groups"}
     notes: "Randomized resume field experiment. Difference-in-means is the gold standard; a balancing estimator is also valid (recommend detects observational — it cannot know assignment was randomized)."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Nunn & Wantchekon (2011) slave-trade IV (distance from coast as an
+  # instrument for historical slave exports → trust). Citation + DOI verified
+  # via aeaweb.org (10.1257/aer.101.7.3221) + NBER w14783.
+  # ---------------------------------------------------------------------------
+  - id: nunn_wantchekon_2011_slave_iv
+    paper:
+      citation: "Nunn, N. & Wantchekon, L. (2011). The Slave Trade and the Origins of Mistrust in Africa. American Economic Review 101(7), 3221-3252."
+      bib_key: nunn2011slave
+    design:
+      label: iv
+      fingerprint: {synthetic: true, endogenous: slave_exports, instrument: distance_to_coast, cross_section: true}
+    data:
+      tier: B
+      loader: "sp.dgp_iv(n=700, first_stage=0.5, seed=2011)"
+      args: {y: y, treatment: treatment, instrument: instrument, covariates: [x1, x2]}
+    ground_truth:
+      estimator:
+        primary: twosls
+        acceptable: [twosls, liml, anderson_rubin, jive]
+        disqualifying: [ols]
+      robustness_checks:
+        - {check: weak_instrument,   provenance: paper_section,           source: "Nunn & Wantchekon (2011) first-stage strength"}
+        - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust CI as a guardrail"}
+    notes: "Real applied IV (distance-to-coast instrument for slave exports). recommend should lead with 2SLS."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Meyer, Viscusi & Durbin (1995) workers'-comp natural-experiment
+  # DiD (benefit increase; high- vs low-earnings groups before/after). Citation
+  # verified via ideas.repec.org + nber.org (NBER w3494; no clean AER DOI).
+  # ---------------------------------------------------------------------------
+  - id: meyer_viscusi_durbin_1995_did
+    paper:
+      citation: "Meyer, B. D., Viscusi, W. K. & Durbin, D. L. (1995). Workers' Compensation and Injury Duration: Evidence from a Natural Experiment. American Economic Review 85(3), 322-340."
+      bib_key: meyer1995workers
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 200, n_periods: 2, staggered: false, natural_experiment: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=200, n_periods=2, staggered=False, seed=95)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: classic_2x2
+        acceptable: [classic_2x2, did, twfe, callaway_santanna, sun_abraham, drdid]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: methodological_followup, source: "pre-period comparability of the two earnings groups"}
+    notes: "Real applied 2x2 natural-experiment DiD (high- vs low-earnings groups × benefit change). Common timing → nothing disqualifying."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now
