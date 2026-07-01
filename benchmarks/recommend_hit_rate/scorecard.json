@@ -1,10 +1,10 @@
 {
-  "corpus_version": "0.7.0-cardkrueger",
+  "corpus_version": "0.8.0-batch1",
   "statspai_version": "1.20.0",
-  "n_entries": 24,
-  "n_core": 18,
+  "n_entries": 26,
+  "n_core": 20,
   "n_tier_a": 10,
-  "n_tier_b": 14,
+  "n_tier_b": 16,
   "summary": {
     "hit_rate_top1": 1.0,
     "hit_rate_topk": 1.0,
@@ -553,6 +553,62 @@
       "gap_probe": false
     },
     {
+      "id": "angrist_1990_draft_lottery",
+      "design": "iv",
+      "status": "HIT",
+      "detected_design": "iv",
+      "ranked_labels": [
+        "2SLS (two-stage least squares)",
+        "LIML (robust to weak instruments)"
+      ],
+      "ranked_tags": [
+        "twosls",
+        "liml"
+      ],
+      "top1_tag": "twosls",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "anderson_rubin",
+        "jive",
+        "liml",
+        "twosls"
+      ],
+      "disqualifying": [
+        "ols"
+      ],
+      "gap_probe": false
+    },
+    {
+      "id": "acemoglu_2001_colonial_iv",
+      "design": "iv",
+      "status": "HIT",
+      "detected_design": "iv",
+      "ranked_labels": [
+        "2SLS (two-stage least squares)",
+        "LIML (robust to weak instruments)"
+      ],
+      "ranked_tags": [
+        "twosls",
+        "liml"
+      ],
+      "top1_tag": "twosls",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "anderson_rubin",
+        "jive",
+        "liml",
+        "twosls"
+      ],
+      "disqualifying": [
+        "ols"
+      ],
+      "gap_probe": false
+    },
+    {
       "id": "frontier_bunching_saez2010",
       "design": "bunching",
       "status": "HIT",
@@ -864,6 +920,26 @@
       "audit_family": "did",
       "covered": [
         "parallel_trends"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "angrist_1990_draft_lottery",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "acemoglu_2001_colonial_iv",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
       ],
       "missing_from_catalog": [],
       "catalog_recall": 1.0
@@ -1184,6 +1260,34 @@
       "not_emitted": [],
       "actionable_next_steps": [
         "parallel_trends"
+      ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "angrist_1990_draft_lottery",
+      "status": "OK",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [
+        "anderson_rubin_ci"
+      ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "acemoglu_2001_colonial_iv",
+      "status": "OK",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [
+        "anderson_rubin_ci"
       ],
       "dynamic_recall": 1.0
     },

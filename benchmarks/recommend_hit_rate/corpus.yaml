@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.7.0-cardkrueger"
+corpus_version: "0.8.0-batch1"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -480,6 +480,58 @@ entries:
       robustness_checks:
         - {check: parallel_trends, provenance: methodological_followup, source: "pre-trend / placebo check on the 2x2 DiD"}
     notes: "Canonical 2x2 DiD (Card-Krueger NJ/PA minimum wage). Common timing → TWFE unbiased, nothing disqualifying."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Angrist (1990) Vietnam draft-lottery IV. The lottery number is a
+  # randomly-assigned instrument for veteran status → earnings. Citation
+  # verified via ideas.repec.org + economics.mit.edu (see paper.bib note).
+  # ---------------------------------------------------------------------------
+  - id: angrist_1990_draft_lottery
+    paper:
+      citation: "Angrist, J. D. (1990). Lifetime Earnings and the Vietnam Era Draft Lottery: Evidence from Social Security Administrative Records. American Economic Review 80(3), 313-336."
+      bib_key: angrist1990lifetime
+    design:
+      label: iv
+      fingerprint: {synthetic: true, endogenous: veteran, instrument: draft_lottery, randomized_instrument: true}
+    data:
+      tier: B
+      loader: "sp.dgp_iv(n=800, first_stage=0.5, seed=90)"
+      args: {y: y, treatment: treatment, instrument: instrument, covariates: [x1, x2]}
+    ground_truth:
+      estimator:
+        primary: twosls
+        acceptable: [twosls, liml, anderson_rubin, jive]
+        disqualifying: [ols]
+      robustness_checks:
+        - {check: weak_instrument,   provenance: paper_section, source: "randomized draft lottery → strong first stage"}
+        - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust CI as a guardrail"}
+    notes: "Real applied IV with a randomized instrument (draft lottery). recommend should lead with 2SLS."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Acemoglu-Johnson-Robinson (2001) settler-mortality IV (institutions
+  # → income). Cross-country (~64 obs). Citation + DOI verified via aeaweb.org
+  # (10.1257/aer.91.5.1369) + NBER w7771.
+  # ---------------------------------------------------------------------------
+  - id: acemoglu_2001_colonial_iv
+    paper:
+      citation: "Acemoglu, D., Johnson, S. & Robinson, J. A. (2001). The Colonial Origins of Comparative Development: An Empirical Investigation. American Economic Review 91(5), 1369-1401."
+      bib_key: acemoglu2001colonial
+    design:
+      label: iv
+      fingerprint: {synthetic: true, endogenous: institutions, instrument: settler_mortality, n: 64, cross_country: true}
+    data:
+      tier: B
+      loader: "sp.dgp_iv(n=64, first_stage=0.5, seed=2001)"
+      args: {y: y, treatment: treatment, instrument: instrument, covariates: [x1, x2]}
+    ground_truth:
+      estimator:
+        primary: twosls
+        acceptable: [twosls, liml, anderson_rubin, jive]
+        disqualifying: [ols]
+      robustness_checks:
+        - {check: weak_instrument,   provenance: methodological_followup, source: "instrument-strength scrutiny (small cross-country sample)"}
+        - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust inference on a small sample"}
+    notes: "Real applied cross-country IV (settler mortality → institutions). Small n; recommend should lead with 2SLS (LIML/AR also acceptable)."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now
