@@ -3897,6 +3897,61 @@
       "tolerance": ""
     },
     {
+      "function": "sar",
+      "headline": {
+        "metric": "rel_est",
+        "rel_vs_R": 8.288407604807484e-08,
+        "rel_vs_Stata": null,
+        "statistic": [
+          "sar_const",
+          "sar_x1",
+          "sar_x2",
+          "sar_rho",
+          "sem_const",
+          "sem_x1",
+          "sem_x2",
+          "sem_lambda",
+          "sdm_const",
+          "sdm_x1",
+          "sdm_x2",
+          "sdm_W_x1",
+          "sdm_W_x2",
+          "sdm_rho"
+        ],
+        "tolerance": 1e-06
+      },
+      "label": "Spatial ML (SAR/SEM/SDM)",
+      "last_verified": "R version 4.5.2 (2025-10-31)",
+      "module_id": "65_spatial",
+      "notes": [],
+      "point_estimate_rel": {
+        "R": 8.288407604807484e-08,
+        "Stata": null
+      },
+      "python_call": "sp.sar / sp.sem / sp.sdm",
+      "reference": "spatialreg::lagsarlm / spatialreg::errorsarlm / spatialreg::lagsarlm(Durbin=TRUE)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "spatialreg": "1.4.3"
+      },
+      "se_rel": {
+        "R": 1.9665191253248252e-08,
+        "Stata": null
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "track_a",
+      "status": "bit-exact",
+      "test": [
+        "tests/r_parity/65_spatial.py",
+        "tests/r_parity/65_spatial.R"
+      ],
+      "tier": "machine",
+      "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
+    },
+    {
       "function": "sbw",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -3959,6 +4014,116 @@
         "tests/r_parity/12_sdid.py",
         "tests/r_parity/12_sdid.R",
         "tests/stata_parity/12_sdid.do"
+      ],
+      "tier": "machine",
+      "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
+    },
+    {
+      "function": "sdm",
+      "headline": {
+        "metric": "rel_est",
+        "rel_vs_R": 8.288407604807484e-08,
+        "rel_vs_Stata": null,
+        "statistic": [
+          "sar_const",
+          "sar_x1",
+          "sar_x2",
+          "sar_rho",
+          "sem_const",
+          "sem_x1",
+          "sem_x2",
+          "sem_lambda",
+          "sdm_const",
+          "sdm_x1",
+          "sdm_x2",
+          "sdm_W_x1",
+          "sdm_W_x2",
+          "sdm_rho"
+        ],
+        "tolerance": 1e-06
+      },
+      "label": "Spatial ML (SAR/SEM/SDM)",
+      "last_verified": "R version 4.5.2 (2025-10-31)",
+      "module_id": "65_spatial",
+      "notes": [],
+      "point_estimate_rel": {
+        "R": 8.288407604807484e-08,
+        "Stata": null
+      },
+      "python_call": "sp.sar / sp.sem / sp.sdm",
+      "reference": "spatialreg::lagsarlm / spatialreg::errorsarlm / spatialreg::lagsarlm(Durbin=TRUE)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "spatialreg": "1.4.3"
+      },
+      "se_rel": {
+        "R": 1.9665191253248252e-08,
+        "Stata": null
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "track_a",
+      "status": "bit-exact",
+      "test": [
+        "tests/r_parity/65_spatial.py",
+        "tests/r_parity/65_spatial.R"
+      ],
+      "tier": "machine",
+      "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
+    },
+    {
+      "function": "sem",
+      "headline": {
+        "metric": "rel_est",
+        "rel_vs_R": 8.288407604807484e-08,
+        "rel_vs_Stata": null,
+        "statistic": [
+          "sar_const",
+          "sar_x1",
+          "sar_x2",
+          "sar_rho",
+          "sem_const",
+          "sem_x1",
+          "sem_x2",
+          "sem_lambda",
+          "sdm_const",
+          "sdm_x1",
+          "sdm_x2",
+          "sdm_W_x1",
+          "sdm_W_x2",
+          "sdm_rho"
+        ],
+        "tolerance": 1e-06
+      },
+      "label": "Spatial ML (SAR/SEM/SDM)",
+      "last_verified": "R version 4.5.2 (2025-10-31)",
+      "module_id": "65_spatial",
+      "notes": [],
+      "point_estimate_rel": {
+        "R": 8.288407604807484e-08,
+        "Stata": null
+      },
+      "python_call": "sp.sar / sp.sem / sp.sdm",
+      "reference": "spatialreg::lagsarlm / spatialreg::errorsarlm / spatialreg::lagsarlm(Durbin=TRUE)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "spatialreg": "1.4.3"
+      },
+      "se_rel": {
+        "R": 1.9665191253248252e-08,
+        "Stata": null
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "track_a",
+      "status": "bit-exact",
+      "test": [
+        "tests/r_parity/65_spatial.py",
+        "tests/r_parity/65_spatial.R"
       ],
       "tier": "machine",
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"

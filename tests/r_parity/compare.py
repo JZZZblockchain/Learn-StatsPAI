@@ -392,6 +392,12 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # identical logLik to 1e-10), so the point budget is 1e-5 instead of
     # machine; worst observed gap is ~1.1e-6 est / ~4e-5 SE.
     "64_zinb": {"rel_est": 1e-5, "rel_se": 1e-3},
+    # Spatial ML: SAR/SEM/SDM coefficients, spatial parameter (rho/lambda),
+    # and full-information asymptotic SEs vs spatialreg::lagsarlm /
+    # errorsarlm / lagsarlm(Durbin=TRUE) on a 12x12 row-standardised rook
+    # lattice. Machine tier: worst observed 8.3e-8 est / 2.0e-8 SE after the
+    # bounded rho/lambda optimiser was tightened (xatol=1e-10).
+    "65_spatial": {"rel_est": 1e-6, "rel_se": 1e-6},
 }
 
 
@@ -1177,6 +1183,13 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
         "gap_note": "flat ZINB likelihood near optimum (1e-5 budget)",
+    },
+    "65_spatial": {
+        "name": "Spatial ML (SAR/SEM/SDM)",
+        "headline_filter": lambda d: True,
+        "metric": "rel_est",
+        "verdict": "\\textbf{PASS}",
+        "gap_note": "vs spatialreg::lagsarlm/errorsarlm/Durbin, row-std rook W",
     },
 }
 

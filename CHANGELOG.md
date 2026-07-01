@@ -18,6 +18,14 @@ These change DiD point estimates for affected staggered/switching designs. See
   the full horizon, and placebo effects use the Stata mirror sign convention.
   New parity guards cover both Stata-pinned static panels and hand-checkable
   dynamic/placebo regressions.
+- **`sp.sar` / `sp.sdm` coefficient standard errors** now come from the full
+  `(β, ρ, σ²)` information matrix (the leading block of its inverse), matching
+  `spatialreg::lagsarlm`. The previous concentrated `σ²(XᵀX)⁻¹` treated `ρ` as
+  known and understated the coefficient SEs — most visibly ~2× too small on the
+  intercept for a row-standardised `W`. Point estimates and the `ρ`/`λ` SEs are
+  substantively unchanged; the bounded `ρ`/`λ` ML optimiser was also tightened
+  (`xatol=1e-10`), shifting estimates by ≲1e-5 toward the exact MLE. `sp.sem`
+  and `sp.slx` standard errors are unaffected. See `MIGRATION.md`.
 - **`sp.etwfe` control-group and headline aggregation** now honors the public
   `cgroup` contract. The default `cgroup="notyet"` headline is the
   treated-observation-weighted simple ATT used by R `etwfe::emfx(type="simple")`
@@ -28,6 +36,13 @@ These change DiD point estimates for affected staggered/switching designs. See
 
 ### Added
 
+- **Cross-language parity — spatial ML family opened.** New Track A module
+  `65_spatial` aligns `sp.sar` / `sp.sem` / `sp.sdm` against
+  `spatialreg::lagsarlm`, `spatialreg::errorsarlm`, and
+  `spatialreg::lagsarlm(Durbin=TRUE)` (spatialreg 1.4.3 / spdep 1.4.2) on a
+  row-standardised 12×12 rook lattice. All three are graded **bit-exact**
+  (worst relative error 8.3e-8 on estimates, 2.0e-8 on SEs), moving the
+  `spatial` family from 0 verified estimators to 3 in the parity matrix.
 - **`sp.rlasso` — rigorous (data-driven) Lasso, a faithful port of R's
   `hdm`.** A new first-class module (`statspai.rlasso`) that ports
   `hdm::rlasso` / `rlassoEffect` / `rlassoIV` line-for-line, validated to
