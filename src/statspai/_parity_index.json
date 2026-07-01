@@ -149,6 +149,30 @@
       "tolerance": ""
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "attributable_risk",
+      "notes": [
+        "Frozen-R fixture: attributable fraction exposed (RR-1)/RR and population attributable fraction match base R exactly (CI method not pinned). Regenerate via _generate_epi_extra_R.R."
+      ],
+      "reference": "base-R closed form (attributable fraction exposed + PAF)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_epi_extra_parity.py",
+        "tests/reference_parity/_fixtures/epi_extra_R.json"
+      ],
+      "tolerance": "AFE + PAF point estimates 1e-12 abs (observed 0); CI not pinned"
+    },
+    {
       "function": "augsynth",
       "headline": {
         "metric": "rel_est",
@@ -610,6 +634,30 @@
         "tests/reference_parity/_fixtures/glm_ext_R.json"
       ],
       "tolerance": "coefficients 5e-5 abs (observed ~1e-5; IRLS convergence)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "cohen_kappa",
+      "notes": [
+        "Frozen-R fixture: unweighted Cohen's kappa + observed/expected agreement match base R exactly (SE convention-specific, not pinned). Regenerate via _generate_epi_extra_R.R."
+      ],
+      "reference": "base-R closed form (Cohen's kappa point estimate)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_epi_extra_parity.py",
+        "tests/reference_parity/_fixtures/epi_extra_R.json"
+      ],
+      "tolerance": "kappa + agreements 1e-12 abs (observed ~1e-16); SE not pinned"
     },
     {
       "function": "continuous_did",
@@ -1731,6 +1779,30 @@
         "tests/reference_parity/_fixtures/epi_R.json"
       ],
       "tolerance": "estimate 1e-12; exact CI 1e-10 abs (observed ~3e-15)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "inequality_index",
+      "notes": [
+        "Frozen-R fixture: bias-corrected Gini, Theil-T, Theil-L (MLD) and Atkinson (epsilon=1) match the canonical base-R closed form exactly. Regenerate via _generate_inequality_R.R."
+      ],
+      "reference": "base-R closed form (Gini/Theil-T/Theil-L/Atkinson; = ineq)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_inequality_parity.py",
+        "tests/reference_parity/_fixtures/inequality_R.json"
+      ],
+      "tolerance": "all indices 1e-12 abs (observed ~2e-16)"
     },
     {
       "function": "interference",

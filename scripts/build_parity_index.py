@@ -463,6 +463,54 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "via _generate_epi_R.R."
         ),
     },
+    "inequality_index": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Gini/Theil-T/Theil-L/Atkinson; = ineq)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "all indices 1e-12 abs (observed ~2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_inequality_parity.py",
+            "tests/reference_parity/_fixtures/inequality_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: bias-corrected Gini, Theil-T, Theil-L (MLD) and "
+            "Atkinson (epsilon=1) match the canonical base-R closed form exactly. "
+            "Regenerate via _generate_inequality_R.R."
+        ),
+    },
+    "cohen_kappa": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (Cohen's kappa point estimate)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "kappa + agreements 1e-12 abs (observed ~1e-16); SE not pinned",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_extra_parity.py",
+            "tests/reference_parity/_fixtures/epi_extra_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: unweighted Cohen's kappa + observed/expected "
+            "agreement match base R exactly (SE convention-specific, not pinned). "
+            "Regenerate via _generate_epi_extra_R.R."
+        ),
+    },
+    "attributable_risk": {
+        "status": "bit-exact",
+        "reference": "base-R closed form (attributable fraction exposed + PAF)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "AFE + PAF point estimates 1e-12 abs (observed 0); CI not pinned",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_epi_extra_parity.py",
+            "tests/reference_parity/_fixtures/epi_extra_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: attributable fraction exposed (RR-1)/RR and "
+            "population attributable fraction match base R exactly (CI method "
+            "not pinned). Regenerate via _generate_epi_extra_R.R."
+        ),
+    },
 }
 
 
