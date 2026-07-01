@@ -749,6 +749,40 @@
       "tolerance": "kappa + agreements 1e-12 abs (observed ~1e-16); SE not pinned"
     },
     {
+      "function": "conformal_fair_ite",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_conformal_fair_ite_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "conformal_ite",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_conformal_ite_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "continuous_did",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -3486,6 +3520,7 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_panel_bias_reduced_parity.py",
         "tests/reference_parity/test_panel_parity.py"
       ],
       "also_verified_by": [
@@ -3767,10 +3802,14 @@
       "additional_tests": [
         "tests/r_parity/47_ppmlhdfe_3fe.py",
         "tests/r_parity/47_ppmlhdfe_3fe.R",
-        "tests/stata_parity/47_ppmlhdfe_3fe.do"
+        "tests/stata_parity/47_ppmlhdfe_3fe.do",
+        "tests/reference_parity/test_ppmlhdfe_twoway_parity.py"
       ],
       "also_in_modules": [
         "47_ppmlhdfe_3fe"
+      ],
+      "also_verified_by": [
+        "reference_parity"
       ],
       "function": "ppmlhdfe",
       "headline": {
@@ -4181,6 +4220,7 @@
         "tests/reference_parity/test_cross_estimator_parity.py",
         "tests/reference_parity/test_feols_bias_reduced_parity.py",
         "tests/reference_parity/test_ols_se_external_parity.py",
+        "tests/reference_parity/test_panel_bias_reduced_parity.py",
         "tests/reference_parity/test_postestimation_parity.py",
         "tests/reference_parity/test_recovery_batch2_parity.py",
         "tests/reference_parity/test_regress_weights_iv_robust_parity.py"
