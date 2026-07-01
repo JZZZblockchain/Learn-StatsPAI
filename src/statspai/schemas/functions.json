@@ -28581,7 +28581,7 @@
     }
   },
   {
-    "description": "Compute Manski (1990) worst-case bounds on ATE.",
+    "description": "Compute Manski (1990) worst-case bounds on ATE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "manski_bounds",
     "parameters": {
       "properties": {

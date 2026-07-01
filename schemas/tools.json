@@ -11398,7 +11398,7 @@
     "name": "machado_mata"
   },
   {
-    "description": "Compute Manski (1990) worst-case bounds on ATE. Assumptions: Only weak (set-identifying) assumptions are imposed; the result is an interval, not a point; Lee bounds add monotonicity of selection; Oster's delta adds proportional selection on observed vs. unobserved. Pre-conditions: The data needed for the point-identifying analysis, plus the weakest credible identifying restriction; For Lee bounds: a binary selection/attrition indicator. Failure modes: Bounds are too wide to be informative -> Add a credible auxiliary restriction (monotone treatment response, instrument) to tighten the bounds. Alternatives: sp.oster_delta, sp.lee_bounds, sp.manski_bounds. Typical minimum N: 100.",
+    "description": "Compute Manski (1990) worst-case bounds on ATE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Only weak (set-identifying) assumptions are imposed; the result is an interval, not a point; Lee bounds add monotonicity of selection; Oster's delta adds proportional selection on observed vs. unobserved. Pre-conditions: The data needed for the point-identifying analysis, plus the weakest credible identifying restriction; For Lee bounds: a binary selection/attrition indicator. Failure modes: Bounds are too wide to be informative -> Add a credible auxiliary restriction (monotone treatment response, instrument) to tighten the bounds. Alternatives: sp.oster_delta, sp.lee_bounds, sp.manski_bounds. Typical minimum N: 100.",
     "input_schema": {
       "properties": {
         "alpha": {

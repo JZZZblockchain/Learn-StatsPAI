@@ -29575,7 +29575,7 @@
       "Lee bounds add monotonicity of selection; Oster's delta adds proportional selection on observed vs. unobserved."
     ],
     "category": "causal",
-    "description": "Compute Manski (1990) worst-case bounds on ATE.",
+    "description": "Compute Manski (1990) worst-case bounds on ATE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.manski_bounds(df, y='employed', treat='training', y_lower=0, y_upper=1)",
     "failure_modes": [
       {
@@ -29594,7 +29594,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Compute Manski (1990) worst-case bounds on ATE.",
+      "description": "Compute Manski (1990) worst-case bounds on ATE. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "manski_bounds",
       "parameters": {
         "properties": {
@@ -29649,8 +29649,10 @@
     },
     "stability": "stable",
     "typical_n_min": 100,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_manski_bounds_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
