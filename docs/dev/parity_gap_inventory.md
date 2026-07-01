@@ -17,9 +17,9 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 134 | 964 | **13.9%** |
+| **estimator functions** (parity-applicable) | 137 | 964 | **14.2%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
-| all registered | 134 | 1135 | 11.8% |
+| all registered | 137 | 1135 | 12.1% |
 
 > Recent coverage gains (vs R): +`kaplan_meier`, +`logrank_test`
 > (`survival::survfit`/`survdiff`, bit-exact); +`bonferroni`, +`holm`,
@@ -58,7 +58,7 @@ functions at once.
 | neural_causal | 0 / 16 | **EMPTY** (frontier) |
 | interference | 0 / 16 | **EMPTY** |
 | structural | 0 / 12 | **EMPTY** |
-| postestimation | 0 / 12 | analytical-feasible (margins/contrasts vs Stata) |
+| postestimation | 3 / 12 | lincom/test(Wald)/margins analytical-only (closed-form identities); contrast/pwcompare open |
 | power | 0 / 12 | analytical-feasible (closed-form / Stata `power`) |
 | survival | 5 / 12 | Cox/KM/log-rank bit-exact + Weibull AFT (survreg/aft) aligned, all vs R `survival`; competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
