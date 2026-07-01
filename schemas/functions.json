@@ -42843,7 +42843,7 @@
     }
   },
   {
-    "description": "Kitagawa (1955) two-factor rate decomposition.",
+    "description": "Kitagawa (1955) two-factor rate decomposition. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "kitagawa_decompose",
     "parameters": {
       "properties": {
@@ -42891,7 +42891,7 @@
     }
   },
   {
-    "description": "Lerman-Yitzhaki (1985) Gini source decomposition.",
+    "description": "Lerman-Yitzhaki (1985) Gini source decomposition. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "source_decompose",
     "parameters": {
       "properties": {
