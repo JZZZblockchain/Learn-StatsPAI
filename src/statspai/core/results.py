@@ -2111,6 +2111,79 @@ class CausalResult:
             "  year={2022}\n"
             "}"
         ),
+        # --- batch 8 methods-appendix coverage (randomization inference /
+        #     Bayesian causal forest / MTE / DR-learner / nonparametric IV /
+        #     sensitivity; verified via paper.bib) ---
+        "ri": (
+            "@book{fisher1935design,\n"
+            "  title={The Design of Experiments},\n"
+            "  author={Fisher, Ronald A.},\n"
+            "  publisher={Oliver and Boyd, Edinburgh},\n"
+            "  year={1935}\n"
+            "}"
+        ),
+        "bcf": (
+            "@article{hahn2020bayesian,\n"
+            "  title={Bayesian regression tree models for causal "
+            "inference: Regularization, confounding, and "
+            "heterogeneous effects (with discussion)},\n"
+            "  author={Hahn, P. Richard and Murray, Jared S. and "
+            "Carvalho, Carlos M.},\n"
+            "  journal={Bayesian Analysis},\n"
+            "  volume={15},\n"
+            "  number={3},\n"
+            "  pages={965--1056},\n"
+            "  year={2020},\n"
+            "  doi={10.1214/19-BA1195}\n"
+            "}"
+        ),
+        "mte": (
+            "@techreport{heckman2005structural,\n"
+            "  title={Structural Equations, Treatment Effects and "
+            "Econometric Policy Evaluation},\n"
+            "  author={Heckman, James and Vytlacil, Edward},\n"
+            "  year={2005},\n"
+            "  doi={10.3386/w11259}\n"
+            "}"
+        ),
+        "dr_learner": (
+            "@article{kennedy2023towards,\n"
+            "  title={Towards optimal doubly robust estimation of "
+            "heterogeneous causal effects},\n"
+            "  author={Kennedy, Edward H.},\n"
+            "  journal={Electronic Journal of Statistics},\n"
+            "  volume={17},\n"
+            "  number={2},\n"
+            "  pages={3008--3049},\n"
+            "  year={2023},\n"
+            "  doi={10.1214/23-EJS2157}\n"
+            "}"
+        ),
+        "npiv": (
+            "@article{newey2003instrumental,\n"
+            "  title={Instrumental Variable Estimation of "
+            "Nonparametric Models},\n"
+            "  author={Newey, Whitney K. and Powell, James L.},\n"
+            "  journal={Econometrica},\n"
+            "  year={2003},\n"
+            "  doi={10.1111/1468-0262.00459}\n"
+            "}"
+        ),
+        "sensemakr": (
+            "@article{cinelli2020making,\n"
+            "  title={Making sense of sensitivity: Extending omitted "
+            "variable bias},\n"
+            "  author={Cinelli, Carlos and Hazlett, Chad},\n"
+            "  journal={Journal of the Royal Statistical Society: "
+            "Series B (Statistical Methodology)},\n"
+            "  volume={82},\n"
+            "  number={1},\n"
+            "  pages={39--67},\n"
+            "  year={2020},\n"
+            "  publisher={Wiley},\n"
+            "  doi={10.1111/rssb.12348}\n"
+            "}"
+        ),
     }
 
     def __init__(

@@ -103,8 +103,9 @@ class MethodSpec:
 #  bounds, wild cluster bootstrap, deep IV, interference, marginal structural
 #  models, network exposure, stacked DiD, surrogate index, Oaxaca / RIF / DFL /
 #  Gelbach decompositions, Kitagawa, multiway clustering, Lin RCT adjustment,
-#  conformal ITE, stochastic frontier, Machado-Mata, kernel IV, two-stage DiD)
-#  plus the
+#  conformal ITE, stochastic frontier, Machado-Mata, kernel IV, two-stage DiD,
+#  randomization inference, Bayesian causal forest, marginal treatment effects,
+#  DR-learner, nonparametric IV, sensitivity to unobservables) plus the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
 #
@@ -1784,6 +1785,139 @@ _SPECS: List[MethodSpec] = [
             "Correct two-way structure for the untreated potential outcome.",
         ],
         aliases=["did_2stage", "two_stage_did", "did2s"],
+    ),
+    MethodSpec(
+        key="ri",
+        name="Randomization (Fisher) Inference",
+        estimand_latex=(r"H_0: Y_i(1) = Y_i(0)\ \forall i\ " r"(\text{sharp null})"),
+        estimator_latex=(
+            r"p = \Pr\big(|T(\mathbf{D}^{*},Y)| \ge |T_{\text{obs}}|\big),\ "
+            r"\mathbf{D}^{*}\sim \text{the assignment mechanism}"
+        ),
+        prose=(
+            "Exact, assumption-light inference for a randomized experiment: fix "
+            "the observed outcomes, re-draw treatment from the known assignment "
+            "mechanism, and compute the p-value as the share of re-randomized "
+            "test statistics at least as extreme as the observed one (Fisher)."
+        ),
+        assumptions=[
+            "Known randomization / assignment mechanism.",
+            "A sharp null hypothesis (for exactness).",
+        ],
+        aliases=["randomization_inference", "fisher_randomization", "permutation_test"],
+    ),
+    MethodSpec(
+        key="bcf",
+        name="Bayesian Causal Forest",
+        estimand_latex=(r"\tau(x) = \mathbb{E}[Y(1) - Y(0) \mid X = x]"),
+        estimator_latex=(
+            r"Y_i = \mu(X_i, \hat\pi_i) + \tau(X_i)\,D_i + \varepsilon_i,\ "
+            r"\mu,\tau \sim \text{BART priors}"
+        ),
+        prose=(
+            "Bayesian regression-tree model that gives the prognostic function "
+            "and the treatment-effect function separate BART priors — with the "
+            "estimated propensity as a covariate to control regularization-"
+            "induced confounding — yielding heterogeneous effects with coherent "
+            "posterior uncertainty (Hahn, Murray & Carvalho)."
+        ),
+        assumptions=[
+            "Unconfoundedness given X.",
+            "Overlap: 0 < e(X) < 1.",
+            "BART prior adequately captures the response surfaces.",
+        ],
+        aliases=["bayesian_causal_forest", "bcf_estimator"],
+    ),
+    MethodSpec(
+        key="mte",
+        name="Marginal Treatment Effect",
+        estimand_latex=(r"\mathrm{MTE}(x,u) = \mathbb{E}[Y(1) - Y(0)\mid X=x, U_D=u]"),
+        estimator_latex=(
+            r"\mathrm{MTE}(x,u) = \frac{\partial\,\mathbb{E}[Y\mid X=x, "
+            r"P(Z)=p]}{\partial p}\Big|_{p=u}\ (\text{local IV})"
+        ),
+        prose=(
+            "The treatment effect for individuals at the margin of "
+            "participation (unobserved resistance U_D = u); identified as the "
+            "derivative of the outcome with respect to the propensity score via "
+            "local instrumental variables, and integrated to recover ATE / ATT / "
+            "LATE (Heckman & Vytlacil)."
+        ),
+        assumptions=[
+            "A valid, continuously-varying instrument (large support).",
+            "Additive separability / selection on U_D.",
+            "Monotonicity of selection in the instrument.",
+        ],
+        aliases=["marginal_treatment_effect", "heckman_vytlacil", "local_iv"],
+    ),
+    MethodSpec(
+        key="dr_learner",
+        name="DR-Learner (Doubly-Robust CATE)",
+        estimand_latex=r"\tau(x) = \mathbb{E}[Y(1) - Y(0) \mid X = x]",
+        estimator_latex=(
+            r"\hat\tau = \text{regress } \hat\varphi_i \text{ on } X_i,\quad "
+            r"\hat\varphi_i = \hat\mu_1 - \hat\mu_0 + "
+            r"\tfrac{D_i(Y_i-\hat\mu_1)}{\hat e} - "
+            r"\tfrac{(1-D_i)(Y_i-\hat\mu_0)}{1-\hat e}"
+        ),
+        prose=(
+            "Estimates the CATE by regressing the doubly-robust (AIPW) "
+            "pseudo-outcome on covariates with cross-fitting, achieving "
+            "oracle-efficient second-order robustness to nuisance error "
+            "(Kennedy)."
+        ),
+        assumptions=[
+            "Unconfoundedness and overlap.",
+            "Cross-fitting; nuisance products converge at o(n^{-1/2}).",
+        ],
+        aliases=["dr_learner_kennedy", "doubly_robust_learner", "aipw_learner"],
+    ),
+    MethodSpec(
+        key="npiv",
+        name="Nonparametric IV (Newey-Powell)",
+        estimand_latex=(
+            r"Y = g(X) + \varepsilon,\quad \mathbb{E}[\varepsilon \mid Z] = 0"
+        ),
+        estimator_latex=(
+            r"\hat g = \arg\min_{g}\ \big\|\widehat{\mathbb{E}}[Y - g(X)\mid Z]"
+            r"\big\|^2\ (\text{series / sieve; ill-posed, regularized})"
+        ),
+        prose=(
+            "Recovers a nonparametric structural function from the conditional "
+            "moment restriction E[Y - g(X) | Z] = 0 by solving an ill-posed "
+            "integral equation with series/sieve estimators and regularization "
+            "(Newey & Powell)."
+        ),
+        assumptions=[
+            "Instrument exogeneity: E[epsilon | Z] = 0.",
+            "Completeness (identification of g).",
+            "Smoothness / regularization for the ill-posed inverse.",
+        ],
+        aliases=["nonparametric_iv", "newey_powell", "sieve_iv"],
+    ),
+    MethodSpec(
+        key="sensemakr",
+        name="Sensitivity to Unobserved Confounding (OVB)",
+        estimand_latex=(
+            r"\mathrm{RV}_{q}: \text{min. confounder strength to move } "
+            r"\hat\beta \text{ by } q\%"
+        ),
+        estimator_latex=(
+            r"\hat\beta^{*} = \hat\beta \mp \mathrm{se}(\hat\beta)\,"
+            r"\sqrt{\tfrac{R^2_{Y\sim Z}\,R^2_{D\sim Z}}"
+            r"{1 - R^2_{D\sim Z}}}\,\sqrt{df}"
+        ),
+        prose=(
+            "Extends omitted-variable-bias theory into design-agnostic "
+            "sensitivity statistics: the robustness value (the confounder "
+            "strength needed to overturn a result) and bias bounds benchmarked "
+            "against observed covariates (Cinelli & Hazlett)."
+        ),
+        assumptions=[
+            "Linear outcome model for the bias formula.",
+            "Benchmarking against observed covariates is informative.",
+        ],
+        aliases=["cinelli_hazlett", "robustness_value", "sensitivity_ovb"],
     ),
 ]
 

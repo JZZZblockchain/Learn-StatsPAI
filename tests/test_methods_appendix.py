@@ -181,6 +181,17 @@ def test_econometric_result_method_present():
         ("kiv", "kernel_iv"),
         ("gardner_did", "gardner_did"),
         ("did2s", "gardner_did"),
+        # Randomization / Bayesian / MTE / DR-learner / npIV / sensitivity b8
+        ("ri", "ri"),
+        ("randomization_inference", "ri"),
+        ("bcf", "bcf"),
+        ("mte", "mte"),
+        ("marginal_treatment_effect", "mte"),
+        ("dr_learner", "dr_learner"),
+        ("npiv", "npiv"),
+        ("nonparametric_iv", "npiv"),
+        ("sensemakr", "sensemakr"),
+        ("robustness_value", "sensemakr"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -518,6 +529,20 @@ def test_batch7_estimators_carry_verified_citation():
         ("machado_mata", "Machado"),
         ("kernel_iv", "Singh"),
         ("gardner_did", "Gardner"),
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_batch8_estimators_carry_verified_citation():
+    for key, token in [
+        ("ri", "Fisher"),
+        ("bcf", "Hahn"),
+        ("mte", "Heckman"),
+        ("dr_learner", "Kennedy"),
+        ("npiv", "Newey"),
+        ("sensemakr", "Cinelli"),
     ]:
         r = _causal(key)
         r._citation_key = key
