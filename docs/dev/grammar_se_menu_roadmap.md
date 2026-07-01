@@ -71,11 +71,16 @@ Against the `se_menu_matrix` gate:
   `clubSandwich`'s absorbed-FE CR2. Flip only after an R `clubSandwich` parity
   test (needs the absorbed-FE hat-matrix correction).
 - **Unify the two `feols` doors** (pyfixest vs panel) so their SE menus match.
-- **`ivreg` remaining ⚠ cells** (twoway / CR2 / Conley / jackknife): the OLS
-  standalone helpers refit plain OLS and drop the IV structure. Lower priority
-  than wild (now native); each needs an IV-aware implementation + Stata parity.
-- **Multi-endogenous WRE**: `iv_wild_bootstrap` currently supports a single
-  endogenous regressor; extend to the multi-endogenous case.
+- **IV two-way cluster** (done): native `ivreg(cluster=["a","b"])` via CGM 2011
+  inclusion-exclusion on the projected regressors; matches `ivreg2, cluster(a b)
+  small`. Matrix ivreg twoway `unsafe → native` (native 36→37, unsafe 4→3).
+- **Multi-endogenous WRE** (done): `iv_wild_bootstrap` handles ≥1 endogenous
+  regressor (the restricted estimation re-estimates the other endogenous by
+  2SLS); validated vs boottest for the two-endogenous case.
+- **`ivreg` remaining ⚠ cells** (CR2 / Conley / jackknife): the OLS standalone
+  helpers refit plain OLS and drop the IV structure. Each needs an IV-aware
+  implementation + external parity (CR2 vs R `clubSandwich` for IV; Conley vs
+  `acreg`; jackknife via leave-one-cluster-out 2SLS).
 
 ### D5 — unify the result contract  *(collision risk: results.py)*
 - One §3-true protocol: `summary`/`plot`/`to_latex`/`to_word`/`to_excel`/`cite`

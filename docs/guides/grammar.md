@@ -80,7 +80,7 @@ estimator, or only on `feols`?* The honest answer, tracked in
 | `fepois` | ✓ | ✓ | ✓ | ✓ | · | · | · | · |
 | `feglm` | ✓ | ✓ | ✓ | ✓ | · | · | · | · |
 | `regress` | ✓ | ✓ | ✓ | ○ | ○ | ○ | ○ | ○ |
-| `ivreg` | ✓ | ✓ | ✓ | ⚠ | ⚠ | ✓ | ⚠ | ⚠ |
+| `ivreg` | ✓ | ✓ | ✓ | ✓ | ⚠ | ✓ | ⚠ | ⚠ |
 | `ppmlhdfe` | ✓ | ✓ | ✓ | · | · | · | · | · |
 | `panel` | ✓ | ✓ | ✓ | · | · | · | · | · |
 | `callaway_santanna` | · | · | ✓ | · | · | · | · | · |
@@ -124,12 +124,16 @@ What the matrix makes explicit today:
 
   **Validated against Stata `boottest` after `ivreg2`** across strong-IV (p
   0.2016 vs 0.20155) and weak-IV (p 0.3415 vs 0.3412) regimes — the weak-IV
-  case rules out the naive reduced form (which gives 0.426). See
-  `tests/reference_parity/test_iv_wild_boottest_parity.py`.
+  case rules out the naive reduced form (which gives 0.426). Also validated for
+  **two endogenous regressors** (p 0.2101/0.0151 vs boottest 0.2108/0.0141).
+  See `tests/reference_parity/test_iv_wild_boottest_parity.py`.
+- **`ivreg` has native two-way clustering** via `cluster=["a", "b"]` — the
+  CGM (2011) inclusion-exclusion sandwich on the projected regressors, matching
+  Stata `ivreg2, cluster(a b) small`.
 - **`ivreg`'s remaining ⚠ cells are still a trap:** the OLS standalone helpers
-  (twoway / CR2 / Conley / jackknife) refit plain OLS and silently drop the
-  two-stage structure, so their SEs are not trustworthy. The matrix flags these
-  so they cannot be mistaken for support.
+  (CR2 / Conley / jackknife) refit plain OLS and silently drop the two-stage
+  structure, so their SEs are not trustworthy. The matrix flags these so they
+  cannot be mistaken for support.
 
 This is the gap the SE-menu wiring work closes, estimator by estimator. The
 matrix is the scoreboard: the CI gate ratchets the **native** count up and the
