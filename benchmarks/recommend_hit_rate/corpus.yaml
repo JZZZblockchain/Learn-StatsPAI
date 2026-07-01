@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.14.0-batch7"
+corpus_version: "0.15.0-batch8"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -840,6 +840,58 @@ entries:
       robustness_checks:
         - {check: parallel_trends, provenance: paper_section, source: "pre-attack comparability of protected vs unprotected blocks"}
     notes: "Real applied 2x2 natural-experiment DiD (post-attack police allocation). Common timing → nothing disqualifying."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Angrist & Evans (1998) family-size IV (same-sex sibship / twins as
+  # instruments for having a third child → parental labor supply). Citation
+  # verified via ideas.repec.org + nber.org (NBER w5778; no clean AER DOI).
+  # ---------------------------------------------------------------------------
+  - id: angrist_evans_1998_familysize_iv
+    paper:
+      citation: "Angrist, J. D. & Evans, W. N. (1998). Children and Their Parents' Labor Supply: Evidence from Exogenous Variation in Family Size. American Economic Review 88(3), 450-477."
+      bib_key: angrist1998children
+    design:
+      label: iv
+      fingerprint: {synthetic: true, endogenous: family_size, instrument: same_sex_siblings, randomized_instrument: true}
+    data:
+      tier: B
+      loader: "sp.dgp_iv(n=800, first_stage=0.5, seed=98)"
+      args: {y: y, treatment: treatment, instrument: instrument, covariates: [x1, x2]}
+    ground_truth:
+      estimator:
+        primary: twosls
+        acceptable: [twosls, liml, anderson_rubin, jive]
+        disqualifying: [ols]
+      robustness_checks:
+        - {check: weak_instrument,   provenance: paper_section, source: "same-sex/twins first-stage strength"}
+        - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust CI as a guardrail"}
+    notes: "Real applied IV (same-sex/twins instrument for family size). recommend should lead with 2SLS."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Imbens, Rubin & Sacerdote (2001) lottery-winners observational
+  # study (quasi-random lottery amount as unearned income → labor supply).
+  # Citation + DOI verified via aeaweb.org (10.1257/aer.91.4.778) + NBER w7001.
+  # ---------------------------------------------------------------------------
+  - id: imbens_2001_lottery_obs
+    paper:
+      citation: "Imbens, G. W., Rubin, D. B. & Sacerdote, B. I. (2001). Estimating the Effect of Unearned Income on Labor Earnings, Savings, and Consumption: Evidence from a Survey of Lottery Players. American Economic Review 91(4), 778-794."
+      bib_key: imbens2001estimating
+    design:
+      label: observational
+      fingerprint: {quasi_random_treatment: true, unearned_income: true}
+    data:
+      tier: B
+      loader: "sp.dgp_observational(n=1000, confounding=0.2, seed=701)"
+      args: {y: y, treatment: treatment, covariates: [x1, x2]}
+    ground_truth:
+      estimator:
+        primary: psm
+        acceptable: [ols, psm, dml, ipw, aipw, matching]
+        disqualifying: []
+      robustness_checks:
+        - {check: overlap,       provenance: methodological_followup, source: "common support across winning amounts"}
+        - {check: balance_after, provenance: paper_section,           source: "Imbens et al. (2001) covariate balance conditioning"}
+    notes: "Quasi-random unearned income (lottery amount among winners) → labor supply. Selection-on-observables adjustment; a balancing estimator is expected."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now

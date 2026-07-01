@@ -1,10 +1,10 @@
 {
-  "corpus_version": "0.14.0-batch7",
+  "corpus_version": "0.15.0-batch8",
   "statspai_version": "1.20.0",
-  "n_entries": 38,
-  "n_core": 32,
+  "n_entries": 40,
+  "n_core": 34,
   "n_tier_a": 10,
-  "n_tier_b": 28,
+  "n_tier_b": 30,
   "summary": {
     "hit_rate_top1": 1.0,
     "hit_rate_topk": 1.0,
@@ -938,6 +938,66 @@
       "gap_probe": false
     },
     {
+      "id": "angrist_evans_1998_familysize_iv",
+      "design": "iv",
+      "status": "HIT",
+      "detected_design": "iv",
+      "ranked_labels": [
+        "2SLS (two-stage least squares)",
+        "LIML (robust to weak instruments)"
+      ],
+      "ranked_tags": [
+        "twosls",
+        "liml"
+      ],
+      "top1_tag": "twosls",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "anderson_rubin",
+        "jive",
+        "liml",
+        "twosls"
+      ],
+      "disqualifying": [
+        "ols"
+      ],
+      "gap_probe": false
+    },
+    {
+      "id": "imbens_2001_lottery_obs",
+      "design": "observational",
+      "status": "HIT",
+      "detected_design": "observational",
+      "ranked_labels": [
+        "Propensity Score Matching (selection on observables)",
+        "Double ML (high-dimensional controls)",
+        "OLS with robust SE (naive baseline \u2014 biased under confounding)",
+        "G-computation (ATE)"
+      ],
+      "ranked_tags": [
+        "psm",
+        "dml",
+        "ols",
+        "g_computation"
+      ],
+      "top1_tag": "psm",
+      "hit_top1": true,
+      "hit_topk": true,
+      "hard_miss": false,
+      "acceptable": [
+        "aipw",
+        "dml",
+        "ipw",
+        "matching",
+        "ols",
+        "psm"
+      ],
+      "disqualifying": [],
+      "gap_probe": false
+    },
+    {
       "id": "frontier_bunching_saez2010",
       "design": "bunching",
       "status": "HIT",
@@ -1384,6 +1444,26 @@
       "audit_family": "did",
       "covered": [
         "parallel_trends"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "angrist_evans_1998_familysize_iv",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
+      ],
+      "missing_from_catalog": [],
+      "catalog_recall": 1.0
+    },
+    {
+      "id": "imbens_2001_lottery_obs",
+      "audit_family": "matching",
+      "covered": [
+        "overlap",
+        "balance_after"
       ],
       "missing_from_catalog": [],
       "catalog_recall": 1.0
@@ -1893,6 +1973,35 @@
       "not_emitted": [],
       "actionable_next_steps": [
         "parallel_trends"
+      ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "angrist_evans_1998_familysize_iv",
+      "status": "OK",
+      "audit_family": "iv",
+      "covered": [
+        "weak_instrument",
+        "anderson_rubin_ci"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [
+        "anderson_rubin_ci"
+      ],
+      "dynamic_recall": 1.0
+    },
+    {
+      "id": "imbens_2001_lottery_obs",
+      "status": "OK",
+      "audit_family": "matching",
+      "covered": [
+        "overlap",
+        "balance_after"
+      ],
+      "not_emitted": [],
+      "actionable_next_steps": [
+        "overlap",
+        "balance_after"
       ],
       "dynamic_recall": 1.0
     },
