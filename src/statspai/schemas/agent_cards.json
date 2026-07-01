@@ -6556,7 +6556,7 @@
       "The exact (Fisher conditional) CI assumes fixed margins under the non-central hypergeometric model."
     ],
     "category": "epi",
-    "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells.",
+    "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.epi.odds_ratio(50, 20, 30, 40)",
     "failure_modes": [
       {
@@ -6581,7 +6581,7 @@
     ],
     "reference": "Woolf (1955); Rothman, Greenland & Lash (2008)",
     "signature": {
-      "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells.",
+      "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "odds_ratio",
       "parameters": {
         "properties": {
@@ -6625,9 +6625,10 @@
     "stability": "stable",
     "typical_n_min": 20,
     "validation_notes": [
+      "tests/reference_parity/test_epi_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -6641,7 +6642,7 @@
       "The Katz log-RR CI assumes large-sample normality; the Haldane 0.5 correction is applied only when a cell is zero."
     ],
     "category": "epi",
-    "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells.",
+    "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.epi.relative_risk(50, 950, 10, 990)",
     "failure_modes": [
       {
@@ -6666,7 +6667,7 @@
     ],
     "reference": "Katz (1978); Rothman, Greenland & Lash (2008)",
     "signature": {
-      "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells.",
+      "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "relative_risk",
       "parameters": {
         "properties": {
@@ -6701,9 +6702,10 @@
     "stability": "stable",
     "typical_n_min": 20,
     "validation_notes": [
+      "tests/reference_parity/test_epi_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -6717,7 +6719,7 @@
       "The Wald CI assumes normality (poor near risk 0 or 1); Newcombe's hybrid-score CI corrects the boundary overshoot."
     ],
     "category": "epi",
-    "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI.",
+    "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -6742,7 +6744,7 @@
     ],
     "reference": "Newcombe (1998)",
     "signature": {
-      "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI.",
+      "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "risk_difference",
       "parameters": {
         "properties": {
@@ -6786,9 +6788,10 @@
     "stability": "stable",
     "typical_n_min": 30,
     "validation_notes": [
+      "tests/reference_parity/test_epi_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -6880,7 +6883,7 @@
       "The exact CI uses the F-distribution/Poisson relationship, valid for count data without overdispersion."
     ],
     "category": "epi",
-    "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial).",
+    "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -6905,7 +6908,7 @@
     ],
     "reference": "Breslow & Day (1987)",
     "signature": {
-      "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial).",
+      "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "incidence_rate_ratio",
       "parameters": {
         "properties": {
@@ -6952,9 +6955,10 @@
     "stability": "stable",
     "typical_n_min": 20,
     "validation_notes": [
+      "tests/reference_parity/test_epi_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -6968,7 +6972,7 @@
       "Sparse-data validity holds: the MH estimator is consistent even with small per-stratum counts but many strata."
     ],
     "category": "epi",
-    "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check.",
+    "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -6993,7 +6997,7 @@
     ],
     "reference": "Mantel & Haenszel (1959); Robins, Breslow & Greenland (1986)",
     "signature": {
-      "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check.",
+      "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mantel_haenszel",
       "parameters": {
         "properties": {
@@ -7025,9 +7029,10 @@
     "stability": "stable",
     "typical_n_min": 40,
     "validation_notes": [
+      "tests/reference_parity/test_epi_parity.py",
       "API/unit contract evidence: tests/test_epi.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

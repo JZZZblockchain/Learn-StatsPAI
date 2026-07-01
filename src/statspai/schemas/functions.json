@@ -3621,7 +3621,7 @@
     }
   },
   {
-    "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells.",
+    "description": "Odds ratio from a 2x2 table with Woolf (asymptotic) or Fisher-exact CI. Haldane-Anscombe correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "odds_ratio",
     "parameters": {
       "properties": {
@@ -3663,7 +3663,7 @@
     }
   },
   {
-    "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells.",
+    "description": "Relative risk (risk ratio) from a 2x2 table with Katz log-RR CI. Haldane correction for zero cells. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "relative_risk",
     "parameters": {
       "properties": {
@@ -3696,7 +3696,7 @@
     }
   },
   {
-    "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI.",
+    "description": "Risk difference (absolute risk reduction) with Wald or Newcombe hybrid-score CI. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "risk_difference",
     "parameters": {
       "properties": {
@@ -3771,7 +3771,7 @@
     }
   },
   {
-    "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial).",
+    "description": "Person-time incidence rate ratio with exact Poisson CI (Clopper-Pearson on conditional binomial). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "incidence_rate_ratio",
     "parameters": {
       "properties": {
@@ -3816,7 +3816,7 @@
     }
   },
   {
-    "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check.",
+    "description": "Mantel-Haenszel pooled OR or RR across K strata, with Robins-Breslow-Greenland variance and Cochran's Q homogeneity check. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mantel_haenszel",
     "parameters": {
       "properties": {
@@ -46562,7 +46562,7 @@
     }
   },
   {
-    "description": "Number needed to treat (or harm), defined as |1 / RD|.",
+    "description": "Number needed to treat (or harm), defined as |1 / RD|. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "number_needed_to_treat",
     "parameters": {
       "properties": {
@@ -46595,7 +46595,7 @@
     }
   },
   {
-    "description": "Prevalence ratio (cross-sectional RR); mathematically identical",
+    "description": "Prevalence ratio (cross-sectional RR); mathematically identical Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "prevalence_ratio",
     "parameters": {
       "properties": {},
