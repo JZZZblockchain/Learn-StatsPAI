@@ -724,6 +724,23 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "precision. Regenerate via _generate_survey_R.R."
         ),
     },
+    "svyglm": {
+        "status": "bit-exact",
+        "reference": "survey::svyglm (design-based GLM + linearization SE)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "coefficients + SE 1e-10 abs (observed ~2e-15 / 6e-15)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_survey_parity.py",
+            "tests/reference_parity/_fixtures/survey_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: survey-weighted GLM coefficients and "
+            "design-based (linearization) standard errors match R "
+            "survey::svyglm to machine precision. Regenerate via "
+            "_generate_survey_R.R."
+        ),
+    },
 }
 
 

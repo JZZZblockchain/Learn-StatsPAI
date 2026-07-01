@@ -56,3 +56,13 @@ def test_svytotal_matches_R_survey(design, r_reference):
     ref = r_reference["svytotal"]
     assert _scalar(t.estimate) == pytest.approx(_scalar(ref["estimate"]), rel=1e-12)
     assert _scalar(t.std_error) == pytest.approx(_scalar(ref["se"]), rel=1e-10)
+
+
+def test_svyglm_matches_R_survey(design, r_reference):
+    g = sp.svyglm("y ~ x", design)
+    ref = r_reference["svyglm"]
+    est, se = g.estimate, g.std_error
+    assert float(est["Intercept"]) == pytest.approx(ref["intercept"], abs=1e-10)
+    assert float(est["x"]) == pytest.approx(ref["x"], abs=1e-10)
+    assert float(se["Intercept"]) == pytest.approx(ref["se_intercept"], abs=1e-10)
+    assert float(se["x"]) == pytest.approx(ref["se_x"], abs=1e-10)

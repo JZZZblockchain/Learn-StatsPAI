@@ -17,7 +17,7 @@ render tables, build agent schemas, or load data; they are not estimators.
 
 | denominator | verified | total | fraction |
 | --- | ---: | ---: | ---: |
-| **estimator functions** (parity-applicable) | 155 | 964 | **16.1%** |
+| **estimator functions** (parity-applicable) | 156 | 964 | **16.2%** |
 | infra / non-estimator (parity N/A) | — | 171 | — |
 | all registered | 143 | 1139 | 12.6% |
 
@@ -63,7 +63,7 @@ functions at once.
 | survival | 5 / 12 | Cox/KM/log-rank bit-exact + Weibull AFT (survreg/aft) aligned, all vs R `survival`; competing-risks open |
 | frontier | 2 / 12 | SFA core covered; panel SFA variants open |
 | robustness | 0 / 11 | sensitivity bounds — analytical-feasible |
-| survey | 3 / 7 | svymean/svytotal bit-exact (vs R `survey`, HT/Hajek + Taylor SE) + svydesign; svyglm/calibration open |
+| survey | 4 / 7 | svymean/svytotal/svyglm bit-exact (vs R `survey`, HT/Hajek + linearization SE) + svydesign; calibration/rake open |
 | target_trial / transport / longitudinal / bartik | 0 each | alignable against established packages |
 | neural / llm / rl / text / fairness / ope / surrogate / bridge | 0 each | frontier; analytical/simulation ceiling |
 

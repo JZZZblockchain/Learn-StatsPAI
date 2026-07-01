@@ -4320,6 +4320,30 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "function": "svyglm",
+      "notes": [
+        "Frozen-R fixture: survey-weighted GLM coefficients and design-based (linearization) standard errors match R survey::svyglm to machine precision. Regenerate via _generate_survey_R.R."
+      ],
+      "reference": "survey::svyglm (design-based GLM + linearization SE)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_survey_parity.py",
+        "tests/reference_parity/_fixtures/survey_R.json"
+      ],
+      "tolerance": "coefficients + SE 1e-10 abs (observed ~2e-15 / 6e-15)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "svymean",
       "notes": [
         "Frozen-R fixture: weights-only design survey mean + Taylor-linearization SE match R survey::svymean to machine precision. Regenerate via _generate_survey_R.R."
