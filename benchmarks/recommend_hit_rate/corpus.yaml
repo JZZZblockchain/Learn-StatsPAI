@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.13.0-batch6"
+corpus_version: "0.14.0-batch7"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -790,6 +790,56 @@ entries:
         - {check: pretreatment_fit,  provenance: methodological_followup, source: "pre-treatment fit vs comparison cities"}
         - {check: placebo_inference, provenance: methodological_followup, source: "placebo/in-space inference (Peri & Yasenov 2019 synth redo)"}
     notes: "Single-treated-unit comparative case study (Mariel). Card used DiD with comparison cities; modern practice uses synthetic control — recommend detects synth. Both families acceptable."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Dube, Lester & Reich (2010) minimum-wage border DiD (contiguous
+  # county-pairs across state lines; staggered state minimum-wage changes).
+  # Citation + DOI verified via direct.mit.edu (10.1162/REST_a_00039) + SSRN.
+  # ---------------------------------------------------------------------------
+  - id: dube_lester_reich_2010_border_did
+    paper:
+      citation: "Dube, A., Lester, T. W. & Reich, M. (2010). Minimum Wage Effects Across State Borders: Estimates Using Contiguous Counties. Review of Economics and Statistics 92(4), 945-964."
+      bib_key: dube2010minimum
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 150, n_periods: 5, staggered: true, border_county_pairs: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=150, n_periods=5, staggered=True, seed=210)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: callaway_santanna
+        acceptable: [callaway_santanna, sun_abraham, did_imputation, gardner, borusyak_jaravel_spiess, stacked_did, dcdh, drdid, classic_2x2, twfe, did]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "Dube et al. (2010) border-pair common trends"}
+    notes: "Real applied panel DiD (border-county pairs, staggered state min-wage changes). A heterogeneity-robust or border-pair FE estimator is valid."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Di Tella & Schargrodsky (2004) police/crime natural-experiment DiD
+  # (blocks with vs without post-attack police protection, before/after).
+  # Citation + DOI verified via aeaweb.org (10.1257/000282804322970733) + RePEc.
+  # ---------------------------------------------------------------------------
+  - id: ditella_schargrodsky_2004_police_did
+    paper:
+      citation: "Di Tella, R. & Schargrodsky, E. (2004). Do Police Reduce Crime? Estimates Using the Allocation of Police Forces After a Terrorist Attack. American Economic Review 94(1), 115-133."
+      bib_key: ditella2004police
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 200, n_periods: 2, staggered: false, natural_experiment: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=200, n_periods=2, staggered=False, seed=204)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: classic_2x2
+        acceptable: [classic_2x2, did, twfe, callaway_santanna, sun_abraham, drdid]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "pre-attack comparability of protected vs unprotected blocks"}
+    notes: "Real applied 2x2 natural-experiment DiD (post-attack police allocation). Common timing → nothing disqualifying."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now

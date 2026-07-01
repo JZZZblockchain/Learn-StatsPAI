@@ -1,6 +1,6 @@
 # Recommendation Hit-Rate Scorecard
 
-- corpus: `0.13.0-batch6`  |  statspai: `1.20.0`  |  entries: **36** (30 core + 6 frontier; 10 Tier-A + 26 Tier-B)
+- corpus: `0.14.0-batch7`  |  statspai: `1.20.0`  |  entries: **38** (32 core + 6 frontier; 10 Tier-A + 28 Tier-B)
 - **core top-1 hit-rate: 1.0**  |  top-k: 1.0  |  hard-miss rate: 0.0  |  errors: 0
 - audit catalog mean recall (static): 1.0  |  audit dynamic mean recall (fit+audit): 1.0  |  audit errors: 0
 - frontier coverage (gap-probe designs recommend is being taught): **1.0** (6/6)
@@ -41,6 +41,8 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | iv | `miguel_2004_rainfall_iv` | ✓ HIT | iv | `twosls` |
 | rd | `angrist_lavy_1999_classsize_rd` | ✓ HIT | rd | `local_polynomial_rd` |
 | synth | `card_1990_mariel_boatlift` | ✓ HIT | synth | `synth` |
+| did | `dube_lester_reich_2010_border_did` | ✓ HIT | did | `callaway_santanna` |
+| did | `ditella_schargrodsky_2004_police_did` | ✓ HIT | did | `classic_2x2` |
 | bunching ⊕ | `frontier_bunching_saez2010` | ✓ HIT | bunching | `bunching` |
 | rkd ⊕ | `frontier_rkd_card2015` | ✓ HIT | rkd | `rkd` |
 | ddd ⊕ | `frontier_ddd_gruber1994` | ✓ HIT | ddd | `ddd` |
@@ -82,6 +84,8 @@ _Frontier (gap-probe) designs are marked ⊕ and scored separately; they do not 
 | `miguel_2004_rainfall_iv` | iv | 1.0 | anderson_rubin_ci |
 | `angrist_lavy_1999_classsize_rd` | rd | 1.0 | bandwidth_sensitivity |
 | `card_1990_mariel_boatlift` | synth | 1.0 | placebo_inference |
+| `dube_lester_reich_2010_border_did` | did | 1.0 | — |
+| `ditella_schargrodsky_2004_police_did` | did | 1.0 | parallel_trends |
 | `frontier_bunching_saez2010` | rd | 0.0 | — |
 | `frontier_rkd_card2015` | rd | 1.0 | bandwidth_sensitivity |
 | `frontier_ddd_gruber1994` | — | ERR | TypeError("ddd() missing 1 required positional argument: 'su |
