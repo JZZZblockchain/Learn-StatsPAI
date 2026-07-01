@@ -18524,7 +18524,7 @@
     }
   },
   {
-    "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.",
+    "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "average_treatment_effect",
     "parameters": {
       "properties": {
@@ -19107,7 +19107,7 @@
     }
   },
   {
-    "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE",
+    "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "sbw",
     "parameters": {
       "properties": {
@@ -19264,7 +19264,7 @@
     }
   },
   {
-    "description": "Genetic Matching for ATT estimation.",
+    "description": "Genetic Matching for ATT estimation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "genmatch",
     "parameters": {
       "properties": {

@@ -26024,7 +26024,7 @@
       "Honesty: separate subsamples are used to choose splits and to estimate effects."
     ],
     "category": "causal",
-    "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.",
+    "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -26042,7 +26042,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.",
+      "description": "Aggregate CATE predictions into ATE/ATT/ATC/ATO targets. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "average_treatment_effect",
       "parameters": {
         "properties": {
@@ -26082,8 +26082,10 @@
     },
     "stability": "stable",
     "typical_n_min": 1000,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_forest_ate_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -26539,7 +26541,7 @@
       "The covariate set blocks all back-door paths."
     ],
     "category": "causal",
-    "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE",
+    "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.sbw(df, treat='D', covariates=['age', 'educ', 'race'], y='wage', delta=0.02)",
     "failure_modes": [
       {
@@ -26565,7 +26567,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE",
+      "description": "Stable Balancing Weights (Zubizarreta 2015) with optional ATT/ATE Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "sbw",
       "parameters": {
         "properties": {
@@ -26649,8 +26651,10 @@
     },
     "stability": "stable",
     "typical_n_min": 200,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_matching_recovery_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -26665,7 +26669,7 @@
       "The covariate set blocks all back-door paths."
     ],
     "category": "causal",
-    "description": "Genetic Matching for ATT estimation.",
+    "description": "Genetic Matching for ATT estimation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -26691,7 +26695,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Genetic Matching for ATT estimation.",
+      "description": "Genetic Matching for ATT estimation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "genmatch",
       "parameters": {
         "properties": {
@@ -26756,8 +26760,10 @@
     },
     "stability": "stable",
     "typical_n_min": 200,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_matching_recovery_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
