@@ -77,6 +77,30 @@ _LOGIT_SEPARATION_COEF = 15.0
 #: conservative bar (equidispersion is 1.0) that clears clean Poisson data.
 _POISSON_DISPERSION_MAX = 1.5
 
+#: Excess-zero margin: observed zero share minus the share the fitted count
+#: model predicts. Above this the data has more zeros than Poisson/NB explains,
+#: so a zero-inflated model (ZIP/ZINB) is warranted. 0.05 clears equidispersed
+#: data (observed ≈ predicted) and fires on genuine zero inflation.
+_COUNT_EXCESS_ZERO_MARGIN = 0.05
+
+#: Heckman: |rho| this close to the ±1 boundary signals a weak exclusion
+#: restriction / near-collinear inverse-Mills term — the two-step estimates are
+#: unstable and hypersensitive to the specification.
+_HECKMAN_RHO_BOUNDARY = 0.99
+
+#: Heckman: inverse-Mills (lambda) p-value above which there is no detectable
+#: selection — the correction is adding variance for nothing, so OLS on the
+#: selected sample is consistent and more efficient.
+_HECKMAN_SELECTION_P = 0.10
+
+#: Tobit: censored share (percent) above which the likelihood is dominated by
+#: the censoring point and the latent-model coefficients are fragile.
+_TOBIT_CENSOR_PCT_MAX = 90.0
+
+#: Cox: proportional-hazards test p-value below which the PH assumption is
+#: rejected for some covariate (its hazard ratio changes over time).
+_COX_PH_ALPHA = 0.05
+
 #: Minimum number of clusters for cluster-robust SE to be reliable. Below this,
 #: the CRVE is downward-biased and t-tests over-reject; the wild cluster
 #: bootstrap (Cameron-Gelbach-Miller 2008; MacKinnon-Webb 2017) is the standard
@@ -389,6 +413,80 @@ def causal_violations(result: Any) -> List[Dict[str, Any]]:
                         ],
                     }
                 )
+
+    # --- Heckman: selection correction ---------------------------------
+    # Gated on the two-step selection keys the estimator stores.
+    rho = _as_float(mi.get("rho"))
+    lambda_p = _as_float(mi.get("lambda_pvalue"))
+    if rho is not None and lambda_p is not None:
+        if abs(rho) > _HECKMAN_RHO_BOUNDARY:
+            out.append(
+                {
+                    "kind": "numerical",
+                    "severity": "warning",
+                    "test": "heckman_rho_boundary",
+                    "value": rho,
+                    "threshold": _HECKMAN_RHO_BOUNDARY,
+                    "message": (
+                        f"Selection correlation rho = {rho:.3f} sits on the ±1 "
+                        "boundary — a weak exclusion restriction is making the "
+                        "two-step estimates unstable."
+                    ),
+                    "recovery_hint": (
+                        "Strengthen the exclusion restriction (a selection-only "
+                        "instrument), or compare against sp.regress on the "
+                        "selected sample."
+                    ),
+                    "alternatives": ["sp.regress", "sp.ipw"],
+                }
+            )
+        elif lambda_p > _HECKMAN_SELECTION_P:
+            out.append(
+                {
+                    "kind": "assumption",
+                    "severity": "info",
+                    "test": "heckman_no_selection",
+                    "value": lambda_p,
+                    "threshold": _HECKMAN_SELECTION_P,
+                    "message": (
+                        f"Inverse-Mills term is not significant (p = {lambda_p:.3g})"
+                        " — no detectable selection, so the correction only adds "
+                        "variance."
+                    ),
+                    "recovery_hint": (
+                        "OLS on the selected sample (sp.regress) is consistent "
+                        "here and more efficient than the Heckman two-step."
+                    ),
+                    "alternatives": ["sp.regress"],
+                }
+            )
+
+    # --- Tobit: extreme censoring --------------------------------------
+    censor_pct = _as_float(mi.get("censor_pct"))
+    if (
+        censor_pct is not None
+        and "n_censored" in mi
+        and censor_pct > _TOBIT_CENSOR_PCT_MAX
+    ):
+        out.append(
+            {
+                "kind": "data",
+                "severity": "warning",
+                "test": "extreme_censoring",
+                "value": censor_pct,
+                "threshold": _TOBIT_CENSOR_PCT_MAX,
+                "message": (
+                    f"{censor_pct:.0f}% of observations are censored — the "
+                    "likelihood is dominated by the limit and the Tobit slope "
+                    "estimates are fragile."
+                ),
+                "recovery_hint": (
+                    "Model the censoring explicitly (sp.heckman two-part), or "
+                    "report bounds; treat the point estimates with caution."
+                ),
+                "alternatives": ["sp.heckman"],
+            }
+        )
 
     # --- Bayesian: convergence ------------------------------------------
     rhat = _as_float(mi.get("rhat_max") or _safe_get(mi, "diagnostics", "rhat_max"))
@@ -726,6 +824,79 @@ def econometric_violations(result: Any) -> List[Dict[str, Any]]:
                         "alternatives": ["sp.nbreg", "sp.zinb", "sp.poisson"],
                     }
                 )
+
+    # Count models: excess zeros. Compare the observed zero share to the share
+    # the fitted model predicts (Poisson e^-mu, or the NB2 formula using the
+    # stored dispersion) — a large gap means a zero-inflated model is needed.
+    is_count = (
+        "poisson" in model_type
+        or "negbin" in model_type
+        or family in ("poisson", "negative binomial")
+    )
+    if is_count:
+        di = getattr(result, "data_info", None) or {}
+        mu = di.get("fitted_values")
+        yv = di.get("y")
+        if mu is not None and yv is not None:
+            try:
+                mu_a = np.clip(np.asarray(mu, dtype=float), 1e-10, None)
+                y_a = np.asarray(yv, dtype=float)
+                alpha = _as_float(mi.get("dispersion"))
+                if ("negbin" in model_type or family == "negative binomial") and (
+                    alpha is not None and alpha > 1e-6
+                ):
+                    pred0 = float(np.mean((1.0 + alpha * mu_a) ** (-1.0 / alpha)))
+                else:
+                    pred0 = float(np.mean(np.exp(-mu_a)))
+                obs0 = float(np.mean(y_a == 0))
+            except (TypeError, ValueError):
+                obs0 = pred0 = 0.0
+            if obs0 - pred0 > _COUNT_EXCESS_ZERO_MARGIN:
+                out.append(
+                    {
+                        "kind": "assumption",
+                        "severity": "warning",
+                        "test": "excess_zeros",
+                        "value": obs0 - pred0,
+                        "threshold": _COUNT_EXCESS_ZERO_MARGIN,
+                        "message": (
+                            f"Observed zeros ({obs0:.1%}) far exceed the "
+                            f"{pred0:.1%} the model predicts — the data are "
+                            "zero-inflated, so a plain count model understates "
+                            "the zero process."
+                        ),
+                        "recovery_hint": (
+                            "Fit a zero-inflated model: sp.zip_model (Poisson) or "
+                            "sp.zinb (negative binomial), or a hurdle model."
+                        ),
+                        "alternatives": ["sp.zip_model", "sp.zinb"],
+                    }
+                )
+
+    # Cox: proportional-hazards assumption (from the stored ph_test p-value).
+    ph_p = _as_float(_safe_get(mi, "ph_test", "min_pvalue"))
+    if "cox" in model_type and ph_p is not None and ph_p < _COX_PH_ALPHA:
+        worst = _safe_get(mi, "ph_test", "worst_variable")
+        out.append(
+            {
+                "kind": "assumption",
+                "severity": "warning",
+                "test": "proportional_hazards",
+                "value": ph_p,
+                "threshold": _COX_PH_ALPHA,
+                "message": (
+                    f"Proportional-hazards test rejects (p = {ph_p:.3g}"
+                    + (f" for '{worst}'" if worst else "")
+                    + ") — the hazard ratio is not constant over time, so the "
+                    "reported Cox coefficient is a time-averaged blur."
+                ),
+                "recovery_hint": (
+                    "Inspect result.ph_test(); add a time interaction / stratify "
+                    "on the offending covariate, or model it with sp.aft."
+                ),
+                "alternatives": ["sp.aft", "sp.cox"],
+            }
+        )
 
     # Non-positive SE
     ses = getattr(result, "std_errors", None)

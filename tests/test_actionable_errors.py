@@ -438,6 +438,110 @@ class TestGLMDiagnostics:
 
 
 # --------------------------------------------------------------------------- #
+#  Count models — excess zeros (zero inflation)
+# --------------------------------------------------------------------------- #
+
+
+class TestCountExcessZeros:
+    def test_zero_inflated_is_flagged(self):
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=600)
+        y = rng.poisson(np.exp(0.5 + 0.8 * x))
+        y[rng.uniform(size=600) < 0.4] = 0  # structural zeros
+        r = sp.poisson("y ~ x", data=pd.DataFrame({"y": y, "x": x}))
+        viols = [v for v in r.violations() if v.get("test") == "excess_zeros"]
+        assert viols and "sp.zip_model" in viols[0]["alternatives"]
+
+    def test_clean_poisson_has_no_excess_zeros(self):
+        rng = np.random.default_rng(1)
+        x = rng.normal(size=600)
+        r = sp.poisson(
+            "y ~ x",
+            data=pd.DataFrame({"y": rng.poisson(np.exp(0.5 + 0.8 * x)), "x": x}),
+        )
+        assert not [v for v in r.violations() if v.get("test") == "excess_zeros"]
+
+
+# --------------------------------------------------------------------------- #
+#  Selection models — Heckman & Tobit
+# --------------------------------------------------------------------------- #
+
+
+class TestSelectionModels:
+    def test_heckman_insignificant_selection_suggests_ols(self):
+        rng = np.random.default_rng(2)
+        n = 800
+        u = rng.normal(size=n)  # corr(u, selection error) = 0 → no selection
+        x, z = rng.normal(size=n), rng.normal(size=n)
+        sel = (0.3 + x + z + u) > 0
+        y = np.where(sel, 1 + 2 * x + rng.normal(size=n), np.nan)
+        r = sp.heckman(
+            pd.DataFrame({"yh": y, "sel": sel.astype(int), "x": x, "z": z}),
+            y="yh",
+            x=["x"],
+            select="sel",
+            z=["x", "z"],
+        )
+        viols = [v for v in r.violations() if v.get("test") == "heckman_no_selection"]
+        assert viols and "sp.regress" in viols[0]["alternatives"]
+
+    def test_tobit_extreme_censoring_is_flagged(self):
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=600)
+        y = np.maximum(0, -3 + 2 * x + rng.normal(size=600))  # ~90% censored at 0
+        r = sp.tobit(pd.DataFrame({"y": y, "x": x}), y="y", x=["x"], ll=0)
+        assert r.model_info["censor_pct"] > 90
+        assert [v for v in r.violations() if v.get("test") == "extreme_censoring"]
+
+
+# --------------------------------------------------------------------------- #
+#  Survival — Cox proportional hazards
+# --------------------------------------------------------------------------- #
+
+
+class TestCoxPH:
+    def test_ph_test_stored_and_clean_fit_is_silent(self):
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=400)
+        df = pd.DataFrame(
+            {
+                "t": rng.exponential(np.exp(-0.5 * x)),
+                "x": x,
+                "event": (rng.uniform(size=400) < 0.85).astype(int),
+            }
+        )
+        r = sp.cox("t ~ x", data=df, event="event")
+        assert "min_pvalue" in r.model_info["ph_test"]
+        assert not [
+            v for v in r.violations() if v.get("test") == "proportional_hazards"
+        ]
+
+    def test_ph_violation_is_surfaced(self):
+        """A stored PH-test rejection must surface as a violation (the ph_test
+        computation itself is exercised by the survival suite)."""
+        from types import SimpleNamespace
+
+        from statspai.core._agent_summary import econometric_violations
+
+        stub = SimpleNamespace(
+            model_info={
+                "model_type": "cox proportional hazards",
+                "ph_test": {"min_pvalue": 0.001, "worst_variable": "treat"},
+            },
+            diagnostics={},
+            std_errors=None,
+            params=None,
+            data_info={},
+        )
+        viols = [
+            v
+            for v in econometric_violations(stub)
+            if v.get("test") == "proportional_hazards"
+        ]
+        assert viols and "sp.aft" in viols[0]["alternatives"]
+
+
+# --------------------------------------------------------------------------- #
 #  Taxonomy — IdentificationError is catchable through the central taxonomy
 # --------------------------------------------------------------------------- #
 

@@ -9,9 +9,10 @@ Implements:
 """
 
 from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from scipy import stats, optimize
+from scipy import optimize, stats
 
 from ..core.results import EconometricResults
 
@@ -1207,6 +1208,18 @@ def cox(
         _hazard_ratios=hr,
         _hr_ci=hr_ci,
     )
+    # Store the global proportional-hazards test (from the Schoenfeld residuals
+    # computed above) so result.violations() can flag a PH violation without
+    # recomputing it — best-effort: strata models don't expose the residuals.
+    try:
+        _ph = _result.ph_test()
+        _imin = int(np.asarray(_ph["p_value"].values).argmin())
+        _result.model_info["ph_test"] = {
+            "min_pvalue": float(_ph["p_value"].iloc[_imin]),
+            "worst_variable": str(_ph["variable"].iloc[_imin]),
+        }
+    except (RuntimeError, ValueError, KeyError, IndexError):
+        pass
     try:
         from ..output._lineage import attach_provenance as _attach_prov
 
