@@ -25,15 +25,15 @@ sp.parity_summary()           # honest coverage counts
 
 | status | functions |
 | --- | ---: |
-| bit-exact | 93 |
+| bit-exact | 94 |
 | aligned | 7 |
 | analytical-only | 52 |
 | external-replication | 4 |
-| **verified (subtotal)** | **156** |
-| unverified | 983 |
+| **verified (subtotal)** | **157** |
+| unverified | 982 |
 | **total registered** | **1139** |
 
-## bit-exact — 93 functions
+## bit-exact — 94 functions
 
 Machine-tolerance agreement with a named R/Stata reference.
 
@@ -78,6 +78,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `ipw` | base R stats::glm(binomial) + hand-rolled Hajek weighted means | — | Hajek ATE/ATT estimate 1e-9 (observed <= 2e-15; SE not pinned) | — / — | [`test_ipw_parity.py`](../tests/reference_parity/test_ipw_parity.py) (+1) |
 | `ivreg` | AER::ivreg | R 4.5.2; AER 1.2.16 | rel_est<=1e-06, rel_se<=1e-06 | 1.1e-11 / 1.1e-11 | [`02_iv.py`](../tests/r_parity/02_iv.py) (+2) |
 | `kaplan_meier` | survival::survfit | R 4.5.2; survival 3.8.3 | S(t) at every event time 1e-12 (observed ~3e-17); median exact | — / — | [`test_survival_km_parity.py`](../tests/reference_parity/test_survival_km_parity.py) (+1) |
+| `kdensity` | Gaussian KDE closed form (= stats::density / sklearn) | R 4.5.2 | density 1e-12 abs (observed ~3e-18 / 0) | — / — | [`test_kdensity_parity.py`](../tests/reference_parity/test_kdensity_parity.py) |
 | `liml` | ivmodel::LIML | R 4.5.2; ivmodel 1.9.1 | rel_est<=1e-06, rel_se<=1e-06 | 1.7e-15 / 3.0e-16 | [`59_liml.py`](../tests/r_parity/59_liml.py) (+2) |
 | `local_projections` | lpirfs::lp_lin | R 4.5.2; lpirfs 0.2.5 | rel_est<=1e-06, rel_se<=1e-06 | 5.0e-15 / — | [`34_lp.py`](../tests/r_parity/34_lp.py) (+1) |
 | `logit` | stats::glm(family=binomial("logit")) | R 4.5.2; stats 4.5.2 | rel_est<=1e-06, rel_se<=1e-06 | 2.7e-11 / 2.7e-11 | [`57_logit.py`](../tests/r_parity/57_logit.py) (+2) |
@@ -217,6 +218,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `test` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 983 functions
+## unverified — 982 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

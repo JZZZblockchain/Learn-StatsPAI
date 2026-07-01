@@ -427,8 +427,15 @@ class TestSeverityImportanceSeparation:
         assert check["importance"] == "high"
 
     def test_missing_low_importance_check_has_info_severity(self):
-        r = _bare_did_result()  # empty
-        # ess_bulk is universal-applies and importance="low"
+        # A Bayesian DID result that wrote the diagnostics dict but omitted
+        # ess_bulk: still missing, still low-importance, still info severity.
+        r = _bare_did_result(
+            model_info={
+                "model_type": "Bayesian DID",
+                "rhat_max": 1.001,
+                # no ess_bulk_min
+            }
+        )
         check = next(c for c in sp.audit(r)["checks"] if c["name"] == "ess_bulk")
         assert check["status"] == "missing"
         assert check["importance"] == "low"
@@ -526,3 +533,64 @@ class TestModelTypeGatedChecks:
         assert self._status(good, "heckman_rho_boundary") == "passed"
         assert self._status(bad, "heckman_rho_boundary") == "failed"
         assert self._is_superset(bad)
+
+
+class TestMcmcGate:
+    """MCMC convergence checks (rhat / ess) only apply when the result could
+    actually report them. On a frequentist MLE that has no sampler, "missing
+    convergence_rhat" is noise — a reviewer asked "has your OLS converged?"
+    is being told something that doesn't exist. The gate keeps the check
+    *live* for Bayesian results (so an actually-converged / non-converged
+    verdict is still surfaced) and silences it for everyone else."""
+
+    @staticmethod
+    def _names(result):
+        return {c["name"] for c in sp.audit(result)["checks"]}
+
+    def test_frequentist_ols_has_no_mcmc_checks(self):
+        rng = np.random.default_rng(1)
+        x = rng.normal(size=400)
+        ols = sp.regress(
+            "y ~ x", data=pd.DataFrame({"y": x + rng.normal(size=400), "x": x})
+        )
+        names = self._names(ols)
+        assert "convergence_rhat" not in names
+        assert "ess_bulk" not in names
+
+    def test_frequentist_tobit_has_no_mcmc_checks(self):
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=400)
+        y = np.maximum(1 + 2 * x + rng.normal(size=400), 0)
+        tb = sp.tobit(pd.DataFrame({"y": y, "x": x}), y="y", x=["x"], ll=0)
+        names = self._names(tb)
+        assert "convergence_rhat" not in names
+        assert "ess_bulk" not in names
+
+    def test_bayesian_did_surfaces_mcmc_checks(self):
+        # A DID result that carries rhat evidence should keep the MCMC checks
+        # surfaced (a high rhat would then be a real "failed" finding).
+        r = _bare_did_result(
+            model_info={
+                "model_type": "Bayesian DID",
+                "rhat_max": 1.001,
+                "ess_bulk_min": 800,
+            }
+        )
+        names = self._names(r)
+        assert "convergence_rhat" in names
+        assert "ess_bulk" in names
+        rhat = next(c for c in sp.audit(r)["checks"] if c["name"] == "convergence_rhat")
+        ess = next(c for c in sp.audit(r)["checks"] if c["name"] == "ess_bulk")
+        assert rhat["status"] == "passed"
+        assert ess["status"] == "passed"
+
+    def test_bayesian_method_signature_unlocks_mcmc(self):
+        # A result with no model_info rhat but a "Bayesian" method label
+        # is also treated as Bayesian — the signature alone is sufficient.
+        r = _bare_did_result(model_info={})
+        # Override method to a Bayesian signature without touching model_info
+        r.method = "Bayesian DiD"
+        r.model_info["model_type"] = "Bayesian DiD"
+        names = self._names(r)
+        assert "convergence_rhat" in names
+        assert "ess_bulk" in names

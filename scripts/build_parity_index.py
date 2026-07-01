@@ -741,6 +741,22 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "_generate_survey_R.R."
         ),
     },
+    "kdensity": {
+        "status": "bit-exact",
+        "reference": "Gaussian KDE closed form (= stats::density / sklearn)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "density 1e-12 abs (observed ~3e-18 / 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_kdensity_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: Gaussian KDE f(x0) = (1/nh) * sum_i "
+            "phi((x0-x_i)/h)/sqrt(2pi) matches the kernel-density value at every "
+            "grid point to machine precision (Silverman 1986). Bandwidth "
+            "selector not pinned."
+        ),
+    },
 }
 
 

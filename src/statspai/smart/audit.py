@@ -115,6 +115,13 @@ class _Check:
         proportional-hazards check lives in the regression pool but must fire
         only for Cox, never for a plain OLS. Empty (the default) means the
         check applies to every result its ``applies_to`` family admits.
+    requires_bayesian : bool
+        When True, the check is only included for results that carry
+        MCMC-specific evidence (rhat / ess / divergences in model_info or
+        diagnostics, or a Bayesian method signature). This prevents
+        "missing convergence_rhat" from showing up as noise on a frequentist
+        MLE result that has no sampler to diagnose — the absence of rhat on
+        an MLE is not a missing check, it is by design.
     """
 
     name: str
@@ -127,6 +134,7 @@ class _Check:
     importance: str
     rationale: str
     model_type_any: Tuple[str, ...] = ()
+    requires_bayesian: bool = False
 
 
 def _p(*keys: str) -> EvidencePaths:
@@ -324,7 +332,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         "in-place placebos; without this, the estimate has no "
         "inferential statement.",
     ),
-    # --- Bayesian convergence (any family with MCMC) --------------- #
+    # --- Bayesian convergence (only when the result is actually Bayesian) - #
     _Check(
         name="convergence_rhat",
         question="Has the MCMC sampler converged (max R-hat ≤ 1.01)?",
@@ -339,6 +347,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
             "mediation",
             "generic",
         ),
+        requires_bayesian=True,
         evidence_paths=_pp(
             ("rhat_max",),
             ("diagnostics", "rhat_max"),
@@ -365,6 +374,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
             "mediation",
             "generic",
         ),
+        requires_bayesian=True,
         evidence_paths=_pp(
             ("ess_bulk_min",),
             ("diagnostics", "ess_bulk_min"),
@@ -500,6 +510,38 @@ def _resolve_evidence(model_info: Dict[str, Any], paths: EvidencePaths) -> Any:
         if val is not None:
             return val
     return None
+
+
+# MCMC indicators — the result is Bayesian if any of these are present in
+# model_info / diagnostics. Used by the ``requires_bayesian`` gate so MCMC
+# checks (rhat / ess) only appear on results that could actually report them.
+_BAYESIAN_MCMC_KEYS = (
+    "rhat_max",
+    "rhat",
+    "ess_bulk_min",
+    "ess_bulk",
+    "ess_tail_min",
+    "ess_tail",
+    "divergences",
+    "n_chains",
+    "n_draws",
+)
+
+
+def _result_is_bayesian(model_info: Dict[str, Any], method_label: str) -> bool:
+    """Return True if the result has MCMC evidence or a Bayesian signature.
+
+    A frequentist MLE has no rhat/ess by design, and surfacing
+    "missing convergence_rhat" on it would be noise. The check is
+    deliberately permissive — any MCMC indicator under model_info or
+    diagnostics, or a Bayesian method string, qualifies.
+    """
+    if any(k in model_info for k in _BAYESIAN_MCMC_KEYS):
+        return True
+    ml = (method_label or "").lower()
+    if "bayes" in ml or "mcmc" in ml:
+        return True
+    return False
 
 
 def _evaluate(check: _Check, model_info: Dict[str, Any]) -> Tuple[str, Any]:
@@ -732,11 +774,14 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> Dict[str, Any]:
     # a family (e.g. Cox / Tobit / Heckman all share a broad family but each
     # carries a diagnostic the others must not be asked about).
     signature = (f"{method_label} {model_info.get('model_type', '')}").lower()
+    is_bayesian = _result_is_bayesian(model_info, method_label)
 
     for chk in pool:
         if family not in chk.applies_to:
             continue
         if chk.model_type_any and not any(s in signature for s in chk.model_type_any):
+            continue
+        if chk.requires_bayesian and not is_bayesian:
             continue
         _record(chk)
 
