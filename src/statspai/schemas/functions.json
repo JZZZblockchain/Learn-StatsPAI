@@ -33673,7 +33673,7 @@
     }
   },
   {
-    "description": "Kernel density estimation.",
+    "description": "Kernel density estimation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "kdensity",
     "parameters": {
       "properties": {
