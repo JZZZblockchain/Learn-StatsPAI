@@ -68,6 +68,17 @@ def test_liml_records_first_stage_f_so_weak_iv_is_flagged():
     assert "weak_instrument" not in {v["test"] for v in strong.violations()}
 
 
+def test_jive_records_first_stage_f_so_weak_iv_is_flagged():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        weak = sp.jive(data=_iv_design(0.03), y="y", x_endog=["d"], z=["z"])
+        strong = sp.jive(data=_iv_design(2.0), y="y", x_endog=["d"], z=["z"])
+    assert weak.model_info["first_stage_f"] < 10
+    assert "weak_instrument" in {v["test"] for v in weak.violations()}
+    assert strong.model_info["first_stage_f"] > 10
+    assert "weak_instrument" not in {v["test"] for v in strong.violations()}
+
+
 def test_paper_robustness_flags_weak_instrument():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
