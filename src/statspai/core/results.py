@@ -2184,6 +2184,76 @@ class CausalResult:
             "  doi={10.1111/rssb.12348}\n"
             "}"
         ),
+        # --- batch 9 methods-appendix coverage (balancing weights / matching /
+        #     selection / IV / ensembles; verified via paper.bib) ---
+        "ebalance": (
+            "@article{hainmueller2012entropy,\n"
+            "  title={Entropy Balancing for Causal Effects: A "
+            "Multivariate Reweighting Method to Produce Balanced "
+            "Samples in Observational Studies},\n"
+            "  author={Hainmueller, Jens},\n"
+            "  journal={Political Analysis},\n"
+            "  year={2012},\n"
+            "  doi={10.1093/pan/mpr025}\n"
+            "}"
+        ),
+        "cbps": (
+            "@article{imai2014covariate,\n"
+            "  title={Covariate Balancing Propensity Score},\n"
+            "  author={Imai, Kosuke and Ratkovic, Marc},\n"
+            "  journal={Journal of the Royal Statistical Society "
+            "Series B},\n"
+            "  volume={76},\n"
+            "  number={1},\n"
+            "  pages={243--263},\n"
+            "  year={2014},\n"
+            "  doi={10.1111/rssb.12027}\n"
+            "}"
+        ),
+        "sbw": (
+            "@article{zubizarreta2015stable,\n"
+            "  title={Stable Weights that Balance Covariates for "
+            "Estimation With Incomplete Outcome Data},\n"
+            "  author={Zubizarreta, José R.},\n"
+            "  journal={Journal of the American Statistical "
+            "Association},\n"
+            "  year={2015},\n"
+            "  doi={10.1080/01621459.2015.1023805}\n"
+            "}"
+        ),
+        "heckman": (
+            "@article{heckman1979sample,\n"
+            "  title={Sample Selection Bias as a Specification "
+            "Error},\n"
+            "  author={Heckman, James J.},\n"
+            "  journal={Econometrica},\n"
+            "  year={1979},\n"
+            "  doi={10.2307/1912352}\n"
+            "}"
+        ),
+        "jive": (
+            "@article{angrist1999jackknife,\n"
+            "  title={Jackknife instrumental variables "
+            "estimation},\n"
+            "  author={Angrist, J. D. and Imbens, G. W. and "
+            "Krueger, A. B.},\n"
+            "  journal={Journal of Applied Econometrics},\n"
+            "  year={1999},\n"
+            "  doi={10.1002/(sici)1099-1255(199901/02)14:1<57::"
+            "aid-jae501>3.3.co;2-7}\n"
+            "}"
+        ),
+        "super_learner": (
+            "@article{vanderlaan2007super,\n"
+            "  title={Super Learner},\n"
+            "  author={van der Laan, Mark J. and Polley, Eric C "
+            "and Hubbard, Alan E.},\n"
+            "  journal={Statistical Applications in Genetics and "
+            "Molecular Biology},\n"
+            "  year={2007},\n"
+            "  doi={10.2202/1544-6115.1309}\n"
+            "}"
+        ),
     }
 
     def __init__(

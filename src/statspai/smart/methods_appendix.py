@@ -105,7 +105,9 @@ class MethodSpec:
 #  Gelbach decompositions, Kitagawa, multiway clustering, Lin RCT adjustment,
 #  conformal ITE, stochastic frontier, Machado-Mata, kernel IV, two-stage DiD,
 #  randomization inference, Bayesian causal forest, marginal treatment effects,
-#  DR-learner, nonparametric IV, sensitivity to unobservables) plus the
+#  DR-learner, nonparametric IV, sensitivity to unobservables, entropy
+#  balancing, CBPS, stable balancing weights, Heckman selection, jackknife IV,
+#  super learner) plus the
 #  common regression families (OLS, Poisson, logit, probit, panel fixed
 #  effects).
 #
@@ -1918,6 +1920,133 @@ _SPECS: List[MethodSpec] = [
             "Benchmarking against observed covariates is informative.",
         ],
         aliases=["cinelli_hazlett", "robustness_value", "sensitivity_ovb"],
+    ),
+    MethodSpec(
+        key="ebalance",
+        name="Entropy Balancing",
+        estimand_latex=(r"\tau_{\mathrm{ATT}} = \mathbb{E}[Y(1) - Y(0)\mid D=1]"),
+        estimator_latex=(
+            r"\min_{w}\ \sum_i w_i\log(w_i/q_i)\ \text{s.t. }\ "
+            r"\sum_i w_i c_r(X_i) = m_r,\ w_i \ge 0"
+        ),
+        prose=(
+            "Solves for the minimum-entropy weights (closest to base weights) "
+            "that exactly match chosen covariate moments of the target group, "
+            "then contrasts weighted means — exact moment balance without "
+            "iterative propensity tuning (Hainmueller)."
+        ),
+        assumptions=[
+            "Unconfoundedness given the balanced covariate moments.",
+            "Overlap; the specified moments capture the confounding.",
+        ],
+        aliases=["entropy_balancing", "entropy_balance"],
+    ),
+    MethodSpec(
+        key="cbps",
+        name="Covariate Balancing Propensity Score",
+        estimand_latex=r"e(X;\beta) = \Pr(D=1\mid X)",
+        estimator_latex=(
+            r"\hat\beta:\ \mathbb{E}\!\left[\Big(\tfrac{D}{e} - "
+            r"\tfrac{1-D}{1-e}\Big) X\right] = 0\ "
+            r"(+\ \text{score, over-identified GMM})"
+        ),
+        prose=(
+            "Estimates the propensity score to satisfy covariate-balancing "
+            "moment conditions in addition to (or instead of) the likelihood "
+            "score, making the resulting weights robust to mild propensity "
+            "misspecification (Imai & Ratkovic)."
+        ),
+        assumptions=[
+            "Unconfoundedness and overlap.",
+            "The balancing moments identify the propensity parameters.",
+        ],
+        aliases=["covariate_balancing_ps", "covariate_balancing_propensity_score"],
+    ),
+    MethodSpec(
+        key="sbw",
+        name="Stable Balancing Weights",
+        estimand_latex=r"\tau_{\mathrm{ATT}}\ \text{(via balancing weights)}",
+        estimator_latex=(
+            r"\min_{w}\ \sum_i w_i^2\ \text{s.t. }\ "
+            r"\big|\textstyle\sum_i w_i X_{ri} - m_r\big| \le \delta,\ "
+            r"w_i \ge 0"
+        ),
+        prose=(
+            "Finds the minimum-variance (most stable) weights that approximately "
+            "balance covariate moments within a tolerance delta, trading exact "
+            "balance for weight stability via convex optimization (Zubizarreta)."
+        ),
+        assumptions=[
+            "Unconfoundedness and overlap.",
+            "The balance tolerance is small enough to remove confounding.",
+        ],
+        aliases=["stable_balancing_weights", "sbw_weights"],
+    ),
+    MethodSpec(
+        key="heckman",
+        name="Heckman Selection Model",
+        estimand_latex=(
+            r"Y = X'\beta + \varepsilon\ \text{observed if}\ Z'\gamma + u > 0"
+        ),
+        estimator_latex=(
+            r"\hat\gamma\ (\text{probit});\quad "
+            r"Y = X'\beta + \rho\sigma\,\lambda(Z'\hat\gamma) + \eta,\ "
+            r"\lambda = \phi/\Phi"
+        ),
+        prose=(
+            "Corrects sample-selection bias by modeling the selection process "
+            "and adding the inverse Mills ratio as a regressor in the outcome "
+            "equation (Heckman two-step; or full-information ML)."
+        ),
+        assumptions=[
+            "Joint normality of the selection and outcome errors (two-step).",
+            "An exclusion restriction: a variable affecting selection only.",
+        ],
+        aliases=["heckit", "sample_selection", "heckman_selection"],
+    ),
+    MethodSpec(
+        key="jive",
+        name="Jackknife Instrumental Variables",
+        estimand_latex=r"\delta\ \text{(IV coefficient, many-instrument robust)}",
+        estimator_latex=(
+            r"\hat D_{(i)} = X_i'\hat\pi_{(i)}\ (\text{leave-one-out first "
+            r"stage});\ \hat\delta = \big(\textstyle\sum_i \hat D_{(i)} "
+            r"D_i'\big)^{-1}\sum_i \hat D_{(i)} Y_i"
+        ),
+        prose=(
+            "Reduces the finite-sample bias of 2SLS with many instruments by "
+            "using leave-one-out (jackknife) first-stage predictions, so each "
+            "observation's fitted endogenous value excludes its own data "
+            "(Angrist, Imbens & Krueger)."
+        ),
+        assumptions=[
+            "Instrument validity (relevance, exclusion, independence).",
+            "Many / weak instruments where 2SLS is biased.",
+        ],
+        aliases=["jackknife_iv", "jive_estimator", "jive1"],
+    ),
+    MethodSpec(
+        key="super_learner",
+        name="Super Learner (Stacked Ensemble)",
+        estimand_latex=(
+            r"\hat\Psi = \sum_k \hat\alpha_k \hat\Psi_k,\quad "
+            r"\alpha \ge 0,\ \textstyle\sum_k \alpha_k = 1"
+        ),
+        estimator_latex=(
+            r"\hat\alpha = \arg\min_{\alpha}\ \sum_i \Big(Y_i - "
+            r"\sum_k \alpha_k \hat\Psi_k^{-\,\mathrm{cv}}(X_i)\Big)^2"
+        ),
+        prose=(
+            "A cross-validation-based ensemble that combines a library of "
+            "candidate learners into the convex weighting minimizing "
+            "cross-validated risk, with an oracle guarantee relative to the best "
+            "library member (van der Laan, Polley & Hubbard)."
+        ),
+        assumptions=[
+            "I.i.d. data for cross-validation.",
+            "A sufficiently rich library of candidate learners.",
+        ],
+        aliases=["superlearner", "sl_ensemble", "stacking"],
     ),
 ]
 

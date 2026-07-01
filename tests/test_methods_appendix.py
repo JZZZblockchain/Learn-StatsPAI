@@ -192,6 +192,17 @@ def test_econometric_result_method_present():
         ("nonparametric_iv", "npiv"),
         ("sensemakr", "sensemakr"),
         ("robustness_value", "sensemakr"),
+        # Balancing / matching / selection / IV / ensemble batch-9
+        ("ebalance", "ebalance"),
+        ("entropy_balancing", "ebalance"),
+        ("cbps", "cbps"),
+        ("sbw", "sbw"),
+        ("heckman", "heckman"),
+        ("heckit", "heckman"),
+        ("jive", "jive"),
+        ("jackknife_iv", "jive"),
+        ("super_learner", "super_learner"),
+        ("superlearner", "super_learner"),
     ],
 )
 def test_resolution(method, expect_key):
@@ -543,6 +554,20 @@ def test_batch8_estimators_carry_verified_citation():
         ("dr_learner", "Kennedy"),
         ("npiv", "Newey"),
         ("sensemakr", "Cinelli"),
+    ]:
+        r = _causal(key)
+        r._citation_key = key
+        assert token in r.cite(format="apa"), f"{key}: missing {token!r}"
+
+
+def test_batch9_estimators_carry_verified_citation():
+    for key, token in [
+        ("ebalance", "Hainmueller"),
+        ("cbps", "Imai"),
+        ("sbw", "Zubizarreta"),
+        ("heckman", "Heckman"),
+        ("jive", "Angrist"),
+        ("super_learner", "Laan"),
     ]:
         r = _causal(key)
         r._citation_key = key
