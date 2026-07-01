@@ -146,19 +146,30 @@ def _as_float(x: Any) -> Optional[float]:
 
 def _max_covariate_smd(mi: Dict[str, Any]) -> Optional[float]:
     """Largest absolute post-matching standardized mean difference across
-    covariates. Handles both the scalar convention
-    (``mi["balance"]["max_smd_after"]``) and the per-variable balance table
-    that ``sp.match`` stores (a DataFrame with ``variable`` / ``smd`` columns),
-    excluding the propensity score / distance rows which are not covariates."""
+    covariates. Handles the three shapes estimators use: the scalar convention
+    (``mi["balance"]["max_smd_after"]``), the per-variable balance table
+    ``sp.match`` stores (a DataFrame with ``variable`` / ``smd`` columns), and
+    the ``{covariate: smd}`` dict weighting estimators store under
+    ``std_mean_diff_after`` (e.g. ``sp.cbps``). The propensity score / distance
+    entries are excluded — they are not covariates."""
+    _skip = ("propensity_score", "distance")
     scalar = _as_float(_safe_get(mi, "balance", "max_smd_after"))
     if scalar is not None:
         return scalar
     bal = mi.get("balance")
     if isinstance(bal, pd.DataFrame) and {"variable", "smd"}.issubset(bal.columns):
-        cov = bal[~bal["variable"].isin(["propensity_score", "distance"])]
+        cov = bal[~bal["variable"].isin(_skip)]
         if not cov.empty:
-            m = cov["smd"].abs().max()
-            return _as_float(m)
+            return _as_float(cov["smd"].abs().max())
+    smd_dict = mi.get("std_mean_diff_after")
+    if isinstance(smd_dict, dict) and smd_dict:
+        vals = [
+            abs(v)
+            for k, v in smd_dict.items()
+            if str(k) not in _skip and _as_float(v) is not None
+        ]
+        if vals:
+            return _as_float(max(vals))
     return None
 
 
@@ -321,13 +332,12 @@ def causal_violations(result: Any) -> List[Dict[str, Any]]:
                 }
             )
 
-    # --- Matching: covariate balance ------------------------------------
+    # --- Matching / weighting: covariate balance -----------------------
+    # Gated on the estimator having recorded post-adjustment balance (only
+    # matching / weighting estimators do), not on family detection — CBPS and
+    # entropy balancing report balance but are not tagged "matching".
     smd_max = _max_covariate_smd(mi)
-    if (
-        smd_max is not None
-        and smd_max > _SMD_IMBALANCE_MAX
-        and method_family == "matching"
-    ):
+    if smd_max is not None and smd_max > _SMD_IMBALANCE_MAX:
         out.append(
             {
                 "kind": "assumption",
