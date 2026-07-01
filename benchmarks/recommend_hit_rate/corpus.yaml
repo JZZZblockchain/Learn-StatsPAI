@@ -36,7 +36,7 @@
 #   panel         : fe mundlak re
 
 schema_version: 1
-corpus_version: "0.8.0-batch1"
+corpus_version: "0.9.0-batch2"
 
 entries:
   # ---------------------------------------------------------------------------
@@ -532,6 +532,57 @@ entries:
         - {check: weak_instrument,   provenance: methodological_followup, source: "instrument-strength scrutiny (small cross-country sample)"}
         - {check: anderson_rubin_ci, provenance: methodological_followup, source: "weak-IV-robust inference on a small sample"}
     notes: "Real applied cross-country IV (settler mortality → institutions). Small n; recommend should lead with 2SLS (LIML/AR also acceptable)."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Dell (2010) Peru mining-mita geographic boundary RD (distance to
+  # the mita boundary as the running variable). Citation + DOI verified via
+  # onlinelibrary.wiley.com (10.3982/ECTA8121) + ideas.repec.org.
+  # ---------------------------------------------------------------------------
+  - id: dell_2010_mining_mita_rd
+    paper:
+      citation: "Dell, M. (2010). The Persistent Effects of Peru's Mining Mita. Econometrica 78(6), 1863-1903."
+      bib_key: dell2010persistent
+    design:
+      label: rd
+      fingerprint: {synthetic: true, running_var: distance_to_mita_boundary, cutoff: 0.0, geographic_boundary: true}
+    data:
+      tier: B
+      loader: "sp.dgp_rd(n=1500, fuzzy=False, cutoff=0.0, seed=2010)"
+      args: {y: y, running_var: x, cutoff: 0.0}
+    ground_truth:
+      estimator:
+        primary: local_polynomial_rd
+        acceptable: [rdrobust, cct, local_polynomial_rd]
+        disqualifying: []
+      robustness_checks:
+        - {check: mccrary_density,       provenance: methodological_followup, source: "density/manipulation at the boundary"}
+        - {check: bandwidth_sensitivity, provenance: paper_section,           source: "Dell (2010) bandwidth robustness"}
+    notes: "Real applied geographic boundary RD (distance to the mita boundary). rdrobust / local-polynomial expected."
+
+  # ---------------------------------------------------------------------------
+  # TIER B — Duflo (2001) Indonesia school-construction DiD (region construction
+  # intensity × birth cohort). Citation + DOI verified via aeaweb.org
+  # (10.1257/aer.91.4.795) + NBER w7860.
+  # ---------------------------------------------------------------------------
+  - id: duflo_2001_school_construction_did
+    paper:
+      citation: "Duflo, E. (2001). Schooling and Labor Market Consequences of School Construction in Indonesia: Evidence from an Unusual Policy Experiment. American Economic Review 91(4), 795-813."
+      bib_key: duflo2001schooling
+    design:
+      label: did
+      fingerprint: {synthetic: true, n_units: 120, n_periods: 5, staggered: true, intensity_x_cohort: true}
+    data:
+      tier: B
+      loader: "sp.dgp_did(n_units=120, n_periods=5, staggered=True, seed=2001)"
+      args: {y: y, treatment: treated, id: unit, time: time}
+    ground_truth:
+      estimator:
+        primary: callaway_santanna
+        acceptable: [callaway_santanna, sun_abraham, classic_2x2, twfe, did, drdid, did_imputation]
+        disqualifying: []
+      robustness_checks:
+        - {check: parallel_trends, provenance: paper_section, source: "Duflo (2001) older-cohort placebo (no exposure)"}
+    notes: "Real applied DiD (construction intensity × birth cohort). A heterogeneity-robust or classic estimator is valid here."
 
   # ===========================================================================
   # FRONTIER (gap_probe) — design families recommend was BLIND to (F-004), now
