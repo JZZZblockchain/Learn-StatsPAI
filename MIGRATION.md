@@ -5,6 +5,30 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="ges-collider-acyclicity"></a>
+
+## Unreleased — ⚠️ `sp.ges` no longer adds a spurious collider-parent edge
+
+**What changed.** Greedy Equivalence Search searched over edge additions with no
+acyclicity constraint. On a v-structure `X -> Z <- Y` it could add an edge into
+`Z` and another out of `Z`; scoring a parent of `X`/`Y` then conditioned on the
+collider and made the two independent parents look dependent, so a false
+`X -- Y` edge entered the graph. The search now rejects cycle-creating edges and
+returns the DAG's CPDAG (v-structures directed, reversible edges undirected).
+
+**Why.** The recovered skeleton was wrong — colliders came back fully connected
+instead of `X -> Z <- Y`, contradicting the d-separation structure.
+
+**Who is affected.** Any `sp.ges` result on data containing a collider (common).
+Recovered graphs may lose spurious edges and gain correct v-structure
+orientations; chains now read as undirected CPDAG edges rather than a single
+arbitrary orientation.
+
+**Action.** Re-run `sp.ges`; the new adjacency is the correct CPDAG. No API
+change (`.edges()`, `.adjacency`, `.to_frame()` unchanged in shape).
+
+---
+
 <a id="dist-iv-binary-instrument-nan"></a>
 
 ## Unreleased — ⚠️ `sp.dist_iv` / `sp.kan_dlate` no longer NaN on binary instruments

@@ -47,6 +47,59 @@ def _total_bic(data: np.ndarray, adj: np.ndarray) -> float:
     return total
 
 
+def _creates_cycle(adj: np.ndarray, i: int, j: int) -> bool:
+    """Would adding the directed edge ``i -> j`` create a directed cycle?
+
+    True iff ``j`` can already reach ``i`` along existing directed edges.
+    Without this guard the greedy search adds edges into a collider *and* out
+    of it (``X -> Z`` then ``Z -> Y``), which conditions on the collider and
+    spuriously links its otherwise-independent parents.
+    """
+    p = adj.shape[0]
+    stack = [j]
+    seen = {j}
+    while stack:
+        node = stack.pop()
+        if node == i:
+            return True
+        for k in range(p):
+            if adj[node, k] != 0 and k not in seen:
+                seen.add(k)
+                stack.append(k)
+    return False
+
+
+def _dag_to_cpdag(adj: np.ndarray) -> np.ndarray:
+    """Convert a directed DAG adjacency to a CPDAG.
+
+    Edges that participate in a v-structure (``i -> k <- j`` with ``i``, ``j``
+    non-adjacent) stay directed; every other edge is rendered undirected
+    (both orientations set), matching the Markov-equivalence-class semantics
+    documented on :class:`GESResult`.
+    """
+    p = adj.shape[0]
+    directed: set = set()
+    for k in range(p):
+        parents = [i for i in range(p) if adj[i, k] != 0]
+        for a_idx in range(len(parents)):
+            for b_idx in range(a_idx + 1, len(parents)):
+                i, j = parents[a_idx], parents[b_idx]
+                if adj[i, j] == 0 and adj[j, i] == 0:  # non-adjacent -> collider
+                    directed.add((i, k))
+                    directed.add((j, k))
+    cpdag = np.zeros_like(adj)
+    for i in range(p):
+        for j in range(p):
+            if adj[i, j] == 0:
+                continue
+            if (i, j) in directed:
+                cpdag[i, j] = 1
+            else:
+                cpdag[i, j] = 1
+                cpdag[j, i] = 1
+    return cpdag
+
+
 @dataclass
 class GESResult:
     """Result of :func:`ges` — a CPDAG (Markov equivalence class).
@@ -169,7 +222,9 @@ def ges(
         best_new_bic = best_bic
         for i in range(p):
             for j in range(p):
-                if i == j or adj[i, j]:
+                if i == j or adj[i, j] or adj[j, i]:
+                    continue
+                if _creates_cycle(adj, i, j):
                     continue
                 adj[i, j] = 1
                 new_bic = _score()
@@ -205,6 +260,11 @@ def ges(
             break
         adj[best_edge[0], best_edge[1]] = 0
         best_bic = best_new_bic
+
+    # The greedy search returns a single DAG; report its Markov equivalence
+    # class (CPDAG) so v-structures stay directed and reversible edges read as
+    # undirected.
+    adj = _dag_to_cpdag(adj)
 
     _result = GESResult(adjacency=adj, names=names, bic=best_bic)
     try:

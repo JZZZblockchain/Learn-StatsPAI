@@ -9,6 +9,17 @@ All notable changes to StatsPAI will be documented in this file.
 These change DiD point estimates for affected staggered/switching designs. See
 `MIGRATION.md` before comparing new output to earlier StatsPAI runs.
 
+- **`sp.ges` (Greedy Equivalence Search)** no longer adds a spurious edge
+  between the parents of a collider. The greedy edge search had no acyclicity
+  constraint, so on a v-structure `X -> Z <- Y` it would add edges into *and*
+  out of `Z`; conditioning on the collider then made the independent parents
+  `X`, `Y` look dependent and a false `X -- Y` edge was added (observed on every
+  seed of a strong-signal collider). The search now rejects edges that create a
+  directed cycle, and the recovered DAG is reported as its CPDAG (v-structures
+  stay directed, reversible edges render undirected). Colliders now recover the
+  correct `X -> Z <- Y`; chains recover the undirected skeleton. New guard:
+  `tests/reference_parity/test_ges_parity.py`.
+
 - **`sp.dist_iv` / `sp.kan_dlate` with a binary instrument** no longer return a
   silent all-`NaN` `late_q`. The Wald quantile-LATE split used a strict
   `Z > median(Z)` rule, which leaves the high group empty whenever the median
