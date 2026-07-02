@@ -5,6 +5,31 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="eigenvector-centrality-bipartite"></a>
+
+## Unreleased — ⚠️ `sp.eigenvector_centrality` fixed on bipartite graphs
+
+**What changed.** Eigenvector centrality was computed by naive power iteration
+`x <- A x`. On a bipartite graph the adjacency spectrum is symmetric
+(`lambda_max = -lambda_min`), so the iteration oscillates between the two
+sign-partitions and never converges; after `max_iter` steps it returned a
+near-uniform vector (a star scored ~`1/sqrt(n)` for every node). The leading
+eigenvector is now obtained by direct eigendecomposition, so the dominant nodes
+score correctly (star hub `1/sqrt(2)`, leaves `1/sqrt(8)`).
+
+**Why.** The returned centralities were qualitatively wrong on any bipartite or
+near-bipartite network — the whole point of the measure (ranking nodes by
+recursive influence) was lost.
+
+**Who is affected.** Any `sp.eigenvector_centrality` call on a bipartite or
+near-bipartite graph. Non-bipartite connected graphs (where power iteration did
+converge) are numerically unchanged up to normalization.
+
+**Action.** Re-run; the new scores are the correct leading eigenvector. The
+`max_iter` / `tol` arguments remain accepted for backward compatibility.
+
+---
+
 <a id="ges-collider-acyclicity"></a>
 
 ## Unreleased — ⚠️ `sp.ges` no longer adds a spurious collider-parent edge

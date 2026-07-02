@@ -9,6 +9,17 @@ All notable changes to StatsPAI will be documented in this file.
 These change DiD point estimates for affected staggered/switching designs. See
 `MIGRATION.md` before comparing new output to earlier StatsPAI runs.
 
+- **`sp.eigenvector_centrality` on bipartite graphs** now returns the true
+  leading eigenvector instead of a spurious near-uniform vector. The score was
+  computed by naive power iteration `x <- A x`, which *oscillates* on a
+  bipartite graph (its spectrum is symmetric, `lambda_max = -lambda_min`) and
+  never converges — a star returned ~`1/sqrt(n)` for every node instead of a
+  dominant hub. The leading eigenvector is now recovered by direct
+  eigendecomposition (`eigh` for undirected, `eig` for directed), so a star
+  hub scores `1/sqrt(2)` and its leaves `1/sqrt(8)`, matching the
+  igraph / networkx convention. New guard in
+  `tests/reference_parity/test_network_centrality_parity.py`.
+
 - **`sp.ges` (Greedy Equivalence Search)** no longer adds a spurious edge
   between the parents of a collider. The greedy edge search had no acyclicity
   constraint, so on a v-structure `X -> Z <- Y` it would add edges into *and*

@@ -1600,6 +1600,29 @@
       "tolerance": ""
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "eigenvector_centrality",
+      "notes": [
+        "Closed-form identity: the L2-normalized leading eigenvector of the adjacency matrix (star hub 1/sqrt2, leaves 1/sqrt8; triangle uniform; path midpoint 1/sqrt2). Guards the bipartite power-iteration fix. = igraph/networkx eigenvector convention."
+      ],
+      "reference": "leading adjacency eigenvector (Bonacich 1972)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_network_centrality_parity.py"
+      ],
+      "tolerance": "centrality 1e-9 abs (observed <= 1e-15)"
+    },
+    {
       "function": "engle_granger",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."

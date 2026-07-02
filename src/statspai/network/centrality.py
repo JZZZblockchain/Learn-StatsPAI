@@ -290,25 +290,28 @@ def eigenvector_centrality(
     """
     g = as_graph(graph)
     use_w = g.is_weighted if weighted is None else weighted
-    A = g.adjacency_matrix() if use_w else g.binary()
+    A = np.asarray(g.adjacency_matrix() if use_w else g.binary(), dtype=float)
     n = g.n_nodes
     if n == 0:
         return pd.Series([], dtype=float, name="eigenvector")
-    x = np.full(n, 1.0 / np.sqrt(n))
-    for _ in range(max_iter):
-        x_new = A @ x
-        norm = np.linalg.norm(x_new)
-        if norm == 0:
-            break
-        x_new = x_new / norm
-        if np.linalg.norm(x_new - x) < tol:
-            x = x_new
-            break
-        x = x_new
+    # Leading eigenvector via direct eigendecomposition. Naive power iteration
+    # (x <- A x) oscillates and fails to converge on bipartite graphs, whose
+    # spectrum is symmetric (lambda_max = -lambda_min): e.g. a star returns a
+    # spurious near-uniform vector. eigh/eig recover the true dominant
+    # eigenvector, matching the igraph / networkx convention.
+    if np.allclose(A, A.T):
+        vals, vecs = np.linalg.eigh(A)
+        lead = vecs[:, int(np.argmax(vals))]
+    else:
+        vals, vecs = np.linalg.eig(A)
+        lead = vecs[:, int(np.argmax(vals.real))].real
+    norm = np.linalg.norm(lead)
+    if norm > 0:
+        lead = lead / norm
     # Perron-Frobenius: choose the non-negative orientation.
-    if x.sum() < 0:
-        x = -x
-    return pd.Series(x, index=g.labels, name="eigenvector")
+    if lead.sum() < 0:
+        lead = -lead
+    return pd.Series(lead, index=g.labels, name="eigenvector")
 
 
 # ====================================================================== #

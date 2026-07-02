@@ -1109,6 +1109,22 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "= igraph/networkx transitivity(local)."
         ),
     },
+    "eigenvector_centrality": {
+        "status": "bit-exact",
+        "reference": "leading adjacency eigenvector (Bonacich 1972)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "centrality 1e-9 abs (observed <= 1e-15)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_network_centrality_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the L2-normalized leading eigenvector of the "
+            "adjacency matrix (star hub 1/sqrt2, leaves 1/sqrt8; triangle "
+            "uniform; path midpoint 1/sqrt2). Guards the bipartite power-"
+            "iteration fix. = igraph/networkx eigenvector convention."
+        ),
+    },
 }
 
 

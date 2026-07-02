@@ -60,3 +60,20 @@ def test_local_clustering_closed_form():
     # star / path: no triangles -> clustering 0 everywhere
     assert np.allclose(sp.clustering(STAR).to_numpy(dtype=float), 0.0, atol=1e-12)
     assert np.allclose(sp.clustering(PATH).to_numpy(dtype=float), 0.0, atol=1e-12)
+
+
+def test_eigenvector_centrality_leading_eigenvector():
+    # Star is bipartite (spectrum +/-2); the leading eigenvector has the hub at
+    # 1/sqrt(2) and each leaf at 1/sqrt(8) — not the uniform vector that naive
+    # power iteration collapses to. Guards the bipartite-oscillation fix.
+    ev = sp.eigenvector_centrality(STAR)
+    assert float(ev.iloc[0]) == pytest.approx(1 / np.sqrt(2), abs=1e-9)
+    for i in range(1, 5):
+        assert float(ev.iloc[i]) == pytest.approx(1 / np.sqrt(8), abs=1e-9)
+    # triangle: symmetric -> uniform 1/sqrt(3)
+    et = sp.eigenvector_centrality(TRIANGLE)
+    assert np.allclose(et.to_numpy(dtype=float), 1 / np.sqrt(3), atol=1e-9)
+    # path 0-1-2: leading eigenvector [1/2, 1/sqrt2, 1/2]
+    ep = sp.eigenvector_centrality(PATH)
+    assert float(ep.iloc[1]) == pytest.approx(1 / np.sqrt(2), abs=1e-9)
+    assert float(ep.iloc[0]) == pytest.approx(0.5, abs=1e-9)
