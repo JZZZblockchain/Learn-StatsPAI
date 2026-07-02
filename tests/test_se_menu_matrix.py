@@ -58,6 +58,8 @@ def test_native_wild_boot_estimators() -> None:
         est for est in MATRIX if _cell(est, "wild_cluster_boot") == "native"
     )
     assert native_wild == [
+        "callaway_santanna",
+        "did",
         "feglm",
         "feols",
         "fepois",

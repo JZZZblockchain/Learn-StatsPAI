@@ -13,7 +13,7 @@ Angrist, J.D. and Pischke, J.-S. (2009).
 Princeton University Press. [@angrist2009mostly]
 """
 
-from typing import Any, Optional, List, cast
+from typing import Any, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -81,6 +81,10 @@ def did_2x2(
     alpha: float = 0.05,
     weights: Optional[str] = None,
     engine: str = "ols",
+    vce: Optional[str] = None,
+    wild_reps: int = 999,
+    wild_weight_type: str = "rademacher",
+    seed: Optional[int] = None,
     **kwargs: Any,
 ) -> CausalResult:
     """
@@ -100,6 +104,19 @@ def did_2x2(
         Additional control variables.
     cluster : str, optional
         Cluster variable for cluster-robust standard errors.
+    vce : str, optional
+        ``"wild"`` (with ``cluster=``) replaces the ATT p-value and CI with
+        the WCR wild cluster bootstrap (Cameron-Gelbach-Miller 2008) on the
+        DID interaction regression — the canonical few-clusters DID
+        inference (validated against Stata ``boottest`` after
+        ``reg y d t dt, vce(cluster ...)``). Point estimate and cluster SE
+        stand.
+    wild_reps : int, default 999
+        Bootstrap replications for ``vce="wild"``.
+    wild_weight_type : str, default "rademacher"
+        Wild weight distribution.
+    seed : int, optional
+        RNG seed for ``vce="wild"``.
     robust : bool, default True
         Use HC1 heteroskedasticity-robust standard errors.
     alpha : float, default 0.05
@@ -304,6 +321,60 @@ def did_2x2(
     t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
     ci = (att - t_crit * att_se, att + t_crit * att_se)
 
+    # --- WCR wild cluster bootstrap for the ATT (vce="wild") ----------------
+    # Runs the SAME verified engine as sp.regress(vce="wild") on the DID
+    # interaction design; the point estimate and cluster SE stand, while the
+    # p-value / CI come from the bootstrap. This is the canonical
+    # few-clusters DID inference (MacKinnon-Webb 2017), validated against
+    # Stata `boottest` after `reg y d t dt, vce(cluster ...)`.
+    _vce = vce.lower() if isinstance(vce, str) else None
+    wild_note: Optional[str] = None
+    if _vce in ("wild", "wildbootstrap", "wild_cluster", "wcr", "boottest"):
+        from ..exceptions import MethodIncompatibility
+
+        if cluster is None:
+            raise MethodIncompatibility(
+                "did_2x2(vce='wild') requires cluster=... — the wild "
+                "*cluster* bootstrap resamples residuals within clusters.",
+                recovery_hint="Pass cluster='unit_id' (or another id).",
+            )
+        if weights is not None:
+            raise MethodIncompatibility(
+                "did_2x2(vce='wild') does not support weights=.",
+                recovery_hint="Drop weights= or use cluster-robust SEs.",
+            )
+        from types import SimpleNamespace
+
+        from ..inference.jackknife import wild_cluster_boot
+
+        shim = SimpleNamespace(
+            data_info={"X": X, "y": y_arr, "var_names": X_names},
+            model_info={},
+        )
+        out = wild_cluster_boot(
+            shim,
+            pd.DataFrame({cluster: cl}),
+            cluster=cluster,
+            variable=f"{treat}x{time}",
+            n_boot=wild_reps,
+            weight_type=wild_weight_type,
+            seed=seed,
+            alpha=alpha,
+        )
+        pvalue = float(out["p_boot"])
+        ci = (float(out["ci_boot"][0]), float(out["ci_boot"][1]))
+        wild_note = (
+            f"wild cluster bootstrap (Cameron-Gelbach-Miller 2008, "
+            f"{wild_reps} reps, {wild_weight_type})"
+        )
+    elif _vce is not None:
+        from ..exceptions import MethodIncompatibility
+
+        raise MethodIncompatibility(
+            f"did_2x2 vce={vce!r} not recognised; use vce='wild' (or the "
+            "cluster=/robust= parameters for analytic SEs).",
+        )
+
     # Full coefficient table for detail
     t_stats_all = beta / se
     pvals_all = 2 * (1 - stats.t.cdf(np.abs(t_stats_all), df_resid))
@@ -337,6 +408,9 @@ def did_2x2(
         "cluster": cluster,
         "weights": weights,
     }
+    if wild_note is not None:
+        model_info["inference"] = wild_note
+        model_info["n_boot"] = wild_reps
 
     _result = CausalResult(
         method="Difference-in-Differences (2x2)",

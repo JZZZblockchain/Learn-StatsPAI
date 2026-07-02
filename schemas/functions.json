@@ -364,7 +364,7 @@
     }
   },
   {
-    "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID.",
+    "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "did",
     "parameters": {
       "properties": {
@@ -22228,6 +22228,18 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "conley_cutoff": {
+          "description": "conley_cutoff parameter (Optional[float]).",
+          "type": "number"
+        },
+        "conley_lat": {
+          "description": "conley_lat parameter (Optional[str]).",
+          "type": "string"
+        },
+        "conley_lon": {
+          "description": "conley_lon parameter (Optional[str]).",
+          "type": "string"
         },
         "data": {
           "description": "Data containing all variables.",

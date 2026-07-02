@@ -140,10 +140,18 @@ These change DiD point estimates for affected staggered/switching designs. See
     A beyond-Stata capability: `boottest` cannot run after Stata's
     `ppmlhdfe` at all. `vce="CR2"/"CR3"` added with the same
     reference-matching dummy design + high-dim guard as `fepois`.
-  - `sp.fepois` / `sp.feglm` `vce="conley"`: GLM Conley spatial HAC
-    referenced to R `conleyreg` (the only reference supporting GLMs;
-    reproduces its spherical uniform kernel to ~1e-7). OLS menu keeps the
-    Stata `acreg` planar convention; the split is documented.
+  - `sp.fepois` / `sp.feglm` / `sp.ppmlhdfe` `vce="conley"`: GLM Conley
+    spatial HAC referenced to R `conleyreg` (the only reference supporting
+    GLMs; reproduces its spherical uniform kernel to ~1e-7). OLS menu keeps
+    the Stata `acreg` planar convention; the split is documented.
+  - `sp.did(method="2x2", vce="wild", cluster=...)`: the canonical
+    few-clusters DiD inference (MacKinnon-Webb 2017) — WCR wild cluster
+    bootstrap on the interaction regression, validated against Stata
+    `boottest` and byte-identical to `sp.regress(vce="wild")` on the same
+    design. Staggered methods refuse `vce=` (Callaway-Sant'Anna's multiplier
+    bootstrap on influence functions is itself the wild bootstrap for that
+    estimator and is exposed via `sp.aggte`). `did` deliberately does NOT
+    offer unclustered classical/HC SEs (Bertrand-Duflo-Mullainathan 2004).
   See `docs/guides/grammar.md` for the full matrix and the verified-reference
   map.
 - **Cross-language parity — within-transformation pinned to textbook

@@ -150,6 +150,23 @@ byte-identical to regress on the hand-demeaned data (whose wild path is pinned
 to Stata `boottest`). The test includes a true-null covariate so the anchor is
 discriminating (`0 < p < 1`), not a degenerate `p=0` comparison.
 
+**2x2 DID wild cluster bootstrap** (`test_did2x2_wild_parity.py`).
+`sp.did(method="2x2", vce="wild", cluster=...)` runs the verified WCR engine
+(`inference.jackknife.wild_cluster_boot`) on the interaction design
+`[1, D, T, DxT]`. Frozen Stata anchor: `reg y d t dt, vce(cluster gid)` +
+`boottest dt, reps(9999) weighttype(rademacher)` → enumerated (2^12)
+p=0.81640625, b_dt=0.0257697520; ours reproduces b to 1e-7 and p within
+Monte-Carlo error (|diff|=0.0022 at B=9999; the engine samples rather than
+enumerates), and is byte-identical to `sp.regress(vce="wild")` on the same
+design with the same seed. Staggered DID methods refuse `vce=` (the CS
+multiplier bootstrap on unit-level influence functions is itself the wild
+bootstrap for that estimator — Callaway-Sant'Anna 2021 §4.1, R `did::mboot`).
+
+**PPML HDFE conley** (`test_ppmlhdfe_extended_vce_parity.py`).
+`sp.ppmlhdfe(vce="conley")` equals `sp.fepois(vce="conley")` on the same
+model (conleyreg-pinned; the no-FE case is asserted against the frozen
+conleyreg value 0.033367118927 directly), dummy design + high-dim guard.
+
 **PPML HDFE two-way clustering** (`test_ppmlhdfe_twoway_parity.py`).
 `sp.ppmlhdfe(cluster=[a, b])` is the CGM-2011 inclusion-exclusion sandwich on
 the FE-residualised design with a single `G_min/(G_min-1)` small-sample factor

@@ -21,68 +21,59 @@ Provides estimators for:
 from __future__ import annotations
 
 from numbers import Real
-from typing import Any, Literal, Optional, List, Sequence, cast
+from typing import Any, List, Literal, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility
-from .did_2x2 import did_2x2
-from .overlap_did import overlap_weighted_did, dl_propensity_score
-from .ddd import ddd
-from .callaway_santanna import callaway_santanna
 from .aggte import aggte
-from .report import cs_report, CSReport
-from .bjs_inference import bjs_pretrend_joint
-from .sun_abraham import sun_abraham
+from .analysis import DIDAnalysis, did_analysis
 from .bacon import bacon_decomposition
-from .honest_did import honest_did, breakdown_m
-from .event_study import event_study
-from .analysis import did_analysis, DIDAnalysis
-from .did_multiplegt import did_multiplegt
-from .did_imputation import did_imputation
-from .stacked_did import stacked_did
-from .gardner_2s import gardner_did, did_2stage
-from .harvest import harvest_did, HarvestDIDResult
+from .bjs_inference import bjs_pretrend_joint
+from .callaway_santanna import callaway_santanna
 from .cic import cic
-from .pretrends import (
-    pretrends_test,
-    pretrends_power,
-    sensitivity_rr,
-    SensitivityResult,
-    pretrends_summary,
-)
-from .wooldridge_did import (
-    wooldridge_did,
-    etwfe,
-    etwfe_emfx,
-    drdid,
-    twfe_decomposition,
-)
-from .did_bcf import did_bcf
 from .cohort_anchored import cohort_anchored_event_study
-from .design_robust import design_robust_event_study
-from .misclassified import did_misclassified
-from .summary import (
-    did_summary,
-    did_summary_to_markdown,
-    did_summary_to_latex,
-    did_report,
-)
 from .continuous_did import continuous_did
+from .ddd import ddd
+from .design_robust import design_robust_event_study
+from .did_2x2 import did_2x2
+from .did_bcf import did_bcf
+from .did_imputation import did_imputation
+from .did_multiplegt import did_multiplegt
+from .event_study import event_study
+from .gardner_2s import did_2stage, gardner_did
+from .harvest import HarvestDIDResult, harvest_did
+from .honest_did import breakdown_m, honest_did
+from .misclassified import did_misclassified
+from .overlap_did import dl_propensity_score, overlap_weighted_did
+from .plots import bacon_plot, cohort_event_study_plot, did_plot, did_summary_plot
+from .plots import event_study_plot as enhanced_event_study_plot
 from .plots import (
-    parallel_trends_plot,
-    bacon_plot,
-    group_time_plot,
-    did_plot,
-    event_study_plot as enhanced_event_study_plot,
-    treatment_rollout_plot,
-    sensitivity_plot,
-    cohort_event_study_plot,
     ggdid,
-    did_summary_plot,
+    group_time_plot,
+    parallel_trends_plot,
+    sensitivity_plot,
+    treatment_rollout_plot,
 )
+from .pretrends import (
+    SensitivityResult,
+    pretrends_power,
+    pretrends_summary,
+    pretrends_test,
+    sensitivity_rr,
+)
+from .report import CSReport, cs_report
+from .stacked_did import stacked_did
+from .summary import (
+    did_report,
+    did_summary,
+    did_summary_to_latex,
+    did_summary_to_markdown,
+)
+from .sun_abraham import sun_abraham
+from .wooldridge_did import drdid, etwfe, etwfe_emfx, twfe_decomposition, wooldridge_did
 
 bjs = did_imputation
 borusyak_jaravel_spiess = did_imputation
@@ -231,6 +222,10 @@ def did(
     random_state: Optional[int] = None,
     panel: bool = True,
     anticipation: int = 0,
+    vce: Optional[str] = None,
+    wild_reps: int = 999,
+    wild_weight_type: str = "rademacher",
+    seed: Optional[int] = None,
     **kwargs: Any,
 ) -> CausalResult:
     """
@@ -524,6 +519,19 @@ def did(
             robust=robust,
             alpha=alpha,
             weights=weights,
+            vce=vce,
+            wild_reps=wild_reps,
+            wild_weight_type=wild_weight_type,
+            seed=seed,
+        )
+
+    if vce is not None:
+        raise MethodIncompatibility(
+            f"vce={vce!r} is only supported for method='2x2' — staggered "
+            "estimators use their own design-specific inference "
+            "(Callaway-Sant'Anna: influence-function multiplier bootstrap).",
+            recovery_hint="Use method='2x2' for the wild cluster bootstrap, "
+            "or the estimator's native inference options.",
         )
 
     if method == "ddd":

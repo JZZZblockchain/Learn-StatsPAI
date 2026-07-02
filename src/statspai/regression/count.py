@@ -1907,6 +1907,108 @@ def _ppmlhdfe_cr(
     return base
 
 
+def _ppmlhdfe_conley(
+    formula: Optional[str],
+    data: pd.DataFrame,
+    y: Optional[str],
+    x: Optional[List[str]],
+    absorb: Optional[str],
+    *,
+    conley_lat: Optional[str],
+    conley_lon: Optional[str],
+    conley_cutoff: Optional[float],
+    separation: bool,
+    maxiter: int,
+    tol: float,
+    alpha: float,
+) -> EconometricResults:
+    """Conley spatial-HAC SEs for PPML (conleyreg spherical convention).
+
+    GLM score sandwich on the FE-as-dummies design with R ``conleyreg``'s
+    spherical uniform kernel — the reference implementation for GLM Conley
+    (Stata ``acreg`` is OLS/2SLS-only and cannot follow ``ppmlhdfe``).
+    Equal to ``sp.fepois(vce="conley")`` on the same model, which is pinned
+    to ``conleyreg::conleyreg(model="poisson", kernel="uniform",
+    dist_comp="spherical")``. Guarded against high-dimensional FE like the
+    CR2/CR3 path (conleyreg's construction is dummy-based).
+    """
+    import statsmodels.api as sm
+    from scipy import stats as _stats
+
+    from ..inference.jackknife import glm_conley_vcov
+
+    if conley_lat is None or conley_lon is None or conley_cutoff is None:
+        raise MethodIncompatibility(
+            "ppmlhdfe(vce='conley') requires conley_lat=, conley_lon= and "
+            "conley_cutoff= (km).",
+            recovery_hint="Pass the coordinate columns and distance cutoff.",
+        )
+    for c in (conley_lat, conley_lon):
+        if c not in data.columns:
+            raise MethodIncompatibility(
+                f"ppmlhdfe(vce='conley'): coordinate column {c!r} not in data."
+            )
+
+    base = ppmlhdfe(
+        formula,
+        data,
+        y=y,
+        x=x,
+        absorb=absorb,
+        separation=separation,
+        maxiter=maxiter,
+        tol=tol,
+        alpha=alpha,
+    )
+    y_arr, X, var_names, fe_list, data = _ppmlhdfe_design(formula, data, y, x, absorb)
+    n = len(y_arr)
+    if data[[conley_lat, conley_lon]].isna().any().any() or len(data) != n:
+        raise MethodIncompatibility(
+            "ppmlhdfe(vce='conley'): coordinates must be complete and "
+            "row-aligned to the fitted sample."
+        )
+    blocks: List[np.ndarray] = [X]
+    if fe_list:
+        blocks.append(np.ones((n, 1)))
+        for fe_idx in fe_list:
+            dmy = pd.get_dummies(pd.Series(fe_idx), drop_first=True).astype(float)
+            if dmy.shape[1]:
+                blocks.append(dmy.values)
+    X_full = np.column_stack(blocks)
+    if X_full.shape[1] >= n or X_full.shape[1] > 1000:
+        raise MethodIncompatibility(
+            f"ppmlhdfe(vce='conley'): the fixed-effects dummy design has "
+            f"{X_full.shape[1]} columns — too many for the reference-matching "
+            "spatial HAC (conleyreg's construction is dummy-based).",
+            recovery_hint="Use cluster= (CRV1) for high-dimensional " "fixed effects.",
+        )
+    se_full = glm_conley_vcov(
+        X_full,
+        y_arr,
+        sm.families.Poisson(),
+        data[conley_lat].to_numpy(dtype=float),
+        data[conley_lon].to_numpy(dtype=float),
+        float(conley_cutoff),
+    )
+    se = pd.Series(
+        [float(se_full[var_names.index(str(v))]) for v in base.params.index],
+        index=base.params.index,
+    )
+    z = base.params / se
+    base.std_errors = se
+    base.pvalues = pd.Series(
+        2 * (1 - _stats.norm.cdf(np.abs(z))), index=base.params.index
+    )
+    crit = _stats.norm.ppf(1 - alpha / 2)
+    base.conf_int_lower = base.params - crit * se
+    base.conf_int_upper = base.params + crit * se
+    base.model_info = dict(base.model_info)
+    base.model_info[
+        "vcov_type"
+    ] = f"Conley spatial HAC (conleyreg spherical, {conley_cutoff} km)"
+    return base
+
+
 def ppmlhdfe(
     formula: Optional[str] = None,
     data: pd.DataFrame = None,
@@ -1924,6 +2026,9 @@ def ppmlhdfe(
     wild_reps: int = 9999,
     wild_weight_type: str = "rademacher",
     seed: Optional[int] = None,
+    conley_lat: Optional[str] = None,
+    conley_lon: Optional[str] = None,
+    conley_cutoff: Optional[float] = None,
 ) -> EconometricResults:
     """
     Pseudo-Poisson Maximum Likelihood with high-dimensional fixed effects.
@@ -2046,7 +2151,7 @@ def ppmlhdfe(
                 "extended SE menu is unweighted.",
                 recovery_hint="Drop weights= or use cluster= (CRV1).",
             )
-        if not isinstance(cluster, str):
+        if _vce != "conley" and not isinstance(cluster, str):
             raise MethodIncompatibility(
                 f"ppmlhdfe(vce={vce!r}) requires cluster='<one column>' " "(one-way).",
                 recovery_hint="Pass cluster='pair_id' (or another id column).",
@@ -2076,6 +2181,21 @@ def ppmlhdfe(
                 absorb,
                 cluster,
                 _vce,
+                separation=separation,
+                maxiter=maxiter,
+                tol=tol,
+                alpha=alpha,
+            )
+        if _vce == "conley":
+            return _ppmlhdfe_conley(
+                formula,
+                data,
+                y,
+                x,
+                absorb,
+                conley_lat=conley_lat,
+                conley_lon=conley_lon,
+                conley_cutoff=conley_cutoff,
                 separation=separation,
                 maxiter=maxiter,
                 tol=tol,

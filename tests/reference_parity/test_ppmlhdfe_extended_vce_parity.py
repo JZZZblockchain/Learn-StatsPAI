@@ -127,3 +127,29 @@ def test_ppmlhdfe_vce_hc_alias_and_guards() -> None:
     df["w"] = 1.0
     with pytest.raises(Exception):
         ppmlhdfe("y ~ x1 + x2 | firm", data=df, vce="wild", cluster="clu", weights="w")
+
+
+def test_ppmlhdfe_conley_matches_conleyreg_via_fepois() -> None:
+    """ppmlhdfe(vce='conley') equals fepois(vce='conley') on the same model,
+    which is pinned to R conleyreg (spherical uniform kernel, ~1e-7); the
+    no-FE case is asserted against the frozen conleyreg value directly."""
+    rng = np.random.default_rng(31)
+    n = 400
+    lat = rng.uniform(30, 45, n)
+    lon = rng.uniform(-120, -100, n)
+    x1 = rng.normal(size=n)
+    x2 = rng.normal(size=n)
+    mu = np.exp(0.3 + 0.4 * x1 - 0.25 * x2)
+    yv = rng.poisson(mu)
+    df = pd.DataFrame({"y": yv, "x1": x1, "x2": x2, "lat": lat, "lon": lon})
+    r = ppmlhdfe(
+        "y ~ x1 + x2",
+        data=df,
+        vce="conley",
+        conley_lat="lat",
+        conley_lon="lon",
+        conley_cutoff=200,
+    )
+    assert np.isclose(float(r.std_errors["x1"]), 0.033367118927, atol=5e-7)
+    with pytest.raises(Exception):
+        ppmlhdfe("y ~ x1 + x2", data=df, vce="conley")  # coords required

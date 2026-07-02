@@ -4759,7 +4759,7 @@
     "name": "diagnose_result"
   },
   {
-    "description": "Fit a classic 2-period 2-group difference-in-differences. Pass treatment / time / post column names. For staggered adoption across many cohorts use callaway_santanna instead.",
+    "description": "Fit a classic 2-period 2-group difference-in-differences. Pass treatment / time / post column names. For staggered adoption across many cohorts use callaway_santanna instead. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "post": {
@@ -15096,6 +15096,18 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "conley_cutoff": {
+          "description": "conley_cutoff parameter (Optional[float]).",
+          "type": "number"
+        },
+        "conley_lat": {
+          "description": "conley_lat parameter (Optional[str]).",
+          "type": "string"
+        },
+        "conley_lon": {
+          "description": "conley_lon parameter (Optional[str]).",
+          "type": "string"
         },
         "formula": {
           "description": "Model formula. Fixed effects can be specified via ``|``: ``\"trade ~ dist + contig | origin + destination + year\"``",

@@ -206,6 +206,23 @@ now has zero `standalone_unsafe` cells.
   (native 64→69; ppmlhdfe un-stranded). `test_ppmlhdfe_extended_vce_parity.py`
   + `test_feglm_conley_parity.py`.
 
+### R5 — design-specific rows: the referenced remainder
+- **did(method="2x2", vce="wild") — native (done).** WCR wild cluster
+  bootstrap on the DID interaction regression via the SAME engine as
+  `sp.regress(vce="wild")`; frozen Stata anchor `boottest dt` after
+  `reg y d t dt, vce(cluster gid)` (enumerated p=0.81640625; ours within MC
+  error, byte-identical to regress-wild same-seed). Staggered methods refuse
+  vce= loudly. did classical/hc stay deliberately absent
+  (Bertrand-Duflo-Mullainathan). `test_did2x2_wild_parity.py`.
+- **callaway_santanna wild — native by construction (flipped).** The Mammen
+  multiplier bootstrap on unit-level IFs (`sp.aggte`) IS the wild bootstrap
+  for the CS estimator (CS 2021 §4.1 "multiplicative wild bootstrap"; R
+  `did::mboot` reference at the documented loose tier).
+- **ppmlhdfe(vce="conley") — native (done).** Same conleyreg-referenced GLM
+  spatial HAC as fepois (equal on the same model), dummy design + high-dim
+  guard. Matrix 69→72; stranded 3 (dml/rdrobust/synth — all documented as
+  methodologically legitimate n/a in the matrix comments).
+
 ### D5 — unify the result contract  *(collision risk: results.py)*
 - One §3-true protocol: `summary`/`plot`/`to_latex`/`to_word`/`to_excel`/`cite`
   (today only 11/279 classes satisfy all six; `to_word` 6%, `to_excel` 7%).

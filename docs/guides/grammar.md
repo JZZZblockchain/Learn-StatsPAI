@@ -81,10 +81,10 @@ estimator, or only on `feols`?* The honest answer, tracked in
 | `feglm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `regress` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `ivreg` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ppmlhdfe` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | ✓ |
+| `ppmlhdfe` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `panel` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `callaway_santanna` | · | · | ✓ | · | · | · | · | · |
-| `did` | · | · | ✓ | · | · | · | · | · |
+| `callaway_santanna` | · | · | ✓ | · | · | ✓ | · | · |
+| `did` | · | · | ✓ | · | · | ✓ | · | · |
 | `dml` | ✓ | · | · | · | · | · | · | · |
 | `rdrobust` | · | ✓ | ✓ | · | · | · | · | · |
 | `synth` | · | · | · | · | · | · | · | ✓ |
@@ -246,6 +246,21 @@ What the matrix makes explicit today:
   sp.panel(df, "y ~ x", entity="firm", time="t", method="fe",
            vce="wild", cluster="firm", seed=42)                    # WCR bootstrap
   ```
+
+- **DiD gets the canonical few-clusters inference.**
+  `did(method="2x2", vce="wild", cluster=...)` runs the WCR wild cluster
+  bootstrap on the interaction regression — the setting the wild-bootstrap
+  literature was built for (MacKinnon-Webb 2017) — validated against Stata
+  `boottest` after `reg y d t dt, vce(cluster ...)` and byte-identical to
+  `sp.regress(vce="wild")` on the same design. `classical`/`hc_robust` for
+  DiD stay deliberately absent (unclustered DiD SEs are the
+  Bertrand-Duflo-Mullainathan mistake). For Callaway-Sant'Anna, the Mammen
+  multiplier bootstrap on unit-level influence functions (`sp.aggte`) **is**
+  the wild bootstrap for that estimator (CS 2021 §4.1; R `did::mboot`), so
+  its cell is native by construction. `ppmlhdfe` also completes
+  `vce="conley"` via the conleyreg-referenced GLM spatial HAC. Remaining
+  blanks (`synth`, `rdrobust`, `dml` rows) are documented in
+  `scripts/se_menu_matrix.py` as methodologically legitimate n/a.
 
 This is the gap the SE-menu wiring work closes, estimator by estimator. The
 matrix is the scoreboard: the CI gate ratchets the **native** count up and the

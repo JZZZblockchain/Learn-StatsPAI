@@ -694,7 +694,7 @@
       "For staggered / heterogeneous effects: use CS or SA -- TWFE can produce negative weights (Goodman-Bacon)"
     ],
     "category": "causal",
-    "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID.",
+    "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.did(df, y=\"wage\", treat=\"treated\", time=\"post\")",
     "failure_modes": [
       {
@@ -733,7 +733,7 @@
     ],
     "reference": "Roth et al. (2023); Callaway & Sant'Anna (2021); Goodman-Bacon (2021)",
     "signature": {
-      "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID.",
+      "description": "Difference-in-Differences. Supports 2x2, DDD, staggered (Callaway-Sant'Anna, Sun-Abraham), and Synthetic DID. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "did",
       "parameters": {
         "properties": {
@@ -789,10 +789,11 @@
     "stability": "stable",
     "typical_n_min": 50,
     "validation_notes": [
+      "tests/reference_parity/test_did2x2_wild_parity.py",
       "API/unit contract evidence: tests/reference_parity/test_did_parity.py",
       "API/unit contract evidence: tests/test_did.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

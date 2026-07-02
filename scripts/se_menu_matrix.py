@@ -224,6 +224,10 @@ MATRIX: Dict[str, Dict[str, str]] = {
         # the frozen clubSandwich references.
         "cr2_cr3": "native",
         "jackknife": "native",
+        # Native `ppmlhdfe(vce="conley", conley_lat/lon/cutoff)` — the same
+        # conleyreg-referenced GLM spatial HAC as fepois (equal on the same
+        # model; conleyreg pinned to ~1e-7). Dummy design + high-dim guard.
+        "conley": "native",
     },
     "panel": {  # FE/RE — has Driscoll-Kraay (not modelled as a column here)
         "classical": "native",
@@ -250,11 +254,29 @@ MATRIX: Dict[str, Dict[str, str]] = {
         # Stata boottest).
         "wild_cluster_boot": "native",
     },
-    "callaway_santanna": {  # influence-function + multiplier bootstrap
+    "callaway_santanna": {  # influence-function inference
         "cluster": "native",
+        # The Mammen multiplier bootstrap on unit-level influence functions
+        # (sp.aggte boot_type="multiplier") IS the wild bootstrap for this
+        # estimator — Callaway-Sant'Anna (2021) §4.1 call it a
+        # "multiplicative wild bootstrap"; R did::mboot is the reference
+        # (parity at the documented loose tier: point estimates machine-tier,
+        # bootstrap SEs differ by RNG stream).
+        "wild_cluster_boot": "native",
     },
     "did": {
         "cluster": "native",
+        # Native `did(method="2x2", vce="wild", cluster=...)` — WCR wild
+        # cluster bootstrap on the DID interaction regression via the SAME
+        # engine as sp.regress(vce="wild"); validated vs Stata `boottest`
+        # after `reg y d t dt, vce(cluster ...)` (frozen p=0.81640625,
+        # reproduced within MC error) and byte-identical to regress-wild on
+        # the same design. The canonical few-clusters DID inference
+        # (MacKinnon-Webb 2017). Staggered methods refuse vce= loudly.
+        "wild_cluster_boot": "native",
+        # classical / hc_robust are DELIBERATELY absent: unclustered DID SEs
+        # ignore within-unit serial correlation (Bertrand-Duflo-Mullainathan
+        # 2004) — offering them would invite the canonical DID mistake.
     },
     "dml": {  # asymptotic psi-score SE; clustering via dml_panel only
         "classical": "native",
@@ -262,9 +284,16 @@ MATRIX: Dict[str, Dict[str, str]] = {
     "rdrobust": {  # RD bias-aware variance + cluster
         "hc_robust": "native",
         "cluster": "native",
+        # Remaining cells are legitimately n/a: rdrobust's bias-aware
+        # (Calonico-Cattaneo-Titiunik) inference is its own paradigm; the
+        # reference implementation offers vce(nn/hc0-3/cluster) only — no
+        # wild/CR2/Conley exists to align against.
     },
     "synth": {  # SC permutation / conformal / SDID jackknife — orthogonal menu
         "jackknife": "native",
+        # Remaining cells are legitimately n/a: synthetic-control inference is
+        # placebo-permutation / conformal / SDID-jackknife — the regression SE
+        # menu does not apply to the SC estimand.
     },
 }
 
