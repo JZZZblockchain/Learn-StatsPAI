@@ -49210,7 +49210,7 @@
     }
   },
   {
-    "description": "Distributional IV: LATE at each quantile of Y.",
+    "description": "Distributional IV: LATE at each quantile of Y. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "dist_iv",
     "parameters": {
       "properties": {
@@ -49267,7 +49267,7 @@
     }
   },
   {
-    "description": "KAN-Powered D-IV-LATE (Shaw 2025, arXiv 2506.12765).",
+    "description": "KAN-Powered D-IV-LATE (Shaw 2025, arXiv 2506.12765). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "kan_dlate",
     "parameters": {
       "properties": {
