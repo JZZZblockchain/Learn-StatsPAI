@@ -988,6 +988,36 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "the planted effect."
         ),
     },
+    "mr": {
+        "status": "bit-exact",
+        "reference": "inverse-variance-weighted MR closed form (Burgess et al. 2013)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "estimate / se / Cochran Q 1e-10 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_mr_ivw_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: mr('ivw') is weighted regression through the "
+            "origin with weights 1/se_outcome^2 — estimate = sum(w bx by)/"
+            "sum(w bx^2), se = sqrt(1/sum(w bx^2)), Q = sum(w resid^2) exactly."
+        ),
+    },
+    "margins_at": {
+        "status": "bit-exact",
+        "reference": "predictive-margin linear form of the OLS coefficients",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "margin(x=v) 1e-10 abs (observed 0); symmetric-grid SE symmetric",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_margins_at_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the predictive margin at x=v equals "
+            "b0 + b_x*v + b_z*mean(z) exactly (= Stata margins, at()); "
+            "symmetric covariate grid yields symmetric standard errors."
+        ),
+    },
 }
 
 
