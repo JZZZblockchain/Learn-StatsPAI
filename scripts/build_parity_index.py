@@ -862,6 +862,22 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "reconstructs from the cell means and treatment share (Manski 1990)."
         ),
     },
+    "mediate_interventional": {
+        "status": "bit-exact",
+        "reference": "interventional effects telescoping identity (VanderWeele "
+        "Vansteelandt Robins 2014)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "total = IIE + IDE 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_mediate_interventional_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the interventional decomposition telescopes "
+            "over shared Monte-Carlo draws, so total_effect == IIE + IDE "
+            "exactly; components recover their linear-DGP population values."
+        ),
+    },
 }
 
 
