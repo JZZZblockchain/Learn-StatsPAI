@@ -190,13 +190,16 @@ What the matrix makes explicit today:
   ```
 - **`fepois` / `feglm` also have a native wild cluster bootstrap** via
   `vce="wild"` — the restricted **score wild cluster bootstrap** (Kline-Santos
-  2012), the method Stata `boottest` runs after `poisson` / `logit`. It returns
-  wild-bootstrap p-values per coefficient (SE/CI stay cluster-robust). It is
-  *consistent with* `boottest` — agreeing on the enumerated p-value to ~2
-  decimals — but **not bit-exact** (`boottest` uses a specific full-model-bread /
-  restricted-score studentization). So the answer to *"is wild cluster bootstrap
-  usable on any estimator or only `feols`?"* is now: **`regress`, `feols`,
-  `ivreg` (WRE), `fepois`, `feglm` all have a native `vce="wild"`.**
+  2012), the method Stata `boottest` runs after `poisson` / `logit`, implemented
+  with `boottest`'s exact studentization (cluster-share-centered CRVE
+  denominator + strict exceedance counting, reverse-engineered from its
+  enumerated bootstrap distribution and corroborated against `boottest.mata`).
+  In the enumerated regime (`2^G <= wild_reps`) the p-values are **bit-exact**
+  matches to Stata `boottest`, verified for Poisson *and* logit. It returns
+  wild-bootstrap p-values per coefficient (SE/CI stay cluster-robust). So the
+  answer to *"is wild cluster bootstrap usable on any estimator or only
+  `feols`?"* is now: **`regress`, `feols`, `ivreg` (WRE), `fepois`, `feglm` all
+  have a native, externally-validated `vce="wild"`.**
 
   ```python
   sp.fepois("y ~ x1 + x2 | firm", data=df, vce="wild", cluster="clu")

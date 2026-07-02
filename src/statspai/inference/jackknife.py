@@ -985,32 +985,49 @@ def glm_score_wild_boot(
     n_boot: int = 9999,
     weight_type: str = "rademacher",
     seed: Optional[int] = None,
-    enumerate_max_G: int = 14,
 ) -> Dict[str, float]:
     """Score wild cluster bootstrap for one GLM coefficient (Kline-Santos 2012).
 
     The restricted (null-imposed) score wild cluster bootstrap — the method
-    Stata ``boottest`` runs after ``poisson``/``logit``. It is *consistent with*
-    ``boottest`` (agrees on the p-value to ~2 decimals) but not bit-identical:
-    ``boottest`` uses a specific full-model-bread / restricted-score
-    studentization that this canonical restricted efficient-score version does
-    not reproduce to machine precision.
+    Stata ``boottest`` runs after ``poisson``/``logit`` — implemented with
+    ``boottest``'s exact studentization, reverse-engineered from its enumerated
+    bootstrap distribution and corroborated against ``boottest.mata`` (the
+    ``ClustShare`` centering of the bootstrap scores). In the enumerated regime
+    the p-value and the observed z statistic are **bit-exact** matches to Stata
+    ``boottest`` (verified for Poisson and logit, multiple G and coefficients).
 
     Algorithm (test of ``H0: beta[test_idx] = 0``):
 
     1. Fit the **restricted** GLM (drop column ``test_idx``) → fitted ``mu_tilde``.
-    2. Efficient-score influence for the tested coefficient on the full design,
-       evaluated at the restricted fit: ``g_i = (A @ s_i)[test_idx]`` with
-       ``s_i = X_i · (d/V) · (y_i - mu_tilde_i)`` and ``A = (X' diag(w) X)^{-1}``
-       (``d = dμ/dη``, ``V = Var(μ)``, ``w = d²/V`` at ``mu_tilde``).
-    3. Cluster sums ``q_c = Σ_{i∈c} g_i``; studentized statistic
-       ``t = (Σ_c q_c) / sqrt(Σ_c q_c²)``.
-    4. Wild weights ``w_c`` per cluster; bootstrap statistic
-       ``t*_b = (Σ_c w_c q_c) / sqrt(Σ_c w_c² q_c²)``. When ``2**G <=
-       enumerate_max_G``-implied cap the full ``2**G`` Rademacher grid is
-       enumerated (deterministic, exact for the design); otherwise ``n_boot``
-       draws are sampled with ``seed``.
-    5. ``p = mean(|t*_b| >= |t_obs|)``.
+    2. Per-cluster one-step numerator contributions on the full design at the
+       restricted fit: ``q_g = (A @ s_g)[test_idx]`` with
+       ``s_g = Σ_{i∈g} X_i (d_i/V_i)(y_i - mu_tilde_i)`` and
+       ``A = (X' diag(w) X)^{-1}`` (``d = dμ/dη``, ``V = Var(μ)``,
+       ``w = d²/V`` at ``mu_tilde``).
+    3. For wild weights ``w``: numerator ``N(w) = Σ_g w_g q_g`` and the
+       **cluster-share-centered** CRVE denominator
+       ``D²(w) = Σ_g (w_g q_g − c_g N(w))²`` with ``c_g = n_g/N`` (the
+       cluster's share of observations — ``boottest``'s ``ClustShare``
+       centering; this is what distinguishes its studentization from the
+       plain score bootstrap).
+    4. ``t*(w) = N(w)/D(w)``; the observed statistic is ``t*(1)`` (the
+       identity draw) — this equals ``boottest``'s reported ``r(z)``.
+    5. ``p = #{|t*_b| > |t_obs|} / B`` with **strict** inequality
+       (``boottest``'s counting rule; under enumeration the identity draw and
+       its negation tie exactly with ``|t_obs|`` and are excluded).
+
+    Enumeration follows ``boottest``'s rule: when ``2**G <= n_boot`` the full
+    Rademacher grid is enumerated (deterministic — the bit-exact regime);
+    otherwise ``n_boot`` draws are sampled with ``seed`` (same formula per
+    draw, but the RNG stream necessarily differs from Stata's).
+
+    Verified references (Stata 18 MP, boottest 4.5.3, enumerated)::
+
+        poisson y x1 x2 x3 i.firm, vce(cluster clu)   // n=240, G=10
+        boottest x3, reps(2000) weighttype(rademacher)
+        //  p = 0.31640625 (= 324/1024), z = -1.0999434   <- both reproduced
+        logit y x1 x2 x3 i.firm, vce(cluster clu)     // n=300, G=9
+        boottest x3, reps(2000)  //  p = 0.95703125, z = 0.0645052  <- reproduced
 
     Returns ``{"p_boot", "t_obs", "n_reps", "enumerated"}``.
     """
@@ -1026,37 +1043,45 @@ def glm_score_wild_boot(
     w = d**2 / V
     A = np.linalg.inv((X * w[:, None]).T @ X)
     scores = X * ((d / V) * (y - mu))[:, None]
-    g = scores @ A[test_idx]  # efficient-score influence, per obs
+    g = scores @ A[test_idx]  # per-obs one-step contribution (beta units)
 
     G = int(cluster_codes.max()) + 1
     q = np.array([g[cluster_codes == c].sum() for c in range(G)])
-    denom_obs = np.sqrt((q**2).sum())
-    if denom_obs <= 0:
-        return {"p_boot": 1.0, "t_obs": 0.0, "n_reps": 0, "enumerated": 0.0}
-    t_obs = q.sum() / denom_obs
+    c_share = np.array([(cluster_codes == c).sum() for c in range(G)]) / float(n)
 
-    enumerate_it = G <= enumerate_max_G
+    def _tstat(wv: np.ndarray) -> float:
+        num = float(wv @ q)
+        dev = wv * q - c_share * num
+        den = float(np.sqrt((dev**2).sum()))
+        return num / den if den > 0 else 0.0
+
+    t_obs = _tstat(np.ones(G))
+    if t_obs == 0.0:
+        return {"p_boot": 1.0, "t_obs": 0.0, "n_reps": 0, "enumerated": 0.0}
+
+    # boottest's rule: enumerate the full 2^G Rademacher grid when it fits in
+    # the requested replications; the grid includes the identity draw.
+    enumerate_it = weight_type.lower() in ("rademacher", "rade") and 2**G <= n_boot
     if enumerate_it:
         from itertools import product
 
         exceed = 0
         reps = 0
         for signs in product((1.0, -1.0), repeat=G):
-            wv = np.asarray(signs)
-            tb = (wv * q).sum() / np.sqrt(((wv * q) ** 2).sum())
+            tb = _tstat(np.asarray(signs))
             reps += 1
-            if abs(tb) >= abs(t_obs) - 1e-12:
+            if abs(tb) > abs(t_obs) + 1e-12:
                 exceed += 1
         p_boot = exceed / reps
     else:
         rng = np.random.default_rng(seed)
         draws = _draw_wild_weights(weight_type, (n_boot, G), rng)
         num = draws @ q
-        den = np.sqrt((draws**2) @ (q**2))
+        dev = draws * q[None, :] - c_share[None, :] * num[:, None]
+        den = np.sqrt((dev**2).sum(axis=1))
         tb = num / den
-        exceed = int(np.sum(np.abs(tb) >= abs(t_obs) - 1e-12))
-        # MacKinnon (1+exceed)/(1+B) convention for sampled bootstraps.
-        p_boot = (1 + exceed) / (1 + n_boot)
+        exceed = int(np.sum(np.abs(tb) > abs(t_obs) + 1e-12))
+        p_boot = exceed / n_boot
         reps = n_boot
 
     return {

@@ -130,16 +130,24 @@ now has zero `standalone_unsafe` cells.
   ~1%), so the SE is computed on the FE-as-dummies design and guarded against
   high-dimensional FE. Matrix: fepois/feglm cr2_cr3/jackknife `na → native`
   (native 52→56). `test_feglm_bias_reduced_parity.py`.
-- **fepois / feglm(vce="wild") — native (done, consistency-validated).** Restricted
+- **fepois / feglm(vce="wild") — native, BIT-EXACT vs boottest (done).** Restricted
   score wild cluster bootstrap (Kline-Santos 2012) via
   `inference/jackknife.py::glm_score_wild_boot`, the method Stata `boottest` runs
-  after `poisson`/`logit`. Enumerates the 2^G Rademacher grid for small G
-  (deterministic). **Consistent with boottest to ~2 decimals but NOT bit-exact**
-  (0.320 vs 0.31378 for the frozen x3 case): boottest studentizes the observed
-  statistic with a full-model-bread / restricted-score convention (its z=-1.0999
-  vs the canonical -1.031) that this efficient-score version does not reproduce.
-  Shipped per an explicit ship-to-tolerance decision; REFERENCES/docstrings state
-  the non-bit-exactness plainly. Matrix fepois/feglm wild_cluster_boot
+  after `poisson`/`logit`. Initially shipped as a ~2-decimal-consistent canonical
+  version; then boottest's studentization was **reverse-engineered from its
+  enumerated bootstrap distribution** (numerators + t statistics extracted via
+  `svmat`, per-replication sign vectors recovered from the numerator multiset,
+  the denominator solved as an exact quadratic form in the signs) and
+  corroborated against `boottest.mata`. The convention: numerator = restricted
+  one-step per-cluster contributions `q_g = (A s_g)[j]`; denominator =
+  **cluster-share-centered** CRVE `D²(w) = Σ_g (w_g q_g − (n_g/N) N(w))²`
+  (boottest.mata's `ClustShare` centering); observed statistic = the identity
+  draw's t* (= boottest's `r(z)`); p counts **strict** exceedances over the
+  enumerated 2^G grid (identity + its negation tie exactly and are excluded).
+  Reproduces boottest's enumerated p **exactly** on four frozen references
+  (Poisson x3 p=0.31640625 & z=-1.0999434, Poisson x2 p=0, logit x3
+  p=0.95703125, logit x1 p=0.00390625); tie margins ≥ 4.6e-4 make the
+  exact-equality tests stable. Matrix fepois/feglm wild_cluster_boot
   `na → native` (native 57→59). `test_feglm_wild_boottest_parity.py`.
 - **ppmlhdfe(cluster=[a,b]) — native two-way (done).** CGM-2011 inclusion-
   exclusion on the FE-residualised PPML design (`regression/count.py::

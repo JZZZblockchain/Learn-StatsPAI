@@ -121,9 +121,10 @@ MATRIX: Dict[str, Dict[str, str]] = {
         "cr2_cr3": "native",
         "jackknife": "native",
         # Native `fepois(vce="wild", cluster=...)` — restricted score wild
-        # cluster bootstrap (Kline-Santos 2012), the method Stata `boottest`
-        # runs after `poisson`. Consistent with boottest to ~2 decimals (not
-        # bit-exact: boottest's studentization differs). Enumerated for small G.
+        # cluster bootstrap (Kline-Santos 2012) with boottest's exact
+        # studentization (ClustShare-centered CRVE + strict counting).
+        # BIT-EXACT vs Stata `boottest` after `poisson` in the enumerated
+        # regime (p and z both reproduced).
         "wild_cluster_boot": "native",
     },
     "feglm": {
@@ -137,8 +138,8 @@ MATRIX: Dict[str, Dict[str, str]] = {
         "cr2_cr3": "native",
         "jackknife": "native",
         # Native `feglm(vce="wild", cluster=...)` — score wild cluster bootstrap
-        # (Kline-Santos 2012), consistent with Stata `boottest` after logit to
-        # ~2 decimals (not bit-exact).
+        # (Kline-Santos 2012) with boottest's exact studentization. BIT-EXACT
+        # vs Stata `boottest` after `logit` in the enumerated regime.
         "wild_cluster_boot": "native",
     },
     "regress": {

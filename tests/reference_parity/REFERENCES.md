@@ -95,20 +95,39 @@ the CR2 leverage under FE absorption (unlike OLS — verified: the absorbed desi
 differs by ~1%), the SE is computed on the FE-as-dummies design, guarded against
 high-dimensional FE.
 
-**GLM wild cluster bootstrap — consistency (not bit-exact)**
+**GLM wild cluster bootstrap — bit-exact vs Stata `boottest`**
 (`test_feglm_wild_boottest_parity.py`). `sp.fepois(vce="wild")` /
 `sp.feglm(vce="wild")` run the restricted score wild cluster bootstrap
-(Kline-Santos 2012), the method Stata `boottest` uses after `poisson`/`logit`.
-For small `G` the `2**G` Rademacher grid is enumerated, so the p-value is
-deterministic. This is the **one SE-menu cell validated to a *tolerance* rather
-than bit-exactly**: it agrees with Stata 18 `boottest x3, weighttype(rademacher)`
-to ~2 decimals (`0.320` vs frozen `0.31378299 = 321/1023`), but `boottest`
-studentizes the observed statistic with a specific full-model-bread /
-restricted-score convention (its reported `z=-1.0999` vs the canonical `-1.031`
-here) that this efficient-score implementation does not reproduce to machine
-precision. The test asserts `atol=0.02`. This was an explicit ship-to-tolerance
-decision — the method is a valid, correctly-sized wild cluster bootstrap; only
-the exact boottest count is not matched.
+(Kline-Santos 2012), the method Stata `boottest` uses after `poisson`/`logit`,
+with `boottest`'s exact studentization. The convention was
+**reverse-engineered from boottest's own enumerated bootstrap distribution**
+(numerators and t statistics extracted via `svmat`; the per-replication sign
+vectors recovered uniquely from the numerator multiset; the denominator solved
+as an exact quadratic form in the signs, LS residual ~1e-15) and corroborated
+against the shipped `boottest.mata` source (`pustar :- ClustShare *
+colsum(pustar)`):
+
+- numerator: restricted one-step per-cluster contributions
+  `q_g = (A s_g)[j]`, `N(w) = Σ w_g q_g` (matches boottest's saved numerators
+  to 4e-9 and its `r(b)` to 7 digits);
+- denominator: **cluster-share-centered** CRVE
+  `D²(w) = Σ_g (w_g q_g − (n_g/N)·N(w))²` — zero-parameter exact
+  (residual ~7e-11 across all 1024 enumerated replications);
+- observed statistic = the identity draw's `t*` (= boottest's `r(z)`,
+  reproduced to 1e-7);
+- p-value counts **strict** exceedances `|t*| > |t_obs|` over the enumerated
+  `2^G` grid (identity + its negation tie exactly and are excluded).
+
+Frozen enumerated references (Stata 18 MP, boottest 4.5.3, `reps(2000)`):
+Poisson (n=240, G=10): x3 `p=0.31640625 = 324/1024`, `z=-1.0999434`; x2 `p=0`.
+Logit (n=300, G=9): x3 `p=0.95703125 = 490/512`, `z=0.0645052`; x1
+`p=0.00390625 = 2/512`. All four p-values asserted with **exact equality**
+(tie margins ≥ 4.6e-4 on these designs, far above IRLS convergence noise).
+Bit-exactness holds in the enumerated regime (`2^G <= reps`, mirroring
+boottest's own enumeration rule); sampled draws use the same formula but an
+RNG stream that necessarily differs from Stata's. An earlier sampled-mode
+reference (`reps(1023)` → `p=0.31378299`) predated the enumeration finding and
+was superseded by the enumerated targets above.
 
 **PPML HDFE two-way clustering** (`test_ppmlhdfe_twoway_parity.py`).
 `sp.ppmlhdfe(cluster=[a, b])` is the CGM-2011 inclusion-exclusion sandwich on

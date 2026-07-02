@@ -394,13 +394,14 @@ def _feglm_wild(
 
     Runs the restricted (null-imposed) score wild cluster bootstrap of
     Kline-Santos (2012) — the method Stata ``boottest`` uses after ``poisson`` /
-    ``logit`` — on the fixed-effects-as-dummies design (see
-    :func:`statspai.inference.jackknife.glm_score_wild_boot`). It is *consistent
-    with* ``boottest`` (agrees on the bootstrap p-value to ~2 decimals) but not
-    bit-identical: ``boottest`` applies a specific full-model-bread /
-    restricted-score studentization this canonical version does not reproduce
-    exactly. Point estimates and SE/CI stay the cluster-robust (CRV1) values;
-    only the p-values are replaced by the wild-bootstrap p-values.
+    ``logit`` — on the fixed-effects-as-dummies design with ``boottest``'s
+    exact studentization (cluster-share-centered CRVE denominator + strict
+    exceedance counting; see
+    :func:`statspai.inference.jackknife.glm_score_wild_boot`). In the
+    enumerated regime (``2^G <= wild_reps``) the p-values are **bit-exact**
+    matches to Stata ``boottest`` (verified for Poisson and logit). Point
+    estimates and SE/CI stay the cluster-robust (CRV1) values; only the
+    p-values are replaced by the wild-bootstrap p-values.
     """
     from ..inference.jackknife import glm_score_wild_boot
 
@@ -761,6 +762,13 @@ def fepois(
     ...                 cluster="firm")
     """
     # Score wild cluster bootstrap p-values (Kline-Santos 2012, boottest-style).
+    if isinstance(vcov, str) and vcov.lower() in (_WILD_VCOV | _GLM_BR_VCOV):
+        if weights is not None:
+            raise MethodIncompatibility(
+                f"fepois(vce={vcov!r}) does not support weights= — the "
+                "extended SE menu (wild / CR2 / CR3) is unweighted.",
+                recovery_hint="Drop weights= or use cluster= (CRV1).",
+            )
     if isinstance(vcov, str) and vcov.lower() in _WILD_VCOV:
         return _feglm_wild(
             fml,
