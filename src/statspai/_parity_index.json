@@ -985,6 +985,23 @@
       "tolerance": ""
     },
     {
+      "function": "cusum_test",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_cusum_test_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],
@@ -1413,6 +1430,23 @@
       "test": [
         "tests/reference_parity/test_matching_parity.py",
         "tests/reference_parity/test_paper_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "engle_granger",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_engle_granger_parity.py"
       ],
       "tolerance": ""
     },
@@ -5321,6 +5355,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_distributional_te_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "structural_break",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_structural_break_parity.py"
       ],
       "tolerance": ""
     },
