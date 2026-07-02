@@ -77,11 +77,11 @@ estimator, or only on `feols`?* The honest answer, tracked in
 |---|---|---|---|---|---|---|---|---|
 | `feols` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `hdfe_ols` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `fepois` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | ✓ |
-| `feglm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | ✓ |
+| `fepois` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `feglm` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `regress` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `ivreg` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `ppmlhdfe` | ✓ | ✓ | ✓ | ✓ | · | · | · | · |
+| `ppmlhdfe` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | ✓ |
 | `panel` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `callaway_santanna` | · | · | ✓ | · | · | · | · | · |
 | `did` | · | · | ✓ | · | · | · | · | · |
@@ -213,6 +213,23 @@ What the matrix makes explicit today:
   ```python
   sp.ppmlhdfe("y ~ x1 + x2 | o + d", data=df, cluster=["origin", "dest"])
   ```
+- **`ppmlhdfe` gains the boottest-convention wild bootstrap at scale, plus
+  CR2/CR3.** Stata's `boottest` cannot run after `ppmlhdfe` at all (no
+  `constraints()` support — verified empirically), so `ppmlhdfe(vce="wild")`
+  is a *beyond-Stata* capability: the score bootstrap touches only per-cluster
+  one-step contributions (never per-observation leverage), and their weighted
+  Frisch-Waugh-Lovell reduction onto the FE-absorbed design is **exact**
+  (verified to 1e-17) — so it runs on 500-level FE in under a second and is
+  byte-identical to `fepois(vce="wild")` (itself bit-exact vs `boottest`) on
+  low-dimensional FE. `vce="CR2"/"CR3"` use the reference-matching dummy
+  design with the same high-dim guard as `fepois`.
+- **`fepois` / `feglm` gain `vce="conley"`** — GLM spatial HAC referenced to R
+  **conleyreg** (which natively supports Poisson/logit/probit; Stata `acreg`
+  is OLS/2SLS-only). The implementation reproduces conleyreg's spherical
+  uniform kernel (haversine, earth radius 6371.01 km, read from its C++
+  source) to ~1e-7. Note the documented convention split: the OLS menu
+  follows `acreg`'s planar distance, the GLM menu follows `conleyreg`'s
+  spherical distance — each the convention of the reference that exists.
 - **`hdfe_ols` and `panel` complete their rows (8/8).** `hdfe_ols` gains the
   canonical `vce=` menu on its absorber's within design: `vce="robust"/"hc1"`
   (HC1 with **reghdfe's** `N/(N-k-df_a)` factor — matches Stata

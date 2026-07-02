@@ -132,6 +132,18 @@ These change DiD point estimates for affected staggered/switching designs. See
   - `sp.ppmlhdfe(cluster=["a", "b"])`: CGM-2011 two-way clustering on the
     FE-residualised PPML design — byte-identical to Stata
     `ppmlhdfe, cluster(a b)`.
+  - `sp.ppmlhdfe(vce="wild")`: the boottest-convention score bootstrap
+    computed **on the FE-absorbed design at scale** (the weighted-FWL
+    reduction of the one-step numerator is exact, verified to 1e-17; runs
+    500-level FE in <1s) — byte-identical to `fepois(vce="wild")` on
+    low-dimensional FE and hence transitively bit-exact vs Stata `boottest`.
+    A beyond-Stata capability: `boottest` cannot run after Stata's
+    `ppmlhdfe` at all. `vce="CR2"/"CR3"` added with the same
+    reference-matching dummy design + high-dim guard as `fepois`.
+  - `sp.fepois` / `sp.feglm` `vce="conley"`: GLM Conley spatial HAC
+    referenced to R `conleyreg` (the only reference supporting GLMs;
+    reproduces its spherical uniform kernel to ~1e-7). OLS menu keeps the
+    Stata `acreg` planar convention; the split is documented.
   See `docs/guides/grammar.md` for the full matrix and the verified-reference
   map.
 - **Cross-language parity — within-transformation pinned to textbook

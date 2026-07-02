@@ -138,6 +138,10 @@ MATRIX: Dict[str, Dict[str, str]] = {
         # BIT-EXACT vs Stata `boottest` after `poisson` in the enumerated
         # regime (p and z both reproduced).
         "wild_cluster_boot": "native",
+        # Native `fepois(vce="conley", conley_lat/lon/cutoff)` — GLM score
+        # sandwich with R conleyreg's spherical uniform kernel (haversine,
+        # R=6371.01 km). Matches conleyreg(model="poisson") to ~1e-7.
+        "conley": "native",
     },
     "feglm": {
         "classical": "native",
@@ -153,6 +157,9 @@ MATRIX: Dict[str, Dict[str, str]] = {
         # (Kline-Santos 2012) with boottest's exact studentization. BIT-EXACT
         # vs Stata `boottest` after `logit` in the enumerated regime.
         "wild_cluster_boot": "native",
+        # Native `feglm(vce="conley", ...)` — same conleyreg-referenced GLM
+        # spatial HAC, verified for the logit family.
+        "conley": "native",
     },
     "regress": {
         "classical": "native",
@@ -205,6 +212,18 @@ MATRIX: Dict[str, Dict[str, str]] = {
         # FE-residualised PPML design with the single G_min/(G_min-1) factor.
         # Byte-identical to Stata `ppmlhdfe ..., cluster(a b)`.
         "twoway": "native",
+        # Native `ppmlhdfe(vce="wild", cluster=...)` — boottest-convention score
+        # bootstrap computed on the FE-absorbed design (the weighted-FWL
+        # reduction of the one-step numerator is EXACT, verified to 1e-17), so
+        # it scales to high-dimensional FE. Byte-identical to fepois(vce="wild")
+        # (itself bit-exact vs boottest) on low-dim FE. Beyond-Stata: boottest
+        # cannot run after Stata's ppmlhdfe at all (no constraints() support).
+        "wild_cluster_boot": "native",
+        # Native `ppmlhdfe(vce="CR2"/"CR3"/"jackknife")` — clubSandwich glm on
+        # the FE-as-dummies design (guarded vs high-dim FE); equals fepois and
+        # the frozen clubSandwich references.
+        "cr2_cr3": "native",
+        "jackknife": "native",
     },
     "panel": {  # FE/RE — has Driscoll-Kraay (not modelled as a column here)
         "classical": "native",

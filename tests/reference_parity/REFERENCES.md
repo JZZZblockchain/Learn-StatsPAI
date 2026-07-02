@@ -156,10 +156,40 @@ the FE-residualised design with a single `G_min/(G_min-1)` small-sample factor
 (`regression/count.py::_twoway_cluster_vcov`), **byte-identical to Stata 18
 `ppmlhdfe y x1 x2, absorb(o d) cluster(ca cb)`** (frozen `x1=0.01820187`,
 `x2=0.01793071`). The one-way path already matches Stata exactly, so the
-two-way is validated end-to-end against the same reference. GLM CR2/CR3 is *not*
-offered for ppmlhdfe: the reference-matching version needs the FE-as-dummies
-design (infeasible for its high-dimensional-FE use case) and the absorbed CR2
-has no published reference.
+two-way is validated end-to-end against the same reference.
+
+**PPML HDFE wild bootstrap + CR2/CR3**
+(`test_ppmlhdfe_extended_vce_parity.py`). `sp.ppmlhdfe(vce="wild")` runs the
+boottest-convention score wild cluster bootstrap **on the FE-absorbed design
+at scale**: the score bootstrap touches only per-cluster one-step
+contributions `q_g` and cluster shares — never per-observation leverage — and
+`q_g` is pure linear algebra at the restricted fit, so the μ̃-weighted
+Frisch-Waugh-Lovell reduction is *exact* (verified to 1e-17 against the
+full-dummy computation; 500-level FE runs in <1s). On low-dimensional FE it is
+**byte-identical to `sp.fepois(vce="wild")`**, which is itself bit-exact vs
+Stata `boottest` — a transitive Stata anchor. This is a *beyond-Stata*
+capability: `boottest` errors after Stata's `ppmlhdfe` ("ppmlhdfe does not
+accept the constraints() option" — verified empirically), so no direct
+reference can exist. `vce="CR2"/"CR3"` use the reference-matching
+FE-as-dummies design (equal to `fepois` and the frozen clubSandwich
+references) with a hard guard against high-dimensional FE — the absorbed CR2
+differs ~1% and has no published reference.
+
+**GLM Conley spatial HAC — referenced to R conleyreg**
+(`test_feglm_conley_parity.py`). `sp.fepois(vce="conley")` /
+`sp.feglm(vce="conley")` follow R **conleyreg** 0.1.9 (the only reference
+implementation supporting GLMs; Stata `acreg` is OLS/2SLS-only): score
+sandwich `A (S' K S) A` with the uniform kernel on great-circle distances
+(atan2-form haversine, earth radius **6371.01 km**, read from
+`conleyreg/src/distance_functions.cpp`). Frozen references (Poisson no-FE,
+Poisson + manual FE dummies — conleyreg's GLM path rejects `factor()` —
+and logit) reproduce to ≤7.2e-8 absolute; the residual is conleyreg's
+internal accumulation order, verified by feeding conleyreg's own
+coefficients into the formula (residual unchanged) and by rejecting
+rounded/strict kernel variants (all worse). **Convention split documented:**
+the OLS Conley menu follows Stata `acreg`'s planar 111-km/degree distance;
+the GLM menu follows conleyreg's spherical distance — each matches the
+reference that exists for its model class.
 
 ## What the tests verify
 

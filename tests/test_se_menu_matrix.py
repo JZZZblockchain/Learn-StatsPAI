@@ -64,6 +64,7 @@ def test_native_wild_boot_estimators() -> None:
         "hdfe_ols",
         "ivreg",
         "panel",
+        "ppmlhdfe",
         "regress",
     ], native_wild
 

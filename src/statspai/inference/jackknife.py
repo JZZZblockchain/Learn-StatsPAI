@@ -1010,6 +1010,59 @@ def glm_cr_vcov(
     return np.sqrt(np.maximum(np.diag(vcov), 0.0))
 
 
+def glm_conley_vcov(
+    X: np.ndarray,
+    y: np.ndarray,
+    family: Any,
+    lat_deg: np.ndarray,
+    lon_deg: np.ndarray,
+    dist_cutoff: float,
+) -> np.ndarray:
+    """Conley spatial-HAC SEs for a GLM (conleyreg spherical convention).
+
+    Score sandwich ``V = A (S' K S) A`` with ``A = (X' diag(w) X)^{-1}``
+    (IRLS weights ``w = d²/V`` at the MLE), scores
+    ``s_i = X_i (d_i/V_i)(y_i - μ_i)``, and the uniform spatial kernel
+    ``K_ij = 1(dist_ij <= cutoff)`` using R ``conleyreg``'s great-circle
+    distance (atan2-form haversine, earth radius **6371.01 km** — read from
+    ``conleyreg/src/distance_functions.cpp``). Matches
+    ``conleyreg::conleyreg(model="poisson"/"logit", kernel="uniform",
+    dist_comp="spherical")`` to ~1e-7 absolute (the residual is conleyreg's
+    internal accumulation order — verified by feeding conleyreg's own
+    coefficients into this formula).
+
+    Note the convention difference from the OLS menu: ``sp.regress`` /
+    ``sp.feols`` Conley follows Stata ``acreg``'s *planar* 111-km/degree
+    distance, while the GLM menu follows ``conleyreg``'s *spherical* distance
+    (acreg does not support GLMs; conleyreg is the reference that does).
+
+    Returns the SE vector for every column of ``X``.
+    """
+    import statsmodels.api as sm  # noqa: F401 — core dependency
+
+    fit = sm.GLM(y, X, family=family).fit()
+    mu = np.asarray(fit.mu, dtype=float)
+    d = 1.0 / family.link.deriv(mu)
+    V = family.variance(mu)
+    w = d**2 / V
+    A = np.linalg.inv((X * w[:, None]).T @ X)
+    S = X * ((d / V) * (y - mu))[:, None]
+
+    lat = np.radians(np.asarray(lat_deg, dtype=float))
+    lon = np.radians(np.asarray(lon_deg, dtype=float))
+    t = (
+        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
+        + np.cos(lat)[:, None]
+        * np.cos(lat)[None, :]
+        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
+    )
+    dist = 6371.01 * 2 * np.arctan2(np.sqrt(t), np.sqrt(np.maximum(1 - t, 0.0)))
+    K = (dist <= dist_cutoff).astype(float)
+
+    vcov = A @ (S.T @ K @ S) @ A
+    return np.sqrt(np.maximum(np.diag(vcov), 0.0))
+
+
 def glm_score_wild_boot(
     X: np.ndarray,
     y: np.ndarray,
@@ -1083,6 +1136,31 @@ def glm_score_wild_boot(
     G = int(cluster_codes.max()) + 1
     q = np.array([g[cluster_codes == c].sum() for c in range(G)])
     c_share = np.array([(cluster_codes == c).sum() for c in range(G)]) / float(n)
+    return score_wild_from_q(
+        q, c_share, n_boot=n_boot, weight_type=weight_type, seed=seed
+    )
+
+
+def score_wild_from_q(
+    q: np.ndarray,
+    c_share: np.ndarray,
+    *,
+    n_boot: int = 9999,
+    weight_type: str = "rademacher",
+    seed: Optional[int] = None,
+) -> Dict[str, float]:
+    """boottest score-wild-bootstrap engine on per-cluster contributions.
+
+    The shared core behind :func:`glm_score_wild_boot` (and the ``sp.ppmlhdfe``
+    wild path): given the per-cluster one-step numerator contributions ``q_g``
+    (beta units) and the cluster observation shares ``c_g``, run the
+    cluster-share-centered studentization + strict exceedance counting that
+    reproduces Stata ``boottest`` bit-exactly in the enumerated regime.
+    The score bootstrap only touches ``q`` and ``c`` — never per-observation
+    leverage — which is why the FE-absorbed (weighted-FWL) computation of ``q``
+    is exact and the engine is reusable across low- and high-dimensional FE.
+    """
+    G = len(q)
 
     def _tstat(wv: np.ndarray) -> float:
         num = float(wv @ q)

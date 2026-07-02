@@ -317,10 +317,13 @@ def _feglm_bias_reduced(
             recovery_hint="Use cluster= (CRV1) or vce='wild' for this model.",
         )
 
-    # Align result coefficients to design columns by name (simple regressors only).
+    # Align result coefficients to design columns by name (simple regressors
+    # only; the constant is named "Intercept" by pyfixest in the no-FE case).
+    colmap = {nm: i for i, nm in enumerate(cov_vars)}
+    colmap["Intercept"] = len(cov_vars)
     try:
-        cov_pos = [cov_vars.index(nm) for nm in base.params.index]
-    except ValueError:
+        cov_pos = [colmap[str(nm)] for nm in base.params.index]
+    except KeyError:
         raise MethodIncompatibility(
             f"{who}(vce={kind!r}) supports simple additive regressors only; "
             "factor() / interaction terms are not yet handled.",
@@ -507,6 +510,134 @@ def _feglm_wild(
     )
     base.model_info["cluster"] = cluster
     base.model_info["n_boot"] = n_boot
+    return base
+
+
+def _feglm_conley(
+    fml: str,
+    data: pd.DataFrame,
+    *,
+    family_str: Optional[str],
+    is_pois: bool,
+    conley_lat: Optional[str],
+    conley_lon: Optional[str],
+    conley_cutoff: Optional[float],
+    ssc: Optional[Any],
+    fixef_rm: str,
+    collin_tol: float,
+    extra: Dict[str, Any],
+) -> EconometricResults:
+    """Conley spatial-HAC SEs for fepois / feglm (conleyreg convention).
+
+    Score sandwich on the FE-as-dummies design with R ``conleyreg``'s
+    spherical (haversine, R=6371.01 km) uniform kernel — the reference
+    implementation for GLM Conley (Stata ``acreg`` supports OLS/2SLS only).
+    Matches ``conleyreg::conleyreg(model="poisson"/"logit",
+    kernel="uniform", dist_comp="spherical")`` to ~1e-7. Guarded against
+    high-dimensional FE like the CR2/CR3 path.
+    """
+    from scipy import stats as _stats
+
+    from ..inference.jackknife import glm_conley_vcov
+
+    who = "fepois" if is_pois else "feglm"
+    if conley_lat is None or conley_lon is None or conley_cutoff is None:
+        raise MethodIncompatibility(
+            f"{who}(vce='conley') requires conley_lat=, conley_lon= and "
+            "conley_cutoff= (km).",
+            recovery_hint="Pass the coordinate columns and distance cutoff.",
+        )
+
+    if is_pois:
+        base = fepois(
+            fml, data, ssc=ssc, fixef_rm=fixef_rm, collin_tol=collin_tol, **extra
+        )
+    else:
+        base = feglm(fml, data, family=family_str, **extra)
+    if isinstance(base, list):
+        raise MethodIncompatibility(
+            f"{who}(vce='conley') does not support multiple-estimation formulas."
+        )
+
+    lhs, rhs = fml.split("~", 1)
+    y_var = lhs.strip()
+    fe_vars: List[str] = []
+    if "|" in rhs:
+        cov_part, fe_part = rhs.split("|", 1)
+        fe_vars = [t.strip() for t in fe_part.replace("+", " ").split() if t.strip()]
+    else:
+        cov_part = rhs
+    cov_vars = [
+        t.strip() for t in cov_part.split("+") if t.strip() and t.strip() != "1"
+    ]
+
+    need = [y_var] + cov_vars + fe_vars + [conley_lat, conley_lon]
+    missing = [c for c in need if c not in data.columns]
+    if missing:
+        raise MethodIncompatibility(
+            f"{who}(vce='conley'): columns {missing} not found in data."
+        )
+    work = data.loc[:, need].dropna().reset_index(drop=True)
+    if int(base.data_info.get("nobs", len(work))) != len(work):
+        raise MethodIncompatibility(
+            f"{who}(vce='conley'): the fitted sample differs from the "
+            "complete-case design — cannot align coordinates.",
+            recovery_hint="Use cluster= (CRV1) for this model.",
+        )
+    # column map: covariates first, then the constant (pyfixest names it
+    # "Intercept" in the no-FE case)
+    colmap = {nm: i for i, nm in enumerate(cov_vars)}
+    colmap["Intercept"] = len(cov_vars)
+    try:
+        cov_pos = [colmap[str(nm)] for nm in base.params.index]
+    except KeyError:
+        raise MethodIncompatibility(
+            f"{who}(vce='conley') supports simple additive regressors only.",
+            recovery_hint="Use cluster= (CRV1) for this model.",
+        )
+
+    y = work[y_var].to_numpy(dtype=float)
+    Xc = work[cov_vars].to_numpy(dtype=float)
+    blocks: List[np.ndarray] = [Xc, np.ones((len(work), 1))]
+    for fe in fe_vars:
+        d = pd.get_dummies(work[fe], prefix=fe, drop_first=True).astype(float).values
+        if d.shape[1]:
+            blocks.append(d)
+    X = np.column_stack(blocks)
+    if X.shape[1] >= len(work) or X.shape[1] > 1000:
+        raise MethodIncompatibility(
+            f"{who}(vce='conley'): the fixed-effects dummy design has "
+            f"{X.shape[1]} columns — too many for the reference-matching "
+            "spatial HAC (conleyreg's construction is dummy-based).",
+            recovery_hint="Use cluster= (CRV1) for high-dimensional " "fixed effects.",
+        )
+
+    fam = _sm_glm_family("poisson" if is_pois else family_str)
+    se_full = glm_conley_vcov(
+        X,
+        y,
+        fam,
+        work[conley_lat].to_numpy(dtype=float),
+        work[conley_lon].to_numpy(dtype=float),
+        float(conley_cutoff),
+    )
+    se = pd.Series(
+        [float(se_full[cov_pos[i]]) for i in range(len(cov_pos))],
+        index=list(base.params.index),
+    )
+
+    z = base.params / se
+    base.std_errors = se
+    base.pvalues = pd.Series(
+        2 * (1 - _stats.norm.cdf(np.abs(z))), index=base.params.index
+    )
+    crit = _stats.norm.ppf(0.975)
+    base.conf_int_lower = base.params - crit * se
+    base.conf_int_upper = base.params + crit * se
+    base.model_info = dict(base.model_info)
+    base.model_info[
+        "vcov_type"
+    ] = f"Conley spatial HAC (conleyreg spherical, {conley_cutoff} km)"
     return base
 
 
@@ -727,6 +858,9 @@ def fepois(
     wild_reps: int = 9999,
     wild_weight_type: str = "rademacher",
     seed: Optional[int] = None,
+    conley_lat: Optional[str] = None,
+    conley_lon: Optional[str] = None,
+    conley_cutoff: Optional[float] = None,
     **kwargs: Any,
 ) -> Union[EconometricResults, List[EconometricResults]]:
     """
@@ -801,6 +935,27 @@ def fepois(
     >>> res = sp.fepois("y ~ x1 | firm", data=df, vce="CR2",  # doctest: +SKIP
     ...                 cluster="firm")
     """
+    # Conley spatial HAC (conleyreg spherical convention).
+    if isinstance(vcov, str) and vcov.lower() == "conley":
+        if weights is not None:
+            raise MethodIncompatibility(
+                "fepois(vce='conley') does not support weights=.",
+                recovery_hint="Drop weights= or use cluster= (CRV1).",
+            )
+        return _feglm_conley(
+            fml,
+            data,
+            family_str="poisson",
+            is_pois=True,
+            conley_lat=conley_lat,
+            conley_lon=conley_lon,
+            conley_cutoff=conley_cutoff,
+            ssc=ssc,
+            fixef_rm=fixef_rm,
+            collin_tol=collin_tol,
+            extra=kwargs,
+        )
+
     # Score wild cluster bootstrap p-values (Kline-Santos 2012, boottest-style).
     if isinstance(vcov, str) and vcov.lower() in (_WILD_VCOV | _GLM_BR_VCOV):
         if weights is not None:
@@ -887,6 +1042,9 @@ def feglm(
     wild_reps: int = 9999,
     wild_weight_type: str = "rademacher",
     seed: Optional[int] = None,
+    conley_lat: Optional[str] = None,
+    conley_lon: Optional[str] = None,
+    conley_cutoff: Optional[float] = None,
     **kwargs: Any,
 ) -> Union[EconometricResults, List[EconometricResults]]:
     """
@@ -942,6 +1100,22 @@ def feglm(
     >>> "x1" in res.params.index  # doctest: +SKIP
     True
     """
+    # Conley spatial HAC (conleyreg spherical convention).
+    if isinstance(vcov, str) and vcov.lower() == "conley":
+        return _feglm_conley(
+            fml,
+            data,
+            family_str=family,
+            is_pois=False,
+            conley_lat=conley_lat,
+            conley_lon=conley_lon,
+            conley_cutoff=conley_cutoff,
+            ssc=None,
+            fixef_rm="none",
+            collin_tol=1e-6,
+            extra=kwargs,
+        )
+
     # Score wild cluster bootstrap p-values (Kline-Santos 2012, boottest-style).
     if isinstance(vcov, str) and vcov.lower() in _WILD_VCOV:
         return _feglm_wild(

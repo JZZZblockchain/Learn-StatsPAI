@@ -7358,6 +7358,18 @@
           "description": "Cluster id column for the extended ``vce=`` menu (also a shorthand for one-way ``{\"CRV1\": cluster}``).",
           "type": "string"
         },
+        "conley_cutoff": {
+          "description": "conley_cutoff parameter (Optional[float]).",
+          "type": "number"
+        },
+        "conley_lat": {
+          "description": "conley_lat parameter (Optional[str]).",
+          "type": "string"
+        },
+        "conley_lon": {
+          "description": "conley_lon parameter (Optional[str]).",
+          "type": "string"
+        },
         "family": {
           "default": "gaussian",
           "description": "GLM family: ``\"gaussian\"``, ``\"logit\"``, ``\"probit\"``.",
@@ -7478,6 +7490,18 @@
           "default": 1e-06,
           "description": "Collinearity tolerance.",
           "type": "number"
+        },
+        "conley_cutoff": {
+          "description": "conley_cutoff parameter (Optional[float]).",
+          "type": "number"
+        },
+        "conley_lat": {
+          "description": "conley_lat parameter (Optional[str]).",
+          "type": "string"
+        },
+        "conley_lon": {
+          "description": "conley_lon parameter (Optional[str]).",
+          "type": "string"
         },
         "fixef_rm": {
           "default": "none",
@@ -15087,6 +15111,10 @@
           "description": "Default is robust SE (as in Stata's ppmlhdfe). Options: \"robust\"/\"hc0\", \"hc1\", \"nonrobust\".",
           "type": "string"
         },
+        "seed": {
+          "description": "RNG seed for sampled (non-enumerated) wild draws.",
+          "type": "integer"
+        },
         "separation": {
           "default": true,
           "description": "If True, check for separation (perfect prediction of zeros) and warn. Observations causing separation are not dropped automatically.",
@@ -15097,8 +15125,22 @@
           "description": "Convergence tolerance.",
           "type": "number"
         },
+        "vce": {
+          "description": "Canonical SE-menu keyword. ``\"robust\"``/``\"hc1\"``/``\"hc0\"`` alias the ``robust=`` parameter. ``\"wild\"`` (with ``cluster=``) runs the boottest-convention score wild cluster bootstrap on the FE-absorbed design -- exact at any FE dimensionality (the weighted-FWL reduction of the score numerator is exact) and byte-identical to ``sp.fepois(vce=\"wild\")`` on low-dimensional FE. ``\"CR2\"``/``\"CR3\"``/``\"jackknife\"`` (with ``cluster=``) compute the clubSandwich glm bias-reduced SEs on the FE-as-dummies design (guarded against high-dimensional FE).",
+          "type": "string"
+        },
         "weights": {
           "description": "Weight variable name.",
+          "type": "string"
+        },
+        "wild_reps": {
+          "default": 9999,
+          "description": "Replications for ``vce=\"wild\"`` (enumerates the 2^G grid when ``2**G <= wild_reps``).",
+          "type": "integer"
+        },
+        "wild_weight_type": {
+          "default": "rademacher",
+          "description": "Wild weight distribution.",
           "type": "string"
         },
         "x": {

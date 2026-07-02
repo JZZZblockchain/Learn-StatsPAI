@@ -178,6 +178,34 @@ now has zero `standalone_unsafe` cells.
   reference), which defeats ppmlhdfe's high-dimensional-FE purpose; use
   `cluster=` / two-way there.
 
+### R4 — the last referenced cells: ppmlhdfe wild/CR + GLM Conley
+- **ppmlhdfe(vce="wild") — native at scale (done).** Key math fact: the
+  boottest score bootstrap touches only per-cluster one-step contributions
+  `q_g` and cluster shares — never per-observation leverage — and `q_g` is
+  pure linear algebra at the restricted fit, so the **weighted-FWL reduction
+  onto the FE-absorbed design is exact** (verified 1e-17 vs full dummies).
+  Implemented via `regression/count.py::_ppmlhdfe_wild` (restricted PPML per
+  coefficient + μ̃-weighted residualization + the shared
+  `inference.jackknife.score_wild_from_q` engine). Byte-identical to
+  `fepois(vce="wild")` — itself bit-exact vs Stata boottest — on low-dim FE;
+  runs 500-level FE in <1s. Beyond-Stata: `boottest` errors after Stata's
+  `ppmlhdfe` (no `constraints()`), verified empirically. Matrix ppmlhdfe
+  wild `na → native`.
+- **ppmlhdfe(vce="CR2"/"CR3"/"jackknife") — native, guarded (done).**
+  Reference-matching FE-as-dummies design (same ≤1000-column guard as
+  fepois); equals fepois and the frozen clubSandwich references. Matrix
+  cr2_cr3/jackknife `na → native`.
+- **fepois/feglm(vce="conley") — native, conleyreg-referenced (done).** R
+  `conleyreg` 0.1.9 natively supports `model="poisson"/"logit"/"probit"` —
+  the reference `acreg` never was. New `inference.jackknife.glm_conley_vcov`
+  reproduces its spherical uniform kernel (atan2 haversine, R=6371.01 km,
+  read from `conleyreg/src/distance_functions.cpp`) to ~1e-7 (residual =
+  conleyreg's accumulation order; verified by feeding its own coefficients
+  back). Convention split documented: OLS menu = acreg planar; GLM menu =
+  conleyreg spherical. Matrix fepois/feglm conley `na → native`
+  (native 64→69; ppmlhdfe un-stranded). `test_ppmlhdfe_extended_vce_parity.py`
+  + `test_feglm_conley_parity.py`.
+
 ### D5 — unify the result contract  *(collision risk: results.py)*
 - One §3-true protocol: `summary`/`plot`/`to_latex`/`to_word`/`to_excel`/`cite`
   (today only 11/279 classes satisfy all six; `to_word` 6%, `to_excel` 7%).

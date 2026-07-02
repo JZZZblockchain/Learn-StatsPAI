@@ -1665,7 +1665,248 @@ def xtnbreg(
     )
 
 
-@accepts_aliases(vce="robust")
+def _ppmlhdfe_design(
+    formula: Optional[str],
+    data: pd.DataFrame,
+    y: Optional[str],
+    x: Optional[List[str]],
+    absorb: Optional[str],
+) -> Tuple[np.ndarray, np.ndarray, List[str], List[np.ndarray], pd.DataFrame]:
+    """Parse the PPML design exactly like :func:`ppmlhdfe` does.
+
+    Returns ``(y_arr, X, var_names, fe_indices_list, data)`` with the constant
+    already dropped when fixed effects absorb it — the shared front end for
+    the extended ``vce=`` paths.
+    """
+    y_arr, X, var_names, _dep, formula_fe, data = _parse_formula_or_xy(
+        formula, data, y, x, add_constant=True
+    )
+    if absorb is not None:
+        fe_names = [v.strip() for v in absorb.split("+")]
+    elif formula_fe:
+        fe_names = list(formula_fe)
+    else:
+        fe_names = []
+    fe_indices_list = [pd.factorize(data[fv].values)[0] for fv in fe_names]
+    if fe_indices_list and var_names[0] == "_cons":
+        X = X[:, 1:]
+        var_names = var_names[1:]
+    return y_arr, X, list(var_names), fe_indices_list, data
+
+
+def _wfe_demean(
+    M: np.ndarray,
+    fe_indices_list: Sequence[np.ndarray],
+    w: np.ndarray,
+    maxiter: int = 2000,
+    tol: float = 1e-12,
+) -> np.ndarray:
+    """Weighted within-transform: alternating w-weighted FE projections of M."""
+    Md = M.astype(float, copy=True)
+    for _ in range(maxiter):
+        max_change = 0.0
+        for fe_idx in fe_indices_list:
+            for g in np.unique(fe_idx):
+                mask = fe_idx == g
+                wg = w[mask]
+                mean = (wg[:, None] * Md[mask]).sum(axis=0) / wg.sum()
+                Md[mask] -= mean
+                max_change = max(max_change, float(np.max(np.abs(mean))))
+        if max_change < tol:
+            break
+    return Md
+
+
+def _ppmlhdfe_wild(
+    formula: Optional[str],
+    data: pd.DataFrame,
+    y: Optional[str],
+    x: Optional[List[str]],
+    absorb: Optional[str],
+    cluster: str,
+    *,
+    separation: bool,
+    maxiter: int,
+    tol: float,
+    alpha: float,
+    n_boot: int,
+    weight_type: str,
+    seed: Optional[int],
+) -> EconometricResults:
+    """Score wild cluster bootstrap p-values for PPML HDFE (boottest convention).
+
+    Runs the restricted score wild cluster bootstrap (Kline-Santos 2012) with
+    Stata ``boottest``'s exact studentization, computed **on the FE-absorbed
+    design at scale**: the per-cluster one-step contributions ``q_g`` are pure
+    linear algebra at the restricted fit, so the weighted
+    Frisch-Waugh-Lovell reduction is *exact* (verified to 1e-17 against the
+    full-dummy computation) — unlike CR2, whose per-observation leverage does
+    not survive absorption. On low-dimensional FE this path equals
+    ``sp.fepois(vce="wild")`` (itself bit-exact vs ``boottest``) replication
+    for replication; ``boottest`` cannot run after Stata's ``ppmlhdfe`` at
+    all (no ``constraints()`` support), so this extends the Stata menu rather
+    than mirroring it. Point estimates and cluster-robust SEs stand; p-values
+    come from the bootstrap.
+    """
+    from ..inference.jackknife import score_wild_from_q
+
+    base = ppmlhdfe(
+        formula,
+        data,
+        y=y,
+        x=x,
+        absorb=absorb,
+        cluster=cluster,
+        separation=separation,
+        maxiter=maxiter,
+        tol=tol,
+        alpha=alpha,
+    )
+    y_arr, X, var_names, fe_list, data = _ppmlhdfe_design(formula, data, y, x, absorb)
+    n, k = X.shape
+    if k < 2 and not fe_list:
+        raise MethodIncompatibility(
+            "ppmlhdfe(vce='wild') needs at least one other regressor or an "
+            "absorbed fixed effect to form the restricted (null) model.",
+            recovery_hint="Add covariates / absorb= or use cluster= (CRV1).",
+        )
+    codes = pd.factorize(data[cluster].values)[0]
+    G = int(codes.max()) + 1
+    c_share = np.array([(codes == c).sum() for c in range(G)]) / float(n)
+
+    pvals: Dict[str, float] = {}
+    for j, vname in enumerate(var_names):
+        keep = [c for c in range(k) if c != j]
+        X_rest = X[:, keep]
+        beta_r, mu_r, conv, _it, _xdm = _ppml_hdfe_irls(
+            y_arr,
+            X_rest,
+            fe_indices_list=fe_list or None,
+            weights=None,
+            maxiter=maxiter,
+            tol=tol,
+        )
+        if not conv:
+            warnings.warn(
+                f"Restricted PPML for H0: {vname}=0 did not converge; "
+                "its wild-bootstrap p-value may be unreliable."
+            )
+        e = y_arr - mu_r
+        W = mu_r
+        # weighted-FWL residualization of x_j on [other covariates + FE]
+        cols = np.column_stack([X[:, j], X_rest]) if X_rest.size else X[:, [j]]
+        cols_d = _wfe_demean(cols, fe_list, W) if fe_list else cols
+        xd = cols_d[:, 0]
+        Zd = cols_d[:, 1:]
+        if Zd.shape[1]:
+            gam = np.linalg.solve(Zd.T @ (W[:, None] * Zd), Zd.T @ (W * xd))
+            xt = xd - Zd @ gam
+        else:
+            xt = xd
+        denom = float(xt @ (W * xt))
+        g_i = xt * e / denom
+        q = np.array([g_i[codes == c].sum() for c in range(G)])
+        out = score_wild_from_q(
+            q, c_share, n_boot=n_boot, weight_type=weight_type, seed=seed
+        )
+        pvals[vname] = out["p_boot"]
+
+    base.pvalues = pd.Series(
+        [pvals[v] for v in base.params.index], index=base.params.index
+    )
+    base.model_info = dict(base.model_info)
+    base.model_info["vcov_type"] = (
+        f"score wild cluster bootstrap (Kline-Santos 2012, boottest "
+        f"studentization, {weight_type}); SEs remain cluster-robust"
+    )
+    base.model_info["n_boot"] = n_boot
+    return base
+
+
+def _ppmlhdfe_cr(
+    formula: Optional[str],
+    data: pd.DataFrame,
+    y: Optional[str],
+    x: Optional[List[str]],
+    absorb: Optional[str],
+    cluster: str,
+    kind: str,
+    *,
+    separation: bool,
+    maxiter: int,
+    tol: float,
+    alpha: float,
+) -> EconometricResults:
+    """CR2/CR3 (clubSandwich glm) SEs for PPML with LOW-dimensional FE.
+
+    The reference-matching CR2/CR3 requires the FE-as-dummies design (the
+    weighted projection does not carry the CR2 leverage through absorption —
+    the absorbed variant differs ~1% with no published reference), so this
+    path builds the dummy design like ``sp.fepois(vce="CR2")`` does and is
+    guarded against high-dimensional FE. Matches R
+    ``clubSandwich::vcovCR(glm(poisson), type=...)`` exactly; equal to
+    ``sp.fepois`` on the same model.
+    """
+    import statsmodels.api as sm
+    from scipy import stats as _stats
+
+    from ..inference.jackknife import glm_cr_vcov
+
+    base = ppmlhdfe(
+        formula,
+        data,
+        y=y,
+        x=x,
+        absorb=absorb,
+        cluster=cluster,
+        separation=separation,
+        maxiter=maxiter,
+        tol=tol,
+        alpha=alpha,
+    )
+    y_arr, X, var_names, fe_list, data = _ppmlhdfe_design(formula, data, y, x, absorb)
+    n = len(y_arr)
+    blocks: List[np.ndarray] = [X]
+    if fe_list:
+        blocks.append(np.ones((n, 1)))
+        for fe_idx in fe_list:
+            dmy = pd.get_dummies(pd.Series(fe_idx), drop_first=True).astype(float)
+            if dmy.shape[1]:
+                blocks.append(dmy.values)
+    X_full = np.column_stack(blocks)
+    if X_full.shape[1] >= n or X_full.shape[1] > 1000:
+        raise MethodIncompatibility(
+            f"ppmlhdfe(vce={kind!r}): the fixed-effects dummy design has "
+            f"{X_full.shape[1]} columns — too many for the reference-matching "
+            "full-dummy CR2/CR3 (the absorbed variant has no published "
+            "reference).",
+            recovery_hint="Use cluster= (CRV1), cluster=['a','b'] (two-way) "
+            "or vce='wild' for high-dimensional fixed effects.",
+        )
+    codes = pd.factorize(data[cluster].values)[0]
+    power = 0.5 if kind == "cr2" else 1.0
+    se_full = glm_cr_vcov(X_full, y_arr, sm.families.Poisson(), codes, power=power)
+    se = pd.Series(
+        [float(se_full[var_names.index(str(v))]) for v in base.params.index],
+        index=base.params.index,
+    )
+    z = base.params / se
+    base.std_errors = se
+    base.pvalues = pd.Series(
+        2 * (1 - _stats.norm.cdf(np.abs(z))), index=base.params.index
+    )
+    crit = _stats.norm.ppf(1 - alpha / 2)
+    base.conf_int_lower = base.params - crit * se
+    base.conf_int_upper = base.params + crit * se
+    base.model_info = dict(base.model_info)
+    base.model_info["vcov_type"] = {
+        "cr2": "CR2 cluster-robust (clubSandwich glm, Pustejovsky-Tipton 2018)",
+        "cr3": "CR3 cluster-robust (clubSandwich glm jackknife-type)",
+        "jackknife": "CR3 cluster-robust (clubSandwich glm jackknife-type)",
+    }[kind]
+    return base
+
+
 def ppmlhdfe(
     formula: Optional[str] = None,
     data: pd.DataFrame = None,
@@ -1679,6 +1920,10 @@ def ppmlhdfe(
     maxiter: int = 1000,
     tol: float = 1e-8,
     alpha: float = 0.05,
+    vce: Optional[str] = None,
+    wild_reps: int = 9999,
+    wild_weight_type: str = "rademacher",
+    seed: Optional[int] = None,
 ) -> EconometricResults:
     """
     Pseudo-Poisson Maximum Likelihood with high-dimensional fixed effects.
@@ -1724,6 +1969,23 @@ def ppmlhdfe(
         Convergence tolerance.
     alpha : float, default 0.05
         Significance level for confidence intervals.
+    vce : str, optional
+        Canonical SE-menu keyword. ``"robust"``/``"hc1"``/``"hc0"`` alias the
+        ``robust=`` parameter. ``"wild"`` (with ``cluster=``) runs the
+        boottest-convention score wild cluster bootstrap on the FE-absorbed
+        design — exact at any FE dimensionality (the weighted-FWL reduction
+        of the score numerator is exact) and byte-identical to
+        ``sp.fepois(vce="wild")`` on low-dimensional FE.
+        ``"CR2"``/``"CR3"``/``"jackknife"`` (with ``cluster=``) compute the
+        clubSandwich glm bias-reduced SEs on the FE-as-dummies design
+        (guarded against high-dimensional FE).
+    wild_reps : int, default 9999
+        Replications for ``vce="wild"`` (enumerates the 2^G grid when
+        ``2**G <= wild_reps``).
+    wild_weight_type : str, default "rademacher"
+        Wild weight distribution.
+    seed : int, optional
+        RNG seed for sampled (non-enumerated) wild draws.
 
     Returns
     -------
@@ -1771,6 +2033,60 @@ def ppmlhdfe(
     >>> 'dist' in res2.params.index
     True
     """
+    # --- canonical vce= keyword (extended SE menu) --------------------------
+    _vce = vce.lower() if isinstance(vce, str) else None
+    if _vce in ("robust", "hc0", "hc1", "hc_robust", "nonrobust"):
+        # spelling alias for the existing robust= parameter
+        robust = "robust" if _vce == "hc_robust" else _vce
+        _vce = None
+    if _vce is not None:
+        if weights is not None:
+            raise MethodIncompatibility(
+                f"ppmlhdfe(vce={vce!r}) does not support weights= — the "
+                "extended SE menu is unweighted.",
+                recovery_hint="Drop weights= or use cluster= (CRV1).",
+            )
+        if not isinstance(cluster, str):
+            raise MethodIncompatibility(
+                f"ppmlhdfe(vce={vce!r}) requires cluster='<one column>' " "(one-way).",
+                recovery_hint="Pass cluster='pair_id' (or another id column).",
+            )
+        if _vce in ("wild", "wildbootstrap", "wild_cluster", "wcr", "boottest"):
+            return _ppmlhdfe_wild(
+                formula,
+                data,
+                y,
+                x,
+                absorb,
+                cluster,
+                separation=separation,
+                maxiter=maxiter,
+                tol=tol,
+                alpha=alpha,
+                n_boot=wild_reps,
+                weight_type=wild_weight_type,
+                seed=seed,
+            )
+        if _vce in ("cr2", "cr3", "jackknife"):
+            return _ppmlhdfe_cr(
+                formula,
+                data,
+                y,
+                x,
+                absorb,
+                cluster,
+                _vce,
+                separation=separation,
+                maxiter=maxiter,
+                tol=tol,
+                alpha=alpha,
+            )
+        raise MethodIncompatibility(
+            f"ppmlhdfe vce={vce!r} not recognised; use 'robust'/'hc1'/'hc0', "
+            "'CR2'/'CR3'/'jackknife', or 'wild'.",
+            recovery_hint="See the SE menu in docs/guides/grammar.md.",
+        )
+
     y_arr, X, var_names, dep_var, formula_fe, data = _parse_formula_or_xy(
         formula, data, y, x, add_constant=True
     )
