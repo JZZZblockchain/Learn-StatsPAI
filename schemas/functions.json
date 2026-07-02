@@ -28547,7 +28547,7 @@
     }
   },
   {
-    "description": "Compute Lee (2009) bounds for ATE under sample selection.",
+    "description": "Compute Lee (2009) bounds for ATE under sample selection. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "lee_bounds",
     "parameters": {
       "properties": {
@@ -28909,7 +28909,7 @@
     }
   },
   {
-    "description": "Lee (2009) bounds for ATE under sample selection, optionally",
+    "description": "Lee (2009) bounds for ATE under sample selection, optionally Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "selection_bounds",
     "parameters": {
       "properties": {

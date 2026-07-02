@@ -29517,7 +29517,7 @@
       "Lee bounds add monotonicity of selection; Oster's delta adds proportional selection on observed vs. unobserved."
     ],
     "category": "causal",
-    "description": "Compute Lee (2009) bounds for ATE under sample selection.",
+    "description": "Compute Lee (2009) bounds for ATE under sample selection. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.lee_bounds(df, y='wage', treat='training', selection='employed')",
     "failure_modes": [
       {
@@ -29536,7 +29536,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Compute Lee (2009) bounds for ATE under sample selection.",
+      "description": "Compute Lee (2009) bounds for ATE under sample selection. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "lee_bounds",
       "parameters": {
         "properties": {
@@ -29590,8 +29590,10 @@
     },
     "stability": "stable",
     "typical_n_min": 100,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_lee_bounds_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -29986,7 +29988,7 @@
       "Lee bounds add monotonicity of selection; Oster's delta adds proportional selection on observed vs. unobserved."
     ],
     "category": "causal",
-    "description": "Lee (2009) bounds for ATE under sample selection, optionally",
+    "description": "Lee (2009) bounds for ATE under sample selection, optionally Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.selection_bounds( data=df, y=\"wage\", treatment=\"trained\", selection=\"employed\", covariates=[\"age\", \"education\"], method=\"conditional\", )",
     "failure_modes": [
       {
@@ -30005,7 +30007,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Lee (2009) bounds for ATE under sample selection, optionally",
+      "description": "Lee (2009) bounds for ATE under sample selection, optionally Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "selection_bounds",
       "parameters": {
         "properties": {
@@ -30064,8 +30066,10 @@
     },
     "stability": "stable",
     "typical_n_min": 100,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_selection_bounds_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
