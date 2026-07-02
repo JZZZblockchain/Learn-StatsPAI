@@ -1018,6 +1018,37 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "symmetric covariate grid yields symmetric standard errors."
         ),
     },
+    "contrast": {
+        "status": "bit-exact",
+        "reference": "treatment-contrast identity (= Stata margins, contrast(r))",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "contrast == dummy coefficient 1e-12 abs (observed <= 1e-15)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_contrast_pwcompare_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: for a linear model with C(g), the reference "
+            "contrast of predictive margins equals the dummy coefficient "
+            "coef[C(g)[T.k]] exactly (covariates cancel in the difference). "
+            "Guards the C(var)[T.level] margin-parsing correctness fix."
+        ),
+    },
+    "pwcompare": {
+        "status": "bit-exact",
+        "reference": "pairwise-contrast identity (= Stata pwcompare)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "pairwise diff == coef difference 1e-12 abs (observed <= 1e-15)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_contrast_pwcompare_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: each pairwise margin difference equals the "
+            "difference of the corresponding treatment-dummy coefficients "
+            "(j vs k == coef[T.j] - coef[T.k]) exactly."
+        ),
+    },
 }
 
 

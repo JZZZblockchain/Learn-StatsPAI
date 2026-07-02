@@ -9,6 +9,16 @@ All notable changes to StatsPAI will be documented in this file.
 These change DiD point estimates for affected staggered/switching designs. See
 `MIGRATION.md` before comparing new output to earlier StatsPAI runs.
 
+- **`sp.contrast` / `sp.pwcompare` with `C(var)` categoricals** now return the
+  correct treatment contrasts instead of all zeros. The predictive-margin
+  engine matched design-matrix terms by raw column name, so a model fit with a
+  formula-encoded factor (terms like `C(g)[T.1]`) never fired the dummies when
+  a level was set — every contrast, SE, and p-value came back `0`. The margin
+  builder now parses `C(var)[T.level]` (and string levels) so the reference /
+  adjacent / pairwise contrasts equal the corresponding dummy coefficients
+  exactly (verified to ≤1e-15). Models specified with numeric-coded factors
+  were already correct and are unchanged. New parity guard:
+  `tests/reference_parity/test_contrast_pwcompare_parity.py`.
 - **`sp.did_multiplegt` DID_M / dynamic / placebo** now conditions
   switcher-vs-stayer cells on the baseline treatment `d_{t-1}`, matching the
   de Chaisemartin–D'Haultfoeuille estimator and Stata

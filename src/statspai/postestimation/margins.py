@@ -14,8 +14,9 @@ Supports:
 """
 
 import re
-from typing import Optional, List, Dict, Any, Tuple
 from itertools import product as itertools_product
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -226,6 +227,51 @@ def _compute_dydx(
     return dydx
 
 
+# Categorical design-term pattern, e.g. ``C(group)[T.2]`` or ``group[T.b]``
+# (formulaic / patsy treatment-coding).  Captures the base variable name and
+# the encoded reference level.
+_CAT_TERM_RE = re.compile(r"^(?:C\(\s*)?([A-Za-z_]\w*)\s*(?:,[^)]*)?\)?\[T\.(.+)\]$")
+
+
+def _factor_value(base: str, level: str, obs_val: Any) -> float:
+    """Indicator for a treatment-coded dummy: 1.0 if ``obs_val`` is ``level``."""
+    try:
+        return 1.0 if float(obs_val) == float(level) else 0.0
+    except (TypeError, ValueError):
+        return 1.0 if str(obs_val) == str(level) else 0.0
+
+
+def _component_value(
+    token: str,
+    row: pd.Series,
+    var_to_change: Optional[str],
+    new_val: Any,
+) -> Optional[float]:
+    """Design value of a single (non-interaction) token for one observation.
+
+    Handles the intercept, plain numeric columns, and treatment-coded
+    categorical dummies ``C(var)[T.level]``.  Returns ``None`` when the token
+    references a variable that is absent from the row (so callers can treat the
+    whole interaction term as zero, matching the original behaviour).
+    """
+    if token in ("Intercept", "const"):
+        return 1.0
+
+    m = _CAT_TERM_RE.match(token)
+    if m is not None:
+        base, level = m.group(1), m.group(2)
+        obs_val = new_val if base == var_to_change else row.get(base)
+        if base != var_to_change and base not in row.index:
+            return None
+        return _factor_value(base, level, obs_val)
+
+    if token == var_to_change:
+        return float(new_val)
+    if token in row.index:
+        return float(row[token])
+    return None
+
+
 def _predict_row(
     params: pd.Series,
     row: pd.Series,
@@ -235,26 +281,14 @@ def _predict_row(
     """Predict y for a single observation, changing one variable."""
     y = 0.0
     for term, coef in params.items():
-        if term in ("Intercept", "const"):
-            y += coef
-        elif ":" in term:
-            # Interaction term
-            parts = term.split(":")
-            val = coef
-            for p in parts:
-                if p == var_to_change:
-                    val *= new_val
-                elif p in row.index:
-                    val *= row[p]
-                else:
-                    val = 0
-                    break
-            y += val
-        else:
-            if term == var_to_change:
-                y += coef * new_val
-            elif term in row.index:
-                y += coef * row[term]
+        val = coef
+        for part in term.split(":"):
+            comp = _component_value(part, row, var_to_change, new_val)
+            if comp is None:
+                val = 0.0
+                break
+            val *= comp
+        y += val
     return float(y)
 
 
@@ -452,21 +486,14 @@ def _margin_gradient(params: pd.Series, df_mod: pd.DataFrame) -> np.ndarray:
     for i in range(n):
         row = df_mod.iloc[i]
         for j, (term, _coef) in enumerate(params.items()):
-            if term in ("Intercept", "const"):
-                grad[j] += 1.0
-            elif ":" in term:
-                parts = term.split(":")
-                val = 1.0
-                for part in parts:
-                    if part in row.index:
-                        val *= row[part]
-                    else:
-                        val = 0.0
-                        break
-                grad[j] += val
-            else:
-                if term in row.index:
-                    grad[j] += row[term]
+            val = 1.0
+            for part in term.split(":"):
+                comp = _component_value(part, row, None, None)
+                if comp is None:
+                    val = 0.0
+                    break
+                val *= comp
+            grad[j] += val
 
     grad /= n
     return grad

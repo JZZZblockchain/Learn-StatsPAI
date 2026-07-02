@@ -5,6 +5,32 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="contrast-pwcompare-categorical"></a>
+
+## Unreleased — ⚠️ `sp.contrast` / `sp.pwcompare` now fire `C(var)` factor dummies
+
+**What changed.** `sp.contrast` and `sp.pwcompare` previously returned all-zero
+contrasts (and zero SEs / p-values) when the model was fit with a
+formula-encoded categorical such as `y ~ C(g) + x`. The predictive-margin
+engine matched coefficient terms to raw data columns, so design terms named
+`C(g)[T.1]` never responded to setting the raw `g` column to a level. The margin
+builder now parses treatment-coded factor terms (`C(var)[T.level]`, including
+string levels), so reference/adjacent/pairwise contrasts equal the
+corresponding dummy coefficients exactly.
+
+**Why.** All-zero contrasts are a silent correctness failure — the function ran
+without error but every reported difference was wrong. The fix restores the
+documented Stata `margins, contrast(...)` behaviour for factor-encoded models.
+
+**Who is affected.** Any `sp.contrast` / `sp.pwcompare` call on a model fit with
+`C(...)` factor notation. Models that coded the categorical as a plain numeric
+column were already correct and are unchanged.
+
+**Action.** Re-run affected contrasts; the new numbers are the correct ones
+(they equal the treatment-dummy coefficients). No API change.
+
+---
+
 <a id="did-multiplegt-baseline-conditioning"></a>
 
 ## Unreleased — ⚠️ `sp.did_multiplegt` now baseline-conditions switcher/stayer cells
