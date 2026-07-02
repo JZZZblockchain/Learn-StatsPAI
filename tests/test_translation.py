@@ -873,3 +873,139 @@ def test_r_translations_are_structurally_executable():
     commands = [c for c, _, _ in R_ROUND_TRIPS]
     problems = _structural_exec_problems(commands, from_r)
     assert not problems, "dead / unrunnable R translations:\n  " + "\n  ".join(problems)
+
+
+# ----------------------------------------------------------------------
+# Numerical equivalence — the translated call must fit the RIGHT model
+# ----------------------------------------------------------------------
+#
+# Structural checks prove a translation runs with accepted argument names; they
+# do not prove the arguments encode the model the command actually specifies.
+# A formula-reassembly slip (dropped FE, wrong cluster column, mis-parsed IV)
+# or a wrong option value produces an executable payload that fits a DIFFERENT
+# model — right shape, wrong numbers. This suite executes each translated
+# payload and an INDEPENDENTLY hand-authored reference call for the same model
+# on shared data, and asserts the coefficients agree to machine precision.
+# Because ``sp.feols`` etc. are separately validated against R/Stata in the
+# reference-parity suite, matching the reference call means matching R/Stata.
+
+
+def _num_df(seed=7, n=1500):
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    firm = rng.integers(0, 25, n)
+    year = rng.integers(0, 10, n)
+    fe = firm * 0.3 + year * 0.2
+    z = rng.normal(size=n)
+    u = rng.normal(size=n)
+    d = 0.8 * z + u + rng.normal(size=n)
+    x1 = rng.normal(size=n)
+    x2 = rng.normal(size=n)
+    y_star = 1.0 * x1 - 0.5 * x2 + 2.0 * d + fe + u + rng.normal(size=n)
+    return pd.DataFrame(
+        {
+            "y": y_star,
+            "hours": np.clip(y_star * 5 + 40, 0, 80),
+            "x1": x1,
+            "x2": x2,
+            "d": d,
+            "z": z,
+            "firm": firm,
+            "year": year,
+        }
+    )
+
+
+def _coef_map(tool, args, df):
+    """Coefficient dict from a direct ``sp.<tool>`` call — the same numerical
+    path ``execute_tool`` dispatches to, called directly so ``.params`` is
+    easy to compare."""
+    import warnings
+
+    import numpy as np
+
+    import statspai as sp
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = getattr(sp, tool)(data=df, **args)
+    params = res.params
+    if hasattr(params, "to_dict"):
+        return {str(k): float(v) for k, v in params.to_dict().items()}
+    return {str(i): float(v) for i, v in enumerate(np.atleast_1d(params))}
+
+
+def _assert_same_fit(translated, reference, df, label):
+    tool_t, args_t = translated
+    tool_r, args_r = reference
+    ct = _coef_map(tool_t, args_t, df)
+    cr = _coef_map(tool_r, args_r, df)
+    common = set(ct) & set(cr)
+    assert common, f"{label}: no overlapping coefficients ({ct} vs {cr})"
+    for k in common:
+        assert abs(ct[k] - cr[k]) < 1e-9, (
+            f"{label}: coefficient {k!r} differs — translated {ct[k]!r} vs "
+            f"reference {cr[k]!r}; the translation fits the wrong model."
+        )
+
+
+#: (command, translate_fn, reference (tool, args)). The reference is authored
+#: independently of the handler; a handler that mis-encodes the model diverges.
+_NUMERIC_CASES = [
+    (
+        "reghdfe y x1 x2, absorb(firm year) cluster(firm)",
+        "stata",
+        ("feols", {"fml": "y ~ x1 + x2 | firm + year", "cluster": "firm"}),
+    ),
+    (
+        "xtreg y x1, fe i(firm) vce(cluster firm)",
+        "stata",
+        ("feols", {"fml": "y ~ x1 | firm", "cluster": "firm"}),
+    ),
+    (
+        "ivreghdfe y x1 (d = z), absorb(firm) cluster(firm)",
+        "stata",
+        ("feols", {"fml": "y ~ x1 | firm | d ~ z", "cluster": "firm"}),
+    ),
+    (
+        "feols(y ~ x1 + x2 | firm + year, data=df, cluster=~firm)",
+        "r",
+        ("feols", {"fml": "y ~ x1 + x2 | firm + year", "cluster": "firm"}),
+    ),
+    (
+        "ppmlhdfe hours x1, absorb(firm year)",
+        "stata",
+        ("ppmlhdfe", {"formula": "hours ~ x1", "absorb": "firm + year"}),
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "command,channel,reference",
+    _NUMERIC_CASES,
+    ids=[c[0][:32] for c in _NUMERIC_CASES],
+)
+def test_translation_fits_the_right_model(command, channel, reference):
+    df = _num_df()
+    translate = from_stata if channel == "stata" else from_r
+    out = translate(command)
+    assert out["ok"], f"{command}: translation failed: {out}"
+    _assert_same_fit((out["tool"], out["arguments"]), reference, df, command)
+
+
+def test_cross_translator_hdfe_agrees_numerically():
+    """The two independent translators must agree on the numbers for the same
+    model: Stata ``reghdfe`` and R ``feols`` of an identical HDFE spec produce
+    the same coefficients. A bug in either reassembly path shows up as a
+    divergence here."""
+    df = _num_df()
+    s = from_stata("reghdfe y x1 x2, absorb(firm year) cluster(firm)")
+    r = from_r("feols(y ~ x1 + x2 | firm + year, data=df, cluster=~firm)")
+    _assert_same_fit(
+        (s["tool"], s["arguments"]),
+        (r["tool"], r["arguments"]),
+        df,
+        "reghdfe vs feols",
+    )
