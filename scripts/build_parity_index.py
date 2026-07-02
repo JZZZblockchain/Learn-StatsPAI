@@ -1142,6 +1142,26 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "SEs align to ~1e-3 relative. Regenerate via _generate_glm_R.R."
         ),
     },
+    "three_sls": {
+        "status": "bit-exact",
+        "reference": "R systemfit::systemfit(method='3SLS')",
+        "reference_versions": {
+            "R": "R version 4.5.2 (2025-10-31)",
+            "systemfit": "1.1.30",
+        },
+        "tolerance": "coef 1e-9 abs (observed <= 1e-15); SE ~5e-3 rel",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_threesls_parity.py",
+            "tests/reference_parity/_fixtures/threesls_R.json",
+        ],
+        "note": (
+            "Frozen-R fixture: 3SLS coefficients on a 2-equation simultaneous "
+            "system match R systemfit to machine precision on a committed "
+            "dataset; SEs align to ~5e-3 relative (small-sample residual-"
+            "covariance d.o.f. convention). Regenerate via _generate_threesls_R.R."
+        ),
+    },
 }
 
 

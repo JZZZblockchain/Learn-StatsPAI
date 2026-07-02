@@ -25,15 +25,15 @@ sp.parity_summary()           # honest coverage counts
 
 | status | functions |
 | --- | ---: |
-| bit-exact | 127 |
+| bit-exact | 128 |
 | aligned | 7 |
 | analytical-only | 86 |
 | external-replication | 4 |
-| **verified (subtotal)** | **224** |
-| unverified | 915 |
+| **verified (subtotal)** | **225** |
+| unverified | 914 |
 | **total registered** | **1139** |
 
-## bit-exact — 127 functions
+## bit-exact — 128 functions
 
 Machine-tolerance agreement with a named R/Stata reference.
 
@@ -159,6 +159,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `svymean` | survey::svymean (Horvitz-Thompson/Hajek + Taylor SE) | R 4.5.2 | estimate + SE 1e-10 abs (observed ~5e-15 / 8e-17) | — / — | [`test_survey_parity.py`](../tests/reference_parity/test_survey_parity.py) (+1) |
 | `svytotal` | survey::svytotal (Horvitz-Thompson + Taylor SE) | R 4.5.2 | estimate 1e-12 rel; SE 1e-10 rel (observed ~2e-12 / 1e-14) | — / — | [`test_survey_parity.py`](../tests/reference_parity/test_survey_parity.py) (+1) |
 | `synth` | Synth::synth | R 4.5.2; Synth 1.1.10 | rel_est<=1e-06, rel_se<=1e-06 | 7.8e-08 / 7.7e-08 | [`52_scm_unique.py`](../tests/r_parity/52_scm_unique.py) (+2) |
+| `three_sls` | R systemfit::systemfit(method='3SLS') | R 4.5.2; systemfit 1.1.30 | coef 1e-9 abs (observed <= 1e-15); SE ~5e-3 rel | — / — | [`test_threesls_parity.py`](../tests/reference_parity/test_threesls_parity.py) (+1) |
 | `tmle` | base R stats::glm TMLE (van der Laan & Rubin 2006) | — | psi 1e-9 (observed 5.6e-12), EIF SE 1e-9, epsilon 1e-8 | — / — | [`test_tmle_parity.py`](../tests/reference_parity/test_tmle_parity.py) (+1) |
 | `tobit` | censReg::censReg | R 4.5.2; censReg 0.5.38 | rel_est<=1e-06, rel_se<=1e-05 | 2.8e-08 / 2.8e-08 | [`41_tobit.py`](../tests/r_parity/41_tobit.py) (+2) |
 | `truncreg` | truncreg::truncreg(method="NR") | R 4.5.2; truncreg 0.2.5 | rel_est<=1e-06, rel_se<=0.0001 | 3.3e-08 / 9.5e-08 | [`62_truncreg.py`](../tests/r_parity/62_truncreg.py) (+2) |
@@ -285,6 +286,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `wild_cluster_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 915 functions
+## unverified — 914 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

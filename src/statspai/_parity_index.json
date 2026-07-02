@@ -1952,7 +1952,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_feglm_wild_boottest_parity.py"
+        "tests/reference_parity/test_feglm_wild_boottest_parity.py",
+        "tests/reference_parity/test_ppmlhdfe_extended_vce_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -6092,6 +6093,31 @@
         "tests/reference_parity/test_postestimation_parity.py"
       ],
       "tolerance": ""
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "three_sls",
+      "notes": [
+        "Frozen-R fixture: 3SLS coefficients on a 2-equation simultaneous system match R systemfit to machine precision on a committed dataset; SEs align to ~5e-3 relative (small-sample residual-covariance d.o.f. convention). Regenerate via _generate_threesls_R.R."
+      ],
+      "reference": "R systemfit::systemfit(method='3SLS')",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)",
+        "systemfit": "1.1.30"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_threesls_parity.py",
+        "tests/reference_parity/_fixtures/threesls_R.json"
+      ],
+      "tolerance": "coef 1e-9 abs (observed <= 1e-15); SE ~5e-3 rel"
     },
     {
       "also_verified_by": [
