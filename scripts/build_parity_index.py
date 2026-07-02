@@ -894,6 +894,52 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "values (0 / mean score) and oracle dominance holding exactly."
         ),
     },
+    "sensemakr": {
+        "status": "bit-exact",
+        "reference": "omitted-variable-bias closed forms (Cinelli & Hazlett 2020)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "RV / partial-R2 / OLS quantities 1e-12 abs (observed <= 2e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_sensemakr_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: partial R2 = t^2/(t^2+df), robustness value "
+            "RV = (sqrt(f^4+4f^2)-f^2)/2, and beta/se/t equal the hand-rolled "
+            "OLS fit exactly (Cinelli & Hazlett 2020; = R sensemakr formulas)."
+        ),
+    },
+    "oster_delta": {
+        "status": "bit-exact",
+        "reference": "coefficient-stability bound identities (Oster 2019)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "OLS inputs 1e-12 abs (observed 0); beta(delta*)=0 at 1e-10",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_oster_delta_parity.py",
+        ],
+        "note": (
+            "Structural identities: beta/R2 for short and controlled fits equal "
+            "hand-rolled OLS exactly; bound endpoints are the named beta_full / "
+            "beta*(delta=1); delta* is exactly the zero-crossing of the "
+            "bias-adjusted coefficient grid (Oster 2019)."
+        ),
+    },
+    "breakdown_frontier": {
+        "status": "bit-exact",
+        "reference": "additive-violation breakdown identities (Masten & Poirier 2021)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "breakdown point / CI / bounds 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_breakdown_frontier_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: breakdown point == estimate, its CI == "
+            "estimate - z*se, and bounds == estimate +/- max_violation "
+            "(Masten & Poirier 2021 breakdown-frontier framework)."
+        ),
+    },
 }
 
 

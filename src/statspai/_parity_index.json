@@ -499,6 +499,29 @@
       "tolerance": "exact (atol 1e-15; observed 0)"
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "breakdown_frontier",
+      "notes": [
+        "Closed-form identity: breakdown point == estimate, its CI == estimate - z*se, and bounds == estimate +/- max_violation (Masten & Poirier 2021 breakdown-frontier framework)."
+      ],
+      "reference": "additive-violation breakdown identities (Masten & Poirier 2021)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_breakdown_frontier_parity.py"
+      ],
+      "tolerance": "breakdown point / CI / bounds 1e-12 abs (observed 0)"
+    },
+    {
       "function": "breakdown_m",
       "notes": [
         "Reproduces published-paper numbers on a calibrated replica. See tests/external_parity/PUBLISHED_REFERENCE_VALUES.md."
@@ -3672,6 +3695,29 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "oster_delta",
+      "notes": [
+        "Structural identities: beta/R2 for short and controlled fits equal hand-rolled OLS exactly; bound endpoints are the named beta_full / beta*(delta=1); delta* is exactly the zero-crossing of the bias-adjusted coefficient grid (Oster 2019)."
+      ],
+      "reference": "coefficient-stability bound identities (Oster 2019)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_oster_delta_parity.py"
+      ],
+      "tolerance": "OLS inputs 1e-12 abs (observed 0); beta(delta*)=0 at 1e-10"
+    },
+    {
       "function": "overlap_weights",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -5019,6 +5065,13 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_sensemakr_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity_frozen",
+        "reference_parity"
+      ],
       "function": "sensemakr",
       "headline": {
         "metric": "rel_est",
