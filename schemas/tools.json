@@ -6804,7 +6804,7 @@
     "name": "etable"
   },
   {
-    "description": "Endogenous treatment effects model.",
+    "description": "Endogenous treatment effects model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
