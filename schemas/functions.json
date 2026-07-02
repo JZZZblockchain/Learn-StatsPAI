@@ -51763,7 +51763,7 @@
     }
   },
   {
-    "description": "Per-node local clustering coefficient (Watts-Strogatz).",
+    "description": "Per-node local clustering coefficient (Watts-Strogatz). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "clustering",
     "parameters": {
       "properties": {
@@ -51904,7 +51904,7 @@
     }
   },
   {
-    "description": "Degree centrality.",
+    "description": "Degree centrality. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "degree_centrality",
     "parameters": {
       "properties": {
@@ -51955,7 +51955,7 @@
     }
   },
   {
-    "description": "Shortest-path betweenness centrality (Brandes 2001).",
+    "description": "Shortest-path betweenness centrality (Brandes 2001). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "betweenness_centrality",
     "parameters": {
       "properties": {
