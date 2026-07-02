@@ -1779,6 +1779,23 @@
       "tolerance": "rel_est<=1e-06, rel_se<=5e-05"
     },
     {
+      "function": "fisher_exact",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_fisher_exact_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "fortified_pci",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -2295,6 +2312,29 @@
         "tests/reference_parity/_fixtures/glm_ext_R.json"
       ],
       "tolerance": "count + zero coefficients 1e-6 abs (observed ~2e-8)"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "icc",
+      "notes": [
+        "Closed-form identity: the intraclass correlation equals the random-intercept variance share of the fitted mixed model's own variance components exactly; tracks the realized group variance across seeds."
+      ],
+      "reference": "variance-ratio identity ICC = var_u / (var_u + var_e)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_icc_parity.py"
+      ],
+      "tolerance": "ICC vs model variance components 1e-12 abs (observed 0)"
     },
     {
       "also_verified_by": [
@@ -2818,6 +2858,29 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "function": "lrtest",
+      "notes": [
+        "Closed-form identity: the LR statistic equals twice the log-likelihood difference of the nested ML fits, the reported logL fields equal the models' own attributes, and p is the exact chi-square survival at the df difference."
+      ],
+      "reference": "likelihood-ratio identity chi2 = 2*(logL_full - logL_restricted)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_lrtest_parity.py"
+      ],
+      "tolerance": "chi2 / logL fields 1e-10 abs (observed 0); p == chi2.sf exact"
+    },
+    {
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "manski_bounds",
       "notes": [
         "Closed-form identity: the no-assumption ATE bound width equals the outcome range y_upper - y_lower exactly, and each bound reconstructs from the cell means and treatment share (Manski 1990)."
@@ -3165,6 +3228,13 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_icc_parity.py",
+        "tests/reference_parity/test_lrtest_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "mixed",
       "headline": {
         "metric": "rel_est",
@@ -5177,6 +5247,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_interference_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "stabilized_weights",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_stabilized_weights_parity.py"
       ],
       "tolerance": ""
     },

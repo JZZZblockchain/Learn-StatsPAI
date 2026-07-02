@@ -25,15 +25,15 @@ sp.parity_summary()           # honest coverage counts
 
 | status | functions |
 | --- | ---: |
-| bit-exact | 114 |
+| bit-exact | 116 |
 | aligned | 7 |
-| analytical-only | 72 |
+| analytical-only | 74 |
 | external-replication | 4 |
-| **verified (subtotal)** | **197** |
-| unverified | 942 |
+| **verified (subtotal)** | **201** |
+| unverified | 938 |
 | **total registered** | **1139** |
 
-## bit-exact — 114 functions
+## bit-exact — 116 functions
 
 Machine-tolerance agreement with a named R/Stata reference.
 
@@ -79,6 +79,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `holm` | base R stats::p.adjust(method='holm') | R 4.5.2 | exact (atol 1e-15; observed 0) | — / — | [`test_mht_parity.py`](../tests/reference_parity/test_mht_parity.py) (+1) |
 | `honest_did` | HonestDiD::createSensitivityResults_relativeMagnitudes | R 4.5.2; HonestDiD 0.2.8 | abs_est<=1e-06, abs_se<=1e-06 | 4.4e-16 / 5.6e-17 | [`21_honest_relmags.py`](../tests/r_parity/21_honest_relmags.py) (+2) |
 | `hurdle` | pscl::hurdle(dist='poisson', zero.dist='binomial') | R 4.5.2; pscl 1.5.9 | count + zero coefficients 1e-6 abs (observed ~2e-8) | — / — | [`test_glm_ext_parity.py`](../tests/reference_parity/test_glm_ext_parity.py) (+1) |
+| `icc` | variance-ratio identity ICC = var_u / (var_u + var_e) | R 4.5.2 | ICC vs model variance components 1e-12 abs (observed 0) | — / — | [`test_icc_parity.py`](../tests/reference_parity/test_icc_parity.py) |
 | `incidence_rate_ratio` | base-R closed form (rate ratio + conditional-binomial exact CI) | R 4.5.2 | estimate 1e-12; exact CI 1e-10 abs (observed ~3e-15) | — / — | [`test_epi_parity.py`](../tests/reference_parity/test_epi_parity.py) (+1) |
 | `indirect_standardize` | base closed form (SMR / indirect std.; = Stata istdize) | R 4.5.2 | expected + SMR 1e-12 abs (observed 0) | — / — | [`test_standardize_parity.py`](../tests/reference_parity/test_standardize_parity.py) |
 | `inequality_index` | base-R closed form (Gini/Theil-T/Theil-L/Atkinson; = ineq) | R 4.5.2 | all indices 1e-12 abs (observed ~2e-16) | — / — | [`test_inequality_parity.py`](../tests/reference_parity/test_inequality_parity.py) (+1) |
@@ -91,6 +92,7 @@ Machine-tolerance agreement with a named R/Stata reference.
 | `local_projections` | lpirfs::lp_lin | R 4.5.2; lpirfs 0.2.5 | rel_est<=1e-06, rel_se<=1e-06 | 5.0e-15 / — | [`34_lp.py`](../tests/r_parity/34_lp.py) (+1) |
 | `logit` | stats::glm(family=binomial("logit")) | R 4.5.2; stats 4.5.2 | rel_est<=1e-06, rel_se<=1e-06 | 2.7e-11 / 2.7e-11 | [`57_logit.py`](../tests/r_parity/57_logit.py) (+2) |
 | `logrank_test` | survival::survdiff | R 4.5.2; survival 3.8.3 | chi-square 1e-10 rel (observed ~8e-16); p-value 1e-10 abs | — / — | [`test_survival_km_parity.py`](../tests/reference_parity/test_survival_km_parity.py) (+1) |
+| `lrtest` | likelihood-ratio identity chi2 = 2*(logL_full - logL_restricted) | R 4.5.2 | chi2 / logL fields 1e-10 abs (observed 0); p == chi2.sf exact | — / — | [`test_lrtest_parity.py`](../tests/reference_parity/test_lrtest_parity.py) |
 | `manski_bounds` | Manski (1990) no-assumption worst-case ATE bound identity | R 4.5.2 | width == y_upper - y_lower 1e-12 abs (observed 0) | — / — | [`test_manski_bounds_parity.py`](../tests/reference_parity/test_manski_bounds_parity.py) |
 | `mantel_haenszel` | base-R closed form (Robins-Breslow-Greenland MH; = epiR) | R 4.5.2 | estimate, se_log, CI 1e-12 abs (observed 0) | — / — | [`test_epi_parity.py`](../tests/reference_parity/test_epi_parity.py) (+1) |
 | `mde` | base-R closed form (RCT minimum detectable effect) | R 4.5.2 | effect size 1e-6 abs (output rounded to 6 dp; observed ~2e-8) | — / — | [`test_power_extra_parity.py`](../tests/reference_parity/test_power_extra_parity.py) (+1) |
@@ -179,7 +181,7 @@ Reproduces published-paper numbers; sources in `tests/external_parity/PUBLISHED_
 | `g_estimation` | [`test_whatif_nhefs.py`](../tests/external_parity/test_whatif_nhefs.py) |
 | `metalearner` | [`test_causalml_book.py`](../tests/external_parity/test_causalml_book.py) |
 
-## analytical-only — 72 functions
+## analytical-only — 74 functions
 
 Recovers a known DGP truth / closed-form identity within tolerance; no cross-package reference. See `tests/reference_parity/REFERENCES.md`.
 
@@ -206,6 +208,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `dose_response` | [`test_dose_response_parity.py`](../tests/reference_parity/test_dose_response_parity.py) |
 | `ebalance` | [`test_matching_parity.py`](../tests/reference_parity/test_matching_parity.py) (+1) |
 | `fci` | [`test_fci_parity.py`](../tests/reference_parity/test_fci_parity.py) |
+| `fisher_exact` | [`test_fisher_exact_parity.py`](../tests/reference_parity/test_fisher_exact_parity.py) |
 | `fortified_pci` | [`test_proximal_parity.py`](../tests/reference_parity/test_proximal_parity.py) |
 | `front_door` | [`test_front_door_parity.py`](../tests/reference_parity/test_front_door_parity.py) |
 | `frontdoor` | [`test_frontdoor_parity.py`](../tests/reference_parity/test_frontdoor_parity.py) |
@@ -250,6 +253,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `rlasso_effects` | [`test_rlasso_parity.py`](../tests/reference_parity/test_rlasso_parity.py) |
 | `sbw` | [`test_matching_recovery_parity.py`](../tests/reference_parity/test_matching_recovery_parity.py) |
 | `spillover` | [`test_interference_parity.py`](../tests/reference_parity/test_interference_parity.py) |
+| `stabilized_weights` | [`test_stabilized_weights_parity.py`](../tests/reference_parity/test_stabilized_weights_parity.py) |
 | `stochastic_dominance` | [`test_distributional_te_parity.py`](../tests/reference_parity/test_distributional_te_parity.py) |
 | `subcluster_wild_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) |
 | `survivor_average_causal_effect` | [`test_principal_strat_parity.py`](../tests/reference_parity/test_principal_strat_parity.py) |
@@ -258,6 +262,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `wild_cluster_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 942 functions
+## unverified — 938 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

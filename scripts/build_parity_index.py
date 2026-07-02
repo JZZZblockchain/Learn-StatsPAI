@@ -940,6 +940,38 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "(Masten & Poirier 2021 breakdown-frontier framework)."
         ),
     },
+    "lrtest": {
+        "status": "bit-exact",
+        "reference": "likelihood-ratio identity chi2 = 2*(logL_full - logL_restricted)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "chi2 / logL fields 1e-10 abs (observed 0); p == chi2.sf exact",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_lrtest_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the LR statistic equals twice the "
+            "log-likelihood difference of the nested ML fits, the reported "
+            "logL fields equal the models' own attributes, and p is the exact "
+            "chi-square survival at the df difference."
+        ),
+    },
+    "icc": {
+        "status": "bit-exact",
+        "reference": "variance-ratio identity ICC = var_u / (var_u + var_e)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "ICC vs model variance components 1e-12 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_icc_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the intraclass correlation equals the "
+            "random-intercept variance share of the fitted mixed model's own "
+            "variance components exactly; tracks the realized group variance "
+            "across seeds."
+        ),
+    },
 }
 
 
