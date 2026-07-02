@@ -36,6 +36,43 @@ These change DiD point estimates for affected staggered/switching designs. See
 
 ### Added
 
+- **Universal SE menu — every regression-family estimator is now 8/8 native,
+  externally validated.** The reviewer question *"is wild cluster bootstrap
+  usable on any estimator or only `feols`?"* now has a clean answer: `regress`,
+  `feols`, `ivreg`, `panel(method="fe")` and `hdfe_ols` each expose the full
+  canonical `vce=` menu (classical / HC / cluster / two-way `cluster=[a,b]` /
+  CR2–CR3 / jackknife / wild cluster bootstrap / Conley spatial HAC), and
+  `fepois` / `feglm` add CR2–CR3/jackknife plus the score wild bootstrap.
+  Every cell is pinned to an external reference
+  (`tests/reference_parity/REFERENCES.md`); the coverage ratchet
+  `scripts/se_menu_matrix.py --check` now holds 64 native cells / 0 unsafe.
+  Highlights:
+  - `sp.feols` / `sp.panel(method="fe")` / `sp.hdfe_ols`:
+    `vce="CR2"/"CR3"/"jackknife"` (Pustejovsky–Tipton 2018 on the within
+    design — matches R `clubSandwich::vcovCR(plm, model="within")` to machine
+    precision) and `vce="conley"` (Stata `acreg` planar-distance convention).
+    `panel` also gains two-way `cluster=["a", "b"]` (CGM 2011).
+  - `sp.hdfe_ols(vce="robust")`: HC1 with reghdfe's `N/(N-k-df_a)` factor —
+    matches Stata `reghdfe, vce(robust)` exactly.
+  - `sp.panel(method="fe", vce="wild", cluster=...)`: WCR wild cluster
+    bootstrap on the entity-within design, byte-identical to
+    `sp.regress(vce="wild")` on the hand-demeaned data.
+  - `sp.fepois` / `sp.feglm` `vce="CR2"/"CR3"/"jackknife"`: the IRLS-weighted
+    clubSandwich glm adjustment on the FE-as-dummies design — matches R
+    `clubSandwich::vcovCR(glm)` for Poisson and logit. (The weighted
+    projection does **not** carry CR2 leverage through FE absorption, so the
+    dummy design is required; guarded against high-dimensional FE.)
+  - `sp.fepois` / `sp.feglm` `vce="wild"`: the restricted score wild cluster
+    bootstrap (Kline–Santos 2012) with Stata `boottest`'s exact
+    studentization — reverse-engineered from boottest's enumerated bootstrap
+    distribution (cluster-share-centered CRVE + strict exceedance counting)
+    and **bit-exact** vs `boottest` in the enumerated regime (`2^G <= reps`),
+    verified for Poisson and logit.
+  - `sp.ppmlhdfe(cluster=["a", "b"])`: CGM-2011 two-way clustering on the
+    FE-residualised PPML design — byte-identical to Stata
+    `ppmlhdfe, cluster(a b)`.
+  See `docs/guides/grammar.md` for the full matrix and the verified-reference
+  map.
 - **Cross-language parity — within-transformation pinned to textbook
   mean-within.** New Track A module `68_demean_within` aligns
   `sp.demean(solver="map")` against the textbook entity-mean projection

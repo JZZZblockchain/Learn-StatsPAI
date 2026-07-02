@@ -30612,7 +30612,7 @@
       "parameters": {
         "properties": {
           "cluster": {
-            "description": "Cluster identifier column for clustered standard errors.",
+            "description": "Cluster id column for the extended ``vce=`` menu; also a shorthand for one-way ``{\"CRV1\": cluster}``.",
             "type": "string"
           },
           "collin_tol": {
@@ -30621,15 +30621,15 @@
             "type": "number"
           },
           "conley_cutoff": {
-            "description": "conley_cutoff parameter (Optional[float]).",
+            "description": "Conley distance cutoff in km for ``vce=\"conley\"``.",
             "type": "number"
           },
           "conley_lat": {
-            "description": "conley_lat parameter (Optional[str]).",
+            "description": "Coordinate columns (decimal degrees) for ``vce=\"conley\"``.",
             "type": "string"
           },
           "conley_lon": {
-            "description": "conley_lon parameter (Optional[str]).",
+            "description": "Coordinate columns (decimal degrees) for ``vce=\"conley\"``.",
             "type": "string"
           },
           "data": {
@@ -30651,7 +30651,7 @@
             "type": "boolean"
           },
           "seed": {
-            "description": "Random seed for reproducible stochastic steps.",
+            "description": "RNG seed for ``vce=\"wild\"``.",
             "type": "integer"
           },
           "ssc": {
@@ -30659,7 +30659,7 @@
             "type": "string"
           },
           "vcov": {
-            "description": "Variance-covariance estimator. - ``\"iid\"`` -- classical - ``\"HC1\"``, ``\"HC2\"``, ``\"HC3\"`` -- heteroskedasticity-robust - ``{\"CRV1\": \"firm\"}`` -- cluster-robust - ``{\"CRV1\": \"firm + year\"}`` -- two-way clustering",
+            "description": "Variance-covariance estimator (``vce=`` is the canonical alias). - ``\"iid\"`` -- classical - ``\"HC1\"``, ``\"HC2\"``, ``\"HC3\"`` -- heteroskedasticity-robust - ``{\"CRV1\": \"firm\"}`` -- cluster-robust - ``{\"CRV1\": \"firm + year\"}`` -- two-way clustering - ``vce=\"CR2\"`` / ``\"CR3\"`` / ``\"jackknife\"`` (with ``cluster=``) -- Pustejovsky-Tipton bias-reduced cluster-robust on the FE-absorbed within design; matches R ``clubSandwich::vcovCR(plm)``. - ``vce=\"wild\"`` (with ``cluster=``) -- WCR wild cluster bootstrap (Cameron-Gelbach-Miller 2008); validated against Stata ``boottest``. - ``vce=\"conley\"`` (with ``conley_lat=/conley_lon=/conley_cutoff=``) -- Conley spatial HAC (Stata ``acreg`` planar-distance convention).",
             "type": "object"
           },
           "weights": {
@@ -30668,12 +30668,12 @@
           },
           "wild_reps": {
             "default": 999,
-            "description": "wild_reps parameter (int).",
+            "description": "Bootstrap replications for ``vce=\"wild\"``.",
             "type": "integer"
           },
           "wild_weight_type": {
             "default": "rademacher",
-            "description": "wild_weight_type parameter (str).",
+            "description": "Wild weight distribution (``\"rademacher\"``, ``\"webb\"``, ``\"mammen\"``).",
             "type": "string"
           }
         },
@@ -30736,7 +30736,7 @@
       "parameters": {
         "properties": {
           "cluster": {
-            "description": "Cluster identifier column for clustered standard errors.",
+            "description": "Cluster id column for the extended ``vce=`` menu; also a shorthand for one-way ``{\"CRV1\": cluster}``.",
             "type": "string"
           },
           "collin_tol": {
@@ -30768,7 +30768,7 @@
             "type": "number"
           },
           "seed": {
-            "description": "Random seed for reproducible stochastic steps.",
+            "description": "RNG seed for sampled (non-enumerated) ``vce=\"wild\"`` draws.",
             "type": "integer"
           },
           "ssc": {
@@ -30776,21 +30776,21 @@
             "type": "string"
           },
           "vcov": {
-            "description": "Variance-covariance estimator.",
+            "description": "Variance-covariance estimator (``vce=`` is the canonical alias). Besides the pyfixest values (``\"iid\"``, ``\"HC1\"``, ``{\"CRV1\": \"firm\"}``, ...), accepts the extended menu: - ``vce=\"CR2\"`` / ``\"CR3\"`` / ``\"jackknife\"`` (with ``cluster=``) -- clubSandwich glm bias-reduced cluster-robust SEs on the FE-as-dummies design; matches R ``clubSandwich::vcovCR(glm)``. - ``vce=\"wild\"`` (with ``cluster=``) -- restricted score wild cluster bootstrap (Kline-Santos 2012) with Stata ``boottest``'s exact studentization; bit-exact vs ``boottest`` in the enumerated regime.",
             "type": "object"
           },
           "weights": {
-            "description": "Column name for regression weights.",
+            "description": "Column name for regression weights (not supported with the extended ``vce=`` menu).",
             "type": "string"
           },
           "wild_reps": {
             "default": 9999,
-            "description": "wild_reps parameter (int).",
+            "description": "Replications for ``vce=\"wild\"``. When ``2**G <= wild_reps`` the full Rademacher grid is enumerated (deterministic).",
             "type": "integer"
           },
           "wild_weight_type": {
             "default": "rademacher",
-            "description": "wild_weight_type parameter (str).",
+            "description": "Wild weight distribution (``\"rademacher\"`` or ``\"webb\"``).",
             "type": "string"
           }
         },

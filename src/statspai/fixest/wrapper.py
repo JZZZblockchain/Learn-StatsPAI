@@ -549,12 +549,19 @@ def feols(
     data : pd.DataFrame
         Input dataset.
     vcov : str or dict, optional
-        Variance-covariance estimator.
+        Variance-covariance estimator (``vce=`` is the canonical alias).
 
         - ``"iid"`` — classical
         - ``"HC1"``, ``"HC2"``, ``"HC3"`` — heteroskedasticity-robust
         - ``{"CRV1": "firm"}`` — cluster-robust
         - ``{"CRV1": "firm + year"}`` — two-way clustering
+        - ``vce="CR2"`` / ``"CR3"`` / ``"jackknife"`` (with ``cluster=``) —
+          Pustejovsky-Tipton bias-reduced cluster-robust on the FE-absorbed
+          within design; matches R ``clubSandwich::vcovCR(plm)``.
+        - ``vce="wild"`` (with ``cluster=``) — WCR wild cluster bootstrap
+          (Cameron-Gelbach-Miller 2008); validated against Stata ``boottest``.
+        - ``vce="conley"`` (with ``conley_lat=/conley_lon=/conley_cutoff=``)
+          — Conley spatial HAC (Stata ``acreg`` planar-distance convention).
     weights : str, optional
         Column name for regression weights.
     ssc : optional
@@ -566,6 +573,19 @@ def feols(
         Collinearity tolerance.
     lean : bool, default False
         If True, drop large intermediate arrays to save memory.
+    cluster : str, optional
+        Cluster id column for the extended ``vce=`` menu; also a shorthand
+        for one-way ``{"CRV1": cluster}``.
+    wild_reps : int, default 999
+        Bootstrap replications for ``vce="wild"``.
+    wild_weight_type : str, default "rademacher"
+        Wild weight distribution (``"rademacher"``, ``"webb"``, ``"mammen"``).
+    seed : int, optional
+        RNG seed for ``vce="wild"``.
+    conley_lat, conley_lon : str, optional
+        Coordinate columns (decimal degrees) for ``vce="conley"``.
+    conley_cutoff : float, optional
+        Conley distance cutoff in km for ``vce="conley"``.
     **kwargs
         Additional arguments passed to ``pyfixest.feols()``.
 
@@ -719,9 +739,19 @@ def fepois(
     data : pd.DataFrame
         Input dataset.
     vcov : str or dict, optional
-        Variance-covariance estimator.
+        Variance-covariance estimator (``vce=`` is the canonical alias).
+        Besides the pyfixest values (``"iid"``, ``"HC1"``,
+        ``{"CRV1": "firm"}``, ...), accepts the extended menu:
+
+        - ``vce="CR2"`` / ``"CR3"`` / ``"jackknife"`` (with ``cluster=``) —
+          clubSandwich glm bias-reduced cluster-robust SEs on the
+          FE-as-dummies design; matches R ``clubSandwich::vcovCR(glm)``.
+        - ``vce="wild"`` (with ``cluster=``) — restricted score wild cluster
+          bootstrap (Kline-Santos 2012) with Stata ``boottest``'s exact
+          studentization; bit-exact vs ``boottest`` in the enumerated regime.
     weights : str, optional
-        Column name for regression weights.
+        Column name for regression weights (not supported with the extended
+        ``vce=`` menu).
     ssc : optional
         Small-sample correction.
     fixef_rm : str, default "none"
@@ -732,6 +762,16 @@ def fepois(
         IWLS convergence tolerance.
     iwls_maxiter : int, default 25
         Max IWLS iterations.
+    cluster : str, optional
+        Cluster id column for the extended ``vce=`` menu; also a shorthand
+        for one-way ``{"CRV1": cluster}``.
+    wild_reps : int, default 9999
+        Replications for ``vce="wild"``. When ``2**G <= wild_reps`` the full
+        Rademacher grid is enumerated (deterministic).
+    wild_weight_type : str, default "rademacher"
+        Wild weight distribution (``"rademacher"`` or ``"webb"``).
+    seed : int, optional
+        RNG seed for sampled (non-enumerated) ``vce="wild"`` draws.
     **kwargs
         Additional arguments passed to ``pyfixest.fepois()``.
 
@@ -861,12 +901,22 @@ def feglm(
     family : str, default "gaussian"
         GLM family: ``"gaussian"``, ``"logit"``, ``"probit"``.
     vcov : str or dict, optional
-        Variance-covariance estimator. Also accepts ``vce="CR2"``/``"CR3"``/
-        ``"jackknife"`` (with ``cluster=``) for the clubSandwich bias-reduced
-        cluster-robust SEs.
+        Variance-covariance estimator (``vce=`` is the canonical alias). Also
+        accepts ``vce="CR2"``/``"CR3"``/``"jackknife"`` (with ``cluster=``)
+        for the clubSandwich bias-reduced cluster-robust SEs, and
+        ``vce="wild"`` (with ``cluster=``) for the restricted score wild
+        cluster bootstrap (Kline-Santos 2012; bit-exact vs Stata ``boottest``
+        in the enumerated regime).
     cluster : str, optional
-        Cluster id column for ``vce="CR2"/"CR3"/"jackknife"`` (also a shorthand
+        Cluster id column for the extended ``vce=`` menu (also a shorthand
         for one-way ``{"CRV1": cluster}``).
+    wild_reps : int, default 9999
+        Replications for ``vce="wild"``. When ``2**G <= wild_reps`` the full
+        Rademacher grid is enumerated (deterministic).
+    wild_weight_type : str, default "rademacher"
+        Wild weight distribution (``"rademacher"`` or ``"webb"``).
+    seed : int, optional
+        RNG seed for sampled (non-enumerated) ``vce="wild"`` draws.
     **kwargs
         Additional arguments passed to ``pyfixest.feglm()``.
 

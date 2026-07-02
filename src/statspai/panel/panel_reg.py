@@ -746,6 +746,32 @@ def _dispatch_panel_impl(
         GMM instrument lag range (for ``'ab'``/``'system'``).
     twostep : bool, default False
         Two-step GMM (for ``'ab'``/``'system'``).
+    vce : str, optional
+        Extended SE menu on the entity-within design (``method='fe'`` only,
+        same canonical keyword as ``sp.regress`` / ``sp.feols``):
+
+        - ``'CR2'`` / ``'CR3'`` / ``'jackknife'`` — Pustejovsky-Tipton (2018)
+          bias-reduced cluster-robust (requires ``cluster=``; matches R
+          ``clubSandwich::vcovCR(plm, model="within")``).
+        - ``'conley'`` — Conley spatial HAC (requires
+          ``conley_lat=/conley_lon=/conley_cutoff=``; Stata ``acreg``
+          planar-distance convention).
+        - ``'wild'`` — WCR wild cluster bootstrap
+          (Cameron-Gelbach-Miller 2008; requires ``cluster=``). Point
+          estimates and CR1 SEs stand; p-values / CIs come from the
+          bootstrap.
+
+        Two-way clustering is spelled ``cluster=['a', 'b']`` (CGM 2011).
+    conley_lat, conley_lon : str, optional
+        Coordinate columns (decimal degrees) for ``vce='conley'``.
+    conley_cutoff : float, optional
+        Conley distance cutoff in km for ``vce='conley'``.
+    wild_reps : int, default 999
+        Bootstrap replications for ``vce='wild'``.
+    wild_weight_type : str, default 'rademacher'
+        Wild weight distribution (``'rademacher'``, ``'webb'``, ``'mammen'``).
+    seed : int, optional
+        RNG seed for ``vce='wild'``.
 
     Returns
     -------

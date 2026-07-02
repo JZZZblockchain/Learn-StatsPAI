@@ -1703,7 +1703,11 @@ def ppmlhdfe(
         "robust"/"hc0", "hc1", "nonrobust".
     cluster : str, optional
         Variable name for clustered standard errors (recommended for
-        gravity models, e.g. cluster on country-pair).
+        gravity models, e.g. cluster on country-pair). A pair
+        ``cluster=["a", "b"]`` requests two-way clustering
+        (Cameron-Gelbach-Miller 2011 inclusion-exclusion with the single
+        ``G_min/(G_min-1)`` small-sample factor — byte-identical to Stata
+        ``ppmlhdfe ..., cluster(a b)``).
     weights : str, optional
         Weight variable name.
     separation : bool, default True

@@ -32,20 +32,18 @@ Correia, S. (2017). "Linear Models with High-Dimensional Fixed Effects."
 
 from typing import Any, Dict, Optional, Union
 
-# Underlying estimators
-from .panel_reg import (
-    panel as _panel_classical,
-    panel_compare,
-    balance_panel,
-    PanelResults,
-    PanelCompareResults,
-    PanelRegression,
-)
+from ..exceptions import MethodIncompatibility
+from .feols import FEOLSResult
+from .feols import feols as hdfe_feols
+from .feols import hdfe_ols
+from .hdfe import Absorber, absorb_ols, demean
 from .panel_binary import panel_logit, panel_probit
 from .panel_plots import plot_within_between
-from .hdfe import Absorber, demean, absorb_ols
-from .feols import feols as hdfe_feols, hdfe_ols, FEOLSResult
-from ..exceptions import MethodIncompatibility
+
+# Underlying estimators
+from .panel_reg import PanelCompareResults, PanelRegression, PanelResults, balance_panel
+from .panel_reg import panel as _panel_classical
+from .panel_reg import panel_compare
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Unified dispatcher — sp.panel(..., method=...)
@@ -163,8 +161,11 @@ def panel(
     **kwargs
         Forwarded to the chosen estimator.  Classical methods accept
         ``robust`` / ``cluster`` / ``weights`` / ``alpha`` /
-        ``balance`` / ``lags`` / ``gmm_lags``.  HDFE accepts
-        ``cluster`` / ``se_type`` / ``wild`` / ``alpha`` etc.
+        ``balance`` / ``lags`` / ``gmm_lags``, plus (for ``method='fe'``)
+        the extended SE menu ``vce='CR2'/'CR3'/'jackknife'/'conley'/'wild'``,
+        two-way ``cluster=['a', 'b']``, ``conley_lat/lon/cutoff`` and
+        ``wild_reps`` / ``seed``.  HDFE accepts ``cluster`` / ``vce`` /
+        ``se_type`` / ``wild`` / ``alpha`` etc.
 
     Returns
     -------
