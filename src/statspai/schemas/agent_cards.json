@@ -16039,7 +16039,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "causal",
-    "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide.",
+    "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.mr(\"ivw\", beta_exposure=bx, beta_outcome=by, se_exposure=sx, se_outcome=sy)",
     "failure_modes": [
       {
@@ -16078,7 +16078,7 @@
     ],
     "reference": "Burgess et al. 2013; Bowden et al. 2015/2016/2017/2018; Verbanck et al. 2018; Hartwig et al. 2017; Sanderson et al. 2019; Zuber et al. 2020.",
     "signature": {
-      "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide.",
+      "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr",
       "parameters": {
         "properties": {
@@ -16095,10 +16095,11 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_ivw_parity.py",
       "API/unit contract evidence: tests/test_mr_frontier.py",
       "API/unit contract evidence: tests/test_dispatchers_v150.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

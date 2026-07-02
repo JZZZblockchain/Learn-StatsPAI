@@ -8832,7 +8832,7 @@
     }
   },
   {
-    "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide.",
+    "description": "Unified Mendelian Randomization dispatcher. method= selects the estimator: 'ivw' / 'egger' / 'median' / 'penalized_median' / 'mode' / 'all' (runs IVW+Egger+Median together) / 'mvmr' / 'mediation' / 'bma' (multi-exposure) / 'presso' / 'radial' / 'leave_one_out' / 'steiger' / 'heterogeneity' / 'pleiotropy_egger' / 'f_statistic' (diagnostics). Kwargs are passed through to the target function unchanged; see sp.mendelian_family guide. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr",
     "parameters": {
       "properties": {
@@ -22440,7 +22440,7 @@
     }
   },
   {
-    "description": "Compute predictive margins at specific covariate values.",
+    "description": "Compute predictive margins at specific covariate values. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "margins_at",
     "parameters": {
       "properties": {
