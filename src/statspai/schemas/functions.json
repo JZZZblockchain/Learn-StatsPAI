@@ -23991,7 +23991,7 @@
     }
   },
   {
-    "description": "Fisher's exact randomization test with enhanced features.",
+    "description": "Fisher's exact randomization test with enhanced features. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "fisher_exact",
     "parameters": {
       "properties": {
@@ -24404,7 +24404,7 @@
     }
   },
   {
-    "description": "Compute stabilized IPTW weights for time-varying treatments.",
+    "description": "Compute stabilized IPTW weights for time-varying treatments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "stabilized_weights",
     "parameters": {
       "properties": {
@@ -38419,7 +38419,7 @@
     }
   },
   {
-    "description": "Intra-class correlation for a fitted mixed model.",
+    "description": "Intra-class correlation for a fitted mixed model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "icc",
     "parameters": {
       "properties": {
@@ -38454,7 +38454,7 @@
     }
   },
   {
-    "description": "Likelihood-ratio test comparing a *restricted* and a *full* model.",
+    "description": "Likelihood-ratio test comparing a *restricted* and a *full* model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "lrtest",
     "parameters": {
       "properties": {

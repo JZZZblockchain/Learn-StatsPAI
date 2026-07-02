@@ -27013,7 +27013,7 @@
       "Correct specification of the treatment and/or outcome models."
     ],
     "category": "causal",
-    "description": "Compute stabilized IPTW weights for time-varying treatments.",
+    "description": "Compute stabilized IPTW weights for time-varying treatments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -27032,7 +27032,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Compute stabilized IPTW weights for time-varying treatments.",
+      "description": "Compute stabilized IPTW weights for time-varying treatments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "stabilized_weights",
       "parameters": {
         "properties": {
@@ -27094,8 +27094,10 @@
     },
     "stability": "stable",
     "typical_n_min": 300,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_stabilized_weights_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [

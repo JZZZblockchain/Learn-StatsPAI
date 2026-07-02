@@ -7667,7 +7667,7 @@
     "name": "finegray"
   },
   {
-    "description": "Fisher's exact randomization test with enhanced features.",
+    "description": "Fisher's exact randomization test with enhanced features. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -9399,7 +9399,7 @@
     "name": "hurdle"
   },
   {
-    "description": "Intra-class correlation for a fitted mixed model.",
+    "description": "Intra-class correlation for a fitted mixed model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -11189,7 +11189,7 @@
     "name": "lp_did"
   },
   {
-    "description": "Likelihood-ratio test comparing a *restricted* and a *full* model.",
+    "description": "Likelihood-ratio test comparing a *restricted* and a *full* model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "boundary": {
@@ -20769,7 +20769,7 @@
     "name": "sqreg"
   },
   {
-    "description": "Compute stabilized IPTW weights for time-varying treatments. Assumptions: Sequential exchangeability / no unmeasured confounding at each time point; Positivity: every treatment level is possible given the past; Correct specification of the treatment and/or outcome models. Pre-conditions: Sequentially measured covariates, (time-varying) treatment, and outcome; Models for the treatment process and the outcome (or weights). Failure modes: Stabilized weights have extreme values (positivity near-violation) -> Truncate weights, simplify the treatment model, or use a doubly-robust estimator (TMLE). Alternatives: sp.tmle, sp.g_computation, sp.ipw. Typical minimum N: 300.",
+    "description": "Compute stabilized IPTW weights for time-varying treatments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Sequential exchangeability / no unmeasured confounding at each time point; Positivity: every treatment level is possible given the past; Correct specification of the treatment and/or outcome models. Pre-conditions: Sequentially measured covariates, (time-varying) treatment, and outcome; Models for the treatment process and the outcome (or weights). Failure modes: Stabilized weights have extreme values (positivity near-violation) -> Truncate weights, simplify the treatment model, or use a doubly-robust estimator (TMLE). Alternatives: sp.tmle, sp.g_computation, sp.ipw. Typical minimum N: 300.",
     "input_schema": {
       "properties": {
         "baseline": {
