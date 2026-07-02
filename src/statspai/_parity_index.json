@@ -3817,6 +3817,49 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "function": "policy_tree",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_policy_tree_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "additional_tests": [
+        "tests/reference_parity/test_policy_tree_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
+      "function": "policy_value",
+      "notes": [
+        "Closed-form identity: the doubly-robust policy value is exactly the mean of gain scores under the policy, with degenerate-policy values (0 / mean score) and oracle dominance holding exactly."
+      ],
+      "reference": "empirical policy value V(pi) = mean(Gamma * pi) (Athey & Wager 2021)",
+      "reference_versions": {
+        "R": "R version 4.5.2 (2025-10-31)"
+      },
+      "sides": [
+        "py",
+        "R"
+      ],
+      "source": "reference_parity_frozen",
+      "status": "bit-exact",
+      "test": [
+        "tests/reference_parity/test_policy_value_parity.py"
+      ],
+      "tolerance": "V(pi) == mean(scores * policy) 1e-15 abs (observed 0)"
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],

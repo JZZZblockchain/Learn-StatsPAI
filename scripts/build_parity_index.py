@@ -878,6 +878,22 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "exactly; components recover their linear-DGP population values."
         ),
     },
+    "policy_value": {
+        "status": "bit-exact",
+        "reference": "empirical policy value V(pi) = mean(Gamma * pi) "
+        "(Athey & Wager 2021)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "V(pi) == mean(scores * policy) 1e-15 abs (observed 0)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_policy_value_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: the doubly-robust policy value is exactly "
+            "the mean of gain scores under the policy, with degenerate-policy "
+            "values (0 / mean score) and oracle dominance holding exactly."
+        ),
+    },
 }
 
 
