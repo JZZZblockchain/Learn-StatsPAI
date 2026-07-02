@@ -972,6 +972,22 @@ _FROZEN_PROMOTIONS: Dict[str, Dict[str, Any]] = {
             "across seeds."
         ),
     },
+    "lee_bounds": {
+        "status": "bit-exact",
+        "reference": "Lee (2009) trimming-bound closed form (lee2009training)",
+        "reference_versions": {"R": "R version 4.5.2 (2025-10-31)"},
+        "tolerance": "bounds / trim fraction / retention 1e-12 abs (observed <= 1e-16)",
+        "sides": ["py", "R"],
+        "test": [
+            "tests/reference_parity/test_lee_bounds_parity.py",
+        ],
+        "note": (
+            "Closed-form identity: with p = (s1 - s0) / s1 the bounds are the "
+            "top/bottom-trimmed treated means minus the control mean, matching "
+            "the hand-computed Lee (2009) definition exactly; bounds bracket "
+            "the planted effect."
+        ),
+    },
 }
 
 
