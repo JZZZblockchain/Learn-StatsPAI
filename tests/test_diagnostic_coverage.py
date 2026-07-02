@@ -756,3 +756,48 @@ def test_prose_recovery_pointers_resolve():
         "guidance prose names sp.xxx pointers that do not resolve to a callable "
         "— an agent reading the hint hits AttributeError:\n  " + "\n  ".join(dead)
     )
+
+
+# --------------------------------------------------------------------------- #
+#  next_steps() action snippets — the runnable code an agent copies must resolve
+# --------------------------------------------------------------------------- #
+#
+# ``result.next_steps()`` emits ``Step.action`` strings that are literal,
+# copy-pasteable calls — "sp.estat(result, 'all')", "sp.hausman_test(fe, re)".
+# An agent lifts the snippet and runs it verbatim, so the called function must
+# exist. This is the fifth and final recovery channel (after the three
+# structured pointer lists and the inline prose); together they guarantee every
+# sp.xxx an agent can encounter anywhere in the guidance surface is callable.
+
+
+def test_next_steps_action_snippets_resolve():
+    """Every ``sp.xxx(`` call form emitted by ``next_steps`` names a callable —
+    an agent runs the snippet verbatim, so a dead call is an immediate error."""
+    import importlib
+    import pathlib
+    import re
+
+    src = pathlib.Path(
+        importlib.import_module("statspai.core.next_steps").__file__
+    ).read_text(encoding="utf-8")
+    # Call form: sp.name( or sp.mod.name( — capture the dotted name before "(".
+    call = re.compile(r"\bsp\.([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
+    names = sorted(set(call.findall(src)))
+    assert len(names) >= 20, (
+        f"expected >=20 sp.xxx() action snippets in next_steps, found "
+        f"{len(names)} — did the module move or the emit format change?"
+    )
+
+    dead = []
+    for dotted in names:
+        obj = sp
+        for part in dotted.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                break
+        if not callable(obj):
+            dead.append(f"sp.{dotted}")
+    assert not dead, (
+        "next_steps emits runnable snippets calling functions that do not "
+        "resolve — an agent running the snippet hits an error:\n  " + "\n  ".join(dead)
+    )
