@@ -255,7 +255,7 @@
     "name": "anderson_rubin_ci"
   },
   {
-    "description": "Anderson-Rubin (1949) test -- size-correct under weak instruments.",
+    "description": "Anderson-Rubin (1949) test -- size-correct under weak instruments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -6592,7 +6592,7 @@
     "name": "ebalance"
   },
   {
-    "description": "Olea-Pflueger (2013) robust effective F statistic for weak instruments.",
+    "description": "Olea-Pflueger (2013) robust effective F statistic for weak instruments. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "endog": {
@@ -22619,7 +22619,7 @@
     "name": "tF_adjustment"
   },
   {
-    "description": "Lee-McCrary-Moreira-Porter (2022, AER) tF adjusted critical value.",
+    "description": "Lee-McCrary-Moreira-Porter (2022, AER) tF adjusted critical value. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
