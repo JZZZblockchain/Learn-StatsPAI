@@ -22530,7 +22530,7 @@
     }
   },
   {
-    "description": "Compute contrasts of predictive margins across levels of a variable.",
+    "description": "Compute contrasts of predictive margins across levels of a variable. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "contrast",
     "parameters": {
       "properties": {
@@ -22570,7 +22570,7 @@
     }
   },
   {
-    "description": "Pairwise comparisons of predictive margins across all levels.",
+    "description": "Pairwise comparisons of predictive margins across all levels. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "pwcompare",
     "parameters": {
       "properties": {
