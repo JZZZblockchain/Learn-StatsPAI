@@ -224,7 +224,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("mccrary", "pvalue"),
         threshold=0.05,
         compare="greater_passes",
-        suggest_function="sp.mccrary",
+        suggest_function="sp.mccrary_test",
         importance="high",
         rationale="Manipulation of the running variable invalidates the "
         "RD identifying assumption.",
@@ -236,7 +236,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("bandwidth_sensitivity"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.rd_bandwidth_sensitivity",
+        suggest_function="sp.rdbwsensitivity",
         importance="medium",
         rationale="Optimal-bandwidth selection is a researcher degree "
         "of freedom; reviewers expect a sensitivity sweep.",
@@ -248,7 +248,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("placebo_cutoff"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.rd_placebo",
+        suggest_function="sp.rdplacebo",
         importance="medium",
         rationale="A real RD effect should not appear at off-cutoff "
         "values; placebos guard against spurious discontinuity.",
@@ -284,7 +284,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         ),
         threshold=0.05,
         compare="greater_passes",
-        suggest_function="sp.hansen_j",
+        suggest_function="sp.iv_diag",
         importance="medium",
         rationale="With ≥2 instruments, a J test rejection is direct "
         "evidence one of them is invalid.",
@@ -309,7 +309,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("overlap", "min_share"),
         threshold=_OVERLAP_MIN,
         compare="greater_passes",
-        suggest_function="sp.overlap_check",
+        suggest_function="sp.overlap_plot",
         importance="high",
         rationale="Without common support across treatment arms, IPW / "
         "matching extrapolate beyond the data.",
@@ -321,7 +321,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("balance", "max_smd_after"),
         threshold=_SMD_MAX,
         compare="less_passes",
-        suggest_function="sp.balance",
+        suggest_function="sp.balance_table",
         importance="high",
         rationale="Imbalance after matching reintroduces confounding "
         "that the design was meant to remove.",
@@ -347,7 +347,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("placebo_inference"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.synth_placebo",
+        suggest_function="sp.synth_sensitivity",
         importance="high",
         rationale="Synth p-values come from ranking treated effect among "
         "in-place placebos; without this, the estimate has no "
@@ -417,7 +417,7 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("oster"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.oster",
+        suggest_function="sp.oster_delta",
         importance="medium",
         rationale="Observational designs cannot rule out unobserved "
         "confounders; sensitivity bounds tell readers how "
@@ -479,7 +479,7 @@ _REGRESSION_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("oster"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.oster",
+        suggest_function="sp.oster_delta",
         importance="medium",
         rationale="Oster bounds quantify how strong a missing covariate "
         "would need to be to nullify the result.",
@@ -491,7 +491,7 @@ _REGRESSION_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_p("cinelli_hazlett"),
         threshold=None,
         compare="exists",
-        suggest_function="sp.cinelli_hazlett",
+        suggest_function="sp.sensemakr",
         importance="low",
         rationale="The robustness-value diagnostic complements Oster "
         "and is easier to interpret graphically.",

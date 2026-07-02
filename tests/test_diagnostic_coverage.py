@@ -582,3 +582,90 @@ def test_audit_folds_live_violation_with_actionable_content():
             f"audit check {c['name']!r} is a failed finding with neither a "
             "suggest_function nor a rationale — actionless"
         )
+
+
+# --------------------------------------------------------------------------- #
+#  Reachability contract — every recovery pointer must be a real function
+# --------------------------------------------------------------------------- #
+#
+# ``test_every_violation_is_actionable`` proves the recovery text is non-empty.
+# This goes one step further: the ``sp.xxx`` names an agent is told to run —
+# violation ``alternatives`` and audit ``suggest_function`` — must resolve to a
+# *registered, callable* function. A hint that says "run sp.mccrary" when the
+# real name is ``sp.mccrary_test`` is a dead link: the agent follows the
+# guidance straight into an AttributeError, which is worse than no guidance at
+# all. Nine such dead links existed (sp.mccrary, sp.oster, sp.cinelli_hazlett,
+# sp.hansen_j, sp.balance, sp.overlap_check, sp.rd_placebo,
+# sp.rd_bandwidth_sensitivity, sp.synth_placebo) plus two in a violation
+# (sp.rd_donut, sp.bounds); this test locks the repair so no future recovery
+# pointer can regress into a dead link.
+
+
+def _sp_refs_from_alternatives():
+    """Every ``sp.xxx`` in a violation ``alternatives`` list (parsed from
+    ``_agent_summary.py`` source, so all branches are covered)."""
+    import ast
+    import importlib
+    import pathlib
+
+    src = pathlib.Path(
+        importlib.import_module("statspai.core._agent_summary").__file__
+    ).read_text(encoding="utf-8")
+    refs = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Dict) and any(
+            isinstance(k, ast.Constant) and k.value == "test" for k in node.keys
+        ):
+            for k, v in zip(node.keys, node.values):
+                if (
+                    isinstance(k, ast.Constant)
+                    and k.value == "alternatives"
+                    and isinstance(v, ast.List)
+                ):
+                    for elt in v.elts:
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                            refs.add(elt.value)
+    return refs
+
+
+def _sp_refs_from_audit_suggestions():
+    """Every ``suggest_function`` string literal in ``audit.py``."""
+    import ast
+    import importlib
+    import pathlib
+
+    src = pathlib.Path(
+        importlib.import_module("statspai.smart.audit").__file__
+    ).read_text(encoding="utf-8")
+    refs = set()
+    for node in ast.walk(ast.parse(src)):
+        if (
+            isinstance(node, ast.keyword)
+            and node.arg == "suggest_function"
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            refs.add(node.value.value)
+    return refs
+
+
+@pytest.mark.parametrize(
+    "source",
+    [_sp_refs_from_alternatives, _sp_refs_from_audit_suggestions],
+    ids=["violation_alternatives", "audit_suggest_function"],
+)
+def test_recovery_pointers_resolve_to_registered_functions(source):
+    """Every recovery pointer (``sp.xxx``) must name a registered function —
+    a dead link sends an agent following the guidance into an error."""
+    registered = set(sp.list_functions())
+    dead = []
+    for ref in sorted(source()):
+        if not ref:  # empty string = "no suggestion", legitimately allowed
+            continue
+        name = ref[3:] if ref.startswith("sp.") else ref
+        if name not in registered:
+            dead.append(ref)
+    assert not dead, (
+        "recovery pointers name functions that are not registered — an agent "
+        "following the hint hits AttributeError:\n  " + "\n  ".join(dead)
+    )

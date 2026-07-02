@@ -588,10 +588,12 @@ def causal_violations(result: Any) -> List[Dict[str, Any]]:
                     "running variable may be manipulated at the cutoff."
                 ),
                 "recovery_hint": (
-                    "Inspect manipulation mechanism; consider donut-RD "
-                    "(sp.rd_donut) or partial-identification bounds."
+                    "Re-test with the CJM density test (sp.rddensity); "
+                    "manipulation undermines RD identification, so also consider "
+                    "excluding a donut window around the cutoff or reporting "
+                    "partial-identification bounds."
                 ),
-                "alternatives": ["sp.rd_donut", "sp.bounds"],
+                "alternatives": ["sp.rddensity"],
             }
         )
 
