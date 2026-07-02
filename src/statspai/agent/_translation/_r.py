@@ -162,6 +162,43 @@ def _parse_fixest_formula(formula: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _pyfixest_fml(
+    main: str,
+    fe_terms: List[str],
+    iv_lhs: Optional[str] = None,
+    iv_rhs: Optional[str] = None,
+) -> str:
+    """Reassemble a pyfixest formula that :func:`sp.feols` accepts.
+
+    ``sp.feols`` takes the fixed effects and IV inside the formula, not as
+    separate arguments: ``depvar ~ exog | fe1 + fe2 | endog ~ instruments``
+    (each ``|`` section optional). Note the IV section has NO parentheses —
+    ``y ~ x | id | (d ~ z)`` is a pyfixest syntax error, ``y ~ x | id | d ~ z``
+    is correct. Building the fml here (rather than emitting a non-existent
+    ``sp.fixest(formula, fe=...)`` call) is what makes the translated payload
+    actually runnable.
+    """
+    parts = [main.strip()]
+    if fe_terms:
+        parts.append(" + ".join(fe_terms))
+    if iv_lhs and iv_rhs:
+        parts.append(f"{iv_lhs.strip()} ~ {iv_rhs.strip()}")
+    return " | ".join(parts)
+
+
+def _clean_cluster_terms(terms: List[str]) -> List[str]:
+    """Strip R one-sided-formula sugar (``~id``) and quotes so a cluster name
+    matches a real column: ``~id`` / ``"id"`` → ``id``."""
+    out = []
+    for t in terms:
+        if not t:
+            continue
+        t = _strip_quotes(t.strip()).lstrip("~").strip()
+        if t:
+            out.append(t)
+    return out
+
+
 def _h_feols(pos: List[str], kw: Dict[str, str], _: List[str]) -> Dict[str, Any]:
     formula = pos[0] if pos else kw.get("fml") or kw.get("formula")
     if not formula:
@@ -174,31 +211,39 @@ def _h_feols(pos: List[str], kw: Dict[str, str], _: List[str]) -> Dict[str, Any]
     cluster_kw = kw.get("cluster")
     if cluster_kw and not clusters:
         clusters = _parse_c_vector(cluster_kw)
+    clusters = _clean_cluster_terms(clusters)
 
-    # Recompose into a Wilkinson formula sp.fixest understands.
-    if iv_lhs and iv_rhs:
-        formula_out = f"{main} + ({iv_lhs} ~ {iv_rhs})"
-    else:
-        formula_out = main
-    args: Dict[str, Any] = {
-        "formula": formula_out,
-        "fe": fe_terms,
-    }
-    if clusters:
-        args["cluster"] = clusters[0] if len(clusters) == 1 else clusters
+    # Target the real, registered ``sp.feols`` (there is no ``sp.fixest``
+    # callable — it is a package). feols carries FE / IV inside the formula.
+    fml = _pyfixest_fml(main, fe_terms, iv_lhs, iv_rhs)
+    args: Dict[str, Any] = {"fml": fml}
     notes: List[str] = []
+    if clusters:
+        args["cluster"] = clusters[0]
+        if len(clusters) > 1:
+            # feols takes a single ``cluster`` kwarg; surface the first and tell
+            # the caller how to add the rest rather than silently dropping
+            # clustering dimensions.
+            joined = " + ".join(clusters)
+            notes.append(
+                f"Multiway clustering on {clusters}: sp.feols applies "
+                f"cluster={clusters[0]!r}; for the full multiway VCOV pass "
+                f"vcov={{'CRV1': {joined!r}}} explicitly."
+            )
     if "vcov" in kw:
         notes.append(
-            f"R `vcov={kw['vcov']}` not auto-translated; check sp.fixest "
-            f"`robust=` / `cluster=` options."
+            f"R `vcov={kw['vcov']}` not auto-translated; check sp.feols "
+            f"`vcov=` / `cluster=` options."
         )
     if "weights" in kw:
         args["weights"] = _strip_quotes(kw["weights"])
-    code_pairs = ["data=df", f"fe={fe_terms!r}"]
+    code_pairs = [repr(fml), "data=df"]
     if "cluster" in args:
         code_pairs.append(f"cluster={args['cluster']!r}")
-    python = f"sp.fixest({formula_out!r}, {', '.join(code_pairs)})"
-    return _emit("fixest", args, python, notes)
+    if "weights" in args:
+        code_pairs.append(f"weights={args['weights']!r}")
+    python = f"sp.feols({', '.join(code_pairs)})"
+    return _emit("feols", args, python, notes)
 
 
 def _h_felm(pos: List[str], kw: Dict[str, str], _: List[str]) -> Dict[str, Any]:

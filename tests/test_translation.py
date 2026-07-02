@@ -10,17 +10,15 @@ import json
 
 import pytest
 
-from statspai.agent._translation import (
-    from_stata,
-    from_r,
-    STATA_COMMAND_MAP,
-    R_FUNCTION_MAP,
-)
-from statspai.agent._translation._stata_lexer import (
-    parse as stata_parse,
-    StataParseError,
-)
 from statspai.agent import execute_tool, mcp_handle_request
+from statspai.agent._translation import (
+    R_FUNCTION_MAP,
+    STATA_COMMAND_MAP,
+    from_r,
+    from_stata,
+)
+from statspai.agent._translation._stata_lexer import StataParseError
+from statspai.agent._translation._stata_lexer import parse as stata_parse
 
 
 def _rpc(method, params=None, request_id=1):
@@ -97,23 +95,23 @@ TIER1_ROUND_TRIPS = [
         {"formula": "wage ~ education + experience", "robust": "hc1"},
     ),
     ("regress y x, vce(cluster id)", "regress", {"formula": "y ~ x", "cluster": "id"}),
-    # xtreg
-    ("xtreg y x, fe i(worker)", "fixest", {"formula": "y ~ x", "fe": ["worker"]}),
+    # xtreg — targets sp.feols; FE folded into the pyfixest formula (fml)
+    ("xtreg y x, fe i(worker)", "feols", {"fml": "y ~ x | worker"}),
     (
         "xtreg y x, fe vce(cluster id) i(id)",
-        "fixest",
-        {"formula": "y ~ x", "fe": ["id"], "cluster": "id"},
+        "feols",
+        {"fml": "y ~ x | id", "cluster": "id"},
     ),
     # reghdfe
     (
         "reghdfe y x, absorb(id year) cluster(id)",
-        "fixest",
-        {"formula": "y ~ x", "fe": ["id", "year"], "cluster": "id"},
+        "feols",
+        {"fml": "y ~ x | id + year", "cluster": "id"},
     ),
     (
         "reghdfe wage edu exp, absorb(firm year)",
-        "fixest",
-        {"formula": "wage ~ edu + exp", "fe": ["firm", "year"]},
+        "feols",
+        {"fml": "wage ~ edu + exp | firm + year"},
     ),
     # ivreg2
     ("ivreg2 y x1 (d = z1 z2)", "ivreg", {"formula": "y ~ x1 + (d ~ z1 z2)"}),
@@ -134,10 +132,9 @@ TIER1_ROUND_TRIPS = [
     ),
     (
         "ivreghdfe y x1 x2 (d = z1 z2), absorb(firm year) cluster(firm)",
-        "fixest",
+        "feols",
         {
-            "formula": "y ~ x1 + x2 + (d ~ z1 + z2)",
-            "fe": ["firm", "year"],
+            "fml": "y ~ x1 + x2 | firm + year | d ~ z1 + z2",
             "cluster": "firm",
         },
     ),
@@ -228,17 +225,18 @@ class TestStataDispatchPolicy:
 # ----------------------------------------------------------------------
 
 R_ROUND_TRIPS = [
-    ("feols(y ~ x, data = df)", "fixest", {"formula": "y ~ x", "fe": []}),
-    ("feols(y ~ x | id, data = df)", "fixest", {"formula": "y ~ x", "fe": ["id"]}),
+    # feols targets sp.feols; FE / IV live inside the pyfixest formula (fml)
+    ("feols(y ~ x, data = df)", "feols", {"fml": "y ~ x"}),
+    ("feols(y ~ x | id, data = df)", "feols", {"fml": "y ~ x | id"}),
     (
         'feols(y ~ x | id + year, data = df, cluster = "id")',
-        "fixest",
-        {"formula": "y ~ x", "fe": ["id", "year"], "cluster": "id"},
+        "feols",
+        {"fml": "y ~ x | id + year", "cluster": "id"},
     ),
     (
         "feols(y ~ x | id^year | (d ~ z), data = df)",
-        "fixest",
-        {"formula": "y ~ x + (d ~ z)", "fe": ["id^year"]},
+        "feols",
+        {"fml": "y ~ x | id^year | d ~ z"},
     ),
     ("lm(y ~ x + z, data = df)", "regress", {"formula": "y ~ x + z"}),
     (
@@ -330,7 +328,7 @@ class TestEconomistMigrationUseCases:
 
         assert stata["ok"] is True, stata
         assert r["ok"] is True, r
-        assert stata["tool"] == r["tool"] == "fixest"
+        assert stata["tool"] == r["tool"] == "feols"
         assert stata["arguments"] == r["arguments"]
 
     def test_csdid_and_att_gt_share_timing_shape(self):
@@ -359,7 +357,7 @@ class TestEconomistMigrationUseCases:
 
         assert stata["ok"] is True, stata
         assert r["ok"] is True, r
-        assert stata["tool"] == r["tool"] == "fixest"
+        assert stata["tool"] == r["tool"] == "feols"
         assert stata["arguments"] == r["arguments"]
 
 
@@ -374,7 +372,7 @@ class TestExecuteToolFromStata:
             "from_stata", {"command": "reghdfe y x, absorb(id) cluster(id)"}
         )
         assert out["ok"] is True
-        assert out["tool"] == "fixest"
+        assert out["tool"] == "feols"
         assert out["source"] == "stata"
 
     def test_psmatch2_via_execute_tool(self):
@@ -394,9 +392,8 @@ class TestExecuteToolFromStata:
             {"command": ("ivreghdfe y x (d = z), absorb(id year) cluster(id)")},
         )
         assert out["ok"] is True
-        assert out["tool"] == "fixest"
-        assert out["arguments"]["formula"] == "y ~ x + (d ~ z)"
-        assert out["arguments"]["fe"] == ["id", "year"]
+        assert out["tool"] == "feols"
+        assert out["arguments"]["fml"] == "y ~ x | id + year | d ~ z"
 
     def test_missing_command(self):
         out = execute_tool("from_stata", {})
@@ -407,7 +404,7 @@ class TestExecuteToolFromR:
     def test_via_execute_tool(self):
         out = execute_tool("from_r", {"expression": "feols(y ~ x | id, data=df)"})
         assert out["ok"] is True
-        assert out["tool"] == "fixest"
+        assert out["tool"] == "feols"
 
     def test_missing_expression(self):
         out = execute_tool("from_r", {})

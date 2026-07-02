@@ -11,8 +11,9 @@ The translators are exposed as MCP tools so an agent can hand a user's
 Stata or R snippet directly to the server and receive a verified
 StatsPAI call back. The output carries both:
 
-* ``python_code`` — a string the agent can paste into a chat reply
-  (``sp.fixest("y ~ x", fe=["id"], data=df, cluster="id")``).
+* ``python_code`` — a runnable string the agent can paste into a chat
+  reply (``sp.feols("y ~ x | id", data=df, cluster="id")`` — fixed effects
+  live inside the pyfixest formula, since ``sp.feols`` is the real callable).
 * ``tool_call`` — a JSON-RPC-ready ``{tool, arguments}`` payload the
   agent can dispatch via ``tools/call`` to actually run the
   translation.

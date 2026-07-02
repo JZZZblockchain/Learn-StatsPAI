@@ -152,8 +152,35 @@ def _h_regress(cmd: StataCommand) -> Dict[str, Any]:
     return _emit("regress", args, python, notes)
 
 
+def _pyfixest_fml(
+    main: str,
+    fe_terms: List[str],
+    iv_lhs: Optional[str] = None,
+    iv_rhs: Optional[str] = None,
+) -> str:
+    """Reassemble a pyfixest formula that :func:`sp.feols` accepts:
+    ``depvar ~ exog | fe1 + fe2 | endog ~ instruments`` (each ``|`` section
+    optional; the IV section has NO parentheses). Building this — instead of
+    emitting a non-existent ``sp.fixest(formula, fe=...)`` call — is what makes
+    the translated payload actually runnable via sp.feols."""
+    parts = [main.strip()]
+    if fe_terms:
+        parts.append(" + ".join(fe_terms))
+    if iv_lhs and iv_rhs:
+        parts.append(f"{iv_lhs.strip()} ~ {iv_rhs.strip()}")
+    return " | ".join(parts)
+
+
+def _feols_code(fml: str, cluster: Optional[str] = None) -> str:
+    """Runnable ``sp.feols(...)`` snippet for the translated payload."""
+    pairs = [repr(fml), "data=df"]
+    if cluster:
+        pairs.append(f"cluster={cluster!r}")
+    return f"sp.feols({', '.join(pairs)})"
+
+
 def _h_xtreg(cmd: StataCommand) -> Dict[str, Any]:
-    """``xtreg y x1 x2, fe vce(cluster id)`` → ``sp.fixest`` with entity FE."""
+    """``xtreg y x1 x2, fe vce(cluster id)`` → ``sp.feols`` with entity FE."""
     y, xs = _split_varlist_y_x(cmd.varlist)
     if y is None:
         return _emit_error("xtreg requires an outcome variable", command="xtreg")
@@ -168,12 +195,11 @@ def _h_xtreg(cmd: StataCommand) -> Dict[str, Any]:
     # that here, so the user must supply ``id`` via the option or we
     # leave a placeholder.
     panel_id = cmd.options.get("i") or cmd.options.get("id") or "<panel_id>"
-    formula = _build_formula(y, xs)
+    main = _build_formula(y, xs)
     cluster = _vce_cluster(cmd)
-    args: Dict[str, Any] = {
-        "formula": formula,
-        "fe": [panel_id] if panel_id != "<panel_id>" else [],
-    }
+    fe_terms = [panel_id] if panel_id != "<panel_id>" else []
+    fml = _pyfixest_fml(main, fe_terms)
+    args: Dict[str, Any] = {"fml": fml}
     if cluster:
         args["cluster"] = cluster
     notes: List[str] = []
@@ -188,16 +214,11 @@ def _h_xtreg(cmd: StataCommand) -> Dict[str, Any]:
             "Between-effects / first-difference variants are not yet "
             "translated — use sp.panel(method='be'/'fd') directly."
         )
-    fe_repr = args["fe"]
-    code_pairs = ["data=df", f"fe={fe_repr!r}"]
-    if cluster:
-        code_pairs.append(f"cluster={cluster!r}")
-    python = f"sp.fixest({formula!r}, {', '.join(code_pairs)})"
-    return _emit("fixest", args, python, notes)
+    return _emit("feols", args, _feols_code(fml, cluster), notes)
 
 
 def _h_reghdfe(cmd: StataCommand) -> Dict[str, Any]:
-    """``reghdfe y x, absorb(id year) cluster(id)`` → ``sp.fixest``."""
+    """``reghdfe y x, absorb(id year) cluster(id)`` → ``sp.feols``."""
     y, xs = _split_varlist_y_x(cmd.varlist)
     if y is None:
         return _emit_error("reghdfe requires an outcome variable", command="reghdfe")
@@ -206,8 +227,9 @@ def _h_reghdfe(cmd: StataCommand) -> Dict[str, Any]:
     cluster = _vce_cluster(cmd) or cmd.options.get("cluster")
     if cluster:
         cluster = cluster.split()[0]
-    formula = _build_formula(y, xs)
-    args: Dict[str, Any] = {"formula": formula, "fe": fe_list}
+    main = _build_formula(y, xs)
+    fml = _pyfixest_fml(main, fe_list)
+    args: Dict[str, Any] = {"fml": fml}
     if cluster:
         args["cluster"] = cluster
     notes: List[str] = []
@@ -216,11 +238,7 @@ def _h_reghdfe(cmd: StataCommand) -> Dict[str, Any]:
             "reghdfe with no absorb() collapses to OLS — "
             "consider sp.regress instead."
         )
-    code_pairs = ["data=df", f"fe={fe_list!r}"]
-    if cluster:
-        code_pairs.append(f"cluster={cluster!r}")
-    python = f"sp.fixest({formula!r}, {', '.join(code_pairs)})"
-    return _emit("fixest", args, python, notes)
+    return _emit("feols", args, _feols_code(fml, cluster), notes)
 
 
 def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
@@ -310,13 +328,13 @@ def _h_ivreghdfe(cmd: StataCommand) -> Dict[str, Any]:
     exog = [x for x in exog_xs.split() if x]
     main = _build_formula(y, exog)
     instr = " + ".join(x for x in instruments.split() if x)
-    formula = f"{main} + ({endog} ~ {instr})"
     absorb = cmd.options.get("absorb") or ""
     fe_list = [v for v in absorb.split() if v]
     cluster = _vce_cluster(cmd) or cmd.options.get("cluster")
     if cluster:
         cluster = cluster.split()[0]
-    args: Dict[str, Any] = {"formula": formula, "fe": fe_list}
+    fml = _pyfixest_fml(main, fe_list, endog, instr)
+    args: Dict[str, Any] = {"fml": fml}
     if cluster:
         args["cluster"] = cluster
     notes = [
@@ -325,11 +343,7 @@ def _h_ivreghdfe(cmd: StataCommand) -> Dict[str, Any]:
     ]
     if not fe_list:
         notes.append("ivreghdfe without absorb() is equivalent to IV without HDFE.")
-    code_pairs = ["data=df", f"fe={fe_list!r}"]
-    if cluster:
-        code_pairs.append(f"cluster={cluster!r}")
-    python = f"sp.fixest({formula!r}, {', '.join(code_pairs)})"
-    return _emit("fixest", args, python, notes)
+    return _emit("feols", args, _feols_code(fml, cluster), notes)
 
 
 def _h_csdid(cmd: StataCommand) -> Dict[str, Any]:
