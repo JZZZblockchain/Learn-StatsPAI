@@ -10588,7 +10588,7 @@
     "name": "lasso_iv"
   },
   {
-    "description": "LASSO-based variable selection.",
+    "description": "LASSO-based variable selection. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "eps": {
