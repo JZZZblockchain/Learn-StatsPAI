@@ -12518,7 +12518,7 @@
     "name": "mepoisson"
   },
   {
-    "description": "Summary-data meta-analysis with fixed- and random-effects pooling.",
+    "description": "Summary-data meta-analysis with fixed- and random-effects pooling. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "input_schema": {
       "properties": {
         "alpha": {
