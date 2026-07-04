@@ -2923,6 +2923,23 @@
       "tolerance": ""
     },
     {
+      "function": "jive",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_jive_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "kan_dlate",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -5755,6 +5772,23 @@
       "tolerance": ""
     },
     {
+      "function": "sqreg",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_sqreg_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "stabilized_weights",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -5768,6 +5802,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_stabilized_weights_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "stepwise",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_stepwise_parity.py"
       ],
       "tolerance": ""
     },
