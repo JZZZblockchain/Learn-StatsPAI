@@ -27,10 +27,10 @@ sp.parity_summary()           # honest coverage counts
 | --- | ---: |
 | bit-exact | 129 |
 | aligned | 7 |
-| analytical-only | 93 |
+| analytical-only | 98 |
 | external-replication | 4 |
-| **verified (subtotal)** | **233** |
-| unverified | 906 |
+| **verified (subtotal)** | **238** |
+| unverified | 901 |
 | **total registered** | **1139** |
 
 ## bit-exact — 129 functions
@@ -194,7 +194,7 @@ Reproduces published-paper numbers; sources in `tests/external_parity/PUBLISHED_
 | `g_estimation` | [`test_whatif_nhefs.py`](../tests/external_parity/test_whatif_nhefs.py) |
 | `metalearner` | [`test_causalml_book.py`](../tests/external_parity/test_causalml_book.py) |
 
-## analytical-only — 93 functions
+## analytical-only — 98 functions
 
 Recovers a known DGP truth / closed-form identity within tolerance; no cross-package reference. See `tests/reference_parity/REFERENCES.md`.
 
@@ -233,6 +233,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `front_door` | [`test_front_door_parity.py`](../tests/reference_parity/test_front_door_parity.py) |
 | `frontdoor` | [`test_frontdoor_parity.py`](../tests/reference_parity/test_frontdoor_parity.py) |
 | `gardner_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
+| `geary` | [`test_geary_parity.py`](../tests/reference_parity/test_geary_parity.py) |
 | `general_bunching` | [`test_bunching_parity.py`](../tests/reference_parity/test_bunching_parity.py) |
 | `genmatch` | [`test_matching_recovery_parity.py`](../tests/reference_parity/test_matching_recovery_parity.py) |
 | `ges` | [`test_ges_parity.py`](../tests/reference_parity/test_ges_parity.py) |
@@ -247,6 +248,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `jackknife_se` | [`test_recovery_batch2_parity.py`](../tests/reference_parity/test_recovery_batch2_parity.py) |
 | `jive` | [`test_jive_parity.py`](../tests/reference_parity/test_jive_parity.py) |
 | `kan_dlate` | [`test_dist_iv_parity.py`](../tests/reference_parity/test_dist_iv_parity.py) |
+| `knn_weights` | [`test_geary_parity.py`](../tests/reference_parity/test_geary_parity.py) (+1) |
 | `lasso_iv` | [`test_lasso_iv_parity.py`](../tests/reference_parity/test_lasso_iv_parity.py) |
 | `lasso_select` | [`test_lasso_select_parity.py`](../tests/reference_parity/test_lasso_select_parity.py) |
 | `lincom` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
@@ -255,10 +257,13 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `match` | [`test_matching_parity.py`](../tests/reference_parity/test_matching_parity.py) (+1) |
 | `matrix_completion` | [`test_matrix_completion_parity.py`](../tests/reference_parity/test_matrix_completion_parity.py) |
 | `mc_panel` | [`test_matrix_completion_parity.py`](../tests/reference_parity/test_matrix_completion_parity.py) |
+| `moran` | [`test_moran_parity.py`](../tests/reference_parity/test_moran_parity.py) |
 | `mr_egger` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
+| `mr_heterogeneity` | [`test_mr_diagnostics_parity.py`](../tests/reference_parity/test_mr_diagnostics_parity.py) |
 | `mr_ivw` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
 | `mr_leave_one_out` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
 | `mr_median` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
+| `mr_pleiotropy_egger` | [`test_mr_diagnostics_parity.py`](../tests/reference_parity/test_mr_diagnostics_parity.py) |
 | `mr_presso` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
 | `mr_radial` | [`test_mr_parity.py`](../tests/reference_parity/test_mr_parity.py) |
 | `network_exposure` | [`test_interference_parity.py`](../tests/reference_parity/test_interference_parity.py) |
@@ -294,6 +299,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `wild_cluster_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
-## unverified — 906 functions
+## unverified — 901 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

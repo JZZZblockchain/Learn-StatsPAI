@@ -2261,6 +2261,23 @@
       "tolerance": ""
     },
     {
+      "function": "geary",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_geary_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],
@@ -3028,6 +3045,24 @@
       "tolerance": "gap = rate + composition + interaction 1e-12 abs (observed 0)"
     },
     {
+      "function": "knn_weights",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_geary_parity.py",
+        "tests/reference_parity/test_moran_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "lasso_iv",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -3784,6 +3819,23 @@
       "tolerance": "rel_est<=1e-06, rel_se<=5e-05"
     },
     {
+      "function": "moran",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_moran_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],
@@ -3820,6 +3872,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_mr_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "mr_heterogeneity",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_mr_diagnostics_parity.py"
       ],
       "tolerance": ""
     },
@@ -3871,6 +3940,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_mr_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "mr_pleiotropy_egger",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_mr_diagnostics_parity.py"
       ],
       "tolerance": ""
     },
