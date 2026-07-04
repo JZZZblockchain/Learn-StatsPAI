@@ -38988,7 +38988,7 @@
     }
   },
   {
-    "description": "Build a translog design matrix from Cobb-Douglas inputs.",
+    "description": "Build a translog design matrix from Cobb-Douglas inputs. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "translog_design",
     "parameters": {
       "properties": {
