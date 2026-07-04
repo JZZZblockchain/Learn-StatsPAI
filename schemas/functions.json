@@ -34402,7 +34402,7 @@
     }
   },
   {
-    "description": "Test for differential attrition in an RCT.",
+    "description": "Test for differential attrition in an RCT. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "attrition_test",
     "parameters": {
       "properties": {
