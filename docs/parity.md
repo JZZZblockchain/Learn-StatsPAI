@@ -307,7 +307,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `tF_critical_value` | [`test_tf_critical_value_parity.py`](../tests/reference_parity/test_tf_critical_value_parity.py) |
 | `test` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
 | `translog_design` | [`test_translog_design_parity.py`](../tests/reference_parity/test_translog_design_parity.py) |
-| `wild_cluster_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) |
+| `wild_cluster_bootstrap` | [`test_wcb_recovery_parity.py`](../tests/reference_parity/test_wcb_recovery_parity.py) (+1) |
 | `wooldridge_did` | [`test_did_variants_parity.py`](../tests/reference_parity/test_did_variants_parity.py) |
 
 ## unverified — 890 functions
