@@ -7391,7 +7391,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy.",
+    "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -7430,7 +7430,7 @@
     ],
     "reference": "Bowden et al. (2017)",
     "signature": {
-      "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy.",
+      "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_heterogeneity",
       "parameters": {
         "properties": {
@@ -7467,9 +7467,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_diagnostics_parity.py",
       "API/unit contract evidence: tests/test_mr_diagnostics.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -7487,7 +7488,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy.",
+    "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -7526,7 +7527,7 @@
     ],
     "reference": "Bowden et al. (2015)",
     "signature": {
-      "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy.",
+      "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_pleiotropy_egger",
       "parameters": {
         "properties": {
@@ -7554,10 +7555,11 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_diagnostics_parity.py",
       "API/unit contract evidence: tests/test_mr_diagnostics.py",
       "API/unit contract evidence: tests/test_correctness_v150.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

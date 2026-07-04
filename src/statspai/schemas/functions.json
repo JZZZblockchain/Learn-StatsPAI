@@ -4006,7 +4006,7 @@
     }
   },
   {
-    "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy.",
+    "description": "Cochran's Q (IVW) or Ruecker's Q' (Egger) heterogeneity statistic with I^2, used to detect horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_heterogeneity",
     "parameters": {
       "properties": {
@@ -4041,7 +4041,7 @@
     }
   },
   {
-    "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy.",
+    "description": "Formal MR-Egger intercept test for directional (unbalanced) horizontal pleiotropy. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_pleiotropy_egger",
     "parameters": {
       "properties": {
@@ -40839,7 +40839,7 @@
     }
   },
   {
-    "description": "Global Moran's I -- test for global spatial autocorrelation.",
+    "description": "Global Moran's I -- test for global spatial autocorrelation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "moran",
     "parameters": {
       "properties": {
@@ -40955,7 +40955,7 @@
     }
   },
   {
-    "description": "Global Geary's C -- squared-difference measure of spatial autocorrelation.",
+    "description": "Global Geary's C -- squared-difference measure of spatial autocorrelation. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "geary",
     "parameters": {
       "properties": {
@@ -41203,7 +41203,7 @@
     }
   },
   {
-    "description": "k-nearest-neighbour spatial weights from point coordinates.",
+    "description": "k-nearest-neighbour spatial weights from point coordinates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "knn_weights",
     "parameters": {
       "properties": {
