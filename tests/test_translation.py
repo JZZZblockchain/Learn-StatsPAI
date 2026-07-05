@@ -1360,3 +1360,66 @@ def test_unified_translation_trust_sweep(command, channel):
         f"translation trust sweep failed for {command!r} on "
         f"{len(failures)} channel(s):\n  " + "\n  ".join(failures)
     )
+
+
+# ----------------------------------------------------------------------
+# Known-issue guard: silent dead on-ramps in input validation
+# ----------------------------------------------------------------------
+#
+# The dispatchable contract checks that ``sp.<tool>(**args)`` is callable
+# with the *form* of the args — it does not (and cannot) verify that the
+# referenced columns exist on the data the user eventually supplies. Two
+# specific commands were observed to return ``ok=True`` despite pointing
+# at columns that the data does not have:
+#
+#   1. ``reghdfe y x, absorb(no_such_col) cluster(no_such_col)``
+#   2. ``feols(y ~ x | no_such_method, data=df)``
+#
+# In both cases the user copy-pastes the emitted python_code, the call
+# fails at fit time with a KeyError / NameError deep inside pyfixest, and
+# the *translation* said everything was fine. The migration-trust surface
+# is a contract to translate what the user wrote, not a polite way to
+# say yes while dropping the assertion.
+#
+# These tests are xfail with a strict reason. When the handler-side
+# validation lands (in a separate fix), they flip green and signal the
+# regression is closed.
+#
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Translation handler does not yet validate referenced columns / "
+        "method names against the user's data. The emitted code fits but "
+        "later raises KeyError / NameError at fit time, after the user "
+        "trusts the ok=True. Fix: from_stata / from_r should fail loud "
+        "with a column-missing / method-not-valid error when the "
+        "command references identifiers that have no correspondence in "
+        "sp's estimator argument vocabulary."
+    ),
+    strict=True,
+)
+@pytest.mark.parametrize(
+    "command,channel",
+    [
+        ("reghdfe y x, absorb(no_such_col) cluster(no_such_col)", "stata"),
+        ("feols(y ~ x | no_such_method, data=df)", "r"),
+    ],
+    ids=lambda x: x if isinstance(x, str) else x[:50],
+)
+def test_translation_does_not_silently_succeed_on_invalid_input(command, channel):
+    """Once the handler-side input validation lands, both translations must
+    return ok=False with a column-missing / method-not-valid error rather
+    than silently emitting a dead on-ramp the user only discovers at fit
+    time."""
+    translate = from_stata if channel == "stata" else from_r
+    out = translate(command)
+    assert out.get("ok") is False, (
+        f"{command!r}: translator returned ok=True despite an unresolvable "
+        f"reference ({out.get('arguments', {})!s}) — the user copy-pastes "
+        f"the code and the call fails at fit time. Expected ok=False with an "
+        f"actionable error."
+    )
+    # When fix lands, the error must point the user somewhere useful.
+    err = out.get("error", "")
+    assert err, f"{command!r}: ok=False but no error message"
