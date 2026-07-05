@@ -5952,7 +5952,7 @@
     }
   },
   {
-    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_mediation",
     "parameters": {
       "properties": {

@@ -11161,7 +11161,7 @@
       "Delta-method SE for the indirect effect treats the step components as combinable, assuming approximate normality of the IVW/MVMR estimates."
     ],
     "category": "mendelian",
-    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -11187,7 +11187,7 @@
     ],
     "reference": "Burgess, Daniel, Butterworth, Thompson (IJE 2015).",
     "signature": {
-      "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+      "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_mediation",
       "parameters": {
         "properties": {
@@ -11220,9 +11220,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_mediation_parity.py",
       "API/unit contract evidence: tests/test_mr_extensions.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
