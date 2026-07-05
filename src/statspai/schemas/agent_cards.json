@@ -5964,7 +5964,7 @@
       "Stabilized weights use baseline-only covariates in the numerator; weights have mean about 1 and finite variance under correct specification."
     ],
     "category": "censoring",
-    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -5990,7 +5990,7 @@
     ],
     "reference": "Robins & Finkelstein (2000); Cole & Hernan (2008)",
     "signature": {
-      "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+      "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "ipcw",
       "parameters": {
         "properties": {
@@ -6058,9 +6058,10 @@
     "stability": "stable",
     "typical_n_min": 200,
     "validation_notes": [
+      "tests/reference_parity/test_ipcw_parity.py",
       "API/unit contract evidence: tests/test_target_trial.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [

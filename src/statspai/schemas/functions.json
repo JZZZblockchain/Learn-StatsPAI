@@ -3215,7 +3215,7 @@
     }
   },
   {
-    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "ipcw",
     "parameters": {
       "properties": {
