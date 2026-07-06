@@ -3215,7 +3215,7 @@
     }
   },
   {
-    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "ipcw",
     "parameters": {
       "properties": {
@@ -5919,7 +5919,7 @@
     }
   },
   {
-    "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength.",
+    "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_multivariable",
     "parameters": {
       "properties": {
@@ -5952,7 +5952,7 @@
     }
   },
   {
-    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_mediation",
     "parameters": {
       "properties": {
@@ -6020,7 +6020,7 @@
     }
   },
   {
-    "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression).",
+    "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_lap",
     "parameters": {
       "properties": {
@@ -6123,7 +6123,7 @@
     }
   },
   {
-    "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info.",
+    "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "grapple",
     "parameters": {
       "properties": {
@@ -6168,7 +6168,7 @@
     }
   },
   {
-    "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously.",
+    "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_cml",
     "parameters": {
       "properties": {
@@ -6208,7 +6208,7 @@
     }
   },
   {
-    "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model.",
+    "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "mr_raps",
     "parameters": {
       "properties": {
@@ -7909,7 +7909,7 @@
     }
   },
   {
-    "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor.",
+    "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "bcf_factor_exposure",
     "parameters": {
       "properties": {
@@ -18378,7 +18378,7 @@
     }
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "calibration_test",
     "parameters": {
       "properties": {
@@ -18411,7 +18411,7 @@
     }
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "test_calibration",
     "parameters": {
       "properties": {
@@ -18444,7 +18444,7 @@
     }
   },
   {
-    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023).",
+    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "rate",
     "parameters": {
       "properties": {
@@ -18495,7 +18495,7 @@
     }
   },
   {
-    "description": "Half-sample bootstrap variance of the ATE/GATE estimate.",
+    "description": "Half-sample bootstrap variance of the ATE/GATE estimate. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "honest_variance",
     "parameters": {
       "properties": {
@@ -19533,7 +19533,7 @@
     }
   },
   {
-    "description": "Confidence interval via bootstrap p-value inversion.",
+    "description": "Confidence interval via bootstrap p-value inversion. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "wild_cluster_ci_inv",
     "parameters": {
       "properties": {
@@ -21021,7 +21021,7 @@
     }
   },
   {
-    "description": "Estimate geo-experiment lift via synthetic control.",
+    "description": "Estimate geo-experiment lift via synthetic control. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "geolift",
     "parameters": {
       "properties": {
@@ -25727,7 +25727,7 @@
     }
   },
   {
-    "description": "Bayesian synthetic control.",
+    "description": "Bayesian synthetic control. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "bayes_synth",
     "parameters": {
       "properties": {

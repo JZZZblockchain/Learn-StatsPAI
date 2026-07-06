@@ -280,27 +280,35 @@ R_ROUND_TRIPS = [
         "melogit",
         {"y": "y", "x_fixed": ["x"], "group": "group"},
     ),
-    # Panel
+    # Panel — sp.panel uses keyword args entity/time (not id/time); entity must
+    # be supplied (error otherwise) so the test case keeps index=c("id","t").
     (
         'plm(y ~ x, data = df, model = "within", index = c("id", "t"))',
         "panel",
-        {"formula": "y ~ x", "method": "within", "id": "id", "time": "t"},
+        {"formula": "y ~ x", "entity": "id", "time": "t", "method": "within"},
     ),
     (
-        'plm(y ~ x, data = df, model = "random")',
+        'plm(y ~ x, data = df, model = "random", index = c("id", "t"))',
         "panel",
-        {"formula": "y ~ x", "method": "random"},
+        {"formula": "y ~ x", "entity": "id", "time": "t", "method": "random"},
     ),
-    # MatchIt
+    # MatchIt — sp.match takes y (outcome) / treat / covariates (kw), not
+    # a formula. Translator uses the LHS as outcome and falls back to LHS
+    # as treatment if no ``treat=`` override is given.
     (
         'matchit(treat ~ x1 + x2, data = df, method = "nearest")',
         "match",
-        {"formula": "treat ~ x1 + x2", "method": "nn"},
+        {
+            "y": "treat",
+            "treat": "treat",
+            "covariates": ["x1", "x2"],
+            "method": "nearest",
+        },
     ),
     (
         'matchit(treat ~ x1, data = df, method = "genetic")',
         "match",
-        {"formula": "treat ~ x1", "method": "genmatch"},
+        {"y": "treat", "treat": "treat", "covariates": ["x1"], "method": "genetic"},
     ),
 ]
 
@@ -551,12 +559,11 @@ TIER2_ROUND_TRIPS = [
         },
     ),
     # Postestimation
-    ("margins, dydx(treat)", "margins", {"variables": [], "dydx": ["treat"]}),
+    ("margins, dydx(treat)", "margins", {"dydx": ["treat"]}),
     ("contrast x1", "contrast", {"terms": ["x1"]}),
     ("test x1 x2", "test", {"terms": ["x1", "x2"]}),
-    # Panel declaration (no-op)
-    ("xtset id year", "xtset", {"id": "id", "time": "year"}),
-    ("tsset year", "xtset", {"id": "year"}),
+    # xtset / tsset are intentionally excluded: no sp equivalent, the
+    # translator now fails loud with a note pointing at sp.panel / sp.feols.
 ]
 
 
@@ -696,9 +703,15 @@ class TestTier2EdgeCases:
         assert "time" in out["error"]
 
     def test_xtset_handles_time_only_form(self):
+        # xtset / tsset have no sp equivalent — the translator must fail
+        # loud (ok=False) with a note pointing at sp.panel / sp.feols, not
+        # silently emit a dead tool name + placeholder.
         out = from_stata("tsset year")
-        assert out["ok"] is True
-        assert out["arguments"]["id"] == "year"
+        assert out["ok"] is False
+        assert (
+            "panel" in out.get("error", "").lower()
+            or "feols" in out.get("error", "").lower()
+        )
 
     def test_tobit_string_bounds_ignored(self):
         # ``ll(.)`` is Stata's missing literal; we should ignore.
@@ -745,7 +758,10 @@ class TestStataHandlerCoverage:
         # Commands whose contract is a dedicated behaviour test rather than a
         # round-trip (they intentionally do not produce a runnable payload):
         #   xtdpdsys — system GMM unsupported → test_xtdpdsys_fails_loud_as_unsupported
+        #   xtset / tsset — no sp equivalent; translator fails loud →
+        #     test_xtset_handles_time_only_form
         covered.add("xtdpdsys")
+        covered.add("xtset")
         # Each handler should have at least one alias covered.
         handler_to_aliases = {}
         for alias, h in STATA_COMMAND_MAP.items():
@@ -1009,3 +1025,401 @@ def test_cross_translator_hdfe_agrees_numerically():
         df,
         "reghdfe vs feols",
     )
+
+
+# ----------------------------------------------------------------------
+# python_code ↔ arguments round-trip — copy-paste must match dispatch
+# ----------------------------------------------------------------------
+#
+# Each translation emits BOTH a ``python_code`` string (for an LLM to paste
+# into a chat reply) AND a structured ``arguments`` dict (for an LLM to
+# dispatch via tools/call). An agent following one path and a user following
+# the other must reach the same model. The previous round of fixes caught
+# a real divergence here: ``_h_glm_like`` was writing ``args["robust"]`` but
+# leaving it out of ``python_code`` — copy-paste ran the wrong model while
+# dispatch ran the right one, with no error from either path. This contract
+# parses the emitted code back to a dict and asserts equality with the
+# structured ``arguments``, mod the data carrier (``data=df``).
+
+
+def _parse_python_call(code):
+    """Parse ``sp.fn(args..., kw=val)`` and return (tool, kwargs) where every
+    value is a plain Python value. Returns None on parse failure or a
+    placeholder / comment snippet.
+    """
+    import ast
+
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError:
+        return None
+    if not tree.body or not isinstance(tree.body[0], ast.Expr):
+        return None
+    call = tree.body[0].value
+    if not isinstance(call, ast.Call):
+        return None
+    f = call.func
+    if isinstance(f, ast.Name):
+        tool = f.id
+    elif isinstance(f, ast.Attribute):
+        tool = f"sp.{f.attr}"
+    else:
+        return None
+    out = {}
+
+    def _val(v):
+        if isinstance(v, (ast.List, ast.Dict, ast.Tuple, ast.Set)):
+            try:
+                return ast.literal_eval(v)
+            except Exception:
+                return ast.unparse(v)
+        if isinstance(v, ast.Constant):
+            return v.value
+        if isinstance(v, ast.Name):
+            return v.id
+        if (
+            isinstance(v, ast.UnaryOp)
+            and isinstance(v.op, ast.USub)
+            and isinstance(v.operand, ast.Constant)
+        ):
+            return -v.operand.value
+        return ast.unparse(v)
+
+    for k in call.keywords or []:
+        if k.arg is None:
+            continue
+        out[k.arg] = _val(k.value)
+    import inspect
+
+    try:
+        sig = inspect.signature(
+            getattr(__import__("statspai"), tool.removeprefix("sp."), None)
+        )
+    except Exception:
+        sig = None
+    params = list(sig.parameters.values()) if sig else []
+    for pos, a in enumerate(call.args):
+        if pos < len(params):
+            out[params[pos].name] = _val(a)
+        else:
+            out[f"_pos{pos}"] = _val(a)
+    return tool, out
+
+
+def _code_args_agree(payload, *, allow_postest=False):
+    """Assert python_code and arguments describe the same ``sp.<tool>`` call.
+
+    A few tools (margins / contrast / test / boottest / wild_cluster_boot) take
+    a fitted result as a positional argument, so ``python_code`` references
+    ``result`` while ``arguments`` does not — the agent is expected to pipe
+    the result in. That is a partial translation by design; pass
+    ``allow_postest=True`` to allow that asymmetry. Otherwise every
+    key in args must appear in code with the same value (and vice versa
+    for keys in code that are not the data carrier).
+    """
+    code = payload.get("python_code", "")
+    if not code or code.lstrip().startswith("#"):
+        return  # placeholder / comment snippet
+    parsed = _parse_python_call(code)
+    if parsed is None:
+        return
+    tool, code_args = parsed
+    expected_tool = f"sp.{payload['tool']}"
+    if tool != expected_tool:
+        raise AssertionError(
+            f"{payload.get('python_code', '')!r}: tool mismatch — "
+            f"python_code calls {tool!r} but arguments target {expected_tool!r}."
+        )
+    args = dict(payload["arguments"])
+    args.pop("data", None)
+    code_args.pop("data", None)
+    # Allow postestimation tools (margins / contrast / test / wild_cluster_boot):
+    # they take a fitted ``result`` as the first argument in python_code while
+    # args has no ``result`` key (the agent pipes the previous estimator's
+    # result_id in). Match either positional ``_pos0`` or keyword ``result``.
+    if allow_postest:
+        if code_args.get("_pos0") == "result":
+            code_args.pop("_pos0", None)
+        if code_args.get("result") == "result":
+            code_args.pop("result", None)
+    for k, v in code_args.items():
+        if k.startswith("_pos"):
+            # Extra positional with no parameter name — can't match. Skip
+            # unless the handler explicitly named it elsewhere.
+            continue
+        if k not in args:
+            raise AssertionError(
+                f"{code!r}: key {k!r}={v!r} present in python_code but not "
+                f"in arguments (args={args})."
+            )
+        if args[k] != v:
+            raise AssertionError(
+                f"{code!r}: key {k!r} mismatch — python_code has {v!r}, "
+                f"arguments has {args[k]!r}."
+            )
+    for k, v in args.items():
+        if k not in code_args:
+            raise AssertionError(
+                f"{code!r}: key {k!r}={v!r} present in arguments but not "
+                f"in python_code (code_args={code_args})."
+            )
+
+
+@pytest.mark.parametrize(
+    "command,channel",
+    [
+        *[
+            (c[0], "stata")
+            for c in TIER1_ROUND_TRIPS + TIER2_ROUND_TRIPS + TIER3_ROUND_TRIPS
+        ],
+        *[(c[0], "r") for c in R_ROUND_TRIPS],
+    ],
+    ids=lambda x: x if isinstance(x, str) else x[:50],
+)
+def test_python_code_and_arguments_describe_the_same_call(command, channel):
+    """For every (non-postest) translation, parsing the emitted ``python_code``
+    back to kwargs must equal the structured ``arguments`` dict — a copy-paste
+    user and a dispatch user reach the same model."""
+    translate = from_stata if channel == "stata" else from_r
+    out = translate(command)
+    if not out.get("ok"):
+        return
+    POSTEST = {"margins", "contrast", "test", "wild_cluster_bootstrap", "mi_estimate"}
+    allow = out.get("tool") in POSTEST
+    _code_args_agree(out, allow_postest=allow)
+
+
+# ----------------------------------------------------------------------
+# Unified 4-channel sweep — one test, one failure path
+# ----------------------------------------------------------------------
+#
+# Translation trust has four faces; running them as a single sweep gives a
+# unified failure message that points at the exact channel that broke,
+# rather than four separate test failures. A bug that affects multiple
+# channels (e.g. plm signature drift surfaced as both a "dispatch" failure
+# and an "args↔code" failure) is now reported once, with the deepest channel
+# that actually caught it.
+#
+# Order matches the trust chain:
+#   1. dispatchable   — the tool is callable and the payload runs.
+#   2. lossless        — no required arg is silently dropped.
+#   3. consistent     — python_code and arguments describe the same call.
+#   4. self-consistent — the emitted code can be parsed back to its keys.
+#
+# Numerical equivalence (the fourth trust contract, in a separate suite)
+# is excluded here because it needs synthetic data; this sweep is
+# structural-only so it runs in microseconds across every command.
+
+
+POSTEST_TOOLS = {"margins", "contrast", "test", "wild_cluster_bootstrap", "mi_estimate"}
+
+
+def _channel_dispatchable(out, df):
+    """Channel 1: payload is dispatchable — tool exists, args accepted, runs."""
+    if out.get("tool") in POSTEST_TOOLS:
+        return  # partial translations handled by postest allowlist
+    import statspai as sp
+
+    tool = out["tool"]
+    fn = getattr(sp, tool, None)
+    if fn is None or not callable(fn):
+        raise AssertionError(
+            f"channel=dispatchable: sp.{tool} is not callable — "
+            f"the translated tool name is a dead on-ramp."
+        )
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            res = fn(data=df, **out["arguments"])
+        except TypeError as e:
+            raise AssertionError(
+                f"channel=dispatchable: sp.{tool}(**{out['arguments']}) raised "
+                f"TypeError — {e}. An argument name is likely wrong or a required "
+                f"kwarg is missing."
+            ) from None
+        except Exception:
+            # Numerical / convergence errors are not the dispatch channel's
+            # concern — they belong to numerical faithfulness.
+            return
+
+
+def _channel_lossless(out):
+    """Channel 2: no arg name in arguments is silently dropped by dispatch."""
+    if out.get("tool") in POSTEST_TOOLS:
+        return
+    import inspect
+
+    import statspai as sp
+
+    tool = out["tool"]
+    fn = getattr(sp, tool, None)
+    if fn is None:
+        return
+    try:
+        sig = inspect.signature(fn)
+    except (ValueError, TypeError):
+        return
+    has_var_kwargs = any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values())
+    if has_var_kwargs:
+        return  # unknown kwargs land in **kwargs; only the structural test
+        # (channel 3) can catch silent drops there.
+    accepted = {
+        p.name
+        for p in sig.parameters.values()
+        if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+    }
+    unknown = set(out["arguments"]) - accepted - {"data"}
+    assert not unknown, (
+        f"channel=lossless: tool sp.{tool} rejects {sorted(unknown)} (no "
+        f"**kwargs to absorb them). One of those args is being silently dropped "
+        f"at dispatch — the call shape looks runnable but fits a different model."
+    )
+
+
+def _channel_consistent(out):
+    """Channel 3: python_code and arguments describe the same call.
+
+    Both must be derivable from one another. A divergence means a user
+    who copy-pastes the python_code gets a different model than a user who
+    dispatches (tool, arguments).
+    """
+    allow = out.get("tool") in POSTEST_TOOLS
+    _code_args_agree(out, allow_postest=allow)
+
+
+def _channel_self_consistent(out):
+    """Channel 4: the emitted python_code can be parsed back to its keys.
+
+    This is the lightest channel — it just confirms the code is syntactically
+    a real sp.<tool> call with extractable kwargs. Catches malformed strings,
+    placeholder snippets that were never real code, etc.
+    """
+    code = out.get("python_code", "")
+    if not code or code.lstrip().startswith("#"):
+        if out.get("tool") in POSTEST_TOOLS:
+            return
+        raise AssertionError(
+            f"channel=self_consistent: python_code is a placeholder/comment: "
+            f"{code!r} — the translator emitted no runnable call."
+        )
+    parsed = _parse_python_call(code)
+    if parsed is None:
+        raise AssertionError(
+            f"channel=self_consistent: python_code is not parseable: {code!r}"
+        )
+
+
+#: Same dataset shape used by the numerical-equivalence contract — built
+#: lazily so the sweep is cheap on commands that don't need a dataframe.
+def _sweep_df():
+    import pandas as pd
+
+    return _num_df()
+
+
+@pytest.mark.parametrize(
+    "command,channel",
+    [
+        *[
+            (c[0], "stata")
+            for c in TIER1_ROUND_TRIPS + TIER2_ROUND_TRIPS + TIER3_ROUND_TRIPS
+        ],
+        *[(c[0], "r") for c in R_ROUND_TRIPS],
+    ],
+    ids=lambda x: x if isinstance(x, str) else x[:50],
+)
+def test_unified_translation_trust_sweep(command, channel):
+    """For every (non-postest) translation, all four trust channels must
+    pass: dispatchable, lossless, consistent, self-consistent. A single
+    failure points at the violated channel; if multiple channels break, we
+    surface all of them so the regression can be diagnosed in one read."""
+    translate = from_stata if channel == "stata" else from_r
+    out = translate(command)
+    if not out.get("ok"):
+        # translators already fail-loud with suggestions; covered by the
+        # existing dispatch-policy tests. Skip — nothing for the sweep to
+        # verify.
+        return
+    failures: list = []
+    for name, fn in (
+        ("self_consistent", _channel_self_consistent),
+        ("dispatchable", _channel_dispatchable),
+        ("lossless", _channel_lossless),
+        ("consistent", _channel_consistent),
+    ):
+        try:
+            if name == "dispatchable":
+                fn(out, _sweep_df())
+            else:
+                fn(out)
+        except AssertionError as e:
+            failures.append(str(e))
+    assert not failures, (
+        f"translation trust sweep failed for {command!r} on "
+        f"{len(failures)} channel(s):\n  " + "\n  ".join(failures)
+    )
+
+
+# ----------------------------------------------------------------------
+# Known-issue guard: silent dead on-ramps in input validation
+# ----------------------------------------------------------------------
+#
+# The dispatchable contract checks that ``sp.<tool>(**args)`` is callable
+# with the *form* of the args — it does not (and cannot) verify that the
+# referenced columns exist on the data the user eventually supplies. Two
+# specific commands were observed to return ``ok=True`` despite pointing
+# at columns that the data does not have:
+#
+#   1. ``reghdfe y x, absorb(no_such_col) cluster(no_such_col)``
+#   2. ``feols(y ~ x | no_such_method, data=df)``
+#
+# In both cases the user copy-pastes the emitted python_code, the call
+# fails at fit time with a KeyError / NameError deep inside pyfixest, and
+# the *translation* said everything was fine. The migration-trust surface
+# is a contract to translate what the user wrote, not a polite way to
+# say yes while dropping the assertion.
+#
+# These tests are xfail with a strict reason. When the handler-side
+# validation lands (in a separate fix), they flip green and signal the
+# regression is closed.
+#
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Translation handler does not yet validate referenced columns / "
+        "method names against the user's data. The emitted code fits but "
+        "later raises KeyError / NameError at fit time, after the user "
+        "trusts the ok=True. Fix: from_stata / from_r should fail loud "
+        "with a column-missing / method-not-valid error when the "
+        "command references identifiers that have no correspondence in "
+        "sp's estimator argument vocabulary."
+    ),
+    strict=True,
+)
+@pytest.mark.parametrize(
+    "command,channel",
+    [
+        ("reghdfe y x, absorb(no_such_col) cluster(no_such_col)", "stata"),
+        ("feols(y ~ x | no_such_method, data=df)", "r"),
+    ],
+    ids=lambda x: x if isinstance(x, str) else x[:50],
+)
+def test_translation_does_not_silently_succeed_on_invalid_input(command, channel):
+    """Once the handler-side input validation lands, both translations must
+    return ok=False with a column-missing / method-not-valid error rather
+    than silently emitting a dead on-ramp the user only discovers at fit
+    time."""
+    translate = from_stata if channel == "stata" else from_r
+    out = translate(command)
+    assert out.get("ok") is False, (
+        f"{command!r}: translator returned ok=True despite an unresolvable "
+        f"reference ({out.get('arguments', {})!s}) — the user copy-pastes "
+        f"the code and the call fails at fit time. Expected ok=False with an "
+        f"actionable error."
+    )
+    # When fix lands, the error must point the user somewhere useful.
+    err = out.get("error", "")
+    assert err, f"{command!r}: ok=False but no error message"

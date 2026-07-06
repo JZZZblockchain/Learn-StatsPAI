@@ -5964,7 +5964,7 @@
       "Stabilized weights use baseline-only covariates in the numerator; weights have mean about 1 and finite variance under correct specification."
     ],
     "category": "censoring",
-    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+    "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -5990,7 +5990,7 @@
     ],
     "reference": "Robins & Finkelstein (2000); Cole & Hernan (2008)",
     "signature": {
-      "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates.",
+      "description": "Inverse Probability of Censoring Weights -- corrects for informative censoring under conditional independent censoring given covariates. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "ipcw",
       "parameters": {
         "properties": {
@@ -6058,9 +6058,10 @@
     "stability": "stable",
     "typical_n_min": 200,
     "validation_notes": [
+      "tests/reference_parity/test_ipcw_parity.py",
       "API/unit contract evidence: tests/test_target_trial.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11071,7 +11072,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength.",
+    "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.mr_multivariable(df, outcome='beta_y', outcome_se='se_y', exposures=['beta_ldl','beta_hdl'])",
     "failure_modes": [
       {
@@ -11110,7 +11111,7 @@
     ],
     "reference": "Sanderson et al. (IJE 2019); Yao et al. (arXiv:2509.11519).",
     "signature": {
-      "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength.",
+      "description": "Multivariable Mendelian randomization (Sanderson-Windmeijer 2019): direct causal effects of multiple correlated exposures via weighted least-squares on SNP-summary data, with conditional F-statistics for instrument strength. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_multivariable",
       "parameters": {
         "properties": {
@@ -11145,9 +11146,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_multivariable_parity.py",
       "API/unit contract evidence: tests/test_mr_extensions.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11161,7 +11163,7 @@
       "Delta-method SE for the indirect effect treats the step components as combinable, assuming approximate normality of the IVW/MVMR estimates."
     ],
     "category": "mendelian",
-    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+    "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -11187,7 +11189,7 @@
     ],
     "reference": "Burgess, Daniel, Butterworth, Thompson (IJE 2015).",
     "signature": {
-      "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components.",
+      "description": "Two-step (network) MR: decompose the total causal effect of an exposure on an outcome into direct + indirect (mediated) components. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_mediation",
       "parameters": {
         "properties": {
@@ -11220,9 +11222,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_mediation_parity.py",
       "API/unit contract evidence: tests/test_mr_extensions.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11338,7 +11341,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression).",
+    "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.mr_lap(bx, by, sx, sy, overlap_fraction=0.4, overlap_rho=0.18)",
     "failure_modes": [
       {
@@ -11377,7 +11380,7 @@
     ],
     "reference": "Burgess, Davies & Thompson (2016) Genet Epidemiol 40(7); Mounier & Kutalik (2023) Genet Epidemiol 47(4).",
     "signature": {
-      "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression).",
+      "description": "Sample-overlap-corrected IVW MR (Burgess-Davies-Thompson 2016 closed-form correction). Removes first-order bias when exposure and outcome GWAS share participants; requires overlap_fraction and overlap_rho (e.g. from LD-score regression). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_lap",
       "parameters": {
         "properties": {
@@ -11425,9 +11428,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_lap_parity.py",
       "API/unit contract evidence: tests/test_mr_frontier.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11563,7 +11567,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info.",
+    "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.grapple(bx, by, sx, sy)",
     "failure_modes": [
       {
@@ -11602,7 +11606,7 @@
     ],
     "reference": "Wang, Zhao, Bowden, Hemani et al. (2021) PLoS Genet 17(6).",
     "signature": {
-      "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info.",
+      "description": "GRAPPLE: profile-likelihood MR with joint weak-instrument and balanced-pleiotropy robustness (Wang et al. 2021). Model: beta_y = beta*beta_x + u, Var(u) = se_y^2 + beta^2*se_x^2 + tau^2; jointly MLE over (beta, tau^2) via L-BFGS-B; SE from observed Fisher info. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "grapple",
       "parameters": {
         "properties": {
@@ -11649,9 +11653,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_grapple_parity.py",
       "API/unit contract evidence: tests/test_mr_frontier.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11669,7 +11674,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously.",
+    "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.mr_cml(bx, by, sx, sy)",
     "failure_modes": [
       {
@@ -11708,7 +11713,7 @@
     ],
     "reference": "Xue, Shen & Pan (2021) AJHG 108(7).",
     "signature": {
-      "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously.",
+      "description": "MR-cML-BIC: constrained maximum-likelihood MR with L0-sparse pleiotropy (Xue, Shen & Pan 2021). Block-coordinate descent jointly updates causal beta, true exposure effects, and a K-sparse pleiotropy vector; K selected by BIC. Robust to correlated + uncorrelated pleiotropy simultaneously. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_cml",
       "parameters": {
         "properties": {
@@ -11750,9 +11755,10 @@
     "stability": "stable",
     "typical_n_min": 10,
     "validation_notes": [
+      "tests/reference_parity/test_mr_cml_parity.py",
       "API/unit contract evidence: tests/test_mr_frontier.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -11773,7 +11779,7 @@
       "Monotonicity when interpreting LATE on genetically-shifted subpopulation"
     ],
     "category": "mendelian",
-    "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model.",
+    "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.mr_raps(beta_exposure=beta_x, beta_outcome=beta_y, se_exposure=se_x, se_outcome=se_y)",
     "failure_modes": [
       {
@@ -11820,7 +11826,7 @@
     ],
     "reference": "Zhao, Wang, Hemani, Bowden & Small (2020) Annals of Statistics 48(3).",
     "signature": {
-      "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model.",
+      "description": "MR-RAPS: Robust Adjusted Profile Score for two-sample summary-data MR (Zhao et al. 2020, Annals of Statistics). Profile-likelihood MR with Tukey biweight loss + weak-instrument correction; resistant to a small fraction of gross pleiotropy outliers. Complements GRAPPLE (Gaussian) with a robust-loss variant of the same structural model. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "mr_raps",
       "parameters": {
         "properties": {
@@ -11872,9 +11878,10 @@
     "stability": "stable",
     "typical_n_min": 30,
     "validation_notes": [
+      "tests/reference_parity/test_mr_raps_parity.py",
       "API/unit contract evidence: tests/test_mr_frontier.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -14840,7 +14847,7 @@
       "The BART/forest priors are appropriate for the outcome scale."
     ],
     "category": "causal",
-    "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor.",
+    "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.bcf_factor_exposure(df, y=\"Y\", exposures=[\"z1\",\"z2\",\"z3\"], covariates=[\"x1\",\"x2\"], n_factors=2)",
     "failure_modes": [
       {
@@ -14858,7 +14865,7 @@
     ],
     "reference": "arXiv:2601.16595 (2026).",
     "signature": {
-      "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor.",
+      "description": "BCF on PCA-factor scores of a high-dimensional exposure vector (arXiv:2601.16595, 2026). Compresses exposures via SVD or user-supplied loadings, then fits one BCF per factor. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "bcf_factor_exposure",
       "parameters": {
         "properties": {
@@ -14926,9 +14933,10 @@
     "stability": "stable",
     "typical_n_min": 250,
     "validation_notes": [
+      "tests/reference_parity/test_bcf_factor_exposure_parity.py",
       "API/unit contract evidence: tests/test_bcf_ordinal.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -25767,7 +25775,7 @@
       "Honesty: separate subsamples are used to choose splits and to estimate effects."
     ],
     "category": "causal",
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -25785,7 +25793,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+      "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "calibration_test",
       "parameters": {
         "properties": {
@@ -25819,8 +25827,10 @@
     },
     "stability": "stable",
     "typical_n_min": 1000,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_calibration_test_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -25834,7 +25844,7 @@
       "Honesty: separate subsamples are used to choose splits and to estimate effects."
     ],
     "category": "causal",
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -25852,7 +25862,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).",
+      "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "test_calibration",
       "parameters": {
         "properties": {
@@ -25886,8 +25896,10 @@
     },
     "stability": "stable",
     "typical_n_min": 1000,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_calibration_test_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -25901,7 +25913,7 @@
       "Honesty: separate subsamples are used to choose splits and to estimate effects."
     ],
     "category": "causal",
-    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023).",
+    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -25919,7 +25931,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023).",
+      "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "rate",
       "parameters": {
         "properties": {
@@ -25971,8 +25983,10 @@
     },
     "stability": "stable",
     "typical_n_min": 1000,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_forest_rate_honest_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -25986,7 +26000,7 @@
       "Honesty: separate subsamples are used to choose splits and to estimate effects."
     ],
     "category": "causal",
-    "description": "Half-sample bootstrap variance of the ATE/GATE estimate.",
+    "description": "Half-sample bootstrap variance of the ATE/GATE estimate. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -26004,7 +26018,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Half-sample bootstrap variance of the ATE/GATE estimate.",
+      "description": "Half-sample bootstrap variance of the ATE/GATE estimate. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "honest_variance",
       "parameters": {
         "properties": {
@@ -26034,8 +26048,10 @@
     },
     "stability": "stable",
     "typical_n_min": 1000,
-    "validation_notes": [],
-    "validation_status": "api_stable"
+    "validation_notes": [
+      "tests/reference_parity/test_forest_rate_honest_parity.py"
+    ],
+    "validation_status": "validated"
   },
   {
     "alternatives": [
