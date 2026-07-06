@@ -9,6 +9,18 @@ All notable changes to StatsPAI will be documented in this file.
 These change DiD point estimates for affected staggered/switching designs. See
 `MIGRATION.md` before comparing new output to earlier StatsPAI runs.
 
+- **`sp.callaway_santanna(control_group="nevertreated")` now fails loudly when
+  the panel has no never-treated units** instead of silently returning
+  `ATT = 0.0`. With every unit eventually treated, each `ATT(g,t)` lost its
+  comparison cell and returned `0.0`, which aggregated to a headline ATT of
+  `0.0` — a wrong number that reads as "no effect" rather than an error (no
+  warning was emitted). The estimator now raises `MethodIncompatibility` with a
+  hint to use `control_group="notyettreated"` or add never-treated units. The
+  internal group encoding treats `NaN`/`inf` `g` as never-treated (0), so a
+  panel with any never-treated (including `NaN`-coded) unit is unaffected, and
+  `control_group="notyettreated"` is unaffected. No previously-valid estimate
+  moves — only the silent `0.0` degenerate path changes. New guard:
+  `tests/tier_eg/test_did_robustness.py::test_cs_no_never_treated_control_documented`.
 - **`sp.eigenvector_centrality` on bipartite graphs** now returns the true
   leading eigenvector instead of a spurious near-uniform vector. The score was
   computed by naive power iteration `x <- A x`, which *oscillates* on a
@@ -78,9 +90,10 @@ These change DiD point estimates for affected staggered/switching designs. See
 
 ### Added
 
-- **Parity index coverage expansion — 248 estimators now carry a graded
+- **Parity index coverage expansion — 264 estimators now carry a graded
   parity record (129 bit-exact), queryable via `sp.parity_status()` /
-  `sp.parity_summary()`. Across multiple sessions this pass added closed-form
+  `sp.parity_summary()`. This closes the Tier-D worklist of reference-less
+  estimators to zero. Across multiple sessions this pass added closed-form
   / known-truth guards across decomposition (Gelbach, Das-Gupta, Kitagawa,
   Lerman-Yitzhaki source, subgroup-Theil, natural-effects mediation,
   interventional effects, four-way-decomposition, sensitivity-mr_DL,
@@ -95,8 +108,13 @@ These change DiD point estimates for affected staggered/switching designs. See
   causal discovery (`fci`, `ges` CPDAGs), conformal (`conformal_ite`,
   `conformal_fair_ite`), interference (`cluster_cross_interference`),
   transportability (`pate`, `front_door`), QTE (`ivqreg`, `beyond_average_late`,
-  `continuous_iv_late`, `dist_iv`), and the first network rows
-  (`degree_centrality`, `betweenness_centrality`, `clustering`). Every record
+  `continuous_iv_late`, `dist_iv`), the first network rows
+  (`degree_centrality`, `betweenness_centrality`, `clustering`), and the
+  causal-forest / synthetic-control aggregates (`rate` AUTOC sign anchor +
+  `honest_variance` mean-CATE identity, `geolift` exact convex-combo lift
+  recovery, `bcf_factor_exposure` adding-up identities + effect recovery,
+  `bayes_synth` Dirichlet-simplex ATT recovery, `calibration_test` /
+  `test_calibration` BLP heterogeneity detection). Every record
   traces to a committed `tests/reference_parity/` guard; grades are honest
   (bit-exact only for machine-precision identities, analytical-only for
   DGP-recovery / coverage guarantees). See `docs/dev/parity_gap_inventory.md`.
