@@ -115,7 +115,11 @@ Card (1995) teaching dataset?
 import statspai as sp
 
 card = sp.datasets.card_1995()
-ols = sp.regress("lwage ~ educ + exper", data=card, robust="hc1")
+ols = sp.regress(
+    "lwage ~ educ + exper + expersq + black + south + smsa",
+    data=card,
+    robust="hc1",
+)
 print(ols.summary())
 ```
 
@@ -125,17 +129,25 @@ Result:
 Model: OLS
 Dependent Variable: lwage
 
-           Coefficient  Std. Error  t-statistic  P>|t|
-Intercept       4.9060      0.0599      81.8392 0.0000
-educ            0.1088      0.0042      25.8730 0.0000
-exper           0.0164      0.0014      11.3496 0.0000
+              Coefficient  Std. Error  t-statistic  P>|t|
+Intercept          4.8388      0.0637      76.0131 0.0000
+educ               0.1100      0.0041      26.5543 0.0000
+exper              0.0283      0.0054       5.2742 0.0000
+expersq           -0.0005      0.0002      -2.2132 0.0270
+black             -0.1561      0.0231      -6.7571 0.0000
+south             -0.0554      0.0193      -2.8636 0.0042
+smsa               0.0905      0.0205       4.4214 0.0000
 
-R-squared: 0.2102
+R-squared: 0.2307
 ```
 
 Read it like a Stata/R regression table: in this replica, one additional year
-of schooling is associated with about `0.109` higher log wage, before dealing
-with endogeneity.
+of schooling is associated with about `0.110` higher log wage, before dealing
+with endogeneity. Adding the standard Card (1995) controls (experience and
+its square, race, region, SMSA) lifts R² from `0.210` to `0.231` and the
+educ coefficient is essentially unchanged — the small attenuation from
+classical measurement error in `educ` persists and motivates the IV in
+example 2.
 
 ### 2. IV / 2SLS: replace `ivregress 2sls` or `AER::ivreg`
 
@@ -344,8 +356,12 @@ controls on the other, and code export for reproducibility.
 import statspai as sp
 
 card = sp.datasets.card_1995()
-r1 = sp.regress("lwage ~ educ + exper", data=card, robust="hc1")
-r2 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper", data=card)
+r1 = sp.regress(
+    "lwage ~ educ + exper + expersq + black + south + smsa",
+    data=card,
+    robust="hc1",
+)
+r2 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper + expersq + black + south + smsa", data=card)
 
 print(r1.summary())                         # human-readable table
 print(r1.tidy().head())                      # broom-style dataframe
