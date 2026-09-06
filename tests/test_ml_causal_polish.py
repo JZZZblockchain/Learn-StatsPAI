@@ -21,8 +21,8 @@ Covers:
    works.
 6. ``sp.dml_sensitivity`` (Chernozhukov-Cinelli-Newey 2022) returns RV_q,
    RV_qa, bias bound, and benchmark covariate effects.
-7. ``sp.dml_diagnostics`` returns overlap, score density, balance,
-   orthogonality test.
+7. ``sp.dml_diagnostics`` returns overlap, residual density, balance,
+   and an explicit orthogonality-test availability status.
 8. ``sp.cate_eval`` evaluates RATE/AUTOC/Qini for any CATE array
    (backbone-agnostic Yadlowsky 2025).
 9. ``CausalResult.to_docx`` writes a publication-style .docx (existing
@@ -375,9 +375,9 @@ class TestDMLDiagnostics:
         diag = sp.dml_diagnostics(res)
         assert diag.method == "PLR"
         assert diag.score_sd > 0
-        # Orthogonality score should be approximately zero by construction
-        # for PLR's psi (mean-centred residual moment).
-        assert abs(diag.orth_stat) < 1e-6
+        assert diag.orth_stat is None
+        assert diag.orth_pvalue is None
+        assert diag.orthogonality_status == "not_tested"
         # Balance table should include all four covariates
         assert set(diag.balance_table["variable"]) == {"X1", "X2", "X3", "X4"}
 
@@ -394,7 +394,7 @@ class TestDMLDiagnostics:
         diag = sp.dml_diagnostics(res)
         s = diag.summary()
         assert "Overlap" in s
-        assert "Score density" in s
+        assert "Score / residual description" in s
         assert "Orthogonality" in s
 
 

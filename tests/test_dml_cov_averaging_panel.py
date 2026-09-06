@@ -1,12 +1,12 @@
 """Coverage campaign — DML sensitivity rendering, weighted model averaging,
-weighted panel DML, and overlap/orthogonality diagnostics warnings.
+weighted panel DML, and overlap diagnostics warnings.
 
 Part of the core-module ≥95% coverage initiative
 (see ``.coverage_campaign/CAMPAIGN.md``). Drives the remaining reachable lines of
 ``dml/_sensitivity.py`` (result ``summary()`` / ``plot()``),
 ``dml/model_averaging.py`` (sample-weighted candidate fits + input validation),
 ``dml/panel_dml.py`` (sample-weighted two-way demeaning + score), and
-``dml/_diagnostics.py`` (overlap / orthogonality warning paths).
+``dml/_diagnostics.py`` (overlap warning paths).
 """
 
 from __future__ import annotations

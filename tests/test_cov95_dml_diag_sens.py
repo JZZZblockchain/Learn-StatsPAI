@@ -51,7 +51,9 @@ def test_diagnostics_plr_path(plr_result):
     assert diag.method == "PLR"
     assert not diag.overlap_table.empty
     assert diag.score_sd > 0
-    assert np.isfinite(diag.orth_stat)
+    assert diag.orth_stat is None
+    assert diag.orth_pvalue is None
+    assert diag.orthogonality_status == "not_tested"
     # Balance table built from the stashed design matrix.
     assert not diag.balance_table.empty
     assert set(["variable", "corr_d_resid", "corr_y_resid"]).issubset(
@@ -409,15 +411,16 @@ def test_diagnostics_summary_warnings():
 
 
 def test_diagnostics_constant_score_path():
-    # y_resid constant → score_sd == 0 → orth_stat 0.0 branch (line 272),
-    # skew/kurtosis 0.0 branches.
+    # y_resid constant exercises the skew/kurtosis 0.0 branches while the
+    # unavailable orthogonality statistic remains explicit.
     n = 100
     y_resid = np.full(n, 3.0)
     d_resid = np.linspace(-1, 1, n)
     res = _make_result(y_resid, d_resid)
     diag = dml_diagnostics(res)
     assert diag.score_sd == 0.0
-    assert diag.orth_stat == 0.0
+    assert diag.orth_stat is None
+    assert diag.orth_pvalue is None
     assert diag.score_skew == 0.0
 
 

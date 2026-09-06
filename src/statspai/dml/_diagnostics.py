@@ -1,4 +1,4 @@
-"""DML diagnostics: overlap, score density, balance, orthogonality.
+"""DML diagnostics: overlap, residual density, balance, and test status.
 
 Provides :func:`dml_diagnostics` returning a :class:`DMLDiagnostics`
 report bundling four standard ML-causal diagnostics:
@@ -6,15 +6,14 @@ report bundling four standard ML-causal diagnostics:
 1. **Overlap** — distribution of the cross-fitted propensity (IRM) or
    :math:`D - m̂(X)` residual (PLR). Flags propensity values within
    ``clip`` of 0/1 and ESS-style summaries.
-2. **Score density** — kernel-density / histogram of the orthogonal
-   score :math:`\\psi`; should be bell-shaped and centred at 0 under a
-   correctly identified moment.
+2. **Residual density** — histogram and descriptive moments of the
+   centred outcome residual stored by the fitted DML method.
 3. **Covariate balance after residualisation** — for each X_k,
    ``corr(X_k, d_resid)`` and ``corr(X_k, y_resid)``. Large values
    indicate the nuisance learner left structure in the data that the
    orthogonalisation cannot remove.
-4. **Orthogonality test** — :math:`\\hat E[\\psi_a]` standardised by
-   its SE; under correct nuisance estimation this ≈ 0.
+4. **Orthogonality status** — explicitly reports that a solved estimating
+   equation does not test Neyman orthogonality or identification.
 
 Each diagnostic ships with a ``.plot()`` that produces a publication-
 ready 2×2 panel matching the modelsummary / DoubleML defaults.
@@ -40,13 +39,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._result_serialize import ResultProtocolMixin
+
 
 @dataclass
-class DMLDiagnostics:
+class DMLDiagnostics(ResultProtocolMixin):
     """Bundled DML diagnostics returned by :func:`dml_diagnostics`.
 
-    Holds the overlap table, residual-balance table, score-density
-    moments, and the orthogonality test for a fitted DML estimator.
+    Holds the overlap table, residual-balance table, residual-density
+    moments, and the orthogonality-test availability for a fitted DML estimator.
     Use ``.summary()`` for the text report and ``.plot()`` for the 2x2
     diagnostic panel.
 
@@ -86,22 +87,29 @@ class DMLDiagnostics:
     # Balance after residualisation
     balance_table: pd.DataFrame = field(default_factory=pd.DataFrame)
 
-    # Score density
+    # Stored score/residual description
     score_mean: float = 0.0
     score_sd: float = 0.0
     score_skew: float = 0.0
     score_kurtosis: float = 0.0
 
-    # Orthogonality test
-    orth_stat: float = 0.0  # standardized E[ψ_a]
-    orth_pvalue: float = 1.0
+    # Orthogonality test availability. A solved estimating equation alone
+    # supplies neither a Neyman-orthogonality nor an identification test.
+    orth_stat: Optional[float] = None
+    orth_pvalue: Optional[float] = None
     orth_warning: Optional[str] = None
+    orthogonality_status: str = "not_tested"
+    orthogonality_reason: str = (
+        "A solved estimating equation is not a test of Neyman "
+        "orthogonality or identification."
+    )
     _overlap_values: np.ndarray = field(
         default_factory=lambda: np.asarray([], dtype=float),
         repr=False,
     )
     _overlap_label: str = ""
     _score: Optional[np.ndarray] = field(default=None, repr=False)
+    _score_label: str = "Centered outcome residual"
 
     def summary(self) -> str:
         lines = [
@@ -117,15 +125,16 @@ class DMLDiagnostics:
             lines.append(f"  ⚠ {self.overlap_warning}")
         lines += [
             "",
-            "[Score density]",
+            "[Score / residual description]",
+            f"  Series    : {self._score_label}",
             f"  Mean      : {self.score_mean:+.4f}",
             f"  SD        : {self.score_sd:.4f}",
             f"  Skew      : {self.score_skew:+.4f}",
             f"  Kurtosis  : {self.score_kurtosis:.4f}",
             "",
-            "[Orthogonality test (E[ψ_a] = 0)]",
-            f"  Standardised statistic : {self.orth_stat:+.4f}",
-            f"  p-value                : {self.orth_pvalue:.4f}",
+            "[Orthogonality]",
+            f"  Orthogonality: {self.orthogonality_status.replace('_', ' ')}",
+            f"  Reason: {self.orthogonality_reason}",
         ]
         if self.orth_warning:
             lines.append(f"  ⚠ {self.orth_warning}")
@@ -174,7 +183,7 @@ class DMLDiagnostics:
                 bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
             )
 
-        # Score density + normal overlay
+        # Centered residual density + normal overlay
         psi = self._score
         if psi is not None:
             ax_sc.hist(
@@ -194,8 +203,8 @@ class DMLDiagnostics:
                 label="N(0, σ̂)",
             )
             ax_sc.legend(loc="upper right", fontsize=8)
-            ax_sc.set_title("Score density")
-            ax_sc.set_xlabel(r"$\psi - \theta$")
+            ax_sc.set_title(f"{self._score_label} density")
+            ax_sc.set_xlabel(self._score_label)
 
         # Balance
         if not self.balance_table.empty:
@@ -270,8 +279,8 @@ def dml_diagnostics(result: Any, clip: float = 0.02) -> DMLDiagnostics:
     400
     >>> diag.method
     'PLR'
-    >>> round(diag.orth_pvalue, 2)  # E[psi] = 0 not rejected
-    1.0
+    >>> diag.orth_pvalue is None
+    True
     >>> text = diag.summary()  # overlap / score / balance report
     """
     info = result.model_info or {}
@@ -335,29 +344,16 @@ def dml_diagnostics(result: Any, clip: float = 0.02) -> DMLDiagnostics:
         )
         overlap_warning = None
 
-    # ---- Score density ----
-    # For PLR the orthogonal score psi ∝ (y_resid - θ * d_resid) * d_resid;
-    # for IRM y_resid IS already psi - θ. Both have mean ≈ 0 under
-    # correct identification. Use psi = y_resid (an effective score
-    # residual) for unified diagnostics.
+    # ---- Stored residual description ----
+    # Retain the historical centered values and descriptive moments without
+    # interpreting their mechanically zero mean as an identifying restriction.
     psi = y_resid - float(np.mean(y_resid))
     score_mean = float(np.mean(psi))
     score_sd = float(np.std(psi, ddof=1))
     score_skew = float(stats.skew(psi)) if score_sd > 0 else 0.0
     score_kurt = float(stats.kurtosis(psi)) if score_sd > 0 else 0.0
 
-    # ---- Orthogonality: E[ψ] = 0 ----
-    if score_sd > 0:
-        orth_stat = float(np.mean(psi) / (score_sd / np.sqrt(n)))
-    else:
-        orth_stat = 0.0
-    orth_pvalue = float(2 * stats.norm.sf(abs(orth_stat)))
-    orth_warning = None
-    if orth_pvalue < 0.01:
-        orth_warning = (
-            "Orthogonality score is significantly nonzero; "
-            "nuisance learner may be mis-specified."
-        )
+    score_label = f"Centered {method} outcome residual"
 
     # ---- Balance ----
     rows: List[Dict[str, Any]] = []
@@ -398,11 +394,9 @@ def dml_diagnostics(result: Any, clip: float = 0.02) -> DMLDiagnostics:
         score_sd=score_sd,
         score_skew=score_skew,
         score_kurtosis=score_kurt,
-        orth_stat=orth_stat,
-        orth_pvalue=orth_pvalue,
-        orth_warning=orth_warning,
     )
     diag._overlap_values = overlap_values
     diag._overlap_label = overlap_label
     diag._score = psi
+    diag._score_label = score_label
     return diag

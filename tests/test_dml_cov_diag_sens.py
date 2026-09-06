@@ -86,7 +86,7 @@ def test_dml_diagnostics_summary(plr_result):
     # (true effect = 2; recover within a generous band) and finite score moments.
     assert np.isfinite(diag.estimate) and abs(diag.estimate - 2.0) < 0.5
     assert np.isfinite(diag.se) and 0.0 < diag.se < 1.0
-    # Neyman-orthogonal score is mean-zero by construction; sd strictly positive.
+    # Historical centered residual moments remain available as descriptions.
     assert abs(diag.score_mean) < 1e-6
     assert np.isfinite(diag.score_sd) and diag.score_sd > 0.0
     assert all(np.isfinite(v) for v in (diag.score_skew, diag.score_kurtosis))
