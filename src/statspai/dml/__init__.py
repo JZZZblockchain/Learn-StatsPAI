@@ -16,7 +16,8 @@ References
 ----------
 Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C.,
 Newey, W., and Robins, J. (2018). "Double/Debiased Machine Learning for
-Treatment and Structural Parameters." *Econometrics Journal*, 21(1), C1-C68. [@chernozhukov2018double]
+Treatment and Structural Parameters." *Econometrics Journal*, 21(1),
+C1-C68. [@chernozhukov2018double]
 """
 
 from .double_ml import dml, DoubleML
@@ -32,6 +33,7 @@ from .model_averaging import (
 from .panel_dml import dml_panel, DMLPanelResult
 from ._sensitivity import dml_sensitivity, DMLSensitivityResult
 from ._diagnostics import dml_diagnostics, DMLDiagnostics
+from .oof import OOFBundle, OOFPredictions
 
 __all__ = [
     "dml",
@@ -51,4 +53,6 @@ __all__ = [
     "DMLSensitivityResult",
     "dml_diagnostics",
     "DMLDiagnostics",
+    "OOFBundle",
+    "OOFPredictions",
 ]
