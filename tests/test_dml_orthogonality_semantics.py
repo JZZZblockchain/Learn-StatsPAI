@@ -10,9 +10,8 @@ from statspai.dml._diagnostics import dml_diagnostics
 matplotlib.use("Agg")
 
 
-@pytest.mark.parametrize("values", [[-1.0, 1.0, -5.0, 5.0], [9.0, 11.0, 5.0, 15.0]])
-def test_centered_moment_is_not_an_orthogonality_test(values):
-    res = CausalResult(
+def _irm_result(values):
+    return CausalResult(
         method="Double ML (IRM)",
         estimand="ATE",
         estimate=3.0,
@@ -28,6 +27,11 @@ def test_centered_moment_is_not_an_orthogonality_test(values):
             "_pscore": np.full(4, 0.5),
         },
     )
+
+
+@pytest.mark.parametrize("values", [[-1.0, 1.0, -5.0, 5.0], [9.0, 11.0, 5.0, 15.0]])
+def test_centered_moment_is_not_an_orthogonality_test(values):
+    res = _irm_result(values)
     diag = dml_diagnostics(res)
     assert diag.orth_pvalue is None
     assert diag.orth_stat is None
@@ -39,6 +43,34 @@ def test_centered_moment_is_not_an_orthogonality_test(values):
     summary = diag.summary()
     assert "Orthogonality: not tested" in summary
     assert "p-value                : 1.0000" not in summary
+
+
+def test_irm_summary_uses_score_residual_label():
+    diag = dml_diagnostics(_irm_result([-1.0, 1.0, -5.0, 5.0]))
+
+    assert "Centered IRM score residual" in diag.summary()
+
+
+def test_irm_plot_uses_score_residual_label():
+    diag = dml_diagnostics(_irm_result([-1.0, 1.0, -5.0, 5.0]))
+
+    fig, axes = diag.plot()
+
+    assert axes[0, 1].get_title() == "Centered IRM score residual density"
+    assert axes[0, 1].get_xlabel() == "Centered IRM score residual"
+    fig.clear()
+
+
+def test_other_methods_use_neutral_residual_label():
+    res = _irm_result([-1.0, 1.0, -5.0, 5.0])
+    res.model_info["dml_model"] = "PLIV"
+    res.model_info.pop("_pscore")
+
+    diag = dml_diagnostics(res)
+
+    assert diag._score_label == "Centered PLIV stored residual"
+    assert "score residual" not in diag._score_label
+    assert "outcome residual" not in diag._score_label
 
 
 def test_unavailable_orthogonality_is_plot_and_json_safe():

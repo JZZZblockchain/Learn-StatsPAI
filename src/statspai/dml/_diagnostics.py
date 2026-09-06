@@ -7,7 +7,9 @@ report bundling four standard ML-causal diagnostics:
    :math:`D - m̂(X)` residual (PLR). Flags propensity values within
    ``clip`` of 0/1 and ESS-style summaries.
 2. **Residual density** — histogram and descriptive moments of the
-   centred outcome residual stored by the fitted DML method.
+   centred method-specific series stored by the fit: the PLR outcome
+   residual or the IRM score residual. Other methods use a neutral
+   stored-residual label.
 3. **Covariate balance after residualisation** — for each X_k,
    ``corr(X_k, d_resid)`` and ``corr(X_k, y_resid)``. Large values
    indicate the nuisance learner left structure in the data that the
@@ -109,7 +111,7 @@ class DMLDiagnostics(ResultProtocolMixin):
     )
     _overlap_label: str = ""
     _score: Optional[np.ndarray] = field(default=None, repr=False)
-    _score_label: str = "Centered outcome residual"
+    _score_label: str = "Centered stored residual"
 
     def summary(self) -> str:
         lines = [
@@ -353,7 +355,13 @@ def dml_diagnostics(result: Any, clip: float = 0.02) -> DMLDiagnostics:
     score_skew = float(stats.skew(psi)) if score_sd > 0 else 0.0
     score_kurt = float(stats.kurtosis(psi)) if score_sd > 0 else 0.0
 
-    score_label = f"Centered {method} outcome residual"
+    method_key = str(method).upper()
+    if method_key == "IRM":
+        score_label = "Centered IRM score residual"
+    elif method_key == "PLR":
+        score_label = "Centered PLR outcome residual"
+    else:
+        score_label = f"Centered {method} stored residual"
 
     # ---- Balance ----
     rows: List[Dict[str, Any]] = []
