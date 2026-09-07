@@ -152,9 +152,9 @@ class OOFPredictions:
             checks = {
                 "ids": tuple(ids) == self.ids,
                 "covariate_names": tuple(covariate_names) == self.covariate_names,
-                "y": np.array_equal(np.asarray(y, dtype=float), self.y),
-                "d": np.array_equal(np.asarray(d), self.d),
-                "x": np.array_equal(np.asarray(x, dtype=float), self.x),
+                "y": np.array_equal(_v.immutable_array(y, "y", 1), self.y),
+                "d": np.array_equal(_v.immutable_array(d, "d", 1), self.d),
+                "x": np.array_equal(_v.immutable_array(x, "x", 2), self.x),
             }
         except (TypeError, ValueError):
             checks = {"input": False}

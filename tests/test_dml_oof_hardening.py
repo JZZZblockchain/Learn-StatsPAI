@@ -6,6 +6,7 @@ import builtins
 import hashlib
 import hmac
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -116,6 +117,30 @@ def test_prediction_rejects_complex_analysis_and_nuisance_arrays(field):
     kwargs[field] = value
     with pytest.raises(ValueError, match="complex"):
         OOFPredictions.from_arrays(**kwargs)
+
+
+@pytest.mark.parametrize("field", ["y", "d", "x"])
+def test_alignment_rejects_complex_live_arrays_without_warning(field):
+    """Live alignment inputs reject imaginary parts without lossy casts."""
+    _, predictions = tiny_bundle()
+    live = {
+        "ids": predictions.ids,
+        "y": predictions.y,
+        "d": predictions.d,
+        "x": predictions.x,
+        "covariate_names": predictions.covariate_names,
+    }
+    complex_value = np.asarray(live[field], dtype=complex)
+    complex_value.flat[0] += 7j
+    live[field] = complex_value
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(
+            ValueError, match="^OOFPredictions alignment failed for: input$"
+        ):
+            predictions.validate_alignment(**live)
+    assert not any(item.category.__name__ == "ComplexWarning" for item in caught)
 
 
 @pytest.mark.parametrize("field", ["ps_used", "psi_b", "psi", "theta", "se"])
