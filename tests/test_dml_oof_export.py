@@ -26,6 +26,7 @@ from .dml_oof_export_helpers import (
     external_estimator,
     external_literal_fixture,
     internal_estimator,
+    internal_functional_fit,
     internal_literal_frame,
     internal_mapping_frame,
     internal_partitions,
@@ -224,6 +225,11 @@ def test_external_getters_clone_and_residual_integer_protocol():
     assert list(all_rows.columns) == list(expected.columns)
     assert len(all_rows) == 12
     assert list(all_rows["rep"]) == [0] * 4 + [1] * 4 + [2] * 4
+    unchanged = all_rows.copy(deep=True)
+    all_rows.iloc[0, 0] = 99
+    all_rows.columns = [f"changed_{name}" for name in all_rows.columns]
+    all_rows.index = np.arange(100, 100 + len(all_rows))
+    pd.testing.assert_frame_equal(result.get_residuals(), unchanged)
 
 
 @pytest.mark.parametrize("rep", [True, np.bool_(True), 1.0, "1"])
@@ -379,6 +385,10 @@ def test_internal_three_repeats_capture_exact_splits_scores_and_fit_scopes(
     np.testing.assert_array_equal(
         result.model_info["_pscore"], bundle.predictions.ps_raw[-1]
     )
+    np.testing.assert_array_equal(
+        result.model_info["_d_resid"],
+        bundle.predictions.d - bundle.predictions.ps_raw[-1],
+    )
     assert bundle.predictions.source == {
         "engine": "statspai_irm_internal",
         "recipe": (
@@ -524,10 +534,21 @@ def test_reused_estimator_cleans_failed_and_successful_capture_state(monkeypatch
 def test_real_agent_serializer_and_public_summaries_omit_retained_rows():
     frame = internal_literal_frame()
     secret_ids = tuple(f"private-subject-{i}" for i in range(len(frame)))
-    result = internal_estimator(frame, fold_indices=internal_partitions()[101]).fit(
-        store_oof=True, observation_ids=secret_ids
-    )
-    payloads = (result.to_dict(), _default_serializer(result))
+    result = internal_functional_fit(frame, secret_ids)
+    params = statspai.get_provenance(result).params
+    oof_keys = {
+        "external_predictions_provided",
+        "external_predictions_hashes",
+        "store_oof",
+        "observation_ids_source",
+    }
+    assert {key: params[key] for key in oof_keys} == {
+        "external_predictions_provided": False,
+        "external_predictions_hashes": None,
+        "store_oof": True,
+        "observation_ids_source": "caller_provided",
+    }
+    payloads = (params, result.to_dict(), _default_serializer(result))
     rendered = [json.dumps(payload, sort_keys=True) for payload in payloads]
     rendered.append(result.summary())
     for text in rendered:

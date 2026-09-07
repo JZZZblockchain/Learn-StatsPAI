@@ -47,7 +47,13 @@ class NoFitClassifier(BaseEstimator):
 
 
 def _external_fixture(
-    *, n_rep=1, ids=None, ps_raw=None, fold_ids=None, origin="caller_declared"
+    *,
+    n_rep=1,
+    ids=None,
+    ps_raw=None,
+    fold_ids=None,
+    origin="caller_declared",
+    two_covariates=False,
 ):
     frame = pd.DataFrame(
         {
@@ -56,6 +62,9 @@ def _external_fixture(
             "x": [0.0, 1.0, 2.0, 3.0],
         }
     )
+    if two_covariates:
+        frame["z"] = [10.0, 11.0, 12.0, 13.0]
+    covariates = ["x", "z"] if two_covariates else ["x"]
     if ids is None:
         ids = [f"row:{i}" for i in range(len(frame))]
     if fold_ids is None:
@@ -67,8 +76,8 @@ def _external_fixture(
         ids=ids,
         y=frame["y"].to_numpy(),
         d=frame["d"].to_numpy(),
-        x=frame[["x"]].to_numpy(),
-        covariate_names=["x"],
+        x=frame[covariates].to_numpy(),
+        covariate_names=covariates,
         g0=np.ones((n_rep, len(frame))),
         g1=np.full((n_rep, len(frame)), 3.0),
         ps_raw=ps_raw,
@@ -86,7 +95,7 @@ def _external_fixture(
     return frame, predictions
 
 
-def _assert_external_provenance(result, predictions, id_source):
+def _assert_external_provenance(result, predictions, id_source, store_oof):
     provenance = sp.get_provenance(result)
     keys = {
         "external_predictions_provided",
@@ -97,79 +106,12 @@ def _assert_external_provenance(result, predictions, id_source):
     assert {name: provenance.params[name] for name in keys} == {
         "external_predictions_provided": True,
         "external_predictions_hashes": dict(predictions.hashes),
-        "store_oof": False,
+        "store_oof": store_oof,
         "observation_ids_source": id_source,
     }
     encoded = json.dumps(provenance.params, allow_nan=False)
     assert all(row_id not in encoded for row_id in predictions.ids)
     assert not _contains_identity(provenance.params, predictions)
-
-
-def test_external_direct_irm_scores_hand_fixture_without_nuisance_fit():
-    frame, predictions = _external_fixture()
-    estimator = _direct_external_estimator(frame)
-    result = estimator.fit(external_predictions=predictions)
-    assert result.estimate == 3.0
-    assert result.se == math.sqrt(3.25)
-    assert result.model_info["fold_source"] == "external_predictions"
-    assert result.model_info["external_predictions_hashes"] == dict(predictions.hashes)
-    assert sp.get_provenance(result) is None
-
-
-def test_external_library_dispatcher_scores_hand_fixture_without_nuisance_fit():
-    frame, predictions = _external_fixture()
-    result = library_dml(
-        frame,
-        "y",
-        "d",
-        ["x"],
-        "irm",
-        None,
-        NoFitRegressor(),
-        NoFitClassifier(),
-        None,
-        2,
-        external_predictions=predictions,
-    )
-    assert result.estimate == 3.0
-    _assert_external_provenance(result, predictions, "generated_ordinal")
-
-
-def test_external_article_alias_scores_hand_fixture_without_nuisance_fit():
-    ids = ["unit-a", "unit-b", "unit-c", "unit-d"]
-    frame, predictions = _external_fixture(ids=ids)
-    result = sp.dml(
-        frame,
-        "y",
-        "d",
-        ["x"],
-        model="irm",
-        ml_g=NoFitRegressor(),
-        ml_m=NoFitClassifier(),
-        n_folds=2,
-        external_predictions=predictions,
-        observation_ids=ids,
-    )
-    assert result.estimate == 3.0
-    _assert_external_provenance(result, predictions, "caller_provided")
-
-
-def test_external_legacy_facade_scores_hand_fixture_without_nuisance_fit():
-    frame, predictions = _external_fixture()
-    estimator = DoubleML(
-        frame,
-        "y",
-        "d",
-        ["x"],
-        "irm",
-        ml_g=NoFitRegressor(),
-        ml_m=NoFitClassifier(),
-        n_folds=2,
-    )
-    result = estimator.fit(external_predictions=predictions)
-    assert result.estimate == 3.0
-    assert result.model_info["external_predictions_hashes"] == dict(predictions.hashes)
-    assert sp.get_provenance(result) is None
 
 
 @pytest.mark.parametrize(
@@ -225,7 +167,8 @@ def _run_external_entry(entry, frame, predictions, **fit_kwargs):
     if entry == "legacy":
         estimator = DoubleML(frame, "y", "d", ["x"], "irm", **common)
         return estimator.fit(external_predictions=predictions, **fit_kwargs)
-    return sp.dml(
+    function = library_dml if entry == "library" else sp.dml
+    return function(
         frame,
         "y",
         "d",
@@ -237,28 +180,56 @@ def _run_external_entry(entry, frame, predictions, **fit_kwargs):
     )
 
 
-@pytest.mark.parametrize("entry", ["direct", "article", "legacy"])
-def test_external_paths_skip_all_internal_split_fit_predict_and_fallback_seams(
-    monkeypatch, entry
-):
-    frame, predictions = _external_fixture()
+def _forbid_external_internal_work(monkeypatch, *, reject_score=False):
     irm_module = importlib.import_module("statspai.dml.irm")
+    base_module = importlib.import_module("statspai.dml._base")
+    retention_module = importlib.import_module("statspai.dml._oof_retention")
     real_numpy = irm_module.np
 
     def forbidden(*_args, **_kwargs):
-        raise AssertionError("external scoring entered an internal nuisance seam")
+        raise AssertionError("external OOF request reached forbidden work")
 
     class NoFallbackNumpy:
         def __getattr__(self, name):
-            if name == "full":
-                return forbidden
-            return getattr(real_numpy, name)
+            return forbidden if name == "full" else getattr(real_numpy, name)
 
-    monkeypatch.setattr(DoubleMLIRM, "_make_splits", forbidden)
+    monkeypatch.setattr(_DoubleMLBase, "_make_splits", forbidden)
     monkeypatch.setattr(DoubleMLIRM, "_fit_one_rep", forbidden)
     monkeypatch.setattr(irm_module, "np", NoFallbackNumpy())
-    result = _run_external_entry(entry, frame, predictions)
+    if reject_score:
+        monkeypatch.setattr(irm_module, "score_binary_ate", forbidden)
+        monkeypatch.setattr(base_module, "_attach_result_oof", forbidden)
+        monkeypatch.setattr(retention_module.OOFRetention, "internal", forbidden)
+        monkeypatch.setattr(retention_module.OOFRetention, "external", forbidden)
+
+
+@pytest.mark.parametrize("entry", ["direct", "library", "article", "legacy"])
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_store_entry_points_skip_internal_fit_split_and_fallback(
+    monkeypatch, entry, store_oof
+):
+    ids = ["unit-a", "unit-b", "unit-c", "unit-d"] if entry == "article" else None
+    frame, predictions = _external_fixture(ids=ids)
+    _forbid_external_internal_work(monkeypatch)
+    result = _run_external_entry(
+        entry, frame, predictions, store_oof=store_oof, observation_ids=ids
+    )
     assert result.estimate == 3.0
+    assert result.se == math.sqrt(3.25)
+    if store_oof:
+        assert result.get_oof().predictions.hashes == predictions.hashes
+    else:
+        with pytest.raises(ValueError, match="^OOF records are unavailable;"):
+            result.get_oof()
+    if entry in {"library", "article"}:
+        _assert_external_provenance(
+            result,
+            predictions,
+            "caller_provided" if ids else "generated_ordinal",
+            store_oof,
+        )
+    else:
+        assert sp.get_provenance(result) is None
 
 
 def test_external_two_repeat_uses_existing_median_aggregation_and_last_repeat():
@@ -281,6 +252,9 @@ def test_external_two_repeat_uses_existing_median_aggregation_and_last_repeat():
         np.array([2.0, 6.0, -2.0 / 3.0, 14.0]) - theta_second,
     )
     np.testing.assert_array_equal(result.model_info["_pscore"], [0.25] * 4)
+    np.testing.assert_array_equal(
+        result.model_info["_d_resid"], frame["d"] - predictions.ps_raw[-1]
+    )
 
 
 def test_external_raw_boundary_propensity_is_clipped_only_for_scoring():
@@ -345,6 +319,24 @@ def test_functional_oof_provenance_validation_precedes_best_effort_attach(monkey
     assert build(external_predictions=None, store_oof=False, observation_ids=None) == {}
     lineage = importlib.import_module("statspai.output._lineage")
     frame, predictions = _external_fixture()
+    assert build(
+        external_predictions=None,
+        store_oof=True,
+        observation_ids=("private",),
+    ) == {
+        "external_predictions_provided": False,
+        "external_predictions_hashes": None,
+        "store_oof": True,
+        "observation_ids_source": "caller_provided",
+    }
+    assert build(
+        external_predictions=predictions, store_oof=True, observation_ids=None
+    ) == {
+        "external_predictions_provided": True,
+        "external_predictions_hashes": dict(predictions.hashes),
+        "store_oof": True,
+        "observation_ids_source": "generated_ordinal",
+    }
     valid_builder = external_module._raw_oof_provenance_payload
     call = lambda: library_dml(  # noqa: E731
         frame,
@@ -427,20 +419,29 @@ def _direct_external_estimator(frame, **kwargs):
 
 
 @pytest.mark.parametrize("bad", [{}, "predictions.json", Path("predictions.json")])
-def test_external_predictions_reject_unsupported_transport_types(bad):
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_predictions_reject_unsupported_transport_types(
+    monkeypatch, bad, store_oof
+):
     frame, _ = _external_fixture()
     estimator = _direct_external_estimator(frame)
 
-    with pytest.raises(TypeError, match="OOFPredictions"):
-        estimator.fit(external_predictions=bad)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    message = "external_predictions must be an in-memory OOFPredictions instance"
+    with pytest.raises(TypeError, match=f"^{message}$"):
+        estimator.fit(external_predictions=bad, store_oof=store_oof)
 
 
-def test_external_custom_prediction_ids_require_matching_caller_ids():
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_custom_prediction_ids_require_matching_caller_ids(
+    monkeypatch, store_oof
+):
     frame, predictions = _external_fixture(ids=["a", "b", "c", "d"])
     estimator = _direct_external_estimator(frame)
 
-    with pytest.raises(ValueError, match="alignment.*ids"):
-        estimator.fit(external_predictions=predictions)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    with pytest.raises(ValueError, match="^OOFPredictions alignment failed for: ids$"):
+        estimator.fit(external_predictions=predictions, store_oof=store_oof)
 
 
 @pytest.mark.parametrize(
@@ -462,10 +463,12 @@ def test_external_rejects_invalid_observation_ids(ids, error):
 
 
 @pytest.mark.parametrize(
-    "mutation",
-    ["row_order", "y", "d", "x"],
+    "mutation,failed", [("row_order", "y, d, x"), ("y", "y"), ("d", "d"), ("x", "x")]
 )
-def test_external_rejects_analysis_row_or_value_mismatch(mutation):
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_rejects_analysis_row_or_value_mismatch(
+    monkeypatch, mutation, failed, store_oof
+):
     frame, predictions = _external_fixture()
     changed = frame.copy()
     if mutation == "row_order":
@@ -478,51 +481,29 @@ def test_external_rejects_analysis_row_or_value_mismatch(mutation):
         changed.loc[0, "x"] += 1.0
     estimator = _direct_external_estimator(changed)
 
-    with pytest.raises(ValueError, match="alignment"):
-        estimator.fit(external_predictions=predictions)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    message = f"OOFPredictions alignment failed for: {failed}"
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        estimator.fit(external_predictions=predictions, store_oof=store_oof)
 
 
-def test_external_rejects_covariate_name_and_order_mismatch():
-    frame = pd.DataFrame(
-        {
-            "y": [1.0, 4.0, 3.0, 6.0],
-            "d": [0, 1, 0, 1],
-            "x1": [0.0, 1.0, 2.0, 3.0],
-            "x2": [10.0, 11.0, 12.0, 13.0],
-        }
-    )
-    ids = [f"row:{i}" for i in range(4)]
-    folds = np.array([[0, 0, 1, 1]])
-    predictions = OOFPredictions.from_arrays(
-        ids=ids,
-        y=frame.y,
-        d=frame.d,
-        x=frame[["x1", "x2"]],
-        covariate_names=["x1", "x2"],
-        g0=np.ones((1, 4)),
-        g1=np.full((1, 4), 3.0),
-        ps_raw=np.full((1, 4), 0.5),
-        fold_ids=folds,
-        training_records=_training_records(ids, frame.d, folds),
-        source={
-            "engine": "fixture",
-            "recipe": "fixed arrays",
-            "seed": None,
-            "software_versions": {"fixture": "1"},
-        },
-    )
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_rejects_covariate_name_and_order_mismatch(monkeypatch, store_oof):
+    frame, predictions = _external_fixture(two_covariates=True)
     estimator = DoubleMLIRM(
         frame,
         y="y",
         treat="d",
-        covariates=["x2", "x1"],
+        covariates=["z", "x"],
         ml_g=NoFitRegressor(),
         ml_m=NoFitClassifier(),
         n_folds=2,
     )
 
-    with pytest.raises(ValueError, match="alignment.*covariate_names"):
-        estimator.fit(external_predictions=predictions)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    message = "OOFPredictions alignment failed for: covariate_names, x"
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        estimator.fit(external_predictions=predictions, store_oof=store_oof)
 
 
 @pytest.mark.parametrize("field", ["y", "d", "x", "fold"])
@@ -585,42 +566,57 @@ def test_external_rejects_nonfinite_analysis_values_before_alignment(
         estimator.fit(external_predictions=predictions)
 
 
-def test_external_rejects_repeat_and_fold_count_mismatch():
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_rejects_repeat_and_fold_count_mismatch(monkeypatch, store_oof):
     frame, predictions = _external_fixture()
-
-    with pytest.raises(ValueError, match="repeats"):
-        _direct_external_estimator(frame, n_rep=2).fit(external_predictions=predictions)
-    with pytest.raises(ValueError, match="folds"):
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    with pytest.raises(
+        ValueError, match="^external prediction repeats do not match n_rep: 1 != 2$"
+    ):
+        _direct_external_estimator(frame, n_rep=2).fit(
+            external_predictions=predictions, store_oof=store_oof
+        )
+    with pytest.raises(
+        ValueError, match="^external prediction folds do not match n_folds: 2 != 3$"
+    ):
         _direct_external_estimator(frame, n_folds=3).fit(
-            external_predictions=predictions
+            external_predictions=predictions, store_oof=store_oof
         )
 
 
-def test_external_rejects_conflicting_explicit_partition_in_any_repeat():
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_rejects_conflicting_explicit_partition_in_any_repeat(
+    monkeypatch, store_oof
+):
     frame, predictions = _external_fixture(
         n_rep=2,
         fold_ids=np.array([[0, 0, 1, 1], [0, 1, 1, 0]]),
     )
     estimator = _direct_external_estimator(frame, n_rep=2, fold_indices=[0, 0, 1, 1])
 
-    with pytest.raises(ValueError, match="repeat 1"):
-        estimator.fit(external_predictions=predictions)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    message = "explicit fold partition does not match external predictions at repeat 1"
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        estimator.fit(external_predictions=predictions, store_oof=store_oof)
 
 
-def test_external_rejects_statspai_internal_training_origin():
+@pytest.mark.parametrize("store_oof", [False, True])
+def test_external_rejects_statspai_internal_training_origin(monkeypatch, store_oof):
     frame, predictions = _external_fixture(origin="statspai_internal")
     estimator = _direct_external_estimator(frame)
 
-    with pytest.raises(ValueError, match="caller_declared"):
-        estimator.fit(external_predictions=predictions)
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
+    message = "external predictions require training-record origin='caller_declared'"
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        estimator.fit(external_predictions=predictions, store_oof=store_oof)
 
 
 @pytest.mark.parametrize("model", ["plr", "pliv", "iivm"])
-def test_external_request_rejects_other_models_before_any_learner_fit(model):
-    frame, predictions = _external_fixture()
+def test_store_only_rejects_other_models_before_any_work(monkeypatch, model):
+    frame, _ = _external_fixture()
     frame["z"] = [0, 1, 0, 1]
     instrument = "z" if model in {"pliv", "iivm"} else None
-
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
     with pytest.raises(NotImplementedError, match="model='irm'"):
         library_dml(
             frame,
@@ -633,28 +629,28 @@ def test_external_request_rejects_other_models_before_any_learner_fit(model):
             ml_m=NoFitClassifier(),
             ml_r=NoFitClassifier(),
             n_folds=2,
-            external_predictions=predictions,
+            store_oof=True,
         )
 
 
-def test_external_request_rejects_atte_normalized_and_weighted_irm_in_order():
-    frame, predictions = _external_fixture()
-
+def test_store_only_rejects_atte_normalized_and_weighted_before_work(monkeypatch):
+    frame, _ = _external_fixture()
+    _forbid_external_internal_work(monkeypatch, reject_score=True)
     atte = _direct_external_estimator(
         frame, score="ATTE", normalize_ipw=True, sample_weight=np.ones(4)
     )
     with pytest.raises(NotImplementedError, match="score='ATE'"):
-        atte.fit(external_predictions=predictions, store_oof=True)
+        atte.fit(store_oof=True)
 
     normalized = _direct_external_estimator(
         frame, normalize_ipw=True, sample_weight=np.ones(4)
     )
     with pytest.raises(NotImplementedError, match="normalize_ipw"):
-        normalized.fit(external_predictions=predictions, store_oof=True)
+        normalized.fit(store_oof=True)
 
     weighted = _direct_external_estimator(frame, sample_weight=np.ones(4))
     with pytest.raises(NotImplementedError, match="sample_weight"):
-        weighted.fit(external_predictions=predictions, store_oof=True)
+        weighted.fit(store_oof=True)
 
 
 def test_external_request_rejects_nonbinary_treatment_before_alignment():

@@ -7,7 +7,7 @@ from ..exceptions import DataInsufficient
 from . import _oof_validation as _v
 from ._irm_score import IRMScore
 from ._oof_bundle_validation import AGGREGATION_RULE
-from .oof import OOFBundle, OOFPredictions
+from .oof import OOFBundle, OOFPredictions, _clone_oof_predictions
 
 
 @dataclass(frozen=True)
@@ -86,15 +86,11 @@ def validate_oof_request_scope(
     return True
 
 
-def _clone_external(predictions: "OOFPredictions") -> "OOFPredictions":
-    from .oof import _clone_oof_predictions
-
-    return _clone_oof_predictions(predictions)
-
-
-def _validated_indices(value: Any, n_obs: int, name: str) -> np.ndarray:
-    raw = np.asarray(value)
-    if raw.ndim != 1 or raw.dtype.kind not in "iu" or raw.dtype.kind == "b":
+def _validated_indices(v: Any, n_obs: int, name: str) -> np.ndarray:
+    if any(isinstance(x, (bool, np.bool_)) for x in np.asarray(v, dtype=object).flat):
+        raise ValueError(f"{name} must be one-dimensional integer indices")
+    raw = np.asarray(v)
+    if raw.ndim != 1 or raw.dtype.kind not in "iu":
         raise ValueError(f"{name} must be one-dimensional integer indices")
     result = np.array(raw, dtype=np.int64, copy=True)
     if np.any(result < 0) or np.any(result >= n_obs):
@@ -105,10 +101,9 @@ def _validated_indices(value: Any, n_obs: int, name: str) -> np.ndarray:
 
 
 def _validated_splits(capture: "OOFRepCapture", splits, minimum: int):
-    try:
-        rows = list(splits)
-    except TypeError as exc:
-        raise ValueError("splits must be a sequence") from exc
+    if not isinstance(splits, Sequence):
+        raise ValueError("splits must be a sequence")
+    rows = list(splits)
     owner, n_obs = capture._owner, len(capture._owner._y)
     if len(rows) != owner._n_folds:
         raise ValueError("splits must contain exactly n_folds entries")
@@ -240,7 +235,7 @@ class OOFRetention:
         cls, *, predictions, identity, n_rep, n_folds, trimming_threshold
     ) -> "OOFRetention":
         instance = cls._new("external", identity, n_rep, n_folds, trimming_threshold)
-        instance._predictions = _clone_external(predictions)
+        instance._predictions = _clone_oof_predictions(predictions)
         return instance
 
     def start_rep(self, rep: int, rng_seed: int) -> OOFRepCapture:

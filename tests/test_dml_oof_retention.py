@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from statspai import dml
@@ -26,7 +25,9 @@ from .dml_oof_export_helpers import (
     internal_estimator,
     internal_literal_frame,
     internal_partitions,
+    partition_splits,
     reset_internal_audits,
+    TrainingMeanRegressor,
 )
 from .dml_oof_helpers import tiny_bundle
 
@@ -235,8 +236,6 @@ def _bad_splits(case):
     if case == "count":
         return splits[:1]
     replacements = {
-        "bool": np.array([True, False]),
-        "np_bool": np.array([np.bool_(True), np.bool_(False)]),
         "float": np.array([2.0, 3.0]),
         "two_dim": np.array([[2, 3]]),
         "negative": np.array([-1, 3]),
@@ -261,8 +260,6 @@ def _bad_splits(case):
     "case",
     [
         "count",
-        "bool",
-        "np_bool",
         "float",
         "two_dim",
         "negative",
@@ -282,45 +279,46 @@ def test_internal_split_preflight_rejects_malformed_indices(case):
 
 
 def test_second_fold_index_error_is_found_before_any_learner_fit(monkeypatch):
-    n = 40
-    d = (np.arange(n) % 2).astype(float)
-    x = np.arange(n, dtype=float)[:, None]
-    y = 5.0 + 2.0 * d
-    identity = AnalysisIdentity(
-        ids=tuple(f"row:{i}" for i in range(n)),
-        input_positions=tuple(range(n)),
-        dropped_positions=(),
-        observation_ids_source="generated_ordinal",
-    )
-    collector = OOFRetention.internal(
-        y=y,
-        d=d,
-        x=x,
-        covariate_names=["x"],
-        identity=identity,
-        n_rep=1,
-        n_folds=2,
-        random_state=42,
-        trimming_threshold=0.01,
-    )
-    capture = collector.start_rep(0, 42)
-    estimator = DoubleMLIRM(
-        pd.DataFrame({"y": y, "d": d, "x": x[:, 0]}),
-        y="y",
-        treat="d",
-        covariates=["x"],
-        ml_g=NoFitRegressor(),
-        ml_m=NoFitClassifier(),
-        n_folds=2,
-    )
-    bad_second = [
-        (np.arange(20, 40), np.arange(20)),
-        (np.arange(20), np.r_[np.arange(20, 39), 40]),
-    ]
-    monkeypatch.setattr(estimator, "_make_splits", lambda *_a, **_k: bad_second)
-    estimator._oof_rep_capture = capture
-    with pytest.raises(ValueError):
-        estimator._fit_one_rep(y, d, x, None, n, 42)
+    frame = internal_literal_frame()
+    splits = partition_splits(internal_partitions()[101])
+    train, test = splits[1]
+    splits[1] = (train, np.r_[test[:-1], len(frame)])
+    estimator = internal_estimator(frame, forbid_fit=True)
+    monkeypatch.setattr(estimator, "_make_splits", lambda *_a, **_k: splits)
+    with pytest.raises(ValueError, match="out-of-range"):
+        estimator.fit(store_oof=True)
+
+
+@pytest.mark.parametrize("one_shot", [True, False], ids=["generator", "list"])
+def test_internal_split_source_requires_reiterable_sequence(monkeypatch, one_shot):
+    splits = partition_splits(internal_partitions()[101])
+    estimator = internal_estimator(internal_literal_frame())
+    source = iter(splits) if one_shot else splits
+    monkeypatch.setattr(estimator, "_make_splits", lambda *_a, **_k: source)
+    reset_internal_audits()
+    if one_shot:
+        with pytest.raises(ValueError, match="splits must be a sequence"):
+            estimator.fit(store_oof=True)
+        assert TrainingMeanRegressor.fit_rows == []
+    else:
+        bundle = estimator.fit(store_oof=True).get_oof()
+        np.testing.assert_array_equal(bundle.predictions.fold_ids[0], [0, 0, 1, 1] * 12)
+        assert TrainingMeanRegressor.fit_rows
+
+
+@pytest.mark.parametrize("side", ["train", "test"])
+@pytest.mark.parametrize("boolean", [False, np.bool_(False)], ids=["bool", "np_bool"])
+def test_mixed_boolean_split_index_fails_before_learner(monkeypatch, side, boolean):
+    splits = partition_splits(internal_partitions()[101])
+    fold, part = (1, 0) if side == "train" else (0, 1)
+    pair = list(splits[fold])
+    pair[part] = pair[part].tolist()
+    pair[part][0] = boolean
+    splits[fold] = tuple(pair)
+    estimator = internal_estimator(internal_literal_frame(), forbid_fit=True)
+    monkeypatch.setattr(estimator, "_make_splits", lambda *_a, **_k: splits)
+    with pytest.raises(ValueError, match=f"{side} indices.*integer"):
+        estimator.fit(store_oof=True)
 
 
 @pytest.mark.parametrize("dispatcher", [False, True])

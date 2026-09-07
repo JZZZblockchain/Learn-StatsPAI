@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 
-from statspai import OOFPredictions
+from statspai import OOFPredictions, dml
 from statspai.dml.irm import DoubleMLIRM
 
 from .dml_oof_helpers import tiny_inputs
@@ -153,6 +153,23 @@ def internal_estimator(
         n_rep=n_rep,
         random_state=random_state,
         fold_indices=fold_indices,
+    )
+
+
+def internal_functional_fit(frame, observation_ids):
+    """Run the functional internal retained path with deterministic learners."""
+    return dml(
+        frame,
+        "y",
+        "d",
+        ["x1", "x2"],
+        model="irm",
+        ml_g=Pipeline([("audit", AuditScaler()), ("mean", TrainingMeanRegressor())]),
+        ml_m=Pipeline([("audit", AuditScaler()), ("rate", TrainingRateClassifier())]),
+        n_folds=2,
+        fold_indices=internal_partitions()[101],
+        store_oof=True,
+        observation_ids=observation_ids,
     )
 
 
