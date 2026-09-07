@@ -116,10 +116,11 @@ def dml(
         present in ``data``. Supported for
         ``model in {'plr', 'irm', 'pliv', 'iivm'}``.
     fold_indices : array-like or str, optional
-        Explicit cross-fit fold labels for ``model='plr'``. Pass either
-        a 1-D array of length ``len(data)`` or a column name. When
-        provided, ``n_rep`` must be 1 and the labels must define exactly
-        ``n_folds`` non-empty folds.
+        Explicit cross-fit fold labels. Pass either a 1-D array of length
+        ``len(data)`` or a column name. For internal fitting, labels must
+        define exactly ``n_folds`` non-empty folds and ``n_rep`` must be 1.
+        External repeated IRM predictions may use the same labels when that
+        partition is equivalent to every caller repeat.
     score : str, optional
         Orthogonal score variant (DoubleML-compatible). Model-specific:
 
@@ -149,6 +150,17 @@ def dml(
         estimated propensity is clipped to ``[t, 1 - t]``. The default
         ``0.01`` reproduces the historical clip and matches DoubleML's
         ``trimming_threshold`` with ``trimming_rule='truncate'``.
+    external_predictions : OOFPredictions, optional
+        Python-only in-memory predictions for unweighted, unnormalised
+        binary-treatment IRM ATE scoring. ``caller_declared`` training records
+        are auditable declarations, not proof that training avoided leakage.
+    store_oof : bool, default False
+        Python-only retention switch for the supported IRM ATE scope. With
+        ``store_oof=True``, use ``get_oof()`` or ``get_residuals()`` on the result.
+        Ordinary result serialization omits these individual-level records.
+    observation_ids : sequence of str, optional
+        Python-only stable row IDs. Internal IDs are checked before complete-case
+        filtering; external IDs must match the prediction record exactly.
 
     Returns
     -------
@@ -175,7 +187,11 @@ def dml(
       for simultaneous inference).
     - DML2 (pooled-moment) procedure only; PLR exposes the
       partialling-out score only.
-    - ``fold_indices`` is supported for ``model='plr'`` only.
+    - Retained internal IRM fits require at least 10 rows per treatment arm in
+      every training fold or raise ``DataInsufficient`` instead of using the
+      legacy subgroup-mean fallback; internal explicit fold_indices require n_rep=1,
+      while external repeated IRM predictions are accepted when the explicit fold
+      partition is equivalent to every repeat.
     - Cluster-robust DML inference lives in ``sp.dml_panel``
       (unit-clustered panel PLR), not in this cross-sectional entry
       point.
@@ -364,6 +380,19 @@ class DoubleML:
         store_oof: bool = False,
         observation_ids: Optional[Sequence[str]] = None,
     ) -> CausalResult:
+        """Fit, with optional Python-only retained IRM ATE records.
+
+        ``store_oof=True`` enables ``get_oof()`` and ``get_residuals()``;
+        ordinary serialization omits the individual-level records. The
+        supported path is unweighted, unnormalised binary-treatment IRM ATE,
+        and external ``caller_declared`` records remain declarations. Retained
+        internal fits require at least 10 rows per treatment arm in each fold or
+        raise ``DataInsufficient`` instead of using a subgroup-mean fallback;
+        internal explicit fold_indices require n_rep=1, while external repeated IRM
+        predictions are allowed when the explicit partition is equivalent for
+        every repeat. ``external_predictions``, ``store_oof``, and
+        ``observation_ids`` are Python-only controls.
+        """
         return self._impl.fit(
             external_predictions=external_predictions,
             store_oof=store_oof,

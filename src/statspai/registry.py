@@ -1793,16 +1793,11 @@ def _build_registry() -> None:
             name="dml",
             category="causal",
             description=(
-                "Double/Debiased Machine Learning for treatment effect "
-                "estimation. Supports partially linear (PLR), interactive "
-                "regression (IRM, binary D), partially linear IV (PLIV), and "
-                "interactive IV (IIVM, binary D/binary Z → LATE). Direct "
-                "Python callers may supply an in-memory OOFPredictions object "
-                "for external unweighted, unnormalised binary-treatment IRM "
-                "ATE scoring; this Python-only path checks exact "
-                "row/value/fold alignment, while its caller_declared training "
-                "records remain declarations rather than proof "
-                "against data leakage."
+                "Double/Debiased Machine Learning supports PLR, binary-D IRM, "
+                "PLIV, and binary-D/binary-Z IIVM. Python-only external "
+                "OOFPredictions supports unweighted, unnormalised IRM ATE "
+                "scoring with exact alignment; caller_declared records are "
+                "declarations rather than proof against leakage."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -1938,12 +1933,16 @@ def _build_registry() -> None:
             alternatives=["metalearner", "causal_forest", "tmle", "aipw"],
             typical_n_min=500,
             limitations=[
-                "Python-only external_predictions is omitted from JSON/MCP "
-                "callable schemas and accepts no dict, JSON-string, or "
-                "file-path transport.",
-                "store_oof=True is pending Task 5 retention/getters and "
-                "currently raises NotImplementedError; observation_ids is "
-                "also Python-only.",
+                "external_predictions, store_oof, and observation_ids are "
+                "Python-only and absent from JSON/MCP inputs; external records "
+                "accept no dict, JSON string, or file path.",
+                "store_oof=True retains individual-level records for get_oof() "
+                "and get_residuals(); ordinary serialization omits them.",
+                "Retained IRM needs at least 10 rows per treatment arm in each "
+                "training fold or raises DataInsufficient instead of fallback; "
+                "internal explicit fold_indices require n_rep=1, "
+                "while external repeated IRM records are allowed when the "
+                "explicit partition is equivalent for every repeat.",
             ],
         )
     )

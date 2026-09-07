@@ -22,7 +22,8 @@ from ._external_predictions import (
     validate_external_prediction_input,
 )
 from ._learners import resolve_learner
-from .oof import OOFPredictions
+from . import _oof_retention as _retention
+from .oof import OOFPredictions, _attach_result_oof
 
 
 def _positive_int(value: Any, *, name: str, context: str) -> int:
@@ -571,37 +572,26 @@ class _DoubleMLBase:
         store_oof: bool = False,
         observation_ids: Optional[Sequence[str]] = None,
     ) -> CausalResult:
-        """Cross-fit, aggregate across repeats, return a CausalResult."""
-        if not isinstance(store_oof, bool):
-            raise TypeError("store_oof must be a bool")
-        new_oof_request = (
-            external_predictions is not None or store_oof or observation_ids is not None
+        _retention.validate_oof_request_scope(
+            model_tag=self._MODEL_TAG,
+            score=self.score,
+            normalize_ipw=self.normalize_ipw,
+            has_sample_weight=self._sample_weight_input is not None,
+            external_predictions=external_predictions,
+            store_oof=store_oof,
+            observation_ids=observation_ids,
         )
-        if new_oof_request:
-            if self._MODEL_TAG != "IRM":
-                raise NotImplementedError(
-                    "OOF scoring is currently implemented only for model='irm'"
-                )
-            if self.score != "ATE":
-                raise NotImplementedError(
-                    "OOF scoring is currently implemented only for score='ATE'"
-                )
-            if self.normalize_ipw:
-                raise NotImplementedError(
-                    "OOF scoring does not yet support normalize_ipw=True"
-                )
-            if self._sample_weight_input is not None:
-                raise NotImplementedError(
-                    "OOF scoring does not yet support sample_weight"
-                )
-            if store_oof:
-                raise NotImplementedError(
-                    "store_oof=True is pending Task 5 retention and getters"
-                )
-            if external_predictions is None:
-                raise ValueError(
-                    "observation_ids require external_predictions or store_oof=True"
-                )
+        internal_explicit = (
+            external_predictions is None and self._fold_indices_input is not None
+        )
+        if internal_explicit and self.n_rep != 1:
+            context = f"dml.{self._MODEL_TAG.lower() or 'base'}"
+            raise MethodIncompatibility(
+                f"{context}: explicit fold_indices require n_rep=1; pass one "
+                "fold assignment for the single cross-fit repetition."
+            )
+        collector = None
+        if external_predictions is not None:
             analysis = self.data[[self.y, self.treat] + self.covariates]
             fi = self._fold_indices_input
             raw_fold = (
@@ -634,17 +624,23 @@ class _DoubleMLBase:
                     raw_fold, len(self.data), self.n_folds
                 )
                 validate_external_partitions(external_predictions, normalized_fold)
-            Z = None
-            sample_weight = None
-            fold_indices = None
+            if store_oof:
+                identity = _retention.external_analysis_identity(
+                    predictions=external_predictions,
+                    n_input=len(self.data),
+                    observation_ids_source=external_input.observation_ids_source,
+                )
+                collector = _retention.OOFRetention.external(
+                    predictions=external_predictions,
+                    identity=identity,
+                    n_rep=self.n_rep,
+                    n_folds=self.n_folds,
+                    trimming_threshold=self.trimming_threshold,
+                )
+                external_predictions = collector._predictions
+            Z = sample_weight = fold_indices = None
             fold_source = "external_predictions"
         else:
-            if self._fold_indices_input is not None and self.n_rep != 1:
-                context = f"dml.{self._MODEL_TAG.lower() or 'base'}"
-                raise MethodIncompatibility(
-                    f"{context}: explicit fold_indices require n_rep=1; pass one "
-                    "fold assignment for the single cross-fit repetition."
-                )
             cols = [self.y, self.treat] + self.covariates
             if self.instrument is not None:
                 cols = cols + self.instrument
@@ -659,6 +655,12 @@ class _DoubleMLBase:
                 work["__fold__"] = self.data[fi].values
             elif fi is not None:
                 work["__fold__"] = np.asarray(fi)
+            if store_oof:
+                identity = _retention.internal_analysis_identity(
+                    n_input=len(self.data),
+                    complete_mask=~work.isna().to_numpy().any(axis=1),
+                    observation_ids=observation_ids,
+                )
             clean = work.dropna()
             Y = clean[self.y].values.astype(float)
             D = clean[self.treat].values.astype(float)
@@ -692,6 +694,18 @@ class _DoubleMLBase:
             else:
                 fold_indices = None
                 fold_source = "kfold"
+            if store_oof:
+                collector = _retention.OOFRetention.internal(
+                    y=Y,
+                    d=D,
+                    x=X,
+                    covariate_names=self.covariates,
+                    identity=identity,
+                    n_rep=self.n_rep,
+                    n_folds=self.n_folds,
+                    random_state=self.random_state,
+                    trimming_threshold=self.trimming_threshold,
+                )
         n = len(Y)
         if n == 0:
             raise DataInsufficient(
@@ -709,49 +723,51 @@ class _DoubleMLBase:
         for rep in range(self.n_rep):
             self._last_rep_diagnostics: Dict[str, Any] = {}
             self._last_rep_residuals: Dict[str, np.ndarray] = {}
-            if external_predictions is None:
-                theta_r, se_r = self._fit_one_rep(
-                    Y,
-                    D,
-                    X,
-                    Z,
-                    n,
-                    rng_seed=self.random_state + rep,
-                    sample_weight=sample_weight,
-                    fold_indices=fold_indices,
-                )
-            else:
-                theta_r, se_r = self._fit_external_rep(
-                    Y, D, X, external_predictions, rep
-                )
+            capture = collector and collector.start_rep(rep, self.random_state + rep)
+            if capture is not None:
+                self._oof_rep_capture = capture
+            try:
+                if external_predictions is None:
+                    theta_r, se_r = self._fit_one_rep(
+                        Y,
+                        D,
+                        X,
+                        Z,
+                        n,
+                        rng_seed=self.random_state + rep,
+                        sample_weight=sample_weight,
+                        fold_indices=fold_indices,
+                    )
+                else:
+                    theta_r, se_r = self._fit_external_rep(
+                        Y, D, X, external_predictions, rep
+                    )
+            finally:
+                self.__dict__.pop("_oof_rep_capture", None)
+            if collector is not None:
+                assert isinstance(capture, _retention.OOFRepCapture)
+                collector.finish_rep(capture, theta_r, se_r)
             thetas.append(theta_r)
             ses.append(se_r)
             if self._last_rep_diagnostics:
                 per_rep_diags.append(self._last_rep_diagnostics)
             if self._last_rep_residuals:
                 last_residuals = self._last_rep_residuals
-
         if len(thetas) == 1:
             theta, se = thetas[0], ses[0]
         else:
-            # Chernozhukov et al. (2018) eq. 3.7 / Algorithm 1 Step 4:
-            # point estimate = median of rep estimates,
-            # SE accounts for BOTH within-rep nuisance variance AND
-            # between-rep dispersion of the point estimates:
+            # Median estimate with within-rep variance and split dispersion:
             #     σ̂² = median_r ( se_r² + (θ̂_r − θ̂_med)² )
-            # This avoids under-coverage that would result from
-            # taking only median(se_r).
             thetas_arr = np.asarray(thetas, dtype=float)
             ses_arr = np.asarray(ses, dtype=float)
             theta = float(np.median(thetas_arr))
             s2 = ses_arr**2 + (thetas_arr - theta) ** 2
             se = float(np.sqrt(np.median(s2)))
-
+        retained_bundle = collector and collector.build(theta, se)
         t_stat = theta / se if se > 0 else 0.0
         pvalue = float(2 * stats.norm.sf(abs(t_stat)))
         z_crit = stats.norm.ppf(1 - self.alpha / 2)
         ci = (theta - z_crit * se, theta + z_crit * se)
-
         model_info = {
             "dml_model": self._MODEL_TAG,
             "n_folds": self.n_folds,
@@ -779,31 +795,19 @@ class _DoubleMLBase:
         if per_rep_diags:
             model_info["diagnostics"] = self._aggregate_diagnostics(per_rep_diags)
         if external_predictions is not None:
-            model_info.update(
-                {
-                    "scoring_engine": "statspai_irm_external_predictions",
-                    "external_predictions_hashes": dict(external_input.hashes),
-                    "nuisance_fit": "skipped_external_predictions",
-                }
-            )
-        # Stash residuals + design matrix for downstream sensitivity /
-        # diagnostics (sp.dml_sensitivity, sp.dml_diagnostics). These are
-        # NumPy arrays so they don't serialise in to_dict, but they're
-        # available on the in-memory model_info.
+            model_info["scoring_engine"] = "statspai_irm_external_predictions"
+            model_info["external_predictions_hashes"] = dict(external_input.hashes)
+            model_info["nuisance_fit"] = "skipped_external_predictions"
+        # Keep private diagnostics in memory for sensitivity helpers.
         if last_residuals:
-            model_info.update(
-                {
-                    "_y_resid": last_residuals.get("y_resid"),
-                    "_d_resid": last_residuals.get("d_resid"),
-                    "_pscore": last_residuals.get("pscore"),
-                }
-            )
+            model_info["_y_resid"] = last_residuals.get("y_resid")
+            model_info["_d_resid"] = last_residuals.get("d_resid")
+            model_info["_pscore"] = last_residuals.get("pscore")
         model_info["_X_design"] = X
         model_info["_T"] = D
         model_info["_Y"] = Y
         model_info["_covariate_names"] = list(self.covariates)
-
-        return CausalResult(
+        result = CausalResult(
             method=f"Double ML ({self._MODEL_TAG})",
             estimand=self._ESTIMAND,
             estimate=theta,
@@ -816,3 +820,6 @@ class _DoubleMLBase:
             model_info=model_info,
             _citation_key="dml",
         )
+        if retained_bundle is not None:
+            _attach_result_oof(result, retained_bundle)
+        return result

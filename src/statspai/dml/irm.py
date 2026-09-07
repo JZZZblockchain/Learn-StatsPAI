@@ -99,6 +99,9 @@ class DoubleMLIRM(_DoubleMLBase):
             ps_raw=ps_raw,
             trimming_threshold=self.trimming_threshold,
         )
+        capture = self.__dict__.get("_oof_rep_capture")
+        if capture is not None:
+            capture.record_external_score(score)
         lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
         self._last_rep_diagnostics = {
             "pscore_min": float(np.min(ps_raw)),
@@ -172,6 +175,11 @@ class DoubleMLIRM(_DoubleMLBase):
         splits = self._make_splits(
             X, rng_seed=rng_seed, fold_indices=fold_indices, stratify=D
         )
+        capture = self.__dict__.get("_oof_rep_capture")
+        if capture is not None:
+            capture.record_internal_splits(
+                splits, min_subgroup_fit=self._MIN_SUBGROUP_FIT
+            )
         # Accumulate the cross-fitted nuisance predictions over folds;
         # trimming / IPW-normalization / the (ATE or ATTE) score are then
         # applied once on the full out-of-fold vectors so that
@@ -277,7 +285,6 @@ class DoubleMLIRM(_DoubleMLBase):
 
         # ---- trimming + IPW normalization + score (full-vector) ------
         lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
-
         if self.score == "ATE" and not self.normalize_ipw:
             canonical = score_binary_ate(
                 y=Y,
@@ -287,6 +294,16 @@ class DoubleMLIRM(_DoubleMLBase):
                 ps_raw=m_hat_full,
                 trimming_threshold=self.trimming_threshold,
             )
+            capture = self.__dict__.get("_oof_rep_capture")
+            if capture is not None:
+                capture.record_internal_score(
+                    g0=g0_full,
+                    g1=g1_full,
+                    ps_raw=m_hat_full,
+                    score=canonical,
+                    fallback_g0=n_fallback_g0,
+                    fallback_g1=n_fallback_g1,
+                )
             m_clip = canonical.ps_used
             psi_scores = canonical.psi_b
             if sample_weight is None:

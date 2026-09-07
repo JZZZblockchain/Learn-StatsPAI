@@ -329,37 +329,16 @@ class OOFBundle:
 
     def to_frame(self) -> pd.DataFrame:
         """Return repeat-major score rows without individual covariate values."""
-        repeats, n_obs = self.ps_used.shape
-        rep = np.repeat(np.arange(repeats), n_obs)
-        folds = self.predictions.fold_ids.reshape(-1)
-        origins = {
-            (row["rep"], row["fold_id"]): row["origin"]
-            for row in self.predictions.training_records
-        }
-        return pd.DataFrame(
-            {
-                "rep": rep,
-                "row_id": np.tile(self.predictions.ids, repeats),
-                "input_position": np.tile(self.input_positions, repeats),
-                "fold_id": folds,
-                "training_origin": [
-                    origins[(int(r), int(f))] for r, f in zip(rep, folds)
-                ],
-                "y": np.tile(self.predictions.y, repeats),
-                "d": np.tile(self.predictions.d, repeats),
-                **{
-                    name: getattr(self.predictions, name).reshape(-1)
-                    for name in ("g0", "g1", "ps_raw")
-                },
-                **{
-                    name: getattr(self, name).reshape(-1)
-                    for name in ("ps_used", "psi_b", "psi")
-                },
-            }
-        )
+        from ._oof_result import bundle_frame
+
+        return bundle_frame(self)
 
     def to_json(self, path) -> None:
-        """Write deterministic UTF-8 JSON with one whole-bundle hash."""
+        """Write full individual-level IDs, Y, D, X, nuisance predictions, and scores.
+
+        Choose the path, permissions, and sharing scope under the applicable
+        user-data policy; the file carries one whole-bundle hash.
+        """
         Path(path).write_bytes(_json.canonical_bytes(self._payload()))
 
     @classmethod
@@ -392,6 +371,30 @@ class OOFBundle:
             stored, result.hash, "bundle hash changed during reconstruction"
         )
         return result
+
+
+def _clone_oof_predictions(predictions):
+    from ._oof_result import _clone_predictions
+
+    return _clone_predictions(predictions)
+
+
+def _attach_result_oof(result, bundle) -> None:
+    from ._oof_result import attach_result_oof
+
+    attach_result_oof(result, bundle)
+
+
+def _get_result_oof(result):
+    from ._oof_result import get_result_oof
+
+    return get_result_oof(result)
+
+
+def _get_result_residuals(result, *, rep=None):
+    from ._oof_result import get_result_residuals
+
+    return get_result_residuals(result, rep)
 
 
 __all__ = ["OOFBundle", "OOFPredictions"]

@@ -12,6 +12,9 @@ from ..exceptions import MethodIncompatibility
 
 if TYPE_CHECKING:
     from ._decision import DecisionSummary
+    from ..dml.oof import OOFBundle
+else:
+    OOFBundle = Any
 
 
 def _scipy_stats() -> Any:
@@ -2803,6 +2806,18 @@ class CausalResult:
         self.model_info = model_info or {}
         self._influence_funcs = _influence_funcs
         self._citation_key = _citation_key
+
+    def get_oof(self) -> "OOFBundle":
+        """Return an independent snapshot of retained repeated-cross-fit OOF data."""
+        from ..dml.oof import _get_result_oof
+
+        return _get_result_oof(self)
+
+    def get_residuals(self, rep: Optional[int] = None) -> pd.DataFrame:
+        """Return retained IRM residual/score rows, optionally for one repeat."""
+        from ..dml.oof import _get_result_residuals
+
+        return _get_result_residuals(self, rep=rep)
 
     # ------------------------------------------------------------------
     # Backward compatibility with EconometricResults

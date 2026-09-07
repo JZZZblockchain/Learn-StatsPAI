@@ -7,6 +7,7 @@ import importlib
 import inspect
 import hashlib
 import json
+import pydoc
 import typing
 from pathlib import Path
 
@@ -313,10 +314,13 @@ def test_external_custom_ids_and_label_permuted_explicit_partition_are_accepted(
         fold_indices=[1, 1, 0, 0],
     )
 
-    result = estimator.fit(external_predictions=predictions, observation_ids=ids)
+    result = estimator.fit(
+        external_predictions=predictions, store_oof=True, observation_ids=ids
+    )
 
     assert result.estimate == 3.0
     assert result.model_info["fold_source"] == "external_predictions"
+    assert result.get_oof().predictions.n_rep == 2
 
 
 def _contains_identity(value, target, seen=None):
@@ -665,14 +669,20 @@ def test_external_request_rejects_nonbinary_treatment_before_alignment():
         _direct_external_estimator(frame).fit(external_predictions=predictions)
 
 
-def test_store_oof_pending_task5_and_strict_bool_gate():
+@pytest.mark.parametrize("bad", [None, 0, 1, np.bool_(False), np.bool_(True), "true"])
+@pytest.mark.parametrize("entry", ["direct", "article"])
+def test_store_oof_requires_exact_builtin_bool(entry, bad):
     frame, predictions = _external_fixture()
-    estimator = _direct_external_estimator(frame)
-
     with pytest.raises(TypeError, match="store_oof must be a bool"):
-        estimator.fit(external_predictions=predictions, store_oof=1)
-    with pytest.raises(NotImplementedError, match="Task 5"):
-        estimator.fit(external_predictions=predictions, store_oof=True)
+        _run_external_entry(entry, frame, predictions, store_oof=bad)
+
+
+def test_store_oof_builtin_true_enters_external_retention_path():
+    frame, predictions = _external_fixture()
+    result = _direct_external_estimator(frame).fit(
+        external_predictions=predictions, store_oof=True
+    )
+    assert result.get_oof().predictions.n_rep == 1
 
 
 def test_observation_ids_alone_are_not_silently_ignored():
@@ -755,16 +765,43 @@ def test_python_only_oof_controls_are_absent_from_all_live_callable_schemas():
     assert _PYTHON_ONLY_NAMES.isdisjoint(registry_params)
 
 
-def test_dml_help_and_registry_disclose_python_only_scope_and_retention_limit():
-    help_text = sp.dml.__doc__ or ""
-    description = sp.describe_function("dml")
-    registry_text = json.dumps(description, sort_keys=True)
+def _live_help(value):
+    return pydoc.render_doc(value, renderer=pydoc.plaintext)
 
-    for text in (help_text, registry_text):
-        assert "Python-only" in text
-        assert "caller_declared" in text
-        assert "Task 5" in text
-        assert "store_oof=True" in text
+
+def test_dml_live_help_and_registry_disclose_complete_retention_contract():
+    surfaces = {
+        "article": _live_help(sp.dml),
+        "library": _live_help(library_dml),
+        "legacy_fit": _live_help(DoubleML.fit),
+        "registry": json.dumps(sp.describe_function("dml"), sort_keys=True),
+    }
+    required = (
+        "Python-only",
+        "store_oof=True",
+        "get_oof()",
+        "get_residuals()",
+        "individual-level",
+        "caller_declared",
+        "10 rows per treatment arm",
+        "internal explicit fold_indices require n_rep=1",
+        "external repeated IRM",
+        "equivalent",
+    )
+    for name, text in surfaces.items():
+        assert "pending Task 5" not in text, name
+        for phrase in required:
+            assert phrase in text, (name, phrase)
+    library = surfaces["library"]
+    for heading in (
+        "external_predictions : OOFPredictions, optional",
+        "store_oof : bool, default False",
+        "observation_ids : sequence of str, optional",
+    ):
+        assert heading in library
+    export_help = inspect.getdoc(sp.OOFBundle.to_json) or ""
+    expected = "individual-level IDs, Y, D, X, nuisance predictions, and scores"
+    assert expected in export_help
 
 
 def test_dml_stub_reexports_the_annotated_article_wrapper():
@@ -795,5 +832,9 @@ def test_committed_dml_schemas_keep_python_only_controls_out_and_non_dml_baselin
     assert schema == _LIVE_DML_SCHEMAS[filename]()
     assert _PYTHON_ONLY_NAMES.isdisjoint(schema["properties"])
     assert _PYTHON_ONLY_NAMES.isdisjoint(schema.get("required", ()))
-    assert "Python-only" in json.dumps(dml_entry, sort_keys=True)
+    artifact_text = json.dumps(dml_entry, sort_keys=True)
+    assert "Python-only" in artifact_text
+    assert "get_oof()" in artifact_text
+    assert "10 rows per treatment arm" in artifact_text
+    assert "pending Task 5" not in artifact_text
     assert _canonical_non_dml_hash(entries) == _PRECHANGE_NON_DML_HASHES[filename]

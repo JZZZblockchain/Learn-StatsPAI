@@ -1112,13 +1112,20 @@ def dml(
     (treatment / propensity nuisance). ``model=`` controls the DML
     variant: ``'plr'``, ``'irm'``, ``'pliv'``, ``'iivm'``.
 
-    ``external_predictions`` is a direct-Python-only path for an in-memory,
-    contract-validated ``OOFPredictions`` object. In this release it is scoped
-    to unweighted, unnormalised binary-treatment IRM ATE scoring with exact
-    row/value/fold alignment. Its ``caller_declared`` records are auditable
-    declarations, not proof that nuisance training avoided data leakage.
-    ``store_oof=True`` is reserved for Task 5 and currently fails explicitly;
-    these three Python-only controls are omitted from callable JSON/MCP schemas.
+    ``external_predictions`` is a Python-only path for an in-memory,
+    contract-validated ``OOFPredictions`` object. It supports unweighted,
+    unnormalised binary-treatment IRM ATE scoring with exact row/value/fold
+    alignment. Its ``caller_declared`` records are auditable declarations, not
+    proof that nuisance training avoided data leakage. ``store_oof=True`` keeps
+    every repeat for ``get_oof()`` and ``get_residuals()``; ordinary result
+    serialization omits these individual-level records. Retained internal fits
+    require at least 10 rows per treatment arm in every training fold, and
+    otherwise raise ``DataInsufficient`` instead of using the legacy subgroup-mean
+    fallback. For retained calls, internal explicit fold_indices require n_rep=1;
+    external repeated IRM
+    predictions are accepted when the explicit partition is equivalent for
+    every repeat. ``observation_ids`` and the other two controls are Python-only
+    and omitted from callable JSON/MCP schemas.
 
     Notes
     -----
@@ -1126,8 +1133,7 @@ def dml(
     (``plr`` / ``pliv`` to machine precision under shared learners and
     folds). Declared scope boundaries — single scalar instrument for
     ``pliv`` / ``iivm`` (use ``sp.scalar_iv_projection`` for multiple
-    instruments), one treatment per call, DML2 procedure only,
-    ``fold_indices`` for ``'plr'`` only — are detailed in the
+    instruments), one treatment per call, and DML2 procedure only are detailed in the
     :func:`statspai.dml.dml` docstring and the guide *"sp.dml and the
     DoubleML reference implementation"*.
 

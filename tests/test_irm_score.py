@@ -407,6 +407,17 @@ def test_internal_irm_prechange_literal_goldens(kind, estimate, se, y_residual_b
         info["_y_resid"] + result.estimate,
         np.tile(np.asarray(y_residual_block) + estimate, 4),
     )
+    retained = _internal_estimator(kind).fit(store_oof=True)
+    bundle = retained.get_oof()
+    assert (
+        retained.estimate,
+        retained.se,
+        retained.pvalue,
+        retained.ci,
+    ) == (result.estimate, result.se, result.pvalue, result.ci)
+    np.testing.assert_array_equal(bundle.theta, [estimate])
+    np.testing.assert_array_equal(bundle.se, [se])
+    np.testing.assert_array_equal(bundle.psi[0], retained.model_info["_y_resid"])
 
 
 def test_internal_irm_two_repeat_prechange_literal_golden(monkeypatch):
