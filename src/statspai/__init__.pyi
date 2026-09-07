@@ -322,6 +322,8 @@ from .dml.irm import DoubleMLIRM as DoubleMLIRM
 from .dml.model_averaging import DMLAveragingResult as DMLAveragingResult
 from .dml.model_averaging import dml_model_averaging as dml_model_averaging
 from .dml.model_averaging import dml_model_averaging as model_averaging_dml
+from .dml.oof import OOFBundle as OOFBundle
+from .dml.oof import OOFPredictions as OOFPredictions
 from .dml.panel_dml import DMLPanelResult as DMLPanelResult
 from .dml.panel_dml import dml_panel as dml_panel
 from .dml.pliv import DoubleMLPLIV as DoubleMLPLIV

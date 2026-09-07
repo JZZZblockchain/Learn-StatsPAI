@@ -14958,6 +14958,11 @@ def _build_registry() -> None:
 
 _FULL_REGISTRY_BUILT = False
 
+# Public value objects that are exported for construction, serialization, and
+# static typing but are not statistical functions.  Keep these out of the
+# agent function catalog and parity denominator.
+_NON_FUNCTION_PUBLIC_EXPORTS: frozenset = frozenset({"OOFBundle", "OOFPredictions"})
+
 
 # Public symbols whose Track A parity is represented by the R/Stata
 # harness. This conservative seed is supplemented by parsing the live
@@ -17588,7 +17593,7 @@ def _ensure_full_registry() -> None:
 
     exported = getattr(_sp, "__all__", None) or dir(_sp)
     for name in exported:
-        if name in _REGISTRY:
+        if name in _REGISTRY or name in _NON_FUNCTION_PUBLIC_EXPORTS:
             continue
         obj = getattr(_sp, name, None)
         if obj is None:

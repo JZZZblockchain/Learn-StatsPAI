@@ -33,6 +33,8 @@ import statspai as sp
 ALL_NOT_REGISTERED_BASELINE = frozenset(
     {
         "JOURNAL_PRESETS",
+        "OOFBundle",
+        "OOFPredictions",
         "PAPER_TABLE_TEMPLATES",
         "STABILITY_TIERS",
         "VALIDATION_STATUSES",

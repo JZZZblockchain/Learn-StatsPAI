@@ -354,16 +354,31 @@ def test_bundle_records_exact_raw_propensity_clipping_counts():
     _, template = tiny_scored_bundle()
     metadata = bundle_metadata(predictions)
     metadata["clipping_counts"][0].update(n_clipped_low=1, n_clipped_high=1)
+    ps_used = np.array([[0.01, 0.99, 0.5, 0.5]])
+    psi_b = (
+        predictions.g1
+        - predictions.g0
+        + predictions.d[None, :] * (predictions.y[None, :] - predictions.g1) / ps_used
+        - (1 - predictions.d[None, :])
+        * (predictions.y[None, :] - predictions.g0)
+        / (1 - ps_used)
+    )
+    theta = psi_b.mean(axis=1)
+    se = np.std(psi_b, axis=1, ddof=0) / np.sqrt(psi_b.shape[1])
     bundle = OOFBundle.from_arrays(
         predictions=predictions,
-        ps_used=[[0.01, 0.99, 0.5, 0.5]],
-        psi_b=template.psi_b,
-        psi=template.psi,
-        theta=template.theta,
-        se=template.se,
+        ps_used=ps_used,
+        psi_b=psi_b,
+        psi=psi_b - theta[:, None],
+        theta=theta,
+        se=se,
         input_positions=template.input_positions,
         dropped_positions=template.dropped_positions,
-        aggregation=template.aggregation,
+        aggregation={
+            "rule": "median_theta_median_variance_plus_split_deviation",
+            "theta": float(np.median(theta)),
+            "se": float(np.sqrt(np.median(se**2))),
+        },
         metadata=metadata,
     )
     assert bundle.metadata["clipping_counts"][0]["n_clipped_low"] == 1
