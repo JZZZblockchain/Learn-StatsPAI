@@ -20,12 +20,13 @@ underlying module — not this file.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
 from ._aliases import accepts_aliases
 from .core.results import CausalResult
+from .dml.oof import OOFPredictions
 from .exceptions import MethodIncompatibility
 
 __all__ = [
@@ -1091,6 +1092,9 @@ def dml(
     model_y: Any = None,
     model_d: Any = None,
     model: str = "plr",
+    external_predictions: Optional["OOFPredictions"] = None,
+    store_oof: bool = False,
+    observation_ids: Optional[Sequence[str]] = None,
     **kwargs: Any,
 ) -> CausalResult:
     """Double/Debiased Machine Learning — article-facing alias.
@@ -1107,6 +1111,14 @@ def dml(
     forwards to ``ml_g`` (outcome nuisance), ``model_d`` to ``ml_m``
     (treatment / propensity nuisance). ``model=`` controls the DML
     variant: ``'plr'``, ``'irm'``, ``'pliv'``, ``'iivm'``.
+
+    ``external_predictions`` is a direct-Python-only path for an in-memory,
+    contract-validated ``OOFPredictions`` object. In this release it is scoped
+    to unweighted, unnormalised binary-treatment IRM ATE scoring with exact
+    row/value/fold alignment. Its ``caller_declared`` records are auditable
+    declarations, not proof that nuisance training avoided data leakage.
+    ``store_oof=True`` is reserved for Task 5 and currently fails explicitly;
+    these three Python-only controls are omitted from callable JSON/MCP schemas.
 
     Notes
     -----
@@ -1218,5 +1230,8 @@ def dml(
         treat=treat_final,
         covariates=cov_final,
         model=model,
+        external_predictions=external_predictions,
+        store_oof=store_oof,
+        observation_ids=observation_ids,
         **kwargs,
     )

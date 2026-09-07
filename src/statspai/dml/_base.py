@@ -9,7 +9,7 @@ validation, default learners, repeat-split aggregation, and
 """
 
 import operator
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,12 @@ from scipy import stats
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility
+from ._external_predictions import (
+    validate_external_partitions,
+    validate_external_prediction_input,
+)
 from ._learners import resolve_learner
+from .oof import OOFPredictions
 
 
 def _positive_int(value: Any, *, name: str, context: str) -> int:
@@ -62,11 +67,7 @@ def _coerce_column_list(value: Any, *, name: str, context: str) -> List[str]:
     return cols
 
 
-# Model tags whose ``_fit_one_rep`` routes ``fold_indices`` through
-# ``_DoubleMLBase._make_splits``. Sharing an explicit fold partition is what
-# lets a StatsPAI fit be compared bit-for-bit against DoubleML: with the
-# split fixed by the data, the cross-fitting Monte Carlo term drops out and
-# any residual gap is attributable to the estimator itself.
+# Models that route explicit folds through ``_make_splits``.
 _FOLD_AWARE_MODELS = frozenset({"PLR", "IRM", "PLIV", "IIVM"})
 
 
@@ -85,16 +86,9 @@ class _DoubleMLBase:
     # not estimand descriptors.
     _ML_M_TARGET_BINARY: bool = False
     _ML_R_TARGET_BINARY: bool = False
-    # Some IV models (IIVM) genuinely only work with a single scalar
-    # instrument; PLIV with multiple Z is fine in principle but the
-    # current reduced-form r(X) is scalar so we still project to a
-    # scalar index before passing. Models that can handle vector Z
-    # override this to False.
+    # Current IV implementations use a scalar reduced-form nuisance.
     _REQUIRES_SCALAR_INSTRUMENT: bool = True
-    # Subclasses opt into ``sample_weight`` support by setting this to
-    # True. Models without weighted-variance derivations (PLIV, IIVM)
-    # raise ``NotImplementedError`` if a non-trivial weight vector is
-    # supplied — better than silently ignoring it.
+    # Subclasses opt into sample weights when their variance supports them.
     _SUPPORTS_SAMPLE_WEIGHT: bool = False
     # Score / IPW options. ``_VALID_SCORES = None`` means the model does
     # not accept a ``score=`` argument; otherwise it is the set of legal
@@ -220,11 +214,6 @@ class _DoubleMLBase:
                 f"{context}: explicit fold_indices are supported for model in "
                 f"{{{', '.join(sorted(m.lower() for m in _FOLD_AWARE_MODELS))}}}; "
                 f"model='{self._MODEL_TAG.lower()}' would ignore them."
-            )
-        if fold_indices is not None and self.n_rep != 1:
-            raise MethodIncompatibility(
-                f"{context}: explicit fold_indices require n_rep=1; pass one fold "
-                "assignment for the single cross-fit repetition."
             )
         if fold_indices is None:
             self._fold_indices_input: Any = None
@@ -399,6 +388,19 @@ class _DoubleMLBase:
     ) -> Tuple[float, float]:
         raise NotImplementedError  # pragma: no cover
 
+    def _fit_external_rep(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X: np.ndarray,
+        predictions: "OOFPredictions",
+        rep: int,
+    ) -> Tuple[float, float]:
+        del Y, D, X, predictions, rep
+        raise NotImplementedError(
+            "external predictions are not implemented for this DML model"
+        )
+
     def _make_splits(
         self,
         X: np.ndarray,
@@ -562,45 +564,134 @@ class _DoubleMLBase:
                 merged[k] = sample
         return merged
 
-    def fit(self) -> CausalResult:
+    def fit(
+        self,
+        *,
+        external_predictions: Optional["OOFPredictions"] = None,
+        store_oof: bool = False,
+        observation_ids: Optional[Sequence[str]] = None,
+    ) -> CausalResult:
         """Cross-fit, aggregate across repeats, return a CausalResult."""
-        cols = [self.y, self.treat] + self.covariates
-        if self.instrument is not None:
-            cols = cols + self.instrument
-        # Build a working frame that also carries sample weights so the
-        # dropna mask is consistent across (Y, D, X, Z, w).
-        work = self.data[cols].copy()
-        sw = self._sample_weight_input
-        if isinstance(sw, str):
-            work["__sw__"] = self.data[sw].astype(float).values
-        elif sw is not None:
-            work["__sw__"] = np.asarray(sw, dtype=float)
-        fi = self._fold_indices_input
-        if isinstance(fi, str):
-            work["__fold__"] = self.data[fi].values
-        elif fi is not None:
-            work["__fold__"] = np.asarray(fi)
-        clean = work.dropna()
-        Y = clean[self.y].values.astype(float)
-        D = clean[self.treat].values.astype(float)
-        X = clean[self.covariates].values.astype(float)
-        Z = (
-            clean[self.instrument[0]].values.astype(float)
-            if self.instrument is not None
-            else None
+        if not isinstance(store_oof, bool):
+            raise TypeError("store_oof must be a bool")
+        new_oof_request = (
+            external_predictions is not None or store_oof or observation_ids is not None
         )
-        if "__sw__" in clean.columns:
-            sample_weight = clean["__sw__"].values.astype(float)
-            if np.any(sample_weight < 0):
-                raise MethodIncompatibility(
-                    "sample_weight must be non-negative; got negative entries."
+        if new_oof_request:
+            if self._MODEL_TAG != "IRM":
+                raise NotImplementedError(
+                    "OOF scoring is currently implemented only for model='irm'"
                 )
-            if not np.isfinite(sample_weight).all():
-                raise MethodIncompatibility("sample_weight contains non-finite values.")
-            if sample_weight.sum() <= 0:
-                raise DataInsufficient("sample_weight has zero total mass.")
-        else:
+            if self.score != "ATE":
+                raise NotImplementedError(
+                    "OOF scoring is currently implemented only for score='ATE'"
+                )
+            if self.normalize_ipw:
+                raise NotImplementedError(
+                    "OOF scoring does not yet support normalize_ipw=True"
+                )
+            if self._sample_weight_input is not None:
+                raise NotImplementedError(
+                    "OOF scoring does not yet support sample_weight"
+                )
+            if store_oof:
+                raise NotImplementedError(
+                    "store_oof=True is pending Task 5 retention and getters"
+                )
+            if external_predictions is None:
+                raise ValueError(
+                    "observation_ids require external_predictions or store_oof=True"
+                )
+            analysis = self.data[[self.y, self.treat] + self.covariates]
+            fi = self._fold_indices_input
+            raw_fold = (
+                self.data[fi].to_numpy()
+                if isinstance(fi, str)
+                else np.asarray(fi) if fi is not None else None
+            )
+            external_input = validate_external_prediction_input(
+                external_predictions,
+                y_values=analysis[self.y].to_numpy(),
+                d_values=analysis[self.treat].to_numpy(),
+                x_columns=[
+                    (name, analysis[name].to_numpy()) for name in self.covariates
+                ],
+                y_name=self.y,
+                d_name=self.treat,
+                covariate_names=self.covariates,
+                observation_ids=observation_ids,
+                n_obs=len(self.data),
+                n_rep=self.n_rep,
+                n_folds=self.n_folds,
+                analysis_has_missing=bool(analysis.isna().to_numpy().any()),
+                fold_has_missing=bool(
+                    raw_fold is not None and np.asarray(pd.isna(raw_fold)).any()
+                ),
+            )
+            Y, D, X = external_input.y, external_input.d, external_input.x
+            if raw_fold is not None:
+                normalized_fold = self._validate_fold_indices(
+                    raw_fold, len(self.data), self.n_folds
+                )
+                validate_external_partitions(external_predictions, normalized_fold)
+            Z = None
             sample_weight = None
+            fold_indices = None
+            fold_source = "external_predictions"
+        else:
+            if self._fold_indices_input is not None and self.n_rep != 1:
+                context = f"dml.{self._MODEL_TAG.lower() or 'base'}"
+                raise MethodIncompatibility(
+                    f"{context}: explicit fold_indices require n_rep=1; pass one "
+                    "fold assignment for the single cross-fit repetition."
+                )
+            cols = [self.y, self.treat] + self.covariates
+            if self.instrument is not None:
+                cols = cols + self.instrument
+            work = self.data[cols].copy()
+            sw = self._sample_weight_input
+            if isinstance(sw, str):
+                work["__sw__"] = self.data[sw].astype(float).values
+            elif sw is not None:
+                work["__sw__"] = np.asarray(sw, dtype=float)
+            fi = self._fold_indices_input
+            if isinstance(fi, str):
+                work["__fold__"] = self.data[fi].values
+            elif fi is not None:
+                work["__fold__"] = np.asarray(fi)
+            clean = work.dropna()
+            Y = clean[self.y].values.astype(float)
+            D = clean[self.treat].values.astype(float)
+            X = clean[self.covariates].values.astype(float)
+            Z = (
+                clean[self.instrument[0]].values.astype(float)
+                if self.instrument is not None
+                else None
+            )
+            if "__sw__" in clean.columns:
+                sample_weight = clean["__sw__"].values.astype(float)
+                if np.any(sample_weight < 0):
+                    raise MethodIncompatibility(
+                        "sample_weight must be non-negative; got negative entries."
+                    )
+                if not np.isfinite(sample_weight).all():
+                    raise MethodIncompatibility(
+                        "sample_weight contains non-finite values."
+                    )
+                if sample_weight.sum() <= 0:
+                    raise DataInsufficient("sample_weight has zero total mass.")
+            else:
+                sample_weight = None
+            if "__fold__" in clean.columns:
+                fold_indices = self._validate_fold_indices(
+                    clean["__fold__"].values,
+                    len(Y),
+                    self.n_folds,
+                )
+                fold_source = "user"
+            else:
+                fold_indices = None
+                fold_source = "kfold"
         n = len(Y)
         if n == 0:
             raise DataInsufficient(
@@ -611,17 +702,6 @@ class _DoubleMLBase:
                 f"DML needs at least n_folds complete rows; got n={n}, "
                 f"n_folds={self.n_folds}."
             )
-        if "__fold__" in clean.columns:
-            fold_indices = self._validate_fold_indices(
-                clean["__fold__"].values,
-                n,
-                self.n_folds,
-            )
-            fold_source = "user"
-        else:
-            fold_indices = None
-            fold_source = "kfold"
-
         thetas: List[float] = []
         ses: List[float] = []
         per_rep_diags: List[Dict[str, Any]] = []
@@ -629,16 +709,21 @@ class _DoubleMLBase:
         for rep in range(self.n_rep):
             self._last_rep_diagnostics: Dict[str, Any] = {}
             self._last_rep_residuals: Dict[str, np.ndarray] = {}
-            theta_r, se_r = self._fit_one_rep(
-                Y,
-                D,
-                X,
-                Z,
-                n,
-                rng_seed=self.random_state + rep,
-                sample_weight=sample_weight,
-                fold_indices=fold_indices,
-            )
+            if external_predictions is None:
+                theta_r, se_r = self._fit_one_rep(
+                    Y,
+                    D,
+                    X,
+                    Z,
+                    n,
+                    rng_seed=self.random_state + rep,
+                    sample_weight=sample_weight,
+                    fold_indices=fold_indices,
+                )
+            else:
+                theta_r, se_r = self._fit_external_rep(
+                    Y, D, X, external_predictions, rep
+                )
             thetas.append(theta_r)
             ses.append(se_r)
             if self._last_rep_diagnostics:
@@ -693,6 +778,14 @@ class _DoubleMLBase:
             model_info["se_all_reps"] = ses
         if per_rep_diags:
             model_info["diagnostics"] = self._aggregate_diagnostics(per_rep_diags)
+        if external_predictions is not None:
+            model_info.update(
+                {
+                    "scoring_engine": "statspai_irm_external_predictions",
+                    "external_predictions_hashes": dict(external_input.hashes),
+                    "nuisance_fit": "skipped_external_predictions",
+                }
+            )
         # Stash residuals + design matrix for downstream sensitivity /
         # diagnostics (sp.dml_sensitivity, sp.dml_diagnostics). These are
         # NumPy arrays so they don't serialise in to_dict, but they're

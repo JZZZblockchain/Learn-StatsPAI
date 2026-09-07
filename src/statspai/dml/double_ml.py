@@ -19,15 +19,17 @@ Treatment and Structural Parameters." *Econometrics Journal*, 21(1), C1-C68.
 [@chernozhukov2018double]
 """
 
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Sequence, Union
 
 import pandas as pd
 
 from ..core.results import CausalResult
 from ..exceptions import MethodIncompatibility
 from ._base import _DoubleMLBase
+from ._external_predictions import build_oof_provenance_payload
 from .iivm import DoubleMLIIVM
 from .irm import DoubleMLIRM
+from .oof import OOFPredictions
 from .pliv import DoubleMLPLIV
 from .plr import DoubleMLPLR
 
@@ -58,6 +60,10 @@ def dml(
     score: Optional[str] = None,
     normalize_ipw: bool = False,
     trimming_threshold: float = 1e-2,
+    *,
+    external_predictions: Optional["OOFPredictions"] = None,
+    store_oof: bool = False,
+    observation_ids: Optional[Sequence[str]] = None,
 ) -> CausalResult:
     """
     Estimate causal effect using Double/Debiased Machine Learning.
@@ -221,37 +227,43 @@ def dml(
         normalize_ipw=normalize_ipw,
         trimming_threshold=trimming_threshold,
     )
-    _result = estimator.fit()
+    _result = estimator.fit(
+        external_predictions=external_predictions,
+        store_oof=store_oof,
+        observation_ids=observation_ids,
+    )
+    oof_provenance = build_oof_provenance_payload(
+        external_predictions=external_predictions,
+        store_oof=store_oof,
+        observation_ids=observation_ids,
+    )
     try:
         from ..output._lineage import attach_provenance as _attach_prov
 
+        provenance_params = {
+            "y": y,
+            "treat": treat,
+            "covariates": list(estimator.covariates),
+            "model": model,
+            "instrument": instrument if isinstance(instrument, (str, list)) else None,
+            "n_folds": n_folds,
+            "n_rep": n_rep,
+            "alpha": alpha,
+            "random_state": int(random_state),
+            "score": score,
+            "normalize_ipw": normalize_ipw,
+            "trimming_threshold": trimming_threshold,
+            "fold_indices": fold_indices if isinstance(fold_indices, str) else None,
+            # Keep learner objects out of the JSON-serialisable lineage record.
+            "ml_g": type(ml_g).__name__ if ml_g is not None else None,
+            "ml_m": type(ml_m).__name__ if ml_m is not None else None,
+            "ml_r": type(ml_r).__name__ if ml_r is not None else None,
+        }
+        provenance_params.update(oof_provenance)
         _attach_prov(
             _result,
             function="sp.dml",
-            params={
-                "y": y,
-                "treat": treat,
-                "covariates": list(estimator.covariates),
-                "model": model,
-                "instrument": (
-                    instrument if isinstance(instrument, (str, list)) else None
-                ),
-                "n_folds": n_folds,
-                "n_rep": n_rep,
-                "alpha": alpha,
-                "random_state": int(random_state),
-                "score": score,
-                "normalize_ipw": normalize_ipw,
-                "trimming_threshold": trimming_threshold,
-                "fold_indices": (
-                    fold_indices if isinstance(fold_indices, str) else None
-                ),
-                # Learner classes are objects — capture only their type
-                # names so the provenance dict stays JSON-serialisable.
-                "ml_g": type(ml_g).__name__ if ml_g is not None else None,
-                "ml_m": type(ml_m).__name__ if ml_m is not None else None,
-                "ml_r": type(ml_r).__name__ if ml_r is not None else None,
-            },
+            params=provenance_params,
             data=data,
             overwrite=False,
         )
@@ -345,8 +357,18 @@ class DoubleML:
             trimming_threshold=trimming_threshold,
         )
 
-    def fit(self) -> CausalResult:
-        return self._impl.fit()
+    def fit(
+        self,
+        *,
+        external_predictions: Optional["OOFPredictions"] = None,
+        store_oof: bool = False,
+        observation_ids: Optional[Sequence[str]] = None,
+    ) -> CausalResult:
+        return self._impl.fit(
+            external_predictions=external_predictions,
+            store_oof=store_oof,
+            observation_ids=observation_ids,
+        )
 
     # expose common attributes for legacy access
     @property

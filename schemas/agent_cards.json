@@ -1707,7 +1707,7 @@
     ],
     "category": "causal",
     "cost_profile": "",
-    "description": "Double/Debiased Machine Learning for treatment effect estimation. Supports partially linear (PLR), interactive regression (IRM, binary D), partially linear IV (PLIV), and interactive IV (IIVM, binary D/binary Z -> LATE). Validation: certified parity evidence.",
+    "description": "Double/Debiased Machine Learning for treatment effect estimation. Supports partially linear (PLR), interactive regression (IRM, binary D), partially linear IV (PLIV), and interactive IV (IIVM, binary D/binary Z -> LATE). Direct Python callers may supply an in-memory OOFPredictions object for external unweighted, unnormalised binary-treatment IRM ATE scoring; this Python-only path checks exact row/value/fold alignment, while its caller_declared training records remain declarations rather than proof against data leakage. Validation: certified evidence with scoped limitations. Known limitations: Python-only external_predictions is omitted from JSON/MCP callable schemas and accepts no dict, JSON-string, or file-path transport; store_oof=True is pending Task 5 retention/getters and currently raises NotImplementedError; observation_ids is also Python-only.",
     "example": "sp.dml(df, y=\"wage\", treat=\"training\", covariates=[\"age\",\"edu\"], model=\"plr\")",
     "failure_modes": [
       {
@@ -1742,7 +1742,10 @@
       }
     ],
     "inherits_from": null,
-    "limitations": [],
+    "limitations": [
+      "Python-only external_predictions is omitted from JSON/MCP callable schemas and accepts no dict, JSON-string, or file-path transport.",
+      "store_oof=True is pending Task 5 retention/getters and currently raises NotImplementedError; observation_ids is also Python-only."
+    ],
     "name": "dml",
     "not_recommended_when": [],
     "pre_conditions": [
@@ -1753,7 +1756,7 @@
     ],
     "reference": "Chernozhukov et al. (2018) Econometrics Journal",
     "signature": {
-      "description": "Double/Debiased Machine Learning for treatment effect estimation. Supports partially linear (PLR), interactive regression (IRM, binary D), partially linear IV (PLIV), and interactive IV (IIVM, binary D/binary Z -> LATE). Validation: certified parity evidence.",
+      "description": "Double/Debiased Machine Learning for treatment effect estimation. Supports partially linear (PLR), interactive regression (IRM, binary D), partially linear IV (PLIV), and interactive IV (IIVM, binary D/binary Z -> LATE). Direct Python callers may supply an in-memory OOFPredictions object for external unweighted, unnormalised binary-treatment IRM ATE scoring; this Python-only path checks exact row/value/fold alignment, while its caller_declared training records remain declarations rather than proof against data leakage. Validation: certified evidence with scoped limitations. Known limitations: Python-only external_predictions is omitted from JSON/MCP callable schemas and accepts no dict, JSON-string, or file-path transport; store_oof=True is pending Task 5 retention/getters and currently raises NotImplementedError; observation_ids is also Python-only.",
       "name": "dml",
       "parameters": {
         "properties": {

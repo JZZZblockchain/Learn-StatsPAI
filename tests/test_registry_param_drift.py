@@ -52,6 +52,10 @@ _BASELINE = (
     / "registry_param_drift_baseline.json"
 )
 
+_PYTHON_ONLY_PARAM_ALLOWLIST = {
+    "dml": frozenset({"external_predictions", "store_oof", "observation_ids"})
+}
+
 
 def _live_params(fn) -> set:
     """Named parameters a caller can actually pass."""
@@ -67,7 +71,7 @@ def _live_params(fn) -> set:
     }
 
 
-def _current_drift() -> dict:
+def _raw_current_drift() -> dict:
     R._ensure_full_registry()
     out = {}
     for name, spec in sorted(R._REGISTRY.items()):
@@ -83,6 +87,18 @@ def _current_drift() -> dict:
     return out
 
 
+def _current_drift() -> dict:
+    """Return drift after consuming the exact reviewed Python-only boundary."""
+    out = _raw_current_drift()
+    for name, allowed in _PYTHON_ONLY_PARAM_ALLOWLIST.items():
+        remaining = sorted(set(out.get(name, ())) - set(allowed))
+        if remaining:
+            out[name] = remaining
+        else:
+            out.pop(name, None)
+    return out
+
+
 @pytest.fixture(scope="module")
 def baseline() -> dict:
     return json.loads(_BASELINE.read_text(encoding="utf-8"))["entries"]
@@ -91,6 +107,25 @@ def baseline() -> dict:
 @pytest.fixture(scope="module")
 def drift() -> dict:
     return _current_drift()
+
+
+def test_dml_python_only_allowlist_is_exact_consumed_and_schema_absent():
+    frozen = frozenset({"external_predictions", "store_oof", "observation_ids"})
+    assert _PYTHON_ONLY_PARAM_ALLOWLIST == {"dml": frozen}
+
+    raw = _raw_current_drift()
+    consumed = set(raw.get("dml", ())) & set(_PYTHON_ONLY_PARAM_ALLOWLIST["dml"])
+    assert consumed == frozen
+
+    signature = inspect.signature(sp.dml)
+    callable_schema = sp.function_schema("dml")["parameters"]
+    properties = set(callable_schema["properties"])
+    required = set(callable_schema.get("required", ()))
+    for name in frozen:
+        assert name in signature.parameters
+        assert signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
+        assert name not in properties
+        assert name not in required
 
 
 def test_no_function_starts_hiding_parameters(drift, baseline):

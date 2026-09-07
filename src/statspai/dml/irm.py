@@ -17,11 +17,12 @@ can produce a degenerate fold whose subgroup-fitted nuisance is junk.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
 from ._base import _DoubleMLBase
+from ._irm_score import score_binary_ate
 
 
 class DoubleMLIRM(_DoubleMLBase):
@@ -78,6 +79,42 @@ class DoubleMLIRM(_DoubleMLBase):
     _PSCORE_CLIP_LO = 0.01
     _PSCORE_CLIP_HI = 0.99
     _SUPPORTS_SAMPLE_WEIGHT = True
+
+    def _fit_external_rep(
+        self,
+        Y: np.ndarray,
+        D: np.ndarray,
+        X: np.ndarray,
+        predictions: Any,
+        rep: int,
+    ) -> Tuple[float, float]:
+        """Score one validated caller-declared OOF prediction repeat."""
+        del X
+        ps_raw = predictions.ps_raw[rep]
+        score = score_binary_ate(
+            y=Y,
+            d=D,
+            g0=predictions.g0[rep],
+            g1=predictions.g1[rep],
+            ps_raw=ps_raw,
+            trimming_threshold=self.trimming_threshold,
+        )
+        lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
+        self._last_rep_diagnostics = {
+            "pscore_min": float(np.min(ps_raw)),
+            "pscore_max": float(np.max(ps_raw)),
+            "pscore_p01": float(np.quantile(ps_raw, 0.01)),
+            "pscore_p99": float(np.quantile(ps_raw, 0.99)),
+            "n_clipped_below": int(np.sum(ps_raw < lo)),
+            "n_clipped_above": int(np.sum(ps_raw > hi)),
+            "weighted": False,
+        }
+        self._last_rep_residuals = {
+            "y_resid": score.psi,
+            "d_resid": D - ps_raw,
+            "pscore": ps_raw,
+        }
+        return score.theta, score.se
 
     def _fit_one_rep(
         self,
@@ -240,24 +277,21 @@ class DoubleMLIRM(_DoubleMLBase):
 
         # ---- trimming + IPW normalization + score (full-vector) ------
         lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
-        m_clip = np.clip(m_hat_full, lo, hi)
-        u1 = Y - g1_full
-        u0 = Y - g0_full
 
         if self.score == "ATE" and not self.normalize_ipw:
-            # Historical StatsPAI AIPW-ATE score — preserved bit-for-bit
-            # so default ``sp.dml(model='irm')`` output never moves.
-            psi_scores = (
-                g1_full - g0_full + D * u1 / m_clip - (1 - D) * u0 / (1 - m_clip)
+            canonical = score_binary_ate(
+                y=Y,
+                d=D,
+                g0=g0_full,
+                g1=g1_full,
+                ps_raw=m_hat_full,
+                trimming_threshold=self.trimming_threshold,
             )
+            m_clip = canonical.ps_used
+            psi_scores = canonical.psi_b
             if sample_weight is None:
-                theta = float(np.mean(psi_scores))
-                # Influence-function variance normalised by n, matching
-                # DoubleML, the ``normalize_ipw`` / ATTE branch below
-                # (which uses mean(psi**2)), the weighted branch, and
-                # PLR / PLIV. This path used ddof=1 until v1.21, which
-                # inflated the SE by sqrt(n/(n-1)) relative to all four.
-                se = float(np.std(psi_scores, ddof=0) / np.sqrt(n))
+                theta = canonical.theta
+                se = canonical.se
             else:
                 # Weighted Z-estimator: θ̂ = Σ w ψ / Σ w; sandwich SE
                 # Var(θ̂) = Σ w_i² (ψ_i − θ̂)² / (Σ w_i)².
@@ -267,6 +301,9 @@ class DoubleMLIRM(_DoubleMLBase):
                 num = float(np.sum((w**2) * (psi_scores - theta) ** 2))
                 se = float(np.sqrt(num)) / W
         else:
+            m_clip = np.clip(m_hat_full, lo, hi)
+            u1 = Y - g1_full
+            u0 = Y - g0_full
             # ATTE and/or normalize_ipw — DoubleML-matching orthogonal
             # score. Sample weights are not combined with these (the
             # DoubleML 'weights' object is a GATE construct, not survey

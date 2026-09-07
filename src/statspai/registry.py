@@ -1793,9 +1793,16 @@ def _build_registry() -> None:
             name="dml",
             category="causal",
             description=(
-                "Double/Debiased Machine Learning for treatment effect estimation. "
-                "Supports partially linear (PLR), interactive regression (IRM, binary D), "
-                "partially linear IV (PLIV), and interactive IV (IIVM, binary D/binary Z → LATE)."
+                "Double/Debiased Machine Learning for treatment effect "
+                "estimation. Supports partially linear (PLR), interactive "
+                "regression (IRM, binary D), partially linear IV (PLIV), and "
+                "interactive IV (IIVM, binary D/binary Z → LATE). Direct "
+                "Python callers may supply an in-memory OOFPredictions object "
+                "for external unweighted, unnormalised binary-treatment IRM "
+                "ATE scoring; this Python-only path checks exact "
+                "row/value/fold alignment, while its caller_declared training "
+                "records remain declarations rather than proof "
+                "against data leakage."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -1930,6 +1937,14 @@ def _build_registry() -> None:
             ],
             alternatives=["metalearner", "causal_forest", "tmle", "aipw"],
             typical_n_min=500,
+            limitations=[
+                "Python-only external_predictions is omitted from JSON/MCP "
+                "callable schemas and accepts no dict, JSON-string, or "
+                "file-path transport.",
+                "store_oof=True is pending Task 5 retention/getters and "
+                "currently raises NotImplementedError; observation_ids is "
+                "also Python-only.",
+            ],
         )
     )
 
