@@ -405,6 +405,18 @@ def mr_raps(
     loss with a robust one. A port of the authors' ``mr.raps`` package, which
     it matches variant for variant.
 
+    .. versionchanged:: 1.28.0
+       Rewritten as a port of ``mr.raps``. The previous implementation was a
+       different estimator under this name: it minimised a Tukey loss jointly
+       over ``(beta, log tau2)`` instead of solving the reference's
+       ``tau2`` estimating equation, and its standard error was a
+       one-dimensional sandwich that treated ``tau2`` as known. On
+       ``MendelianRandomization``'s LDL-C / CHD example that put ``tau2``
+       3.5x below the reference, the estimate 1.4% away and the SE 47% too
+       small. The default loss also changes from Tukey (4.685) to Huber
+       (1.345), the package default; pass ``loss="tukey"`` for the old
+       choice of loss.
+
     Parameters
     ----------
     beta_exposure, beta_outcome : ndarray
@@ -434,18 +446,6 @@ def mr_raps(
     Returns
     -------
     :class:`MRRapsResult`
-
-    .. versionchanged:: 1.28.0
-       Rewritten as a port of ``mr.raps``. The previous implementation was a
-       different estimator under this name: it minimised a Tukey loss jointly
-       over ``(beta, log tau2)`` instead of solving the reference's
-       ``tau2`` estimating equation, and its standard error was a
-       one-dimensional sandwich that treated ``tau2`` as known. On
-       ``MendelianRandomization``'s LDL-C / CHD example that put ``tau2``
-       3.5x below the reference, the estimate 1.4% away and the SE 47% too
-       small. The default loss also changes from Tukey (4.685) to Huber
-       (1.345), the package default; pass ``loss="tukey"`` for the old
-       choice of loss.
 
     Examples
     --------

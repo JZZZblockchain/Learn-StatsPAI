@@ -255,7 +255,12 @@ def test_gini_rif_averages_to_the_gini(cps):
     from statspai.decomposition._common import gini_population, influence_function
 
     y = cps["log_wage"].to_numpy()
-    _close(influence_function(y, "gini").mean(), gini_population(y), rtol=1e-12)
+    # The identity is exact in algebra; numerically both sides are sums of
+    # 3,000 terms, so the gap is floating-point roundoff of order n * eps
+    # and depends on the platform's summation order (3.8e-12 on the Linux
+    # CI runner, below 1e-12 on arm64 macOS). 1e-10 still rejects the
+    # pre-1.28.0 midpoint-ECDF RIF, which averaged to G within 3.5e-3.
+    _close(influence_function(y, "gini").mean(), gini_population(y), rtol=1e-10)
 
 
 _FFL_TERMS = {

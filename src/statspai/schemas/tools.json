@@ -26854,7 +26854,7 @@
         },
         "method": {
           "default": "plugin",
-          "description": "``\"plugin\"`` uses within-cell OLS for outcomes and within-group logit for the propensity and computes plug-in expectations. ``\"efficient\"`` is the efficient-influence-function estimator of the authors' ``cdgd`` package (``cdgd0_manual``) on those same nuisance fits: Hajek-normalised doubly robust potential outcomes, with selection the residual so the components add up exactly -- recommended when nuisance functions might be misspecified. ``method=\"efficient\"`` computed selection as a covariance of doubly robust scores, so the four components did not add up to the disparity (0.566 against 0.572 on a 2,000-row example), and used unnormalised inverse-probability weights. Given the same nuisance predictions it now matches ``cdgd::cdgd0_manual`` to machine precision. ``inference=\"analytic\"`` is new. ``\"plugin\"`` is unchanged.",
+          "description": "``\"plugin\"`` uses within-cell OLS for outcomes and within-group logit for the propensity and computes plug-in expectations. ``\"efficient\"`` is the efficient-influence-function estimator of the authors' ``cdgd`` package (``cdgd0_manual``) on those same nuisance fits: Hajek-normalised doubly robust potential outcomes, with selection the residual so the components add up exactly -- recommended when nuisance functions might be misspecified.",
           "enum": [
             "plugin",
             "efficient"

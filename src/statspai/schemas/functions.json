@@ -38246,7 +38246,7 @@
         },
         "n_boot": {
           "default": 1000,
-          "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not. Three corrections, found against ``MendelianRandomization``: * the weighted median was a step function (first ratio reaching half the weight) instead of Bowden et al.'s interpolated definition -- 0.8% on the package's LDL-C / CHD example; * the penalty used the LOWER-tail chi-square probability, so it up-weighted exactly the heterogeneous variants it exists to suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW estimate rather than the weighted median -- 38% off; * the bootstrap recomputed the weights from every draw instead of holding them fixed.",
+          "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not.",
           "type": "integer"
         },
         "penalized": {
@@ -38263,7 +38263,7 @@
           "type": "string"
         },
         "seed": {
-          "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not. Three corrections, found against ``MendelianRandomization``: * the weighted median was a step function (first ratio reaching half the weight) instead of Bowden et al.'s interpolated definition -- 0.8% on the package's LDL-C / CHD example; * the penalty used the LOWER-tail chi-square probability, so it up-weighted exactly the heterogeneous variants it exists to suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW estimate rather than the weighted median -- 38% off; * the bootstrap recomputed the weights from every draw instead of holding them fixed.",
+          "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not.",
           "type": "integer"
         },
         "weighting": {
@@ -47154,7 +47154,7 @@
         },
         "method": {
           "default": "plugin",
-          "description": "``\"plugin\"`` uses within-cell OLS for outcomes and within-group logit for the propensity and computes plug-in expectations. ``\"efficient\"`` is the efficient-influence-function estimator of the authors' ``cdgd`` package (``cdgd0_manual``) on those same nuisance fits: Hajek-normalised doubly robust potential outcomes, with selection the residual so the components add up exactly -- recommended when nuisance functions might be misspecified. ``method=\"efficient\"`` computed selection as a covariance of doubly robust scores, so the four components did not add up to the disparity (0.566 against 0.572 on a 2,000-row example), and used unnormalised inverse-probability weights. Given the same nuisance predictions it now matches ``cdgd::cdgd0_manual`` to machine precision. ``inference=\"analytic\"`` is new. ``\"plugin\"`` is unchanged.",
+          "description": "``\"plugin\"`` uses within-cell OLS for outcomes and within-group logit for the propensity and computes plug-in expectations. ``\"efficient\"`` is the efficient-influence-function estimator of the authors' ``cdgd`` package (``cdgd0_manual``) on those same nuisance fits: Hajek-normalised doubly robust potential outcomes, with selection the residual so the components add up exactly -- recommended when nuisance functions might be misspecified.",
           "enum": [
             "plugin",
             "efficient"

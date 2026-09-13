@@ -372,6 +372,19 @@ def mr_median(
     Consistent when at least 50% of the weight comes from valid instruments.
     Matches ``MendelianRandomization::mr_median`` in all three weightings.
 
+    .. versionchanged:: 1.28.0
+       Three corrections, found against ``MendelianRandomization``:
+
+       * the weighted median was a step function (first ratio reaching half
+         the weight) instead of Bowden et al.'s interpolated definition --
+         0.8% on the package's LDL-C / CHD example;
+       * the penalty used the LOWER-tail chi-square probability, so it
+         up-weighted exactly the heterogeneous variants it exists to
+         suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW
+         estimate rather than the weighted median -- 38% off;
+       * the bootstrap recomputed the weights from every draw instead of
+         holding them fixed.
+
     Parameters
     ----------
     weighting : {"weighted", "simple", "penalized"}, optional
@@ -390,19 +403,6 @@ def mr_median(
         median of the resampled ratios with the ORIGINAL weights, as the
         reference does. The standard error is stochastic; the estimate is
         not.
-
-    .. versionchanged:: 1.28.0
-       Three corrections, found against ``MendelianRandomization``:
-
-       * the weighted median was a step function (first ratio reaching half
-         the weight) instead of Bowden et al.'s interpolated definition --
-         0.8% on the package's LDL-C / CHD example;
-       * the penalty used the LOWER-tail chi-square probability, so it
-         up-weighted exactly the heterogeneous variants it exists to
-         suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW
-         estimate rather than the weighted median -- 38% off;
-       * the bootstrap recomputed the weights from every draw instead of
-         holding them fixed.
 
     Examples
     --------

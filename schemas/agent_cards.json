@@ -35267,7 +35267,7 @@
           },
           "n_boot": {
             "default": 1000,
-            "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not. Three corrections, found against ``MendelianRandomization``: * the weighted median was a step function (first ratio reaching half the weight) instead of Bowden et al.'s interpolated definition -- 0.8% on the package's LDL-C / CHD example; * the penalty used the LOWER-tail chi-square probability, so it up-weighted exactly the heterogeneous variants it exists to suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW estimate rather than the weighted median -- 38% off; * the bootstrap recomputed the weights from every draw instead of holding them fixed.",
+            "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not.",
             "type": "integer"
           },
           "penalized": {
@@ -35284,7 +35284,7 @@
             "type": "string"
           },
           "seed": {
-            "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not. Three corrections, found against ``MendelianRandomization``: * the weighted median was a step function (first ratio reaching half the weight) instead of Bowden et al.'s interpolated definition -- 0.8% on the package's LDL-C / CHD example; * the penalty used the LOWER-tail chi-square probability, so it up-weighted exactly the heterogeneous variants it exists to suppress, had no ``min(1, 20 q)`` cap, and centred on the IVW estimate rather than the weighted median -- 38% off; * the bootstrap recomputed the weights from every draw instead of holding them fixed.",
+            "description": "Parametric bootstrap for the standard error: draw ``bx`` and ``by`` from their normal sampling distributions and take the weighted median of the resampled ratios with the ORIGINAL weights, as the reference does. The standard error is stochastic; the estimate is not.",
             "type": "integer"
           },
           "weighting": {

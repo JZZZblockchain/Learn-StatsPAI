@@ -527,17 +527,17 @@ def mr_steiger(
     direction (exposure -> outcome) is supported. Matches
     ``TwoSampleMR::mr_steiger`` with ``r`` from ``get_r_from_bsen``.
 
-    Parameters
-    ----------
-    alternative : {"two-sided", "greater"}, default "two-sided"
-        ``"two-sided"`` is the reference's p-value; ``"greater"`` tests the
-        one-sided hypothesis that the exposure R^2 is the larger.
-
     .. versionchanged:: 1.28.0
        The p-value was one-sided and computed as ``1 - Phi(z)``, which is
        exactly 0.0 for z beyond ~8.3. It is now two-sided by default, as
        the method authors' TwoSampleMR reports it, computed from the upper
        tail directly; pass ``alternative="greater"`` for the one-sided test.
+
+    Parameters
+    ----------
+    alternative : {"two-sided", "greater"}, default "two-sided"
+        ``"two-sided"`` is the reference's p-value; ``"greater"`` tests the
+        one-sided hypothesis that the exposure R^2 is the larger.
 
     Examples
     --------

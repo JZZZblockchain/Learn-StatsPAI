@@ -484,6 +484,15 @@ def yu_elwert_decompose(
 ) -> YuElwertResult:
     """Nonparametric causal decomposition of a group disparity.
 
+    .. versionchanged:: 1.28.0
+       ``method="efficient"`` computed selection as a covariance of
+       doubly robust scores, so the four components did not add up to the
+       disparity (0.566 against 0.572 on a 2,000-row example), and used
+       unnormalised inverse-probability weights. Given the same nuisance
+       predictions it now matches ``cdgd::cdgd0_manual`` to machine
+       precision. ``inference="analytic"`` is new. ``"plugin"`` is
+       unchanged.
+
     Parameters
     ----------
     data : DataFrame
@@ -504,15 +513,6 @@ def yu_elwert_decompose(
         nuisance fits: Hajek-normalised doubly robust potential outcomes,
         with selection the residual so the components add up exactly —
         recommended when nuisance functions might be misspecified.
-
-    .. versionchanged:: 1.28.0
-       ``method="efficient"`` computed selection as a covariance of
-       doubly robust scores, so the four components did not add up to the
-       disparity (0.566 against 0.572 on a 2,000-row example), and used
-       unnormalised inverse-probability weights. Given the same nuisance
-       predictions it now matches ``cdgd::cdgd0_manual`` to machine
-       precision. ``inference="analytic"`` is new. ``"plugin"`` is
-       unchanged.
     inference : {"bootstrap", "analytic", "none"}
         ``"bootstrap"`` returns SEs and percentile CIs from the
         non-parametric (cluster-aware) bootstrap. ``"analytic"`` (only with
