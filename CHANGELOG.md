@@ -4,6 +4,8 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+## [1.28.0] — 2026-09-13
+
 ### Added
 
 - **`n_jobs=` for the classic SCM placebo loop.** `sp.SyntheticControl(...,
