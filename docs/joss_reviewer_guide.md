@@ -90,9 +90,10 @@ did = sp.callaway_santanna(data=mpdta, y="lemp", t="year",
                            i="countyreal", g="first_treat")
 print(sp.aggte(did, type="simple").summary())
 
-# Regression discontinuity: Lee-style close-election design.
+# Regression discontinuity: Lee-style close-election design on the U.S. Senate
+# extract distributed with R rdrobust (x = margin at t, y = vote share at t+2).
 lee = sp.datasets.lee_2008_senate()
-rd = sp.rdrobust(data=lee, y="voteshare_next", x="margin", c=0)
+rd = sp.rdrobust(data=lee, y="y", x="x", c=0)
 print(rd.summary())
 
 # Synthetic control: California Proposition 99 teaching dataset.

@@ -5,6 +5,12 @@ canonical estimator recovers output in the neighbourhood of the
 **published numbers on the ORIGINAL data**.  This document is the
 primary-source index for every such claim.
 
+Several loaders now return the **real extract by default** and keep the
+replica behind `simulated=True`: `card_1995`, `lee_2008_senate`,
+`california_prop99` (see the `source` column of
+`sp.datasets.list_datasets()`).  The "replica target" lines below describe
+the `simulated=True` branch only.
+
 ## Callaway-Sant'Anna mpdta
 
 | Statistic | Value | Source |
@@ -33,9 +39,12 @@ Citation: Card, D. (1995). Using Geographic Variation in College Proximity
 to Estimate the Return to Schooling. In Christofides et al. (eds.),
 *Aspects of Labour Market Behaviour*.
 
-`sp.datasets.card_1995()` replica target: OLS ≈ 0.11, IV ≈ 0.142
-(IV > OLS, the "Card puzzle").  Exact numerical values differ
-because the DGP is simulated, not the original NLSYM data.
+`sp.datasets.card_1995(simulated=True)` replica target: OLS ≈ 0.11,
+IV ≈ 0.142 (IV > OLS, the "Card puzzle").  Exact numerical values differ
+because the DGP is simulated.  The default `card_1995()` is the real NLSYM
+extract (n = 3,010); with `exper expersq black south smsa` as controls it
+gives OLS 0.0740 and 2SLS 0.1323.  The table above is a neighbourhood
+anchor for these numbers, not an exact target.
 
 ## LaLonde (1986) / Dehejia-Wahba (1999) NSW
 
@@ -58,7 +67,7 @@ Citations:
 published numbers within $500 on the experimental subset; the
 naive-OLS bias on the NSW+PSID combination matches within $500.
 
-## Lee (2008) US Senate RD
+## Lee (2008) close-election RD (U.S. House)
 
 | Statistic | Value | Source |
 | --- | --- | --- |
@@ -68,7 +77,13 @@ Citation: Lee, D. (2008). Randomized experiments from non-random
 selection in U.S. House elections. *Journal of Econometrics* 142,
 675-697.
 
-`sp.datasets.lee_2008_senate()` replica target: 0.08.
+`sp.datasets.lee_2008_senate(simulated=True)` replica target: 0.08.
+The default `lee_2008_senate()` is **not** Lee's House data: it is the
+U.S. Senate extract of Cattaneo, Frandsen & Titiunik (2015,
+`cattaneo2015randomization`) distributed with R `rdrobust` (vote share in
+percentage points), whose reference is R / Stata `rdrobust` itself
+(Track A module `06_rd`: conventional 7.414, robust 7.507), not the table
+above.
 
 ## Angrist-Krueger (1991) quarter-of-birth
 
@@ -95,7 +110,8 @@ Citation: Abadie, A., Diamond, A. & Hainmueller, J. (2010). Synthetic
 Control Methods for Comparative Case Studies: Estimating the Effect of
 California's Tobacco Control Program. *JASA* 105(490), 493-505.
 
-`sp.datasets.california_prop99()` replica target: ATT ≈ -15 packs/capita.
+`sp.datasets.california_prop99(simulated=True)` replica target: ATT ≈ -15
+packs/capita.  The default `california_prop99()` is the real ADH panel.
 
 ## Basque Country Terrorism (Abadie-Gardeazabal 2003)
 

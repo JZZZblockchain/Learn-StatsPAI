@@ -29,7 +29,8 @@ The scripts cover canonical causal-inference designs:
 
 - `card_iv.py` - instrumental variables using Card (1995).
 - `did_mpdta.py` - staggered difference-in-differences using `mpdta`.
-- `rd_lee.py` - sharp regression discontinuity using Lee (2008).
+- `rd_lee.py` - sharp regression discontinuity: Lee's (2008) close-election
+  design on the U.S. Senate extract distributed with R `rdrobust`.
 - `synth_prop99.py` - synthetic control using California Proposition 99.
 - `gmethods_timevarying.py` - g-methods (parametric g-formula + marginal
   structural model) for time-varying confounding, the signature problem of

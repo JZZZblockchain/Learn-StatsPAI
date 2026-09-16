@@ -39,7 +39,7 @@ DID / panel
     ``teen_employment()``       — alias of ``mpdta()``
 
 RD
-    ``lee_2008_senate()``       — US Senate RD (Lee 2008)
+    ``lee_2008_senate()``       — US Senate RD (Lee 2008 design; CFT 2015 data)
 
 IV
     ``card_1995()``             — IV returns-to-schooling

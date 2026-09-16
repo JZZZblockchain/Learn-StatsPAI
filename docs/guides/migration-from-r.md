@@ -166,12 +166,12 @@ from statspai import SLearner, TLearner, XLearner, RLearner, DRLearner
 
 | R                                                | StatsPAI                                           |
 | ------------------------------------------------ | -------------------------------------------------- |
-| `modelsummary::modelsummary(list(m1, m2))`       | `sp.outreg2([m1, m2])` or `sp.modelsummary([m1, m2])` |
-| `sandwich::vcovCL(m, cluster = ~id)`             | `vcov={"CRV1": "id"}` in `sp.feols` / `sp.regress` |
-| `lmtest::coeftest(m, vcov = vcovHC)`             | `result.robust()` / `result.summary(vcov="HC3")`   |
-| `car::linearHypothesis(m, "x1 = x2")`            | `result.test("x1 = x2")`                           |
-| `marginaleffects::avg_slopes(m)`                 | `result.marginal_effects()`                        |
-| `multiwayvcov::cluster.vcov(m, ~c1 + c2)`        | `vcov={"CRV1": ["c1", "c2"]}`                      |
+| `modelsummary::modelsummary(list(m1, m2))`       | `sp.regtable(m1, m2)` (`sp.modelsummary` is a deprecated wrapper) |
+| `sandwich::vcovCL(m, cluster = ~id)`             | `cluster="id"` in `sp.regress`, or `vcov={"CRV1": "id"}` in `sp.feols` |
+| `lmtest::coeftest(m, vcov = vcovHC)`             | refit with `sp.regress(..., robust="hc3")`         |
+| `car::linearHypothesis(m, "x1 = x2")`            | `sp.test(result, "x1 = x2")`                       |
+| `marginaleffects::avg_slopes(m)`                 | `sp.margins(result)`                               |
+| `multiwayvcov::cluster.vcov(m, ~c1 + c2)`        | `vcov={"CRV1": "c1 + c2"}` in `sp.feols`           |
 | `specr::specr(...)` / `spec_curve`               | `sp.spec_curve(...)` — native implementation       |
 
 ---

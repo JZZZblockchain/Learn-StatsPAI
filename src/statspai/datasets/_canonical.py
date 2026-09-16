@@ -550,12 +550,12 @@ def nsw_dw(seed: int = 42) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Lee (2008) — US Senate RD
+# U.S. Senate close-election RD (real) / Lee (2008)-style replica
 # ---------------------------------------------------------------------------
 
 
 def lee_2008_senate(seed: int = 42, simulated: bool = False) -> pd.DataFrame:
-    """Lee (2008) US Senate RD — simulated replica or real extract.
+    """U.S. Senate close-election RD — real extract or Lee (2008)-style replica.
 
     Parameters
     ----------
@@ -568,16 +568,20 @@ def lee_2008_senate(seed: int = 42, simulated: bool = False) -> pd.DataFrame:
         ``voteshare_next, margin, win``) on a 0-1 vote-share scale,
         calibrated to a 0.08 jump at the cutoff.
         If False, load the real ``rdrobust::rdrobust_RDsenate`` extract
-        (n=1390, ``x, y`` where ``y`` is vote share in **percent
-        points** 0-100 and ``x`` is the lagged Democratic margin).
+        (n=1390, ``x, y``): ``x`` is the party's vote-share margin in a
+        Senate election at time t and ``y`` its vote share (percent points,
+        0-100) in the election at t+2, following ``rdrobust``'s own
+        illustration. 93 rows have a missing ``y``.
 
     Notes
     -----
-    The real-data branch lets you reproduce Lee (2008) Table 1 /
-    CCT (2014) Table 4 numbers exactly.  StatsPAI's
-    ``sp.rdrobust(df, y='y', x='x', c=0, kernel='triangular',
-    bwselect='cct')`` recovers Conventional ≈ 7.41 and Robust ≈ 7.51
-    on this dataset (paper headline ≈ 7.99).
+    The real extract is the Senate data constructed by Cattaneo, Frandsen
+    and Titiunik (2015) and distributed with R ``rdrobust``. It is not
+    Lee's (2008) U.S. House data -- the loader keeps its historical name
+    because it implements Lee's close-election design. On this extract the
+    default ``sp.rdrobust(df, y='y', x='x', c=0)`` returns conventional
+    7.414 and robust 7.507 (bandwidths 17.754 / 28.028), matching R and
+    Stata ``rdrobust`` (Track A parity module ``06_rd``).
 
     Returns
     -------
@@ -589,6 +593,10 @@ def lee_2008_senate(seed: int = 42, simulated: bool = False) -> pd.DataFrame:
     ----------
     Lee, D. (2008). Randomized experiments from non-random selection in
     U.S. House elections. Journal of Econometrics 142, 675-697. [@lee2008randomized]
+    Cattaneo, M.D., Frandsen, B.R. & Titiunik, R. (2015). Randomization
+    inference in the regression discontinuity design: An application to
+    party advantages in the U.S. Senate. Journal of Causal Inference 3(1),
+    1-24. [@cattaneo2015randomization]
     Calonico, S., Cattaneo, M.D. & Titiunik, R. (2014). Robust
     nonparametric confidence intervals for regression-discontinuity
     designs. Econometrica 82(6), 2295-2326. [@calonico2014robust]
@@ -602,16 +610,16 @@ def lee_2008_senate(seed: int = 42, simulated: bool = False) -> pd.DataFrame:
         df.attrs["data_source"] = "real"
         df.attrs["simulated"] = False
         df.attrs["source_origin"] = (
-            "R rdrobust::rdrobust_RDsenate (n=1390): lagged Democratic "
-            "vote margin (x) and current Democratic vote share (y, "
-            "percent points 0-100)."
+            "R rdrobust::rdrobust_RDsenate (n=1390; Cattaneo, Frandsen & "
+            "Titiunik 2015): vote-share margin at election t (x) and vote "
+            "share at election t+2 (y, percent points 0-100)."
         )
         df.attrs["statspai_pinned_conv_estimate_cct_bw"] = 7.414
         df.attrs["statspai_pinned_robust_estimate_cct_bw"] = 7.507
         df.attrs["published_lee2008_table1"] = 7.99
         df.attrs["notes"] = (
-            "Real Lee Senate RD panel (n=1390).  Use kernel='triangular' "
-            "and bwselect='cct' for R-parity with rdrobust."
+            "Real U.S. Senate RD extract (n=1390), not Lee's House data.  "
+            "The default sp.rdrobust call matches R/Stata rdrobust."
         )
         return df
 
@@ -642,8 +650,8 @@ def lee_2008_senate(seed: int = 42, simulated: bool = False) -> pd.DataFrame:
         "2nd-order bias correction shrinks the estimate; the older "
         "CONVENTIONAL local-linear estimator (Lee's original method) "
         "returns ~0.073 with SE 0.017, much closer to Lee's 0.077.  "
-        "For exact Lee replication use the original Senate data, "
-        "shipped with R package rdrobust."
+        "The real U.S. Senate extract distributed with R rdrobust is "
+        "the default (simulated=False); Lee's House data is not bundled."
     )
     return df
 
