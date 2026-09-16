@@ -114,7 +114,23 @@ TIER1_ROUND_TRIPS = [
         {"fml": "wage ~ edu + exp | firm + year"},
     ),
     # ivreg2
-    ("ivreg2 y x1 (d = z1 z2)", "ivreg", {"formula": "y ~ x1 + (d ~ z1 z2)"}),
+    ("ivreg2 y x1 (d = z1 z2)", "ivreg", {"formula": "y ~ x1 + (d ~ z1 + z2)"}),
+    (
+        "ivreg2 y x1 x2 (d = z1 z2), robust",
+        "ivreg",
+        {"formula": "y ~ x1 + x2 + (d ~ z1 + z2)", "robust": "hc1"},
+    ),
+    # Stata accepts exogenous regressors after the parenthesised block too.
+    (
+        "ivregress 2sls y (d = z) x1 x2",
+        "ivreg",
+        {"formula": "y ~ x1 + x2 + (d ~ z)", "method": "2sls"},
+    ),
+    (
+        "ivregress 2sls y x1 (d1 d2 = z1 z2 z3) x2",
+        "ivreg",
+        {"formula": "y ~ x1 + x2 + (d1 + d2 ~ z1 + z2 + z3)", "method": "2sls"},
+    ),
     ("ivregress y (d = z), cluster(id)", "ivreg", {"formula": "y ~ (d ~ z)"}),
     (
         "ivregress 2sls y x1 (d = z), robust small",
@@ -125,7 +141,7 @@ TIER1_ROUND_TRIPS = [
         "ivregress liml y x1 (d = z1 z2), vce(cluster firm)",
         "ivreg",
         {
-            "formula": "y ~ x1 + (d ~ z1 z2)",
+            "formula": "y ~ x1 + (d ~ z1 + z2)",
             "method": "liml",
             "cluster": "firm",
         },
@@ -137,6 +153,11 @@ TIER1_ROUND_TRIPS = [
             "fml": "y ~ x1 + x2 | firm + year | d ~ z1 + z2",
             "cluster": "firm",
         },
+    ),
+    (
+        "ivreghdfe y (d1 d2 = z1 z2) x1, absorb(firm)",
+        "feols",
+        {"fml": "y ~ x1 | firm | d1 + d2 ~ z1 + z2"},
     ),
     # csdid
     (
@@ -1459,3 +1480,74 @@ def test_translation_does_not_silently_succeed_on_invalid_input(command, channel
     # When fix lands, the error must point the user somewhere useful.
     err = out.get("error", "")
     assert err, f"{command!r}: ok=False but no error message"
+
+
+class TestStataIVTranslationRuns:
+    """Translated IV calls must be runnable and reproduce the direct fit.
+
+    The IV handlers used to join multi-variable lists with spaces
+    (``y ~ x1 x2 + (d ~ z1 z2)``), which ``sp.ivreg`` rejects, and refused
+    exogenous regressors written after the parenthesised block.
+    """
+
+    @pytest.fixture(scope="class")
+    def card(self):
+        import statspai as sp
+
+        return sp.datasets.card_1995()
+
+    @pytest.mark.parametrize(
+        "line,direct",
+        [
+            (
+                "ivregress 2sls lwage (educ = nearc4 nearc2) exper expersq, "
+                "vce(robust) small",
+                (
+                    "lwage ~ exper + expersq + (educ ~ nearc4 + nearc2)",
+                    {"robust": "hc1"},
+                ),
+            ),
+            (
+                "ivreg2 lwage exper (educ black = nearc4 nearc2 south)",
+                ("lwage ~ exper + (educ + black ~ nearc4 + nearc2 + south)", {}),
+            ),
+        ],
+    )
+    def test_translated_code_reproduces_direct_fit(self, card, line, direct):
+        import numpy as np
+
+        import statspai as sp
+
+        out = from_stata(line)
+        assert out["ok"], out
+        translated = eval(out["python_code"], {"sp": sp, "df": card})
+        formula, kwargs = direct
+        reference = sp.ivreg(formula, data=card, **kwargs)
+        np.testing.assert_allclose(
+            translated.params.to_numpy(), reference.params.to_numpy(), rtol=1e-12
+        )
+        np.testing.assert_allclose(
+            translated.std_errors.to_numpy(),
+            reference.std_errors.to_numpy(),
+            rtol=1e-12,
+        )
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "ivregress 2sls y x1",
+            "ivregress 2sls y (d = ) x1",
+            "ivregress 2sls (d = z) x1",
+            "ivregress 2sls y (d = z) (e = w)",
+        ],
+    )
+    def test_malformed_iv_varlist_names_the_command(self, line):
+        out = from_stata(line)
+        assert out["ok"] is False
+        assert "could not parse ivregress syntax" in out["error"]
+
+    def test_small_convention_note_only_without_small(self):
+        without = from_stata("ivregress 2sls y (d = z) x, vce(robust)")
+        with_small = from_stata("ivregress 2sls y (d = z) x, vce(robust) small")
+        assert any("small" in n for n in without["notes"])
+        assert not any("sqrt(N/(N-K))" in n for n in with_small["notes"])

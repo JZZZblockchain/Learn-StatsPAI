@@ -26,7 +26,8 @@ Design principles
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from ._stata_lexer import StataCommand, StataParseError
 from ._stata_lexer import parse as _parse_stata
@@ -242,12 +243,45 @@ def _h_reghdfe(cmd: StataCommand) -> Dict[str, Any]:
     return _emit("feols", args, _feols_code(fml, cluster), notes)
 
 
+_IV_BLOCK = re.compile(r"\(\s*([^()=]*?)\s*=\s*([^()]*?)\s*\)")
+
+
+def _parse_iv_varlist(
+    tokens: List[str], command: str
+) -> Union[Tuple[str, List[str], List[str], List[str]], Dict[str, Any]]:
+    """Split a Stata IV varlist into ``(y, exog, endog, instruments)``.
+
+    Stata accepts exogenous regressors on either side of the single
+    ``(endog = instruments)`` block -- ``ivregress 2sls y x1 (d = z) x2`` is
+    as valid as ``y x1 x2 (d = z)`` -- and every list may hold several
+    variables. Returns an ``_emit_error`` payload when the shape is wrong.
+    """
+    joined = " ".join(tokens)
+    blocks = list(_IV_BLOCK.finditer(joined))
+    expected = "expected `y [exog...] (endog... = instruments...) [exog...]`"
+    if len(blocks) != 1:
+        return _emit_error(
+            f"could not parse {command} syntax {joined!r}; {expected}",
+            command=command,
+        )
+    block = blocks[0]
+    before = joined[: block.start()].split()
+    after = joined[block.end() :].split()
+    endog = block.group(1).split()
+    instruments = block.group(2).split()
+    if not before or not endog or not instruments or "(" in after or ")" in after:
+        return _emit_error(
+            f"could not parse {command} syntax {joined!r}; {expected}",
+            command=command,
+        )
+    return before[0], before[1:] + after, endog, instruments
+
+
 def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
     """``ivreg2 y x1 (d = z1 z2), cluster(id)`` → ``sp.ivreg``."""
-    # Stata's ``ivreg2`` varlist contains parentheses with `d = z`.
-    # Re-join the original varlist tokens to recover the parens.
+    command = cmd.command or "ivreg2"
     if not cmd.varlist:
-        return _emit_error("ivreg2 requires an outcome variable", command="ivreg2")
+        return _emit_error(f"{command} requires an outcome variable", command=command)
     tokens = list(cmd.varlist)
     method: Optional[str] = None
     if cmd.command == "ivregress" and tokens:
@@ -255,22 +289,14 @@ def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
         if head in {"2sls", "liml", "gmm"}:
             method = head
             tokens = tokens[1:]
-    joined = " ".join(tokens)
-    # Accept either ``y x (d = z)`` or ``y (d = z)``.
-    import re
-
-    m = re.match(r"^\s*(\S+)\s*(.*?)\s*\(\s*(\S+)\s*=\s*([^)]+?)\s*\)\s*$", joined)
-    if not m:
-        return _emit_error(
-            f"could not parse ivreg2 syntax {joined!r}; expected "
-            "`y [exog_x...] (endog = instruments...)`",
-            command="ivreg2",
-        )
-    y, exog_xs, endog, instruments = m.group(1), m.group(2), m.group(3), m.group(4)
-    formula_lhs = f"{y} ~ "
-    if exog_xs.strip():
-        formula_lhs += f"{exog_xs.strip()} + "
-    formula = f"{formula_lhs}({endog} ~ {instruments.strip()})"
+    parsed = _parse_iv_varlist(tokens, command)
+    if isinstance(parsed, dict):
+        return parsed
+    y, exog, endog, instruments = parsed
+    formula = f"{y} ~ "
+    if exog:
+        formula += " + ".join(exog) + " + "
+    formula += f"({' + '.join(endog)} ~ {' + '.join(instruments)})"
 
     cluster = _vce_cluster(cmd) or cmd.options.get("cluster")
     if cluster:
@@ -291,10 +317,12 @@ def _h_ivreg2(cmd: StataCommand) -> Dict[str, Any]:
             "`first` (first-stage display) not translated; the sp "
             "result already exposes first_stage_F via diagnostics."
         )
-    if "small" in cmd.options:
+    if cmd.command == "ivregress" and "small" not in cmd.options:
         notes.append(
-            "Stata `small` changes finite-sample reporting conventions; "
-            "verify the SE/df convention if exact table reproduction matters."
+            "sp.ivreg standard errors follow `ivregress ..., small` (N-K "
+            "divisor; cluster SEs add (N-1)/(N-K)). Without `small`, Stata "
+            "reports large-sample SEs -- vce(robust) equals sp.ivreg "
+            "robust='hc0' -- so SEs differ by about sqrt(N/(N-K))."
         )
     if method in {"liml", "gmm"}:
         notes.append(
@@ -315,26 +343,17 @@ def _h_ivreghdfe(cmd: StataCommand) -> Dict[str, Any]:
         return _emit_error(
             "ivreghdfe requires an outcome variable", command="ivreghdfe"
         )
-    joined = " ".join(cmd.varlist)
-    import re
-
-    m = re.match(r"^\s*(\S+)\s*(.*?)\s*\(\s*(\S+)\s*=\s*([^)]+?)\s*\)\s*$", joined)
-    if not m:
-        return _emit_error(
-            f"could not parse ivreghdfe syntax {joined!r}; expected "
-            "`y [exog_x...] (endog = instruments...)`",
-            command="ivreghdfe",
-        )
-    y, exog_xs, endog, instruments = m.group(1), m.group(2), m.group(3), m.group(4)
-    exog = [x for x in exog_xs.split() if x]
+    parsed = _parse_iv_varlist(list(cmd.varlist), "ivreghdfe")
+    if isinstance(parsed, dict):
+        return parsed
+    y, exog, endog, instruments = parsed
     main = _build_formula(y, exog)
-    instr = " + ".join(x for x in instruments.split() if x)
     absorb = cmd.options.get("absorb") or ""
     fe_list = [v for v in absorb.split() if v]
     cluster = _vce_cluster(cmd) or cmd.options.get("cluster")
     if cluster:
         cluster = cluster.split()[0]
-    fml = _pyfixest_fml(main, fe_list, endog, instr)
+    fml = _pyfixest_fml(main, fe_list, " + ".join(endog), " + ".join(instruments))
     args: Dict[str, Any] = {"fml": fml}
     if cluster:
         args["cluster"] = cluster
