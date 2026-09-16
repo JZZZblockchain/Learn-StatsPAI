@@ -22,6 +22,7 @@ import pandas as pd
 from scipy import sparse, stats
 from scipy.sparse.linalg import lsqr
 
+from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
 from ..exceptions import MethodIncompatibility
@@ -90,6 +91,7 @@ def _didimp_cluster_bootstrap(
     return _bootstrap_se(boot, label="did.imputation")
 
 
+@accepts_aliases(_strict=True, id="group", unit="group", covariates="controls")
 def did_imputation(
     data: pd.DataFrame,
     y: str,

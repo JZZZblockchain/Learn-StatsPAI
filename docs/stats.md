@@ -12,8 +12,8 @@
 
 | Ecosystem / Project                  | Method     |  Files | Lines of code | Primary focus                      |
 | ------------------------------------ | ---------- | -----: | ------------: | ---------------------------------- |
-| **StatsPAI** `src/statspai/`         | measured   |    702 |   **347,786** | validation-tiered causal inference |
-| StatsPAI tests (`tests/`)            | measured   |  1,052 |       199,714 | —                                  |
+| **StatsPAI** `src/statspai/`         | measured   |    758 |   **396,985** | validation-tiered causal inference |
+| StatsPAI tests (`tests/`)            | measured   |  1,248 |       252,201 | —                                  |
 | statsmodels 0.14.x                   | measured   |    948 |   **381,981** | GLM / time series / general        |
 | linearmodels                         | measured   |    131 |        36,607 | panel / IV                         |
 | **Python causal-inference subtotal** |            |  1,079 |   **418,588** |                                    |
@@ -39,94 +39,94 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 
 | Module              | LOC    | Files | Registered functions (`sp.*`) |
 | ------------------- | -----: | ----: | ----------------------------: |
-| `did` | 37,566 | 51 | 83 |
-| `synth` | 23,247 | 32 | 55 |
-| `rd` | 17,929 | 27 | 53 |
-| `regression` | 16,903 | 21 | 39 |
-| `smart` | 15,578 | 20 | 31 |
-| `output` | 12,621 | 21 | 40 |
-| `agent` | 12,259 | 31 | 3 |
-| `matching` | 9,785 | 14 | 25 |
-| `decomposition` | 9,079 | 19 | 32 |
-| `core` | 9,069 | 15 | 5 |
-| `iv` | 8,130 | 17 | 10 |
-| `inference` | 8,062 | 19 | 26 |
-| `fast` | 7,697 | 16 | 0 |
-| `panel` | 7,674 | 12 | 18 |
-| `diagnostics` | 7,662 | 13 | 25 |
-| `spatial` | 6,841 | 30 | 38 |
+| `did` | 37,788 | 51 | 83 |
+| `synth` | 23,757 | 32 | 55 |
+| `rd` | 18,000 | 27 | 53 |
+| `regression` | 17,944 | 22 | 39 |
+| `smart` | 15,683 | 20 | 31 |
+| `output` | 12,711 | 21 | 40 |
+| `agent` | 12,464 | 32 | 4 |
+| `matching` | 9,789 | 14 | 25 |
+| `core` | 9,593 | 15 | 5 |
+| `decomposition` | 9,547 | 19 | 32 |
+| `iv` | 8,243 | 17 | 10 |
+| `inference` | 8,068 | 19 | 26 |
+| `panel` | 7,848 | 12 | 18 |
+| `fast` | 7,693 | 16 | 0 |
+| `diagnostics` | 7,668 | 13 | 25 |
+| `spatial` | 6,968 | 30 | 38 |
 | `plots` | 6,002 | 7 | 8 |
-| `bayes` | 5,168 | 12 | 19 |
+| `bayes` | 5,170 | 12 | 19 |
 | `dml` | 5,090 | 12 | 14 |
-| `frontier` | 4,801 | 8 | 12 |
+| `mendelian` | 4,916 | 13 | 38 |
+| `frontier` | 4,800 | 8 | 12 |
+| `multilevel` | 4,501 | 8 | 11 |
 | `workflow` | 4,478 | 5 | 3 |
-| `multilevel` | 4,421 | 8 | 11 |
-| `mendelian` | 4,351 | 13 | 38 |
 | `qte` | 4,178 | 9 | 13 |
-| `gmm` | 4,070 | 12 | 4 |
-| `causal_discovery` | 4,056 | 11 | 20 |
-| `metalearners` | 3,957 | 8 | 23 |
+| `gmm` | 4,126 | 12 | 4 |
+| `causal_discovery` | 4,077 | 11 | 20 |
+| `metalearners` | 3,959 | 8 | 23 |
+| `structural` | 3,539 | 9 | 12 |
+| `network` | 3,514 | 9 | 33 |
 | `dag` | 3,500 | 9 | 23 |
-| `network` | 3,474 | 9 | 33 |
-| `tmle` | 3,401 | 6 | 11 |
-| `timeseries` | 3,390 | 9 | 20 |
-| `forest` | 3,335 | 5 | 8 |
-| `survival` | 3,303 | 6 | 12 |
+| `tmle` | 3,403 | 6 | 11 |
+| `timeseries` | 3,389 | 9 | 20 |
+| `forest` | 3,371 | 5 | 8 |
+| `survival` | 3,304 | 6 | 12 |
 | `neural_causal` | 3,275 | 6 | 16 |
-| `structural` | 3,149 | 9 | 12 |
-| `robustness` | 2,961 | 6 | 11 |
-| `causal_llm` | 2,959 | 10 | 14 |
-| `crossval` | 2,647 | 7 | 2 |
-| `bounds` | 2,577 | 5 | 9 |
-| `conformal_causal` | 2,499 | 9 | 19 |
+| `robustness` | 2,986 | 6 | 11 |
+| `causal_llm` | 2,960 | 10 | 14 |
+| `crossval` | 2,646 | 7 | 2 |
+| `bounds` | 2,578 | 5 | 9 |
+| `conformal_causal` | 2,500 | 9 | 19 |
 | `rlasso` | 2,452 | 7 | 10 |
-| `interference` | 2,443 | 10 | 20 |
-| `epi` | 2,340 | 6 | 20 |
+| `interference` | 2,444 | 10 | 20 |
+| `epi` | 2,339 | 6 | 20 |
 | `utils` | 2,267 | 9 | 32 |
-| `bartik` | 2,213 | 4 | 8 |
-| `datasets` | 2,189 | 3 | 3 |
+| `bartik` | 2,211 | 4 | 8 |
+| `datasets` | 2,196 | 3 | 3 |
+| `postestimation` | 2,162 | 5 | 12 |
 | `question` | 2,079 | 3 | 6 |
-| `proximal` | 2,029 | 8 | 13 |
+| `proximal` | 2,030 | 8 | 13 |
 | `policy_learning` | 1,961 | 5 | 8 |
-| `postestimation` | 1,775 | 4 | 12 |
-| `causal_text` | 1,709 | 4 | 4 |
-| `bcf` | 1,644 | 5 | 8 |
-| `fixest` | 1,617 | 3 | 4 |
+| `causal_text` | 1,705 | 4 | 4 |
+| `bcf` | 1,646 | 5 | 8 |
+| `fixest` | 1,634 | 3 | 4 |
 | `target_trial` | 1,457 | 7 | 9 |
-| `mediation` | 1,455 | 4 | 6 |
-| `bunching` | 1,440 | 5 | 8 |
+| `mediation` | 1,456 | 4 | 6 |
+| `bunching` | 1,441 | 5 | 8 |
 | `fairness` | 1,419 | 3 | 6 |
 | `power` | 1,405 | 3 | 12 |
-| `bridge` | 1,317 | 8 | 2 |
+| `bridge` | 1,316 | 8 | 2 |
 | `nonparametric` | 1,215 | 4 | 7 |
-| `principal_strat` | 1,157 | 2 | 3 |
-| `experimental` | 1,118 | 4 | 9 |
-| `longitudinal` | 1,044 | 3 | 7 |
+| `principal_strat` | 1,158 | 2 | 3 |
+| `experimental` | 1,119 | 4 | 9 |
+| `longitudinal` | 1,045 | 3 | 7 |
 | `causal_rl` | 1,041 | 5 | 9 |
 | `surrogate` | 995 | 2 | 3 |
 | `ope` | 966 | 3 | 3 |
-| `survey` | 963 | 4 | 7 |
-| `dose_response` | 932 | 3 | 5 |
+| `survey` | 964 | 4 | 7 |
+| `dose_response` | 933 | 3 | 5 |
 | `selection` | 904 | 2 | 3 |
-| `dtr` | 894 | 5 | 2 |
+| `dtr` | 895 | 5 | 2 |
 | `gformula` | 882 | 3 | 4 |
-| `deepiv` | 804 | 2 | 2 |
+| `deepiv` | 810 | 2 | 2 |
 | `mht` | 768 | 2 | 6 |
-| `transport` | 761 | 5 | 8 |
+| `transport` | 762 | 5 | 8 |
 | `msm` | 716 | 2 | 3 |
 | `assimilation` | 698 | 3 | 3 |
-| `causal_impact` | 652 | 2 | 3 |
-| `imputation` | 502 | 2 | 3 |
+| `causal_impact` | 653 | 2 | 3 |
+| `imputation` | 504 | 2 | 3 |
 | `matrix_completion` | 452 | 2 | 2 |
 | `compat` | 378 | 2 | 0 |
-| `multi_treatment` | 366 | 2 | 2 |
+| `multi_treatment` | 367 | 2 | 2 |
 | `quasi` | 339 | 2 | 2 |
 | `censoring` | 337 | 2 | 2 |
 | `geolift` | 180 | 2 | 1 |
 | `checks` | 152 | 2 | 0 |
 | `causal` | 111 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **388,809** | **751** | **1178** |
+| **Total** | **396,985** | **758** | **1183** |
 ## 3 · Causal-inference coverage matrix (full)
 
 Legend: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.

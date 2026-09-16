@@ -24,7 +24,14 @@ def _linear_result(
     se: float = 0.1,
     fitted_values: Optional[np.ndarray] = None,
 ) -> EconometricResults:
-    data_info = {"df_resid": 50}
+    # An explicit (diagonal) coefficient covariance. Post-estimation functions
+    # that combine several coefficients need the full matrix and refuse a
+    # result that carries only standard errors, instead of assuming zero
+    # covariances; here the zero covariances are a stated test assumption.
+    data_info = {
+        "df_resid": 50,
+        "var_cov": np.eye(len(params)) * se**2,
+    }
     if fitted_values is not None:
         data_info["fitted_values"] = fitted_values
     return EconometricResults(

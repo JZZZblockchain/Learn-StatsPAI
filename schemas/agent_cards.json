@@ -161,6 +161,11 @@
       "name": "iv",
       "parameters": {
         "properties": {
+          "augmented_diagnostics": {
+            "default": true,
+            "description": "When the method returns EconometricResults, attach the Kleibergen-Paap rk statistic, Sanderson-Windmeijer per-endogenous F and Olea-Pflueger effective F to result.diagnostics.",
+            "type": "boolean"
+          },
           "cluster": {
             "description": "Column name for cluster-robust SEs",
             "type": "string"

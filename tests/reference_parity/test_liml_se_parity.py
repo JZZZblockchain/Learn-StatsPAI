@@ -1,18 +1,22 @@
 """Standalone LIML (``sp.liml`` / ``sp.iv.liml``) SE parity tests.
 
 The standalone LIML estimator in ``statspai.regression.advanced_iv`` is a
-separate code path from the ``_k_class_fit`` dispatcher (fixed in v1.6.4):
-users reach it via ``sp.liml(...)`` directly, not via
-``sp.ivreg(method='liml')``. This test pins its cluster / robust SE to:
+separate code path from the ``_k_class_fit`` dispatcher: users reach it via
+``sp.liml(...)`` directly, not via ``sp.ivreg(method='liml')``. This test
+pins its cluster / robust SE to:
 
-1. A hand-computed sandwich using the k-class transformed regressor
-   ``AX = (I − κ M_Z) X``, per the k-class FOC
-   ``X' (I − κ M_Z) (y − X β) = 0``.
-2. ``linearmodels.iv.IVLIML`` with ``cov_type='clustered', debiased=True``.
+1. A hand-computed sandwich with the instrument-projected regressors
+   ``P_Z X`` in the meat and ``(X'(I - kappa M_Z) X)^{-1}`` as the bread.
+2. ``linearmodels.iv.IVLIML`` with ``cov_type='clustered', debiased=True``,
+   now to machine precision.
 
-Before v1.6.5 the standalone LIML used raw ``X`` in the cluster / robust
-meat, identical in character to the 2SLS bug fixed in v1.6.4 but in a
-different module.
+History. Before v1.6.5 the standalone LIML used raw ``X`` in the meat. From
+v1.6.5 it used the k-class first-order-condition form ``(I - kappa M_Z) X``,
+which differs from ``P_Z X`` by ``(kappa - 1) M_Z X`` -- asymptotically
+negligible and zero at kappa = 1, but a ~0.1% finite-sample gap. Stata 18's
+``ivregress liml`` and ``linearmodels`` both use ``P_Z X`` (Stata
+bit-for-bit in ``test_vce_grammar_stata_parity.py``), so the meat was
+aligned to them; see MIGRATION.md.
 """
 
 from __future__ import annotations
@@ -43,7 +47,7 @@ def iv_cluster_data():
 
 
 def _hand_liml_cluster_sandwich(df):
-    """Hand-computed LIML cluster SE using (I−κM_Z)X in the meat.
+    """Hand-computed LIML cluster SE using P_Z X in the meat.
 
     Uses ``scipy.linalg.eigh`` on the symmetric generalized eigenvalue
     problem to pick κ — more numerically stable than the raw
@@ -80,7 +84,7 @@ def _hand_liml_cluster_sandwich(df):
     resid = y - X_all @ beta
     bread = np.linalg.inv(XAX)
 
-    AX = I_kMz @ X_all
+    AX = Pz @ X_all
     G = len(np.unique(cl))
     meat = np.zeros((k, k))
     for c in np.unique(cl):
@@ -169,14 +173,11 @@ class TestStandaloneLIMLSandwichUsesProjectedX:
 
 
 class TestLIMLvsLinearmodelsParity:
-    """Close parity with linearmodels.IVLIML with debiased=True.
+    """Parity with linearmodels.IVLIML with debiased=True.
 
-    StatsPAI uses the influence-function convention AX = (I−κM_Z) X in
-    the meat (strict k-class FOC). ``linearmodels.IVLIML`` uses the
-    2SLS-style meat X̂ = P_Z X regardless of κ. The two conventions are
-    asymptotically equivalent (κ → 1) and coincide exactly at κ = 1
-    (2SLS). On this DGP the finite-sample gap at κ ≈ 1.0017 is ~0.13%
-    — well within the convention-difference tolerance we allow here.
+    Both StatsPAI and ``linearmodels.IVLIML`` put the instrument-projected
+    regressors X̂ = P_Z X in the meat for every κ, as Stata's ``ivregress
+    liml`` does, so the cluster SEs agree to machine precision.
     """
 
     def test_cluster_se_close_to_linearmodels_debiased(self, iv_cluster_data):

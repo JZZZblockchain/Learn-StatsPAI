@@ -362,7 +362,12 @@ class OLSEstimator(BaseEstimator):
                 "residual variance and standard errors: "
                 f"nobs={n}, parameters={k}, residual df={n - k}."
             )
-        robust_key = str(robust).lower()
+        # Stata ``regress, vce(robust)`` is HC1; ``True`` means the same.
+        robust_key = "hc1" if robust is True else str(robust).lower()
+        if robust_key == "robust":
+            robust_key = "hc1"
+        elif robust_key in ("false", "none", "ols", "oim", "iid", "classical"):
+            robust_key = "nonrobust"
         var_names = kwargs.pop("var_names", None)
         if var_names is not None:
             var_names = list(var_names)
@@ -876,6 +881,12 @@ class OLSRegression(BaseModel):
             "var_cov": results.get("var_cov"),
             "var_names": self.var_names,
         }
+        if cluster_var is not None:
+            # Stata ``regress, vce(cluster)``: t / F with G - 1 degrees of
+            # freedom. p-values and intervals used t(N - K), which on 40
+            # clusters and 1,200 observations understated a p-value by 17
+            # orders of magnitude.
+            data_info["df_inference"] = int(n_clusters_obs) - 1
 
         rss_per_obs = results["rss"] / results["nobs"]
         if rss_per_obs <= 0:
@@ -1211,6 +1222,37 @@ def regress(
         else:
             robust = _robust if _robust is not None else "nonrobust"
 
+    # --- Stata grammar: vce='robust' / True / 'cluster firm' / 'vce(hc3)' ---
+    # ``vce='robust'`` (Stata's most common spelling) used to raise, and
+    # ``vce='cluster'`` worked only by accident when cluster= was also set.
+    if not isinstance(robust, dict):
+        from ..core._vcov_spec import parse_se_request
+
+        _se = parse_se_request(
+            robust,
+            cluster,
+            function="regress",
+            supported=(
+                "nonrobust",
+                "robust",
+                "hc0",
+                "hc1",
+                "hc2",
+                "hc3",
+                "hac",
+                "cluster",
+                "cr2",
+                "cr3",
+                "jackknife",
+                "wild",
+                "conley",
+            ),
+            multiway=True,
+        )
+        cluster = _se.cluster
+        # regress, vce(robust) is HC1; a cluster request is carried by cluster=.
+        robust = {"robust": "hc1", "cluster": "nonrobust"}.get(_se.kind, _se.kind)
+
     # --- Input validation (Stata-quality error messages) ---
     if not isinstance(data, pd.DataFrame):
         raise TypeError(
@@ -1288,6 +1330,9 @@ def regress(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             f"{kind} cluster-robust (Pustejovsky-Tipton 2018; matches R "
             "sandwich::vcovCL)"
@@ -1314,6 +1359,9 @@ def regress(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             f"Conley spatial HAC (acreg planar, {conley_cutoff} km; uniform)"
         )
@@ -1377,6 +1425,9 @@ def regress(
         base.conf_int_lower = ci_lo
         base.conf_int_upper = ci_hi
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             f"WCR wild cluster bootstrap (Cameron-Gelbach-Miller 2008, "
             f"{wild_reps} reps, {wild_weight_type})"
@@ -1410,6 +1461,9 @@ def regress(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = "two-way cluster (CGM 2011)"
         base.model_info["cluster"] = list(cluster)
         return base

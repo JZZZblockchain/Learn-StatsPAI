@@ -297,7 +297,10 @@ class EconometricResults:
         std_errors = self.std_errors.to_numpy(dtype=float, copy=False)
         with np.errstate(divide="ignore", invalid="ignore"):
             tvalues = params / std_errors
-        df_resid = self.data_info.get("df_resid", np.inf)
+        # t(df) or z, by the fit's own convention: data_info['inference'] ==
+        # 'z' for likelihood-based fits, data_info['df_inference'] for G - 1
+        # under clustering, else df_resid (see postestimation._covariance).
+        df_resid = self._inference_df()
         self.tvalues = pd.Series(tvalues, index=index)
         self.pvalues = 2 * stats.t.sf(np.abs(tvalues), df_resid)
 
@@ -306,6 +309,16 @@ class EconometricResults:
         t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
         self.conf_int_lower = pd.Series(params - t_crit * std_errors, index=index)
         self.conf_int_upper = pd.Series(params + t_crit * std_errors, index=index)
+
+    def _inference_df(self) -> float:
+        """Reference-distribution degrees of freedom (``inf`` means z).
+
+        Reads only ``data_info``, so fits that record nothing keep the
+        long-standing ``df_resid`` rule.
+        """
+        from ..postestimation._covariance import inference_df
+
+        return inference_df(self, stores=("data_info",))
 
     def summary(self, alpha: float = 0.05) -> str:
         """
@@ -322,13 +335,15 @@ class EconometricResults:
             Formatted summary table
         """
         alpha = _validate_probability(alpha, name="alpha")
-        # Create coefficients table
+        # Label by the reference distribution the p-values actually use:
+        # likelihood-based fits (and fits with no residual df) report z.
+        stat = "z" if not np.isfinite(self._inference_df()) else "t"
         coef_table = pd.DataFrame(
             {
                 "Coefficient": self.params,
                 "Std. Error": self.std_errors,
-                "t-statistic": self.tvalues,
-                "P>|t|": self.pvalues,
+                f"{stat}-statistic": self.tvalues,
+                f"P>|{stat}|": self.pvalues,
                 f"[{alpha / 2:.3f}": self.conf_int_lower,
                 f"{1 - alpha / 2:.3f}]": self.conf_int_upper,
             }
@@ -351,11 +366,17 @@ class EconometricResults:
             output.append("")
             output.append("Model Diagnostics:")
             output.append("-" * 20)
+            width = max(20, *(len(str(k)) for k in self.diagnostics))
             for key, value in self.diagnostics.items():
-                if isinstance(value, (int, float)):
-                    output.append(f"{key:20s}: {value:.4f}")
+                if isinstance(value, (bool, np.bool_)) or value is None:
+                    text = str(value)
+                elif isinstance(value, (int, np.integer)):
+                    text = f"{int(value):d}"
+                elif isinstance(value, (float, np.floating)):
+                    text = f"{value:.4f}"
                 else:
-                    output.append(f"{key:20s}: {value}")
+                    text = str(value)
+                output.append(f"{key:{width}s}: {text}")
 
         output.append("=" * 80)
         return SummaryText("\n".join(output))
@@ -376,7 +397,7 @@ class EconometricResults:
         """
         alpha = _validate_probability(alpha, name="alpha")
         stats = _scipy_stats()
-        t_crit = stats.t.ppf(1 - alpha / 2, self.data_info.get("df_resid", np.inf))
+        t_crit = stats.t.ppf(1 - alpha / 2, self._inference_df())
         lower = self.params - t_crit * self.std_errors
         upper = self.params + t_crit * self.std_errors
 
@@ -423,10 +444,14 @@ class EconometricResults:
 
         Examples
         --------
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"x1": rng.normal(size=100), "x2": rng.normal(size=100)})
+        >>> df["y"] = 1 + df.x1 - df.x2 + rng.normal(size=100)
         >>> result = sp.regress("y ~ x1 + x2", data=df)
-        >>> result.tidy()
-           term  estimate  std_error  statistic  p_value  conf_low  conf_high
-        0  Intercept     ...
+        >>> result.tidy().columns[:3].tolist()
+        ['term', 'estimate', 'std_error']
 
         See Also
         --------
@@ -434,7 +459,7 @@ class EconometricResults:
         """
         conf_level = _validate_probability(conf_level, name="conf_level")
         alpha = 1 - conf_level
-        df_resid = self.data_info.get("df_resid", np.inf)
+        df_resid = self._inference_df()
         stats = _scipy_stats()
         t_crit = stats.t.ppf(1 - alpha / 2, df_resid)
         lo = self.params - t_crit * self.std_errors
@@ -497,6 +522,72 @@ class EconometricResults:
         row = table.loc[term]
         row.name = term
         return row
+
+    def test(self, hypothesis: str) -> Dict[str, Any]:
+        """Wald test of linear restrictions -- Stata's ``test`` after a fit.
+
+        Shorthand for :func:`statspai.test` ``(result, hypothesis)``.
+
+        Parameters
+        ----------
+        hypothesis : str
+            ``"x1 = 0"``, ``"x1 = x2"``, ``"x1 = x2 = 0"`` (joint) or
+            ``"x1 + x2 = 1"``.
+
+        Returns
+        -------
+        dict
+            ``statistic`` (F), ``pvalue``, ``df``, ``chi2``, ``hypothesis``.
+
+        Examples
+        --------
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> x1, x2 = rng.normal(size=200), rng.normal(size=200)
+        >>> df = pd.DataFrame({"y": x1 + x2 + rng.normal(size=200),
+        ...                    "x1": x1, "x2": x2})
+        >>> out = sp.regress("y ~ x1 + x2", data=df).test("x1 = x2")
+        >>> bool(out["pvalue"] > 0.01)
+        True
+        """
+        from ..postestimation.hypothesis import test as _test
+
+        return _test(self, hypothesis)
+
+    def lincom(self, expression: str, alpha: float = 0.05) -> Dict[str, Any]:
+        """Linear combination of coefficients -- Stata's ``lincom``.
+
+        Shorthand for :func:`statspai.lincom` ``(result, expression, alpha)``.
+
+        Parameters
+        ----------
+        expression : str
+            ``"x1 + x2"``, ``"x1 - x2"``, ``"2*x1 + 3*x2"``.
+        alpha : float, default 0.05
+            Significance level for the confidence interval.
+
+        Returns
+        -------
+        dict
+            Estimate, standard error, test statistic, p-value and CI.
+
+        Examples
+        --------
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> x1, x2 = rng.normal(size=200), rng.normal(size=200)
+        >>> df = pd.DataFrame({"y": x1 + x2 + rng.normal(size=200),
+        ...                    "x1": x1, "x2": x2})
+        >>> out = sp.regress("y ~ x1 + x2", data=df).lincom("x1 + x2")
+        >>> sorted(out)  # doctest: +NORMALIZE_WHITESPACE
+        ['ci', 'df', 'distribution', 'estimate', 'expression', 'pvalue', 'se',
+         'statistic', 'z']
+        """
+        from ..postestimation.hypothesis import lincom as _lincom
+
+        return _lincom(self, expression, alpha=alpha)
 
     def glance(self) -> pd.DataFrame:
         """Return a 1-row DataFrame of model-level statistics, broom-style.
@@ -685,8 +776,15 @@ class EconometricResults:
 
         Examples
         --------
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"x1": rng.normal(size=100), "x2": rng.normal(size=100)})
+        >>> df["y"] = 1 + df.x1 - df.x2 + rng.normal(size=100)
         >>> result = sp.regress("y ~ x1 + x2", data=df)
-        >>> result.next_steps()
+        >>> steps = result.next_steps(print_result=False)
+        >>> steps[0]["action"]
+        "sp.estat(result, 'all')"
         """
         from .next_steps import _format_steps, econometric_next_steps
 
@@ -716,6 +814,12 @@ class EconometricResults:
 
         Examples
         --------
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"z": rng.normal(size=300), "c": rng.normal(size=300)})
+        >>> df["x"] = df.z + rng.normal(size=300)
+        >>> df["y"] = 1 + 0.5 * df.x + df.c + rng.normal(size=300)
         >>> result = sp.iv("y ~ (x ~ z) + c", data=df)
         >>> for v in result.violations():
         ...     if v['severity'] == 'error':
@@ -753,9 +857,16 @@ class EconometricResults:
 
         Examples
         --------
-        >>> result = sp.regress("y ~ x", data=df)
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"x1": rng.normal(size=100), "x2": rng.normal(size=100)})
+        >>> df["y"] = 1 + df.x1 - df.x2 + rng.normal(size=100)
+        >>> result = sp.regress("y ~ x1", data=df)
         >>> import json
-        >>> agent_payload = json.dumps(result.to_agent_summary())
+        >>> agent_payload = json.dumps(result.to_agent_summary(), default=str)
+        >>> agent_payload.startswith("{")
+        True
         """
         from ._agent_summary import econometric_agent_summary
 
@@ -872,7 +983,12 @@ class EconometricResults:
 
         Examples
         --------
+        >>> import numpy as np, pandas as pd
         >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"z": rng.normal(size=300), "c": rng.normal(size=300)})
+        >>> df["x"] = df.z + rng.normal(size=300)
+        >>> df["y"] = 1 + 0.5 * df.x + df.c + rng.normal(size=300)
         >>> r = sp.regress("y ~ x + z", data=df)
         >>> tex = r.to_latex(caption="Main results", label="tab:main",
         ...                  coef_labels={"x": "Treatment"}, template="aer")
@@ -1216,8 +1332,16 @@ class EconometricResults:
 
         Examples
         --------
-        >>> res = sp.ivreg('y ~ x | z', data=df)
-        >>> print(res.to_appendix(format='markdown'))
+        >>> import numpy as np, pandas as pd
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> df = pd.DataFrame({"z": rng.normal(size=300), "c": rng.normal(size=300)})
+        >>> df["x"] = df.z + rng.normal(size=300)
+        >>> df["y"] = 1 + 0.5 * df.x + df.c + rng.normal(size=300)
+        >>> res = sp.ivreg("y ~ c + (x ~ z)", data=df)
+        >>> md = res.to_appendix(format="markdown")
+        >>> isinstance(md, str) and len(md) > 0
+        True
         """
         from ..smart.methods_appendix import methods_appendix
 
@@ -2787,6 +2911,25 @@ class CausalResult:
             detail={"alpha": self.alpha},
         )
 
+    def test(self, hypothesis: str) -> Dict[str, Any]:
+        """Wald test on the reported effect(s) -- Stata's ``test``.
+
+        Shorthand for :func:`statspai.test` ``(result, hypothesis)``; terms
+        are the names in ``result.params`` (e.g. ``"ATT = 0"``).
+        """
+        from ..postestimation.hypothesis import test as _test
+
+        return _test(self, hypothesis)
+
+    def lincom(self, expression: str, alpha: float = 0.05) -> Dict[str, Any]:
+        """Linear combination of the reported effect(s) -- Stata's ``lincom``.
+
+        Shorthand for :func:`statspai.lincom` ``(result, expression, alpha)``.
+        """
+        from ..postestimation.hypothesis import lincom as _lincom
+
+        return _lincom(self, expression, alpha=alpha)
+
     # ------------------------------------------------------------------
     # Panel-counterfactual conveniences (synth / matrix completion / …)
     # ------------------------------------------------------------------
@@ -3101,6 +3244,8 @@ class CausalResult:
             "converged",
             "weight_hhi",
             "crit_val_uniform",
+            "cct_delegation",
+            "reference_backend",
         }
         # Friendly labels for keys whose title-cased form is cryptic
         # ("Ml G", "Dml Model", …); private "_"-prefixed keys are
@@ -3130,12 +3275,14 @@ class CausalResult:
                         f'see .model_info["{key}"]>'
                     )
                 continue
-            if key.startswith("_"):
+            if key.startswith("_") or val is None:
                 continue
             if key.startswith(_telemetry_prefixes) or key in _telemetry_keys:
                 n_telemetry += 1
                 continue
             label = _labels.get(key, key.replace("_", " ").title())
+            if isinstance(val, (float, np.floating)) and not isinstance(val, bool):
+                val = f"{float(val):.6g}"
             lines.append(f"  {label}:    {val}")
         if n_telemetry:
             lines.append(
@@ -3167,9 +3314,14 @@ class CausalResult:
 
         Examples
         --------
-        >>> r = sp.callaway_santanna(df, y='y', g='g', t='t', i='i')
-        >>> r.tidy()                  # includes group-time ATTs
-        >>> r.tidy().query("type=='main'")
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=60, n_periods=6, staggered=True, seed=1)
+        >>> df["g"] = df["first_treat"].fillna(0).astype(int)
+        >>> r = sp.callaway_santanna(df, y="y", g="g", t="time", i="unit")
+        >>> sorted(r.tidy()["type"].unique())  # overall, event-time, group-time
+        ['event_study', 'group_time', 'main']
+        >>> len(r.tidy().query("type == 'main'"))
+        1
         """
         # Main row
         if conf_level is not None:
@@ -4031,8 +4183,14 @@ class CausalResult:
 
         Examples
         --------
-        >>> result = sp.did(df, y='wage', treat='treated', time='post')
-        >>> print(result.to_appendix(format='markdown'))
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=200, n_periods=2, seed=0)
+        >>> df["treat"] = df["first_treat"].notna().astype(int)
+        >>> df["post"] = (df["time"] >= 1).astype(int)
+        >>> result = sp.did(df, y="y", treat="treat", time="post")
+        >>> md = result.to_appendix(format="markdown")
+        >>> isinstance(md, str) and len(md) > 0
+        True
         """
         from ..smart.methods_appendix import methods_appendix
 
@@ -4070,8 +4228,14 @@ class CausalResult:
 
         Examples
         --------
-        >>> result = sp.did(df, y='wage', treat='treated', time='post')
-        >>> result.next_steps()
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=200, n_periods=2, seed=0)
+        >>> df["treat"] = df["first_treat"].notna().astype(int)
+        >>> df["post"] = (df["time"] >= 1).astype(int)
+        >>> result = sp.did(df, y="y", treat="treat", time="post")
+        >>> steps = result.next_steps(print_result=False)
+        >>> steps[0]["action"]
+        'sp.event_study(data=df, ...)'
         """
         from .next_steps import _format_steps, causal_next_steps
 
@@ -4104,9 +4268,13 @@ class CausalResult:
 
         Examples
         --------
-        >>> r = sp.did(df, y='wage', treat='treated', time='post')
-        >>> [v['test'] for v in r.violations() if v['severity'] == 'error']
-        ['pretrend']
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=200, n_periods=2, seed=0)
+        >>> df["treat"] = df["first_treat"].notna().astype(int)
+        >>> df["post"] = (df["time"] >= 1).astype(int)
+        >>> r = sp.did(df, y="y", treat="treat", time="post")
+        >>> [v["test"] for v in r.violations() if v["severity"] == "error"]
+        []
         """
         from ._agent_summary import causal_violations
 
@@ -4141,9 +4309,14 @@ class CausalResult:
 
         Examples
         --------
-        >>> r = sp.did(df, y='wage', treat='treated', time='post')
-        >>> import json
-        >>> print(json.dumps(r.to_agent_summary(), indent=2, default=str))
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=200, n_periods=2, seed=0)
+        >>> df["treat"] = df["first_treat"].notna().astype(int)
+        >>> df["post"] = (df["time"] >= 1).astype(int)
+        >>> r = sp.did(df, y="y", treat="treat", time="post")
+        >>> payload = r.to_agent_summary()
+        >>> sorted(payload)[:3]
+        ['citation_key', 'diagnostics', 'estimand']
         """
         from ._agent_summary import causal_agent_summary
 
@@ -4189,11 +4362,14 @@ class CausalResult:
 
         Examples
         --------
-        >>> r = sp.did(df, y='wage', treat='treated', time='post')
+        >>> import statspai as sp
+        >>> df = sp.dgp_did(n_units=200, n_periods=2, seed=0)
+        >>> df["treat"] = df["first_treat"].notna().astype(int)
+        >>> df["post"] = (df["time"] >= 1).astype(int)
+        >>> r = sp.did(df, y="y", treat="treat", time="post")
         >>> s = r.decision_summary(rope=0.5)
-        >>> print(s.text)
         >>> s.verdict
-        'meaningful_effect'
+        'significant_uncertain_magnitude'
         """
         from ._decision import decision_summary
 

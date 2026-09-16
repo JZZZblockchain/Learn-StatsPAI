@@ -788,7 +788,19 @@ class GLMEstimator(BaseEstimator):
 
             # Check convergence: deviance criterion or parameter criterion
             if np.isfinite(dev_old):
-                if np.abs(dev_new - dev_old) / (np.abs(dev_old) + 0.1) < tol:
+                dev_small = np.abs(dev_new - dev_old) / (np.abs(dev_old) + 0.1) < tol
+                # For a canonical link IRLS is Newton's method and converges
+                # quadratically, so the deviance rule leaves no visible error.
+                # For any other link it is Fisher scoring, which converges
+                # linearly: the deviance rule stopped with coefficients ~1e-4
+                # short of the MLE (gaussian/log). Also require the parameter
+                # step to have collapsed there.
+                if dev_small and (
+                    link.name == family.canonical_link
+                    or params_old is None
+                    or np.max(np.abs(params - params_old))
+                    < 1e-10 * (1.0 + np.max(np.abs(params)))
+                ):
                     converged = True
                     break
             elif params_old is not None:
@@ -844,19 +856,40 @@ class GLMEstimator(BaseEstimator):
         df_resid = n - k
         phi = family.dispersion(y, mu, weights, df_resid)
 
+        # Bread: the observed information, Stata ``glm``'s default vce(oim)
+        # and the bread of its vce(robust) / vce(cluster). It equals the
+        # IRLS expected information X'WX for a canonical link; for any other
+        # link the (y - mu) term does not vanish and the two differ (0.1% on
+        # probit, 1% on a cloglog robust SE). ``information='expected'``
+        # reproduces the IRLS / R ``glm`` convention.
+        information = str(kwargs.pop("information", "observed")).lower()
+        if information not in ("observed", "expected"):
+            raise MethodIncompatibility(
+                f"glm: information must be 'observed' or 'expected', got "
+                f"{information!r}.",
+            )
+        bread = XtWX_inv
+        if information == "observed" and link.name != family.canonical_link:
+            bread = self._observed_information_inverse(X, y, mu, weights, family, link)
+
         if cluster is not None:
             var_cov = self._cluster_cov(
-                X, y, mu, V, g_prime, weights, XtWX_inv, cluster, n, k
+                X, y, mu, V, g_prime, weights, bread, cluster, n, k
             )
         elif robust == "nonrobust":
-            var_cov = phi * XtWX_inv
+            var_cov = phi * bread
+        elif robust == "robust":
+            # Stata ``glm, vce(robust)``: the HC0 sandwich times N/(N-1).
+            var_cov = (n / (n - 1.0)) * self._robust_cov(
+                X, y, mu, V, g_prime, weights, bread, "hc0", n, k
+            )
         elif robust in ("hc0", "hc1", "hc2", "hc3"):
             var_cov = self._robust_cov(
-                X, y, mu, V, g_prime, weights, XtWX_inv, robust, n, k
+                X, y, mu, V, g_prime, weights, bread, robust, n, k
             )
         elif robust == "hac":
             lags = kwargs.get("lags", None)
-            var_cov = self._hac_cov(X, y, mu, V, g_prime, weights, XtWX_inv, n, k, lags)
+            var_cov = self._hac_cov(X, y, mu, V, g_prime, weights, bread, n, k, lags)
         else:
             raise MethodIncompatibility(
                 f"Unknown robust option: {robust}",
@@ -920,6 +953,39 @@ class GLMEstimator(BaseEstimator):
     # ------------------------------------------------------------------
     # Robust / clustered covariance helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _observed_information_inverse(
+        X: np.ndarray,
+        y: np.ndarray,
+        mu: np.ndarray,
+        weights: np.ndarray,
+        family: "Family",
+        link: LinkFunction,
+    ) -> np.ndarray:
+        """Inverse observed information for beta, dispersion factored out.
+
+        With ``h(mu) = 1 / (V(mu) g'(mu))`` the score of observation i is
+        ``w_i (y_i - mu_i) h(mu_i) x_i`` and minus its derivative is
+        ``w_i x_i x_i' (h - (y - mu) h') / g'``. The first term alone is the
+        IRLS expected information; ``h'`` vanishes for a canonical link.
+        ``h'`` is a central difference with a step relative to ``mu``, whose
+        truncation error is far below the 1e-6 parity budget.
+        """
+
+        def h(m: np.ndarray) -> np.ndarray:
+            return _as_float_array(1.0 / (family.variance(m) * link.deriv(m)))
+
+        g_prime = link.deriv(mu)
+        step = 1e-6 * np.maximum(np.abs(mu), 1e-8)
+        h_prime = (h(mu + step) - h(mu - step)) / (2.0 * step)
+        w_obs = weights * (h(mu) - (y - mu) * h_prime) / g_prime
+        info = X.T @ (X * w_obs[:, np.newaxis])
+        try:
+            return _as_float_array(np.linalg.inv(info))
+        except np.linalg.LinAlgError:
+            warnings.warn("Singular observed information; using pseudo-inverse")
+            return _as_float_array(np.linalg.pinv(info))
 
     @staticmethod
     def _score_obs(
@@ -1000,7 +1066,10 @@ class GLMEstimator(BaseEstimator):
             s_c = S[idx].sum(axis=0)
             meat += np.outer(s_c, s_c)
 
-        correction = n_clusters / (n_clusters - 1) * (n - 1) / (n - k)
+        # Stata ``glm, vce(cluster)``: G/(G-1) only. This used to carry the
+        # regress-family (N-1)/(N-K) factor as well, which Stata's glm does
+        # not apply.
+        correction = n_clusters / (n_clusters - 1)
         return _as_float_array(correction * bread @ meat @ bread)
 
     def _hac_cov(
@@ -1285,6 +1354,26 @@ class GLMRegression(BaseModel):
                 )
             off = off + np.log(exposure_values)
 
+        # Stata grammar: vce='robust' / True / 'cluster firm' / 'oim' ...
+        from ..core._vcov_spec import parse_se_request
+
+        _se = parse_se_request(
+            robust,
+            cluster,
+            function="glm",
+            supported=(
+                "nonrobust",
+                "robust",
+                "hc0",
+                "hc1",
+                "hc2",
+                "hc3",
+                "hac",
+                "cluster",
+            ),
+        )
+        robust, cluster = _se.kind, _se.cluster
+
         cluster_var = None
         if cluster:
             if self.data is None:
@@ -1357,6 +1446,8 @@ class GLMRegression(BaseModel):
             "nobs": results["nobs"],
             "df_model": results["df_model"],
             "df_resid": results["df_resid"],
+            # z / chi2 inference, as Stata's glm (default and robust vce).
+            "inference": "z",
             "dependent_var": self.dependent_var,
             "fitted_values": results["fitted_values"],
             "residuals": results["residuals"],
@@ -1616,6 +1707,7 @@ def glm(
     maxiter: int = 100,
     tol: float = 1e-8,
     alpha: float = 0.05,
+    information: str = "observed",
 ) -> EconometricResults:
     """
     Fit a Generalized Linear Model.
@@ -1659,6 +1751,12 @@ def glm(
         Convergence tolerance on the relative change in deviance.
     alpha : float, default 0.05
         Significance level for confidence intervals.
+    information : {'observed', 'expected'}, default 'observed'
+        Information matrix used as the variance bread. ``'observed'`` is
+        Stata's ``glm`` default ``vce(oim)`` (and the bread of its robust /
+        cluster sandwiches); ``'expected'`` is the IRLS Fisher information
+        that R's ``glm`` reports. They coincide for canonical links (logit
+        binomial, log Poisson, identity Gaussian) and differ otherwise.
 
     Returns
     -------
@@ -1742,4 +1840,5 @@ def glm(
         maxiter=maxiter,
         tol=tol,
         alpha=alpha,
+        information=information,
     )

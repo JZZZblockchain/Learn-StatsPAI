@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient
 
@@ -593,6 +594,7 @@ def _fect_fit(
     }
 
 
+@accepts_aliases(_strict=True, id="unit", controls="covariates")
 def fect(
     data: pd.DataFrame,
     y: str,

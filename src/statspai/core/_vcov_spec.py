@@ -17,11 +17,18 @@ accepts both spellings and translates to its native one.
 :func:`normalize_vcov` is the one shared primitive.
 """
 
-from typing import Any, Dict, Optional, Tuple
+import re
+from dataclasses import dataclass
+from typing import Any, Dict, FrozenSet, Iterable, Optional, Tuple
 
 from ..exceptions import MethodIncompatibility
 
-__all__ = ["normalize_vcov", "reject_unknown_kwargs"]
+__all__ = [
+    "SERequest",
+    "normalize_vcov",
+    "parse_se_request",
+    "reject_unknown_kwargs",
+]
 
 
 # pyfixest / fixest scalar spellings -> StatsPAI ``robust=`` spellings.
@@ -171,3 +178,247 @@ def reject_unknown_kwargs(
             "unrecognised arguments are rejected rather than ignored so "
             "a typo cannot silently change your standard errors."
         )
+
+
+# ---------------------------------------------------------------------------
+# Stata-style SE requests: vce="robust" / True / "vce(cluster firm)" / ...
+# ---------------------------------------------------------------------------
+#
+# Before this parser each estimator read its ``robust=`` string with its own
+# ad-hoc test, and the tests disagreed in ways that were invisible to the
+# caller: ``logit`` treated every string other than "nonrobust" as the
+# sandwich (so ``vce="cluster firm"`` quietly returned heteroskedasticity-
+# robust SEs), ``ologit`` treated every string other than "robust"/"hc1" as
+# model-based (so ``vce="bogus"`` quietly returned OIM SEs), and
+# ``regress`` rejected ``vce="robust"`` outright.  The parser gives every
+# estimator the same vocabulary and the same failure mode: a spelling is
+# either understood and implemented, or the call raises.
+#
+# The canonical *kinds* below are estimator-agnostic.  What ``"robust"``
+# means numerically is each estimator's business and follows Stata:
+# HC1 on the least-squares family (``regress, vce(robust)``) and the ML
+# sandwich with an N/(N-1) factor on maximum-likelihood models
+# (``logit, vce(robust)``).  See ``core._vcov.ml_vcov``.
+
+#: Spelling (lower-case) -> canonical SE kind.
+_SE_KIND_SYNONYMS: Dict[str, str] = {
+    # Model-based / observed-information standard errors.
+    "nonrobust": "nonrobust",
+    "ols": "nonrobust",
+    "oim": "nonrobust",
+    "iid": "nonrobust",
+    "classical": "nonrobust",
+    "conventional": "nonrobust",
+    "unadjusted": "nonrobust",
+    "homoskedastic": "nonrobust",
+    # Heteroskedasticity-robust.  Stata accepts the abbreviations r / rob.
+    "robust": "robust",
+    "r": "robust",
+    "rob": "robust",
+    "hetero": "robust",
+    "huber": "robust",
+    "white": "hc0",
+    "hc0": "hc0",
+    "hc1": "hc1",
+    "hc2": "hc2",
+    "hc3": "hc3",
+    "hac": "hac",
+    # Cluster-robust.  Stata accepts cl / clu / clus / clust.
+    "cluster": "cluster",
+    "cl": "cluster",
+    "clu": "cluster",
+    "clus": "cluster",
+    "clust": "cluster",
+    "cr1": "cluster",
+    "crv1": "cluster",
+    "cr2": "cr2",
+    "crv2": "cr2",
+    "cr3": "cr3",
+    "crv3": "cr3",
+    "jackknife": "jackknife",
+    "wild": "wild",
+    "wildbootstrap": "wild",
+    "wild_cluster": "wild",
+    "wcr": "wild",
+    "wre": "wild",
+    "boottest": "wild",
+    # Spatial.
+    "conley": "conley",
+}
+
+#: Kinds that are meaningless without a cluster variable.
+_NEEDS_CLUSTER: FrozenSet[str] = frozenset(
+    {"cluster", "cr2", "cr3", "jackknife", "wild"}
+)
+
+#: Kinds a supplied ``cluster=`` silently upgrades to one-way clustering.
+#: This is the long-standing ``robust="hc1", cluster="firm"`` idiom (and
+#: Stata's own ``cluster()`` option), so it keeps working.
+_UPGRADES_TO_CLUSTER: FrozenSet[str] = frozenset({"nonrobust", "robust", "hc0", "hc1"})
+
+_VCE_WRAPPER = re.compile(r"^\s*vce\s*\((?P<body>.*)\)\s*$", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class SERequest:
+    """A parsed standard-error request.
+
+    Attributes
+    ----------
+    kind : str
+        Canonical kind: ``"nonrobust"``, ``"robust"``, ``"hc0"``–``"hc3"``,
+        ``"hac"``, ``"cluster"``, ``"cr2"``, ``"cr3"``, ``"jackknife"``,
+        ``"wild"`` or ``"conley"``.
+    cluster : Any
+        The cluster specification after merging ``cluster=`` with any
+        variable named inside the ``vce`` string (``"cluster firm"``).
+    spelling : Any
+        What the caller passed, kept for error messages and provenance.
+    """
+
+    kind: str
+    cluster: Any
+    spelling: Any
+
+
+def _is_str_list(value: Any) -> bool:
+    return isinstance(value, (list, tuple)) and all(isinstance(v, str) for v in value)
+
+
+def parse_se_request(
+    robust: Any,
+    cluster: Any = None,
+    *,
+    function: str,
+    supported: Iterable[str],
+    multiway: bool = False,
+) -> SERequest:
+    """Parse a Stata-style standard-error request into a canonical kind.
+
+    Parameters
+    ----------
+    robust : None, bool or str
+        The estimator's ``robust=`` value (``vce=`` has already been folded
+        into it by ``accepts_aliases``).  Accepts ``True`` / ``False``, any
+        spelling in the synonym table (case-insensitive), Stata's
+        ``"vce(...)"`` wrapper, and a cluster variable written inline:
+        ``"cluster firm"`` or, when ``multiway`` is allowed,
+        ``"cluster firm year"``.
+    cluster : optional
+        The estimator's ``cluster=`` value.  Column names, lists of column
+        names and arrays are all passed through untouched.
+    function : str
+        Name used in error messages.
+    supported : iterable of str
+        Canonical kinds the estimator implements.  Include ``"cluster"``
+        when the estimator supports one-way clustering.
+    multiway : bool, default False
+        Whether a list of cluster variables is allowed.
+
+    Returns
+    -------
+    SERequest
+
+    Raises
+    ------
+    MethodIncompatibility
+        When the spelling is unknown, recognised but not implemented by
+        this estimator, missing its cluster variable, or in conflict with
+        ``cluster=``.  Returning some other kind of standard error instead
+        is exactly the silent failure this parser exists to remove.
+    """
+    supported_set = frozenset(supported)
+    shown = ", ".join(repr(k) for k in sorted(supported_set))
+
+    def _unknown() -> MethodIncompatibility:
+        return MethodIncompatibility(
+            f"{function}: Unknown robust option: {robust!r}. "
+            f"Supported vce/robust values here: {shown}.",
+            recovery_hint=(
+                "Use a Stata-style spelling such as vce='robust', "
+                "vce='cluster firm', or one of the listed values."
+            ),
+            diagnostics={"robust": repr(robust), "supported": sorted(supported_set)},
+        )
+
+    inline: Tuple[str, ...] = ()
+    if robust is None or robust is False:
+        kind = "nonrobust"
+    elif robust is True:
+        kind = "robust"
+    elif isinstance(robust, str):
+        text = robust.strip()
+        wrapped = _VCE_WRAPPER.match(text)
+        if wrapped is not None:
+            text = wrapped.group("body").strip()
+        parts = text.replace(",", " ").split()
+        if not parts or parts[0].lower() not in _SE_KIND_SYNONYMS:
+            raise _unknown()
+        kind = _SE_KIND_SYNONYMS[parts[0].lower()]
+        inline = tuple(parts[1:])
+        if inline and kind not in _NEEDS_CLUSTER:
+            raise MethodIncompatibility(
+                f"{function}: vce={robust!r} names {list(inline)} after "
+                f"{parts[0]!r}, but only cluster-type standard errors take a "
+                "variable.",
+                recovery_hint="Write vce='cluster firm' or pass cluster='firm'.",
+            )
+    else:
+        raise MethodIncompatibility(
+            f"{function}: robust/vce must be a string or a bool, got "
+            f"{type(robust).__name__}.",
+            recovery_hint="Pass e.g. vce='robust' or vce='cluster firm'.",
+        )
+
+    if inline:
+        named: Any = inline[0] if len(inline) == 1 else list(inline)
+        if cluster is not None:
+            same = (
+                cluster == named
+                if isinstance(cluster, str)
+                else _is_str_list(cluster) and list(cluster) == list(inline)
+            )
+            if not same:
+                raise MethodIncompatibility(
+                    f"{function}: vce={robust!r} clusters on {named!r} but "
+                    f"cluster={cluster!r} was also passed. Pass the cluster "
+                    "variable once.",
+                    recovery_hint="Drop either the name inside vce= or cluster=.",
+                )
+        cluster = named
+
+    if _is_str_list(cluster):
+        if len(cluster) == 1:
+            cluster = cluster[0]
+        elif not multiway:
+            raise MethodIncompatibility(
+                f"{function}: multiway clustering on {list(cluster)} is not "
+                "available; pass a single cluster variable.",
+                recovery_hint="Use sp.feols / sp.regress for multiway clustering.",
+            )
+
+    if kind in _NEEDS_CLUSTER and cluster is None:
+        raise MethodIncompatibility(
+            f"{function}: vce={robust!r} requires cluster=<column> "
+            "(a cluster variable).",
+            recovery_hint="Write vce='cluster firm' or pass cluster='firm'.",
+        )
+    if cluster is not None:
+        if kind in _UPGRADES_TO_CLUSTER:
+            kind = "cluster"
+        elif kind not in _NEEDS_CLUSTER:
+            raise MethodIncompatibility(
+                f"{function}: vce={robust!r} cannot be combined with "
+                f"cluster={cluster!r}; a supplied cluster variable means "
+                "cluster-robust standard errors.",
+                recovery_hint="Drop cluster= or ask for vce='cluster'.",
+            )
+
+    if kind not in supported_set:
+        raise MethodIncompatibility(
+            f"{function}: vce={robust!r} ({kind}) is not available for this "
+            f"estimator. Supported vce/robust values here: {shown}.",
+            recovery_hint=f"Use one of: {shown}.",
+            diagnostics={"robust": repr(robust), "kind": kind},
+        )
+    return SERequest(kind=kind, cluster=cluster, spelling=robust)

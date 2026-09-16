@@ -33,7 +33,7 @@ Read the two evidence kinds separately. Only the first answers "does StatsPAI ag
 | **No external software reference** | analytical-only (T1) | 202 |
 | | external-replication (published numbers) | 4 |
 | | **subtotal** | **206** |
-| No numerical evidence yet | unverified | 752 |
+| No numerical evidence yet | unverified | 753 |
 
 ### Honest denominators
 
@@ -42,9 +42,9 @@ The all-registered denominator understates coverage: it counts result and except
 | denominator | cross-language | any evidence | total | cross-lang share |
 | --- | ---: | ---: | ---: | ---: |
 | estimator callables | 224 | 429 | 773 | 29.0% |
-| infrastructure (parity N/A) | 0 | 0 | 124 | 0.0% |
+| infrastructure (parity N/A) | 0 | 0 | 125 | 0.0% |
 | result / exception classes | 0 | 1 | 285 | 0.0% |
-| **all registered** | 224 | 430 | 1182 | 19.0% |
+| **all registered** | 224 | 430 | 1183 | 18.9% |
 
 ### Coverage by estimator family
 
@@ -455,7 +455,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `lasso_iv` | [`test_lasso_iv_parity.py`](../tests/reference_parity/test_lasso_iv_parity.py) |
 | `lasso_select` | [`test_lasso_select_parity.py`](../tests/reference_parity/test_lasso_select_parity.py) |
 | `lee_bounds` | [`test_lee_bounds_parity.py`](../tests/reference_parity/test_lee_bounds_parity.py) |
-| `lincom` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
+| `lincom` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) (+1) |
 | `lingam` | [`test_causal_discovery_parity.py`](../tests/reference_parity/test_causal_discovery_parity.py) |
 | `long_term_from_short` | [`test_surrogate_parity.py`](../tests/reference_parity/test_surrogate_parity.py) |
 | `longitudinal_analyze` | [`test_longitudinal_parity.py`](../tests/reference_parity/test_longitudinal_parity.py) |
@@ -467,7 +467,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `ltmle_survival` | [`test_ml_causal_recovery_parity_round2.py`](../tests/reference_parity/test_ml_causal_recovery_parity_round2.py) |
 | `malmquist` | [`test_frontier_efficiency_parity.py`](../tests/reference_parity/test_frontier_efficiency_parity.py) |
 | `manski_bounds` | [`test_manski_bounds_parity.py`](../tests/reference_parity/test_manski_bounds_parity.py) |
-| `margins` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
+| `margins` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) (+1) |
 | `margins_at` | [`test_margins_at_parity.py`](../tests/reference_parity/test_margins_at_parity.py) |
 | `markup` | [`test_structural_parity.py`](../tests/reference_parity/test_structural_parity.py) |
 | `matrix_completion` | [`test_matrix_completion_parity.py`](../tests/reference_parity/test_matrix_completion_parity.py) |
@@ -543,7 +543,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `target_trial_emulate` | [`test_target_trial_parity.py`](../tests/reference_parity/test_target_trial_parity.py) |
 | `target_trial_protocol` | [`test_target_trial_parity.py`](../tests/reference_parity/test_target_trial_parity.py) |
 | `target_trial_report` | [`test_target_trial_parity.py`](../tests/reference_parity/test_target_trial_parity.py) |
-| `test` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) |
+| `test` | [`test_postestimation_parity.py`](../tests/reference_parity/test_postestimation_parity.py) (+1) |
 | `test_calibration` | [`test_calibration_test_parity.py`](../tests/reference_parity/test_calibration_test_parity.py) |
 | `translog_design` | [`test_translog_design_parity.py`](../tests/reference_parity/test_translog_design_parity.py) |
 | `transport_generalize` | [`test_transport_parity.py`](../tests/reference_parity/test_transport_parity.py) |
@@ -554,6 +554,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `xlearner` | [`test_ml_causal_recovery_parity.py`](../tests/reference_parity/test_ml_causal_recovery_parity.py) |
 | `yatchew_linearity_test` | [`test_did_had_parity.py`](../tests/reference_parity/test_did_had_parity.py) |
 
-## unverified — 752 functions
+## unverified — 753 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).

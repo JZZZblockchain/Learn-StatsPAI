@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
+from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
 
@@ -188,6 +189,7 @@ def _build_fe_design(
     return A, u_levels, t_levels
 
 
+@accepts_aliases(_strict=True, id="group", unit="group", covariates="controls")
 def gardner_did(
     data: pd.DataFrame,
     y: str,

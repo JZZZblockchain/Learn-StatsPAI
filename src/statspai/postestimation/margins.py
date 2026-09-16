@@ -21,6 +21,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..exceptions import MethodIncompatibility
+from ._covariance import coefficient_covariance, inference_df, require_covariance
+
 
 def margins(
     result: Any,
@@ -82,149 +85,274 @@ def margins(
     >>> me_at['variable'].tolist()
     ['x1']
     """
+    if method not in ("ame", "mem"):
+        raise MethodIncompatibility(
+            f"margins: method must be 'ame' or 'mem', got {method!r}."
+        )
+    link = _response_link(result)
     params = result.params
-    var_cov = _get_vcov(result)
+    frame = _margins_frame(result, data)
+    if at:
+        frame = frame.copy()
+        for name, value in at.items():
+            frame[name] = value
+    if method == "mem":
+        # Stata ``atmeans``: every component at its sample mean.
+        frame = frame.mean(numeric_only=True).to_frame().T
 
+    base_vars = _term_variables(params.index)
     if variables is None:
-        variables = [v for v in params.index if v != "Intercept" and v != "const"]
-
-    # For linear models, marginal effects are just the coefficients
-    # (unless there are interactions or polynomial terms)
-    is_linear = _is_purely_linear(params.index, variables)
-
-    if is_linear:
-        return _linear_margins(params, var_cov, variables, alpha)
+        variables = [v for v in base_vars if not _is_factor_variable(v, params.index)]
     else:
-        return _numerical_margins(result, data, variables, at, method, eps, alpha)
+        unknown = [v for v in variables if v not in base_vars]
+        if unknown:
+            raise MethodIncompatibility(
+                f"margins: {unknown} do not enter the model.",
+                recovery_hint=f"Variables in the model: {base_vars}.",
+            )
+
+    beta = params.to_numpy(dtype=float)
+    X = _design(params.index, frame)
+    eta = X @ beta + _offset(result, frame)
+    f, f_prime = _link_derivatives(link, eta)
+
+    df_ref = inference_df(result)
+    finite = np.isfinite(df_ref)
+    crit = (
+        stats.t.ppf(1 - alpha / 2, df_ref) if finite else stats.norm.ppf(1 - alpha / 2)
+    )
+
+    rows = []
+    for var in variables:
+        if _is_factor_variable(var, params.index):
+            raise MethodIncompatibility(
+                f"margins: {var!r} enters as a factor; dy/dx of a factor is a "
+                "discrete change, which this function does not compute.",
+                recovery_hint="Use sp.contrast for level comparisons.",
+            )
+        D = _design_derivative(params.index, frame, var)  # d X / d var
+        d_eta = D @ beta
+        dydx = float(np.mean(f * d_eta))
+        # Delta method: d AME / d beta = mean(f'(eta) X d_eta + f(eta) D).
+        grad = np.mean(f_prime[:, None] * X * d_eta[:, None] + f[:, None] * D, axis=0)
+        V = require_covariance(result, grad.reshape(1, -1), f"margins({var!r})")
+        se = float(np.sqrt(max(float(grad @ V @ grad), 0.0)))
+        stat = dydx / se if se > 0 else float("nan")
+        pv = float(
+            2 * (stats.t.sf(abs(stat), df_ref) if finite else stats.norm.sf(abs(stat)))
+        )
+        rows.append(
+            {
+                "variable": var,
+                "dy/dx": dydx,
+                "se": se,
+                "z": stat,
+                "pvalue": pv,
+                "ci_lower": dydx - crit * se,
+                "ci_upper": dydx + crit * se,
+            }
+        )
+    return pd.DataFrame(rows)
 
 
-def _is_purely_linear(param_names: Any, variables: List[str]) -> bool:
-    """Check if model has interactions or polynomials involving these variables."""
-    for name in param_names:
-        if ":" in name:
-            return False
-        if any(f"{v}**" in name or f"I({v}" in name for v in variables):
-            return False
-    return True
+# ---------------------------------------------------------------------------
+# Index-model margins: prediction scale, design and its derivative
+# ---------------------------------------------------------------------------
+#
+# ``margins`` used to return the index coefficients for every model without an
+# interaction term -- so after ``sp.logit`` it reported beta (0.568) where
+# Stata's ``margins, dydx(*)`` reports the average marginal effect on Pr(y)
+# (0.126) -- and, with interactions, a "standard error" std(dydx)/sqrt(n) that
+# is not a delta-method SE at all. Both are replaced by the delta method on
+# the model's own prediction scale, using the full coefficient covariance.
+
+_LINKS_SUPPORTED = ("identity", "logit", "probit", "cloglog", "log")
+
+
+def _response_link(result: Any) -> str:
+    """The inverse link of the default prediction, as a name."""
+    model_info = getattr(result, "model_info", None) or {}
+    data_info = getattr(result, "data_info", None) or {}
+    link = model_info.get("link")
+    link_obj = data_info.get("link_obj")
+    if link_obj is not None:
+        link = getattr(link_obj, "name", link)
+    if isinstance(link, str) and link.lower() in _LINKS_SUPPORTED:
+        return link.lower()
+    likelihood_fit = (
+        data_info.get("inference") == "z" and model_info.get("vcov_type") is None
+    )
+    if link is not None or likelihood_fit:
+        raise MethodIncompatibility(
+            f"margins: the prediction scale of this model (link={link!r}) is "
+            "not supported; reporting index coefficients would not be "
+            "marginal effects.",
+            recovery_hint=(
+                "margins supports linear models and logit / probit / cloglog / "
+                "log-link (poisson, nbreg, glm) index models."
+            ),
+        )
+    return "identity"
+
+
+def _link_derivatives(link: str, eta: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """``(d mu / d eta, d2 mu / d eta2)`` for the inverse link."""
+    if link == "identity":
+        return np.ones_like(eta), np.zeros_like(eta)
+    if link == "logit":
+        p = 1.0 / (1.0 + np.exp(-eta))
+        f = p * (1.0 - p)
+        return f, f * (1.0 - 2.0 * p)
+    if link == "probit":
+        f = stats.norm.pdf(eta)
+        return f, -eta * f
+    if link == "cloglog":
+        e = np.exp(eta)
+        f = e * np.exp(-e)
+        return f, f * (1.0 - e)
+    mu = np.exp(eta)  # log
+    return mu, mu
+
+
+def _margins_frame(result: Any, data: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Covariate values to average over: ``data`` or the stored design."""
+    if data is not None:
+        return data
+    data_info = getattr(result, "data_info", None) or {}
+    X = data_info.get("X")
+    names = data_info.get("var_names")
+    if X is not None and names is not None and np.shape(X)[1] == len(names):
+        return pd.DataFrame(np.asarray(X, dtype=float), columns=list(names))
+    raise MethodIncompatibility(
+        "margins needs the covariate values: pass data=<estimation sample>.",
+    )
+
+
+def _term_variables(terms: Any) -> List[str]:
+    """Distinct base variables that enter the model terms, in order."""
+    out: List[str] = []
+    for term in terms:
+        for part in str(term).split(":"):
+            if part in _INTERCEPT_TOKENS:
+                continue
+            m = _CAT_TERM_RE.match(part)
+            name = m.group(1) if m is not None else part
+            if name not in out:
+                out.append(name)
+    return out
+
+
+def _is_factor_variable(var: str, terms: Any) -> bool:
+    for term in terms:
+        for part in str(term).split(":"):
+            m = _CAT_TERM_RE.match(part)
+            if m is not None and m.group(1) == var:
+                return True
+    return False
+
+
+_INTERCEPT_TOKENS = ("Intercept", "const", "_cons")
+
+
+def _part_values(part: str, frame: pd.DataFrame) -> np.ndarray:
+    n = len(frame)
+    if part in _INTERCEPT_TOKENS:
+        return np.ones(n)
+    m = _CAT_TERM_RE.match(part)
+    if m is not None:
+        base, level = m.group(1), m.group(2)
+        if base not in frame.columns:
+            raise MethodIncompatibility(f"margins: {base!r} is not in the data.")
+        return np.array(
+            [_factor_value(base, level, v) for v in frame[base]], dtype=float
+        )
+    if part not in frame.columns:
+        raise MethodIncompatibility(
+            f"margins: model term {part!r} is not a data column; transformed "
+            "terms such as I(x**2) or np.log(x) are not supported.",
+            recovery_hint="Create the transformed variable as a column and refit.",
+        )
+    return frame[part].to_numpy(dtype=float)
+
+
+def _design(terms: Any, frame: pd.DataFrame) -> np.ndarray:
+    columns = []
+    for term in terms:
+        value = np.ones(len(frame))
+        for part in str(term).split(":"):
+            value = value * _part_values(part, frame)
+        columns.append(value)
+    return np.column_stack(columns)
+
+
+def _design_derivative(terms: Any, frame: pd.DataFrame, var: str) -> np.ndarray:
+    """``d X / d var`` for each design column (product rule over ``a:b``)."""
+    columns = []
+    for term in terms:
+        parts = str(term).split(":")
+        deriv = np.zeros(len(frame))
+        for i, part in enumerate(parts):
+            if part != var:
+                continue
+            others = np.ones(len(frame))
+            for j, other in enumerate(parts):
+                if j != i:
+                    others = others * _part_values(other, frame)
+            deriv = deriv + others
+        columns.append(deriv)
+    return np.column_stack(columns)
+
+
+def _offset(result: Any, frame: pd.DataFrame) -> np.ndarray:
+    """Offset / log-exposure in the linear predictor, when the fit had one."""
+    model_info = getattr(result, "model_info", None) or {}
+    total = np.zeros(len(frame))
+    for key, transform in (("offset", lambda v: v), ("exposure", np.log)):
+        spec = model_info.get(key)
+        if spec is None:
+            continue
+        if isinstance(spec, str) and spec in frame.columns:
+            total = total + transform(frame[spec].to_numpy(dtype=float))
+        else:
+            raise MethodIncompatibility(
+                f"margins: the fit used {key}={spec!r}, which is not a column of "
+                "the data passed to margins.",
+                recovery_hint="Pass data= containing the offset/exposure column.",
+            )
+    return total
 
 
 def _get_vcov(result: Any) -> np.ndarray:
-    """Extract variance-covariance matrix from result."""
-    # Try various locations
-    if hasattr(result, "_results") and hasattr(result._results, "var_cov"):
-        return np.asarray(result._results.var_cov, dtype=float)
-    # Reconstruct from std_errors (diagonal approximation)
-    se = result.std_errors
-    return np.diag(se.values**2)
+    """Full coefficient covariance for the gradient-based margins functions.
 
-
-def _linear_margins(
-    params: pd.Series,
-    var_cov: np.ndarray,
-    variables: List[str],
-    alpha: float,
-) -> pd.DataFrame:
-    """Marginal effects for purely linear model = coefficients themselves."""
-    rows = []
-    z_crit = stats.norm.ppf(1 - alpha / 2)
-
-    for var in variables:
-        if var not in params.index:
-            continue
-        idx = list(params.index).index(var)
-        dydx = float(params[var])
-        se = float(np.sqrt(var_cov[idx, idx])) if idx < var_cov.shape[0] else 0
-        z = dydx / se if se > 0 else 0
-        pv = float(2 * stats.norm.sf(abs(z)))
-
-        rows.append(
-            {
-                "variable": var,
-                "dy/dx": dydx,
-                "se": se,
-                "z": z,
-                "pvalue": pv,
-                "ci_lower": dydx - z_crit * se,
-                "ci_upper": dydx + z_crit * se,
-            }
+    ``margins_at`` / ``contrast`` / ``pwcompare`` combine several coefficients
+    through a gradient, so the diagonal-of-standard-errors fallback used before
+    silently dropped every covariance term. Without a stored matrix that
+    matches the reported standard errors they now refuse.
+    """
+    V, _ = coefficient_covariance(result)
+    if V is None:
+        raise MethodIncompatibility(
+            "this margins function combines several coefficients and needs "
+            "their full covariance matrix, which the result does not carry.",
+            recovery_hint="Refit with an estimator that stores data_info['var_cov'].",
         )
+    return V
 
-    return pd.DataFrame(rows)
 
+def _require_linear_prediction(result: Any, function: str) -> None:
+    """``margins_at`` / ``contrast`` / ``pwcompare`` predict on the index scale.
 
-def _numerical_margins(
-    result: Any,
-    data: Optional[pd.DataFrame],
-    variables: List[str],
-    at: Optional[Dict[str, Any]],
-    method: str,
-    eps: float,
-    alpha: float,
-) -> pd.DataFrame:
-    """Numerical marginal effects via finite differences (for interactions etc.)."""
-    params = result.params
-
-    if data is None:
-        raise ValueError("data required for numerical margins with interactions")
-
-    # Apply 'at' conditions
-    if at:
-        data = data.copy()
-        for k, v in at.items():
-            data[k] = v
-
-    rows = []
-    z_crit = stats.norm.ppf(1 - alpha / 2)
-
-    for var in variables:
-        if var not in data.columns:
-            continue
-
-        # Compute dy/dx via finite differences
-        dydx_values = _compute_dydx(params, data, var, eps)
-
-        if method == "ame":
-            dydx = float(np.mean(dydx_values))
-        else:  # mem
-            dydx = float(dydx_values[len(dydx_values) // 2])  # approximate
-
-        # Bootstrap SE (simplified: use delta method with linear approximation)
-        se = float(np.std(dydx_values, ddof=1) / np.sqrt(len(dydx_values)))
-        z = dydx / se if se > 0 else 0
-        pv = float(2 * stats.norm.sf(abs(z)))
-
-        rows.append(
-            {
-                "variable": var,
-                "dy/dx": dydx,
-                "se": se,
-                "z": z,
-                "pvalue": pv,
-                "ci_lower": dydx - z_crit * se,
-                "ci_upper": dydx + z_crit * se,
-            }
+    That is the prediction scale only for linear models; after logit or
+    poisson it would report log-odds / log-count contrasts labelled as
+    margins, so those fits are refused.
+    """
+    if _response_link(result) != "identity":
+        raise MethodIncompatibility(
+            f"{function} predicts on the linear-index scale, which is not the "
+            "outcome scale of this model.",
+            recovery_hint="Use sp.margins for response-scale marginal effects.",
         )
-
-    return pd.DataFrame(rows)
-
-
-def _compute_dydx(
-    params: pd.Series,
-    data: pd.DataFrame,
-    var: str,
-    eps: float,
-) -> np.ndarray:
-    """Compute dy/dx for each observation via central differences."""
-    n = len(data)
-    dydx = np.zeros(n)
-
-    for i in range(n):
-        row = data.iloc[i]
-        y_plus = _predict_row(params, row, var, row[var] + eps)
-        y_minus = _predict_row(params, row, var, row[var] - eps)
-        dydx[i] = (y_plus - y_minus) / (2 * eps)
-
-    return dydx
 
 
 # Categorical design-term pattern, e.g. ``C(group)[T.2]`` or ``group[T.b]``
@@ -433,6 +561,7 @@ def margins_at(
     ['experience', 'margin', 'se', 'ci_lower', 'ci_upper']
     """
     params = result.params
+    _require_linear_prediction(result, "this margins function")
     vcov = _get_vcov(result)
     z_crit = stats.norm.ppf(1 - alpha / 2)
 
@@ -688,6 +817,7 @@ def contrast(
     ['1.0 vs 0', '2.0 vs 0']
     """
     params = result.params
+    _require_linear_prediction(result, "this margins function")
     vcov = _get_vcov(result)
     z_crit = stats.norm.ppf(1 - alpha / 2)
 
@@ -846,6 +976,7 @@ def pwcompare(
     True
     """
     params = result.params
+    _require_linear_prediction(result, "this margins function")
     vcov = _get_vcov(result)
 
     levels = sorted(data[variable].unique())

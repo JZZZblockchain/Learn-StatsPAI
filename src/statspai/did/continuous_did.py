@@ -41,10 +41,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
 
 
+@accepts_aliases(_strict=True, unit="id", covariates="controls")
 def continuous_did(
     data: pd.DataFrame,
     y: str,

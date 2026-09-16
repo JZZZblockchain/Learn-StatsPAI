@@ -38,9 +38,15 @@ import pandas as pd
 from scipy import optimize, special, stats
 
 from .._aliases import accepts_aliases
+from ..core._vcov import ml_vcov
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
-from ._optim_helpers import robust_convergence
+from ._optim_helpers import (
+    inverse_information,
+    ml_newton_polish,
+    robust_convergence,
+    se_from_vcov,
+)
 
 # ---------------------------------------------------------------------------
 # Helper utilities
@@ -133,59 +139,16 @@ def _build_matrices(
     return Y, X_count, X_inflate, count_names, inflate_names, dep_var, df
 
 
-def _robust_se(score_obs: np.ndarray, hessian_inv: np.ndarray) -> np.ndarray:
-    """HC0 (White) robust standard errors via sandwich formula.
-
-    Delegates to the canonical ``core._vcov.sandwich_vcov`` (CLAUDE.md §4);
-    bread is the MLE inverse-Hessian. Byte-identical to the prior sandwich.
-    """
-    from ..core._vcov import sandwich_vcov
-
-    V = sandwich_vcov(hessian_inv, score_obs, correction="none")
-    return _as_float_array(np.sqrt(np.maximum(np.diag(V), 1e-20)))
+#: SE kinds the zero-inflated / hurdle family implements.
+_SE_KINDS = ("nonrobust", "robust", "hc0", "hc1", "cluster")
 
 
-def _cluster_se(
-    score_obs: np.ndarray, hessian_inv: np.ndarray, clusters: np.ndarray
-) -> np.ndarray:
-    """Clustered standard errors (Liang-Zeger).
+def _parse_se(robust: Any, cluster: Any, function: str) -> Tuple[str, Any]:
+    """Resolve ``robust=`` / ``cluster=`` through the shared Stata grammar."""
+    from ..core._vcov_spec import parse_se_request
 
-    Correction G/(G-1) * n/(n-k) = core._vcov ``'stacked'`` factor; bread is
-    the MLE inverse-Hessian. Byte-identical for G >= 2.
-    """
-    from ..core._vcov import sandwich_vcov
-
-    V = sandwich_vcov(hessian_inv, score_obs, clusters=clusters, correction="stacked")
-    return _as_float_array(np.sqrt(np.maximum(np.diag(V), 1e-20)))
-
-
-def _numerical_hessian(
-    func: Callable[[np.ndarray], float],
-    x0: np.ndarray,
-    eps: float = 1e-5,
-) -> np.ndarray:
-    """Compute numerical Hessian of func at x0."""
-    n = len(x0)
-    H = np.zeros((n, n))
-    for i in range(n):
-        for j in range(i, n):
-            x_pp = x0.copy()
-            x_pm = x0.copy()
-            x_mp = x0.copy()
-            x_mm = x0.copy()
-            x_pp[i] += eps
-            x_pp[j] += eps
-            x_pm[i] += eps
-            x_pm[j] -= eps
-            x_mp[i] -= eps
-            x_mp[j] += eps
-            x_mm[i] -= eps
-            x_mm[j] -= eps
-            H[i, j] = (func(x_pp) - func(x_pm) - func(x_mp) + func(x_mm)) / (
-                4 * eps * eps
-            )
-            H[j, i] = H[i, j]
-    return _as_float_array(H)
+    req = parse_se_request(robust, cluster, function=function, supported=_SE_KINDS)
+    return req.kind, req.cluster
 
 
 def _numerical_score(
@@ -320,6 +283,7 @@ def zip_model(
 
     See Lambert (1992, *Technometrics*).
     """
+    robust, cluster = _parse_se(robust, cluster, "zip_model")
     Y, X_count, X_inflate, count_names, inflate_names, dep_var, df = _build_matrices(
         data, formula, y, x, inflate
     )
@@ -385,20 +349,27 @@ def zip_model(
         options={"maxiter": maxiter, "gtol": tol},
     )
 
-    theta_hat = _as_float_array(result.x)
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation ZIP log-likelihood; complex-step safe."""
+        mu = np.exp(X_count @ theta[:k_count])
+        pi = 1.0 / (1.0 + np.exp(-(X_inflate @ theta[k_count:])))
+        positive = np.log(1 - pi) + Y * np.log(mu) - mu - special.gammaln(Y + 1)
+        zero = np.log(pi + (1 - pi) * np.exp(-mu))
+        return np.where(Y == 0, zero, positive)
+
+    # Exact Newton steps from the BFGS solution; the same call returns the
+    # observed information and per-observation scores by complex-step
+    # differentiation, replacing a second-difference Hessian and a central-
+    # difference score that each carried ~1e-5 relative error.
+    theta_hat, score_obs, H, _ = ml_newton_polish(obs_loglik, _as_float_array(result.x))
     beta_hat = theta_hat[:k_count]
     gamma_hat = theta_hat[k_count:]
 
-    ll_zip = float(-result.fun)
+    ll_zip = float(np.sum(obs_loglik(theta_hat)))
 
     # --- Standard errors ---
-    H = _numerical_hessian(neg_loglik, theta_hat)
-    try:
-        H_inv = _as_float_array(np.linalg.inv(H))
-    except np.linalg.LinAlgError:
-        H_inv = _as_float_array(np.linalg.pinv(H))
-
-    if cluster is not None:
+    clusters = None
+    if robust == "cluster":
         if data is None:
             raise ValueError("`data` must be provided for clustered SEs.")
         clusters = (
@@ -406,13 +377,9 @@ def zip_model(
             if cluster in df.columns
             else data.loc[df.index, cluster].values
         )
-        score_obs = _compute_zip_score_obs(theta_hat, Y, X_count, X_inflate, k_count, n)
-        se = _cluster_se(score_obs, H_inv, clusters)
-    elif robust != "nonrobust":
-        score_obs = _compute_zip_score_obs(theta_hat, Y, X_count, X_inflate, k_count, n)
-        se = _robust_se(score_obs, H_inv)
-    else:
-        se = _as_float_array(np.sqrt(np.maximum(np.diag(H_inv), 1e-20)))
+    se = se_from_vcov(
+        ml_vcov(inverse_information(H), score_obs, kind=robust, clusters=clusters)
+    )
 
     # --- Vuong test: ZIP vs plain Poisson ---
     mu_hat = np.exp(np.clip(X_count @ beta_hat, -20, 20))
@@ -451,6 +418,8 @@ def zip_model(
         "n_obs": n,
         "dependent_var": dep_var,
         "df_resid": n - k_total,
+        # Likelihood-based: z / chi2 inference, as Stata's zip / zinb.
+        "inference": "z",
         "k_count": k_count,
         "k_inflate": k_inflate,
         "count_names": count_names,
@@ -625,6 +594,7 @@ def zinb(
 
     See Cameron & Trivedi (2013, Ch. 4).
     """
+    robust, cluster = _parse_se(robust, cluster, "zinb")
     Y, X_count, X_inflate, count_names, inflate_names, dep_var, df = _build_matrices(
         data, formula, y, x, inflate
     )
@@ -690,20 +660,34 @@ def zinb(
         options={"maxiter": maxiter, "gtol": tol},
     )
 
-    theta_hat = _as_float_array(result.x)
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation ZINB (NB2) log-likelihood; complex-step safe."""
+        mu = np.exp(X_count @ theta[:k_count])
+        pi = 1.0 / (1.0 + np.exp(-(X_inflate @ theta[k_count : k_count + k_inflate])))
+        m = np.exp(-theta[-1])  # 1 / alpha
+        log_nb_zero = m * np.log(m / (m + mu))
+        log_nb = (
+            special.loggamma(Y + m)
+            - special.loggamma(m)
+            - special.gammaln(Y + 1)
+            + log_nb_zero
+            + Y * np.log(mu / (m + mu))
+        )
+        zero = np.log(pi + (1 - pi) * np.exp(log_nb_zero))
+        return np.where(Y == 0, zero, np.log(1 - pi) + log_nb)
+
+    # Exact Newton steps from the BFGS solution; the same call returns the
+    # observed information and per-observation scores by complex-step
+    # differentiation (see zip_model).
+    theta_hat, score_obs, H, _ = ml_newton_polish(obs_loglik, _as_float_array(result.x))
     beta_hat = theta_hat[:k_count]
     gamma_hat = theta_hat[k_count : k_count + k_inflate]
     alpha_hat = float(np.exp(theta_hat[-1]))
-    ll_zinb = float(-result.fun)
+    ll_zinb = float(np.sum(obs_loglik(theta_hat)))
 
     # Standard errors
-    H = _numerical_hessian(neg_loglik, theta_hat)
-    try:
-        H_inv = _as_float_array(np.linalg.inv(H))
-    except np.linalg.LinAlgError:
-        H_inv = _as_float_array(np.linalg.pinv(H))
-
-    if cluster is not None:
+    clusters = None
+    if robust == "cluster":
         if data is None:
             raise ValueError("`data` must be provided for clustered SEs.")
         clusters = (
@@ -711,33 +695,9 @@ def zinb(
             if cluster in df.columns
             else data.loc[df.index, cluster].values
         )
-        score_obs = _compute_zi_score_obs(
-            neg_loglik_obs,
-            theta_hat,
-            Y,
-            X_count,
-            X_inflate,
-            k_count,
-            k_inflate,
-            n,
-            nb=True,
-        )
-        se = _cluster_se(score_obs, H_inv, clusters)
-    elif robust != "nonrobust":
-        score_obs = _compute_zi_score_obs(
-            neg_loglik_obs,
-            theta_hat,
-            Y,
-            X_count,
-            X_inflate,
-            k_count,
-            k_inflate,
-            n,
-            nb=True,
-        )
-        se = _robust_se(score_obs, H_inv)
-    else:
-        se = _as_float_array(np.sqrt(np.maximum(np.diag(H_inv), 1e-20)))
+    se = se_from_vcov(
+        ml_vcov(inverse_information(H), score_obs, kind=robust, clusters=clusters)
+    )
 
     # Vuong test: ZINB vs plain NB
     mu_hat = np.exp(np.clip(X_count @ beta_hat, -20, 20))
@@ -776,6 +736,8 @@ def zinb(
         "n_obs": n,
         "dependent_var": dep_var,
         "df_resid": n - k_total,
+        # Likelihood-based: z / chi2 inference, as Stata's zip / zinb.
+        "inference": "z",
         "k_count": k_count,
         "k_inflate": k_inflate,
         "count_names": count_names,
@@ -911,6 +873,7 @@ def hurdle(
 
     See Mullahy (1986, *Journal of Econometrics*).
     """
+    robust, cluster = _parse_se(robust, cluster, "hurdle")
     if data is None:
         raise ValueError("`data` must be provided.")
     if formula is not None:
@@ -1015,31 +978,46 @@ def hurdle(
         options={"maxiter": maxiter, "gtol": tol},
     )
 
-    theta_hat = _as_float_array(result.x)
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation hurdle log-likelihood; complex-step safe."""
+        p = 1.0 / (1.0 + np.exp(-(X @ theta[:k_hurdle])))  # P(Y > 0)
+        mu = np.exp(X @ theta[k_hurdle : k_hurdle + k_count])
+        if use_negbin:
+            m = np.exp(-theta[-1])  # 1 / alpha
+            log_f0 = m * np.log(m / (m + mu))
+            log_f = (
+                special.loggamma(Y + m)
+                - special.loggamma(m)
+                - special.gammaln(Y + 1)
+                + log_f0
+                + Y * np.log(mu / (m + mu))
+            )
+        else:
+            log_f0 = -mu
+            log_f = Y * np.log(mu) - mu - special.gammaln(Y + 1)
+        # Zero-truncated count density f(y) / (1 - f(0)) above the hurdle.
+        positive = np.log(p) + log_f - np.log(-np.expm1(log_f0))
+        return np.where(Y == 0, np.log(1 - p), positive)
+
+    # Exact Newton steps from the BFGS solution; the same call returns the
+    # observed information and per-observation scores by complex-step
+    # differentiation (see zip_model).
+    theta_hat, score_obs, H, _ = ml_newton_polish(obs_loglik, _as_float_array(result.x))
     delta_hat = theta_hat[:k_hurdle]
     beta_hat = theta_hat[k_hurdle : k_hurdle + k_count]
-    ll_hurdle = float(-result.fun)
+    ll_hurdle = float(np.sum(obs_loglik(theta_hat)))
 
     # Standard errors
-    H = _numerical_hessian(neg_loglik, theta_hat)
-    try:
-        H_inv = _as_float_array(np.linalg.inv(H))
-    except np.linalg.LinAlgError:
-        H_inv = _as_float_array(np.linalg.pinv(H))
-
-    if cluster is not None:
+    clusters = None
+    if robust == "cluster":
         clusters = (
             df[cluster].values
             if cluster in df.columns
             else data.loc[df.index, cluster].values
         )
-        score_obs = _compute_hurdle_score_obs(neg_loglik_obs, theta_hat, n)
-        se = _cluster_se(score_obs, H_inv, clusters)
-    elif robust != "nonrobust":
-        score_obs = _compute_hurdle_score_obs(neg_loglik_obs, theta_hat, n)
-        se = _robust_se(score_obs, H_inv)
-    else:
-        se = _as_float_array(np.sqrt(np.maximum(np.diag(H_inv), 1e-20)))
+    se = se_from_vcov(
+        ml_vcov(inverse_information(H), score_obs, kind=robust, clusters=clusters)
+    )
 
     # Predicted values
     p_hat = _logit(X @ delta_hat)
@@ -1084,6 +1062,8 @@ def hurdle(
         "n_obs": n,
         "dependent_var": dep_var,
         "df_resid": n - k_total,
+        # Likelihood-based: z / chi2 inference.
+        "inference": "z",
         "k_hurdle": k_hurdle,
         "k_count": k_count,
         "hurdle_names": hurdle_names,

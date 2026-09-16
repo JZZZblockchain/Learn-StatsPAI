@@ -323,42 +323,6 @@ def _score_obs(
     return _as_float_array(gen_resid[:, np.newaxis] * X)
 
 
-def _robust_vcov(
-    H: np.ndarray,
-    score_obs: np.ndarray,
-) -> np.ndarray:
-    """
-    Sandwich (Huber-White) robust variance.
-    V = H^{-1} B H^{-1}  where B = Σ s_i s_i'.
-    """
-    A_inv = _mle_vcov(H)
-    B = score_obs.T @ score_obs
-    return _as_float_array(A_inv @ B @ A_inv)
-
-
-def _cluster_vcov(
-    H: np.ndarray,
-    score_obs: np.ndarray,
-    clusters: np.ndarray,
-) -> np.ndarray:
-    """
-    Clustered sandwich variance.
-    Score vectors summed within clusters before forming outer product.
-    """
-    A_inv = _mle_vcov(H)
-    unique_clusters = np.unique(clusters)
-    n_clusters = len(unique_clusters)
-    k = score_obs.shape[1]
-    B = np.zeros((k, k))
-    for c in unique_clusters:
-        s_c = score_obs[clusters == c].sum(axis=0)
-        B += np.outer(s_c, s_c)
-
-    # Finite-sample correction: G/(G-1)
-    correction = n_clusters / (n_clusters - 1)
-    return _as_float_array(correction * A_inv @ B @ A_inv)
-
-
 # =========================================================================
 # Marginal effects
 # =========================================================================
@@ -605,9 +569,23 @@ def _fit_binary(
             float
         )
 
+    # Standard-error request (Stata grammar: vce='robust', 'cluster firm', ...)
+    from ..core._vcov import ml_vcov
+    from ..core._vcov_spec import parse_se_request
+
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function=link,
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
     # Cluster variable
     cluster_arr = None
-    if cluster is not None and data is not None:
+    if cluster is not None:
+        if data is None:
+            raise ValueError("`data` must be provided for clustered SEs.")
         cluster_arr = data.loc[X_df.index if formula else clean.index, cluster].values
 
     cdf_func, pdf_func, pdf_deriv_func = _LINKS[link]
@@ -616,17 +594,17 @@ def _fit_binary(
     beta, H, ll, n_iter = _newton_raphson(y_vec, X_mat, link, w, maxiter, tol)
 
     # ── Variance-covariance ─────────────────────────────────────────────
+    # Stata conventions (core._vcov.ml_vcov): vce(robust) carries N/(N-1),
+    # vce(cluster) carries G/(G-1) only.
     s_obs = _score_obs(beta, y_vec, X_mat, cdf_func, pdf_func, w)
-
-    if cluster_arr is not None:
-        vcov = _cluster_vcov(H, s_obs, cluster_arr)
-        se_type = f"Clustered ({cluster})"
-    elif robust != "nonrobust":
-        vcov = _robust_vcov(H, s_obs)
-        se_type = "Robust (sandwich)"
-    else:
-        vcov = _mle_vcov(H)
-        se_type = "MLE (observed information)"
+    vcov = ml_vcov(_mle_vcov(H), s_obs, kind=se_req.kind, clusters=cluster_arr)
+    se_type = {
+        "nonrobust": "MLE (observed information)",
+        "robust": "Robust (sandwich, N/(N-1))",
+        "hc0": "HC0 (sandwich, no small-sample factor)",
+        "hc1": "HC1 (sandwich, N/(N-K))",
+        "cluster": f"Clustered ({cluster})",
+    }[se_req.kind]
 
     std_errors = np.sqrt(np.maximum(np.diag(vcov), 0.0))
 
@@ -718,6 +696,8 @@ def _fit_binary(
         "y": y_vec,
         "var_cov": vcov,
         "var_names": var_names,
+        # Likelihood-based: z / chi2 inference, as Stata's logit/probit.
+        "inference": "z",
     }
 
     diagnostics = {

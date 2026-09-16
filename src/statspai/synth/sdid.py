@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient
 
@@ -42,6 +43,7 @@ from ..exceptions import DataInsufficient
 # ======================================================================
 
 
+@accepts_aliases(_strict=True, id="unit")
 def sdid(
     data: pd.DataFrame,
     outcome: Optional[str] = None,

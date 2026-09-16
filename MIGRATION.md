@@ -5,6 +5,48 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="stata-vce-grammar"></a>
+
+## Unreleased — ⚠️ Standard errors, p-values, `test` / `lincom` and `margins` follow Stata
+
+**Who is affected.** Anyone who reported, from the estimators below, a robust
+or clustered standard error, a p-value or confidence interval of a clustered
+least-squares or likelihood-based fit, an `sp.test` / `sp.lincom` involving
+more than one coefficient, or an `sp.margins` result from a nonlinear model.
+Point estimates change only where noted.
+
+**What changes, and how to get the old number back.**
+
+| Area | Old | New (matches Stata 18) | Old number, if you need it |
+| --- | --- | --- | --- |
+| `vce="robust"` on logit/probit/cloglog/poisson/glm/ordered/multinomial/zero-inflated/truncreg/biprobit/betareg/fracreg | unscaled HC0 | HC0 × N/(N-1) | `vce="hc0"` |
+| cluster SEs on glm, ologit, oprobit, mlogit, clogit, zip, zinb, hurdle | G/(G-1)·(N-1)/(N-K) | G/(G-1) | — |
+| `nbreg` SEs (all vce) | IRLS bread, Poisson score | joint (beta, ln alpha) information | `model_info["se_conditional_on_dispersion"]` (= MASS::glm.nb) |
+| `nbreg(dispersion="constant")` coefficients | profile fit, up to 8.6% off | joint MLE | — |
+| p-values / CIs, clustered `regress` / `ivreg` | t(N-K) | t(G-1) | — |
+| p-values / CIs, likelihood-based fits | t(N-K) | z | — |
+| `sp.test` / `sp.lincom` | diagonal covariance, distribution from `df_resid` | full covariance, F/t or chi2/z by the fit | — |
+| `sp.margins` after logit/probit/cloglog/poisson/nbreg/glm | index coefficients | average marginal effects on the prediction scale, delta-method SE | `result.params` |
+| `sp.margins` with interaction terms | SE = std(dydx)/sqrt(n) | delta-method SE | — |
+| `glm`, non-canonical link | expected information | observed information | `information="expected"` (= R `glm`) |
+| `liml` / `iv(method="liml")` robust & cluster | meat (I - kappa M_Z) X; `sp.liml` robust unscaled | meat P_Z X; N/(N-K) | — |
+| `clogit` SEs | BFGS `hess_inv` | analytic information | — |
+
+**Now errors instead of a quiet fallback.** An unknown or unimplemented
+`vce=` spelling; `vce="cluster"` without a cluster variable; a misspelled
+coefficient in `test` / `lincom`; a multi-coefficient restriction or
+`margins_at` / `contrast` / `pwcompare` on a result without a covariance
+matrix; `margins` on a model whose prediction scale is not supported;
+`robust=` / `cluster=` on `panel_logit(method="fe")` or `xtnbreg(model="re")`;
+`betareg` outcomes on the (0, 1) boundary; `sp.etable` given a non-result.
+
+**Newly honoured options.** `robust=` / `cluster=` on `truncreg`, `biprobit`,
+`betareg`, `panel_logit` / `panel_probit` (RE) and `robust=` on
+`subgroup_analysis` used to be ignored; results computed with those options
+had model-based (or HC1) standard errors. Rerun them.
+
+---
+
 <a id="synth-placebo-pvalue"></a>
 
 ## Unreleased — ⚠️ Synthetic-control placebo p-values now rank the treated unit too

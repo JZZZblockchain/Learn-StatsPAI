@@ -38,6 +38,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from .._aliases import accepts_aliases
 from ._cct_bandwidth import BW_SELECTORS, cct_bandwidth
 from ._core import _check_covariate_rank
 
@@ -53,6 +54,9 @@ from ._core import _check_covariate_rank
 _VALID_METHODS = set(BW_SELECTORS)
 
 
+@accepts_aliases(
+    _strict=True, running="x", cutoff="c", covariates="covs", controls="covs"
+)
 def rdbwselect(
     data: pd.DataFrame,
     y: str,

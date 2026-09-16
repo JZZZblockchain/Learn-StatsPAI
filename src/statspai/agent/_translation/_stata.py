@@ -197,8 +197,9 @@ def _h_xtreg(cmd: StataCommand) -> Dict[str, Any]:
     panel_id = cmd.options.get("i") or cmd.options.get("id") or "<panel_id>"
     main = _build_formula(y, xs)
     cluster = _vce_cluster(cmd)
-    fe_terms = [panel_id] if panel_id != "<panel_id>" else []
-    fml = _pyfixest_fml(main, fe_terms)
+    # Keep the placeholder IN the formula: dropping it would print a pooled
+    # OLS call (``y ~ x``) that runs and silently is not the fixed-effects model.
+    fml = _pyfixest_fml(main, [panel_id])
     args: Dict[str, Any] = {"fml": fml}
     if cluster:
         args["cluster"] = cluster
@@ -969,63 +970,123 @@ def _h_psmatch2(cmd: StataCommand) -> Dict[str, Any]:
     return _emit("psmatch2", args, python, notes)
 
 
+#: ``margins`` options with a faithful ``sp.margins`` counterpart. Anything
+#: else (``eyex``, ``over()``, ``predict()``, ``vce(unconditional)`` ...) asks
+#: for a different quantity, so it is refused rather than dropped.
+_MARGINS_OPTIONS = frozenset({"dydx", "atmeans", "at", "post", "noatlegend"})
+
+
 def _h_margins(cmd: StataCommand) -> Dict[str, Any]:
-    """Stata `margins`/`marginsplot` — emit a hint to use sp.margins()."""
-    targets = cmd.varlist or []
+    """Stata ``margins, dydx(...) [atmeans] [at(v=#)]`` → ``sp.margins``.
+
+    Only marginal effects translate: bare ``margins`` / ``margins <factor>``
+    are predictive margins, a different quantity from ``sp.margins``'s
+    average marginal effects.
+    """
+    dydx = (cmd.options.get("dydx") or "").split()
+    if not dydx:
+        return _emit_error(
+            "only `margins, dydx(...)` translates; predictive margins "
+            "(`margins` / `margins <factor>`) map to sp.margins_at(result, "
+            "data=df, at={...}) or sp.contrast.",
+            command="margins",
+        )
+    unsupported = sorted(set(cmd.options) - _MARGINS_OPTIONS)
+    if unsupported or cmd.varlist:
+        return _emit_error(
+            f"margins {'options ' + str(unsupported) if unsupported else 'varlist'}"
+            " not translated; call sp.margins(result, ...) directly.",
+            command="margins",
+        )
     args: Dict[str, Any] = {}
-    # Only include a key in args if it has a real value — otherwise the
-    # python_code/args round-trip check sees an empty list on the args
-    # side and a missing key on the code side (the handler omits empty
-    # pairs from the emitted call). Treat empty varlist as "no variables"
-    # rather than a sentinel list.
-    if targets:
-        args["variables"] = targets
-    if "dydx" in cmd.options and cmd.options["dydx"]:
-        args["dydx"] = cmd.options["dydx"].split()
-    if "at" in cmd.options:
-        args["at"] = cmd.options["at"]
+    if not {"*", "_all"} & set(dydx):
+        args["variables"] = dydx
+    if "atmeans" in cmd.options:
+        args["method"] = "mem"
+    if cmd.options.get("at"):
+        at: Dict[str, Any] = {}
+        for part in cmd.options["at"].split():
+            name, sep, value = part.partition("=")
+            if not (sep and name and value) or "(" in value:
+                return _emit_error(
+                    f"at({cmd.options['at']}) not translated: only "
+                    "`at(var=# var=# ...)` with one value per variable.",
+                    command="margins",
+                )
+            at[name] = _coerce_scalar(value)
+        args["at"] = at
     notes = [
         "sp.margins takes a fitted result, not data — pipe the "
         "previous estimator's result_id (or fit a model first)."
     ]
-    # Round-trip contract: copy-paste and dispatch must describe the same call.
-    # Build python_code from args, leaving ``result`` as a literal (the agent
-    # pipes the prior estimator's result_id at copy-paste time).
-    code_pairs = ["result"]
-    for k in ("variables", "dydx", "at"):
-        v = args.get(k)
-        if v is None or v == "" or v == [] or v == {}:
-            continue
-        code_pairs.append(f"{k}={v!r}")
-    python = f"sp.margins({', '.join(code_pairs)})"
-    return _emit("margins", args, python, notes)
+    pairs = ["result"] + [f"{k}={v!r}" for k, v in args.items()]
+    return _emit("margins", args, f"sp.margins({', '.join(pairs)})", notes)
+
+
+def _h_marginsplot(cmd: StataCommand) -> Dict[str, Any]:
+    """Stata ``marginsplot`` → ``sp.marginsplot(margins_table)``."""
+    notes = ["sp.marginsplot plots the table sp.margins returned; pipe that in."]
+    return _emit("marginsplot", {}, "sp.marginsplot(result)", notes)
 
 
 def _h_contrast(cmd: StataCommand) -> Dict[str, Any]:
-    """Stata `contrast` — pairwise comparisons of a categorical."""
-    targets = cmd.varlist or []
-    args: Dict[str, Any] = {"terms": targets}
+    """Stata ``contrast x`` → ``sp.contrast(result, data, variable)``."""
+    if len(cmd.varlist) != 1 or cmd.options:
+        return _emit_error(
+            "only `contrast <one variable>` translates; call "
+            "sp.contrast(result, data=df, variable=...) directly.",
+            command="contrast",
+        )
+    variable = cmd.varlist[0].split(".")[-1]  # Stata factor prefix ``i.x``
+    args: Dict[str, Any] = {"variable": variable}
     notes = [
-        "sp.contrast takes a fitted result; pipe the previous " "estimator's result_id."
+        "sp.contrast takes a fitted result and the estimation data; pipe the "
+        "previous estimator's result_id."
     ]
-    code_pairs = ["result"]
-    if args["terms"]:
-        code_pairs.append(f"terms={args['terms']!r}")
-    python = f"sp.contrast({', '.join(code_pairs)})"
+    python = f"sp.contrast(result, data=df, variable={variable!r})"
     return _emit("contrast", args, python, notes)
 
 
 def _h_test(cmd: StataCommand) -> Dict[str, Any]:
-    """Stata `test x1 x2` — Wald test of joint significance."""
-    args: Dict[str, Any] = {"terms": cmd.varlist}
-    notes = [
-        "sp.test takes a fitted result; pipe the previous " "estimator's result_id."
-    ]
-    code_pairs = ["result"]
-    if args["terms"]:
-        code_pairs.append(f"terms={args['terms']!r}")
-    python = f"sp.test({', '.join(code_pairs)})"
+    """Stata ``test x1 x2`` / ``test x1 = x2`` → ``sp.test(result, hypothesis)``.
+
+    ``sp.test`` parses Stata's own restriction syntax (joint ``x1 x2``,
+    chained ``x1 = x2 = 0``, grouped ``(x1 = 0) (x2 = 1)``, ``_b[x]``), so the
+    command text is passed through verbatim.
+    """
+    if not cmd.varlist:
+        return _emit_error("test requires a restriction, e.g. `test x1 = x2`")
+    if cmd.options:
+        return _emit_error(
+            f"test options {sorted(cmd.options)} are not translated; call "
+            "sp.test(result, hypothesis) directly.",
+            command="test",
+        )
+    args: Dict[str, Any] = {"hypothesis": " ".join(cmd.varlist)}
+    notes = ["sp.test takes a fitted result; pipe the previous estimator's result_id."]
+    python = f"sp.test(result, hypothesis={args['hypothesis']!r})"
     return _emit("test", args, python, notes)
+
+
+def _h_lincom(cmd: StataCommand) -> Dict[str, Any]:
+    """Stata ``lincom x1 - 2*x2`` → ``sp.lincom(result, expression)``."""
+    if not cmd.varlist:
+        return _emit_error("lincom requires an expression, e.g. `lincom x1 + x2`")
+    args: Dict[str, Any] = {"expression": " ".join(cmd.varlist)}
+    level = cmd.options.pop("level", None) if cmd.options else None
+    if cmd.options:
+        return _emit_error(
+            f"lincom options {sorted(cmd.options)} are not translated; call "
+            "sp.lincom(result, expression) directly.",
+            command="lincom",
+        )
+    if level is not None:
+        args["alpha"] = round(1 - float(level) / 100, 10)
+    notes = [
+        "sp.lincom takes a fitted result; pipe the previous estimator's result_id."
+    ]
+    pairs = ["result"] + [f"{k}={v!r}" for k, v in args.items()]
+    return _emit("lincom", args, f"sp.lincom({', '.join(pairs)})", notes)
 
 
 def _h_xtset(cmd: StataCommand) -> Dict[str, Any]:
@@ -1303,9 +1364,10 @@ STATA_COMMAND_MAP: Dict[str, Handler] = {
     "teffects": _h_teffects,
     "psmatch2": _h_psmatch2,
     "margins": _h_margins,
-    "marginsplot": _h_margins,
+    "marginsplot": _h_marginsplot,
     "contrast": _h_contrast,
     "test": _h_test,
+    "lincom": _h_lincom,
     "xtset": _h_xtset,
     "tsset": _h_xtset,
     # Tier 3 — long-tail (8 handlers)

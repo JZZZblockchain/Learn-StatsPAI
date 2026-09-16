@@ -98,11 +98,18 @@ def test_nbreg_matches_glm_nb(cq_data, r_reference):
         warnings.simplefilter("ignore")
         res = sp.nbreg("yc ~ x1 + x2", data=cq_data)
     ref = r_reference["nbreg"]
+    se_glm_nb = res.model_info["se_conditional_on_dispersion"]
     for name in ("_cons", "x1", "x2"):
         rb = ref[name]
         assert float(res.params[name]) == pytest.approx(rb["coef"], rel=1e-5), name
-        # SE band 1e-4 for the same IRLS-tolerance reason as Poisson.
-        assert float(res.std_errors[name]) == pytest.approx(rb["se"], rel=1e-4), name
+        # glm.nb's SE is the IRLS Fisher information of beta *conditional on*
+        # theta. sp.nbreg reports Stata's joint observed-information SE
+        # (pinned in test_vce_grammar_stata_parity.py) and keeps the glm.nb
+        # quantity in model_info. SE band 1e-4 for the IRLS-tolerance reason
+        # given for Poisson.
+        assert float(se_glm_nb[name]) == pytest.approx(rb["se"], rel=1e-4), name
+    # The two conventions are genuinely different numbers on this design.
+    assert float(res.std_errors["_cons"]) != pytest.approx(ref["_cons"]["se"], rel=1e-4)
 
 
 def test_nbreg_dispersion_matches_inverse_theta(cq_data, r_reference):

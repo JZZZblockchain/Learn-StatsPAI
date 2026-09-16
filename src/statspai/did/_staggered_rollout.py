@@ -82,6 +82,7 @@ from typing import (
 import numpy as np
 import pandas as pd
 
+from .._aliases import accepts_aliases
 from ..exceptions import DataInsufficient, MethodIncompatibility
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -1080,6 +1081,7 @@ def _drop_treated_at_start(data: pd.DataFrame, t: str, g: str) -> pd.DataFrame:
     return data.loc[~early, :]
 
 
+@accepts_aliases(_strict=True, id="i", unit="i", time="t", first_treat="g", cohort="g")
 def staggered_cs(
     data: pd.DataFrame,
     y: str,
@@ -1150,6 +1152,7 @@ def staggered_cs(
     return res
 
 
+@accepts_aliases(_strict=True, id="i", unit="i", time="t", first_treat="g", cohort="g")
 def staggered_sa(
     data: pd.DataFrame,
     y: str,

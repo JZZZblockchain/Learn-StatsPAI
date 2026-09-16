@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ._core import _kernel_fn
 
@@ -46,6 +47,7 @@ class RKDResult(CausalResult):
 # ======================================================================
 
 
+@accepts_aliases(_strict=True, running="x", cutoff="c")
 def rkd(
     data: pd.DataFrame,
     y: str,

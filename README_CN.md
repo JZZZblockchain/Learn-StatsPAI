@@ -62,7 +62,7 @@ print(sp.datasets.list_datasets()[["name", "design", "source"]])
 
 StatsPAI 内置 14 个可离线加载的数据集。大部分是真实的已发表数据（`source == "bundled CSV"`）：Card (1995) NLSYM 教育回报数据、带 PSID 对照组的 LaLonde/NSW、R `rdrobust` 附带的美国参议院 RD 数据、California Proposition 99、castle-doctrine 面板、NHEFS 等。少数是按已发表设计校准的**确定性模拟复刻**（`source == "simulated"`），包括下面用到的 Callaway–Sant'Anna `mpdta` 面板——它们的数字不是原始数据上的数字。
 
-一眼概览：1,182 个注册函数，分布在 87 个子模块；395k 行核心代码 + 250k 行测试。运行 `python scripts/registry_stats.py` 可复现这些数字。
+一眼概览：1,183 个注册函数，分布在 87 个子模块；397k 行核心代码 + 252k 行测试。运行 `python scripts/registry_stats.py` 可复现这些数字。
 
 ---
 
@@ -176,11 +176,11 @@ educ            0.1323      0.0492       2.6870 0.0072  0.0358  0.2288
 
 Model Diagnostics:
 ...
-First-stage F (educ): 16.7176
+First-stage F (educ)        : 16.7176
 ...
-Partial R² (educ)   : 0.0055
-Hausman F-stat      : 1.5390
-Hausman p-value     : 0.2149
+Partial R² (educ)           : 0.0055
+Hausman F-stat              : 1.5390
+Hausman p-value             : 0.2149
 ```
 
 IV 估计（`0.132`）比 OLS 大，但精度低了约 13 倍。工具变量并不强——`nearc4` 只解释受教育年限 0.55% 的残差变异（一阶段 F ≈ 16.7）——而且 Hausman 检验不拒绝 `educ` 外生（p = 0.21）。默认标准误是非稳健标准误，带 `AER::ivreg` 的小样本自由度修正（对应 Stata `ivregress 2sls ..., small`）；需要异方差稳健标准误时传 `robust="hc1"`。
@@ -274,8 +274,8 @@ Conventional    7.4141 1.4587 5.0826  0.0000    4.5551   10.2732
 ------------------------------------------------------------------------------
   Observations:    1,297
 ...
-  Bandwidth H:    17.75439729605877
-  Bandwidth B:    28.028087178624308
+  Bandwidth H:    17.7544
+  Bandwidth B:    28.0281
 ...
   N Effective Left:    360
   N Effective Right:    323

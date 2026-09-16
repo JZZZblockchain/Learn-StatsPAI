@@ -320,13 +320,36 @@ def _stars_latex(p: float) -> str:
     return ""
 
 
+#: SE kinds the subgroup regressions implement (Stata ``regress`` meanings).
+_SUBGROUP_SE_KINDS = ("nonrobust", "robust", "hc0", "hc1", "hc2", "hc3")
+
+
+def _ols_vcov(
+    X: np.ndarray, resid: np.ndarray, XtX_inv: np.ndarray, kind: str
+) -> np.ndarray:
+    """OLS covariance for a canonical SE kind; ``robust`` is HC1, as in Stata."""
+    n, k = X.shape
+    if kind == "nonrobust":
+        return XtX_inv * (resid @ resid) / (n - k)
+    from ..core._vcov import hc_vcov
+
+    return hc_vcov(
+        X, resid, hc_type="hc1" if kind == "robust" else kind, XtX_inv=XtX_inv
+    )
+
+
 def _quick_ols_full(
     data: pd.DataFrame,
     y_col: str,
     x_col: str,
     control_cols: List[str],
+    robust: str = "hc1",
 ) -> Optional[Dict[str, Any]]:
-    """Quick OLS with HC1, return key variable stats."""
+    """Quick OLS with the requested SE kind, return key variable stats.
+
+    ``robust`` used to be accepted by ``subgroup_analysis`` and ignored:
+    every subgroup regression reported HC1.
+    """
     all_cols = list(set([y_col, x_col] + control_cols))
     df = data[all_cols].dropna()
     if len(df) < len(control_cols) + 5:
@@ -345,10 +368,7 @@ def _quick_ols_full(
     params = XtX_inv @ X.T @ Y
     resid = Y - X @ params
 
-    # HC1
-    u2 = resid**2
-    meat = X.T @ np.diag(u2) @ X * n / (n - k)
-    vcov = XtX_inv @ meat @ XtX_inv
+    vcov = _ols_vcov(X, resid, XtX_inv, robust)
 
     se = np.sqrt(np.diag(vcov))
     beta_x = params[1]
@@ -373,6 +393,7 @@ def _interaction_het_test(
     x_col: str,
     control_cols: List[str],
     group_col: str,
+    robust: str = "hc1",
 ) -> Optional[Dict[str, float]]:
     """
     Wald test for heterogeneity via interaction terms.
@@ -412,10 +433,7 @@ def _interaction_het_test(
     params = XtX_inv @ X.T @ Y
     resid = Y - X @ params
 
-    # HC1 vcov
-    u2 = resid**2
-    meat = X.T @ np.diag(u2) @ X * n / (n - k)
-    vcov = XtX_inv @ meat @ XtX_inv
+    vcov = _ols_vcov(X, resid, XtX_inv, robust)
 
     # Indices of interaction terms (last len(interaction_names) columns)
     n_int = len(interaction_names)
@@ -503,7 +521,13 @@ def subgroup_analysis(
     >>> type(result).__name__
     'SubgroupResult'
     """
+    from ..core._vcov_spec import parse_se_request
     from ..core.utils import parse_formula
+
+    # Stata grammar; robust= used to be accepted and ignored (always HC1).
+    robust = parse_se_request(
+        robust, None, function="subgroup_analysis", supported=_SUBGROUP_SE_KINDS
+    ).kind
 
     parsed = parse_formula(formula)
     y_col = parsed["dependent"]
@@ -511,7 +535,7 @@ def subgroup_analysis(
     controls_base = [v for v in all_rhs if v != x]
 
     # Overall estimate
-    overall = _quick_ols_full(data, y_col, x, controls_base)
+    overall = _quick_ols_full(data, y_col, x, controls_base, robust)
     if overall is None:
         raise ValueError("Overall regression failed.")
 
@@ -530,7 +554,7 @@ def subgroup_analysis(
         for g in groups:
             mask = data[col_name] == g
             sub_data = data.loc[mask]
-            res = _quick_ols_full(sub_data, y_col, x, ctrl_clean)
+            res = _quick_ols_full(sub_data, y_col, x, ctrl_clean, robust)
             if res is not None:
                 res["group_var"] = display_name
                 res["group_val"] = str(g)
@@ -544,6 +568,7 @@ def subgroup_analysis(
             x,
             ctrl_clean,
             col_name,
+            robust,
         )
         if ht is not None:
             het_tests[display_name] = ht

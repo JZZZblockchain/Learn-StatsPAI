@@ -101,11 +101,13 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
 from . import _core as _dc
 
 
+@accepts_aliases(_strict=True, id="group", unit="group", treat="treatment")
 def did_multiplegt_dyn(
     data: pd.DataFrame,
     y: str,

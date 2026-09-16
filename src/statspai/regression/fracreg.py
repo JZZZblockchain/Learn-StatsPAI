@@ -20,13 +20,12 @@ Ferrari, S.L.P. & Cribari-Neto, F. (2004).
 *Journal of Applied Statistics*, 31(7), 799-815. [@ferrari2004beta]
 """
 
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
-from scipy.special import gammaln
 
 from .._aliases import accepts_aliases
 from ..core.results import EconometricResults
@@ -102,6 +101,11 @@ def fracreg(
     n = len(df)
 
     y_data = df[y].values.astype(float)
+    if np.any((y_data < 0) | (y_data > 1)):
+        raise ValueError(
+            "fracreg: the outcome must lie in [0, 1]; "
+            f"{int(((y_data < 0) | (y_data > 1)).sum())} observation(s) do not."
+        )
     X_data = np.column_stack([np.ones(n), df[x_names].values.astype(float)])
     k = X_data.shape[1]
     var_names = ["_cons"] + x_names
@@ -155,6 +159,35 @@ def fracreg(
             break
         beta = beta_new
 
+    from scipy import special
+
+    from ..core._vcov import ml_vcov
+    from ..core._vcov_spec import parse_se_request
+    from ._optim_helpers import inverse_information, ml_newton_polish, se_from_vcov
+
+    # Stata grammar. fracreg is a quasi-MLE: like Stata's fracreg it offers
+    # only sandwich variances (vce(robust), the default, or vce(cluster)).
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function="fracreg",
+        supported=("robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
+    def obs_qll(theta: np.ndarray) -> np.ndarray:
+        """Per-observation Bernoulli quasi-log-likelihood; complex-safe."""
+        eta = X_data @ theta
+        if link == "logit":
+            return y_data * eta - np.log1p(np.exp(eta))
+        return y_data * special.log_ndtr(eta) + (1 - y_data) * special.log_ndtr(-eta)
+
+    # IRLS stops on |delta beta| < tol; exact Newton steps on the quasi-
+    # likelihood take it to the optimum Stata's fracreg reports. The bread
+    # is the observed information, which for the probit link differs from
+    # the IRLS weight matrix.
+    beta, score, H, _ = ml_newton_polish(obs_qll, beta)
+
     # Final predictions
     xb = X_data @ beta
     mu = g(xb)
@@ -162,33 +195,14 @@ def fracreg(
     dmu = g_prime(xb)
 
     # Quasi-log-likelihood
-    qll = np.sum(y_data * np.log(mu) + (1 - y_data) * np.log(1 - mu))
+    qll = float(np.sum(obs_qll(beta)))
 
-    # Robust (sandwich) standard errors — always for QMLE
-    score = ((y_data - mu) * dmu / (mu * (1 - mu)))[:, np.newaxis] * X_data
-    try:
-        weight_mat = np.diag(dmu**2 / (mu * (1 - mu)))
-        XtWX_inv = np.linalg.inv(X_data.T @ weight_mat @ X_data)
-    except np.linalg.LinAlgError:
-        weight_mat = np.diag(dmu**2 / (mu * (1 - mu)))
-        XtWX_inv = np.linalg.pinv(X_data.T @ weight_mat @ X_data)
+    # Stata conventions (core._vcov.ml_vcov): vce(robust) carries N/(N-1),
+    # which the previous hand-rolled sandwich omitted.
+    clusters = df[cluster].values if cluster is not None else None
+    var_cov = ml_vcov(inverse_information(H), score, kind=robust, clusters=clusters)
 
-    if cluster is not None:
-        clusters = df[cluster].values
-        unique_cl = np.unique(clusters)
-        n_cl = len(unique_cl)
-        meat = np.zeros((k, k))
-        for cl in unique_cl:
-            cl_mask = clusters == cl
-            s_cl = score[cl_mask].sum(axis=0)
-            meat += np.outer(s_cl, s_cl)
-        correction = n_cl / (n_cl - 1)
-        var_cov = correction * XtWX_inv @ meat @ XtWX_inv
-    else:
-        meat = score.T @ score
-        var_cov = XtWX_inv @ meat @ XtWX_inv
-
-    se = np.sqrt(np.diag(var_cov))
+    se = se_from_vcov(var_cov)
     params = pd.Series(beta, index=var_names)
     std_errors = pd.Series(se, index=var_names)
 
@@ -204,6 +218,9 @@ def fracreg(
             "n_obs": n,
             "dep_var": y,
             "df_resid": n - k,
+            # z / chi2 inference, as Stata's fracreg.
+            "inference": "z",
+            "var_cov": var_cov,
         },
         diagnostics={
             "quasi_log_likelihood": qll,
@@ -275,14 +292,39 @@ def betareg(
     if data is None or y is None or x is None:
         raise ValueError("betareg requires data, y, and x")
 
+    from scipy import special
+
+    from ..core._vcov import ml_vcov
+    from ..core._vcov_spec import parse_se_request
+    from ._optim_helpers import inverse_information, ml_newton_polish, se_from_vcov
+
+    # Stata grammar; robust= and cluster= used to be accepted and ignored.
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function="betareg",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
     x_names = list(x)
     z_names = list(z) if z is not None else []
-    df = data.dropna(subset=[y] + x_names + z_names)
+    df = data.dropna(
+        subset=[y] + x_names + z_names + ([cluster] if cluster is not None else [])
+    )
     n = len(df)
 
     y_data = df[y].values.astype(float)
-    # Squeeze away from boundaries
-    y_data = np.clip(y_data, 1e-6, 1 - 1e-6)
+    # The beta density is zero at 0 and 1. Values on or outside the boundary
+    # used to be clipped to [1e-6, 1 - 1e-6] without notice, which changes
+    # the likelihood arbitrarily; refuse instead, as Stata's betareg does.
+    outside = (y_data <= 0) | (y_data >= 1)
+    if outside.any():
+        raise ValueError(
+            f"betareg: the outcome must lie strictly inside (0, 1); "
+            f"{int(outside.sum())} observation(s) do not. Use sp.fracreg for "
+            "outcomes that take the values 0 or 1."
+        )
 
     X_mean = np.column_stack([np.ones(n), df[x_names].values.astype(float)])
     k_mean = X_mean.shape[1]
@@ -296,47 +338,40 @@ def betareg(
         prec_names = ["_cons_phi"]
     k_prec = X_prec.shape[1]
 
-    g: Callable[[np.ndarray], np.ndarray]
-    if link == "logit":
+    # Inverse mean links (Stata betareg: logit, probit, cloglog, loglog).
+    # ``link='cloglog'`` used to fall through to the logit link silently.
+    inverse_links: Dict[str, Callable[[np.ndarray], np.ndarray]] = {
+        "logit": lambda eta: 1.0 / (1.0 + np.exp(-eta)),
+        "probit": lambda eta: special.ndtr(eta),
+        "cloglog": lambda eta: 1.0 - np.exp(-np.exp(eta)),
+        "loglog": lambda eta: np.exp(-np.exp(-eta)),
+    }
+    if link not in inverse_links:
+        raise ValueError(
+            f"betareg: unknown link {link!r}; use one of {sorted(inverse_links)}."
+        )
+    g = inverse_links[link]
+    log_y = np.log(y_data)
+    log_1my = np.log1p(-y_data)
 
-        def g(xb: np.ndarray) -> np.ndarray:
-            return np.asarray(
-                1 / (1 + np.exp(-np.clip(xb, -500, 500))),
-                dtype=float,
-            )
-
-    elif link == "probit":
-
-        def g(xb: np.ndarray) -> np.ndarray:
-            return np.asarray(stats.norm.cdf(xb), dtype=float)
-
-    else:
-
-        def g(xb: np.ndarray) -> np.ndarray:
-            return np.asarray(
-                1 / (1 + np.exp(-np.clip(xb, -500, 500))),
-                dtype=float,
-            )
-
-    def neg_log_lik(theta: np.ndarray) -> float:
-        beta = theta[:k_mean]
-        gamma = theta[k_mean:]
-        mu = g(X_mean @ beta)
-        mu = np.clip(mu, 1e-6, 1 - 1e-6)
-        phi = np.exp(X_prec @ gamma)
-        phi = np.clip(phi, 1e-4, 1e6)
-
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation beta log-likelihood; complex-step safe."""
+        mu = g(X_mean @ theta[:k_mean])
+        phi = np.exp(X_prec @ theta[k_mean:])
         a = mu * phi
         b = (1 - mu) * phi
-
-        ll = np.sum(
-            gammaln(phi)
-            - gammaln(a)
-            - gammaln(b)
-            + (a - 1) * np.log(y_data)
-            + (b - 1) * np.log(1 - y_data)
+        return (
+            special.loggamma(phi)
+            - special.loggamma(a)
+            - special.loggamma(b)
+            + (a - 1) * log_y
+            + (b - 1) * log_1my
         )
-        return float(-ll)
+
+    def neg_log_lik(theta: np.ndarray) -> float:
+        with np.errstate(all="ignore"):
+            value = float(-np.sum(np.real(obs_loglik(theta))))
+        return value if np.isfinite(value) else 1e300
 
     # Initialize
     theta0 = np.zeros(k_mean + k_prec)
@@ -349,31 +384,24 @@ def betareg(
             method="BFGS",
             options={"maxiter": maxiter, "gtol": tol},
         )
-        theta_hat = result.x
-        converged, _ = robust_convergence(result)
+        theta_start = np.asarray(result.x, dtype=float)
+        bfgs_converged, _ = robust_convergence(result)
     except Exception:
-        theta_hat = theta0
-        converged = False
+        theta_start = theta0
+        bfgs_converged = False
 
-    # Numerical Hessian for SE
-    eps = 1e-5
+    # Exact Newton steps to the optimum, then the observed information and
+    # per-observation scores for the oim / robust / cluster variances.
+    theta_hat, scores, H, newton_steps = ml_newton_polish(obs_loglik, theta_start)
+    grad_norm = float(np.linalg.norm(scores.sum(axis=0)))
+    converged = bool(bfgs_converged or grad_norm < 1e-6)
     k_total = len(theta_hat)
-    H = np.zeros((k_total, k_total))
-    for i in range(k_total):
-        for j in range(i, k_total):
-            ei, ej = np.zeros(k_total), np.zeros(k_total)
-            ei[i], ej[j] = eps, eps
-            fpp = neg_log_lik(theta_hat + ei + ej)
-            fpm = neg_log_lik(theta_hat + ei - ej)
-            fmp = neg_log_lik(theta_hat - ei + ej)
-            fmm = neg_log_lik(theta_hat - ei - ej)
-            H[i, j] = H[j, i] = (fpp - fpm - fmp + fmm) / (4 * eps**2)
 
-    try:
-        var_cov = np.linalg.inv(H)
-        se = np.sqrt(np.abs(np.diag(var_cov)))
-    except np.linalg.LinAlgError:
-        se = np.full(k_total, np.nan)
+    cluster_vals = df[cluster].values if cluster is not None else None
+    var_cov = ml_vcov(
+        inverse_information(H), scores, kind=robust, clusters=cluster_vals
+    )
+    se = se_from_vcov(var_cov)
 
     all_names = mean_names + prec_names
     params = pd.Series(theta_hat, index=all_names)
@@ -390,11 +418,18 @@ def betareg(
             "n_mean_params": k_mean,
             "n_precision_params": k_prec,
             "converged": converged,
+            "gradient_norm": grad_norm,
+            "newton_steps": newton_steps,
+            "robust": robust,
+            "cluster": cluster,
         },
         data_info={
             "n_obs": n,
             "dep_var": y,
             "df_resid": n - k_total,
+            # z / chi2 inference, as Stata's betareg.
+            "inference": "z",
+            "var_cov": var_cov,
         },
         diagnostics={
             "log_likelihood": ll,

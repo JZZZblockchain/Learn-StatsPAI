@@ -96,9 +96,26 @@ def biprobit(
     >>> bool('rho' in result.model_info)  # error correlation reported
     True
     """
+    from scipy import special
+
+    from ..core._vcov import ml_vcov
+    from ..core._vcov_spec import parse_se_request
+    from ._optim_helpers import inverse_information, ml_newton_polish, se_from_vcov
+
+    # Stata grammar; robust= and cluster= used to be accepted and ignored.
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function="biprobit",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
     x2_names = list(x1) if x2 is None else list(x2)
 
-    df = data.dropna(subset=[y1, y2] + x1 + x2_names)
+    df = data.dropna(
+        subset=[y1, y2] + x1 + x2_names + ([cluster] if cluster is not None else [])
+    )
     n = len(df)
 
     y1_data = df[y1].values.astype(float)
@@ -124,47 +141,45 @@ def biprobit(
         gradient and pinned ``rho`` at its starting value of 0 (so the model
         always reported zero error correlation regardless of the data).
         """
-        h = np.asarray(h, dtype=float)
-        k = np.asarray(k, dtype=float)
-        rho = np.asarray(rho, dtype=float)
+        # Complex-step safe: no dtype casts and no clipping, so the same
+        # function yields exact per-observation scores. |rho| < 1 holds by
+        # construction (rho = tanh(athrho)).
+        h = np.asarray(h)
+        k = np.asarray(k)
+        rho = np.asarray(rho)
         if rho.ndim == 0:
-            rho = np.full(h.shape, float(rho))
-        rho = np.clip(rho, -0.999999, 0.999999)
-        base = stats.norm.cdf(h) * stats.norm.cdf(k)
+            rho = rho * np.ones(h.shape)
+        base = special.ndtr(h) * special.ndtr(k)
         nodes, weights = np.polynomial.legendre.leggauss(24)
         s = 0.5 * (nodes + 1.0)  # map [-1, 1] -> [0, 1]
         w = 0.5 * weights
-        integral = np.zeros(h.shape)
+        integral = np.zeros(h.shape, dtype=np.result_type(h, k, rho, float))
         for s_j, w_j in zip(s, w):
             r = rho * s_j
             denom = 1.0 - r * r
-            integral += (
+            integral = integral + (
                 w_j
                 * np.exp(-(h * h - 2.0 * r * h * k + k * k) / (2.0 * denom))
                 / (2.0 * np.pi * np.sqrt(denom))
             )
-        return _as_float_array(base + rho * integral)
+        return base + rho * integral
+
+    # Adjust signs for different (y1, y2) combinations
+    q1 = 2 * y1_data - 1  # +1 if y=1, -1 if y=0
+    q2 = 2 * y2_data - 1
+
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation log-likelihood at (beta1, beta2, athrho)."""
+        rho = np.tanh(theta[-1])
+        probs = _bvn_cdf(
+            q1 * (X1 @ theta[:k1]), q2 * (X2 @ theta[k1 : k1 + k2]), q1 * q2 * rho
+        )
+        return np.log(probs)
 
     def neg_ll(theta: np.ndarray) -> float:
-        beta1 = theta[:k1]
-        beta2 = theta[k1 : k1 + k2]
-        atanh_rho = theta[-1]
-        rho = np.tanh(atanh_rho)
-
-        xb1 = X1 @ beta1
-        xb2 = X2 @ beta2
-
-        # Adjust signs for different (y1, y2) combinations
-        q1 = 2 * y1_data - 1  # +1 if y=1, -1 if y=0
-        q2 = 2 * y2_data - 1
-
-        h = q1 * xb1
-        k_ = q2 * xb2
-        rho_adj = q1 * q2 * rho
-
-        probs = _bvn_cdf(h, k_, rho_adj)
-        probs = np.clip(probs, 1e-10, 1 - 1e-10)
-        return float(-np.sum(np.log(probs)))
+        with np.errstate(all="ignore"):
+            value = float(-np.sum(obs_loglik(theta)))
+        return value if np.isfinite(value) else 1e300
 
     # Initialize with separate probits
     beta1_init = np.linalg.lstsq(X1, y1_data, rcond=None)[0]
@@ -175,44 +190,33 @@ def biprobit(
         result = minimize(
             neg_ll, theta0, method="BFGS", options={"maxiter": maxiter, "gtol": tol}
         )
-        theta_hat = _as_float_array(result.x)
-        converged, grad_norm = robust_convergence(result)
+        theta_start = _as_float_array(result.x)
+        bfgs_converged = robust_convergence(result)[0]
     except Exception:
-        theta_hat = theta0
-        converged, grad_norm = False, float("inf")
+        theta_start = theta0
+        bfgs_converged = False
+
+    # Exact Newton steps to the optimum, then the observed information and
+    # per-observation scores for the oim / robust / cluster variances.
+    theta_hat, scores, H, newton_steps = ml_newton_polish(obs_loglik, theta_start)
+    grad_norm = float(np.linalg.norm(scores.sum(axis=0)))
+    converged = bool(bfgs_converged or grad_norm < 1e-6)
+    k_total = len(theta_hat)
 
     beta1 = theta_hat[:k1]
     beta2 = theta_hat[k1 : k1 + k2]
     rho = float(np.tanh(theta_hat[-1]))
 
-    # Numerical Hessian for SE
-    k_total = len(theta_hat)
-    eps = 1e-5
-    H = np.zeros((k_total, k_total))
-    f0 = neg_ll(theta_hat)
-    for i in range(k_total):
-        ei = np.zeros(k_total)
-        ei[i] = eps
-        fp = neg_ll(theta_hat + ei)
-        fm = neg_ll(theta_hat - ei)
-        H[i, i] = (fp - 2 * f0 + fm) / eps**2
-        for j in range(i + 1, k_total):
-            ej = np.zeros(k_total)
-            ej[j] = eps
-            fpp = neg_ll(theta_hat + ei + ej)
-            fpm = neg_ll(theta_hat + ei - ej)
-            fmp = neg_ll(theta_hat - ei + ej)
-            fmm = neg_ll(theta_hat - ei - ej)
-            H[i, j] = H[j, i] = (fpp - fpm - fmp + fmm) / (4 * eps**2)
-
-    try:
-        var_cov = np.linalg.inv(H)
-        se = _as_float_array(np.sqrt(np.abs(np.diag(var_cov))))
-    except np.linalg.LinAlgError:
-        se = np.full(k_total, np.nan)
+    cluster_vals = df[cluster].values if cluster is not None else None
+    var_cov = ml_vcov(
+        inverse_information(H), scores, kind=robust, clusters=cluster_vals
+    )
+    se = se_from_vcov(var_cov)
 
     # Delta method for rho SE
     rho_se = float(se[-1] * (1 - rho**2))  # d(tanh)/d(atanh) = 1-tanh^2
+    _rho_scale = np.eye(k_total)
+    _rho_scale[-1, -1] = 1 - rho**2
 
     names = (
         ["eq1._cons"]
@@ -247,6 +251,10 @@ def biprobit(
             "dep_var_1": y1,
             "dep_var_2": y2,
             "df_resid": n - k_total,
+            # z / chi2 inference, as Stata's biprobit. params report rho, so
+            # the athrho row/column is mapped by d rho / d athrho = 1 - rho^2.
+            "inference": "z",
+            "var_cov": _rho_scale @ var_cov @ _rho_scale,
         },
         diagnostics={
             "log_likelihood": ll,
@@ -545,11 +553,16 @@ def etregress(
     """
     if method not in ("mle", "twostep"):
         raise ValueError(f"method must be 'mle' or 'twostep', got {method!r}")
-    robust_kind = str(robust).lower()
-    if robust_kind not in ("nonrobust", "robust", "cluster"):
-        raise ValueError(
-            "robust must be 'nonrobust', 'robust' or 'cluster', " f"got {robust!r}"
-        )
+    from ..core._vcov_spec import parse_se_request
+
+    # Stata grammar: vce='robust' / True / 'cluster firm' / 'oim'.
+    _se = parse_se_request(
+        robust,
+        cluster,
+        function="etregress",
+        supported=("nonrobust", "robust", "cluster"),
+    )
+    robust_kind, cluster = _se.kind, _se.cluster
     subset = [y, treatment] + x + z + ([cluster] if cluster else [])
     df = data.dropna(subset=subset)
     n = len(df)
@@ -676,6 +689,9 @@ def etregress(
             "n_obs": n,
             "dep_var": y,
             "df_resid": n - len(beta),
+            # z / chi2 inference, as Stata's etregress (MLE and twostep).
+            "inference": "z",
+            "var_cov": vcov,
         },
         diagnostics=diagnostics,
     )

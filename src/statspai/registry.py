@@ -7,11 +7,13 @@ and call the right estimator without reading source code.
 
 Usage
 -----
->>> import statspai as sp
->>> sp.list_functions()                 # human-friendly list
->>> sp.describe_function('did')         # detailed schema for one function
->>> sp.search_functions('treatment')    # keyword search
->>> sp.function_schema('regress')       # OpenAI function-calling schema
+::
+
+    import statspai as sp
+    sp.list_functions()                 # human-friendly list
+    sp.describe_function('did')         # detailed schema for one function
+    sp.search_functions('treatment')    # keyword search
+    sp.function_schema('regress')       # OpenAI function-calling schema
 """
 
 from __future__ import annotations
@@ -734,6 +736,18 @@ def _build_registry() -> None:
                         "continuous_late",
                         "shift_share",
                     ],
+                ),
+                ParamSpec(
+                    "augmented_diagnostics",
+                    "bool",
+                    False,
+                    True,
+                    (
+                        "When the method returns EconometricResults, attach the "
+                        "Kleibergen-Paap rk statistic, Sanderson-Windmeijer "
+                        "per-endogenous F and Olea-Pflueger effective F to "
+                        "result.diagnostics."
+                    ),
                 ),
                 ParamSpec(
                     "robust",
@@ -17601,11 +17615,59 @@ def _ensure_full_registry() -> None:
 # ====================================================================== #
 
 
+#: The everyday verbs -- what a Stata user types without opening the manual.
+#: ``sp.list_functions(core=True)`` returns these, in this order, so a newcomer
+#: (or an agent with a small context) starts from ~30 names, not 1,100.
+CORE_FUNCTIONS: Tuple[str, ...] = (
+    # regression
+    "regress",
+    "ivreg",
+    "feols",
+    "logit",
+    "probit",
+    "poisson",
+    "nbreg",
+    "glm",
+    "panel",
+    "qreg",
+    # post-estimation and tables
+    "test",
+    "lincom",
+    "margins",
+    "regtable",
+    # difference-in-differences
+    "did",
+    "callaway_santanna",
+    "event_study",
+    "honest_did",
+    # regression discontinuity
+    "rdrobust",
+    "rdplot",
+    "rddensity",
+    # synthetic control
+    "synth",
+    "sdid",
+    # selection on observables
+    "match",
+    "ipw",
+    "aipw",
+    "ebalance",
+    # machine learning
+    "dml",
+    "causal_forest",
+    "metalearner",
+    # sensitivity
+    "sensemakr",
+    "evalue",
+)
+
+
 def list_functions(
     category: Optional[str] = None,
     *,
     stability: Optional[str] = None,
     validation_status: Optional[str] = None,
+    core: bool = False,
 ) -> List[str]:
     """
     List all registered StatsPAI functions, optionally filtered.
@@ -17628,6 +17690,10 @@ def list_functions(
         ``"experimental"`` / ``"deprecated"``). Use
         ``validation_status='certified'`` for parity-backed tool
         catalogs.
+    core : bool, default False
+        Return only :data:`CORE_FUNCTIONS`, the everyday estimation and
+        post-estimation verbs, in their curated order (the other filters
+        still apply).
 
     Examples
     --------
@@ -17637,8 +17703,19 @@ def list_functions(
     True
     >>> 'did' in fns
     True
+    >>> sp.list_functions(core=True)[:3]
+    ['regress', 'ivreg', 'feols']
     """
     _ensure_full_registry()
+    if core:
+        pool = [_REGISTRY[k] for k in CORE_FUNCTIONS]
+        return [
+            v.name
+            for v in pool
+            if (not category or v.category == category)
+            and (not stability or v.stability == stability)
+            and (not validation_status or v.validation_status == validation_status)
+        ]
     if stability is not None and stability not in STABILITY_TIERS:
         raise ValueError(
             f"stability={stability!r} must be one of {sorted(STABILITY_TIERS)} "
@@ -17665,9 +17742,6 @@ def describe_function(name: str) -> Dict[str, Any]:
     """
     Return the full specification for a function as a dictionary.
 
-    >>> sp.describe_function('did')
-    {'name': 'did', 'category': 'causal', ...}
-
     Examples
     --------
     >>> import statspai as sp
@@ -17677,7 +17751,9 @@ def describe_function(name: str) -> Dict[str, Any]:
     >>> d['name']
     'did'
     >>> sorted(d)[:3]
-    ['alternatives', 'assumptions', 'category']
+    ['aliases', 'alternatives', 'assumptions']
+    >>> d['aliases']['unit']
+    'id'
     """
     _ensure_full_registry()
     if name not in _REGISTRY:
@@ -17687,7 +17763,15 @@ def describe_function(name: str) -> Dict[str, Any]:
         )
         hint = ", ".join(hand_written[:15]) + ", ..."
         raise KeyError(f"Unknown function '{name}'. Examples: {hint}")
-    return _REGISTRY[name].to_dict()
+    out = _REGISTRY[name].to_dict()
+    # Call-time keyword aliases (``@accepts_aliases``) are invisible to the
+    # signature; list them so agents can use the house-style spellings.
+    import statspai
+
+    aliases = getattr(getattr(statspai, name, None), "__statspai_aliases__", None)
+    if aliases:
+        out["aliases"] = dict(aliases)
+    return out
 
 
 def function_schema(name: str, *, agent_native: bool = False) -> Dict[str, Any]:
@@ -17713,11 +17797,7 @@ def function_schema(name: str, *, agent_native: bool = False) -> Dict[str, Any]:
         The base ``name`` / ``description`` / ``parameters`` shape is unchanged,
         so the schema still works with strict tool-calling APIs.
 
-    >>> schema = sp.function_schema('regress')
-    >>> # Feed to OpenAI's function_call or Anthropic's tool_use
-    >>> rich = sp.function_schema('did', agent_native=True)
-    >>> rich['x_statspai']['assumptions']  # doctest: +SKIP
-    ['Parallel trends', ...]
+    Feed the schema to OpenAI's ``function_call`` or Anthropic's ``tool_use``.
 
     Examples
     --------
@@ -17744,10 +17824,6 @@ def agent_schema(name: str) -> Dict[str, Any]:
     planning metadata (assumptions, pre-conditions, failure modes, alternatives,
     stability, typical sample size).
 
-    >>> schema = sp.agent_schema('did')
-    >>> set(schema) >= {'name', 'description', 'parameters', 'x_statspai'}
-    True
-
     Examples
     --------
     >>> import statspai as sp
@@ -17770,9 +17846,6 @@ def search_functions(query: str) -> List[Dict[str, str]]:
 
     Returns a list of ``{'name': ..., 'description': ..., 'category': ...}``,
     sorted by relevance (number of word hits).
-
-    >>> sp.search_functions('treatment effect')
-    [{'name': 'did', ...}, {'name': 'dml', ...}, ...]
 
     Examples
     --------
@@ -17823,8 +17896,7 @@ def all_schemas(*, agent_native: bool = False) -> List[Dict[str, Any]]:
         When True, each schema carries the ``x_statspai`` agent-native block
         (see :func:`function_schema`).
 
-    >>> schemas = sp.all_schemas()
-    >>> # Register all as tools in your LLM framework
+    Register the list as tools in your LLM framework.
 
     Examples
     --------
@@ -17853,9 +17925,8 @@ def agent_card(name: str) -> Dict[str, Any]:
     inspect *before* calling the function, and the payload rendered
     into each guide's ``## For Agents`` block.
 
-    >>> card = sp.agent_card('did')
-    >>> [a for a in card['assumptions']]
-    ['Parallel trends', 'No anticipation', 'SUTVA', ...]
+    For ``did``, ``card['assumptions']`` starts with parallel trends, no
+    anticipation and SUTVA.
 
     Examples
     --------
@@ -17896,8 +17967,7 @@ def agent_cards(
         is the standard cross-language parity-backed filter for agent
         tool catalogs.
 
-    >>> cards = sp.agent_cards(category='causal', stability='stable')
-    >>> # Feed to an agent's tool catalog or doc generator
+    Feed the list to an agent's tool catalog or a doc generator.
 
     Examples
     --------

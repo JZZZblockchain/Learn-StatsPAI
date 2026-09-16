@@ -1388,6 +1388,7 @@ __all__ = [
     "get_code",
     # Stata / R migration on-ramps
     "from_stata",
+    "stata",
     "from_r",
     "translation_coverage",
     # Utils
@@ -2599,6 +2600,7 @@ _LAZY_ATTRS: dict = {}
 # ``agent._translation`` package facade) so resolution is robust to changes in
 # the package ``__init__`` re-exports.
 _register_lazy("agent._translation._stata", "from_stata")
+_register_lazy("agent._translation._stata_run", "stata")
 _register_lazy("agent._translation._r", "from_r")
 _register_lazy("agent._translation._coverage", "translation_coverage")
 _register_lazy(

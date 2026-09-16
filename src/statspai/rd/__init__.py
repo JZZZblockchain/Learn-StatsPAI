@@ -62,40 +62,44 @@ other RD variant is one ``method=`` away.
 0.781
 """
 
-from .rdrobust import rdrobust, rdplot, rdplotdensity
+import inspect as _inspect
+import sys as _sys
+from types import ModuleType as _ModuleType
+from typing import Any as _Any
+from typing import Callable as _Callable
+from typing import Dict as _Dict
+from typing import Optional as _Optional
+
+from ..exceptions import MethodIncompatibility
+
+# User-friendly aliases
+from ._aliases import boundary_rd, geographic_rd, multi_cutoff_rd, multi_score_rd
 from .bandwidth import rdbwselect
-from .diagnostics import rdbwsensitivity, rdbalance, rdplacebo, rdsummary
-from .rkd import rkd
+from .bayes_hte import BayesRDHTEResult, rd_bayes_hte
+from .bias_aware import rd_bias_aware_fuzzy
+from .dashboard import rd_compare, rd_dashboard, rd_robustness_table
+from .diagnostics import rdbalance, rdbwsensitivity, rdplacebo, rdsummary
+from .distribution_valued import DistRDResult, rd_distribution
+from .distributional_design import DDDResult, rd_distributional_design
+from .extrapolate import rd_external_validity, rd_extrapolate, rd_multi_extrapolate
 from .honest_ci import rd_honest
-from .rdit import rdit
-from .rdmulti import rdmc, rdms, RDMultiResult
-from .rdpower import rdpower, rdsampsi, RDPowerResult, RDSampSiResult
-from .locrand import rdrandinf, rdwinselect, rdsensitivity, rdrbounds
-from .hte import rdhte, rdbwhte, rdhte_lincom
-from .rd2d import rd2d, rd2d_bw, rd2d_plot
-from .rdml import rd_forest, rd_boost, rd_lasso, rd_cate_summary
-from .extrapolate import rd_extrapolate, rd_multi_extrapolate, rd_external_validity
+from .hte import rdbwhte, rdhte, rdhte_lincom
 
 # v0.10 RDD frontier
-from .interference import rd_interference, RDInterferenceResult
-from .multi_score import rd_multi_score, MultiScoreRDResult
-from .distribution_valued import rd_distribution, DistRDResult
-from .bayes_hte import rd_bayes_hte, BayesRDHTEResult
-from .distributional_design import rd_distributional_design, DDDResult
+from .interference import RDInterferenceResult, rd_interference
+from .locrand import rdrandinf, rdrbounds, rdsensitivity, rdwinselect
+from .multi_score import MultiScoreRDResult, rd_multi_score
+from .rd2d import rd2d, rd2d_bw, rd2d_plot
+from .rd_discrete import rd_discrete
 
 # v1.15 RDD polish — recent literature
 from .rd_flex import rd_flex
-from .bias_aware import rd_bias_aware_fuzzy
-from .rd_discrete import rd_discrete
-from .dashboard import rd_dashboard, rd_compare, rd_robustness_table
-
-# User-friendly aliases
-from ._aliases import (
-    multi_cutoff_rd,
-    geographic_rd,
-    boundary_rd,
-    multi_score_rd,
-)
+from .rdit import rdit
+from .rdml import rd_boost, rd_cate_summary, rd_forest, rd_lasso
+from .rdmulti import RDMultiResult, rdmc, rdms
+from .rdpower import RDPowerResult, RDSampSiResult, rdpower, rdsampsi
+from .rdrobust import rdplot, rdplotdensity, rdrobust
+from .rkd import rkd
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Unified dispatcher — sp.rd(..., method=...)
@@ -112,12 +116,6 @@ from ._aliases import (
 # ``rdrbounds``) are intentionally NOT in the ``method=`` table —
 # they are not estimators of treatment effects.
 
-import sys as _sys
-from types import ModuleType as _ModuleType
-from typing import Any as _Any, Callable as _Callable, Dict as _Dict
-from typing import Optional as _Optional
-
-from ..exceptions import MethodIncompatibility
 
 _RD_METHOD_ALIASES: _Dict[str, str] = {
     # Local-polynomial bias-corrected (default, CCT 2014)
@@ -428,6 +426,9 @@ class _CallableRDModule(_ModuleType):
 
 
 _sys.modules[__name__].__class__ = _CallableRDModule
+# Report ``sp.rd(data, y, x, c, *, method, ...)`` rather than
+# ``(*args, **kwargs)`` to ``inspect.signature`` / ``help``.
+_sys.modules[__name__].__signature__ = _inspect.signature(fit)
 
 
 __all__ = [

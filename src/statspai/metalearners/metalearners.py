@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility
 
@@ -777,6 +778,7 @@ class DRLearner:
 # ======================================================================
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def metalearner(
     data: pd.DataFrame,
     y: str,

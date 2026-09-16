@@ -51,6 +51,13 @@ CANONICAL_OUTCOME = "y"
 #: Treatment variable.  ``treat`` dominates (98 uses) over ``treatment`` (61).
 CANONICAL_TREATMENT = "treat"
 
+#: Panel identifier.  ``id`` (sp.did, sp.causal, Stata's ``xtset id``),
+#: ratified 2026-09-15 over ``unit`` (more uses, but mostly the synth family).
+CANONICAL_UNIT = "id"
+
+#: Adjustment covariates, ratified 2026-09-15 (160 uses vs 26 ``controls``).
+CANONICAL_COVARIATES = "covariates"
+
 
 #: theme -> (canonical spelling, legacy spellings to converge toward it).
 #:
@@ -113,6 +120,30 @@ THEMES: Dict[str, Dict[str, object]] = {
             "Treatment variable.  EconML-mirrored `T` / `W` is exempt on the "
             "CATE / forest family, and `w`/`W` is exempt on spatial models "
             "(spatial weight matrix) — both via FALSE_FRIENDS."
+        ),
+    },
+    # Ratified by the maintainer 2026-09-15 (grammar-convergence step P1).
+    "unit": {
+        "canonical": CANONICAL_UNIT,
+        "aliases": ("unit", "i", "idname", "panel_id", "ivar", "entity"),
+        "note": (
+            "Panel / cluster-of-observations identifier.  `group` is NOT an "
+            "alias: it means a comparison or cohort group in decompositions "
+            "and several DiD estimators (see FALSE_FRIENDS)."
+        ),
+    },
+    "time": {
+        "canonical": "time",
+        "aliases": ("t", "tname", "period", "time_col"),
+        "note": "Time / period identifier of a panel.",
+    },
+    "covariates": {
+        "canonical": CANONICAL_COVARIATES,
+        "aliases": ("controls", "covs", "X", "xvars", "covars"),
+        "note": (
+            "Adjustment covariates.  Bare `x` is not listed: in the RD family "
+            "it is the running variable (rdrobust's own name) and in the "
+            "limited-dependent-variable family it is the regressor list."
         ),
     },
 }

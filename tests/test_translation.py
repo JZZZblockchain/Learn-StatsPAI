@@ -559,9 +559,15 @@ TIER2_ROUND_TRIPS = [
         },
     ),
     # Postestimation
-    ("margins, dydx(treat)", "margins", {"dydx": ["treat"]}),
-    ("contrast x1", "contrast", {"terms": ["x1"]}),
-    ("test x1 x2", "test", {"terms": ["x1", "x2"]}),
+    ("margins, dydx(treat)", "margins", {"variables": ["treat"]}),
+    ("margins, dydx(*) atmeans", "margins", {"method": "mem"}),
+    ("margins, dydx(x1) at(x2=0)", "margins", {"variables": ["x1"], "at": {"x2": 0}}),
+    ("marginsplot", "marginsplot", {}),
+    ("contrast i.x1", "contrast", {"variable": "x1"}),
+    ("test x1 x2", "test", {"hypothesis": "x1 x2"}),
+    ("test x1 = x2", "test", {"hypothesis": "x1 = x2"}),
+    ("lincom x1 - 2*x2", "lincom", {"expression": "x1 - 2*x2"}),
+    ("lincom x1 + x2, level(90)", "lincom", {"expression": "x1 + x2", "alpha": 0.1}),
     # xtset / tsset are intentionally excluded: no sp equivalent, the
     # translator now fails loud with a note pointing at sp.panel / sp.feols.
 ]
@@ -803,8 +809,10 @@ _NON_EXECUTABLE_TOOLS = frozenset(
     {
         # postestimation — need a fitted ``result``
         "margins",
+        "marginsplot",
         "contrast",
         "test",
+        "lincom",
         "wild_cluster_bootstrap",
         "mi_estimate",
         # setup / declaration — no estimator target (no-op)
@@ -1149,10 +1157,11 @@ def _code_args_agree(payload, *, allow_postest=False):
     # args has no ``result`` key (the agent pipes the previous estimator's
     # result_id in). Match either positional ``_pos0`` or keyword ``result``.
     if allow_postest:
-        if code_args.get("_pos0") == "result":
-            code_args.pop("_pos0", None)
-        if code_args.get("result") == "result":
-            code_args.pop("result", None)
+        # The piped-in fit is the literal ``result`` in whichever parameter
+        # takes it (``result`` for margins / test, ``margins_df`` for
+        # marginsplot, or an unnamed positional).
+        for key in [k for k, v in code_args.items() if v == "result"]:
+            code_args.pop(key)
     for k, v in code_args.items():
         if k.startswith("_pos"):
             # Extra positional with no parameter name — can't match. Skip
@@ -1195,7 +1204,15 @@ def test_python_code_and_arguments_describe_the_same_call(command, channel):
     out = translate(command)
     if not out.get("ok"):
         return
-    POSTEST = {"margins", "contrast", "test", "wild_cluster_bootstrap", "mi_estimate"}
+    POSTEST = {
+        "margins",
+        "marginsplot",
+        "contrast",
+        "test",
+        "lincom",
+        "wild_cluster_bootstrap",
+        "mi_estimate",
+    }
     allow = out.get("tool") in POSTEST
     _code_args_agree(out, allow_postest=allow)
 
@@ -1222,7 +1239,15 @@ def test_python_code_and_arguments_describe_the_same_call(command, channel):
 # structural-only so it runs in microseconds across every command.
 
 
-POSTEST_TOOLS = {"margins", "contrast", "test", "wild_cluster_bootstrap", "mi_estimate"}
+POSTEST_TOOLS = {
+    "margins",
+    "marginsplot",
+    "contrast",
+    "test",
+    "lincom",
+    "wild_cluster_bootstrap",
+    "mi_estimate",
+}
 
 
 def _channel_dispatchable(out, df):

@@ -136,7 +136,10 @@ class TestFractionalResponse:
                 result.std_errors["x1"],
                 result.diagnostics["aic"],
             ],
-            [0.267214, 0.142335, 0.027082, 395.43810740010014],
+            # The robust SE carries Stata's N/(N-1) factor (MIGRATION.md
+            # #stata-vce-grammar): 0.027082 was unscaled HC0, which
+            # vce="hc0" still returns.
+            [0.267214, 0.142335, 0.027128, 395.43810740010014],
             atol=5e-7,
         )
 

@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import AssumptionWarning, DataInsufficient, MethodIncompatibility
 from ._absorbing import AbsorbingCheck, check_absorbing
@@ -222,6 +223,7 @@ def _require_int_at_least(value: Any, *, argument: str, minimum: int) -> int:
     return out
 
 
+@accepts_aliases(_strict=True, unit="id", controls="covariates")
 def did(
     data: pd.DataFrame,
     y: str,

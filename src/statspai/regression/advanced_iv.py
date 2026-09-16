@@ -213,26 +213,42 @@ def liml(
     except np.linalg.LinAlgError:
         XtX_inv = np.linalg.pinv(X_all.T @ I_kMz @ X_all)
 
-    # k-class FOC X' (I − κ M_Z) (y − X β) = 0 implies the score per
-    # observation is (AX)_i u_i with AX = (I − κ M_Z) X. Meat must use
-    # AX, not raw X — the same projection-in-meat invariant as the 2SLS
-    # path in regression/iv.py::_k_class_fit (fixed in v1.6.4). Matches
-    # Cameron–Miller (2015), Stata ivregress, and linearmodels.IVLIML.
-    AX = I_kMz @ X_all
-    if cluster is not None:
+    # Stata grammar: vce='robust' / True / 'cluster firm'.
+    from ..core._vcov_spec import parse_se_request
+
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function="liml",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
+    # Sandwich meat: the instrument-projected regressors P_Z X, for every
+    # k-class estimator. This is what Stata's ``ivregress liml`` and
+    # ``linearmodels.IVLIML`` compute (bit-for-bit against Stata 18 in
+    # tests/reference_parity/test_vce_grammar_stata_parity.py). The k-class
+    # first-order-condition form (I - kappa M_Z) X used here before differs
+    # by (kappa - 1) M_Z X, which is asymptotically negligible and zero at
+    # kappa = 1 (2SLS), but moved robust / cluster SEs ~0.05% away from both
+    # references. Bread and meat use the small-sample convention of
+    # ``ivregress ..., small``, like the classical SE below.
+    PzX = Pz @ X_all
+    scores = PzX * resid[:, None]
+    if robust == "cluster":
         clusters = df[cluster].values
-        unique_cl = np.unique(clusters)
+        unique_cl, codes = np.unique(clusters, return_inverse=True)
         n_cl = len(unique_cl)
-        meat = np.zeros((k, k))
-        for cl in unique_cl:
-            cl_mask = clusters == cl
-            score = AX[cl_mask].T @ resid[cl_mask]
-            meat += np.outer(score, score)
+        summed = np.zeros((n_cl, k))
+        np.add.at(summed, codes, scores)
         correction = n_cl / (n_cl - 1) * (n - 1) / (n - k)
-        var_cov = correction * XtX_inv @ meat @ XtX_inv
-    elif robust != "nonrobust":
-        Omega = np.diag(resid**2)
-        var_cov = XtX_inv @ (AX.T @ Omega @ AX) @ XtX_inv
+        var_cov = correction * XtX_inv @ (summed.T @ summed) @ XtX_inv
+    elif robust in ("robust", "hc0", "hc1"):
+        var_cov = XtX_inv @ (scores.T @ scores) @ XtX_inv
+        if robust != "hc0":
+            # ``vce(robust) small`` = N/(N-K); sp.liml(robust=...) used to
+            # return the unscaled HC0 while sp.iv(method='liml') returned HC1.
+            var_cov = var_cov * (n / (n - k))
     else:
         sigma2 = np.sum(resid**2) / (n - k)
         var_cov = sigma2 * XtX_inv

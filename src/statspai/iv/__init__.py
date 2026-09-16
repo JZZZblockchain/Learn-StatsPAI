@@ -96,6 +96,7 @@ True
 from __future__ import annotations
 
 import importlib
+import inspect as _inspect
 import sys
 from types import ModuleType
 from typing import Any, Dict, Optional
@@ -782,6 +783,9 @@ class _CallableIVModule(ModuleType):
 # before this line still works — Python attribute lookups go through the
 # instance's ``__class__`` at access time, not at import time.
 sys.modules[__name__].__class__ = _CallableIVModule
+# ``inspect.signature(sp.iv)`` / ``help(sp.iv)`` would otherwise report
+# ``(*args, **kwargs)``; expose the dispatcher's real parameters.
+sys.modules[__name__].__signature__ = _inspect.signature(_dispatch)
 
 
 __all__ = [

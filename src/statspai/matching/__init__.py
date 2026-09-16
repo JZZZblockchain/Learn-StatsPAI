@@ -40,6 +40,7 @@ Press. [@rosenbaum1983central]
 
 from typing import Any, Dict, List, Optional
 
+from .._aliases import accepts_aliases
 from ..exceptions import MethodIncompatibility
 from .cbps import cbps
 from .ebalance import ebalance
@@ -163,6 +164,7 @@ _MATCH_METHOD_ALIASES: Dict[str, str] = {
 }
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def match(
     data: Any = None,
     y: Optional[str] = None,

@@ -33,6 +33,49 @@ The canonical spellings, ratified 2026-06-30:
 | Clustering variable | **`cluster`** | `cluster_var` | `clusters` (plural) is reserved for multiway helpers that take a *list*. |
 | Observation weights | **`weights`** | `weight`, `sample_weight` | `w`/`W` are **not** weights (spatial weight matrix / GMM weighting matrix). |
 | Input dataframe | **`data`** | `df`, `frame` | Already near-universal (486 uses). |
+| Panel identifier | **`id`** | `unit`, `i`, `group` (where it means the unit) | Ratified 2026-09-15. Matches `sp.did(id=)` and Stata `xtset id`. |
+| Time / period | **`time`** | `t` | |
+| Adjustment covariates | **`covariates`** | `controls`, `covs`, `X`, `x` (where it means covariates) | Ratified 2026-09-15. In the RD family `x` stays the running variable. |
+| Adoption cohort | **`first_treat`** | `g`, `cohort` | The period a unit is first treated — not a 0/1 indicator. |
+
+On the causal entry points the native spelling (which mirrors the reference
+package: `i`/`t`/`g`/`x` in R `did`, `group`/`controls` in Stata
+`did_imputation`, `x`/`c`/`covs` in `rdrobust`) stays in the signature, and the
+house-style spelling is accepted as well. Both spellings in one call raise
+`TypeError`; a misspelt keyword names the closest real parameter. The accepted
+aliases of any function are listed by `sp.describe_function(name)["aliases"]`.
+
+```python
+sp.callaway_santanna(df, y="y", id="county", time="year", first_treat="g0",
+                     covariates=["lpop"])       # == i=, t=, g=, x=
+sp.bjs(df, y="y", id="county", time="year", first_treat="g0")  # == group=
+sp.rdrobust(df, y="vote", running="margin", cutoff=0)          # == x=, c=
+sp.psm(df, y="earn", treat="train", covariates=["age", "educ"])  # == d=, X=
+```
+
+### Where to start, and running Stata lines as they are
+
+`sp.list_functions(core=True)` lists the ~30 everyday verbs (regression,
+`test` / `lincom` / `margins`, `regtable`, and the DiD / RD / synth /
+matching / DML headliners) — the rest of the 1,100+ names are specialised.
+
+`sp.stata` runs the Stata lines you already know and returns the same object
+as the equivalent `sp.*` call:
+
+```python
+fit = sp.stata("regress y x1 x2, vce(cluster firm)", data=df)
+sp.stata("""
+    logit yb x1 x2, vce(robust)
+    margins, dydx(*)
+""", data=df)                          # margins of the logit above
+sp.stata("lincom x1 - x2", result=fit)
+```
+
+A line whose translation is incomplete raises rather than running a different
+model — `xtreg y x, fe` needs the panel id from an earlier `xtset`, so it
+raises with that note instead of fitting pooled OLS; write it as
+`sp.feols("y ~ x | id", data=df)`. `sp.from_stata(line)` shows the
+translation without running it.
 
 ### False friends (deliberately *not* unified)
 

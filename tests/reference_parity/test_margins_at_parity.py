@@ -47,9 +47,26 @@ def test_margins_match_linear_prediction(fitted):
         assert got[v] == pytest.approx(expected, abs=1e-10)
 
 
-def test_symmetric_grid_symmetric_se(fitted):
-    _, _, tab = fitted
-    se = {float(row["x"]): float(row["se"]) for _, row in tab.iterrows()}
-    # se at x=-1 and x=+1 are equal (symmetry about the mean); center is smallest
-    assert se[-1.0] == pytest.approx(se[1.0], abs=1e-10)
-    assert se[0.0] < se[1.0]
+def test_se_is_the_delta_method_closed_form(fitted):
+    """se(margin at x=v) = sqrt(g' V g), g = (1, v, mean z), V the full vcov.
+
+    This test used to assert se(x=-1) == se(x=+1). That holds only when
+    cov(b0, b_x) is ignored -- which the old diagonal-covariance fallback
+    did. The variance is symmetric about mean(x) (here -0.015), not about 0.
+    """
+    df, res, tab = fitted
+    V = np.asarray(res.data_info["var_cov"], dtype=float)
+    zbar = df["z"].mean()
+    for v in GRID:
+        g = np.array([1.0, v, zbar])
+        got = float(tab.loc[tab["x"] == v, "se"].iloc[0])
+        assert got == pytest.approx(float(np.sqrt(g @ V @ g)), rel=1e-12)
+
+
+def test_se_symmetric_about_the_mean_of_x(fitted):
+    df, res, _ = fitted
+    xbar = float(df["x"].mean())
+    tab = sp.margins_at(res, data=df, at={"x": [xbar - 1.0, xbar, xbar + 1.0]})
+    se = tab["se"].to_numpy()
+    assert se[0] == pytest.approx(se[2], rel=1e-10)
+    assert se[1] < se[0]

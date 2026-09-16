@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import (
     AssumptionWarning,
@@ -275,6 +276,9 @@ def _rdrobust_bayes_engine(
 # ======================================================================
 
 
+@accepts_aliases(
+    _strict=True, running="x", cutoff="c", covariates="covs", controls="covs"
+)
 def rdrobust(
     data: pd.DataFrame,
     y: str,
@@ -1340,6 +1344,9 @@ def _delegate_to_cct_rdrobust(
     return res
 
 
+@accepts_aliases(
+    _strict=True, running="x", cutoff="c", covariates="covs", controls="covs"
+)
 def rdplot(
     data: pd.DataFrame,
     y: str,

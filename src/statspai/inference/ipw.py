@@ -31,9 +31,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def ipw(
     data: pd.DataFrame,
     y: str,

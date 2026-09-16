@@ -184,8 +184,11 @@ def test_documented_keywords_are_real_parameters():
         params = sig.parameters
         if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
             continue  # **kwargs absorbs anything
+        # House-style spellings accepted at call time by @accepts_aliases
+        # (``id=`` / ``running=`` ...) are real keywords, not signature params.
+        aliases = getattr(getattr(sp, node.func.attr), "__statspai_aliases__", {})
         for kw in node.keywords:
-            if kw.arg is not None and kw.arg not in params:
+            if kw.arg is not None and kw.arg not in params and kw.arg not in aliases:
                 bad.append(f"{guide}: {src}\n    -> no parameter {kw.arg!r}")
     assert not bad, "documented keyword does not exist:\n  " + "\n  ".join(bad)
 

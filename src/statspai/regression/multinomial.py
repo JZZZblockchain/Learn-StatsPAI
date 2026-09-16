@@ -34,6 +34,7 @@ from scipy import optimize, stats
 from .._aliases import accepts_aliases
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
+from ..exceptions import MethodIncompatibility
 from ._optim_helpers import robust_convergence
 
 LinkFunc = Callable[[np.ndarray], np.ndarray]
@@ -100,64 +101,34 @@ def _softmax(Z: np.ndarray) -> np.ndarray:
     return _as_float_array(exp_Z / exp_Z.sum(axis=1, keepdims=True))
 
 
-def _sandwich_se(score_i: np.ndarray, H_inv: np.ndarray) -> np.ndarray:
-    """
-    Robust (Huber-White) sandwich SE.
-
-    Parameters
-    ----------
-    score_i : ndarray (n, p)
-        Per-observation score (gradient) vectors.
-    H_inv : ndarray (p, p)
-        Inverse of the Hessian (negative expected information).
-
-    Returns
-    -------
-    se : ndarray (p,)
-    """
-    from ..core._vcov import sandwich_vcov
-
-    V = sandwich_vcov(H_inv, score_i, correction="none")
-    return _as_float_array(np.sqrt(np.maximum(np.diag(V), 1e-20)))
+#: SE kinds the multinomial / ordered / conditional logit family implements.
+_SE_KINDS = ("nonrobust", "robust", "hc0", "hc1", "cluster")
 
 
-def _clustered_se(
-    score_i: np.ndarray,
-    H_inv: np.ndarray,
-    clusters: np.ndarray,
-) -> np.ndarray:
-    """
-    Clustered sandwich SE (Cameron & Miller, 2015).
+def _parse_se(robust: Any, cluster: Any, function: str) -> Tuple[str, Any]:
+    """Resolve ``robust=`` / ``cluster=`` through the shared Stata grammar."""
+    from ..core._vcov_spec import parse_se_request
 
-    Correction G/(G-1) * (n-1)/(n-p) = core._vcov ``'cr1'`` factor; bread is
-    the MLE inverse-Hessian. Byte-identical for G >= 2.
-
-    Parameters
-    ----------
-    score_i : ndarray (n, p)
-    H_inv : ndarray (p, p)
-    clusters : ndarray (n,)
-    """
-    from ..core._vcov import sandwich_vcov
-
-    V = sandwich_vcov(H_inv, score_i, clusters=clusters, correction="cr1")
-    return _as_float_array(np.sqrt(np.maximum(np.diag(V), 1e-20)))
+    req = parse_se_request(robust, cluster, function=function, supported=_SE_KINDS)
+    return req.kind, req.cluster
 
 
 def _compute_se(
     score_i: np.ndarray,
     H_inv: np.ndarray,
-    robust: str,
+    kind: str,
     cluster_vals: Optional[np.ndarray],
 ) -> np.ndarray:
-    """Dispatch to the right SE estimator."""
-    if cluster_vals is not None:
-        return _clustered_se(score_i, H_inv, cluster_vals)
-    elif robust in ("HC1", "robust", "hc1"):
-        return _sandwich_se(score_i, H_inv)
-    else:
-        # Model-based SE from Hessian
-        return _as_float_array(np.sqrt(np.maximum(np.diag(H_inv), 1e-20)))
+    """Standard errors for a canonical SE ``kind`` under Stata's ML conventions.
+
+    ``H_inv`` is the inverse observed information. ``vce(robust)`` carries
+    N/(N-1) and ``vce(cluster)`` G/(G-1) only (see ``core._vcov.ml_vcov``);
+    the cluster factor used to be the regress-family G/(G-1)*(N-1)/(N-K).
+    """
+    from ..core._vcov import ml_vcov
+
+    V = ml_vcov(H_inv, score_i, kind=kind, clusters=cluster_vals)
+    return _as_float_array(np.sqrt(np.maximum(np.diag(V), 1e-20)))
 
 
 def _ordered_logit_cdf(z: np.ndarray) -> np.ndarray:
@@ -264,6 +235,7 @@ def mlogit(
     mcfadden1974conditional
     """
     # --- Parse inputs ---
+    robust, cluster = _parse_se(robust, cluster, "mlogit")
     y_name, x_names = _parse_inputs(formula, data, y, x)
     extra = [c for c in [cluster] if c]
     Y_raw, X, df, var_names = _build_matrices(data, y_name, x_names, extra_cols=extra)
@@ -311,15 +283,6 @@ def mlogit(
             grad[idx * k : (idx + 1) * k] = X.T @ R[:, j]
         return _as_float_array(-grad)
 
-    def score_obs(theta: np.ndarray) -> np.ndarray:
-        """Per-observation score, (n, n_params)."""
-        P = _probs(theta)
-        R = Y_oh - P
-        S = np.zeros((n, n_params))
-        for idx, j in enumerate(non_base):
-            S[:, idx * k : (idx + 1) * k] = R[:, [j]] * X
-        return _as_float_array(S)
-
     # --- Optimise ---
     theta0 = np.zeros(n_params)
     res = optimize.minimize(
@@ -329,8 +292,24 @@ def mlogit(
         method="BFGS",
         options={"maxiter": maxiter, "gtol": tol},
     )
-    theta_hat = _as_float_array(res.x)
-    ll = float(-res.fun)
+
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation log-likelihood; complex-step safe."""
+        V = np.zeros((n, J), dtype=np.result_type(theta, float))
+        for idx, j in enumerate(non_base):
+            V[:, j] = X @ theta[idx * k : (idx + 1) * k]
+        shift = np.max(V.real, axis=1, keepdims=True)
+        log_denominator = shift[:, 0] + np.log(np.sum(np.exp(V - shift), axis=1))
+        return V[np.arange(n), Y_idx] - log_denominator
+
+    # Exact Newton steps from the BFGS solution; the same call returns the
+    # observed information and per-observation scores by complex-step
+    # differentiation. The numerical Hessian of the total log-likelihood used
+    # before (BFGS ``hess_inv`` before that) carried ~1e-5 relative error.
+    from ._optim_helpers import inverse_information, ml_newton_polish
+
+    theta_hat, S_obs, H, _ = ml_newton_polish(obs_loglik, _as_float_array(res.x))
+    ll = float(np.sum(obs_loglik(theta_hat)))
 
     # Null model log-likelihood (intercept only => equal probs)
     freq = np.array([np.sum(Y_idx == j) for j in range(J)]) / n
@@ -341,15 +320,7 @@ def mlogit(
     bic = -2 * ll + np.log(n) * n_params
 
     # --- Standard errors ---
-    # Use the numerical observed-information matrix at theta_hat
-    # rather than `result.hess_inv` from BFGS, which is the quasi-
-    # Newton update for driving the optimiser, not a reliable
-    # Hessian estimate (parity finding #10 — 2026-05-28).
-    from ._optim_helpers import hessian_cov
-
-    H_inv = _as_float_array(hessian_cov(neg_loglik, theta_hat))
-
-    S_obs = score_obs(theta_hat)
+    H_inv = _as_float_array(inverse_information(H))
     se = _compute_se(S_obs, H_inv, robust, cluster_vals)
 
     # --- Build results ---
@@ -521,6 +492,8 @@ def mlogit(
         "n_obs": n,
         "n_params": n_params,
         "df_resid": n - n_params,
+        # Likelihood-based: z / chi2 inference, as Stata's mlogit / ologit.
+        "inference": "z",
     }
 
     diagnostics = {
@@ -577,6 +550,7 @@ def _ordered_model(
     link : str
         ``"logit"`` or ``"probit"``.
     """
+    robust, cluster = _parse_se(robust, cluster, f"o{link}")
     y_name, x_names = _parse_inputs(formula, data, y, x)
     extra = [c for c in [cluster] if c]
     Y_raw, X_no_const, df, _ = _build_matrices(
@@ -645,78 +619,6 @@ def _ordered_model(
         ll = np.sum(np.log(P[np.arange(n), Y_idx]))
         return float(-ll)
 
-    def score_obs(theta: np.ndarray) -> np.ndarray:
-        """Per-observation gradient, (n, n_params)."""
-        beta, kappa = _unpack(theta)
-        xb = X_no_const @ beta
-        P = _cat_probs(beta, kappa)
-
-        S = np.zeros((n, n_params))
-
-        for i_j in range(J):
-            mask = Y_idx == i_j
-            if not mask.any():
-                continue
-            p_i = P[mask, i_j]  # (n_j,)
-
-            # d log P(Y=j) / d beta = (-f(kappa_{j}-xb) + f(kappa_{j-1}-xb)) / P(Y=j) *
-            # (-x)
-            # boundary: kappa_{-1} = -inf => f=0, kappa_{J-1+1} = +inf => f=0
-            if i_j < n_cuts:
-                f_upper = pdf(kappa[i_j] - xb[mask])
-            else:
-                f_upper = np.zeros(mask.sum())
-            if i_j > 0:
-                f_lower = pdf(kappa[i_j - 1] - xb[mask])
-            else:
-                f_lower = np.zeros(mask.sum())
-
-            # d/d beta
-            dbeta = ((f_lower - f_upper) / p_i)[:, np.newaxis] * X_no_const[mask]
-            S[mask, :k] = dbeta
-
-            # d/d kappa_j (chain rule through delta parameterisation)
-            for jj in range(n_cuts):
-                if jj == i_j:
-                    dkappa = f_upper / p_i
-                elif jj == i_j - 1:
-                    dkappa = -f_lower / p_i
-                else:
-                    dkappa = np.zeros(mask.sum())
-                # d kappa_jj / d delta
-                # kappa_jj depends on delta_0..delta_jj
-                # d kappa_jj / d delta_m = exp(delta_m) for m <= jj, m >= 1
-                # d kappa_jj / d delta_0 = 1 (only for jj >= 0)
-                # Actually: d kappa_jj / d delta_0 = 1 for all jj >= 0
-                #           d kappa_jj / d delta_m = exp(delta_m) for 1 <= m <= jj
-                # We accumulate: S[:, k+m] += dkappa * d_kappa_jj/d_delta_m
-                # delta_0 contributes to all kappa >= 0
-                S[mask, k] += dkappa * 1.0  # d kappa_jj / d delta_0 always 1 if jj >= 0
-                # But wait: only if jj is this cutpoint
-                # Let me redo this more carefully.
-                pass
-
-        # The per-observation gradient via finite differences is cleaner here
-        # given the delta parameterisation. Let's use autograd-style numerical approach.
-        # Actually, let's compute analytically.
-        return _score_obs_numerical(theta)
-
-    def _score_obs_numerical(theta: np.ndarray, eps: float = 1e-6) -> np.ndarray:
-        """Numerical per-observation gradient."""
-        S = np.zeros((n, n_params))
-        beta, kappa = _unpack(theta)
-        P = _cat_probs(beta, kappa)
-        ll_base = np.log(P[np.arange(n), Y_idx])
-
-        for p_idx in range(n_params):
-            theta_p = theta.copy()
-            theta_p[p_idx] += eps
-            beta_p, kappa_p = _unpack(theta_p)
-            P_p = _cat_probs(beta_p, kappa_p)
-            ll_p = np.log(P_p[np.arange(n), Y_idx])
-            S[:, p_idx] = (ll_p - ll_base) / eps
-        return _as_float_array(S)
-
     # --- Initial values ---
     # Simple: beta = 0, cutpoints equally spaced
     freq_cum = np.cumsum([np.mean(Y_idx == j) for j in range(J)])
@@ -742,9 +644,51 @@ def _ordered_model(
         method="BFGS",
         options={"maxiter": maxiter, "gtol": tol},
     )
-    theta_hat = _as_float_array(res.x)
+
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation log-likelihood at (beta, delta); complex-step safe."""
+        from scipy import special
+
+        beta = theta[:k]
+        delta = theta[k:]
+        cuts = [delta[0]]
+        for j in range(1, n_cuts):
+            cuts.append(cuts[-1] + np.exp(delta[j]))
+        xb = X_no_const @ beta
+        if link == "logit":
+
+            def log_cdf(z: np.ndarray) -> np.ndarray:
+                return -np.log1p(np.exp(-z))
+
+            def cdf_c(z: np.ndarray) -> np.ndarray:
+                return 1.0 / (1.0 + np.exp(-z))
+
+        else:
+            log_cdf, cdf_c = special.log_ndtr, special.ndtr
+        out = np.empty(n, dtype=np.result_type(theta, float))
+        for j in range(J):
+            m = Y_idx == j
+            if not m.any():
+                continue
+            if j == 0:
+                out[m] = log_cdf(cuts[0] - xb[m])
+            elif j == n_cuts:
+                out[m] = log_cdf(xb[m] - cuts[-1])
+            else:
+                out[m] = np.log(cdf_c(cuts[j] - xb[m]) - cdf_c(cuts[j - 1] - xb[m]))
+        return out
+
+    # Exact Newton steps from the BFGS solution; the same call returns the
+    # observed information and per-observation scores by complex-step
+    # differentiation, replacing a second-difference Hessian and a forward-
+    # difference score that carried ~1e-6 to 1e-5 relative error.
+    from ._optim_helpers import inverse_information, ml_newton_polish
+
+    theta_hat, S_obs_exact, H_exact, _ = ml_newton_polish(
+        obs_loglik, _as_float_array(res.x)
+    )
     beta_hat, kappa_hat = _unpack(theta_hat)
-    ll = float(-res.fun)
+    ll = float(np.sum(obs_loglik(theta_hat)))
 
     # Null model (beta=0, only cutpoints)
     def neg_loglik_null(delta: np.ndarray) -> float:
@@ -764,15 +708,11 @@ def _ordered_model(
     bic = -2 * ll + np.log(n) * n_params
 
     # --- Standard errors ---
-    # Numerical observed-information matrix (see explanation in
-    # mlogit above). Replaces BFGS `hess_inv` which produced the
-    # 26 % SE inflation on beta_x flagged in parity finding #11.
-    from ._optim_helpers import hessian_cov
-
-    H_inv = _as_float_array(hessian_cov(neg_loglik, theta_hat))
-
-    S_obs = _score_obs_numerical(theta_hat)
-    se_all = _compute_se(S_obs, H_inv, robust, cluster_vals)
+    # Observed information and scores from the complex-step derivatives
+    # above (BFGS ``hess_inv`` once inflated beta_x SEs by 26%, parity
+    # finding #11; the numerical Hessian that replaced it carried ~1e-6).
+    H_inv = _as_float_array(inverse_information(H_exact))
+    se_all = _compute_se(S_obs_exact, H_inv, robust, cluster_vals)
 
     # Delta-method for cutpoints: kappa_j SE from delta SE
     # We report beta SE directly and kappa SE via Jacobian
@@ -931,6 +871,8 @@ def _ordered_model(
         "n_obs": n,
         "n_params": n_params,
         "df_resid": n - n_params,
+        # Likelihood-based: z / chi2 inference, as Stata's mlogit / ologit.
+        "inference": "z",
     }
 
     diagnostics = {
@@ -1210,6 +1152,7 @@ def clogit(
         raise ValueError("'group' must be specified for conditional logit.")
     if data is None:
         raise ValueError("'data' must be provided.")
+    robust, cluster = _parse_se(robust, cluster, "clogit")
 
     y_name, x_names = _parse_inputs(formula, data, y, x)
     group_name = group
@@ -1323,24 +1266,43 @@ def clogit(
     bic = -2 * ll + np.log(n_groups_valid) * k
 
     # --- Standard errors ---
-    if hasattr(res, "hess_inv"):
-        H_inv = _as_float_array(res.hess_inv)
-    else:
-        H_inv = np.eye(k)
+    # Inverse *observed* information, analytic: for the conditional logit
+    # -d2 ll = sum_g sum_j p_gj (x_gj - xbar_g)(x_gj - xbar_g)', with
+    # xbar_g the probability-weighted group mean. This replaces BFGS
+    # ``hess_inv``, a quasi-Newton approximation built from the optimisation
+    # path rather than the information matrix.
+    info = np.zeros((k, k))
+    for g in groups_list:
+        Xg = X[group_indices[g]]
+        xb = Xg @ beta_hat
+        p = np.exp(xb - xb.max())
+        p = p / p.sum()
+        centred = Xg - p @ Xg
+        info += (centred * p[:, None]).T @ centred
+    try:
+        H_inv = _as_float_array(np.linalg.inv(info))
+    except np.linalg.LinAlgError:
+        H_inv = _as_float_array(np.linalg.pinv(info))
 
     S_obs = score_obs_clogit(beta_hat)
 
-    # For clustered SE in clogit, cluster at the group level by default
+    # The clogit score is a per-*group* contribution, so clusters are mapped
+    # to groups (groups must nest within clusters, as in Stata).
+    cluster_group = None
     if cluster_vals is not None:
-        # Map cluster to group-level
         cluster_group = np.array(
             [cluster_vals[group_indices[g][0]] for g in groups_list]
         )
-        se = _clustered_se(S_obs, H_inv, cluster_group)
-    elif robust in ("HC1", "robust", "hc1"):
-        se = _sandwich_se(S_obs, H_inv)
-    else:
-        se = _as_float_array(np.sqrt(np.maximum(np.diag(H_inv), 1e-20)))
+        for g in groups_list:
+            if len(pd.unique(cluster_vals[group_indices[g]])) > 1:
+                raise MethodIncompatibility(
+                    f"clogit: group {g!r} spans more than one {cluster!r} "
+                    "cluster; groups must be nested within clusters.",
+                    recovery_hint=(
+                        "Cluster on a variable that is constant within group."
+                    ),
+                )
+    se = _compute_se(S_obs, H_inv, robust, cluster_group)
 
     # --- Predicted choice probabilities ---
     pred_probs = np.zeros(n)
@@ -1374,6 +1336,8 @@ def clogit(
         "n_obs": n,
         "n_params": k,
         "df_resid": n_groups_valid - k,
+        # Likelihood-based: z / chi2 inference, as Stata's clogit.
+        "inference": "z",
     }
 
     diagnostics = {

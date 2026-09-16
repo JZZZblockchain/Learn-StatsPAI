@@ -2,12 +2,14 @@
 Tests for post-estimation tools: margins, test, lincom, tab.
 """
 
-import pytest
 import os
 import tempfile
+
 import numpy as np
 import pandas as pd
-from statspai import regress, margins, marginsplot, test, lincom, tab
+import pytest
+
+from statspai import lincom, margins, marginsplot, regress, tab, test
 
 
 @pytest.fixture
@@ -104,7 +106,13 @@ class TestHypothesisTest:
         assert result["pvalue"] < 0.05
 
     def test_true_restriction(self):
-        """When restriction is true, should not reject."""
+        """A true restriction: the Wald statistic is the closed form, no 1% rejection.
+
+        This used to assert ``pvalue > 0.05``, which passed only because the
+        old implementation dropped cov(b1, b2) (p = 0.0500 on this seed). With
+        the full covariance the correct p-value is 0.0415 -- an ordinary draw
+        under a true null -- so the check is now on the statistic itself.
+        """
         np.random.seed(42)
         n = 500
         x1 = np.random.normal(0, 1, n)
@@ -114,8 +122,13 @@ class TestHypothesisTest:
         result_ols = regress("y ~ x1 + x2", data=df)
 
         t = test(result_ols, "x1 = x2")
-        # Should NOT reject (both coefficients ≈ 2)
-        assert t["pvalue"] > 0.05
+        X = np.column_stack([np.ones(n), x1, x2])
+        b = np.linalg.lstsq(X, y, rcond=None)[0]
+        e = y - X @ b
+        V = (e @ e / (n - 3)) * np.linalg.inv(X.T @ X)
+        closed_form = (b[1] - b[2]) ** 2 / (V[1, 1] + V[2, 2] - 2 * V[1, 2])
+        assert t["statistic"] == pytest.approx(closed_form, rel=1e-10)
+        assert t["pvalue"] > 0.01
 
 
 # ================================================================

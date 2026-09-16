@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import AssumptionWarning
 from ._core import drop_unusable_rows as _drop_unusable_rows
@@ -74,6 +75,7 @@ def _did2x2_bayes_engine(
     )
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def did_2x2(
     data: pd.DataFrame,
     y: str,

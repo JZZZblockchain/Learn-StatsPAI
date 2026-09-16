@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ._core import drop_unusable_rows as _drop_unusable_rows
 from ._core import fe_dof_not_nested as _fe_dof_not_nested
@@ -219,6 +220,15 @@ def _resolve_control_cohort(
     return mask, f"{g} in {wanted}"
 
 
+@accepts_aliases(
+    _strict=True,
+    id="i",
+    unit="i",
+    time="t",
+    first_treat="g",
+    cohort="g",
+    controls="covariates",
+)
 def sun_abraham(
     data: pd.DataFrame,
     y: str,

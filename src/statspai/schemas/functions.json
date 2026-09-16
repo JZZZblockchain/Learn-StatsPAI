@@ -46,6 +46,11 @@
     "name": "iv",
     "parameters": {
       "properties": {
+        "augmented_diagnostics": {
+          "default": true,
+          "description": "When the method returns EconometricResults, attach the Kleibergen-Paap rk statistic, Sanderson-Windmeijer per-endogenous F and Olea-Pflueger effective F to result.diagnostics.",
+          "type": "boolean"
+        },
         "cluster": {
           "description": "Column name for cluster-robust SEs",
           "type": "string"
@@ -24037,6 +24042,30 @@
     }
   },
   {
+    "description": "Execute Stata estimation / post-estimation commands on a DataFrame.",
+    "name": "stata",
+    "parameters": {
+      "properties": {
+        "commands": {
+          "description": "One Stata command, or several separated by newlines or ``;``. ``*`` and ``//`` comments are ignored. Post-estimation commands (``margins``, ``test``, ``lincom`` ...) apply to the most recent estimation result.",
+          "type": "string"
+        },
+        "data": {
+          "description": "The dataset estimation commands run on. Required unless every command is a post-estimation command applied to ``result``.",
+          "type": "string"
+        },
+        "result": {
+          "description": "The estimation result that leading post-estimation commands apply to.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commands"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Translate one R / fixest / felm call to a StatsPAI tool-call payload.",
     "name": "from_r",
     "parameters": {
@@ -24903,6 +24932,15 @@
           "description": "Model formula (e.g. ``\"y ~ x1 + x2\"``).",
           "type": "string"
         },
+        "information": {
+          "default": "observed",
+          "description": "Information matrix used as the variance bread. ``'observed'`` is Stata's ``glm`` default ``vce(oim)`` (and the bread of its robust / cluster sandwiches); ``'expected'`` is the IRLS Fisher information that R's ``glm`` reports. They coincide for canonical links (logit binomial, log Poisson, identity Gaussian) and differ otherwise.",
+          "enum": [
+            "observed",
+            "expected"
+          ],
+          "type": "string"
+        },
         "link": {
           "description": "Link function. If ``None`` the canonical link for the chosen family is used. Options: ``\"identity\"``, ``\"log\"``, ``\"logit\"``, ``\"probit\"``, ``\"inverse\"``, ``\"cloglog\"``, ``\"power\"``, ``\"sqrt\"``.",
           "type": "string"
@@ -25509,11 +25547,11 @@
     "parameters": {
       "properties": {
         "hypothesis": {
-          "description": "Hypothesis specification. Examples: - ``\"x1 = 0\"`` -- test if beta_x1 = 0 - ``\"x1 = x2\"`` -- test if beta_x1 = beta_x2 - ``\"x1 = x2 = 0\"`` -- joint test - ``\"x1 + x2 = 1\"`` -- linear restriction",
+          "description": "Hypothesis specification (Stata ``test`` syntax). Examples: - ``\"x1 = 0\"`` -- beta_x1 = 0 - ``\"x1 = x2\"`` -- beta_x1 = beta_x2 - ``\"x1 = x2 = 0\"`` -- joint: beta_x1 = beta_x2 and beta_x2 = 0 - ``\"x1 x2\"`` -- joint: beta_x1 = 0 and beta_x2 = 0 - ``\"(x1 = 0) (x2 + x3 = 1)\"`` -- grouped restrictions - ``\"x1 - 2*x2 = 0\"`` -- linear restriction; ``_cons`` names the intercept whatever the estimator calls it.",
           "type": "string"
         },
         "result": {
-          "description": "Fitted model with ``.params`` and ``.std_errors``.",
+          "description": "Fitted model with ``.params`` and ``.std_errors``; restrictions that involve several coefficients also need its covariance matrix.",
           "type": "string"
         }
       },
@@ -25535,7 +25573,7 @@
           "type": "number"
         },
         "expression": {
-          "description": "Linear combination. Examples: - ``\"x1 + x2\"`` -- beta_x1 + beta_x2 - ``\"x1 - x2\"`` -- beta_x1 - beta_x2 - ``\"2*x1 + 3*x2\"`` -- 2*beta_x1 + 3*beta_x2",
+          "description": "Linear combination (Stata ``lincom`` syntax). Examples: - ``\"x1 + x2\"`` -- beta_x1 + beta_x2 - ``\"x1 - x2\"`` -- beta_x1 - beta_x2 - ``\"2*x1 + 3*x2\"`` -- 2*beta_x1 + 3*beta_x2 - ``\"_cons + x1\"`` -- intercept plus slope",
           "type": "string"
         },
         "result": {
@@ -33854,6 +33892,11 @@
         "category": {
           "description": "Limit to one category (``\"causal\"``, ``\"panel\"`` ...).",
           "type": "string"
+        },
+        "core": {
+          "default": false,
+          "description": "Return only :data:`CORE_FUNCTIONS`, the everyday estimation and post-estimation verbs, in their curated order (the other filters still apply).",
+          "type": "boolean"
         },
         "stability": {
           "description": "Limit to one tier -- one of :data:`STABILITY_TIERS` (``\"stable\"`` / ``\"experimental\"`` / ``\"deprecated\"``). This is the API-lifecycle filter.",

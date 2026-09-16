@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import ConvergenceWarning, DataInsufficient, MethodIncompatibility
 from ._core import cohort_share_context as _cohort_share_context
@@ -191,6 +192,16 @@ def _require_columns(
 # ======================================================================
 
 
+@accepts_aliases(
+    _strict=True,
+    id="i",
+    unit="i",
+    time="t",
+    first_treat="g",
+    cohort="g",
+    covariates="x",
+    controls="x",
+)
 def callaway_santanna(
     data: pd.DataFrame,
     y: str,

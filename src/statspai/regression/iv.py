@@ -161,15 +161,16 @@ def _k_class_fit(
     residuals = y - fitted_values
 
     # --- Standard errors ---
-    # The k-class first-order condition X' A (y - X β) = 0 implies the
-    # influence function β̂ - β = (X'AX)^{-1} (AX)' u, so the sandwich
-    # meat must use the PROJECTED regressors AX, not the raw X. For
-    # κ = 1 (2SLS) this is AX = P_W X = X̂; for LIML/Fuller it is the
-    # k-class transformed regressor. Using raw X here is the classic
-    # mistake that inflates 2SLS cluster/robust SEs by a factor that
-    # depends on first-stage fit. This implementation matches
-    # Cameron–Miller (2015), Stata ivregress, and linearmodels.
-    AX = A @ X_actual
+    # The sandwich meat uses the instrument-projected regressors
+    # X̂ = P_W X, not the raw X (the classic mistake that inflates 2SLS
+    # cluster/robust SEs by a factor depending on first-stage fit). For
+    # LIML / Fuller this is also what Stata's ``ivregress`` and
+    # ``linearmodels`` compute (bit-for-bit against Stata 18 in
+    # tests/reference_parity/test_vce_grammar_stata_parity.py). The
+    # k-class first-order-condition form (I - κ M_W) X, used here before,
+    # differs from X̂ by (κ - 1) M_W X: asymptotically negligible and zero
+    # at κ = 1 (2SLS), but a ~0.05% finite-sample gap to both references.
+    AX = P_W @ X_actual
     if cluster is not None:
         var_cov = _cluster_cov(AX, A, residuals, XAX_inv, cluster)
     elif robust != "nonrobust":
@@ -1211,11 +1212,30 @@ class IVRegression(BaseModel):
         -------
         EconometricResults
         """
-        # Normalise the SE-type vocabulary so the IV path accepts the same
-        # spellings as ``sp.regress`` (case-insensitive HC0–HC3) plus the
-        # Stata-style ergonomic aliases. Previously a bare ``robust='HC1'``
-        # (uppercase) raised "Unknown robust type" — an API inconsistency with
-        # OLS, which lower-cases the type at point of use.
+        # Normalise the SE-type vocabulary through the shared Stata grammar
+        # (``core._vcov_spec``): case-insensitive HC0–HC3, ``True`` /
+        # ``'robust'`` (≡ HC1), ``'vce(robust)'``, and ``'cluster firm'``.
+        # ``vce='cluster'`` used to raise even when ``cluster=`` was supplied.
+        if isinstance(robust, str) or robust is None or isinstance(robust, bool):
+            from ..core._vcov_spec import parse_se_request
+
+            _se = parse_se_request(
+                robust,
+                cluster,
+                function="iv",
+                supported=(
+                    "nonrobust",
+                    "robust",
+                    "hc0",
+                    "hc1",
+                    "hc2",
+                    "hc3",
+                    "cluster",
+                ),
+                multiway=True,
+            )
+            cluster = _se.cluster
+            robust = "nonrobust" if _se.kind == "cluster" else _se.kind
         robust = _normalize_robust(robust)
 
         if self.formula is not None and self.data is not None:
@@ -1445,7 +1465,16 @@ class IVRegression(BaseModel):
             "dependent_var": self.dependent_var,
             "fitted_values": results["fitted_values"],
             "residuals": results["residuals"],
+            # Full coefficient covariance: sp.test / sp.lincom need it for any
+            # restriction involving more than one coefficient.
+            "var_cov": results.get("var_cov"),
         }
+        _n_cl = model_info.get("n_clusters")
+        if _n_cl is not None:
+            # ``ivregress ..., small vce(cluster)``: t / F with G - 1 degrees of
+            # freedom (the smallest dimension under multiway clustering).
+            _g = min(_n_cl) if isinstance(_n_cl, list) else int(_n_cl)
+            data_info["df_inference"] = int(_g) - 1
 
         # Store the 2SLS structure under a dedicated ``iv`` namespace so the
         # IV-aware wild bootstrap (WRE) can refit the two-stage model without
@@ -2372,6 +2401,9 @@ def ivreg(
             "ci_boot"
         ]
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             "WRE wild cluster bootstrap (Davidson-MacKinnon 2010, "
             f"{wild_reps} reps, {wild_weight_type}; endogenous coefficient)"
@@ -2413,6 +2445,9 @@ def ivreg(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             f"{kind} cluster-robust (clubSandwich, Pustejovsky-Tipton 2018)"
         )
@@ -2449,6 +2484,9 @@ def ivreg(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = (
             f"Conley spatial HAC (uniform, {conley_cutoff} km; acreg-compatible)"
         )
@@ -2481,6 +2519,9 @@ def ivreg(
         base.conf_int_lower = base.params - crit * se
         base.conf_int_upper = base.params + crit * se
         base.model_info = dict(base.model_info)
+        # These SEs replace the fitted ones and their p-values are normal;
+        # mark the fit so conf_int() / tidy() / sp.test use z as well.
+        base.data_info = dict(base.data_info, inference="z")
         base.model_info["vcov_type"] = "two-way cluster (CGM 2011)"
         base.model_info["cluster"] = list(cluster)
         base.model_info["n_clusters1"] = tw["n_clusters1"]

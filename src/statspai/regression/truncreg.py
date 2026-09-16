@@ -17,7 +17,6 @@ from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 from scipy.optimize import minimize
 
 from .._aliases import accepts_aliases
@@ -97,8 +96,42 @@ def truncreg(
     if ll is not None and ul is not None and ll >= ul:
         raise ValueError(f"Lower limit ({ll}) must be < upper limit ({ul})")
 
+    import warnings
+
+    from scipy import special
+
+    from ..core._vcov import ml_vcov
+    from ..core._vcov_spec import parse_se_request
+    from ._optim_helpers import inverse_information, ml_newton_polish, se_from_vcov
+
+    # Stata grammar; robust= and cluster= used to be accepted and ignored.
+    se_req = parse_se_request(
+        robust,
+        cluster,
+        function="truncreg",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = se_req.kind, se_req.cluster
+
     x_names = list(x)
-    df = data.dropna(subset=[y] + x_names)
+    df = data.dropna(subset=[y] + x_names + ([cluster] if cluster is not None else []))
+
+    # Observations outside the truncation limits cannot have come from the
+    # truncated distribution; Stata's truncreg drops them, and so do we
+    # (previously they were kept and the density evaluated where it is 0).
+    inside = np.ones(len(df), dtype=bool)
+    if ll is not None:
+        inside &= df[y].values > ll
+    if ul is not None:
+        inside &= df[y].values < ul
+    n_truncated = int((~inside).sum())
+    if n_truncated:
+        warnings.warn(
+            f"truncreg: dropped {n_truncated} observation(s) outside the "
+            "truncation limits, as Stata's truncreg does.",
+            stacklevel=2,
+        )
+        df = df[inside]
     n = len(df)
 
     y_data = df[y].values.astype(float)
@@ -106,34 +139,27 @@ def truncreg(
     k = X_data.shape[1]
     var_names = ["_cons"] + x_names
 
-    def neg_log_lik(theta: np.ndarray) -> float:
-        beta = theta[:k]
+    def obs_loglik(theta: np.ndarray) -> np.ndarray:
+        """Per-observation log-likelihood at (beta, ln sigma); complex-safe."""
         ln_sigma = theta[k]
         sigma = np.exp(ln_sigma)
-
-        xb = X_data @ beta
+        xb = X_data @ theta[:k]
         z = (y_data - xb) / sigma
-
-        # Log density: log φ(z) - log σ
-        log_pdf = stats.norm.logpdf(z) - ln_sigma
-
-        # Truncation adjustment
+        out = -0.5 * z * z - 0.5 * np.log(2.0 * np.pi) - ln_sigma
         if ll is not None and ul is not None:
-            z_ll = (ll - xb) / sigma
-            z_ul = (ul - xb) / sigma
-            log_denom = np.log(
-                np.clip(stats.norm.cdf(z_ul) - stats.norm.cdf(z_ll), 1e-20, None)
+            out = out - np.log(
+                special.ndtr((ul - xb) / sigma) - special.ndtr((ll - xb) / sigma)
             )
         elif ll is not None:
-            z_ll = (ll - xb) / sigma
-            log_denom = np.log(np.clip(stats.norm.sf(z_ll), 1e-20, None))
+            out = out - special.log_ndtr((xb - ll) / sigma)
         elif ul is not None:
-            z_ul = (ul - xb) / sigma
-            log_denom = np.log(np.clip(stats.norm.cdf(z_ul), 1e-20, None))
-        else:
-            log_denom = 0
+            out = out - special.log_ndtr((ul - xb) / sigma)
+        return out
 
-        return float(-np.sum(log_pdf - log_denom))
+    def neg_log_lik(theta: np.ndarray) -> float:
+        with np.errstate(all="ignore"):
+            value = float(-np.sum(obs_loglik(theta)))
+        return value if np.isfinite(value) else 1e300
 
     # Initialize with OLS
     beta_init = np.linalg.lstsq(X_data, y_data, rcond=None)[0]
@@ -144,39 +170,22 @@ def truncreg(
     result = minimize(
         neg_log_lik, theta0, method="BFGS", options={"maxiter": maxiter, "gtol": tol}
     )
-    # BFGS often reports status-2 ("precision loss") at a good optimum;
-    # derive ``converged`` from the gradient norm (see robust_convergence).
-    converged, grad_norm = robust_convergence(result)
-    theta_hat = _as_float_array(result.x)
+    # BFGS stops on its gradient tolerance; finish with exact Newton steps.
+    theta_hat, scores, H, newton_steps = ml_newton_polish(
+        obs_loglik, _as_float_array(result.x)
+    )
+    grad_norm = float(np.linalg.norm(scores.sum(axis=0)))
+    converged = bool(robust_convergence(result)[0] or grad_norm < 1e-6)
 
     beta_hat = theta_hat[:k]
     sigma_hat = float(np.exp(theta_hat[k]))
 
-    # Standard errors via numerical Hessian
-    eps = 1e-5
+    cluster_vals = df[cluster].values if cluster is not None else None
+    var_cov = ml_vcov(
+        inverse_information(H), scores, kind=robust, clusters=cluster_vals
+    )
+    se = se_from_vcov(var_cov)
     k_total = len(theta_hat)
-    H = np.zeros((k_total, k_total))
-    f0 = neg_log_lik(theta_hat)
-    for i in range(k_total):
-        ei = np.zeros(k_total)
-        ei[i] = eps
-        fp = neg_log_lik(theta_hat + ei)
-        fm = neg_log_lik(theta_hat - ei)
-        H[i, i] = (fp - 2 * f0 + fm) / eps**2
-        for j in range(i + 1, k_total):
-            ej = np.zeros(k_total)
-            ej[j] = eps
-            fpp = neg_log_lik(theta_hat + ei + ej)
-            fpm = neg_log_lik(theta_hat + ei - ej)
-            fmp = neg_log_lik(theta_hat - ei + ej)
-            fmm = neg_log_lik(theta_hat - ei - ej)
-            H[i, j] = H[j, i] = (fpp - fpm - fmp + fmm) / (4 * eps**2)
-
-    try:
-        var_cov = np.linalg.inv(H)
-        se = _as_float_array(np.sqrt(np.abs(np.diag(var_cov))))
-    except np.linalg.LinAlgError:
-        se = np.full(k_total, np.nan)
 
     all_names = var_names + ["ln_sigma"]
     all_params = np.concatenate([beta_hat, [theta_hat[k]]])
@@ -196,11 +205,19 @@ def truncreg(
             "sigma": sigma_hat,
             "converged": converged,
             "gradient_norm": grad_norm,
+            "newton_steps": newton_steps,
+            "robust": robust,
+            "cluster": cluster,
+            "n_truncated": n_truncated,
         },
         data_info={
             "n_obs": n,
             "dep_var": y,
             "df_resid": n - k - 1,
+            # z / chi2 inference, as Stata's truncreg; covariance of
+            # (beta, ln_sigma) in params order for sp.test / sp.lincom.
+            "inference": "z",
+            "var_cov": var_cov,
         },
         diagnostics={
             "log_likelihood": ll_val,

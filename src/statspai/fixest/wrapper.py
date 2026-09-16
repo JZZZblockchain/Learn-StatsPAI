@@ -1271,7 +1271,8 @@ def etable(
     >>> r1 = sp.regress("wage ~ x1", data=df)
     >>> r2 = sp.regress("wage ~ x1 + x2", data=df)
     >>> tab = sp.etable(r1, r2)  # DataFrame: one coefficient column per model
-    >>> print(tab.round(2))
+    >>> list(tab.columns)
+    ['(1)', '(2)']
 
     With ``sp.feols`` fits (requires the ``fixest`` extra), pyfixest's
     native styled table is returned instead:
@@ -1279,12 +1280,34 @@ def etable(
     >>> f1 = sp.feols("wage ~ x1 | firm", data=df)  # doctest: +SKIP
     >>> f2 = sp.feols("wage ~ x1 + x2 | firm", data=df)  # doctest: +SKIP
     >>> tab = sp.etable(f1, f2)  # doctest: +SKIP
+
+    A list works too: ``sp.etable([r1, r2])``.
     """
+    # ``sp.etable([r1, r2])`` used to be read as a single "result" with no
+    # ``params`` and returned an empty DataFrame; so did any non-result
+    # argument. Both are caller errors that must be visible.
+    if len(results) == 1 and isinstance(results[0], (list, tuple)):
+        results = tuple(results[0])
+    if not results:
+        raise TypeError("etable() needs at least one fitted result.")
+    not_results = [
+        (i + 1, type(r).__name__)
+        for i, r in enumerate(results)
+        if getattr(r, "params", None) is None and not hasattr(r, "_pyfixest_fit")
+    ]
+    if not_results:
+        raise TypeError(
+            "etable() expects fitted results (e.g. from sp.regress, sp.feols, "
+            f"sp.logit); argument(s) {not_results} have no coefficients."
+        )
+
     pf_fits = [
         getattr(r, "_pyfixest_fit") for r in results if hasattr(r, "_pyfixest_fit")
     ]
 
-    if pf_fits:
+    # pyfixest's styled table only when *every* result is a pyfixest fit; a
+    # mixed call used to drop the non-pyfixest columns without a word.
+    if pf_fits and len(pf_fits) == len(results):
         pf = _check_pyfixest()
         return pf.etable(pf_fits, **kwargs)
 

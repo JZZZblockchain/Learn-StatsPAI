@@ -348,8 +348,23 @@ def _poisson_vcov(
     robust: str,
     cluster_arr: Optional[np.ndarray],
 ) -> np.ndarray:
-    """Compute variance-covariance for Poisson-family models."""
+    """Variance-covariance for Poisson-family models.
+
+    ``robust`` is a canonical SE kind (see ``core._vcov_spec``):
+
+    * ``"nonrobust"`` -- model-based ``(X'WX)^{-1}`` (Var(y) = mu);
+    * ``"robust"`` -- Stata ``poisson, vce(robust)``: HC0 times N/(N-1);
+    * ``"hc0"`` / ``"hc1"`` -- unscaled and N/(N-K) sandwiches;
+    * any kind with ``cluster_arr`` -- Stata ``vce(cluster)``, G/(G-1).
+
+    ``"robust"`` used to be the unscaled HC0, and ``"hc2"`` / ``"hc3"``
+    silently returned HC0 as well; both now follow the definitions above
+    (hc2/hc3 raise, since no leverage-adjusted Poisson sandwich exists here).
+    """
     n, k = X.shape
+    if cluster_arr is not None:
+        return _cluster_vcov(X, mu, residuals, cluster_arr)
+
     W = mu
     XtWX = X.T @ (X * W[:, None])
     try:
@@ -357,16 +372,21 @@ def _poisson_vcov(
     except np.linalg.LinAlgError:
         XtWX_inv = np.linalg.pinv(XtWX)
 
-    if cluster_arr is not None:
-        return _cluster_vcov(X, mu, residuals, cluster_arr)
-    elif robust.lower() in ("robust", "hc0", "hc1", "hc2", "hc3"):
-        vcov = _sandwich_vcov(X, mu, residuals, XtWX_inv)
-        if robust.lower() == "hc1":
-            vcov *= n / (n - k)
-        return vcov
-    else:
-        # Model-based (assumes Var(y) = mu)
+    kind = str(robust).lower()
+    if kind == "nonrobust":
         return XtWX_inv
+    if kind in ("robust", "hc0", "hc1"):
+        vcov = _sandwich_vcov(X, mu, residuals, XtWX_inv)
+        if kind == "robust":
+            vcov = vcov * (n / (n - 1.0))
+        elif kind == "hc1":
+            vcov = vcov * (n / (n - k))
+        return vcov
+    raise MethodIncompatibility(
+        f"Poisson: Unknown robust option: {robust!r}. Use 'nonrobust', "
+        "'robust', 'hc0', 'hc1', or a cluster variable.",
+        recovery_hint="Use vce='robust' or vce='cluster <var>'.",
+    )
 
 
 def _poisson_loglik(y: np.ndarray, mu: np.ndarray) -> float:
@@ -1020,6 +1040,17 @@ def poisson(
     if weights is not None:
         w_arr = data[weights].values.astype(np.float64)
 
+    # Standard-error request (Stata grammar)
+    from ..core._vcov_spec import parse_se_request
+
+    _se = parse_se_request(
+        robust,
+        cluster,
+        function="poisson",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = _se.kind, _se.cluster
+
     # Cluster variable
     cluster_arr = None
     if cluster is not None:
@@ -1117,6 +1148,8 @@ def poisson(
         "y": y_arr,
         "var_cov": vcov,
         "var_names": var_names,
+        # Likelihood-based: z / chi2 inference, as Stata's poisson.
+        "inference": "z",
         "offset": offset,
         "exposure": exposure,
         "weights": weights,
@@ -1237,6 +1270,16 @@ def nbreg(
         w_arr = data[weights].values.astype(np.float64)
 
     cluster_arr = None
+    # Standard-error request (Stata grammar)
+    from ..core._vcov_spec import parse_se_request
+
+    _se = parse_se_request(
+        robust,
+        cluster,
+        function="nbreg",
+        supported=("nonrobust", "robust", "hc0", "hc1", "cluster"),
+    )
+    robust, cluster = _se.kind, _se.cluster
     if cluster is not None:
         cluster_arr = data[cluster].values
 
@@ -1268,31 +1311,36 @@ def nbreg(
     if not converged:
         warnings.warn(f"NegBin did not converge in {maxiter} outer iterations")
 
+    # Polish to the joint MLE and take every variance from the joint
+    # (beta, ln dispersion) observed information and scores -- what Stata's
+    # ``nbreg`` reports. The previous variance used the IRLS weights as the
+    # bread (ignoring the beta/dispersion cross-information) and the Poisson
+    # residual y - mu as the score (missing the 1/(1 + alpha mu) factor), so
+    # its OIM, robust and cluster SEs all disagreed with Stata; robust and
+    # cluster by ~5% on moderately overdispersed data.
+    from ..core._vcov import ml_vcov
+    from ._negbin import negbin_joint
+
+    joint = negbin_joint(
+        y_arr, X, offset_arr, beta, disp_param, weights=w_arr, nb2=is_nb2
+    )
+    beta, disp_param, mu = joint.beta, joint.dispersion, joint.mu
     residuals = y_arr - mu
 
-    # Variance-covariance (using NB weights in the bread)
-    if is_nb2:
-        nb_w = mu / (1 + disp_param * mu)
-    else:
-        nb_w = mu / (1 + disp_param)
-
-    # Build bread with NB weights
-    XtWX = X.T @ (X * nb_w[:, None])
-    try:
-        XtWX_inv = np.linalg.inv(XtWX)
-    except np.linalg.LinAlgError:
-        XtWX_inv = np.linalg.pinv(XtWX)
-
-    if cluster_arr is not None:
-        vcov = _cluster_vcov(X, nb_w, residuals, cluster_arr)
-    elif robust.lower() in ("robust", "hc0", "hc1"):
-        vcov = _sandwich_vcov(X, nb_w, residuals, XtWX_inv)
-        if robust.lower() == "hc1":
-            vcov *= n / (n - k)
-    else:
-        vcov = XtWX_inv
-
+    vcov_joint = ml_vcov(joint.bread, joint.scores, kind=robust, clusters=cluster_arr)
+    vcov = vcov_joint[:k, :k]
     se = np.sqrt(np.diag(vcov))
+    se_ln_dispersion = float(np.sqrt(vcov_joint[k, k]))
+    # R's MASS::glm.nb reports a different, documented quantity: the
+    # model-based SE of beta *conditional on* the dispersion, i.e. the IRLS
+    # Fisher information (X' W X)^{-1} with W = mu / Var(y | mu). Kept for
+    # R users and for the glm.nb parity test; the reported SE is Stata's.
+    nb_var_ratio = (1 + disp_param * mu) if is_nb2 else np.full_like(mu, 1 + disp_param)
+    info_conditional = X.T @ (X * (mu / nb_var_ratio)[:, None])
+    se_conditional = pd.Series(
+        np.sqrt(np.maximum(np.diag(np.linalg.pinv(info_conditional)), 0.0)),
+        index=var_names,
+    )
 
     # Log-likelihood
     if is_nb2:
@@ -1351,8 +1399,13 @@ def nbreg(
         "model_type": f"NegBin ({nb_label})",
         "family": "Negative Binomial",
         "link": "log",
-        "method": "MLE (IRLS + profile likelihood)",
+        "method": "MLE (IRLS + profile likelihood, joint Newton polish)",
         "dispersion_type": nb_label,
+        f"se_ln{disp_label}": se_ln_dispersion,
+        "gradient_norm": joint.gradient_norm,
+        "newton_steps": joint.newton_steps,
+        # MASS::glm.nb convention (beta SE conditional on the dispersion).
+        "se_conditional_on_dispersion": se_conditional,
         "fixed_effects": list(fe_level_counts) or None,
         "n_fe_levels": fe_level_counts or None,
         "n_fe_params": n_fe_params,
@@ -1386,6 +1439,8 @@ def nbreg(
         "y": y_arr,
         "var_cov": vcov,
         "var_names": var_names,
+        # Likelihood-based: z / chi2 inference, as Stata's nbreg.
+        "inference": "z",
     }
 
     diagnostics = {
@@ -1621,10 +1676,16 @@ def xtnbreg(
             warnings.warn(
                 "xtnbreg(model='re') does not support weights; ignoring weights"
             )
-        if cluster is not None or robust != "nonrobust":
-            warnings.warn(
-                "xtnbreg(model='re') uses GLMM model-based standard errors; "
-                "robust/cluster options are ignored"
+        if cluster is not None or robust not in (None, False, "nonrobust", "oim"):
+            # A warning followed by model-based SEs is a silent change of
+            # the requested standard errors; refuse instead.
+            raise MethodIncompatibility(
+                "xtnbreg(model='re') reports GLMM model-based standard errors "
+                f"only; robust={robust!r} / cluster={cluster!r} is not available.",
+                recovery_hint=(
+                    "Drop robust=/cluster=, or use model='fe' or sp.nbreg with "
+                    "vce='cluster <panel id>'."
+                ),
             )
         if dispersion.lower() != "mean":
             warnings.warn(
@@ -1815,6 +1876,9 @@ def _ppmlhdfe_wild(
         [pvals[v] for v in base.params.index], index=base.params.index
     )
     base.model_info = dict(base.model_info)
+    # These SEs replace the fitted ones and their p-values are normal; mark
+    # the fit so conf_int() / tidy() / sp.test use z as well.
+    base.data_info = dict(base.data_info, inference="z")
     base.model_info["vcov_type"] = (
         f"score wild cluster bootstrap (Kline-Santos 2012, boottest "
         f"studentization, {weight_type}); SEs remain cluster-robust"
@@ -1897,6 +1961,9 @@ def _ppmlhdfe_cr(
     base.conf_int_lower = base.params - crit * se
     base.conf_int_upper = base.params + crit * se
     base.model_info = dict(base.model_info)
+    # These SEs replace the fitted ones and their p-values are normal; mark
+    # the fit so conf_int() / tidy() / sp.test use z as well.
+    base.data_info = dict(base.data_info, inference="z")
     base.model_info["vcov_type"] = {
         "cr2": "CR2 cluster-robust (clubSandwich glm, Pustejovsky-Tipton 2018)",
         "cr3": "CR3 cluster-robust (clubSandwich glm jackknife-type)",
@@ -1999,6 +2066,9 @@ def _ppmlhdfe_conley(
     base.conf_int_lower = base.params - crit * se
     base.conf_int_upper = base.params + crit * se
     base.model_info = dict(base.model_info)
+    # These SEs replace the fitted ones and their p-values are normal; mark
+    # the fit so conf_int() / tidy() / sp.test use z as well.
+    base.data_info = dict(base.data_info, inference="z")
     base.model_info["vcov_type"] = (
         f"Conley spatial HAC (conleyreg spherical, {conley_cutoff} km)"
     )
@@ -2148,12 +2218,41 @@ def ppmlhdfe(
     >>> 'dist' in res2.params.index
     True
     """
-    # --- canonical vce= keyword (extended SE menu) --------------------------
-    _vce = vce.lower() if isinstance(vce, str) else None
-    if _vce in ("robust", "hc0", "hc1", "hc_robust", "nonrobust"):
-        # spelling alias for the existing robust= parameter
-        robust = "robust" if _vce == "hc_robust" else _vce
+    # --- Stata grammar on vce= / robust= (extended SE menu) ------------------
+    # One parser for every spelling: True, 'vce(robust)', 'cluster pair_id',
+    # 'CR2', 'wild', ... ``robust=True`` used to raise AttributeError and
+    # ``vce='cluster'`` was rejected even with cluster= supplied.
+    from ..core._vcov_spec import parse_se_request
+
+    _raw = vce if vce is not None else robust
+    if isinstance(_raw, str) and _raw.strip().lower() == "hc_robust":
+        _raw = "robust"
+    _se = parse_se_request(
+        _raw,
+        cluster,
+        function="ppmlhdfe",
+        supported=(
+            "nonrobust",
+            "robust",
+            "hc0",
+            "hc1",
+            "cluster",
+            "cr2",
+            "cr3",
+            "jackknife",
+            "wild",
+            "conley",
+        ),
+        multiway=True,
+    )
+    cluster = _se.cluster
+    if _se.kind in ("cr2", "cr3", "jackknife", "wild", "conley"):
+        _vce = _se.kind
+    else:
+        # One- and two-way CRV1 run through cluster=; the heteroskedastic
+        # kinds keep their ssc small-sample convention below.
         _vce = None
+        robust = "robust" if _se.kind == "cluster" else _se.kind
     if _vce is not None:
         if weights is not None:
             raise MethodIncompatibility(
@@ -2388,6 +2487,8 @@ def ppmlhdfe(
         "nobs": n,
         "df_model": k,
         "df_resid": n - k - n_fe,
+        # z / chi2 inference, as Stata's ppmlhdfe.
+        "inference": "z",
         "dependent_var": dep_var,
         "fitted_values": mu,
         "residuals": residuals,

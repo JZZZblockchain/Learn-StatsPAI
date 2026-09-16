@@ -1,11 +1,14 @@
 {
-  "_comment": "Frozen ceiling of legacy-spelling sites per theme for the signature house-style ratchet. Lower these as convergence lands; regenerate with `python scripts/signature_house_style.py --update-baseline`.  se raised 58->60 on 2026-08-02 for gmm(vcov=) and xtdpdsys(robust=): both match their own family's existing spelling — feols(vcov=) and xtabond(robust=) — so renaming them in isolation would trade a house-style violation for a sibling inconsistency, which is worse for users. xtdpdsys is already registered in _house_style.ROBUST_BOOL_HINTS as awaiting the coordinated vce= convergence. Lower this again when that convergence lands, not before.  se raised 60->62 on 2026-08-05 for regress(vcov=) and ivreg(vcov=). These are NOT drift: vcov= was previously accepted by both functions via **kwargs and silently discarded, returning unclustered standard errors (measured 1.7x too small on a 15-cluster example; see MIGRATION.md#vcov-silently-ignored). The options were to honour the spelling or to reject it; honouring it is what users moving between sp.feols and sp.regress actually want, and the notebook that surfaced the bug mixes both spellings in one file. vce= remains canonical and is unchanged; vcov= is a documented alias that normalises onto it. Do not lower this by renaming vcov= away -- that would re-open the silent-SE path.",
+  "_comment": "Frozen ceiling of legacy-spelling sites per theme for the signature house-style ratchet. Lower these as convergence lands; regenerate with `python scripts/signature_house_style.py --update-baseline`.  se raised 58->60 on 2026-08-02 for gmm(vcov=) and xtdpdsys(robust=): both match their own family's existing spelling \u2014 feols(vcov=) and xtabond(robust=) \u2014 so renaming them in isolation would trade a house-style violation for a sibling inconsistency, which is worse for users. xtdpdsys is already registered in _house_style.ROBUST_BOOL_HINTS as awaiting the coordinated vce= convergence. Lower this again when that convergence lands, not before.  se raised 60->62 on 2026-08-05 for regress(vcov=) and ivreg(vcov=). These are NOT drift: vcov= was previously accepted by both functions via **kwargs and silently discarded, returning unclustered standard errors (measured 1.7x too small on a 15-cluster example; see MIGRATION.md#vcov-silently-ignored). The options were to honour the spelling or to reject it; honouring it is what users moving between sp.feols and sp.regress actually want, and the notebook that surfaced the bug mixes both spellings in one file. vce= remains canonical and is unchanged; vcov= is a documented alias that normalises onto it. Do not lower this by renaming vcov= away -- that would re-open the silent-SE path.  unit / time / covariates added 2026-09-15 when the maintainer ratified id= and covariates= as canonical (grammar convergence P1). They are frozen at their first observed counts: canonical spellings are accepted through @accepts_aliases without renaming signatures, so these counts fall only when a signature is renamed; the ceiling stops new drift meanwhile.",
   "by_theme": {
     "cluster": 2,
+    "covariates": 82,
     "data": 5,
     "outcome": 55,
     "se": 62,
+    "time": 16,
     "treatment": 63,
+    "unit": 85,
     "weights": 5
   },
   "coverage": {
@@ -14,6 +17,12 @@
       "canonical_pct": 98.1,
       "legacy": 2,
       "total": 103
+    },
+    "covariates": {
+      "canonical": 133,
+      "canonical_pct": 61.9,
+      "legacy": 82,
+      "total": 215
     },
     "data": {
       "canonical": 492,
@@ -33,11 +42,23 @@
       "legacy": 58,
       "total": 73
     },
+    "time": {
+      "canonical": 131,
+      "canonical_pct": 89.1,
+      "legacy": 16,
+      "total": 147
+    },
     "treatment": {
       "canonical": 98,
       "canonical_pct": 60.9,
       "legacy": 63,
       "total": 161
+    },
+    "unit": {
+      "canonical": 32,
+      "canonical_pct": 27.4,
+      "legacy": 85,
+      "total": 117
     },
     "weights": {
       "canonical": 39,
@@ -47,9 +68,9 @@
     }
   },
   "totals": {
-    "acknowledged_false_friends": 41,
-    "introspected": 833,
-    "public_callables": 855,
-    "violations": 188
+    "acknowledged_false_friends": 44,
+    "introspected": 875,
+    "public_callables": 897,
+    "violations": 375
   }
 }

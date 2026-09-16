@@ -4,6 +4,158 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **One Stata `vce()` grammar on every SE-bearing regression estimator.**
+  `robust=` / `vce=` accept `True`, `"robust"`, `"vce(robust)"`, `"r"`,
+  `"oim"`, `"hc0"`–`"hc3"`, and a cluster variable written inline —
+  `vce="cluster firm"`, `"vce(cluster firm)"`, `"cl firm"` — on `regress`,
+  `ivreg` / `iv`, `glm`, `logit`, `probit`, `cloglog`, `poisson`, `nbreg`,
+  `ologit`, `oprobit`, `mlogit`, `clogit`, `zip_model`, `zinb`, `hurdle`,
+  `truncreg`, `biprobit`, `betareg`, `fracreg`, `etregress`, `liml`,
+  `ppmlhdfe`, `panel_logit`, `panel_probit` and `subgroup_analysis`. One
+  parser (`statspai.core._vcov_spec.parse_se_request`) resolves every
+  spelling; a spelling an estimator does not implement raises
+  `MethodIncompatibility` instead of falling back to other standard errors.
+  `vce="robust"` on `sp.regress` (previously an error) is HC1, as in Stata.
+- **House-style keyword spellings on the causal entry points.** The panel
+  identifier is accepted as `id=`, covariates as `covariates=`, and adoption
+  cohorts as `first_treat=`, alongside each estimator's native spelling:
+  `callaway_santanna` / `staggered_cs` / `staggered_sa` / `sun_abraham`
+  (`id`/`unit` -> `i`, `time` -> `t`, `first_treat`/`cohort` -> `g`),
+  `bjs` / `gardner_did` / `wooldridge_did` / `etwfe` / `stacked_did` /
+  `did_multiplegt(_dyn)` (`id`/`unit` -> `group`, `covariates` ->
+  `controls`, `treat` -> `treatment`), `event_study` / `synth` / `sdid` /
+  `gsynth` / `augsynth` / `fect` (`id` -> `unit`), the RD family
+  (`running` -> `x`, `cutoff` -> `c`, `covariates` -> `covs`; `x` stays the
+  running variable), `psm` (`treat` -> `d`, `covariates` -> `X`), and
+  `controls=` on `did`, `ddd`, `did_2x2`, `drdid`, `match`, `psmatch2`,
+  `ipw`, `aipw`, `tmle`, `ebalance`, `metalearner`, `dml`. Signatures and
+  schemas are unchanged; passing both spellings raises `TypeError`, and a
+  misspelt keyword names the closest parameter (`runing=` -> "did you mean
+  'running'"). Alias maps are listed by `sp.describe_function(name)["aliases"]`.
+- **`sp.stata("...", data=df)`** runs Stata command lines through
+  `sp.from_stata` and returns the fitted result: several lines (or `;`),
+  `*` / `//` comments, and `test` / `lincom` / `margins, dydx(...)` applied
+  to the latest fit. A line whose translation is incomplete — `xtreg, fe`
+  without the `xtset` panel id — raises instead of running a different model.
+- **`sp.list_functions(core=True)`** returns the ~30 everyday estimation and
+  post-estimation verbs (`sp.registry.CORE_FUNCTIONS`), in curated order.
+- `inspect.signature(sp.iv)` / `sp.rd` (and `help`) show the dispatcher's
+  parameters instead of `(*args, **kwargs)`.
+- **`result.test(...)` and `result.lincom(...)`** on `EconometricResults`
+  and `CausalResult`, mirroring Stata's post-estimation commands.
+  `sp.test` also accepts `test x1 x2`, chained `x1 = x2 = x3`, grouped
+  `(x1 = 0) (x2 = 1)`, `2*x1`, `_cons` and `_b[x]`.
+- **`sp.glm(..., information="observed" | "expected")`.** Observed
+  information (Stata's default) is now the variance bread; `"expected"`
+  reproduces R's `glm`. They coincide for canonical links.
+- `nbreg` keeps the MASS::`glm.nb` standard error (conditional on the
+  dispersion) in `model_info["se_conditional_on_dispersion"]`.
+- Stata 18 reference fixtures `tests/reference_parity/_fixtures/
+  _generate_vce_grammar_stata.do` (29 estimators x oim / robust / cluster)
+  and `_generate_postestimation_stata.do` (test / lincom / p-values /
+  margins), pinned by `test_vce_grammar_stata_parity.py` and
+  `test_postestimation_stata_parity.py` at the 1e-6 default budget (three
+  documented optimiser-stopping exceptions, each asserted by comparing the
+  objective at both solutions).
+
+### Changed
+
+- Printed summaries: coefficient tables label the statistic `z` / `P>|z|`
+  for likelihood-based fits (the p-values already used the normal);
+  diagnostics print counts as integers (`N instruments : 1`, not `1.0000`);
+  the `CausalResult` footer omits `None` fields and backend flags and shows
+  floats to six significant digits. Stored values are unchanged.
+- `sp.etable([r1, r2])` accepts a list; a non-result argument or an empty
+  call raises `TypeError` (both used to return an empty DataFrame), and a
+  mixed pyfixest / native call no longer drops the native columns.
+- `margins_at`, `contrast` and `pwcompare` refuse models whose prediction
+  scale is not the linear index (logit, poisson, …) and results without a
+  coefficient covariance matrix, instead of returning index-scale numbers
+  or assuming zero covariances.
+- `betareg(link="cloglog")` fits the cloglog link (it silently fitted logit)
+  and `link="loglog"` is available; outcomes on or outside (0, 1) raise
+  instead of being clipped to [1e-6, 1-1e-6]. `fracreg` rejects outcomes
+  outside [0, 1]. `truncreg` drops observations outside the truncation
+  limits with a warning, as Stata does. `xtnbreg(model="re")` raises on
+  `robust=` / `cluster=` instead of warning and ignoring them.
+  `panel_logit(method="fe")` raises on `robust=` / `cluster=` (Stata rc 198)
+  and points to `sp.clogit(..., vce="cluster id")`.
+
+### Fixed
+
+- **`sp.from_stata` post-estimation translations run.** `margins, dydx(x)`
+  emitted `dydx=`, `test x1 x2` emitted `terms=`, and `contrast x` emitted
+  `terms=` — keywords `sp.margins`, `sp.test` and `sp.contrast` do not take,
+  so every copied call raised. They now emit `variables=` (plus
+  `method="mem"` for `atmeans` and an `at={...}` dict), the restriction text
+  as `hypothesis=`, and `variable=`; `lincom` is translated (with
+  `level()` → `alpha`), and `marginsplot` targets `sp.marginsplot`. Predictive
+  margins (`margins` without `dydx`) and options with no `sp.margins`
+  counterpart (`eyex`, `over()` ...) are refused instead of being mapped to
+  average marginal effects. The structural translation sweep exempted
+  post-estimation tools; a new test dispatches each payload on a fitted model.
+- `sp.from_stata("xtreg y x, fe")` without a panel id printed
+  `sp.feols('y ~ x', ...)` — a runnable pooled regression; the formula now
+  keeps the `| <panel_id>` fixed-effect placeholder.
+- Docstring examples of `EconometricResults` / `CausalResult` methods and of
+  the registry helpers ran on undefined `sp` / `df` (or showed placeholder
+  output), so `pytest --doctest-modules` failed on 21 of them; each is now
+  self-contained with checked output.
+- `docs/stats.md` (per-module table, source / test LOC) and the README
+  at-a-glance LOC figures regenerated from `scripts/registry_stats.py`.
+
+### ⚠️ Correctness
+
+- **ML robust / cluster standard errors now follow Stata.** `vce="robust"`
+  on likelihood-based estimators omitted Stata's N/(N-1) factor (SEs
+  ~0.04% small at N = 1,200); `glm`, `ologit`, `oprobit`, `mlogit`,
+  `clogit`, `zip`, `zinb` and `hurdle` cluster SEs carried the regress
+  family's (N-1)/(N-K) factor that Stata's ML commands do not apply.
+  `vce="hc0"` keeps the unscaled R `sandwich` HC0.
+- **Options that were accepted and ignored now take effect:** `robust=` /
+  `cluster=` on `truncreg`, `biprobit`, `betareg`, `panel_logit` /
+  `panel_probit` (RE), and `robust=` on `subgroup_analysis`. `logit` /
+  `probit` / `cloglog` answered `vce="cluster g"` with heteroskedasticity-
+  robust SEs; `poisson` and `nbreg` answered it (and `nbreg` `"hc3"`) with
+  model-based SEs; `ologit` family answered any unknown string with OIM.
+- **`nbreg` standard errors.** The robust / cluster sandwich used the Poisson
+  score `y - mu` (robust SEs up to ~150% off against Stata on overdispersed
+  data) and the OIM bread ignored the beta / dispersion cross-information;
+  `dispersion="constant"` (NB1) coefficients were 8.6% off. Both now come
+  from the joint (beta, ln dispersion) likelihood, polished by Newton, and
+  match Stata `nbreg` to ~1e-12 (NB2) / 1e-7 (NB1).
+- **`sp.test` / `sp.lincom` used a diagonal covariance.** Any restriction on
+  two correlated coefficients was wrong (`test x1 = x2` after robust OLS:
+  F 154.4 vs Stata 167.0); they now use the full covariance and the fit's own
+  reference distribution (F / t or chi2 / z). A misspelled coefficient used
+  to be read as zero and now raises.
+- **p-values and confidence intervals.** Clustered `regress` / `ivreg` used
+  t(N-K); they now use t(G-1) as Stata does (a p-value of 7e-32 vs Stata's
+  9e-15 on 40 clusters). Likelihood-based estimators used t(N-K) and now use
+  z, as Stata reports.
+- **`sp.margins` returned index coefficients.** After `logit` it reported
+  beta (0.568) where Stata's `margins, dydx(*)` reports the average marginal
+  effect on Pr(y) (0.126), and with interaction terms its "SE" was
+  std(dydx)/sqrt(n). It now computes AMEs on the prediction scale (identity,
+  logit, probit, cloglog, log links) with delta-method SEs from the full
+  covariance, matching Stata to ~1e-10.
+- **LIML robust / cluster meat** uses the instrument-projected regressors
+  P_Z X, as Stata `ivregress liml` and `linearmodels` do, instead of
+  (I - kappa M_Z) X (~0.05% SE shift); `sp.liml(robust=...)` now applies the
+  same N/(N-K) small-sample factor as its classical and cluster SEs and as
+  `sp.iv(method="liml")`.
+- **`clogit` standard errors** came from BFGS's quasi-Newton `hess_inv`
+  (off by up to 4% against Stata); they now use the analytic information.
+- **`glm` with a non-canonical link** uses the observed information (see
+  Added) and iterates until the coefficients, not only the deviance, have
+  converged (gaussian/log coefficients were ~1e-4 short of the MLE).
+- Newton-polished, complex-step observed information for `truncreg`,
+  `biprobit`, `betareg`, `fracreg`, `mlogit`, `ologit`, `oprobit`, `zip`,
+  `zinb`, `hurdle` and panel logit / probit replaces second-difference
+  Hessians (1e-6 – 3e-5 relative SE error).
+
 ## [1.28.0] — 2026-09-13
 
 ### Added

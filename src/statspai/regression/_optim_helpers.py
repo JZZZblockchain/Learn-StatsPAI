@@ -161,3 +161,157 @@ def hessian_cov(
     except np.linalg.LinAlgError:
         V = np.linalg.pinv(H_neg + ridge * np.eye(H_neg.shape[0]))
     return V
+
+
+# ---------------------------------------------------------------------------
+# Per-observation scores and the observed information, to machine precision
+# ---------------------------------------------------------------------------
+#
+# ``numerical_hessian`` differences the *total* log-likelihood twice, so its
+# round-off error is ~ |ll| * eps_mach / h^2: with ll ~ 1e3 and h ~ 1e-5 that
+# is ~1e-3 in absolute terms, visible in the fifth digit of a standard error.
+# The helpers below differentiate a *per-observation* log-likelihood written
+# with complex-safe primitives (``np.exp``, ``np.log``, ``scipy.special.ndtr``
+# / ``log_ndtr`` / ``loggamma``): the complex-step derivative
+# ``Im f(theta + i h e_j) / h`` has no subtractive cancellation, so the scores
+# are exact to rounding, and the Hessian -- one central difference of those
+# exact scores -- is accurate to ~1e-10 relative.  Robust and cluster
+# sandwiches also need the per-observation scores, which ``numerical_hessian``
+# cannot supply.
+
+ObsLoglik = Callable[[np.ndarray], np.ndarray]
+
+
+def complex_step_scores(
+    obs_loglik: ObsLoglik, theta: np.ndarray, h: float = 1e-30
+) -> np.ndarray:
+    """Per-observation scores ``d l_i / d theta`` by the complex-step method.
+
+    Parameters
+    ----------
+    obs_loglik : callable
+        Maps a (possibly complex) parameter vector to the ``(n,)`` vector of
+        per-observation log-likelihood contributions. It must be built from
+        complex-safe operations (no ``np.clip``, no ``astype(float)``).
+    theta : np.ndarray
+        Real parameter vector of length ``k``.
+    h : float, default 1e-30
+        Imaginary step; any value far below ``sqrt(eps_mach)`` gives the same
+        result because there is no cancellation.
+
+    Returns
+    -------
+    np.ndarray of shape (n, k)
+    """
+    theta = np.asarray(theta, dtype=float)
+    columns = []
+    for j in range(theta.size):
+        tc = theta.astype(complex)
+        tc[j] += 1j * h
+        columns.append(np.imag(obs_loglik(tc)) / h)
+    return np.column_stack(columns)
+
+
+def ml_scores_hessian(
+    obs_loglik: ObsLoglik, theta: np.ndarray, rel_step: float = 1e-5
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Per-observation scores and the Hessian of the total log-likelihood.
+
+    The Hessian is the central difference of the complex-step total score
+    with step ``rel_step * max(1, |theta_j|)``, symmetrised.
+
+    Returns
+    -------
+    (scores, H)
+        ``scores`` has shape ``(n, k)``; ``H`` is the ``(k, k)`` Hessian of
+        the log-likelihood (negative definite at a maximum), so the
+        observed information is ``-H``.
+    """
+    theta = np.asarray(theta, dtype=float)
+    scores = complex_step_scores(obs_loglik, theta)
+    k = theta.size
+    H = np.empty((k, k))
+    for j in range(k):
+        step = rel_step * max(1.0, abs(float(theta[j])))
+        tp, tm = theta.copy(), theta.copy()
+        tp[j] += step
+        tm[j] -= step
+        H[:, j] = (
+            complex_step_scores(obs_loglik, tp).sum(axis=0)
+            - complex_step_scores(obs_loglik, tm).sum(axis=0)
+        ) / (2.0 * step)
+    return scores, 0.5 * (H + H.T)
+
+
+def ml_newton_polish(
+    obs_loglik: ObsLoglik,
+    theta: np.ndarray,
+    maxiter: int = 50,
+    tol: float = 1e-10,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Newton-Raphson from a nearby start to the maximum of ``sum(obs_loglik)``.
+
+    Quasi-Newton optimisers stop on a gradient tolerance that leaves the
+    estimates several digits short of the optimum Stata's Newton-Raphson
+    reaches; a few exact Newton steps close the gap. Each step is halved
+    until the log-likelihood does not decrease, and iteration stops when the
+    largest step is below ``tol * (1 + max|theta|)``. If no improving step
+    exists the input is returned unchanged.
+
+    Returns
+    -------
+    (theta, scores, H, n_steps)
+        The polished estimate with its per-observation scores and Hessian
+        (see :func:`ml_scores_hessian`).
+    """
+    theta = np.asarray(theta, dtype=float).copy()
+
+    def total(t: np.ndarray) -> float:
+        with np.errstate(all="ignore"):
+            value = float(np.sum(np.real(obs_loglik(t))))
+        return value if np.isfinite(value) else -np.inf
+
+    scores, H = ml_scores_hessian(obs_loglik, theta)
+    ll = total(theta)
+    steps = 0
+    for _ in range(maxiter):
+        try:
+            step = np.linalg.solve(H, scores.sum(axis=0))
+        except np.linalg.LinAlgError:
+            break
+        if not np.all(np.isfinite(step)):
+            break
+        for _halving in range(40):
+            candidate = theta - step
+            ll_new = total(candidate)
+            if ll_new >= ll - 1e-12 * abs(ll):
+                break
+            step = step / 2.0
+        else:
+            break
+        theta, ll = candidate, ll_new
+        scores, H = ml_scores_hessian(obs_loglik, theta)
+        steps += 1
+        if np.max(np.abs(step)) < tol * (1.0 + np.max(np.abs(theta))):
+            break
+    return theta, scores, H, steps
+
+
+def inverse_information(H: np.ndarray) -> np.ndarray:
+    """``(-H)^{-1}`` with a pseudo-inverse fallback for a singular Hessian."""
+    try:
+        return np.linalg.inv(-H)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(-H)
+
+
+def se_from_vcov(V: np.ndarray) -> np.ndarray:
+    """Standard errors from a covariance matrix; negative variances become NaN.
+
+    ``sqrt(abs(diag))`` would report a finite standard error for a variance
+    the optimiser got wrong in sign, which is the failure that should be
+    visible.
+    """
+    d = np.diag(np.asarray(V, dtype=float))
+    with np.errstate(invalid="ignore"):
+        return np.where(d >= 0, np.sqrt(np.maximum(d, 0.0)), np.nan)

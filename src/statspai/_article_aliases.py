@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from ._aliases import accepts_aliases
 from .core.results import CausalResult
 from .exceptions import MethodIncompatibility
 
@@ -115,6 +116,7 @@ def _coerce_column_list(
 # ---------------------------------------------------------------------------
 
 
+@accepts_aliases(_strict=True, x="running", c="cutoff")
 def rdd(
     data: pd.DataFrame,
     y: str,
@@ -322,6 +324,7 @@ def conformal_ite(
 # ---------------------------------------------------------------------------
 
 
+@accepts_aliases(_strict=True, treat="d", covariates="X", controls="X")
 def psm(
     data: pd.DataFrame,
     y: str,
@@ -1076,6 +1079,7 @@ def policy_tree(
     )
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def dml(
     data: pd.DataFrame,
     y: str,

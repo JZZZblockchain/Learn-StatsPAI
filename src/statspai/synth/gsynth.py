@@ -35,10 +35,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ._core import placebo_rank_pvalue
 
 
+@accepts_aliases(_strict=True, id="unit", y="outcome")
 def gsynth(
     data: pd.DataFrame,
     outcome: str,

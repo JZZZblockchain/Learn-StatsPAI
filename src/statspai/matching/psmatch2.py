@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 
+from .._aliases import accepts_aliases
 from .._result_serialize import ResultProtocolMixin
 from ..core.results import CausalResult, SummaryText
 from ..exceptions import DataInsufficient, MethodIncompatibility
@@ -936,6 +937,7 @@ def _fresh_column(base: str, used: set) -> str:
 # ======================================================================
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def psmatch2(
     data: pd.DataFrame,
     *,

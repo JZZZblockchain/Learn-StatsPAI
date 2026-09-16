@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 from scipy import optimize, stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import ConvergenceFailure, DataInsufficient, MethodIncompatibility
 from ._core import drop_unusable_rows as _drop_unusable_rows
@@ -245,6 +246,7 @@ def _cohort_atts_from_cells(
     return detail, cohort_vcov, att_overall, att_se, p_overall, ci
 
 
+@accepts_aliases(_strict=True, id="group", unit="group", covariates="controls")
 def wooldridge_did(
     data: pd.DataFrame,
     y: str,
@@ -866,6 +868,7 @@ def _etwfe_glm(
     )
 
 
+@accepts_aliases(_strict=True, id="group", unit="group", covariates="controls")
 def etwfe(
     data: pd.DataFrame,
     y: str,
@@ -1886,6 +1889,7 @@ def _etwfe_never_only(
 # ═══════════════════════════════════════════════════════════════════════
 
 
+@accepts_aliases(_strict=True, unit="id", treat="group", controls="covariates")
 def drdid(
     data: pd.DataFrame,
     y: str,

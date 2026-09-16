@@ -36,7 +36,9 @@ Examples
 
 from __future__ import annotations
 
+import difflib
 import functools
+import inspect
 import os
 import warnings
 from typing import Any, Callable, Dict, TypeVar
@@ -52,7 +54,9 @@ WARN_ON_LEGACY: bool = os.environ.get("STATSPAI_ALIAS_WARN", "") not in (
 )
 
 
-def accepts_aliases(_warn: bool | None = None, **alias_map: str) -> Callable[[F], F]:
+def accepts_aliases(
+    _warn: bool | None = None, _strict: bool = False, **alias_map: str
+) -> Callable[[F], F]:
     """Accept alternative keyword spellings, forwarding to existing params.
 
     Parameters
@@ -81,6 +85,26 @@ def accepts_aliases(_warn: bool | None = None, **alias_map: str) -> Callable[[F]
 
     def decorator(func: F) -> F:
         warn = WARN_ON_LEGACY if _warn is None else _warn
+        try:
+            params = inspect.signature(func).parameters
+        except (TypeError, ValueError):  # pragma: no cover - builtins
+            params = {}
+        takes_var_kw = any(p.kind is p.VAR_KEYWORD for p in params.values())
+        if params and _strict:
+            # An alias that is also a real parameter would silently rebind it.
+            # Opt-in: legacy call sites (e.g. regress's vce= -> robust=) fold
+            # a declared parameter into another on purpose.
+            clash = sorted(a for a in alias_map if a in params)
+            missing = sorted(
+                t for t in alias_map.values() if t not in params and not takes_var_kw
+            )
+            if clash or missing:
+                raise ValueError(
+                    f"accepts_aliases on {func.__name__}: aliases {clash} are "
+                    f"existing parameters; targets {missing} are not parameters."
+                )
+        inherited: Dict[str, str] = dict(getattr(func, "__statspai_aliases__", {}))
+        known = set(params) | set(alias_map) | set(inherited)
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -100,12 +124,26 @@ def accepts_aliases(_warn: bool | None = None, **alias_map: str) -> Callable[[F]
                             DeprecationWarning,
                             stacklevel=2,
                         )
+            if params and not takes_var_kw:
+                unknown = [k for k in kwargs if k not in known]
+                if unknown:
+                    raise TypeError(_unexpected_message(func.__name__, unknown, known))
             return func(*args, **kwargs)
 
         # Advertise the accepted aliases (merge if stacked).
-        existing: Dict[str, str] = dict(getattr(func, "__statspai_aliases__", {}))
+        existing = dict(inherited)
         existing.update(alias_map)
         wrapper.__statspai_aliases__ = existing  # type: ignore[attr-defined]
         return wrapper  # type: ignore[return-value]
 
     return decorator
+
+
+def _unexpected_message(name: str, unknown: list, known: set) -> str:
+    """``TypeError`` text for unknown keywords, with did-you-mean suggestions."""
+    parts = []
+    for key in unknown:
+        close = difflib.get_close_matches(key, sorted(known), n=3, cutoff=0.6)
+        hint = f" (did you mean {', '.join(repr(c) for c in close)}?)" if close else ""
+        parts.append(f"{key!r}{hint}")
+    return f"{name}() got unexpected keyword argument(s): {'; '.join(parts)}."

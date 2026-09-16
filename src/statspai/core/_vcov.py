@@ -32,14 +32,74 @@ from __future__ import annotations
 import numpy as np
 
 from ..exceptions import MethodIncompatibility
-from ._numba_kernels import cluster_meat, sandwich_hc
+
+# ``._numba_kernels`` imports numba at module level, so it is imported inside
+# the two functions that need it: ``ml_vcov`` (used by the likelihood
+# estimators that ``import statspai`` loads eagerly) needs no kernel, and a
+# plain import must not pay for numba. Same rule as ``core/_validate``.
 
 __all__ = [
     "cluster_robust_vcov",
     "hc_vcov",
+    "ml_vcov",
     "sandwich_vcov",
     "cluster_correction_factor",
 ]
+
+
+def ml_vcov(
+    bread: np.ndarray,
+    scores: np.ndarray | None = None,
+    *,
+    kind: str,
+    clusters: np.ndarray | None = None,
+) -> np.ndarray:
+    """Variance of a maximum-likelihood estimator under Stata's conventions.
+
+    ``bread`` is the inverse of the observed information (the negative
+    Hessian of the log-likelihood at the optimum) and ``scores`` the
+    ``(n, k)`` per-observation gradient contributions.
+
+    With ``B = bread``, ``S`` the scores and ``s_g`` their cluster sums:
+
+    =============  ==============================  ====================
+    ``kind``       covariance                      Stata equivalent
+    =============  ==============================  ====================
+    ``nonrobust``  ``B``                           ``vce(oim)``
+    ``robust``     ``N/(N-1) * B S'S B``           ``vce(robust)``
+    ``cluster``    ``G/(G-1) * B (sum s_g s_g') B``  ``vce(cluster c)``
+    ``hc0``        ``B S'S B``                     R ``sandwich`` HC0
+    ``hc1``        ``N/(N-K) * B S'S B``           textbook HC1
+    =============  ==============================  ====================
+
+    The ``N/(N-1)`` factor is Stata's ``_robust`` default for every ML
+    command (``logit``, ``poisson``, ``glm``, ``ologit``, ``zip`` ...);
+    ``regress`` is the exception, whose ``vce(robust)`` is HC1, and is not
+    handled here.  The ML cluster factor is ``G/(G-1)`` alone -- not the
+    ``(N-1)/(N-K)``-augmented factor ``regress`` uses.
+    """
+    kind = kind.lower()
+    bread = np.asarray(bread, dtype=np.float64)
+    if kind == "nonrobust":
+        return np.array(bread, copy=True)
+    if scores is None:
+        raise MethodIncompatibility(
+            f"ml_vcov(kind={kind!r}) needs per-observation scores."
+        )
+    scores = np.asarray(scores, dtype=np.float64)
+    n = scores.shape[0]
+    if kind == "cluster":
+        if clusters is None:
+            raise MethodIncompatibility("ml_vcov(kind='cluster') needs cluster labels.")
+        return sandwich_vcov(bread, scores, clusters=clusters, correction="cgm")
+    if kind == "robust":
+        return sandwich_vcov(bread, scores, dof_adjust=n / (n - 1.0))
+    if kind in ("hc0", "hc1"):
+        return sandwich_vcov(bread, scores, correction=kind)
+    raise MethodIncompatibility(
+        f"ml_vcov: kind={kind!r} is not defined for maximum-likelihood models; "
+        "use 'nonrobust', 'robust', 'cluster', 'hc0' or 'hc1'."
+    )
 
 
 def sandwich_vcov(
@@ -212,6 +272,8 @@ def cluster_robust_vcov(
     clusters = _cluster_labels_array(clusters, n)
     if XtX_inv is None:
         XtX_inv = np.linalg.inv(X.T @ X)
+    from ._numba_kernels import cluster_meat
+
     meat = cluster_meat(X, residuals, clusters)
     n_clusters = int(np.unique(clusters).shape[0])
     if dof_adjust is not None:
@@ -234,4 +296,6 @@ def hc_vcov(
     residuals = np.asarray(residuals, dtype=np.float64)
     if XtX_inv is None:
         XtX_inv = np.linalg.inv(X.T @ X)
+    from ._numba_kernels import sandwich_hc
+
     return sandwich_hc(X, residuals, XtX_inv, hc_type=hc_type)

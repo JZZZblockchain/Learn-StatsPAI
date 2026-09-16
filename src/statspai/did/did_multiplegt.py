@@ -44,6 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 
 # ======================================================================
@@ -51,6 +52,9 @@ from ..core.results import CausalResult
 # ======================================================================
 
 
+@accepts_aliases(
+    _strict=True, id="group", unit="group", treat="treatment", covariates="controls"
+)
 def did_multiplegt(
     data: pd.DataFrame,
     y: str,

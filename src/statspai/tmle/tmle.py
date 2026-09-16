@@ -43,6 +43,7 @@ from scipy.special import expit, logit
 if TYPE_CHECKING:
     from sklearn.base import BaseEstimator
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from .super_learner import SuperLearner
 
@@ -51,6 +52,7 @@ from .super_learner import SuperLearner
 # ======================================================================
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def tmle(
     data: pd.DataFrame,
     y: str,

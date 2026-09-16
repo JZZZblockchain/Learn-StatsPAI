@@ -704,6 +704,12 @@
       "tolerance": "exact (atol 1e-15; observed 0)"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "betareg",
       "headline": {
         "metric": "rel_est",
@@ -810,6 +816,9 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
       "also_verified_by": [
         "reference_parity"
       ],
@@ -1413,6 +1422,12 @@
       "tolerance": "rel_est<=1e-06"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "clogit",
       "headline": {
         "metric": "rel_est",
@@ -1457,6 +1472,9 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
       "also_verified_by": [
         "reference_parity"
       ],
@@ -3677,6 +3695,9 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
       "also_verified_by": [
         "reference_parity"
       ],
@@ -4195,6 +4216,9 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
       "also_verified_by": [
         "reference_parity"
       ],
@@ -5057,7 +5081,9 @@
         "tests/reference_parity/test_iv_wild_boottest_parity.py",
         "tests/reference_parity/test_liml_se_parity.py",
         "tests/reference_parity/test_paper_parity.py",
-        "tests/reference_parity/test_track_a_alias_equivalence.py"
+        "tests/reference_parity/test_postestimation_stata_parity.py",
+        "tests/reference_parity/test_track_a_alias_equivalence.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "external_parity",
@@ -5442,7 +5468,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_liml_se_parity.py"
+        "tests/reference_parity/test_liml_se_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -5505,7 +5532,8 @@
       "source": "reference_parity",
       "status": "analytical-only",
       "test": [
-        "tests/reference_parity/test_postestimation_parity.py"
+        "tests/reference_parity/test_postestimation_parity.py",
+        "tests/reference_parity/test_postestimation_stata_parity.py"
       ],
       "tolerance": ""
     },
@@ -5612,6 +5640,13 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_postestimation_stata_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "logit",
       "headline": {
         "metric": "rel_est",
@@ -5940,7 +5975,8 @@
       "source": "reference_parity",
       "status": "analytical-only",
       "test": [
-        "tests/reference_parity/test_postestimation_parity.py"
+        "tests/reference_parity/test_postestimation_parity.py",
+        "tests/reference_parity/test_postestimation_stata_parity.py"
       ],
       "tolerance": ""
     },
@@ -6410,6 +6446,12 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "mlogit",
       "headline": {
         "metric": "rel_est",
@@ -7119,7 +7161,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_count_quantile_parity.py"
+        "tests/reference_parity/test_count_quantile_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -7512,6 +7555,13 @@
       "tolerance": "Simulated unbalanced panel with 31 calendar gaps. Free-input coefficient (stage-1 OLS) at 1e-12 against both, polynomial degree 2 and 3. State coefficient: StatsPAI solves the first-order condition and has a sum of squares no larger than at either reference estimate; the references stop their optimisers early (R BFGS 5.9e-6 away, Stata Nelder-Mead at tolerance 1e-5 up to 4.3e-3 away)."
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_postestimation_stata_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "ologit",
       "headline": {
         "metric": "rel_est",
@@ -7558,6 +7608,12 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-05"
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "oprobit",
       "headline": {
         "metric": "rel_est",
@@ -7800,7 +7856,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_panel_estimators_parity.py"
+        "tests/reference_parity/test_panel_estimators_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -7826,7 +7883,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_panel_estimators_parity.py"
+        "tests/reference_parity/test_panel_estimators_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -7976,7 +8034,9 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_count_quantile_parity.py"
+        "tests/reference_parity/test_count_quantile_parity.py",
+        "tests/reference_parity/test_postestimation_stata_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -8511,6 +8571,13 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_postestimation_stata_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "probit",
       "headline": {
         "metric": "rel_est",
@@ -9292,11 +9359,13 @@
         "tests/reference_parity/test_ols_se_external_parity.py",
         "tests/reference_parity/test_panel_bias_reduced_parity.py",
         "tests/reference_parity/test_postestimation_parity.py",
+        "tests/reference_parity/test_postestimation_stata_parity.py",
         "tests/reference_parity/test_recovery_batch2_parity.py",
         "tests/reference_parity/test_regress_weights_iv_robust_parity.py",
         "tests/reference_parity/test_sasp_within_parity.py",
         "tests/reference_parity/test_spdep_parity.py",
-        "tests/reference_parity/test_thornton_ri_parity.py"
+        "tests/reference_parity/test_thornton_ri_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_in_modules": [
         "14_ols_cluster",
@@ -10980,7 +11049,8 @@
       "source": "reference_parity",
       "status": "analytical-only",
       "test": [
-        "tests/reference_parity/test_postestimation_parity.py"
+        "tests/reference_parity/test_postestimation_parity.py",
+        "tests/reference_parity/test_postestimation_stata_parity.py"
       ],
       "tolerance": ""
     },
@@ -11190,6 +11260,12 @@
       "tolerance": ""
     },
     {
+      "additional_tests": [
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
+      ],
+      "also_verified_by": [
+        "reference_parity"
+      ],
       "function": "truncreg",
       "headline": {
         "metric": "rel_est",
@@ -11707,7 +11783,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_count_quantile_parity.py"
+        "tests/reference_parity/test_count_quantile_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -11761,7 +11838,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_count_quantile_parity.py"
+        "tests/reference_parity/test_count_quantile_parity.py",
+        "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"

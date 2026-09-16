@@ -92,7 +92,7 @@ to a published design (`source == "simulated"`), including the
 Callaway–Sant'Anna `mpdta` panel used below; their numbers are not the numbers
 from the original data.
 
-At a glance: 1,182 registered functions across 87 submodules; 395k LOC (core) + 250k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
+At a glance: 1,183 registered functions across 87 submodules; 397k LOC (core) + 252k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
 
 ---
 
@@ -220,11 +220,11 @@ educ            0.1323      0.0492       2.6870 0.0072  0.0358  0.2288
 
 Model Diagnostics:
 ...
-First-stage F (educ): 16.7176
+First-stage F (educ)        : 16.7176
 ...
-Partial R² (educ)   : 0.0055
-Hausman F-stat      : 1.5390
-Hausman p-value     : 0.2149
+Partial R² (educ)           : 0.0055
+Hausman F-stat              : 1.5390
+Hausman p-value             : 0.2149
 ```
 
 The IV estimate (`0.132`) is larger than OLS but about 13 times less precise.
@@ -330,8 +330,8 @@ Conventional    7.4141 1.4587 5.0826  0.0000    4.5551   10.2732
 ------------------------------------------------------------------------------
   Observations:    1,297
 ...
-  Bandwidth H:    17.75439729605877
-  Bandwidth B:    28.028087178624308
+  Bandwidth H:    17.7544
+  Bandwidth B:    28.0281
 ...
   N Effective Left:    360
   N Effective Right:    323

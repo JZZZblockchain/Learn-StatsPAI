@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..core.results import CausalResult
 from ..exceptions import ConvergenceFailure, DataInsufficient, MethodIncompatibility
 
@@ -118,6 +119,7 @@ def _validate_support(X: np.ndarray, c: float) -> Tuple[int, int, int]:
     return n, n_l, n_r
 
 
+@accepts_aliases(_strict=True, running="x", cutoff="c")
 def rddensity(
     data: pd.DataFrame,
     x: str,
