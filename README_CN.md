@@ -19,9 +19,10 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
 
 你可以把它理解成新项目的 Stata/R 平替入口：
 
-- Stata 风格：`regress`、`ivregress`、`reghdfe`、`csdid`、`rdrobust`、`synth`、`psmatch2`、`outreg2`。
+- Stata 风格：`regress`、`ivregress`、`reghdfe`、`csdid`、`rdrobust`、`synth`、`psmatch2`、`esttab` / `outreg2`。
 - R 风格：`lm`、`fixest`、`did`、`rdrobust`、`Synth`、`DoubleML`、`MatchIt`、`modelsummary`、`broom`。
 - Python 输出：在支持的结果对象上直接用 `.summary()`、`.tidy()`、`.plot()`、`.to_latex()`、`.to_docx()`、`.to_agent_summary()`。
+- Agent 原生：每个公开函数都在注册表里带机器可读 schema（`sp.list_functions()`、`sp.describe_function()`、`sp.function_schema()`），随包附带的 `statspai-mcp` 服务把估计器暴露给 Claude Code、Claude Desktop、Cursor 等 MCP 客户端。
 - Stata Agent 协同：我们自己开发的 [`stata-code`](https://github.com/brycewang-stanford/stata-code/)
   可以和 StatsPAI 配合，让 agent 更顺畅地理解既有 Stata 工作流、迁移到 Python，并做结果对照。
 - Skills repo 协同：[`Auto-Empirical-Research-Skills`](https://github.com/brycewang-stanford/Auto-Empirical-Research-Skills)、
@@ -30,7 +31,7 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
   和 [`Paper-WorkFlow`](https://github.com/brycewang-stanford/Paper-WorkFlow)
   可以和 StatsPAI 以及 agent 一起使用，作为方法选择、期刊要求、论文流程和可复现检查的技能层。
 
-这不是说每个 Stata/R 命令都已经逐字节复现。需要严肃对齐时，请看函数的 `validation_status`、参考对齐测试和 `sp.cross_validate`。`validation_status` 把 certified / validated / api_stable 三档区分开：certified / validated 表示有数值证据，api_stable 只表示接口稳定、并非数值验证。完整的分级普查见 `docs/jss_source_audit_dossier.md`。
+这不是说每个 Stata/R 命令都已经逐字节复现。API 覆盖面很广，但背后的数值证据并不均匀：有的估计器在同一份数据上与 R/Stata 逐一对照过，有的只用已知真值的模拟验证过，还有很多目前只承诺接口稳定、没有数值对齐声明。每个函数都带有 `validation_status` 标明属于哪种情况，它把 certified / validated / api_stable 区分开：前两档有数值证据，api_stable 只表示接口稳定。论文要用某个数字之前，请先看[验证状态](#验证状态哪些核验过哪些还没有)。
 
 ---
 
@@ -40,17 +41,28 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
 pip install statspai
 ```
 
-然后：
+支持 Python 3.9 – 3.13。核心安装已包含估计、诊断、内置数据集，以及 `.xlsx` / `.docx` / LaTeX 导出。画图和较重的后端是可选 extras：
+
+| Extra | 增加 | 用途 |
+| --- | --- | --- |
+| `statspai[plotting]` | matplotlib、seaborn、plotly | `.plot()`、`sp.ggdid()`、`sp.interactive()` 等图形 |
+| `statspai[fixest]` | pyfixest（Python ≥ 3.10） | `sp.fixest.*` 封装，以及交叉验证中的 pyfixest 引擎 |
+| `statspai[bayes]` | PyMC、ArviZ | 贝叶斯估计器 |
+| `statspai[neural]` / `statspai[deepiv]` | PyTorch | 神经网络因果模型、DeepIV |
+| `statspai[performance]` | JAX | 加速后端 |
+| `statspai[spatial]` | geopandas、libpysal、shapely | shapefile / 几何空间权重 |
+
+交互式图表编辑器在 Jupyter 里还需要 `ipywidgets`。
 
 ```python
 import statspai as sp
 
-print(sp.datasets.list_datasets()[["name", "design", "n_obs"]].head())
+print(sp.datasets.list_datasets()[["name", "design", "source"]])
 ```
 
-StatsPAI 随包带有 Card (1995)、Callaway-Sant'Anna `mpdta`、Lee (2008) RD、LaLonde/NSW、California Proposition 99 等教学数据集。下面的例子安装后可以离线运行。
+StatsPAI 内置 14 个可离线加载的数据集。大部分是真实的已发表数据（`source == "bundled CSV"`）：Card (1995) NLSYM 教育回报数据、带 PSID 对照组的 LaLonde/NSW、R `rdrobust` 附带的美国参议院 RD 数据、California Proposition 99、castle-doctrine 面板、NHEFS 等。少数是按已发表设计校准的**确定性模拟复刻**（`source == "simulated"`），包括下面用到的 Callaway–Sant'Anna `mpdta` 面板——它们的数字不是原始数据上的数字。
 
-一眼概览：1,182 个注册函数，分布在 87 个子模块；352k 行核心代码 + 200k 行测试。运行 `python scripts/registry_stats.py` 可复现这些数字。
+一眼概览：1,182 个注册函数，分布在 87 个子模块；395k 行核心代码 + 250k 行测试。运行 `python scripts/registry_stats.py` 可复现这些数字。
 
 ---
 
@@ -60,35 +72,45 @@ StatsPAI 随包带有 Card (1995)、Callaway-Sant'Anna `mpdta`、Lee (2008) RD�
 | --- | --- | --- |
 | OLS / 稳健标准误 | `reg y x, vce(robust)` / `lm()` + `sandwich` | `sp.regress(..., robust="hc1")` |
 | IV / 2SLS | `ivregress 2sls` / `AER::ivreg()` | `sp.ivreg("y ~ (d ~ z) + x", data=df)` |
-| 高维固定效应 | `reghdfe` / `fixest::feols()` | `sp.feols("y ~ x | firm + year", data=df)` |
+| 高维固定效应 | `reghdfe` / `fixest::feols()` | `sp.feols("y ~ x \| firm + year", data=df)` |
 | 交错 DiD | `csdid` / `did::att_gt()` | `sp.callaway_santanna()` + `sp.aggte()` |
 | 断点回归 | `rdrobust` / `rdrobust::rdrobust()` | `sp.rdrobust()` |
 | 合成控制 | `synth` / `Synth::synth()` | `sp.synth()` |
-| 匹配 / PSM | `psmatch2` / `MatchIt` | `sp.psmatch2()` 和 matching helpers |
-| 论文表格 | `outreg2`、`esttab` / `modelsummary` | `sp.outreg2()`、`sp.modelsummary()` |
+| 匹配 / PSM | `psmatch2` / `MatchIt` | `sp.psmatch2()`、`sp.match()` |
+| 双重机器学习 | `ddml` / `DoubleML` | `sp.dml()` |
+| 估计后检验 | `test`、`margins` | `sp.test()`、`sp.margins()` |
+| 论文表格 | `esttab`、`outreg2` / `modelsummary` | `sp.regtable()` |
+| 翻译命令 | — | `sp.from_stata("reghdfe y x, absorb(id year)")`、`sp.from_r("feols(...)")` |
+
+`sp.esttab()`、`sp.outreg2()`、`sp.modelsummary()` 仍然可用，但已是 `sp.regtable()` 的弃用薄封装，调用时会发出 `DeprecationWarning`。
 
 ---
 
-## 和其他 Python 因果推断包的简洁对比
+## 和其他 Python 包的对比
 
-StatsPAI 的定位是一个更宽的 Stata/R 风格实证研究工作台，而不是只覆盖某一种建模范式。
+StatsPAI 想做的是一个覆盖面广的 Stata/R 风格实证工作台。下面这些专注型 Python 包各自做好其中一部分，而且往往历史更长；如果你只需要那一部分，它们都是很好的选择。
 
-| 包 | 更适合什么 | StatsPAI 的不同点 |
+| 包 | 专注于什么 | 与 StatsPAI 的关系 |
 | --- | --- | --- |
-| [`causallib`](https://github.com/BiomedSciAI/causallib) | 观测数据因果推断，偏 scikit-learn 风格流程：IPW、匹配、标准化、双重稳健估计和评估。 | StatsPAI 更偏 Stata/R 平替：OLS、IV、高维固定效应、DiD、RD、合成控制、匹配、诊断、验证元数据和论文表格导出都在同一个 API 里。 |
-| [`CausalPy`](https://github.com/pymc-labs/CausalPy) | 基于 PyMC 的 Bayesian quasi-experimental 因果分析，强调不确定性和可视化诊断。 | StatsPAI 优先服务熟悉 Stata/R 的实证工作流：常用计量命令、频率学派估计、跨 Stata/R 的验证证据、内置教学数据和 Agent 可读结果摘要。 |
+| [`pyfixest`](https://github.com/py-econometrics/pyfixest) | fixest 风格的高维固定效应 OLS / IV / GLM、事件研究 DiD、wild bootstrap、表格 | StatsPAI 有自己的 `sp.feols`（与 R `fixest` 对照过），并把 pyfixest 作为可选封装和交叉验证引擎。 |
+| [`linearmodels`](https://github.com/bashtage/linearmodels) | 面板模型、IV / GMM、系统估计 | StatsPAI 面板模块的部分功能依赖它（核心依赖），也是 `sp.cross_validate` 的独立引擎之一。 |
+| [`DoubleML`](https://github.com/DoubleML/doubleml-for-py) | 双重/去偏机器学习（PLR、PLIV、IRM、IIVM），有 R 孪生包 | `sp.dml` 在相同学习器和折分下与 DoubleML 对照过。 |
+| [`EconML`](https://github.com/py-why/EconML) | 异质处理效应：DML、因果森林、DR learner、IV、策略学习 | `sp.metalearner` 与 EconML 的 S/T/X learner 对照过。 |
+| [`DoWhy`](https://github.com/py-why/dowhy) | 基于因果图的 建模 → 识别 → 估计 → 反驳 流程；图因果模型 | StatsPAI 也有 DAG 和因果发现工具，但以估计器为中心，而非以因果图为中心。 |
+| [`CausalPy`](https://github.com/pymc-labs/CausalPy) | 以 PyMC 贝叶斯为主（也支持 scikit-learn OLS）的准实验分析：DiD、合成控制、RD、ITS、IV | StatsPAI 以频率学派计量惯例为中心（聚类 / 稳健标准误、偏差校正 RD、CS-DiD 聚合），并提供跨语言对齐证据。 |
+| [`causallib`](https://github.com/BiomedSciAI/causallib) | scikit-learn 风格的 IPW、标准化、双重稳健估计和因果评估 | StatsPAI 在同一个 API 里同时覆盖这些方法以及回归、面板、DiD、RD、合成控制工作流。 |
 
-如果主要想要 sklearn 风格的 treatment-effect pipeline，`causallib` 很合适；如果想做 PyMC Bayesian causal modeling，`CausalPy` 很合适；如果目标是用一个 Python 包替代日常 Stata/R 实证工作流，StatsPAI 更贴近这个目标。
+如果你想要一个包、一个函数注册表、一个 Agent 接口来覆盖日常 Stata/R 实证工作流，StatsPAI 更贴近这个目标。
 
 ---
 
 ## 新手案例：代码和结果一起看
 
-下面的结果来自本仓库随带示例，使用 StatsPAI 1.20.0 运行后四舍五入展示。
+下面的输出由 StatsPAI 1.28.0 在内置数据集上实际运行得到。较长的 summary 做了节选（`...` 表示省略的行）；这些数字由 `tests/test_readme_examples.py` 和 `tests/test_synth_placebo_pvalue.py` 钉住，今后不会再悄悄与代码脱节。
 
 ### 1. OLS：替代第一条 `regress` / `lm`
 
-问题：在 Card (1995) 教学数据中，多上一年学和 log wage 的关系有多大？
+问题：在 Card (1995) NLSYM 数据中，多上一年学和 log wage 的关系有多大？
 
 ```python
 import statspai as sp
@@ -106,25 +128,29 @@ print(ols.summary())
 
 ```text
 Model: OLS
+Method: Least Squares
 Dependent Variable: lwage
+...
+           Coefficient  Std. Error  t-statistic  P>|t|  [0.025  0.975]
+Intercept       4.7337      0.0702      67.4718 0.0000  4.5961  4.8712
+educ            0.0740      0.0036      20.3208 0.0000  0.0669  0.0812
+exper           0.0836      0.0067      12.4165 0.0000  0.0704  0.0968
+expersq        -0.0022      0.0003      -7.0443 0.0000 -0.0029 -0.0016
+black          -0.1896      0.0174     -10.8781 0.0000 -0.2238 -0.1555
+south          -0.1249      0.0154      -8.1339 0.0000 -0.1550 -0.0948
+smsa            0.1614      0.0152      10.6374 0.0000  0.1317  0.1912
 
-              Coefficient  Std. Error  t-statistic  P>|t|
-Intercept          4.8388      0.0637      76.0131 0.0000
-educ               0.1100      0.0041      26.5543 0.0000
-exper              0.0283      0.0054       5.2742 0.0000
-expersq           -0.0005      0.0002      -2.2132 0.0270
-black             -0.1561      0.0231      -6.7571 0.0000
-south             -0.0554      0.0193      -2.8636 0.0042
-smsa               0.0905      0.0205       4.4214 0.0000
-
-R-squared: 0.2307
+Model Diagnostics:
+--------------------
+R-squared           : 0.2905
+...
 ```
 
-像读 Stata/R 回归表一样读：在这个 replica 里，多上一年学与约 `0.110` 的 log wage 增加相关；这还没有处理教育的内生性。加上 Card (1995) 常用控制（经验及其平方、种族、地区、SMSA），R² 从 `0.210` 提到 `0.231`，educ 系数几乎不变 —— `educ` 中的经典测量误差导致的小幅衰减仍然存在，这正是 example 2 中用 IV 来解决的。
+像读 Stata/R 回归表一样读：控制经验、种族、地区和 SMSA 之后，多上一年学与 log wage 高约 `0.074`（约 7.4%）相关。这还只是相关，不是因果回报：受教育年限很可能与不可观测的能力相关，这正是例 2 用 IV 的原因。HC1 标准误与 Stata `vce(robust)` / `sandwich::vcovHC(type = "HC1")` 的约定一致。
 
 ### 2. IV / 2SLS：替代 `ivregress 2sls` 或 `AER::ivreg`
 
-问题：用是否接近四年制大学（`nearc4`）作为教育年限的工具变量。
+问题：用成长地附近是否有四年制大学（`nearc4`）作为受教育年限的工具变量。
 
 ```python
 import statspai as sp
@@ -141,27 +167,50 @@ print(iv.summary())
 
 ```text
 Model: IV-2SLS
+Method: Two-Stage Least Squares
 Dependent Variable: lwage
-
-           Coefficient  Std. Error  t-statistic  P>|t|
-educ            0.1418      0.0188       7.5606 0.0000
+...
+           Coefficient  Std. Error  t-statistic  P>|t|  [0.025  0.975]
+...
+educ            0.1323      0.0492       2.6870 0.0072  0.0358  0.2288
 
 Model Diagnostics:
-First-stage F (educ): 159.8305
-Partial R2 (educ)   : 0.0505
-Hausman p-value     : 0.0322
+...
+First-stage F (educ): 16.7176
+...
+Partial R² (educ)   : 0.0055
+Hausman F-stat      : 1.5390
+Hausman p-value     : 0.2149
 ```
 
-StatsPAI 会把系数和常见诊断一起打印出来，不需要再手动拼多个 post-estimation 命令。
+IV 估计（`0.132`）比 OLS 大，但精度低了约 13 倍。工具变量并不强——`nearc4` 只解释受教育年限 0.55% 的残差变异（一阶段 F ≈ 16.7）——而且 Hausman 检验不拒绝 `educ` 外生（p = 0.21）。默认标准误是非稳健标准误，带 `AER::ivreg` 的小样本自由度修正（对应 Stata `ivregress 2sls ..., small`）；需要异方差稳健标准误时传 `robust="hc1"`。
+
+一阶段这么弱时，应同时报告对弱工具稳健的置信区间：
+
+```python
+ar = sp.anderson_rubin_ci(
+    y="lwage", endog="educ", instruments=["nearc4"],
+    exog=["exper", "expersq", "black", "south", "smsa"], data=card,
+)
+print(ar.summary())
+```
+
+```text
+Anderson-Rubin (AR) — weak-IV-robust confidence set
+------------------------------------------------------------
+  level                : 95%
+  grid                 : 401 points on [-0.359, 0.624]
+  confidence set       : [0.0389, 0.2601]
+```
 
 ### 3. 交错 DiD：替代 `csdid` 或 R `did`
 
-问题：Callaway-Sant'Anna `mpdta` 例子里，最低工资政策对 teen employment 的平均影响是多少？
+问题：在 Callaway–Sant'Anna `mpdta` 设计里，最低工资上调对青少年就业的平均影响是多少？
 
 ```python
 import statspai as sp
 
-mp = sp.datasets.mpdta()
+mp = sp.datasets.mpdta()   # R did 包 mpdta 的模拟复刻
 gt = sp.callaway_santanna(
     data=mp,
     y="lemp",
@@ -176,45 +225,64 @@ print(overall.summary())
 结果：
 
 ```text
-Callaway and Sant'Anna (2021) - aggte[simple]
+==============================================================================
+  Callaway and Sant'Anna (2021) — aggte[simple]
+==============================================================================
 
-ATT:        -0.032977
-Std. Error:  0.005493
-95% CI:     [-0.043742, -0.022211]
-P-value:     0.0000
-Observations: 2,500
+  ATT:      -0.032977 ***
+  Std. Error:  (0.007765)
+  [95% CI]:    [-0.048195,  -0.017758]
+  P-value:     0.0000
+...
+  Observations:    2,500
+...
 ```
 
-这个 replica 的总体 ATT 为负，而且估计很精确。
+聚合后的 ATT 约为 `-0.033` 个对数点，估计很精确。内置的 `mpdta` 是校准过的模拟复刻，所以这不是 R 在原始 `mpdta` 数据上报告的数字。**核验过的是**：同一份 CSV 交给 R `did::att_gt()` + `aggte()` 和 Stata `csdid`，得到相同的 ATT 和标准误（Track A 对齐模块 `04_csdid`）。
 
 ### 4. RD：替代 `rdrobust`
 
-问题：Lee (2008) 参议院选举设计里，在 0 margin 附近是否存在 incumbent advantage？
+问题：美国参议院选举中，在胜负差为 0 的断点处是否存在政党在位优势？
 
 ```python
 import statspai as sp
 
-lee = sp.datasets.lee_2008_senate()
-rd = sp.rdrobust(data=lee, y="voteshare_next", x="margin", c=0)
+senate = sp.datasets.lee_2008_senate()  # rdrobust 的参议院数据：x = 胜负差，y = 得票率
+rd = sp.rdrobust(data=senate, y="y", x="x", c=0)
 print(rd.summary())
 ```
 
 结果：
 
 ```text
-Sharp RD Estimation
+==============================================================================
+  Sharp RD Estimation
+==============================================================================
 
-RD Effect:   0.061599
-Std. Error:  0.022662
-95% CI:     [0.017183, 0.106015]
-P-value:     0.0066
+  RD Effect:       7.506502 ***
+  Std. Error:  (1.741258)
+  [95% CI]:    [4.093699,  10.919306]
+  P-value:     0.0000
 
-Bandwidth H: 0.042287
-N Effective Left: 440
-N Effective Right: 443
+------------------------------------------------------------------------------
+  Inference
+------------------------------------------------------------------------------
+      method  estimate     se      z  pvalue  ci_lower  ci_upper
+Conventional    7.4141 1.4587 5.0826  0.0000    4.5551   10.2732
+      Robust    7.5065 1.7413 4.3110  0.0000    4.0937   10.9193
+
+------------------------------------------------------------------------------
+  Observations:    1,297
+...
+  Bandwidth H:    17.75439729605877
+  Bandwidth B:    28.028087178624308
+...
+  N Effective Left:    360
+  N Effective Right:    323
+...
 ```
 
-稳健偏差校正后的 RD 估计约为 `0.062` vote-share points。
+数据是 Cattaneo, Frandsen & Titiunik (2015, [doi:10.1515/jci-2013-0010](https://doi.org/10.1515/jci-2013-0010)) 构建、随 R `rdrobust` 发布的节选（加载函数沿用了历史名称）：按 `rdrobust` 自带示例的定义，`x` 是政党在第 t 次选举中的得票差，`y` 是其在第 t+2 次选举中的得票率（0–100）。在 t 期险胜使 t+2 期得票率提高约 7.4 个百分点（常规估计），稳健偏差校正后为 7.5；首行报告的是稳健偏差校正的估计和置信区间。在这份数据上，默认 MSE 最优带宽、估计值和标准误与 R `rdrobust::rdrobust()` 及 Stata `rdrobust` 一致（Track A 对齐模块 `06_rd`）。样本量是 1,297，因为有 93 行结果变量缺失。
 
 ### 5. 合成控制：替代 Stata/R `synth`
 
@@ -238,20 +306,26 @@ print(sc.summary())
 结果：
 
 ```text
-Synthetic Control Method
+==============================================================================
+  Synthetic Control Method
+==============================================================================
 
-ATT:        -19.760529
-Std. Error:  11.233914
-95% CI:     [-41.778595, 2.257538]
-P-value:     0.0769
+  ATT:      -19.760529 *
+  Std. Error:  (11.233914)
+  [95% CI]:    [-41.778595,  2.257538]
+  P-value:     0.0769
 
-Active donor weights:
-Utah           0.3768
-Montana        0.2831
-Nevada         0.1881
-Connecticut    0.0690
+------------------------------------------------------------------------------
+  Detailed Estimates
+------------------------------------------------------------------------------
+         unit  weight
+         Utah  0.3768
+      Montana  0.2831
+       Nevada  0.1881
+  Connecticut  0.0690
 New Hampshire  0.0439
-Colorado       0.0391
+     Colorado  0.0391
+...
 ```
 
 干预后 California 的人均香烟销量每年大约少了 20 包。p 值是 in-space placebo 排序：
@@ -260,28 +334,49 @@ California 的 post/pre RMSPE 比值在 39 个州里排第 3，所以 p = 3/39 �
 `covariates=`（例如 `["lnincome", "retprice", "age15to24", "beer"]`）。
 这条路径会对每个 placebo 州重新求解嵌套 V-W 问题，明显更慢：可传 `n_jobs=-1` 并行拟合 placebo（结果逐位一致），调试设定时也可先用 `placebo=False`。
 
+读这个数字时要带上它的前提（完整 summary 里也会打印）：在真实数据上，经典 SCM 的权重往往不是唯一识别的，不同的正确求解器可能落在不同的 donor 权重上。StatsPAI 的原生求解器在唯一识别的设计上经过认证，其他情形标注为"依赖识别"。在这个设定上，R `Synth` 得到的 ATT 约为 `-19.59` 而不是 `-19.76`；需要 R 的精确数字时，传 `backend="synth"`（需要本机装有 R 和 `Synth` 包，只支持结果滞后项设定）。
+
 ---
 
 ## 导出结果
 
-每个结果对象都自带 Stata 风格与 R（modelsummary/broom）风格的导出器。一行代码就能生成
-多 sheet 的 `.xlsx` 或可以直接交给合作者的 Word 表格。
+`sp.regtable()` 是所有导出格式背后唯一的表格构建器。表格建一次，再输出成合作者需要的任何格式：
 
 ```python
-sp.outreg2(r1, r2, filename="results.xlsx")            # Excel，Stata 风格
-sp.modelsummary(r1, r2, output="table.docx")            # Word，modelsummary 风格
+import statspai as sp
+
+card = sp.datasets.card_1995()
+m1 = sp.regress("lwage ~ educ", data=card, robust="hc1")
+m2 = sp.regress("lwage ~ educ + exper + expersq", data=card, robust="hc1")
+m3 = sp.regress("lwage ~ educ + exper + expersq + black + south + smsa",
+                data=card, robust="hc1")
+m4 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper + expersq + black + south + smsa",
+              data=card, robust="hc1")
+
+tbl = sp.regtable(
+    m1, m2, m3, m4,
+    model_labels=["OLS (1)", "OLS (2)", "OLS (3)", "2SLS (4)"],
+    coef_labels={"educ": "Years of schooling", "exper": "Experience",
+                 "expersq": "Experience squared", "black": "Black",
+                 "south": "South", "smsa": "SMSA"},
+    drop=["Intercept"],
+    title="Returns to Schooling (Card 1995)",
+    notes=["HC1 robust SE. Column (4) instruments schooling with nearc4."],
+)
+print(tbl)                    # 终端
+tbl.to_excel("table1.xlsx")   # Excel
+tbl.to_word("table1.docx")    # Word
+tbl.to_latex()                # LaTeX 源码；另有 .to_markdown()、.to_html()
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/export-card-xlsx.png" alt="sp.outreg2 导出 — Card 1995 OLS + IV 表" width="820">
+  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/export-card-xlsx.png" alt="sp.regtable 导出 — Card 1995 OLS + IV 表" width="820">
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/export-lalonde-xlsx.png" alt="sp.outreg2 导出 — LaLonde/NSW 倾向得分表" width="820">
+  <img src="https://raw.githubusercontent.com/brycewang-stanford/StatsPAI/main/docs/assets/export-lalonde-xlsx.png" alt="sp.regtable 导出 — LaLonde/NSW 收入回归表" width="720">
 </p>
 
-上面的截图是 `sp.outreg2` 在 Card (1995) OLS + IV 组合与 LaLonde/NSW 倾向得分回归上
-输出的 `.xlsx`：每个 sheet 都包含系数表、模型拟合统计量和显著性星号，格式与期刊模板
-的要求一致。
+两张图是 `tbl.to_excel()` 写出的 `.xlsx` 文件经 LibreOffice 渲染的结果：上面是 Card (1995) 表；下面是 LaLonde/NSW 表，用带 PSID 对照组的数据把 1978 年收入回归到 NSW 培训处理上。LaLonde 表同时也是对观测数据比较的一个提醒：控制干预前收入和人口特征后，处理系数从 `-635` 变成 `+1,548`。期刊模板、标准误格式和单模型导出见[导出指南](docs/guides/exporting-regression-tables.md)。
 
 ---
 
@@ -289,13 +384,13 @@ sp.modelsummary(r1, r2, output="table.docx")            # Word，modelsummary �
 
 如果你怀念 Stata 的 Graph Editor，可以对 StatsPAI 返回的任意 matplotlib 图使用
 `sp.interactive(fig)`。它会在 Jupyter 里打开一个带实时预览的编辑面板，新手不用先记住
-matplotlib 的所有参数，也能把图调到适合论文或汇报的样子。
+matplotlib 的所有参数，也能把图调到适合论文或汇报的样子。需要 `pip install "statspai[plotting]" ipywidgets`。
 
 它适合做这些事：
 
 - 修改标题、坐标轴标签、字体、颜色、点线样式、网格、图例、坐标范围、图尺寸和导出 DPI；
-- 一键切换学术论文、ggplot 风格、FiveThirtyEight 风格、深色演示等主题；
-- 保护数据图层，只编辑外观元素；
+- 在 StatsPAI 自带的论文主题（`academic`、`aea`、`minimal`、`cn_journal`）与 matplotlib、seaborn 内置样式之间切换；
+- 保护数据图层，只编辑外观元素（默认 `protect_data=True`）；
 - 自动导出可复现 Python 代码，避免最终图只停留在手工截图里。
 
 ```python
@@ -332,76 +427,135 @@ r1 = sp.regress(
 )
 r2 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper + expersq + black + south + smsa", data=card)
 
-print(r1.summary())                         # 人类可读表格
+print(r1.summary())                          # 人类可读表格
 print(r1.tidy().head())                      # broom 风格 dataframe
-sp.modelsummary(r1, r2, output="table.docx") # Word 表
-sp.outreg2(r1, r2, filename="results.xlsx")  # Stata 风格导出
+print(sp.test(r1, "black = south"))          # Wald 检验，对应 Stata 的 `test`
+tbl = sp.regtable(r1, r2, model_labels=["OLS", "2SLS"])
+tbl.to_word("table.docx")                    # Word 表
+tbl.to_excel("results.xlsx")                 # Excel 表
 ```
 
 常用文档：
 
-- [Getting started](docs/getting-started.md)
-- [Cookbook](docs/cookbook.md)
-- [Choosing an IV estimator](docs/guides/choosing_iv_estimator.md)
-- [Choosing a DID estimator](docs/guides/choosing_did_estimator.md)
-- [Choosing an RD estimator](docs/guides/choosing_rd_estimator.md)
-- [Migrating from R to StatsPAI](docs/guides/migration-from-r.md)
-- [Exporting regression tables](docs/guides/exporting-regression-tables.md)
+- [Getting started](docs/getting-started.md) 与 [Cookbook](docs/cookbook.md)
+- 选择估计器：[DiD](docs/guides/choosing_did_estimator.md)、
+  [IV](docs/guides/choosing_iv_estimator.md)、
+  [RD](docs/guides/choosing_rd_estimator.md)、
+  [匹配](docs/guides/choosing_matching_estimator.md)、
+  [合成控制](docs/guides/synth.md)
+- 迁移：[从 R 迁移](docs/guides/migration-from-r.md)、
+  [Stata/R 命令翻译器](docs/guides/translator.md)、
+  [统一参数语法](docs/guides/grammar.md)
+- [导出回归表](docs/guides/exporting-regression-tables.md)
+- Agent：[agent API](docs/guides/agent_api.md)、
+  [经济学者的 MCP 工作流](docs/guides/economist_mcp_workflow_zh.md)
+- 证据：[稳定性与验证分级](docs/guides/stability.md)、
+  [对齐矩阵](https://brycewang-stanford.github.io/StatsPAI/parity/)、
+  [分级普查](docs/jss_source_audit_dossier.md)
 
 ---
 
-## 验证状态与 Agent 使用
+## 在 Agent 中使用 StatsPAI
+
+驱动 `sp.help()` 的同一个注册表，有三种使用方式。
+
+**在 Python 里**——不读源码也能发现函数及其 schema：
+
+```python
+import statspai as sp
+
+sp.list_functions(category="causal")[:5]      # 函数名
+sp.describe_function("rdrobust")               # 参数、返回值、验证状态
+sp.function_schema("rdrobust")                 # 供工具调用的 JSON schema
+sp.from_stata("reghdfe y x, absorb(id year) vce(cluster id)")
+# {'tool': 'feols', 'python_code': "sp.feols('y ~ x | id + year', data=df, cluster='id')", ...}
+```
+
+**在命令行里**——`statspai list`、`statspai describe rdrobust`、`statspai search "synthetic control"`。
+
+**通过 MCP**——安装包时会附带 `statspai-mcp` stdio 服务（纯 Python，无额外依赖）。它把数百个估计器和诊断工具暴露为 tools，另有工作流 prompts（例如 `audit_did_result`、`stata_command_workflow`）和 `statspai://catalog` 等 resources。工具接收 `data_path`（CSV、Stata `.dta` 以及 pandas 能读取的其他格式），返回带数据来源信息的结构化 JSON。Claude Code 中：
+
+```bash
+claude mcp add statspai -- statspai-mcp
+```
+
+Claude Desktop、Cursor 等其他客户端：
+
+```json
+{
+  "mcpServers": {
+    "statspai": { "command": "statspai-mcp", "args": [] }
+  }
+}
+```
+
+数据交接、结果句柄以及推荐的 识别设计 → 估计 → 审计 流程见 [MCP 工作流指南](docs/guides/economist_mcp_workflow_zh.md)。
+
+---
+
+## 验证状态：哪些核验过，哪些还没有
 
 StatsPAI 的 API 面很大，所以一定要看 validation status。
 
 ```python
 import statspai as sp
 
-print(sp.describe_function("ivreg")["validation_status"])
+print(sp.describe_function("ivreg")["validation_status"])   # 'certified'
 print(sp.list_functions(validation_status="certified")[:5])
 ```
 
-建议按以下层级理解：
+每个注册函数都属于以下一档（数量截至 1.28.0）：
 
-- certified：有外部数值证据；
-- validated：有内部测试或发表参考值检查；
-- api-stable：接口稳定，但精确 Stata/R 对齐可能依赖设计；
-- experimental：前沿或实验性工作流。
+| `validation_status` | 含义 | 函数数 |
+| --- | --- | ---: |
+| `certified` | 在相同输入上与指定的外部参考实现（R、Stata，或方法作者维护的 Python 包）对照，落在预注册容差之内 | 223 |
+| `validated` | 有已知真值模拟、已发表数字、覆盖率或有文档的约定差异等证据，但不在 R/Stata 主对齐 harness 中 | 206 |
+| `api_stable` | 公开接口稳定；有单元测试，但**不声明数值验证** | 750 |
+| `experimental` | 方法或 API 仍可能变化 | 3 |
 
-Agent 可读元数据可通过 `sp.list_functions()`、`sp.describe_function()`、`sp.function_schema()` 获取。
+也就是说，目前大约三分之一的注册函数带有数值证据。覆盖面不等于验证，请检查你依赖的那些函数属于哪一档。
 
 ### 跨语言对齐，可查询
 
-上面的验证层级背后有一套更细、可审计的支撑：**parity 索引**。每个通过验证的函数都记录
-了*它对齐的参考实现是什么、容差是多少、由哪个测试守护、实际匹配到什么程度*。每一行都
-能追溯到一个已提交的测试工件（版本锁定的 StatsPAI ↔ R ↔ Stata 对齐 harness，通过
-`renv.lock` 加逐次运行的 provenance 固定）——没有任何结论是"凭记忆"断言的。
+上面的分级由一套可审计的 **parity 索引**派生而来：每个通过验证的函数都记录了*它对齐的参考实现是什么、容差是多少、由哪个测试守护、实际匹配到什么程度*。每一行都能追溯到一个已提交的测试工件（版本锁定的 StatsPAI ↔ R ↔ Stata 对齐 harness，通过 `renv.lock` 加逐次运行的 provenance 固定）——没有任何结论是"凭记忆"断言的。
 
 ```python
 import statspai as sp
 
-sp.parity_status("feols")
-# {'status': 'bit-exact', 'reference': 'fixest::feols',
-#  'reference_versions': {'R': '...4.5.2...', 'fixest': '0.14.0'},
-#  'tolerance': 'rel_est<=1e-06, rel_se<=1e-06', 'headline': {...}, 'test': [...]}
+s = sp.parity_status("feols")
+print(s)
+# feols: bit-exact vs fixest::feols [py/R/Stata] (headline rel_est 5.2e-15 within rel_est<=1e-06, rel_se<=1e-06)
+s["reference_versions"]          # {'R': 'R version 4.5.2 (2025-10-31)', 'fixest': '0.14.0'}
 
-sp.parity_summary()              # 诚实的覆盖统计（已验证 vs 未验证）
+sp.parity_summary()              # 覆盖统计，包括尚未验证的缺口
 sp.parity_matrix(status="bit-exact")
 ```
 
-等级：`bit-exact`（相对指定 R/Stata 参考实现达到机器精度）、`aligned`（有文档说明的较宽
-容差）、`analytical-only`（能还原已知 DGP 真值）、`external-replication`（对齐已发表论文
-数字）、`unverified`（已注册但**尚**无 parity 证据——诚实标注的缺口）。完整的自动生成
-矩阵发布在 [docs/parity.md](https://brycewang-stanford.github.io/StatsPAI/parity/)。
+等级：`bit-exact`（相对指定 R/Stata 参考实现的主指标相对误差 ≤ 1e-6）、`aligned`（有文档、预注册的较宽容差）、`analytical-only`（还原已知 DGP 真值或闭式恒等式）、`external-replication`（复现已发表论文数字）、`unverified`（已注册但**尚**无 parity 证据——诚实标注的缺口）。完整的自动生成矩阵发布在 [docs/parity.md](https://brycewang-stanford.github.io/StatsPAI/parity/)。
 
-除了点估计对齐，Track-B 覆盖研究对每个估计量跑 `B=1000` 次蒙特卡洛重复，检查 95%
-置信区间在已知真值 DGP 上是否达到名义覆盖率。11 个已物化 nominal 行——RCT 上的 OLS
-(0.952)、2×2 DiD (0.955)、强工具 IV (0.962)、Callaway–Sant'Anna 交错 ATT (0.947)、
-Sun–Abraham 总体 ATT (0.950)、双向固定效应面板 (0.948)、sharp RD robust CI（0.934，
-在弯曲 DGP 上略低于接受带、如实披露）、SDID 安慰剂 SE (0.939)、
-熵平衡 (1.000)、DML IRM ATE (0.968)、以及 causal-forest AIPW ATE (0.977)——除已披露的
-RD 行外都落在名义
-0.95 的接受带之内或之上；已提交的工件在 `tests/coverage_monte_carlo/results_b1000/`。
+对你自己的数据，`sp.cross_validate` 会把同一个估计量交给本机已安装的每个独立引擎重跑，并报告它们是否一致：
+
+```python
+card = sp.datasets.card_1995()
+cv = sp.cross_validate(card, "iv", y="lwage", endog=["educ"], instruments=["nearc4"],
+                       covariates=["exper", "expersq", "black", "south", "smsa"])
+print(cv.summary())
+```
+
+```text
+Engine              Estimate     Std.Err                95% CI    status
+------------------------------------------------------------------------
+statspai             0.13229     0.04923      [0.0358, 0.2288]        ok
+pyfixest             0.13229     0.04923      [0.0358, 0.2288]        ok
+linearmodels         0.13229     0.04918      [0.0359, 0.2287]        ok
+R::fixest            0.13229     0.04923      [0.0358, 0.2288]        ok
+------------------------------------------------------------------------
+VERDICT: ✓ AGREE   (4/4 engines ran)
+```
+
+未安装的引擎（pyfixest，或带 `fixest` 的 R）会被跳过。`linearmodels` 的标准误在第四位小数上不同，是因为它不做小样本修正——这是有文档的约定差异，不是估计值上的分歧。
+
+除了点估计对齐，Track-B 覆盖研究对每个估计量跑 `B=1000` 次蒙特卡洛重复，检查 95% 置信区间在已知真值 DGP 上是否达到名义覆盖率，接受带为 99% Wilson 区间 `[0.935, 0.967]`。11 个已物化 nominal 行——RCT 上的 OLS (0.952)、2×2 DiD (0.955)、强工具 IV (0.962)、Callaway–Sant'Anna 交错 ATT (0.947)、Sun–Abraham 总体 ATT (0.950)、双向固定效应面板 (0.948)、SDID 安慰剂 SE (0.939)、sharp RD robust CI (0.934)、熵平衡 (1.000)、DML IRM ATE (0.968)、causal-forest AIPW ATE (0.977)——前七行落在接受带内；RD 行略低于下沿（弯曲 DGP 上轻微的有限样本覆盖不足），最后三行高于上沿（偏保守）。已提交的工件在 `tests/coverage_monte_carlo/results_b1000/`。
 
 ---
 
@@ -410,6 +564,7 @@ RD 行外都落在名义
 版本历史已经独立到 README 之外：
 
 - [CHANGELOG.md](CHANGELOG.md)：完整版本记录。
+- [MIGRATION.md](MIGRATION.md)：弃用说明，以及会改变数值的正确性修复。
 - [Docs changelog page](https://brycewang-stanford.github.io/StatsPAI/changelog/)：文档站渲染版。
 
 README 首页只保留新手上路所需信息。
@@ -453,7 +608,7 @@ StatsPAI 的同行评审论文已发表于 *Journal of Open Source Software*（2
   title   = {StatsPAI: A Unified, Agent-Native Python Toolkit for
              Causal Inference and Applied Econometrics},
   year    = {2026},
-  version = {1.24.0},
+  version = {1.28.0},
   doi     = {10.5281/zenodo.19933900},
   url     = {https://doi.org/10.5281/zenodo.19933900},
   license = {MIT}
