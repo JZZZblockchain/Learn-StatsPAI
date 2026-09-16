@@ -124,6 +124,8 @@ def _k_class_fit(
         W,
         n,
         m,
+        robust=robust,
+        cluster=cluster,
     )
 
     # --- K-class second stage ---
@@ -424,7 +426,9 @@ def _gmm_fit(
     rss = np.sum(residuals**2)
     r_squared = 1 - rss / tss
 
-    first_stage_results = _first_stage_diagnostics(X_exog, X_endog, W, n, m)
+    first_stage_results = _first_stage_diagnostics(
+        X_exog, X_endog, W, n, m, robust=robust, cluster=cluster
+    )
 
     # Hansen J test (GMM overidentification)
     if m > k2:
@@ -545,7 +549,9 @@ def _jive_fit(
     tss = np.sum((y - y_bar) ** 2)
     rss = np.sum(residuals**2)
 
-    first_stage_results = _first_stage_diagnostics(X_exog, X_endog, W, n, m)
+    first_stage_results = _first_stage_diagnostics(
+        X_exog, X_endog, W, n, m, robust=robust, cluster=cluster
+    )
     sargan = _sargan_test(residuals, W, m, k2) if m > k2 else None
     hausman = _hausman_test(y, X_exog, X_endog, W)
 
@@ -581,11 +587,26 @@ def _first_stage_diagnostics(
     W: np.ndarray,
     n: int,
     m: int,
-) -> List[Dict[str, float]]:
-    """First-stage F-statistic and partial R² for each endogenous variable."""
+    robust: str = "nonrobust",
+    cluster: Any = None,
+) -> List[Dict[str, Any]]:
+    """First-stage F-statistic and partial R² for each endogenous variable.
+
+    ``f_statistic`` tests the excluded instruments with the same variance
+    estimator as the structural equation, which is what Stata's
+    ``estat firststage`` reports after ``ivregress ..., vce(robust)`` /
+    ``vce(cluster)``: the Wald statistic divided by ``m``, referred to
+    ``F(m, n - k_W)`` (robust) or ``F(m, G - 1)`` (clustered, smallest
+    dimension). Under ``robust="nonrobust"`` that Wald form is exactly the
+    classical nested-RSS F. The classical statistic is always kept as
+    ``f_statistic_nonrobust``: Stock-Yogo critical values are tabulated for
+    it, not for the robust version.
+    """
     k2 = X_endog.shape[1]
+    kW = W.shape[1]
     WtW_inv = np.linalg.inv(W.T @ W)
     XeXe_inv = np.linalg.inv(X_exog.T @ X_exog)
+    vce = "cluster" if cluster is not None else robust
 
     results = []
     for j in range(k2):
@@ -598,18 +619,45 @@ def _first_stage_diagnostics(
         rss_full = resid_full @ resid_full
         rss_restricted = resid_restricted @ resid_restricted
         df_num = m
-        df_denom = n - W.shape[1]
+        df_denom = n - kW
 
         if rss_full > 0 and df_denom > 0:
-            f_stat = ((rss_restricted - rss_full) / df_num) / (rss_full / df_denom)
-            f_pvalue = stats.f.sf(f_stat, df_num, df_denom)
+            f_classic = ((rss_restricted - rss_full) / df_num) / (rss_full / df_denom)
+            p_classic = stats.f.sf(f_classic, df_num, df_denom)
         else:
-            f_stat = f_pvalue = np.nan
+            f_classic = p_classic = np.nan
+
+        f_stat, f_pvalue, f_df_denom = f_classic, p_classic, df_denom
+        if vce != "nonrobust" and np.isfinite(f_classic):
+            # Excluded instruments are the last ``m`` columns of W.
+            if cluster is not None:
+                V = _cluster_cov(W, W, resid_full, WtW_inv, cluster)
+                frame = _as_cluster_frame(cluster)
+                f_df_denom = (
+                    min(int(frame.iloc[:, c].nunique()) for c in range(frame.shape[1]))
+                    - 1
+                )
+            else:
+                V = _robust_cov(W, W, resid_full, WtW_inv, robust, n, kW)
+            g_z = gamma_j[-m:]
+            V_zz = V[-m:, -m:]
+            try:
+                wald = float(g_z @ np.linalg.solve(V_zz, g_z))
+            except np.linalg.LinAlgError:
+                f_stat = f_pvalue = np.nan
+            else:
+                f_stat = wald / df_num
+                f_pvalue = (
+                    stats.f.sf(f_stat, df_num, f_df_denom) if f_df_denom > 0 else np.nan
+                )
 
         results.append(
             {
                 "f_statistic": f_stat,
                 "f_pvalue": f_pvalue,
+                "f_df": (int(df_num), int(f_df_denom)),
+                "f_vce": vce,
+                "f_statistic_nonrobust": f_classic,
                 "partial_r_squared": (
                     1 - rss_full / rss_restricted if rss_restricted > 0 else np.nan
                 ),
@@ -1511,6 +1559,12 @@ class IVRegression(BaseModel):
             endog_name = self._endog_names[j]
             diagnostics[f"First-stage F ({endog_name})"] = fs["f_statistic"]
             diagnostics[f"First-stage F p-value ({endog_name})"] = fs["f_pvalue"]
+            if fs.get("f_vce", "nonrobust") != "nonrobust":
+                # The headline F uses the requested vce (Stata estat
+                # firststage); keep the classical F that Stock-Yogo tabulates.
+                diagnostics[f"First-stage F, non-robust ({endog_name})"] = fs[
+                    "f_statistic_nonrobust"
+                ]
             diagnostics[f"Partial R² ({endog_name})"] = fs["partial_r_squared"]
 
         # Weak instrument warning — a typed AssumptionWarning so the fit-time
@@ -1522,11 +1576,17 @@ class IVRegression(BaseModel):
             f_stat = fs["f_statistic"]
             if f_stat is not None and np.isfinite(f_stat) and f_stat < 10:
                 endog_name = self._endog_names[j]
+                f_vce = fs.get("f_vce", "nonrobust")
+                f_kind = (
+                    "Stock-Yogo 5% bias"
+                    if f_vce == "nonrobust"
+                    else f"{f_vce} F; Stock-Yogo values assume the non-robust F"
+                )
                 warnings.warn(
                     AssumptionWarning(
                         f"Weak instrument warning: First-stage F-statistic for "
-                        f"'{endog_name}' is {f_stat:.2f} (< 10, Stock-Yogo "
-                        f"5% bias). 2SLS is biased toward OLS and its t-test "
+                        f"'{endog_name}' is {f_stat:.2f} (< 10, {f_kind}). "
+                        f"2SLS is biased toward OLS and its t-test "
                         f"over-rejects.",
                         recovery_hint=(
                             "Report sp.anderson_rubin_ci (weak-IV-robust, "
@@ -1537,6 +1597,7 @@ class IVRegression(BaseModel):
                         diagnostics={
                             "endogenous": endog_name,
                             "first_stage_f": float(f_stat),
+                            "first_stage_f_vce": f_vce,
                             "threshold": 10.0,
                         },
                         alternative_functions=[

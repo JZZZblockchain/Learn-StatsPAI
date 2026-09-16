@@ -159,8 +159,13 @@ class TestLassoIvProvenance:
                 r.model_info["n_candidate_instruments"],
                 r.model_info["n_selected_instruments"],
                 r.diagnostics["First-stage F (x)"],
+                r.diagnostics["First-stage F, non-robust (x)"],
             ],
-            [1, 1, 463.8658661384413],
+            # lasso_iv defaults to robust="robust" (HC1), so the headline
+            # first-stage F is the HC1 Wald F (statsmodels OLS HC1
+            # wald_test: 547.7637624162697); the classical F is kept alongside.
+            [1, 1, 547.7637624162699, 463.8658661384413],
+            rtol=1e-12,
             atol=1e-12,
         )
 
