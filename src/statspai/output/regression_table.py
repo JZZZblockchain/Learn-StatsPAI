@@ -27,7 +27,17 @@ import sys
 import warnings
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union  # noqa: F401
+from typing import (  # noqa: F401
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
@@ -482,6 +492,32 @@ def _resolved_rule_mode(mode: str) -> str:
     if mode == "auto":
         return "unicode" if _stdout_encodes_box_drawing() else "ascii"
     return mode
+
+
+def _unique_column_keys(labels: List[str]) -> List[str]:
+    """Disambiguate repeated column labels for dict-keyed serialisations.
+
+    Unique labels pass through unchanged; a repeated label becomes
+    ``"<label> (<position>)"`` with its 1-based column position, bumped
+    further if that spelling is itself taken.
+    """
+    counts: Dict[str, int] = {}
+    for lab in labels:
+        counts[lab] = counts.get(lab, 0) + 1
+    taken = {lab for lab in labels if counts[lab] == 1}
+    keys: List[str] = []
+    for pos, lab in enumerate(labels, 1):
+        if counts[lab] == 1:
+            keys.append(lab)
+            continue
+        key = f"{lab} ({pos})"
+        bump = 1
+        while key in taken:
+            key = f"{lab} ({pos}.{bump})"
+            bump += 1
+        taken.add(key)
+        keys.append(key)
+    return keys
 
 
 class RegtableResult:
@@ -1260,11 +1296,41 @@ class RegtableResult:
         """Whether the plain-text render must stay inside ASCII."""
         return _resolved_rule_mode(self.rules) == "ascii"
 
+    @staticmethod
+    def _text_col_width(cells: Iterable[Any]) -> int:
+        """Right-aligned column width: 14, widened so every cell keeps a
+        two-space gutter. A fixed 14 let a long label or estimate run into
+        its neighbour (``"+ Age, Educ+ Full controls"``)."""
+        longest = max((len(str(c)) for c in cells), default=0)
+        return max(14, longest + 2)
+
     def to_text(self) -> str:
         if self.transpose:
             return self._to_text_transposed()
-        col_w = 14
         all_models = self._all_models_flat()
+        width_cells: List[Any] = list(self.model_labels) + list(
+            self.dep_var_labels or []
+        )
+        base = 0
+        for p in self.panels:
+            for var in self._resolve_vars(p.models):
+                for off, m in enumerate(p.models):
+                    width_cells.append(self._coef_cell(m, var, base + off))
+                    width_cells.append(self._se_cell(m, var, base + off))
+                    for ext_idx, (_, per_model_list) in enumerate(self.multi_se):
+                        width_cells.append(
+                            self._multi_se_cell(
+                                per_model_list[base + off], var, ext_idx, m, base + off
+                            )
+                        )
+            base += len(p.models)
+        for vals in self.add_rows.values():
+            width_cells.extend(vals)
+        for _, vals in self.tests_rows:
+            width_cells.extend(vals)
+        for key in self._stat_keys:
+            width_cells.extend(self._stat_cell(m, key) for m in all_models)
+        col_w = self._text_col_width(width_cells)
         all_vars_set: set = set()
         for p in self.panels:
             all_vars_set.update(v for m in p.models for v in m.params.index)
@@ -1404,7 +1470,6 @@ class RegtableResult:
         return self._resolve_vars(panel.models)
 
     def _to_text_transposed(self) -> str:
-        col_w = 14
         panel = self.panels[0]
         models = panel.models
         var_list = self._transposed_var_list()
@@ -1412,6 +1477,15 @@ class RegtableResult:
         # estimate (with stars) and SE on a single row to keep the
         # transposed form compact, then a SE row for every model row.
         var_labels = [self.coef_labels.get(v, v) for v in var_list]
+        width_cells: List[Any] = list(var_labels) + [
+            _STAT_DISPLAY.get(k, k) for k in self._stat_keys
+        ]
+        for mi, m in enumerate(models):
+            for var in var_list:
+                width_cells.append(self._coef_cell(m, var, mi))
+                width_cells.append(self._se_cell(m, var, mi))
+            width_cells.extend(self._stat_cell(m, k) for k in self._stat_keys)
+        col_w = self._text_col_width(width_cells)
         # Width of leftmost column (model labels)
         label_w = max(
             (len(label) for label in self.model_labels),
@@ -2335,86 +2409,82 @@ class RegtableResult:
     # ═══════════════════════════════════════════════════════════════════════
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Return the table as a pandas DataFrame."""
+        """Return the table as a pandas DataFrame.
+
+        One column per model, in model order, headed by ``model_labels``.
+        Rows are built positionally, so repeated labels (``["OLS", "OLS",
+        "2SLS"]``) give repeated column names rather than one model silently
+        overwriting another.
+        """
         all_models = self._all_models_flat()
-        records: List[Dict[str, str]] = []
+        n_cols = len(self.model_labels)
+        index: List[str] = []
+        rows: List[List[str]] = []
+
+        def _emit(label: str, cells: List[str]) -> None:
+            index.append(label)
+            rows.append(cells)
+
+        def _panel_cells(pi: int, cell_fn: Callable[[Any, int, int], str]) -> List[str]:
+            # ``cell_fn(model, flat_index, offset_in_panel)`` fills the
+            # columns of panel ``pi``; every other panel's columns stay blank.
+            cells: List[str] = []
+            mi = 0
+            for gi, p2 in enumerate(self.panels):
+                for off, m in enumerate(p2.models):
+                    cells.append(cell_fn(m, mi, off) if gi == pi else "")
+                    mi += 1
+            return cells
+
+        def _padded(values: Sequence[str]) -> List[str]:
+            return [values[i] if i < len(values) else "" for i in range(n_cols)]
 
         multi = len(self.panels) > 1
         for pi, panel in enumerate(self.panels):
             if multi and self.panel_labels and pi < len(self.panel_labels):
-                row_ph: Dict[str, str] = {"": self.panel_labels[pi]}
-                for n in self.model_labels:
-                    row_ph[n] = ""
-                records.append(row_ph)
+                _emit(self.panel_labels[pi], [""] * n_cols)
 
             var_list = self._resolve_vars(panel.models)
+            base_idx = sum(len(p.models) for p in self.panels[:pi])
             for var in var_list:
                 label = self.coef_labels.get(var, var)
-                row: Dict[str, str] = {"": label}
-                mi = 0
-                for gi, p2 in enumerate(self.panels):
-                    for m in p2.models:
-                        col_name = self.model_labels[mi]
-                        if gi == pi:
-                            row[col_name] = self._coef_cell(m, var, mi)
-                        else:
-                            row[col_name] = ""
-                        mi += 1
-                records.append(row)
-                # SE row
-                row2: Dict[str, str] = {"": ""}
-                mi = 0
-                for gi, p2 in enumerate(self.panels):
-                    for m in p2.models:
-                        col_name = self.model_labels[mi]
-                        if gi == pi:
-                            row2[col_name] = self._se_cell(m, var, mi)
-                        else:
-                            row2[col_name] = ""
-                        mi += 1
-                records.append(row2)
+                _emit(
+                    label,
+                    _panel_cells(pi, lambda m, mi, off: self._coef_cell(m, var, mi)),
+                )
+                _emit(
+                    "",
+                    _panel_cells(pi, lambda m, mi, off: self._se_cell(m, var, mi)),
+                )
                 # Extra SE rows (multi_se)
-                base_idx = sum(len(p.models) for p in self.panels[:pi])
                 for ext_idx, (_, per_model_list) in enumerate(self.multi_se):
-                    row3: Dict[str, str] = {"": ""}
-                    mi = 0
-                    for gi, p2 in enumerate(self.panels):
-                        for off, m in enumerate(p2.models):
-                            col_name = self.model_labels[mi]
-                            if gi == pi:
-                                per_model = per_model_list[base_idx + off]
-                                row3[col_name] = self._multi_se_cell(
-                                    per_model, var, ext_idx, m, base_idx + off
-                                )
-                            else:
-                                row3[col_name] = ""
-                            mi += 1
-                    records.append(row3)
+                    _emit(
+                        "",
+                        _panel_cells(
+                            pi,
+                            lambda m, mi, off: self._multi_se_cell(
+                                per_model_list[base_idx + off],
+                                var,
+                                ext_idx,
+                                m,
+                                base_idx + off,
+                            ),
+                        ),
+                    )
 
-        # Add rows
         for row_label, row_vals in self.add_rows.items():
-            row_ar: Dict[str, str] = {"": row_label}
-            for i, lbl in enumerate(self.model_labels):
-                row_ar[lbl] = row_vals[i] if i < len(row_vals) else ""
-            records.append(row_ar)
+            _emit(row_label, _padded(row_vals))
 
-        # Stats
         for key in self._stat_keys:
-            disp = _STAT_DISPLAY.get(key, key)
-            row_s: Dict[str, str] = {"": disp}
-            for i, m in enumerate(all_models):
-                row_s[self.model_labels[i]] = self._stat_cell(m, key)
-            records.append(row_s)
+            _emit(
+                _STAT_DISPLAY.get(key, key),
+                [self._stat_cell(m, key) for m in all_models],
+            )
 
-        # Hypothesis-test rows
         for row_label, row_vals in self.tests_rows:
-            row_t: Dict[str, str] = {"": row_label}
-            for i, lbl in enumerate(self.model_labels):
-                row_t[lbl] = row_vals[i] if i < len(row_vals) else ""
-            records.append(row_t)
+            _emit(row_label, _padded(row_vals))
 
-        df = pd.DataFrame(records)
-        df = df.set_index("")
+        df = pd.DataFrame(rows, index=index, columns=list(self.model_labels))
         df.index.name = None
         return df
 
@@ -2493,12 +2563,12 @@ class RegtableResult:
         True
         """
         df = self.to_dataframe()
+        column_keys = _unique_column_keys([str(c) for c in df.columns])
         table_rows: List[Dict[str, Any]] = []
-        for idx, row in df.iterrows():
+        for idx, values in zip(df.index, df.itertuples(index=False, name=None)):
             rec: Dict[str, Any] = {"term": "" if idx is None else str(idx)}
-            for col in df.columns:
-                val = row[col]
-                rec[str(col)] = "" if pd.isna(val) else str(val)
+            for key, val in zip(column_keys, values):
+                rec[key] = "" if pd.isna(val) else str(val)
             table_rows.append(rec)
 
         models: List[Dict[str, Any]] = []
@@ -2560,7 +2630,10 @@ class RegtableResult:
             "star_levels": [self._jsonable(x) for x in self.star_levels],
             "requested_stats": [str(x) for x in self.requested_stats],
             "coef_labels": {str(k): str(v) for k, v in self.coef_labels.items()},
-            "columns": ["term"] + [str(c) for c in df.columns],
+            # Row keys: the model label, suffixed with its 1-based column
+            # position only when that label repeats (``model_labels`` keeps
+            # the labels exactly as given).
+            "columns": ["term"] + column_keys,
             "table": table_rows,
             "models": models,
             # Render-controlling parameters so from_dict() can faithfully
