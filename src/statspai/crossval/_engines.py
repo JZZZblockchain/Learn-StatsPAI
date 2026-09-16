@@ -172,27 +172,47 @@ class StatspaiAdapter(EngineAdapter):
                 extra={"aggregation": "simple"},
             )
 
+        # Every engine must estimate the variance the caller asked for; the
+        # statspai engine used to ignore ``cluster`` (and, for IV, ``vcov``)
+        # while pyfixest honoured it, so a clustered cross-check compared two
+        # different variance estimators.
         res: Any
         if est == "ols":
+            if len(spec.cluster) > 1:
+                raise ValueError(
+                    "sp.regress takes one cluster variable; use estimand "
+                    "'feols' for multiway clustering."
+                )
             res = sp.regress(
                 spec.build_formula(),
                 data=spec.data,
                 robust=_sp_robust(spec.vcov),
+                cluster=spec.cluster[0] if spec.cluster else None,
             )
         elif est == "feols":
             res = sp.feols(
                 spec.build_formula(),
                 data=spec.data,
                 vcov=_sp_feols_vcov(spec.vcov, spec.cluster),
+                cluster=" + ".join(spec.cluster) if spec.cluster else None,
             )
         elif est == "poisson":
-            res = sp.fepois(spec.build_formula(), data=spec.data)
+            res = sp.fepois(
+                spec.build_formula(),
+                data=spec.data,
+                vcov=_pf_vcov(spec.vcov, spec.cluster),
+            )
         elif est == "iv":
             # sp.iv is a function alias that shadows the `iv` submodule at
             # runtime; fetch via getattr so the type checker doesn't resolve
             # it to the module object.
             iv_fn = getattr(sp, "iv")
-            res = iv_fn(_aer_iv_formula(spec), data=spec.data)
+            res = iv_fn(
+                _aer_iv_formula(spec),
+                data=spec.data,
+                robust=_sp_robust(spec.vcov),
+                cluster=list(spec.cluster) if spec.cluster else None,
+            )
         else:  # pragma: no cover — guarded by `supported`
             raise ValueError(f"unsupported estimand {est}")
 
@@ -285,6 +305,10 @@ class LinearmodelsAdapter(EngineAdapter):
         term = spec.focal_term()
         df = spec.data.copy()
         cov_type, cov_cfg = _lm_cov(spec.vcov, spec.cluster, df)
+        # ``debiased=True`` applies the N-K (and clustered G/(G-1)) small-sample
+        # factors that statspai, fixest and Stata's ``small`` use; linearmodels'
+        # default large-sample SEs would otherwise differ by sqrt(N/(N-K)).
+        cov_cfg = {"debiased": True, **cov_cfg}
 
         res: Any  # AbsorbingLSResults | IV2SLS results — unified downstream
         if spec.estimand == "feols" and spec.fixed_effects:
@@ -297,7 +321,7 @@ class LinearmodelsAdapter(EngineAdapter):
                 cov_type=cov_type, **cov_cfg
             )
         elif spec.estimand == "iv":
-            exog_cols = ["const"] + [c for c in spec.covariates if c != spec.treatment]
+            exog_cols = ["const"] + _iv_exog(spec)
             df["const"] = 1.0
             res = IV2SLS(
                 df[spec.y],
@@ -469,9 +493,17 @@ def _fixest_formula(spec: EstimandSpec) -> str:
     return " | ".join(parts)
 
 
+def _iv_exog(spec: EstimandSpec) -> List[str]:
+    """Exogenous regressors of an IV spec: an exogenous ``treatment`` plus
+    the covariates, never an endogenous regressor, in first-seen order."""
+    endog_set = set(spec.endog)
+    cols = ([spec.treatment] if spec.treatment else []) + list(spec.covariates)
+    return [c for c in dict.fromkeys(cols) if c and c not in endog_set]
+
+
 def _aer_iv_formula(spec: EstimandSpec) -> str:
     """Build StatsPAI's AER-style IV formula: ``y ~ exog + (endog ~ instr)``."""
-    exog = [c for c in spec.covariates if c != spec.treatment]
+    exog = _iv_exog(spec)
     exog_str = " + ".join(exog) if exog else "1"
     iv_block = f"({' + '.join(spec.endog)} ~ {' + '.join(spec.instruments)})"
     return f"{spec.y} ~ {exog_str} + {iv_block}"
@@ -490,7 +522,7 @@ def _sp_robust(vcov: Optional[str]) -> str:
 
 def _sp_feols_vcov(vcov: Optional[str], cluster: List[str]) -> Optional[str]:
     if cluster:
-        return None  # let caller-supplied formula/cluster default apply
+        return None  # clustering is passed separately via ``cluster=``
     if not vcov:
         return None
     return vcov

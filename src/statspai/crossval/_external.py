@@ -111,6 +111,7 @@ suppressMessages(library(fixest)); suppressMessages(library(jsonlite))
 args <- commandArgs(trailingOnly=TRUE)
 csv <- args[1]; fml <- args[2]; term <- args[3]; vcov <- args[4]; est <- args[5]
 d <- read.csv(csv)
+if (startsWith(vcov, "~")) vcov <- as.formula(vcov)
 if (est == "poisson") {
   m <- fepois(as.formula(fml), data=d, vcov=vcov)
 } else {
@@ -172,7 +173,10 @@ def _run_r_fixest(
 
 def _r_vcov(vcov: Optional[str], cluster: List[str]) -> str:
     if cluster:
-        return "cluster"  # fixest clusters on the first FE by default; see note
+        # A one-sided formula names the cluster variables. The bare string
+        # "cluster" makes fixest cluster on the first fixed effect instead
+        # (and errors when there is none).
+        return "~" + " + ".join(cluster)
     if not vcov:
         return "iid"
     v = vcov.lower()

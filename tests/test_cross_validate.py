@@ -643,3 +643,166 @@ class TestPublicAPI:
     def test_data_mode_requires_estimand(self, ols_data):
         with pytest.raises(ValueError, match="estimand"):
             sp.cross_validate(ols_data)
+
+
+class TestIVSpecKeepsEveryExogenousRegressor:
+    """An IV formula's exogenous regressors all belong in the model.
+
+    ``_reconcile_formula_and_fields`` used to promote the first exogenous
+    term to ``treatment`` and drop it from ``covariates``. The statspai and
+    linearmodels IV adapters build the model from ``covariates`` only, so
+    ``y ~ w1 + w2 | x ~ z`` was silently fitted without ``w1`` -- and the
+    two mis-specified engines agreed with each other, outvoting the one
+    correct engine (pyfixest). Every engine is now held to a direct fit.
+    """
+
+    @pytest.fixture
+    def iv2_data(self) -> pd.DataFrame:
+        rng = np.random.default_rng(11)
+        n = 900
+        z1, z2, u = rng.normal(size=(3, n))
+        w1, w2 = rng.normal(size=(2, n))
+        x = 0.8 * z1 + 0.4 * z2 + 0.5 * w1 + 0.6 * u + rng.normal(size=n)
+        y = 1.0 + 0.7 * x + 0.9 * w1 - 0.3 * w2 + u + rng.normal(size=n)
+        return pd.DataFrame({"y": y, "x": x, "z1": z1, "z2": z2, "w1": w1, "w2": w2})
+
+    @pytest.fixture
+    def direct(self, iv2_data):
+        return sp.ivreg("y ~ (x ~ z1 + z2) + w1 + w2", data=iv2_data)
+
+    def test_iv_formula_spec_fields(self, iv2_data):
+        s = EstimandSpec.from_kwargs(
+            iv2_data, "iv", formula="y ~ w1 + w2 | x ~ z1 + z2"
+        )
+        assert s.treatment is None
+        assert s.covariates == ["w1", "w2"]
+        assert s.focal_term() == "x"
+
+    def test_aer_formula_equals_fixest_formula(self, iv2_data):
+        aer = EstimandSpec.from_kwargs(
+            iv2_data, "iv", formula="y ~ (x ~ z1 + z2) + w1 + w2"
+        )
+        fx = EstimandSpec.from_kwargs(
+            iv2_data, "iv", formula="y ~ w1 + w2 | x ~ z1 + z2"
+        )
+        for field_name in ("y", "treatment", "covariates", "endog", "instruments"):
+            assert getattr(aer, field_name) == getattr(fx, field_name)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"formula": "y ~ w1 + w2 | x ~ z1 + z2"},
+            {"formula": "y ~ (x ~ z1 + z2) + w1 + w2"},
+            # Explicit *exogenous* treatment must stay in the model too.
+            {
+                "y": "y",
+                "treatment": "w1",
+                "covariates": ["w2"],
+                "endog": ["x"],
+                "instruments": ["z1", "z2"],
+                "term": "x",
+            },
+        ],
+        ids=["fixest", "aer", "exog_treatment"],
+    )
+    def test_every_engine_matches_direct_fit(self, iv2_data, direct, kwargs):
+        engines = (
+            ["statspai"]
+            + (["pyfixest"] if HAS_PF else [])
+            + (["linearmodels"] if HAS_LM else [])
+        )
+        cv = sp.cross_validate(iv2_data, "iv", engines=engines, **kwargs)
+        ok = [e for e in cv.estimates if e.status == "ok"]
+        assert len(ok) == len(engines)
+        for est in ok:
+            assert est.coef == pytest.approx(direct.params["x"], rel=1e-8), est.engine
+
+    def test_result_mode_error_gives_runnable_call(self, iv2_data, direct):
+        with pytest.raises(ValueError) as exc:
+            sp.cross_validate(direct)
+        msg = str(exc.value)
+        call = msg[msg.index("sp.cross_validate(df") :]
+        cv = eval(call, {"sp": sp, "df": iv2_data})
+        own = next(e for e in cv.estimates if e.engine == "statspai")
+        assert own.coef == pytest.approx(direct.params["x"], rel=1e-12)
+        assert own.se == pytest.approx(direct.std_errors["x"], rel=1e-12)
+
+
+class TestEnginesHonourRequestedVariance:
+    """``cluster=`` / ``vcov=`` must reach every engine.
+
+    The statspai engine ignored ``cluster`` for OLS / FE / IV (and ``vcov`` for
+    IV); the R engine sent fixest the bare string ``"cluster"``, which clusters
+    on the first fixed effect or errors without one; linearmodels reported
+    large-sample SEs. A clustered cross-check therefore compared different
+    variance estimators. Each engine is now held to the direct StatsPAI fit.
+    """
+
+    @pytest.fixture
+    def panel(self) -> pd.DataFrame:
+        rng = np.random.default_rng(21)
+        n = 1200
+        cid = rng.integers(0, 40, n)
+        fe = rng.integers(0, 8, n)
+        shock = rng.normal(size=40)[cid]
+        z, w, u = rng.normal(size=(3, n))
+        x = 0.9 * z + 0.4 * w + 0.5 * u + rng.normal(size=n)
+        y = 0.6 * x - 0.2 * w + 0.3 * fe + shock + u + rng.normal(size=n)
+        return pd.DataFrame({"y": y, "x": x, "z": z, "w": w, "cid": cid, "fe": fe})
+
+    CASES = {
+        "ols": ("y ~ x + w", lambda d, **k: sp.regress("y ~ x + w", data=d, **k)),
+        "feols": (
+            "y ~ x + w | fe",
+            lambda d, **k: sp.feols("y ~ x + w | fe", data=d, **k),
+        ),
+        "iv": (
+            "y ~ (x ~ z) + w",
+            lambda d, **k: sp.ivreg("y ~ (x ~ z) + w", data=d, **k),
+        ),
+    }
+
+    @pytest.mark.parametrize("estimand", list(CASES))
+    @pytest.mark.parametrize("variance", ["cluster", "hc1"])
+    def test_engines_match_direct_fit(self, panel, estimand, variance):
+        formula, direct_fit = self.CASES[estimand]
+        if variance == "cluster":
+            cv_kw, fit_kw = {"cluster": "cid"}, {"cluster": "cid"}
+        elif estimand == "feols":
+            cv_kw, fit_kw = {"vcov": "HC1"}, {"vcov": "HC1"}
+        else:
+            cv_kw, fit_kw = {"vcov": "HC1"}, {"robust": "hc1"}
+        direct = direct_fit(panel, **fit_kw)
+        want_se = float(direct.std_errors["x"])
+
+        engines = ["statspai"]
+        exact = {"statspai"}
+        if HAS_PF:
+            engines.append("pyfixest")
+            exact.add("pyfixest")
+        if HAS_LM:
+            engines.append("linearmodels")
+            if estimand != "feols":  # FE dof counting is a documented convention gap
+                exact.add("linearmodels")
+        cv = sp.cross_validate(
+            panel, estimand, formula=formula, engines=engines, **cv_kw
+        )
+        by_engine = {e.engine: e for e in cv.estimates}
+        for name in engines:
+            est = by_engine[name]
+            assert est.status == "ok", (name, est)
+            assert est.coef == pytest.approx(float(direct.params["x"]), rel=1e-8)
+            rel = 1e-8 if name in exact else 5e-3
+            assert est.se == pytest.approx(want_se, rel=rel), name
+        assert cv.verdict == VERDICT_AGREE
+
+    @pytest.mark.skipif(not HAS_R, reason="Rscript not installed")
+    def test_r_fixest_clusters_on_the_requested_variable(self, panel):
+        direct = sp.regress("y ~ x + w", data=panel, cluster="cid")
+        cv = sp.cross_validate(
+            panel, "ols", formula="y ~ x + w", cluster="cid", engines=["R"]
+        )
+        (est,) = cv.estimates
+        if est.status != "ok":
+            pytest.skip(f"R fixest unavailable: {est.error}")
+        assert est.se == pytest.approx(float(direct.std_errors["x"]), rel=1e-8)

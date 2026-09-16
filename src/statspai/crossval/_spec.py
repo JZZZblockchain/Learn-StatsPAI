@@ -158,8 +158,9 @@ class EstimandSpec:
         data = _first_attr(result, ["data", "_data", "df", "_df"])
         if not isinstance(data, pd.DataFrame):
             raise ValueError(
-                "Cannot recover the dataset from this result object; pass "
-                "`data=` and the estimand explicitly to sp.cross_validate()."
+                "This result object does not carry its dataset, so it cannot be "
+                "re-run on other engines. Call sp.cross_validate in data mode on "
+                "the same DataFrame" + _rerun_hint(result)
             )
         formula = _first_attr(result, ["formula", "_formula", "model_formula"])
         estimand = _first_attr(
@@ -252,6 +253,8 @@ class EstimandSpec:
         left unset.
         """
         if self.formula:
+            # ``sp.ivreg``'s own spelling ``y ~ (d ~ z) + x`` is accepted too.
+            self.formula = _aer_iv_to_fixest(self.formula)
             parsed = _parse_fixest_formula(self.formula)
             if self.y is None:
                 self.y = parsed["y"]
@@ -261,7 +264,11 @@ class EstimandSpec:
                 self.endog = parsed["endog"]
                 self.instruments = parsed["instruments"]
             exog = parsed["exog"]
-            if self.treatment is None and exog:
+            # An IV model's focal coefficient is the endogenous regressor
+            # (see focal_term), so its exogenous terms are all covariates;
+            # promoting the first one to ``treatment`` used to drop it from
+            # the IV adapters' models.
+            if self.treatment is None and exog and not self.endog:
                 self.treatment = exog[0]
             if not self.covariates:
                 self.covariates = [c for c in exog if c != self.treatment]
@@ -325,6 +332,31 @@ class EstimandSpec:
 # --------------------------------------------------------------------------- #
 
 
+_AER_IV_BLOCK = re.compile(r"\(\s*([^()~|]+?)\s*~\s*([^()~|]+?)\s*\)")
+
+
+def _aer_iv_to_fixest(formula: str) -> str:
+    """Rewrite ``y ~ (endog ~ instr) + exog`` as ``y ~ exog | 0 | endog ~ instr``.
+
+    That parenthesised IV block is what ``sp.ivreg`` / ``sp.iv`` accept and
+    what their provenance records, so a formula copied from a fitted IV
+    result must parse here as well. Formulas without such a block (including
+    fixest's ``|`` syntax) are returned unchanged.
+    """
+    if "|" in formula:
+        return formula
+    lhs, sep, rhs = formula.partition("~")
+    blocks = list(_AER_IV_BLOCK.finditer(rhs))
+    if not sep or len(blocks) != 1:
+        return formula
+    block = blocks[0]
+    exog = _split_terms(rhs[: block.start()] + "+" + rhs[block.end() :])
+    main = " + ".join(exog) if exog else "1"
+    endog = " + ".join(_split_terms(block.group(1)))
+    instr = " + ".join(_split_terms(block.group(2)))
+    return f"{lhs.strip()} ~ {main} | 0 | {endog} ~ {instr}"
+
+
 def _parse_fixest_formula(formula: str) -> Dict[str, Any]:
     """Parse ``y ~ exog | fe | endog ~ instr`` into its components."""
     out: Dict[str, Any] = {
@@ -362,6 +394,47 @@ def _rhs_terms(formula: str) -> List[str]:
         return [str(t) for t in _parse_fixest_formula(formula)["exog"]]
     except ValueError:
         return []
+
+
+# Provenance ``function`` -> cross-validation estimand.
+_PROVENANCE_ESTIMAND = {
+    "sp.regress": "ols",
+    "sp.iv": "iv",
+    "sp.ivreg": "iv",
+    "sp.feols": "feols",
+    "sp.fast.feols": "feols",
+    "sp.fepois": "poisson",
+    "sp.poisson": "poisson",
+    "sp.dml": "dml",
+}
+
+
+def _rerun_hint(result: Any) -> str:
+    """``': sp.cross_validate(df, ...)'`` rebuilt from the result's provenance."""
+    try:
+        from ..output._lineage import get_provenance
+
+        prov = get_provenance(result)
+    except ImportError:  # pragma: no cover - lineage ships with the package
+        prov = None
+    params = dict(getattr(prov, "params", None) or {})
+    estimand = _PROVENANCE_ESTIMAND.get(getattr(prov, "function", None) or "")
+    formula = params.get("formula")
+    if not (estimand and isinstance(formula, str)):
+        return (
+            ", passing the estimand and model explicitly, e.g. "
+            "sp.cross_validate(df, 'ols', formula='y ~ x')."
+        )
+    pieces = [repr(estimand), f"formula={formula!r}"]
+    cluster = params.get("cluster")
+    if cluster:
+        pieces.append(f"cluster={cluster!r}")
+    robust = params.get("robust")
+    if isinstance(robust, str) and robust.lower() not in ("nonrobust", "iid"):
+        pieces.append(f"vcov={robust.upper()!r}")
+    shape = getattr(prov, "data_shape", None)
+    where = f" (provenance: {shape[0]} rows x {shape[1]} columns)" if shape else ""
+    return f"{where}: sp.cross_validate(df, {', '.join(pieces)})"
 
 
 def _aslist(x: Any) -> List[str]:
