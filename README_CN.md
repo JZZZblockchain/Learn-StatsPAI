@@ -183,7 +183,7 @@ Hausman F-stat              : 1.5390
 Hausman p-value             : 0.2149
 ```
 
-IV 估计（`0.132`）比 OLS 大，但精度低了约 13 倍。工具变量并不强——`nearc4` 只解释受教育年限 0.55% 的残差变异（一阶段 F ≈ 16.7）——而且 Hausman 检验不拒绝 `educ` 外生（p = 0.21）。默认标准误是非稳健标准误，带 `AER::ivreg` 的小样本自由度修正（对应 Stata `ivregress 2sls ..., small`）；需要异方差稳健标准误时传 `robust="hc1"`。
+IV 估计（`0.132`）比 OLS 大，但精度低了约 13 倍。工具变量并不强——`nearc4` 只解释受教育年限 0.55% 的残差变异（一阶段 F ≈ 16.7）——而且 Hausman 检验不拒绝 `educ` 外生（p = 0.21）。默认标准误是非稳健标准误，带 `AER::ivreg` 的小样本自由度修正（对应 Stata `ivregress 2sls ..., small`）；需要异方差稳健标准误时传 `robust="hc1"`，此时一阶段 F 也改用同一个方差估计量，与 Stata `estat firststage` 一致。
 
 一阶段这么弱时，应同时报告对弱工具稳健的置信区间：
 
@@ -200,7 +200,7 @@ Anderson-Rubin (AR) — weak-IV-robust confidence set
 ------------------------------------------------------------
   level                : 95%
   grid                 : 401 points on [-0.359, 0.624]
-  confidence set       : [0.0389, 0.2601]
+  confidence set       : [0.0384, 0.2612]
 ```
 
 ### 3. 交错 DiD：替代 `csdid` 或 R `did`
@@ -547,13 +547,13 @@ Engine              Estimate     Std.Err                95% CI    status
 ------------------------------------------------------------------------
 statspai             0.13229     0.04923      [0.0358, 0.2288]        ok
 pyfixest             0.13229     0.04923      [0.0358, 0.2288]        ok
-linearmodels         0.13229     0.04918      [0.0359, 0.2287]        ok
+linearmodels         0.13229     0.04923      [0.0358, 0.2288]        ok
 R::fixest            0.13229     0.04923      [0.0358, 0.2288]        ok
 ------------------------------------------------------------------------
 VERDICT: ✓ AGREE   (4/4 engines ran)
 ```
 
-未安装的引擎（pyfixest，或带 `fixest` 的 R）会被跳过。`linearmodels` 的标准误在第四位小数上不同，是因为它不做小样本修正——这是有文档的约定差异，不是估计值上的分歧。
+未安装的引擎（pyfixest，或带 `fixest` 的 R）会被跳过。每个引擎都按同一个方差估计量（包括 `cluster=` 与 `vcov=`）和同一套小样本修正来计算，所以比较的不只是点估计，还有标准误。
 
 除了点估计对齐，Track-B 覆盖研究对每个估计量跑 `B=1000` 次蒙特卡洛重复，检查 95% 置信区间在已知真值 DGP 上是否达到名义覆盖率，接受带为 99% Wilson 区间 `[0.935, 0.967]`。11 个已物化 nominal 行——RCT 上的 OLS (0.952)、2×2 DiD (0.955)、强工具 IV (0.962)、Callaway–Sant'Anna 交错 ATT (0.947)、Sun–Abraham 总体 ATT (0.950)、双向固定效应面板 (0.948)、SDID 安慰剂 SE (0.939)、sharp RD robust CI (0.934)、熵平衡 (1.000)、DML IRM ATE (0.968)、causal-forest AIPW ATE (0.977)——前七行落在接受带内；RD 行略低于下沿（弯曲 DGP 上轻微的有限样本覆盖不足），最后三行高于上沿（偏保守）。已提交的工件在 `tests/coverage_monte_carlo/results_b1000/`。
 

@@ -136,6 +136,38 @@ matrix; `margins` on a model whose prediction scale is not supported;
 `subgroup_analysis` used to be ignored; results computed with those options
 had model-based (or HC1) standard errors. Rerun them.
 
+<a id="iv-first-stage-f-vce"></a>
+
+## Unreleased — ⚠️ IV first-stage F follows the requested vcov; `sp.cross_validate` engines aligned
+
+**Who is affected.** Anyone reading the first-stage F from `sp.ivreg` /
+`sp.iv` / `sp.lasso_iv` fitted with `robust=` or `cluster=` (diagnostics,
+`model_info['first_stage_f']`, weak-IV warnings, `sp.regtable`'s
+"First-stage F" row), and anyone who relied on `sp.cross_validate` verdicts
+for IV formulas or clustered / robust errors.
+
+**What changes.**
+
+| Quantity | Before | Now |
+| --- | --- | --- |
+| First-stage F with `robust=` / `cluster=` | classical F | Wald F under the same vcov, `F(m, N-k)` / `F(m, G-1)` (Stata `estat firststage`) |
+| First-stage F, non-robust fits | classical F | unchanged |
+| Classical F under robust / cluster | the headline F | `First-stage F, non-robust (<endog>)`, `first_stage[j]['f_statistic_nonrobust']` |
+| `cross_validate` IV formula `y ~ w1 + w2 \| x ~ z` | statspai / linearmodels dropped `w1` | all exogenous regressors kept |
+| `cross_validate(..., cluster=)` | statspai ignored it; R clustered on the first FE | every engine clusters on the requested variable |
+| linearmodels engine SEs | large-sample | small-sample (`debiased=True`) |
+
+**What to do.** Weak-instrument thresholds of Stock and Yogo apply to the
+classical F; read `First-stage F, non-robust` for those, or use
+`sp.effective_f_test` / `sp.anderson_rubin_ci` under heteroskedasticity.
+Re-run `sp.cross_validate` checks that used IV formulas or clustering: an
+old `AGREE` / `DISAGREE` / `PARTIAL` may change.
+
+**Also.** `sp.regtable` exports no longer drop columns when `model_labels`
+repeat; `to_dict()["columns"]` suffixes a repeated label with its position
+(`"OLS (1)"`). Weak-IV confidence-set `summary()` / `as_intervals()` print
+the root-found endpoints, so printed intervals widen slightly.
+
 ---
 
 <a id="synth-placebo-pvalue"></a>

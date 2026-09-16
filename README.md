@@ -233,7 +233,8 @@ variation in schooling (first-stage F ≈ 16.7) — and the Hausman test does no
 reject exogeneity of `educ` (p = 0.21). Default standard errors are the
 unadjusted ones with the small-sample correction used by `AER::ivreg` (Stata:
 `ivregress 2sls ..., small`); pass `robust="hc1"` for heteroskedasticity-robust
-errors.
+errors, and the first-stage F then uses the same variance estimator, as Stata's
+`estat firststage` does.
 
 With a first stage this modest, report a weak-instrument-robust interval too:
 
@@ -250,7 +251,7 @@ Anderson-Rubin (AR) — weak-IV-robust confidence set
 ------------------------------------------------------------
   level                : 95%
   grid                 : 401 points on [-0.359, 0.624]
-  confidence set       : [0.0389, 0.2601]
+  confidence set       : [0.0384, 0.2612]
 ```
 
 ### 3. Staggered DiD: replace `csdid` or R `did`
@@ -658,16 +659,16 @@ Engine              Estimate     Std.Err                95% CI    status
 ------------------------------------------------------------------------
 statspai             0.13229     0.04923      [0.0358, 0.2288]        ok
 pyfixest             0.13229     0.04923      [0.0358, 0.2288]        ok
-linearmodels         0.13229     0.04918      [0.0359, 0.2287]        ok
+linearmodels         0.13229     0.04923      [0.0358, 0.2288]        ok
 R::fixest            0.13229     0.04923      [0.0358, 0.2288]        ok
 ------------------------------------------------------------------------
 VERDICT: ✓ AGREE   (4/4 engines ran)
 ```
 
-Engines that are not installed (pyfixest, or R with `fixest`) are skipped. The
-`linearmodels` standard error differs in the fourth digit because it omits the
-small-sample correction — a documented convention difference, not a
-disagreement about the estimate.
+Engines that are not installed (pyfixest, or R with `fixest`) are skipped. Every
+engine is asked for the same variance estimator (including `cluster=` and
+`vcov=`) and the same small-sample convention, so the standard errors are
+compared as well as the point estimates.
 
 Beyond point-parity, a Track-B coverage study runs `B=1000` Monte Carlo
 replications per estimator and checks that 95% confidence intervals hit their

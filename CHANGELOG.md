@@ -146,6 +146,34 @@ All notable changes to StatsPAI will be documented in this file.
 - `docs/stats.md` (per-module table, source / test LOC) and the README
   at-a-glance LOC figures regenerated from `scripts/registry_stats.py`.
 
+- **`sp.from_stata` IV translations were not runnable.** `ivreg2` /
+  `ivregress` joined multi-variable lists with spaces
+  (`y ~ x1 x2 + (d ~ z1 z2)`), which `sp.ivreg` rejects, and refused
+  exogenous regressors written after the parentheses or several endogenous
+  regressors; `ivreghdfe` shared the last two gaps. The note about Stata's
+  `small` option was also inverted: `sp.ivreg` SEs match `ivregress ...,
+  small`, so the note now appears when `small` is absent.
+- **`sp.cross_validate(result)`** now explains that the result does not carry
+  its data and prints a runnable `sp.cross_validate(df, ...)` call rebuilt from
+  the result's provenance (the old message pointed at a non-existent `data=`
+  argument). Data mode accepts `sp.ivreg`'s own formula, `y ~ (d ~ z) + x`.
+- **`sp.regtable(...).to_text()`** widens columns to fit their widest cell;
+  a fixed 14-character column ran long labels into their neighbours.
+- `WeakIVConfidenceSet` has a compact `repr` instead of dumping every grid
+  array.
+- `examples/rd_lee.py` and the RD snippet in `docs/joss_reviewer_guide.md`
+  crashed (they used columns `lee_2008_senate()` no longer returns);
+  `tests/test_example_scripts.py` now runs every example script.
+- `sp.datasets.lee_2008_senate()` documentation no longer attributes the
+  bundled U.S. Senate extract to Lee (2008), which studies House elections;
+  the data are Cattaneo, Frandsen & Titiunik (2015), distributed with R
+  `rdrobust`.
+- `docs/guides/migration-from-r.md` mapped R post-estimation calls to four
+  methods that do not exist (`result.robust()`, `result.summary(vcov=)`,
+  `result.test()`, `result.marginal_effects()`) and to a multiway-cluster
+  spelling that raises; they now point at `sp.regress(robust=)`, `sp.test`,
+  `sp.margins` and `vcov={"CRV1": "c1 + c2"}`.
+
 ### ⚠️ Correctness
 
 - **`sp.dml(model="plr", score="IV-type")` now computes DoubleML's IV-type
@@ -240,6 +268,54 @@ All notable changes to StatsPAI will be documented in this file.
   `biprobit`, `betareg`, `fracreg`, `mlogit`, `ologit`, `oprobit`, `zip`,
   `zinb`, `hurdle` and panel logit / probit replaces second-difference
   Hessians (1e-6 – 3e-5 relative SE error).
+
+- **`sp.ivreg` / `sp.iv` first-stage F now uses the requested variance
+  estimator.** With `robust=` or `cluster=`, the first-stage F (the
+  `diagnostics` entry, `model_info['first_stage_f']`, the weak-instrument
+  warning and `sp.regtable`'s "First-stage F" row) was still the classical
+  homoskedastic F while every other number used the robust / clustered vcov.
+  It is now the Wald test of the excluded instruments under that vcov divided
+  by the number of instruments, on `F(m, N-k)` or `F(m, G-1)` -- what Stata's
+  `estat firststage` reports after `ivregress ..., vce(robust)` /
+  `vce(cluster)`. On the Card (1995) extract with HC1 it moves from 16.72 to
+  17.51. Checked against Stata 18 to ~1e-13 for one and two instruments, HC1
+  and clustered (`tests/reference_parity/test_iv_first_stage_f_stata_parity.py`).
+  Non-robust fits are unchanged. The classical F stays available as
+  `First-stage F, non-robust (<endog>)` and
+  `model_info['first_stage'][j]['f_statistic_nonrobust']`, since Stock-Yogo
+  critical values are tabulated for it. `sp.lasso_iv` defaults to HC1, so its
+  reported first-stage F changes too.
+
+- **`sp.cross_validate` could compare different models or different variance
+  estimators.** Three defects, each able to produce a wrong verdict:
+  (1) with an IV formula (`y ~ w1 + w2 | x ~ z`) the first exogenous regressor
+  was promoted to "treatment" and dropped from the statspai and linearmodels
+  engines' models, which then agreed with each other against pyfixest;
+  (2) the statspai engine ignored `cluster=` for OLS / FE / IV and `vcov=` for
+  IV, and the R engine passed fixest the string `"cluster"`, which clusters on
+  the first fixed effect (or errors without one);
+  (3) linearmodels reported large-sample SEs. Every engine now fits the same
+  model with the same variance estimator and small-sample convention; on
+  OLS / FE / IV with clustered and HC1 errors the statspai, pyfixest, R and
+  linearmodels SEs agree to ~1e-10 (linearmodels with absorbed FE differs by
+  a documented FE-dof convention, ~0.15%).
+
+- **`sp.regtable(..., model_labels=[...])` with a repeated label silently
+  dropped columns** from `to_dataframe()`, `to_excel()`, `to_word()`,
+  `save('.csv')`, `to_dict()` / `to_json()` and `sp.collect` exports: each row
+  was keyed by label, so `["OLS", "OLS", "2SLS"]` exported two columns, the
+  surviving `OLS` holding the second model. Text / LaTeX / Markdown / HTML were
+  unaffected. All exports now keep every model; `to_dict()["columns"]`
+  disambiguates a repeated label as `"OLS (1)"`, `"OLS (2)"` while
+  `model_labels` keeps the labels as given.
+
+- **Weak-IV confidence sets printed inward-biased endpoints.**
+  `WeakIVConfidenceSet.summary()` and `.as_intervals()` (Anderson-Rubin, CLR,
+  K) reported the extreme grid points inside the set, not the root-found
+  `lower` / `upper`, so the printed interval was too narrow by up to a grid
+  step (Card 1995 AR set: `[0.0389, 0.2601]` printed, `[0.0384, 0.2612]`
+  correct). The outer endpoints now come from `lower` / `upper`; interior
+  boundaries of a disconnected set stay at grid resolution.
 
 ## [1.28.0] — 2026-09-13
 
