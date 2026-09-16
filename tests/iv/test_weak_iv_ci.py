@@ -123,3 +123,45 @@ class TestKTestCI:
         ci = iv.k_test_ci(y="y", endog="d", instruments=["z1", "z2"], data=df)
         assert not ci.is_empty
         assert ci.lower <= 2.0 <= ci.upper
+
+
+class TestReportedEndpointsAreRefined:
+    """``summary()`` / ``as_intervals()`` must report the root-found endpoints.
+
+    ``lower`` / ``upper`` are bisected off the grid, but ``as_intervals`` (and
+    so ``summary``) used to print the extreme *grid points* inside the set --
+    the inward bias the bisection was added to remove. On Card (1995) the
+    printed AR set was [0.0389, 0.2601] while ``lower`` / ``upper`` were
+    [0.0384, 0.2612].
+    """
+
+    @pytest.fixture(scope="class")
+    def card_ar(self):
+        import statspai as sp
+
+        return iv.anderson_rubin_ci(
+            y="lwage",
+            endog="educ",
+            instruments=["nearc4"],
+            exog=["exper", "expersq", "black", "south", "smsa"],
+            data=sp.datasets.card_1995(),
+        )
+
+    def test_intervals_use_refined_outer_endpoints(self, card_ar):
+        lo, hi = card_ar.as_intervals()[0]
+        assert lo == card_ar.lower
+        assert hi == card_ar.upper
+        # Refinement moves the endpoints outward past the grid points.
+        grid_in = card_ar.beta_grid[card_ar.in_set]
+        assert card_ar.lower < grid_in.min()
+        assert card_ar.upper > grid_in.max()
+
+    def test_summary_prints_refined_endpoints(self, card_ar):
+        text = card_ar.summary()
+        assert f"[{card_ar.lower:.4f}, {card_ar.upper:.4f}]" in text
+
+    def test_repr_is_compact(self, card_ar):
+        text = repr(card_ar)
+        assert len(text) < 400
+        assert "Anderson-Rubin" in text
+        assert f"lower={card_ar.lower:.6g}" in text

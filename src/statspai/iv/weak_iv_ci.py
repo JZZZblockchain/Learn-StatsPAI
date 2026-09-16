@@ -62,8 +62,28 @@ class WeakIVConfidenceSet:
     is_unbounded: bool
     extra: dict
 
+    def __repr__(self) -> str:
+        if self.is_empty:
+            body = "empty"
+        else:
+            body = f"lower={self.lower:.6g}, upper={self.upper:.6g}"
+            if not self.is_connected:
+                body += ", disconnected"
+            if self.is_unbounded:
+                body += ", may be unbounded"
+        return (
+            f"WeakIVConfidenceSet(method={self.method!r}, "
+            f"level={self.level:g}, {body}, grid={len(self.beta_grid)} points)"
+        )
+
     def as_intervals(self) -> List[Tuple[float, float]]:
-        """Return the CI as a list of (lo, hi) intervals (handles disconnection)."""
+        """Return the CI as a list of (lo, hi) intervals (handles disconnection).
+
+        The grid decides the pieces; the outermost two endpoints are the
+        root-found ``lower`` / ``upper`` (see :func:`_build_set`), so a
+        connected set reports exactly ``[(lower, upper)]``. Interior
+        boundaries of a disconnected set stay at grid resolution.
+        """
         if self.is_empty:
             return []
         intervals = []
@@ -80,6 +100,10 @@ class WeakIVConfidenceSet:
                 i = j + 1
             else:
                 i += 1
+        if intervals and np.isfinite(self.lower):
+            intervals[0] = (float(self.lower), intervals[0][1])
+        if intervals and np.isfinite(self.upper):
+            intervals[-1] = (intervals[-1][0], float(self.upper))
         return intervals
 
     def summary(self) -> str:
