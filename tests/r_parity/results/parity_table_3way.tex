@@ -29,7 +29,7 @@ ID & Method & Worst diff vs \proglang{R} & Worst diff vs \proglang{Stata} & Verd
 \code{10} & Honest DiD bounds & abs $\le 4.88e-15$ {\footnotesize (FLCI via HonestDiD backend; Stata port within 0.0005)} & abs $\le 0.000327$ & \textbf{PASS} \\
 \code{11} & PSM 1:1 NN & rel $\le 1.2e-15$ & rel $\le 2e-16$ & \textbf{PASS} \\
 \code{12} & Synthetic DID & rel $\le 2.6e-15$ {\footnotesize (native Frank-Wolfe/zeta ATT parity; backend-native placebo SE diagnostics)} & rel $\le 7.2e-08$ & \textbf{PASS} \\
-\code{13} & Causal forest (AIPW) & rel $\le 0.0019$ {\footnotesize (T3 combined-MC-error pass; like-for-like AIPW vs grf within $\sim 0.05$ combined SE on clean-overlap DGP)} & \emph{bridge artifact not materialized: Stata 19's official cate command is the candidate causal-forest/AIPW reference, but the verified local runtime is Stata 18 and `which cate` fails.} & \textbf{PASS} \\
+\code{13} & Causal forest (AIPW) & rel $\le 0.0024$ {\footnotesize (T3 combined-MC-error pass; like-for-like AIPW vs grf within $\sim 0.05$ combined SE on clean-overlap DGP)} & \emph{bridge artifact not materialized: Stata 19's official cate command is the candidate causal-forest/AIPW reference, but the verified local runtime is Stata 18 and `which cate` fails.} & \textbf{PASS} \\
 \code{14} & OLS + cluster-robust SE & rel $\le 3e-14$ & rel $\le 2.2e-14$ & \textbf{PASS} \\
 \code{15} & HDFE + cluster SE & rel $\le 5.2e-15$ {\footnotesize (fixest/reghdfe nested-FE cluster correction)} & rel $\le 2.9e-15$ & \textbf{PASS} \\
 \code{16} & BJS imputation & rel $\le 4.8e-08$ {\footnotesize (R/Stata simple-ATT point parity; SE rows side-specific)} & rel $\le 3.5e-07$ & \textbf{PASS} \\
@@ -58,14 +58,14 @@ ID & Method & Worst diff vs \proglang{R} & Worst diff vs \proglang{Stata} & Verd
 \code{39} & ARIMA(2,0,0) & rel $\le 7.4e-07$ {\footnotesize (stats::arima ML / tightly converged Stata arima)} & rel $\le 9.3e-09$ & \textbf{PASS} \\
 \code{40} & Quantile reg (median) & rel $\le 3.3e-15$ {\footnotesize (post sqrt(n) sandwich-scaling fix)} & rel $\le 4.4e-15$ & \textbf{PASS} \\
 \code{41} & Tobit (left-censored) & rel $\le 2.8e-08$ {\footnotesize (post observed-information Hessian fix)} & rel $\le 2.8e-08$ & \textbf{PASS} \\
-\code{42} & Negative binomial & rel $\le 6e-10$ & rel $\le 1.3e-10$ & \textbf{PASS} \\
+\code{42} & Negative binomial & rel $\le 5.1e-10$ & rel $\le 1e-11$ & \textbf{PASS} \\
 \code{43} & Heckman 2-step & rel $\le 1e-11$ & rel $\le 1e-11$ & \textbf{PASS} \\
-\code{44} & Multinomial logit & rel $\le 2.6e-07$ {\footnotesize (post observed-information Hessian fix)} & rel $\le 7.4e-09$ & \textbf{PASS} \\
-\code{45} & Ordered logit & rel $\le 1.8e-07$ {\footnotesize (post observed-information Hessian fix)} & rel $\le 3.5e-07$ & \textbf{PASS} \\
+\code{44} & Multinomial logit & rel $\le 2.6e-07$ {\footnotesize (post observed-information Hessian fix)} & rel $\le 1.5e-11$ & \textbf{PASS} \\
+\code{45} & Ordered logit & rel $\le 1.5e-07$ {\footnotesize (post observed-information Hessian fix)} & rel $\le 3.4e-07$ & \textbf{PASS} \\
 \code{46} & Conditional logit & rel $\le 1.3e-08$ & rel $\le 1.3e-08$ & \textbf{PASS} \\
 \code{47} & PPML + 3-way HDFE & rel $\le 1.2e-15$ {\footnotesize (Post Gauss-Seidel multi-FE fix; sp matches at 1e-15)} & rel $\le 1.2e-16$ & \textbf{PASS} \\
 \code{48} & Binary probit & rel $\le 3.1e-07$ & rel $\le 1.6e-08$ & \textbf{PASS} \\
-\code{49} & Ordered probit & rel $\le 3.4e-07$ & rel $\le 2.8e-08$ & \textbf{PASS} \\
+\code{49} & Ordered probit & rel $\le 3.7e-07$ & rel $\le 2.1e-10$ & \textbf{PASS} \\
 \code{50} & Arellano-Bond GMM & rel $\le 9e-16$ {\footnotesize (R/Stata dynamic-panel fixture; block-diagonal instruments and one-step GMM weights match)} & rel $\le 1.4e-15$ & \textbf{PASS} \\
 \code{51} & Newey-West HAC OLS & rel $\le 1.4e-15$ {\footnotesize (post HAC sandwich sqrt(n) scaling fix)} & rel $\le 8.5e-16$ & \textbf{PASS} \\
 \code{52} & Classical SCM (unique solution) & rel $\le 7.8e-08$ {\footnotesize (identified convex SCM; sp and Stata synth recover exact weights+gap)} & rel $\le 7.7e-08$ & \textbf{PASS} \\
@@ -77,10 +77,10 @@ ID & Method & Worst diff vs \proglang{R} & Worst diff vs \proglang{Stata} & Verd
 \code{58} & Poisson ML & rel $\le 9.2e-15$ & rel $\le 8.7e-12$ & \textbf{PASS} \\
 \code{59} & LIML k-class IV & rel $\le 1.7e-15$ {\footnotesize (ivregress runs with `small` (RSS/(n-k)))} & rel $\le 9.7e-16$ & \textbf{PASS} \\
 \code{60} & SUR one-step FGLS & rel $\le 1.5e-14$ {\footnotesize (Sigma divisor n (sureg default / noDfCor))} & rel $\le 1.5e-15$ & \textbf{PASS} \\
-\code{61} & Beta regression ML & rel $\le 2.2e-08$ {\footnotesize (betareg SEs are expected-information (documented))} & rel $\le 3.1e-08$ & \textbf{PASS} \\
-\code{62} & Truncated regression ML & rel $\le 3.3e-08$ & rel $\le 9.5e-08$ & \textbf{PASS} \\
-\code{63} & Zero-inflated Poisson & rel $\le 7.7e-08$ & rel $\le 1.1e-07$ & \textbf{PASS} \\
-\code{64} & Zero-inflated NB & rel $\le 1.1e-06$ {\footnotesize (flat ZINB likelihood near optimum (1e-5 budget))} & rel $\le 2.1e-07$ & \textbf{PASS} \\
+\code{61} & Beta regression ML & rel $\le 2.2e-12$ {\footnotesize (betareg SEs are expected-information (documented))} & rel $\le 2.1e-08$ & \textbf{PASS} \\
+\code{62} & Truncated regression ML & rel $\le 3.5e-10$ & rel $\le 7.9e-08$ & \textbf{PASS} \\
+\code{63} & Zero-inflated Poisson & rel $\le 1.2e-07$ & rel $\le 2.8e-08$ & \textbf{PASS} \\
+\code{64} & Zero-inflated NB & rel $\le 9.5e-07$ {\footnotesize (flat ZINB likelihood near optimum (1e-5 budget))} & rel $\le 4.5e-11$ & \textbf{PASS} \\
 \code{65} & Spatial ML (SAR/SEM/SDM) & rel $\le 8.3e-08$ {\footnotesize (vs spatialreg::lagsarlm/errorsarlm/Durbin, row-std rook W)} & rel $\le 5.1e-08$ & \textbf{PASS} \\
 \code{66} & Spatial GMM (SAR-2SLS/SEM-GMM) & rel $\le 4.6e-08$ {\footnotesize (vs spatialreg::stsls(W2X=F)/GMerrorsar; SEM point-only)} & rel $\le 7.3e-16$ & \textbf{PASS} \\
 \code{67} & Panel GLM (feglm / fepois) & rel $\le 9.7e-09$ {\footnotesize (vs fixest::feglm/fepois, absorbed id FE; IWLS SE 1e-5)} & rel $\le 1.8e-09$ & \textbf{PASS} \\

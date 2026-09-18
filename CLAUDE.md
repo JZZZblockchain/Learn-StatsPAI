@@ -297,6 +297,9 @@ PYTHONPATH="$(pwd)/src" python3 scripts/dump_schemas.py
 - **`decomposition/`**：影响函数 / statistic-value / WLS 在 `_common.py`。RIF / FFL / inequality / Oaxaca 都委托到该文件。
 - **`multilevel/` / `frontier/` / GLMM**：v0.9.3–v0.9.4 有含正确性修复的大重构——用户引用旧数值时主动提示。
 - **`bayes/`**：默认 NUTS (`draws=2000 tune=1000 chains=4 target_accept=0.9`)；必带 `rhat` / `ess_bulk` / `ess_tail` / `divergences`；`rhat > 1.01` 或 `ess < 400` 发 `ConvergenceWarning`；HDI 94%（arviz 约定）。
+- **`forest/`**：`sp.causal_forest` 默认是自研 GRF 引擎（`_grf_engine.py`，numba），拟合流程在 `_grf_fit.py` / `_panel_forest.py`，推断在 `_grf_inference.py`。训练行上的一切统计量（ATE、校准、RATE、BLP）必须用 **OOB** 预测，不得用 `effect(X_train)`。grf 是 GPL-3：只按论文与文档行为独立实现，**不得**移植其源码；与 grf 的森林对比只能是 T3，推断算子（给定森林）才可做到 1e-14 级对齐。面板重复观测必须 `clusters=`；`fe=` 森林没有倾向得分，拒绝双稳健平均，`calibrate_cate` 的斜率不是去衰减因子（有实测反例）。`split_rule="legacy"` 仅供复现旧数字，已弃用。
+- **`did/did_forest.py`**：每个 (g, t) 一片森林，干净对照组规则与 CS 相同；聚合 SE 由单元级影响函数跨格求和。
+- **`callaway_santanna(notyet_cutoff=)`**：默认 `'period'` 跟 R `did`（`G > max(t, base) + anticipation`）；`'asinr'` 是 Stata `csdid, asinr`（`G > t`），`'cohort'` 是 csdid 默认。三者只在 universal 基期的前期格或 `anticipation > 0` 时分歧，不要再把 asinr 写成"R 约定"。
 - **`fast/` / `fixest/` / HDFE**：性能关键路径先 Rust，再 numba / JAX。
 
 ---

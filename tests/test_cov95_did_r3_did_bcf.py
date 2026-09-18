@@ -45,6 +45,7 @@ def test_did_bcf_with_covariates(panel):
         covariates=["x1", "x2"],
         n_trees=20,
         seed=3,
+        n_bootstrap=20,
     )
     assert np.isfinite(r.estimate)
     assert 0.0 <= r.pvalue <= 1.0

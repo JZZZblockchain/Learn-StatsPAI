@@ -23,7 +23,7 @@ This is the Python counterpart of `REPRODUCIBILITY_REPORT.md`. Both sides matter
 | `15_hdfe_cluster` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
 | `16_bjs` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
 | `17_etwfe` | ✅ reproduces | same bytes | 8/8 | 0.00e+00 | 0.00e+00 |
-| `18_augsynth` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
+| `18_augsynth` | ✅ reproduces | same bytes | 2/2 | 4.77e-14 | 1.35e-14 |
 | `19_gsynth` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |
 | `20_bacon` | ✅ reproduces | same bytes | 12/12 | 0.00e+00 | 0.00e+00 |
 | `21_honest_relmags` | ✅ reproduces | in-script | 10/10 | 0.00e+00 | 0.00e+00 |
@@ -51,7 +51,7 @@ This is the Python counterpart of `REPRODUCIBILITY_REPORT.md`. Both sides matter
 | `43_heckman` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |
 | `44_mlogit` | ✅ reproduces | same bytes | 6/6 | 0.00e+00 | 0.00e+00 |
 | `45_ologit` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |
-| `46_clogit` | ✅ reproduces | same bytes | 1/1 | 0.00e+00 | 0.00e+00 |
+| `46_clogit` | ✅ reproduces | same bytes | 1/1 | 0.00e+00 | 3.82e-10 |
 | `47_ppmlhdfe_3fe` | ✅ reproduces | same bytes | 4/4 | 0.00e+00 | 0.00e+00 |
 | `48_probit` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
 | `49_oprobit` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |

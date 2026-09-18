@@ -352,7 +352,8 @@ class BayesianCausalForest:
         self._cate = cate
         self._n_features = X.shape[1]
 
-        return CausalResult(
+        self._boot_cate = boot_cate
+        result = CausalResult(
             method="BCF (Hahn, Murray, Carvalho 2020)",
             estimand="ATE",
             estimate=ate,
@@ -365,6 +366,11 @@ class BayesianCausalForest:
             model_info=model_info,
             _citation_key="bcf",
         )
+        # Bootstrap CATE draws (n_bootstrap x n), kept off model_info so the
+        # serialised result stays small; consumers such as sp.did_bcf use
+        # them to form standard errors of subgroup averages.
+        result._bootstrap_cate = boot_cate  # type: ignore[attr-defined]
+        return result
 
     def effect(self, X_new: Optional[np.ndarray] = None) -> np.ndarray:
         """Predict CATE for new observations."""

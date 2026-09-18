@@ -304,14 +304,23 @@ def callaway_santanna(
         must a unit still be untreated at to serve as a control for
         ATT(g, t)?
 
-        - ``'period'`` — untreated as of ``t``. R ``did``, and Stata
-          ``csdid, asinr``.
-        - ``'cohort'`` — untreated as of ``g``, a strictly smaller control
-          set that also excludes cohorts switching on between ``t`` and
-          ``g``. Stata ``csdid``'s own default.
+        - ``'period'`` — untreated through both periods of the comparison,
+          ``G > max(t, base) + anticipation``. R ``did`` (the authors'
+          implementation). Under ``base_period='universal'`` a
+          pre-treatment cell's base is ``g - 1``, so cohorts first treated
+          between ``t`` and the base are excluded: their base-period
+          outcome is already treated.
+        - ``'asinr'`` — untreated as of ``t`` only, ``G > t``. Stata
+          ``csdid, asinr``. Identical to ``'period'`` under
+          ``base_period='varying'`` with no anticipation; under
+          ``'universal'`` it keeps already-treated cohorts in pre-treatment
+          controls.
+        - ``'cohort'`` — ``G > max(t, g)``. Stata ``csdid``'s own default.
 
-        The two coincide for post-treatment cells and differ only on
-        pre-treatment placebos.
+        All three coincide for post-treatment cells without anticipation.
+        On ``mpdta`` (universal base) ATT(2007, 2004) is 0.033813 under
+        ``'period'`` and ``'cohort'`` (R ``did``, Stata default) and
+        0.032971 under ``'asinr'``.
     pscore_trim : float, default 0.995
         Drop *control* units whose estimated propensity score is at or
         above this cutoff, matching ``DRDID``'s ``trim.level`` (inherited
@@ -475,14 +484,14 @@ def callaway_santanna(
     notyet_cutoff = _require_string_option(
         notyet_cutoff,
         argument="notyet_cutoff",
-        valid=("period", "cohort"),
+        valid=("period", "asinr", "cohort"),
     )
     pscore_trim = _require_pscore_trim(pscore_trim)
     # A non-default cutoff with never-treated controls is silently inert —
     # say so rather than let the caller believe it took effect (§7).
     if notyet_cutoff != "period" and control_group == "nevertreated":
         warnings.warn(
-            "callaway_santanna: notyet_cutoff='cohort' only affects the "
+            f"callaway_santanna: notyet_cutoff={notyet_cutoff!r} only affects the "
             "'notyettreated' control group, but control_group="
             "'nevertreated' was requested, so it has no effect. Pass "
             "control_group='notyettreated' to use it.",
@@ -654,6 +663,7 @@ def callaway_santanna(
             alpha=alpha,
             estimator=estimator,
             control_group=control_group,
+            notyet_cutoff=notyet_cutoff,
             pretest=pretest,
             pretest_periods=pretest_periods,
             unit_col=i if use_unbalanced else None,
@@ -720,6 +730,7 @@ def callaway_santanna(
             notyet_cutoff,
             pscore_trim,
             unit_weights,
+            anticipation=anticipation,
         )
 
         pval = 2 * stats.norm.sf(abs(att / se)) if se > 0 else 1.0
@@ -1213,6 +1224,7 @@ def _estimate_single_att(
     notyet_cutoff: str = "period",
     pscore_trim: float = _DEFAULT_PSCORE_TRIM,
     unit_weights: Optional[np.ndarray] = None,
+    anticipation: int = 0,
 ) -> Tuple[float, float, np.ndarray]:
     """Estimate a single ATT(g,t) and return (att, se, influence_func)."""
 
@@ -1226,8 +1238,18 @@ def _estimate_single_att(
     # For 'notyettreated' there are two defensible cutoffs, and the two
     # reference implementations disagree on which is the default:
     #
-    #   notyet_cutoff='period' — untreated as of t. R ``did`` and Stata
+    #   notyet_cutoff='period' — untreated as of both periods of the 2x2
+    #       comparison, i.e. G > max(t, base) + anticipation. R ``did``
+    #       (``get_did_cohort_index`` / ``compute.att_gt``:
+    #       ``time_periods[max(t, pret) + tfac] + anticipation``) and Stata
     #       ``csdid, asinr``. This is StatsPAI's default and matches R.
+    #       Under base_period='varying' base < t, so the cutoff is t; under
+    #       'universal' a pre-treatment cell has base = g - 1 - anticipation
+    #       > t, and a cohort treated between t and base must be excluded
+    #       because its base-period outcome is already treated.
+    #   notyet_cutoff='asinr' — untreated as of t only (G > t), Stata
+    #       ``csdid, asinr``; differs from 'period' on universal-base
+    #       pre-treatment cells and whenever anticipation > 0.
     #   notyet_cutoff='cohort' — untreated as of g, i.e. a stricter set that
     #       excludes anyone treated between t and g. Stata ``csdid``'s
     #       own default.
@@ -1238,14 +1260,16 @@ def _estimate_single_att(
     # ``asinr`` and 'cohort' reproduces the csdid default, both to 1e-9.
     if control_group == "nevertreated":
         is_control = g_series == 0
+    elif notyet_cutoff == "asinr":
+        is_control = (g_series == 0) | (g_series > t_val)
     elif notyet_cutoff == "cohort":
         # max(t, g), not g: csdid's rule is scoped to PRE-treatment cells
         # ("pre-treatment ATTGT's ... are estimated using ..."). For t >= g
         # the cutoff is already t, so max() reproduces the shared
         # post-treatment behaviour instead of shrinking those cells too.
         is_control = (g_series == 0) | (g_series > max(t_val, g_val))
-    else:  # notyettreated, cutoff at the comparison period t
-        is_control = (g_series == 0) | (g_series > t_val)
+    else:  # notyettreated, untreated through both comparison periods
+        is_control = (g_series == 0) | (g_series > max(t_val, base_val) + anticipation)
 
     # Outcome change ΔY = Y_t - Y_base
     if t_val not in y_wide.columns or base_val not in y_wide.columns:
@@ -2265,6 +2289,8 @@ def _estimate_single_att_rcs_sz(
     control_group: str,
     n_obs: int,
     w_arr: Optional[np.ndarray] = None,
+    anticipation: int = 0,
+    notyet_cutoff: str = "period",
 ) -> Tuple[float, float, np.ndarray]:
     """Sant'Anna-Zhao ATT(g, t) for one (g, t) cell of a repeated cross-section.
 
@@ -2280,8 +2306,12 @@ def _estimate_single_att_rcs_sz(
     is_treated = g_arr == g_val
     if control_group == "nevertreated":
         is_control = g_arr == 0
-    else:  # notyettreated
+    elif notyet_cutoff == "asinr":
         is_control = (g_arr == 0) | (g_arr > t_val)
+    elif notyet_cutoff == "cohort":
+        is_control = (g_arr == 0) | (g_arr > max(t_val, g_val))
+    else:  # notyettreated: untreated through both periods (R did's rule)
+        is_control = (g_arr == 0) | (g_arr > max(t_val, base_val) + anticipation)
 
     in_period = (t_arr == t_val) | (t_arr == base_val)
     relevant = (is_treated | is_control) & in_period
@@ -2326,6 +2356,7 @@ def _callaway_santanna_rcs(
     x: Optional[List[str]] = None,
     estimator: str = "reg",
     control_group: str = "nevertreated",
+    notyet_cutoff: str = "period",
     pretest: str = "joint",
     pretest_periods: Optional[int] = None,
     unit_col: Optional[str] = None,
@@ -2530,6 +2561,8 @@ def _callaway_santanna_rcs(
                 control_group=control_group,
                 n_obs=n_obs,
                 w_arr=w_arr,
+                anticipation=anticipation,
+                notyet_cutoff=notyet_cutoff,
             )
         else:
             att, se, inf_func = _estimate_single_att_rcs(

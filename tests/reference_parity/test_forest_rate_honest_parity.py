@@ -12,7 +12,7 @@ known DGP truth and against exact structural identities.
     DGP the mean CATE recovers the true effect within a bounded band, and
     the half-sample SE / CI are well-formed (SE >= 0, CI brackets the ATE).
 
-``sp.rate`` (Yadlowsky et al. 2023 Rank-Average Treatment Effect)
+``sp.rate`` (Yadlowsky et al. 2025, rank-weighted average treatment effect)
     AUTOC measures whether the prioritisation score (the forest CATE)
     correctly orders the *true* heterogeneous effect. On a DGP with strong
     heterogeneity ``tau(x) = 1 + 2 x0`` the forest prioritises correctly, so

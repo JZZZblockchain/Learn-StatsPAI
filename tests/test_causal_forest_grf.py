@@ -100,8 +100,24 @@ def test_blp_validates_prediction_inputs_and_scalar_contracts(fitted_cf):
     with pytest.raises(DataInsufficient):
         fitted_cf.best_linear_projection(np.empty((0, 3)))
 
+    # GRF-engine forests define the doubly-robust scores on the training rows
+    # only; a covariate matrix for other rows is refused rather than replaced
+    # by a plug-in regression with anti-conservative standard errors.
+    with pytest.raises(MethodIncompatibility, match="aligned with the training rows"):
+        fitted_cf.best_linear_projection([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+
+
+def test_legacy_blp_keeps_plug_in_fallback_for_new_rows():
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(300, 3))
+    T = rng.integers(0, 2, 300)
+    Y = X[:, 0] * T + rng.normal(size=300)
+    with pytest.warns(DeprecationWarning, match="legacy"):
+        cf = CausalForest(n_estimators=20, random_state=0, split_rule="legacy").fit(
+            Y=Y, T=T, X=X
+        )
     with pytest.warns(UserWarning, match="different sample size"):
-        out = fitted_cf.best_linear_projection([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        out = cf.best_linear_projection([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
     assert "Intercept" in out.index
 
 

@@ -96,6 +96,7 @@ from .diagnostics import (
 from .did import (
     CSReport,
     DIDAnalysis,
+    DIDForestResult,
     HarvestDIDResult,
     ParallelTrendsRobustnessResult,
     SensitivityResult,
@@ -125,6 +126,7 @@ from .did import (
     did_bcf,
     did_cluster_diagnostics,
     did_design_contract,
+    did_forest,
     did_imputation,
     did_misclassified,
     did_multiplegt,
@@ -1302,6 +1304,7 @@ __all__ = [
     # Causal Forest + GRF inference
     "CausalForest",
     "causal_forest",
+    "calibrate_cate",
     "calibration_test",
     "test_calibration",  # GRF-compatible alias of calibration_test
     "rate",
@@ -2199,6 +2202,8 @@ __all__ = [
     "BridgeResult",
     # v1.0 — DiD frontiers (scaffolded)
     "did_bcf",
+    "did_forest",
+    "DIDForestResult",
     "cohort_anchored_event_study",
     "design_robust_event_study",
     "did_misclassified",
@@ -2804,6 +2809,7 @@ _register_lazy(
 )
 _register_lazy(
     "forest.forest_inference",
+    "calibrate_cate",
     "calibration_test",
     ("test_calibration", "calibration_test"),
     "rate",

@@ -65,7 +65,9 @@ class TestForestATE:
     def test_plug_in_average_is_kept_in_detail(self):
         cf, X, _ = _fit_forest()
         a = cf.ate(X)
-        plug_in = float(cf.effect(X).mean())
+        # The plug-in is the mean of the out-of-bag CATE predictions of the
+        # training rows (X is the training design).
+        plug_in = float(cf.predict().mean())
         assert a.detail["plug_in_estimate"] == pytest.approx(plug_in, rel=0, abs=0)
         assert a.detail["plug_in_minus_aipw"] == pytest.approx(
             plug_in - a.detail["estimate"], rel=1e-12
@@ -89,7 +91,7 @@ class TestForestATE:
         # the treated rows is kept alongside it.
         assert float(t) == pytest.approx(t.detail["estimate"], rel=0, abs=0)
         assert t.detail["plug_in_estimate"] == pytest.approx(
-            float(cf.effect(X)[np.asarray(T) == 1].mean()), rel=0, abs=0
+            float(cf.predict()[np.asarray(T) == 1].mean()), rel=0, abs=0
         )
         assert t.se is not None
 

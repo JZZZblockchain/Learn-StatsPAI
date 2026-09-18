@@ -1,22 +1,25 @@
 """
-Causal Forest implementation for heterogeneous treatment effect estimation
+Causal forests for heterogeneous treatment effect estimation.
 
-This module implements the Causal Forest algorithm for estimating conditional
-average treatment effects (CATE) based on the methodology from:
-- Wager, S., & Athey, S. (2018). Estimation and inference of heterogeneous
-  treatment effects using random forests. Journal of the American Statistical
-  Association, 113(523), 1228-1242.
+Since 1.29 the default estimator (``split_rule="grf"``) is a faithful
+re-implementation of ``grf::causal_forest`` (Athey, Tibshirani and Wager
+2019; Wager and Athey 2018): gradient-based splitting on the causal
+pseudo-outcome, cluster-level subsampling and honesty, out-of-bag
+nuisances and CATE predictions, and bootstrap-of-little-bags variances.
+The engine lives in :mod:`._grf_engine`; fitting in :mod:`._grf_fit`.
 
-The implementation is inspired by and partially based on the EconML library:
-- https://github.com/py-why/econml/
-- Microsoft Corporation. (2019). EconML: A Python Package for ML-Based
-  Heterogeneous Treatment Effects Estimation.
+``fe="unit"`` / ``fe="twoway"`` turns the forest into a causal forest with
+fixed effects for panel data: unit (and period) effects are removed within
+every node and every honest leaf rather than once globally (Kattenberg,
+Scheer and Thiel 2023).
 
-Key features:
-- Honest random forests for unbiased treatment effect estimation
-- Bootstrap confidence intervals
-- Compatible with StatsPAI outreg2 export functionality
-- Both formula and direct array interfaces
+The pre-1.29 estimator, which grew scikit-learn regression trees on the
+treatment residual, is retained as ``split_rule="legacy"`` for one release
+so earlier results can be reproduced; it is deprecated.
+
+References
+----------
+[@athey2019generalized], [@wager2018estimation], [@kattenberg2023causal]
 """
 
 import warnings
@@ -32,7 +35,12 @@ from sklearn.tree import DecisionTreeRegressor
 # Import our core classes
 from .._aliases import accepts_aliases
 from ..core.base import BaseModel
-from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
+from ..exceptions import (
+    AssumptionWarning,
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 
 if TYPE_CHECKING:
     from ..core.results import ScalarEffect
@@ -59,30 +67,65 @@ class CausalForest(BaseModel):
 
     Parameters
     ----------
-    n_estimators : int, default=100
-        Number of trees in the forest
+    n_estimators : int, default=2000
+        Number of trees (grf ``num.trees``).  Rounded up to a multiple of
+        ``ci_group_size``.
     min_samples_leaf : int, default=5
-        Minimum number of samples required to be at a leaf node
+        grf ``min.node.size``: a node with at most this many growing
+        samples is not split, and each child of a stabilised split must
+        hold at least this many treated-like and control-like samples.
     max_depth : int, default=None
-        Maximum depth of trees
+        Optional depth cap (grf has none).
     max_samples : float, default=0.5
-        Fraction of samples to use for each tree
-    model_y : estimator, optional
-        Model for outcome regression (first stage)
-    model_t : estimator, optional
-        Model for treatment propensity (first stage)
+        Fraction of clusters drawn per tree (grf ``sample.fraction``); at
+        most 0.5 when ``ci_group_size > 1``.
+    model_y, model_t : estimator, optional
+        scikit-learn estimators for ``E[Y | X, W]`` and ``E[T | X, W]``.
+        When omitted, grf regression forests with out-of-bag predictions
+        are used.  Supplied estimators are cross-fitted in
+        ``nuisance_folds`` folds that never split a cluster.
     discrete_treatment : bool, default=True
-        Whether treatment is discrete (binary/categorical) or continuous
+        Whether treatment is binary (0/1).  Continuous treatments are
+        supported by the causal forest itself; doubly-robust averages
+        require a binary treatment.
     honest : bool, default=True
-        Whether to use honest estimation (separate samples for splitting and effects)
-    bootstrap : bool, default=True
-        Whether to use bootstrap sampling for trees
+        grf ``honesty``: grow the tree on one half of the drawn clusters and
+        estimate leaves on the other.
+    bootstrap : None
+        Not used by the grf engine (trees are grown on subsamples drawn
+        without replacement).  Retained for the legacy engine.
     random_state : int, optional
-        Random state for reproducibility
+        Seed.  Results are reproducible for a given seed and ``n_jobs``-
+        independent.
     n_jobs : int, default=1
-        Number of parallel jobs
+        Threads used to grow trees (-1 = all cores).
     verbose : int, default=0
         Verbosity level
+    split_rule : {"grf", "legacy"}, default="grf"
+        ``"legacy"`` reproduces the pre-1.29 estimator and is deprecated.
+    mtry : int, optional
+        Mean number of candidate variables per split (grf default
+        ``min(ceil(sqrt(p) + 20), p)``).
+    honesty_fraction : float, default=0.5
+    honesty_prune_leaves : bool, default=True
+    alpha : float, default=0.05
+        grf ``alpha``: minimum share of the parent's treatment variation
+        each child of a stabilised split must retain.
+    imbalance_penalty : float, default=0.0
+    stabilize_splits : bool, default=True
+    ci_group_size : int, optional
+        Trees per little bag (``1`` disables variance estimates).  Defaults
+        to 2 when ``max_samples <= 0.5`` and to 1, with a warning, otherwise.
+    equalize_cluster_weights : bool, default=False
+        grf ``equalize.cluster.weights``: draw the same number of
+        observations from every cluster and weight clusters equally in
+        averages.
+    nuisance_folds : int, default=3
+        Cross-fitting folds for user-supplied nuisance estimators.
+    fe : {None, "unit", "twoway"}, default=None
+        Panel fixed effects removed within every node and leaf.  Requires
+        ``id=`` (and ``time=`` for ``"twoway"``) at fit time; trees are
+        then sampled by unit.
 
     Attributes
     ----------
@@ -133,7 +176,7 @@ class CausalForest(BaseModel):
 
     def __init__(
         self,
-        n_estimators: int = 100,
+        n_estimators: int = 2000,
         min_samples_leaf: int = 5,
         max_depth: Optional[int] = None,
         max_samples: float = 0.5,
@@ -141,11 +184,40 @@ class CausalForest(BaseModel):
         model_t: Optional[BaseEstimator] = None,
         discrete_treatment: bool = True,
         honest: bool = True,
-        bootstrap: bool = True,
+        bootstrap: Optional[bool] = None,
         random_state: Optional[int] = None,
         n_jobs: int = 1,
         verbose: int = 0,
+        split_rule: str = "grf",
+        mtry: Optional[int] = None,
+        honesty_fraction: float = 0.5,
+        honesty_prune_leaves: bool = True,
+        alpha: float = 0.05,
+        imbalance_penalty: float = 0.0,
+        stabilize_splits: bool = True,
+        ci_group_size: Optional[int] = None,
+        equalize_cluster_weights: bool = False,
+        nuisance_folds: int = 3,
+        fe: Optional[str] = None,
     ):
+        self.split_rule = split_rule
+        self.mtry = mtry
+        self.honesty_fraction = honesty_fraction
+        self.honesty_prune_leaves = honesty_prune_leaves
+        self.alpha = alpha
+        self.imbalance_penalty = imbalance_penalty
+        self.stabilize_splits = stabilize_splits
+        self.ci_group_size = ci_group_size
+        self.equalize_cluster_weights = equalize_cluster_weights
+        self.nuisance_folds = nuisance_folds
+        self.fe = fe
+        self._user_model_y = model_y is not None
+        self._user_model_t = model_t is not None
+        self._engine: Any = None
+        self._oob_tau: Optional[np.ndarray] = None
+        self._oob_var: Optional[np.ndarray] = None
+        self._clusters: Optional[np.ndarray] = None
+        self._observation_weight: Optional[np.ndarray] = None
         self.n_estimators = n_estimators
         self.min_samples_leaf = min_samples_leaf
         self.max_depth = max_depth
@@ -184,6 +256,7 @@ class CausalForest(BaseModel):
         self._treatment_values: Optional[np.ndarray] = None
         self._feature_names: Optional[List[str]] = None
 
+    @accepts_aliases(unit="id")
     def fit(  # type: ignore[override]
         self,
         formula: Optional[str] = None,
@@ -192,6 +265,11 @@ class CausalForest(BaseModel):
         T: Optional[np.ndarray] = None,
         X: Optional[np.ndarray] = None,
         W: Optional[np.ndarray] = None,
+        clusters: Optional[Any] = None,
+        Y_hat: Optional[Any] = None,
+        W_hat: Optional[Any] = None,
+        id: Optional[Any] = None,
+        time: Optional[Any] = None,
     ) -> "CausalForest":
         """
         Fit the Causal Forest model
@@ -211,6 +289,17 @@ class CausalForest(BaseModel):
             Effect modifier variables (n_samples, n_features)
         W : array-like, optional
             Control variables for confounding adjustment (n_samples, n_controls)
+        clusters : array-like, optional
+            Cluster ids (grf ``clusters``).  Trees are subsampled, split
+            into honest halves, and cross-fitted by cluster, and averages
+            report cluster-robust standard errors.  With ``fe`` set it
+            defaults to ``id``.
+        Y_hat, W_hat : array-like or scalar, optional
+            Precomputed nuisances ``E[Y | X, W]`` and ``E[T | X, W]``; must be
+            out-of-sample (cross-fitted or out-of-bag) predictions.
+        id, time : array-like, optional
+            Panel unit and period identifiers for ``fe="unit"`` /
+            ``fe="twoway"`` (``unit=`` is accepted as an alias of ``id``).
 
         Returns
         -------
@@ -218,6 +307,7 @@ class CausalForest(BaseModel):
             Fitted estimator
         """
         self._validate_fit_controls()
+        split_rule = self._resolve_split_rule()
 
         # Parse inputs
         if formula is not None and data is not None:
@@ -389,6 +479,25 @@ class CausalForest(BaseModel):
                 recovery_hint="Provide a non-constant continuous treatment.",
             )
 
+        if split_rule == "grf":
+            return self._fit_grf_path(
+                Y,
+                T,
+                X,
+                W,
+                clusters=clusters,
+                Y_hat=Y_hat,
+                W_hat=W_hat,
+                unit=id,
+                time=time,
+            )
+        if clusters is not None or id is not None or Y_hat is not None:
+            raise MethodIncompatibility(
+                "CausalForest.fit(): clusters, panel ids and precomputed "
+                "nuisances require split_rule='grf'.",
+                recovery_hint="Drop split_rule='legacy' to use these options.",
+            )
+
         # Step 1: Fit first stage models (Double ML approach)
         # This follows the EconML CausalForestDML implementation
         if self.verbose > 0:
@@ -464,12 +573,186 @@ class CausalForest(BaseModel):
         ate = self.effect(X).mean()
         self.diagnostics = {
             "method": "Causal Forest",
+            "engine": "legacy",
+            "split_rule": "legacy",
             "n_estimators": self.n_estimators,
             "n_features": X.shape[1],
             "average_treatment_effect": ate,
             "treatment_type": "discrete" if self.discrete_treatment else "continuous",
         }
 
+        return self
+
+    def _resolve_split_rule(self) -> str:
+        rule = str(self.split_rule).lower().strip()
+        if rule not in ("grf", "legacy"):
+            raise MethodIncompatibility(
+                "CausalForest: split_rule must be 'grf' or 'legacy'.",
+                recovery_hint="Use the default split_rule='grf'.",
+                diagnostics={"split_rule": self.split_rule},
+            )
+        if rule == "legacy":
+            warnings.warn(
+                "CausalForest(split_rule='legacy') reproduces the pre-1.29 "
+                "estimator, which grew scikit-learn regression trees on the "
+                "treatment residual instead of splitting on treatment-effect "
+                "heterogeneity, and used in-sample predictions for "
+                "inference. It is deprecated and will be removed in a "
+                "future release; see MIGRATION.md.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            if self.fe is not None:
+                raise MethodIncompatibility(
+                    "CausalForest: fe= requires split_rule='grf'.",
+                    recovery_hint="Drop split_rule='legacy'.",
+                )
+        else:
+            if self.bootstrap:
+                raise MethodIncompatibility(
+                    "CausalForest: bootstrap=True is not supported by the "
+                    "GRF engine, whose honesty and variance theory require "
+                    "subsampling without replacement.",
+                    recovery_hint="Leave bootstrap unset (None).",
+                )
+            if self.fe not in (None, "unit", "twoway"):
+                raise MethodIncompatibility(
+                    "CausalForest: fe must be None, 'unit' or 'twoway'.",
+                    recovery_hint="Use fe='twoway' for unit and period effects.",
+                    diagnostics={"fe": self.fe},
+                )
+            if self.ci_group_size is None:
+                if float(self.max_samples) > 0.5:
+                    warnings.warn(
+                        "CausalForest: max_samples > 0.5 leaves no room for "
+                        "little bags, so CATE variance estimates are "
+                        "disabled (ci_group_size=1). Use max_samples <= 0.5 "
+                        "for effect_interval() / effect_variance().",
+                        AssumptionWarning,
+                        stacklevel=3,
+                    )
+                    self.ci_group_size = 1
+                else:
+                    self.ci_group_size = 2
+            for name in ("ci_group_size", "nuisance_folds"):
+                value = getattr(self, name)
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, np.integer))
+                    or int(value) < 1
+                ):
+                    raise MethodIncompatibility(
+                        f"CausalForest: {name} must be a positive integer.",
+                        recovery_hint=f"Use {name} >= 1.",
+                        diagnostics={name: value},
+                    )
+            if int(self.nuisance_folds) < 2 and (
+                self._user_model_y or self._user_model_t
+            ):
+                raise MethodIncompatibility(
+                    "CausalForest: nuisance_folds must be >= 2 for "
+                    "user-supplied nuisance models.",
+                    recovery_hint="Use nuisance_folds=3 or more.",
+                )
+            if int(self.ci_group_size) > 1 and float(self.max_samples) > 0.5:
+                raise MethodIncompatibility(
+                    "CausalForest: max_samples must be at most 0.5 when "
+                    "ci_group_size > 1 (little bags draw half-samples).",
+                    recovery_hint=(
+                        "Use max_samples <= 0.5, or ci_group_size=1 to "
+                        "disable variance estimates."
+                    ),
+                    diagnostics={
+                        "max_samples": self.max_samples,
+                        "ci_group_size": self.ci_group_size,
+                    },
+                )
+            if not 0.0 < float(self.honesty_fraction) < 1.0:
+                raise MethodIncompatibility(
+                    "CausalForest: honesty_fraction must be in (0, 1).",
+                    recovery_hint="Use honesty_fraction=0.5.",
+                )
+            if not 0.0 <= float(self.alpha) < 0.25:
+                raise MethodIncompatibility(
+                    "CausalForest: alpha must be in [0, 0.25).",
+                    recovery_hint="Use alpha=0.05.",
+                )
+            if float(self.imbalance_penalty) < 0.0:
+                raise MethodIncompatibility(
+                    "CausalForest: imbalance_penalty must be non-negative.",
+                    recovery_hint="Use imbalance_penalty=0.",
+                )
+            if self.mtry is not None and (
+                isinstance(self.mtry, bool)
+                or not isinstance(self.mtry, (int, np.integer))
+                or int(self.mtry) < 1
+            ):
+                raise MethodIncompatibility(
+                    "CausalForest: mtry must be None or a positive integer.",
+                    recovery_hint="Leave mtry=None for the default.",
+                )
+        return rule
+
+    def _fit_grf_path(
+        self,
+        Y: np.ndarray,
+        T: np.ndarray,
+        X: np.ndarray,
+        W: Optional[np.ndarray],
+        *,
+        clusters: Any,
+        Y_hat: Any,
+        W_hat: Any,
+        unit: Any,
+        time: Any,
+    ) -> "CausalForest":
+        from . import _grf_fit
+        from ._panel_forest import fit_fe
+
+        if self.fe is None and (unit is not None or time is not None):
+            raise MethodIncompatibility(
+                "CausalForest.fit(): id= / time= are only used with fe=.",
+                recovery_hint=(
+                    "Pass fe='twoway' (or 'unit') to remove panel fixed "
+                    "effects, or use clusters=<unit ids> to cluster a pooled "
+                    "forest."
+                ),
+            )
+        if self.fe is not None:
+            diagnostics = fit_fe(
+                self,
+                Y,
+                T,
+                X,
+                W,
+                clusters=clusters,
+                Y_hat=Y_hat,
+                W_hat=W_hat,
+                unit=unit,
+                time=time,
+            )
+        else:
+            diagnostics = _grf_fit.fit_grf(
+                self, Y, T, X, W, clusters=clusters, Y_hat=Y_hat, W_hat=W_hat
+            )
+        self.fitted_ = True
+        self.params = pd.Series([], dtype=float)
+        self.std_errors = pd.Series([], dtype=float)
+        self.tvalues = pd.Series([], dtype=float)
+        self.pvalues = np.array([])
+        oob = np.asarray(self._oob_tau, dtype=float)
+        self.diagnostics = {
+            "method": "Causal Forest",
+            "engine": "grf",
+            "split_rule": "grf",
+            "fe": self.fe,
+            "n_estimators": int(self._engine.num_trees),
+            "n_features": X.shape[1],
+            # Plug-in mean of the out-of-bag CATE predictions (descriptive).
+            "average_treatment_effect": float(np.nanmean(oob)),
+            "treatment_type": "discrete" if self.discrete_treatment else "continuous",
+            **diagnostics,
+        }
         return self
 
     def _parse_formula_inputs(
@@ -703,7 +986,7 @@ class CausalForest(BaseModel):
                 print(f"  Fitting tree {tree_idx + 1}/{self.n_estimators}")
 
             # Sample for this tree
-            if self.bootstrap:
+            if self.bootstrap is None or self.bootstrap:
                 n_tree_samples = int(self.max_samples * n_samples)
                 tree_indices = rng.choice(n_samples, n_tree_samples, replace=True)
             else:
@@ -847,6 +1130,9 @@ class CausalForest(BaseModel):
             )
 
         X = self._prepare_effect_matrix(X, context="effect()")
+        if self._engine is not None:
+            tau, _ = self._engine.predict(X)
+            return np.asarray(tau, dtype=float)
         forest = self._forest
         if forest is None:
             raise MethodIncompatibility(
@@ -885,6 +1171,9 @@ class CausalForest(BaseModel):
         -----
         This method is required by the BaseModel interface. For Causal Forest,
         "predictions" are treatment effect estimates rather than outcome predictions.
+        With ``data=None`` the GRF engine returns *out-of-bag* predictions for
+        the training rows (each row predicted only by trees that did not see
+        it), which is what every in-sample diagnostic should use.
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -893,6 +1182,9 @@ class CausalForest(BaseModel):
             )
 
         if data is None:
+            if self._oob_tau is not None:
+                # Training rows: out-of-bag predictions (grf ``predict()``).
+                return np.asarray(self._oob_tau, dtype=float).copy()
             if hasattr(self, "_X_original"):
                 X = self._X_original
             else:
@@ -912,7 +1204,11 @@ class CausalForest(BaseModel):
         self, X: np.ndarray, alpha: float = 0.05
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Compute confidence intervals for treatment effects using bootstrap
+        Pointwise confidence intervals for the CATE.
+
+        With the GRF engine the interval is ``tau(x) +/- z * sqrt(V(x))``
+        where ``V(x)`` is the bootstrap-of-little-bags variance (requires
+        ``ci_group_size >= 2``).  Intervals are pointwise, not uniform.
 
         Parameters
         ----------
@@ -947,6 +1243,18 @@ class CausalForest(BaseModel):
             )
 
         X = self._prepare_effect_matrix(X, context="effect_interval()")
+        if self._engine is not None:
+            tau, var = self._engine_variance(X, context="effect_interval()")
+            z = float(_sp_stats().norm.ppf(1.0 - alpha / 2.0))
+            half = z * np.sqrt(var)
+            return tau - half, tau + half
+        warnings.warn(
+            "effect_interval() on a legacy forest returns percentiles of "
+            "individual tree predictions, which are not confidence intervals "
+            "for the forest's CATE; refit with split_rule='grf'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         forest = self._forest
         if forest is None:
             raise MethodIncompatibility(
@@ -980,6 +1288,94 @@ class CausalForest(BaseModel):
         upper = np.percentile(predictions, upper_percentile, axis=0)
 
         return lower, upper
+
+    def _engine_variance(
+        self, X: Optional[np.ndarray], context: str
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if self._engine is None:
+            raise MethodIncompatibility(
+                f"CausalForest.{context} needs a forest fitted with "
+                "split_rule='grf'.",
+                recovery_hint="Refit with the default split_rule='grf'.",
+            )
+        if int(self.ci_group_size) < 2:
+            raise MethodIncompatibility(
+                f"CausalForest.{context}: variance estimates need "
+                "ci_group_size >= 2.",
+                recovery_hint="Refit with ci_group_size=2 (the default).",
+            )
+        if X is None:
+            tau = np.asarray(self._oob_tau, dtype=float)
+            var = np.asarray(self._oob_var, dtype=float)
+        else:
+            tau, var = self._engine.predict(X, estimate_variance=True)
+        if np.any(~np.isfinite(var)):
+            raise NumericalInstability(
+                f"CausalForest.{context}: some predictions have no little bag "
+                "in which every tree has a non-empty leaf, so their variance "
+                "cannot be estimated.",
+                recovery_hint="Increase n_estimators.",
+                diagnostics={"n_undefined": int(np.sum(~np.isfinite(var)))},
+            )
+        return np.asarray(tau, dtype=float), np.asarray(var, dtype=float)
+
+    def oob_effect(self) -> np.ndarray:
+        """Out-of-bag CATE predictions for the training rows (GRF engine)."""
+        if not self.fitted_ or self._oob_tau is None:
+            raise MethodIncompatibility(
+                "CausalForest.oob_effect() needs a forest fitted with "
+                "split_rule='grf'.",
+                recovery_hint="Fit with the default split_rule='grf'.",
+            )
+        return np.asarray(self._oob_tau, dtype=float).copy()
+
+    def effect_variance(self, X: Optional[np.ndarray] = None) -> np.ndarray:
+        """Little-bag variance of the CATE at ``X`` (OOB rows when ``None``)."""
+        if not self.fitted_:
+            raise MethodIncompatibility(
+                "CausalForest.effect_variance() requires a fitted model.",
+                recovery_hint="Call fit() first.",
+            )
+        X_ = (
+            None
+            if X is None
+            else self._prepare_effect_matrix(X, context="effect_variance()")
+        )
+        return self._engine_variance(X_, "effect_variance()")[1]
+
+    def _insample_effect(self, X: Optional[Any] = None) -> np.ndarray:
+        """CATE for ``X``; out-of-bag when ``X`` is the training design.
+
+        ``X=None`` or a matrix identical to the fitted effect modifiers gets
+        the OOB predictions of a GRF-engine forest (in-sample predictions for
+        legacy forests); any other ``X`` is predicted by the whole forest.
+        """
+        if X is None:
+            if self._oob_tau is not None:
+                return np.asarray(self._oob_tau, dtype=float)
+            return self.effect(self._X_original)
+        if self._oob_tau is not None:
+            X_ = self._prepare_effect_matrix(X, context="effect()")
+            if X_.shape == self._X_original.shape and np.array_equal(
+                X_, self._X_original
+            ):
+                return np.asarray(self._oob_tau, dtype=float)
+        return self.effect(X)
+
+    def split_frequencies(self, max_depth: int = 4) -> pd.DataFrame:
+        """Number of splits on each covariate at each depth (GRF engine)."""
+        if self._engine is None:
+            raise MethodIncompatibility(
+                "split_frequencies() needs a forest fitted with split_rule='grf'.",
+                recovery_hint="Refit with the default split_rule='grf'.",
+            )
+        counts = self._engine.split_frequencies(int(max_depth))
+        names = self._feature_names or [f"X{j}" for j in range(counts.shape[1])]
+        return pd.DataFrame(
+            counts,
+            columns=names,
+            index=pd.Index(range(1, counts.shape[0] + 1), name="depth"),
+        )
 
     def average_treatment_effect(
         self,
@@ -1041,13 +1437,16 @@ class CausalForest(BaseModel):
             f"Max depth:                {self.max_depth or 'None'}",
             f"Max samples per tree:     {self.max_samples}",
             f"Honest estimation:        {self.honest}",
+            f"Engine / split rule:      {self.diagnostics.get('split_rule', 'legacy')}",
+            f"Fixed effects:            {self.fe or 'none'}",
+            f"Clusters:                 {self.diagnostics.get('n_clusters') or 'none'}",
             f"Treatment type:           {self.diagnostics.get('treatment_type', 'Unknown')}",
             "",
             f"Number of observations:   {self.data_info.get('nobs', 'Unknown')}",
             f"Number of features:       {self.data_info.get('n_features', 'Unknown')}",
             f"Number of controls:       {self.data_info.get('n_controls', 0)}",
             "",
-            f"Average Treatment Effect: {ate:.6f}",
+            f"Mean CATE (plug-in):      {ate:.6f}",
             "=" * 60,
             "",
             "Note: Use .effect(X) to estimate individual treatment effects",
@@ -1109,6 +1508,14 @@ class CausalForest(BaseModel):
     ) -> pd.DataFrame:
         r"""Best Linear Projection (BLP) of CATE on features (Semenova-Chernozhukov 2021).
 
+        For GRF-engine forests (the default) this is
+        ``grf::best_linear_projection``: the doubly-robust scores built from
+        the *out-of-bag* CATE are regressed on ``(1, X)`` on the covariates'
+        original scale, with observation weights and an HC3 (cluster-robust
+        when the forest has clusters) covariance.  ``X_test`` must then be
+        the training rows' effect modifiers.  Legacy forests keep the
+        standardised-covariate HC1 regression described below.
+
         Constructs the augmented inverse-propensity-weighted (AIPW) doubly-robust
         score :math:`\Gamma_i` and regresses it on :math:`X_i` with HC1 standard
         errors:
@@ -1146,10 +1553,7 @@ class CausalForest(BaseModel):
 
         References
         ----------
-        Semenova V., Chernozhukov V. (2021).
-        "Debiased Machine Learning of Conditional Average Treatment Effects
-        and Other Causal Functions." *Econometrics Journal* 24(2): 264-289.
-        DOI: 10.1093/ectj/utaa027.
+        [@semenova2021debiased], [@athey2019generalized]
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -1185,6 +1589,43 @@ class CausalForest(BaseModel):
                 diagnostics={"clip": clip},
             )
         from scipy import stats as _stats
+
+        if self._engine is not None:
+            from . import _grf_inference as _gi
+
+            if X_test is None:
+                A = np.asarray(self._X_original, dtype=float)
+                names = ["Intercept"] + list(
+                    self._feature_names or [f"X{j}" for j in range(A.shape[1])]
+                )
+            else:
+                A = self._prepare_effect_matrix(
+                    X_test, context="best_linear_projection()"
+                )
+                if A.shape[0] != len(self._Y_original):
+                    raise MethodIncompatibility(
+                        "best_linear_projection(): for GRF-engine forests the "
+                        "covariates must be aligned with the training rows "
+                        "(the doubly-robust scores are defined there).",
+                        recovery_hint=(
+                            "Pass one row of covariates per training row, or "
+                            "omit X_test to use the effect modifiers."
+                        ),
+                    )
+                names = ["Intercept"] + list(
+                    self._feature_names or [f"X{j}" for j in range(A.shape[1])]
+                )
+            e_hat = np.asarray(self._e_insample, dtype=float)
+            binary = bool(np.all(np.isin(np.unique(self._T_original), (0.0, 1.0))))
+            self.diagnostics = dict(self.diagnostics or {})
+            self.diagnostics["blp_n_clipped_propensities"] = (
+                int(np.sum((e_hat < clip_value) | (e_hat > 1 - clip_value)))
+                if binary
+                else 0
+            )
+            return _gi.best_linear_projection(
+                self, A, names, alpha=alpha_value, clip=clip_value
+            )
 
         if X_test is None:
             X = self._X_original
@@ -1362,7 +1803,7 @@ class CausalForest(BaseModel):
                 "CausalForest.ate() requires a fitted model.",
                 recovery_hint="Call fit() before computing ATE.",
             )
-        value = float(self.effect(X if X is not None else self._X_original).mean())
+        value = float(self._insample_effect(X).mean())
         return self._scalar_effect(value, "ATE", "all", X)
 
     def att(
@@ -1393,8 +1834,8 @@ class CausalForest(BaseModel):
                     "CausalForest.att() requires a treatment vector.",
                     recovery_hint="Pass T or fit the model before calling att().",
                 )
+        cate = self._insample_effect(X)
         X = X if X is not None else self._X_original
-        cate = self.effect(X)
         try:
             T_arr = np.asarray(T, dtype=float).ravel()
         except (TypeError, ValueError) as exc:
@@ -1428,9 +1869,9 @@ class CausalForest(BaseModel):
 
 # ``n_trees`` is the name grf's documentation uses for the tree count; the
 # ML4CI agent-surface audit found it the one documented keyword the callable
-# rejected.  Passing both spellings is a TypeError, as for any duplicate
-# argument.
-@accepts_aliases(_strict=True, _warn=False, n_trees="n_estimators")
+# rejected.  ``unit`` is the pre-house-style spelling of the panel id.  Passing
+# both spellings of either is a TypeError, as for any duplicate argument.
+@accepts_aliases(_strict=True, _warn=False, n_trees="n_estimators", unit="id")
 def causal_forest(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
@@ -1438,7 +1879,7 @@ def causal_forest(
     T: Optional[np.ndarray] = None,
     X: Optional[np.ndarray] = None,
     W: Optional[np.ndarray] = None,
-    n_estimators: int = 100,
+    n_estimators: int = 2000,
     min_samples_leaf: int = 5,
     max_depth: Optional[int] = None,
     max_samples: float = 0.5,
@@ -1450,6 +1891,12 @@ def causal_forest(
     d: Optional[str] = None,
     x: Optional[Any] = None,
     w: Optional[Any] = None,
+    clusters: Optional[Any] = None,
+    fe: Optional[str] = None,
+    id: Optional[Any] = None,
+    time: Optional[Any] = None,
+    Y_hat: Optional[Any] = None,
+    W_hat: Optional[Any] = None,
     **kwargs: Any,
 ) -> CausalForest:
     """
@@ -1472,14 +1919,14 @@ def causal_forest(
         Effect modifier variables
     W : array-like, optional
         Control variables
-    n_estimators : int, default=100
-        Number of trees in the forest
+    n_estimators : int, default=2000
+        Number of trees in the forest (grf ``num.trees``)
     min_samples_leaf : int, default=5
-        Minimum samples per leaf
+        grf ``min.node.size``
     max_depth : int, optional
         Maximum tree depth
     max_samples : float, default=0.5
-        Fraction of samples per tree
+        Fraction of clusters drawn per tree
     model_y : estimator, optional
         First-stage outcome model
     model_t : estimator, optional
@@ -1494,8 +1941,23 @@ def causal_forest(
         y="outcome", d="treatment", x=["x1", "x2"])``.  ``x`` and ``w``
         accept a single name or a list.  Mutually exclusive with the
         formula and array interfaces.
+    clusters : str or array-like, optional
+        Cluster ids, or a column name in ``data``.  Sampling, honesty and
+        cross-fitting respect clusters and averages use cluster-robust
+        standard errors.  Always cluster repeated observations of the same
+        unit.
+    fe : {None, "unit", "twoway"}, optional
+        Remove unit (and period) fixed effects within every node and leaf
+        -- a causal forest with fixed effects for panel data
+        [@kattenberg2023causal].  Requires ``id`` (and ``time``).
+    id, time : str or array-like, optional
+        Panel unit and period identifiers (column names in ``data`` or
+        arrays).  ``unit=`` is accepted as an alias of ``id``.
+    Y_hat, W_hat : array-like, optional
+        Precomputed out-of-sample nuisance predictions.
     **kwargs
-        Additional arguments passed to CausalForest
+        Additional arguments passed to :class:`CausalForest`
+        (``split_rule``, ``mtry``, ``ci_group_size``, ``alpha``, ...).
 
     Returns
     -------
@@ -1527,6 +1989,24 @@ def causal_forest(
     >>> effects = cf.effect(data[['X1', 'X2']])
     >>> print(f"Mean effect: {effects.mean():.3f}")
     """
+    frame = data
+
+    def _column_or_array(value: Any, label: str) -> Any:
+        if isinstance(value, str):
+            if frame is None or value not in frame.columns:
+                raise MethodIncompatibility(
+                    f"causal_forest(): {label}={value!r} is not a column of data.",
+                    recovery_hint=f"Pass {label} as a column name in data or an array.",
+                )
+            return frame[value].to_numpy()
+        return value
+
+    clusters = _column_or_array(clusters, "clusters")
+    id = _column_or_array(id, "id")
+    time = _column_or_array(time, "time")
+    if fe is not None:
+        kwargs["fe"] = fe
+
     # Column-name interface: causal_forest(data=df, y="wage", d="grad",
     # x=["ability", ...]) — the same canonical y/d/x vocabulary used by
     # sp.dml / sp.tarnet, as an alternative to formula= or Y/T/X arrays.
@@ -1574,7 +2054,19 @@ def causal_forest(
         **kwargs,
     )
 
-    cf.fit(formula=formula, data=data, Y=Y, T=T, X=X, W=W)
+    cf.fit(
+        formula=formula,
+        data=data,
+        Y=Y,
+        T=T,
+        X=X,
+        W=W,
+        clusters=clusters,
+        Y_hat=Y_hat,
+        W_hat=W_hat,
+        id=id,
+        time=time,
+    )
     try:
         from ..output._lineage import attach_provenance as _attach_prov
 
@@ -1590,6 +2082,9 @@ def causal_forest(
                 "model_t": type(model_t).__name__ if model_t is not None else None,
                 "discrete_treatment": discrete_treatment,
                 "random_state": random_state,
+                "split_rule": getattr(cf, "split_rule", None),
+                "fe": getattr(cf, "fe", None),
+                "clustered": clusters is not None or fe is not None,
             },
             data=data,
             overwrite=False,

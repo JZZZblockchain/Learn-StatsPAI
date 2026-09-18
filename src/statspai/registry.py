@@ -1300,9 +1300,10 @@ def _build_registry() -> None:
                     False,
                     "period",
                     "Which date a control must still be untreated at when "
-                    "control_group='notyettreated': 'period' (as of t; R did "
-                    "and csdid's asinr) or 'cohort' (as of g; csdid default).",
-                    ["period", "cohort"],
+                    "control_group='notyettreated': 'period' (G > max(t, base) "
+                    "+ anticipation; R did), 'asinr' (G > t; csdid asinr) or "
+                    "'cohort' (G > max(t, g); csdid default).",
+                    ["period", "asinr", "cohort"],
                 ),
                 ParamSpec(
                     "weights",
@@ -2139,61 +2140,278 @@ def _build_registry() -> None:
         FunctionSpec(
             name="causal_forest",
             category="causal",
-            description="Causal Forest for heterogeneous treatment effect estimation (CATE).",
+            description=(
+                "Honest generalized random forest for conditional average "
+                "treatment effects (CATE). Default engine reimplements the GRF "
+                "algorithm: splits on the causal gradient pseudo-outcome, "
+                "out-of-bag nuisances and predictions, little-bag variances, "
+                "cluster-aware sampling and inference. fe='twoway' gives a "
+                "causal forest with fixed effects for panels (unit and period "
+                "effects removed within every node and leaf)."
+            ),
             params=[
                 ParamSpec(
                     "formula",
                     "str",
-                    True,
-                    description="'y ~ treatment | x1 + x2' (pipe separates covariates)",
+                    False,
+                    None,
+                    "'y ~ treatment | x1 + x2 [| w1 + w2]' (pipe separates "
+                    "effect modifiers and controls). Alternatively use y/d/x/w "
+                    "column names or Y/T/X/W arrays.",
                 ),
-                ParamSpec("data", "DataFrame", True),
+                ParamSpec("data", "DataFrame", False, None),
+                ParamSpec("y", "str", False, None, "Outcome column."),
+                ParamSpec("d", "str", False, None, "Treatment column."),
+                ParamSpec("x", "list", False, None, "Effect-modifier columns."),
+                ParamSpec(
+                    "w", "list", False, None, "Control columns (nuisances only)."
+                ),
                 ParamSpec(
                     "n_estimators",
                     "int",
                     False,
-                    100,
-                    description="Number of trees (``n_trees`` is accepted as an alias).",
+                    2000,
+                    "Number of trees (``n_trees`` is accepted as an alias).",
                 ),
+                ParamSpec(
+                    "clusters",
+                    "str",
+                    False,
+                    None,
+                    "Cluster ids or column name; sampling, honesty, "
+                    "cross-fitting and standard errors respect clusters. "
+                    "Always set for repeated observations of a unit.",
+                ),
+                ParamSpec(
+                    "fe",
+                    "str",
+                    False,
+                    None,
+                    "Panel fixed effects removed within nodes and leaves.",
+                    enum=["unit", "twoway"],
+                ),
+                ParamSpec(
+                    "id", "str", False, None, "Unit id column (fe=); unit= is an alias."
+                ),
+                ParamSpec("time", "str", False, None, "Period column (fe='twoway')."),
+                ParamSpec(
+                    "Y_hat",
+                    "array",
+                    False,
+                    None,
+                    "Precomputed out-of-sample E[Y | X, W] (skips the outcome nuisance forest).",
+                ),
+                ParamSpec(
+                    "W_hat",
+                    "array",
+                    False,
+                    None,
+                    "Precomputed out-of-sample E[T | X, W] (skips the treatment nuisance forest).",
+                ),
+                ParamSpec("min_samples_leaf", "int", False, 5, "GRF min.node.size."),
+                ParamSpec(
+                    "max_samples", "float", False, 0.5, "Share of clusters per tree."
+                ),
+                ParamSpec(
+                    "split_rule",
+                    "str",
+                    False,
+                    "grf",
+                    "'legacy' reproduces the pre-1.29 estimator (deprecated).",
+                    enum=["grf", "legacy"],
+                ),
+                ParamSpec("random_state", "int", False, None),
             ],
-            returns="CausalResult",
-            example='sp.causal_forest("y ~ treat | x1 + x2 + x3", data=df)',
-            tags=["forest", "cate", "heterogeneous", "ml"],
-            reference="Athey, Tibshirani & Wager (2019) Annals of Statistics",
+            returns=(
+                "CausalForest (fitted). predict() gives out-of-bag CATEs; "
+                "effect(X), effect_interval(X), average_treatment_effect(), "
+                "best_linear_projection(); sp.calibration_test / "
+                "sp.calibrate_cate / sp.rate for heterogeneity."
+            ),
+            example=(
+                'sp.causal_forest(data=df, y="wage", d="training", '
+                'x=["age", "educ"], clusters="firm")'
+            ),
+            tags=[
+                "forest",
+                "cate",
+                "heterogeneous",
+                "ml",
+                "grf",
+                "panel",
+                "fixed-effects",
+            ],
+            reference="[@athey2019generalized], [@wager2018estimation], [@kattenberg2023causal]",
             pre_conditions=[
-                "formula uses pipe separator: 'y ~ treatment | x_1 + x_2 + ...'",
-                "treatment is binary 0/1 (use sp.multi_arm_forest for multi-valued)",
-                "covariates are numeric; encode categoricals beforehand",
-                "n ≥ ~1000 for stable CATE — forests are data-hungry",
+                "treatment is binary 0/1 (continuous allowed with discrete_treatment=False)",
+                "covariates are numeric and finite; encode categoricals beforehand",
+                "n >= ~1000 for stable CATE -- forests are data-hungry",
+                "repeated observations of a unit: pass clusters= (or fe= with unit=)",
             ],
             assumptions=[
-                "Unconfoundedness: Y(d) ⊥ D | X",
+                "Unconfoundedness: Y(d) independent of D given X (pooled forest)",
                 "Overlap: 0 < P(D=1 | X) < 1 for the estimand support",
+                "fe=: conditional parallel trends and no anticipation; treatment varies within units",
                 "Honest splitting: splits and estimates use disjoint samples (enforced by default)",
-                "Smoothness: CATE is Lipschitz in X (forests approximate smooth functions)",
             ],
             failure_modes=[
                 FailureMode(
-                    symptom="Calibration test (sp.calibration_test) rejects",
-                    exception="statspai.AssumptionViolation",
-                    remedy="CATE predictions are miscalibrated — increase n_trees, add variables, or switch to a DR-Learner.",
-                    alternative="sp.metalearner",
+                    symptom="sp.calibration_test differential_forest_prediction p_one_sided > 0.05",
+                    exception="statspai.AssumptionWarning",
+                    remedy="No detectable heterogeneity: report the average effect, not the CATE ranking.",
+                    alternative="sp.calibrate_cate",
                 ),
                 FailureMode(
-                    symptom="Variance of CATE estimates too large to be useful",
-                    exception="statspai.DataInsufficient",
-                    remedy="Need more observations or narrower conditioning set; consider GATE on discrete subgroups.",
-                    alternative="sp.gate_test",
+                    symptom="average_treatment_effect raises MethodIncompatibility on an fe= forest",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Doubly-robust averages need a propensity; use group-time averages instead.",
+                    alternative="sp.did_forest",
+                ),
+                FailureMode(
+                    symptom="Panel data fitted without clusters= (units repeat across rows)",
+                    exception="statspai.AssumptionViolation",
+                    remedy="Refit with clusters=unit; i.i.d. honesty and SEs are invalid with repeated units.",
+                    alternative="sp.causal_forest",
                 ),
                 FailureMode(
                     symptom="Extreme propensity scores in part of the covariate space",
                     exception="statspai.AssumptionViolation",
-                    remedy="Trim to overlap region via sp.trimming or restrict estimand to overlap support.",
+                    remedy="Use average_treatment_effect(target_sample='overlap') or trim to overlap.",
                     alternative="sp.trimming",
                 ),
             ],
-            alternatives=["metalearner", "dml", "multi_arm_forest", "iv_forest"],
+            alternatives=[
+                "did_forest",
+                "metalearner",
+                "dml",
+                "multi_arm_forest",
+                "iv_forest",
+            ],
             typical_n_min=1000,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="did_forest",
+            category="causal",
+            description=(
+                "Difference-in-differences causal forests for staggered "
+                "adoption: one honest causal forest per clean Callaway-"
+                "Sant'Anna group-time comparison on the long-differenced "
+                "outcome, doubly-robust ATT(g,t), influence-function event "
+                "study and overall ATT, unit-level CATEs and per-cell "
+                "heterogeneity tests."
+            ),
+            params=[
+                ParamSpec("data", "DataFrame", True, description="Long panel."),
+                ParamSpec("y", "str", True),
+                ParamSpec(
+                    "id", "str", True, description="Unit id column; unit= is an alias."
+                ),
+                ParamSpec("time", "str", True, description="Numeric period."),
+                ParamSpec(
+                    "cohort",
+                    "str",
+                    True,
+                    description="First treatment period (0/NaN = never treated).",
+                ),
+                ParamSpec(
+                    "x", "list", True, description="Time-invariant effect modifiers."
+                ),
+                ParamSpec(
+                    "control_group",
+                    "str",
+                    False,
+                    "notyettreated",
+                    enum=["notyettreated", "nevertreated"],
+                ),
+                ParamSpec("anticipation", "int", False, 0),
+                ParamSpec(
+                    "clusters",
+                    "str",
+                    False,
+                    None,
+                    "Cluster column constant within unit.",
+                ),
+                ParamSpec("event_window", "tuple", False, None),
+                ParamSpec("min_group_size", "int", False, 20),
+                ParamSpec(
+                    "n_estimators", "int", False, 1000, "Trees per group-time forest."
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    0,
+                    "Seed; cell k uses random_state + k.",
+                ),
+                ParamSpec(
+                    "n_jobs", "int", False, 1, "Threads per forest (-1 = all cores)."
+                ),
+                ParamSpec(
+                    "alpha", "float", False, 0.05, "Level for confidence intervals."
+                ),
+                ParamSpec(
+                    "propensity_clip",
+                    "float",
+                    False,
+                    0.001,
+                    "Upper clip for the cohort-membership probability in the control weights e/(1-e).",
+                ),
+                ParamSpec(
+                    "forest_kwargs",
+                    "dict",
+                    False,
+                    None,
+                    "Extra sp.CausalForest arguments (min_samples_leaf, mtry, honesty_fraction, ...).",
+                ),
+            ],
+            returns=(
+                "DIDForestResult with att_gt, event_study, overall, "
+                "group_effects, pretrend_test, unit_cate, dropped_cells; "
+                "predict_cate(X, event_time), forest(g, t), plot()"
+            ),
+            example=(
+                'sp.did_forest(df, y="emp", id="county", time="year", '
+                'cohort="first_treat", x=["pop", "income"], clusters="state")'
+            ),
+            tags=[
+                "did",
+                "forest",
+                "cate",
+                "heterogeneous",
+                "staggered",
+                "panel",
+                "event-study",
+            ],
+            reference="[@gavrilova2025difference], [@callaway2021difference], [@athey2019generalized]",
+            pre_conditions=[
+                "absorbing (staggered) treatment coded by first treatment period",
+                "covariates are fixed per unit (baseline values)",
+                "enough treated and comparison units per group-time cell (min_group_size)",
+            ],
+            assumptions=[
+                "Conditional parallel trends given x for the chosen comparison group",
+                "No anticipation beyond `anticipation` periods",
+                "Overlap: every covariate profile has comparison units",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="pretrend_test p-value small",
+                    exception="statspai.AssumptionWarning",
+                    remedy="Pre-period placebos reject parallel trends; add covariates or bound the violation.",
+                    alternative="sp.honest_did",
+                ),
+                FailureMode(
+                    symptom="AssumptionWarning: group-time cells were dropped",
+                    exception="statspai.AssumptionWarning",
+                    remedy="Inspect result.dropped_cells; lower min_group_size or restrict event_window.",
+                    alternative="sp.callaway_santanna",
+                ),
+            ],
+            alternatives=["callaway_santanna", "causal_forest", "did_bcf"],
+            typical_n_min=500,
         )
     )
 
@@ -12562,10 +12780,12 @@ def _build_registry() -> None:
             name="did_bcf",
             category="causal",
             description=(
-                "Bayesian Causal Forests DiD. Fits a BART-style ensemble with "
-                "treatment and prognostic terms on the DiD residuals, "
-                "providing heterogeneous treatment-effect posterior draws per "
-                "unit. Useful for machine-learning DiD with covariates."
+                "DiD with a BCF-style forest on long-differenced outcomes: "
+                "each cohort is compared with never-treated units over its "
+                "own pre and post periods, and a prognostic forest plus "
+                "treatment-effect booster (bootstrap uncertainty, not MCMC) "
+                "is fitted to the long difference. For heterogeneous effects "
+                "with group-time inference prefer sp.did_forest."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -12577,6 +12797,13 @@ def _build_registry() -> None:
                 ParamSpec("n_trees", "int", False, 50),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("seed", "int", False, None),
+                ParamSpec(
+                    "n_bootstrap",
+                    "int",
+                    False,
+                    100,
+                    "Bootstrap replications of the BCF fit per cohort (covariate path).",
+                ),
             ],
             returns=(
                 "CausalResult with posterior ATT + unit-level CATE "
@@ -12585,8 +12812,8 @@ def _build_registry() -> None:
             example='sp.did_bcf(df, y="y", treat="d", time="t", id="i")',
             tags=["did", "bcf", "bart", "bayesian", "heterogeneous", "causal"],
             reference=(
-                "Hahn, Murray & Carvalho (2020) BCF prior; applied to "
-                "DiD by multiple authors — specific citation [待核验]."
+                "[@hahn2020bayesian]; related but not identical to "
+                "[@souto2025forests] (levels model)."
             ),
             alternatives=["did_imputation", "drdid"],
             typical_n_min=200,
@@ -15081,6 +15308,17 @@ _CERTIFIED_VARIANT_LIMITATIONS: Dict[str, Dict[str, List[str]]] = {
             "influence function inflates the standard error (conservative, "
             "over-covering inference), so inspect the sp.audit overlap "
             "diagnostic before interpreting the ATE on that kind of sample.",
+            "The forest is compared with grf only statistically (tier T3: "
+            "RMSE, pointwise variances, coverage), not bit-for-bit; given a "
+            "fitted forest, the inference operators match grf / sandwich "
+            "to 1e-14.",
+            "Doubly-robust averages (average_treatment_effect, "
+            "best_linear_projection, rate) are not implemented for fe= "
+            "forests, which have no propensity score; use sp.did_forest "
+            "for group-time averages.",
+            "For fe= forests the calibration slope tests for heterogeneity "
+            "only; it comes from a globally within-transformed regression "
+            "and does not de-attenuate CATE predictions.",
         ],
         "validation_notes": [
             "Causal-forest parity evidence is overlap-sensitive; the paper "
@@ -15140,7 +15378,8 @@ _VALIDATED_TEST_SEED_FUNCTIONS: Dict[str, List[str]] = {
         "tests/test_cov95_did_analysis.py",
         "tests/test_did_imputation_branches.py",
     ],
-    "did_bcf": ["tests/test_did_frontiers.py"],
+    "did_bcf": ["tests/test_did_frontiers.py", "tests/test_cov95_did_r3_did_bcf.py"],
+    "did_forest": ["tests/test_did_forest.py"],
     "did_misclassified": ["tests/test_did_frontiers.py"],
     "did_timevarying_covariates": ["tests/test_did_timevarying_covariates.py"],
     "cohort_anchored_event_study": ["tests/test_did_frontiers.py"],
@@ -15410,6 +15649,7 @@ _INHERITANCE_SEEDS: Dict[str, str] = {
     "did_2stage": "did",
     "did_2x2": "did",
     "did_bcf": "did",
+    "did_forest": "did",
     "did_misclassified": "did",
     "did_timevarying_covariates": "did",
     "did_multiplegt": "did",

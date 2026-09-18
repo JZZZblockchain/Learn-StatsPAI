@@ -131,8 +131,9 @@ your numbers silently. This table is the mapping.
 | `pointwise` | `cband=False` | csdid's default is *uniform*; StatsPAI's is pointwise |
 | `long2` | `base_period='universal'` | StatsPAI's default |
 | (csdid default gaps) | `base_period='varying'` | |
-| `asinr` | `notyet_cutoff='period'` | StatsPAI's default |
+| `asinr` | `notyet_cutoff='asinr'` | |
 | (csdid default) | `notyet_cutoff='cohort'` | |
+| (R `did`) | `notyet_cutoff='period'` | StatsPAI's default |
 | `notyet` | `control_group='notyettreated'` | |
 | `pscoretrim(#)` | `pscore_trim=#` | both default 0.995 |
 | `saverif(f)` | `sp.influence_functions(res, path=f)` | |
@@ -160,12 +161,16 @@ pinned against Stata in
 Despite the name, `asinr` does not test anything. It selects which date a
 control must still be untreated at, for **pre-treatment** ATT(g,t) only:
 
-- `notyet_cutoff='period'` — untreated as of `t` (R `did`, `csdid, asinr`)
-- `notyet_cutoff='cohort'` — untreated as of `g` (`csdid`'s own default)
+- `notyet_cutoff='period'` (default) — untreated through both periods of the
+  comparison, `G > max(t, base) + anticipation` (R `did`)
+- `notyet_cutoff='asinr'` — untreated as of `t` only, `G > t` (`csdid, asinr`)
+- `notyet_cutoff='cohort'` — `G > max(t, g)` (`csdid`'s own default)
 
-Post-treatment cells are identical either way. On `mpdta` the
-pre-treatment placebos move in the third decimal, e.g. ATT(2007, 2004)
-goes from 0.032971 to 0.033813.
+Post-treatment cells are identical without anticipation. Under
+`base_period='universal'` a pre-treatment cell compares `Y_t` with
+`Y_{g-1}`, so `'asinr'` keeps cohorts that are already treated at `g - 1` in
+the control group. On `mpdta` ATT(2007, 2004) is 0.033813 under `'period'`
+(R `did`) and `'cohort'`, and 0.032971 under `'asinr'`.
 
 ## Influence-function export (`saverif` workflow)
 

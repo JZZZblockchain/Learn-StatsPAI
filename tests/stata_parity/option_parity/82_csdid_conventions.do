@@ -5,8 +5,9 @@
 *! mirrors, and that are easy to get silently wrong because the naming
 *! does NOT line up across the two ecosystems:
 *!
-*!   asinr            -> notyet_cutoff='period'   (StatsPAI default, = R did)
-*!   (csdid default)  -> notyet_cutoff='cohort'
+*!   asinr            -> notyet_cutoff='asinr'
+*!   (csdid default)  -> notyet_cutoff='cohort'  (= R did's default rule on these
+*!                       universal-base cells; StatsPAI default 'period')
 *!   method(stdipw)   -> estimator='ipw' / 'stdipw'  (StatsPAI default naming)
 *!   method(ipw)      -> estimator='ipw_abadie'      (Abadie 2005)
 *!
@@ -46,7 +47,7 @@ program define _dump_atts
     file write `fh' "  }," _n
 end
 
-* --- 1. asinr: R / StatsPAI-default convention -----------------------
+* --- 1. asinr: notyet_cutoff='asinr' ---------------------------------
 qui csdid lemp, ivar(countyreal) time(year) gvar(first_treat) ///
     notyet long2 asinr method(reg)
 _dump_atts `fh' "notyet_asinr_reg"

@@ -268,6 +268,8 @@ from .did.ddd_heterogeneous import ddd_heterogeneous as ddd_heterogeneous
 from .did.design_robust import design_robust_event_study as design_robust_event_study
 from .did.did_2x2 import did_2x2 as did_2x2
 from .did.did_bcf import did_bcf as did_bcf
+from .did.did_forest import DIDForestResult as DIDForestResult
+from .did.did_forest import did_forest as did_forest
 from .did.did_imputation import did_imputation as bjs
 from .did.did_imputation import did_imputation as borusyak_jaravel_spiess
 from .did.did_imputation import did_imputation as did_imputation
@@ -380,6 +382,7 @@ from .forest.causal_forest import causal_forest as causal_forest
 from .forest.forest_inference import (
     average_treatment_effect as average_treatment_effect,
 )
+from .forest.forest_inference import calibrate_cate as calibrate_cate
 from .forest.forest_inference import calibration_test as calibration_test
 from .forest.forest_inference import calibration_test as test_calibration
 from .forest.forest_inference import forest_diagnostics as forest_diagnostics

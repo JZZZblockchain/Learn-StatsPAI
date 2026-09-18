@@ -59,6 +59,7 @@ from .design_audit import (
 from .design_robust import design_robust_event_study
 from .did_2x2 import did_2x2
 from .did_bcf import did_bcf
+from .did_forest import DIDForestResult, did_forest
 from .did_imputation import did_imputation
 from .did_multiplegt import did_multiplegt
 from .es_convention import (
@@ -953,6 +954,8 @@ __all__ = [
     "twfe_decomposition",
     # v0.10 staggered DiD frontier
     "did_bcf",
+    "did_forest",
+    "DIDForestResult",
     "cohort_anchored_event_study",
     "design_robust_event_study",
     "did_misclassified",

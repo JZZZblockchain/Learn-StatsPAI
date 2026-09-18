@@ -232,7 +232,10 @@ def test_causal_forest_overlap_loss():
             covariates=["x1", "x2"],
             data=df,
         )
-        r = q.estimate(n_estimators=30, random_state=seed)
+        # 200 trees: with the GRF engine every row needs an out-of-bag
+        # prediction (in-sample inference refuses otherwise), which 30 trees
+        # (15 little bags) do not guarantee.
+        r = q.estimate(n_estimators=200, random_state=seed)
         if r.ci[0] <= truth <= r.ci[1]:
             covered += 1
     _assert_documented_band(
@@ -266,9 +269,10 @@ def test_causal_forest_clean_overlap_ate_and_att():
     so selection is orthogonal to the effect modifier and both estimands
     have population value 1.0.
 
-    Documented band: 0.90 <= rate <= 0.98.  Wider than the 99% Wilson
-    band at this B because the forest is deliberately under-grown
-    (30 trees) to keep the test inside its wall-clock budget.
+    Documented band: 0.90 <= rate <= 0.98.  Since 1.29 the forest uses
+    200 trees: the GRF engine requires an out-of-bag prediction for every
+    training row, which the former 30 trees (15 little bags) do not
+    guarantee, and the engine is fast enough to afford it.
     """
     B = min(B_DEFAULT, 200)
     truth = 1.0
@@ -286,7 +290,7 @@ def test_causal_forest_clean_overlap_ate_and_att():
             Y=y,
             T=d,
             X=X,
-            n_estimators=30,
+            n_estimators=200,
             random_state=seed,
             discrete_treatment=True,
         )

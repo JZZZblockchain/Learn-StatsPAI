@@ -75,6 +75,39 @@ All notable changes to StatsPAI will be documented in this file.
   documented optimiser-stopping exceptions, each asserted by comparing the
   objective at both solutions).
 
+- **`sp.causal_forest(..., fe="twoway", id=..., time=...)`: causal forests
+  with fixed effects for panel data.** Unit (and period) effects are removed
+  *within every node and every honest leaf*, not once globally
+  [@kattenberg2023causal]. On a staggered panel where adoption selects on the
+  unit effect (N = 300 units, T = 6, 4 seeds) the pooled forest's CATT bias
+  was +0.36 to +2.37 and the FE forest's -0.06 to +0.03 (RMSE 0.32-0.42 with
+  heterogeneous effects). Unbalanced panels are handled by iterating the
+  two-way within transformation to 1e-10. Doubly-robust averages are refused
+  for FE forests (no propensity exists for a within-unit design).
+- **`clusters=` for `sp.causal_forest`.** Trees are subsampled, split into
+  honest halves and cross-fitted by cluster, and every average, calibration
+  test, BLP and RATE reports cluster-robust standard errors;
+  `equalize_cluster_weights=` gives clusters equal weight. Repeated
+  observations of a unit must be clustered.
+- **`sp.did_forest`: difference-in-differences causal forests for staggered
+  adoption.** One honest causal forest per clean Callaway-Sant'Anna
+  group-time comparison on the long-differenced outcome (the DiD causal
+  forest of [@gavrilova2025difference] applied to every group-time cell),
+  doubly-robust ATT(g,t), event-study / cohort / overall aggregates with
+  unit- or cluster-level influence-function standard errors, a joint
+  pre-trend Wald test, unit-level CATEs with little-bag standard errors and a
+  per-cell heterogeneity test. Monte Carlo (200 replications, N = 800, T = 7,
+  two cohorts): see `docs/guides/heterogeneity_panel_forests.md`.
+- **`sp.calibrate_cate`**: CATE predictions rescaled by the out-of-bag
+  best-linear-predictor calibration [@chernozhukov2025generic]; warns when no
+  heterogeneity is detected and, for FE forests, that the slope does not
+  de-attenuate (measured, see the guide).
+- `CausalForest.oob_effect()`, `.effect_variance()`, `.split_frequencies()`,
+  precomputed `Y_hat=` / `W_hat=` nuisances, and a doubly-robust average for
+  continuous treatments (`average_treatment_effect(target_sample="all")`, the
+  Riesz representer `(W - W_hat) / Var(W | X)`). On Card (1995) the return to
+  a year of schooling is 0.0768 (SE 0.0044).
+
 ### Changed
 
 - **`sp.metalearner` states what its standard error refers to.**
@@ -112,6 +145,21 @@ All notable changes to StatsPAI will be documented in this file.
   `robust=` / `cluster=` instead of warning and ignoring them.
   `panel_logit(method="fe")` raises on `robust=` / `cluster=` (Stata rc 198)
   and points to `sp.clogit(..., vce="cluster id")`.
+
+- `sp.causal_forest` defaults follow GRF: `n_estimators=2000` (was 100),
+  subsampling without replacement (`bootstrap=True` now raises),
+  `ci_group_size=2` (1 with a warning when `max_samples > 0.5`), and
+  nuisances from out-of-bag regression forests on `[X, W]` (user sklearn
+  estimators are cross-fitted in cluster-respecting folds).
+- For GRF forests, `calibration_test` is the regression of `Y - Y_hat` on
+  `(W - W_hat) * mean(tau)` and `(W - W_hat) * (tau - mean(tau))` with HC3
+  (cluster-robust) standard errors and adds `t_vs_zero` / `p_one_sided`;
+  `best_linear_projection` regresses AIPW scores on unstandardised
+  covariates with HC3 standard errors; `average_treatment_effect(
+  target_sample="overlap")` is the partially linear coefficient. These are
+  the definitions of `grf::test_calibration`, `grf::best_linear_projection`
+  and `grf::average_treatment_effect`. In-sample inference functions refuse
+  X/Y/T other than the training data.
 
 ### Fixed
 
@@ -173,6 +221,15 @@ All notable changes to StatsPAI will be documented in this file.
   `result.test()`, `result.marginal_effects()`) and to a multiway-cluster
   spelling that raises; they now point at `sp.regress(robust=)`, `sp.test`,
   `sp.margins` and `vcov={"CRV1": "c1 + c2"}`.
+
+- Citation keys: the best-linear-predictor calibration test was attributed to
+  `chernozhukov2020generic` (a paper on quantile effect functions) and the
+  generalized random forest to `athey2019surrogate` (the surrogate index).
+  They now point to `chernozhukov2025generic` and `athey2019generalized`;
+  `souto2025forests` lists its second author's family name as recorded by
+  arXiv and DataCite. New verified entries: `kattenberg2023causal`,
+  `gavrilova2025difference`, `aytug2026attenuated`, `aytug2026fixed`,
+  `aytug2026causalfe`, `chernozhukov2025generic`.
 
 ### ⚠️ Correctness
 
@@ -316,6 +373,61 @@ All notable changes to StatsPAI will be documented in this file.
   step (Card 1995 AR set: `[0.0389, 0.2601]` printed, `[0.0384, 0.2612]`
   correct). The outer endpoints now come from `lower` / `upper`; interior
   boundaries of a disconnected set stay at grid resolution.
+
+- **`sp.causal_forest` now grows generalized random forests.** Since it was
+  introduced the estimator grew scikit-learn regression trees *on the
+  treatment residual* -- splits chased variation in the propensity residual,
+  not treatment-effect heterogeneity -- kept the sklearn leaf mean of that
+  residual in leaves with fewer than two honest rows, and ran every in-sample
+  diagnostic (ATE, calibration test, RATE, BLP) on predictions from trees that
+  had seen the rows. The new default engine implements the GRF algorithm
+  [@athey2019generalized]: gradient-based causal splits with stabilised
+  child constraints, honest cluster-level subsampling with leaf pruning,
+  out-of-bag nuisance forests and CATE predictions, and bootstrap-of-little-
+  bags variances. On five designs with tau(x) = 1 + 2 x0 (n = 2000, 500 trees)
+  the correlation of the CATE with the truth rose from 0.922 to 0.990, RMSE
+  fell from 1.02 to 0.31 and the predicted spread went from 59% to 93% of the
+  true spread, matching R grf 2.6.1 (0.990 / 0.305 / 93%). Against grf on a
+  shared fixture, RMSE ratios are 0.998 (i.i.d.) and 1.017 (clustered),
+  median pointwise-variance ratios 1.01 / 0.94 and CI coverage within one
+  point (tier T3, `tests/reference_parity/test_grf_engine_statistical_parity.py`);
+  the calibration test, AIPW ATE/ATT/ATC/overlap, BLP and `sandwich::vcovCL`
+  HC0-HC3 given a forest match grf / sandwich to 8.5e-15. Track A module 13:
+  ATE SE now within 0.22% of grf (was 7.7%). `split_rule="legacy"`
+  reproduces the old estimator for one release. See MIGRATION.md.
+- **`CausalForest.effect_interval()` returned percentiles of individual tree
+  predictions**, which are not confidence intervals for the forest's CATE.
+  It now returns `tau(x) +/- z sqrt(V(x))` with the little-bag variance.
+- **`sp.honest_variance` measured no sampling uncertainty**: it re-split one
+  fixed vector of predictions and divided by sqrt(n_splits), so its SE went
+  to zero as n_splits grew. It is deprecated and, for GRF forests, returns
+  the doubly-robust ATE and its influence-function SE.
+- **`sp.callaway_santanna(control_group="notyettreated")` admitted
+  already-treated cohorts as controls** for pre-treatment cells under
+  `base_period="universal"`, and ignored `anticipation` in the control set:
+  the cutoff was `G > t` where R `did` uses `G > max(t, base) + anticipation`
+  (`get_did_cohort_index`). On a three-cohort panel cohort 6's placebo
+  ATT(6, 1..3) were 0.54-0.58 with covariates (R: -0.03 to -0.02) and
+  1.21-1.43 without (R: 0.27-0.47). All cells now match R `did` 2.3.0 to
+  3.6e-12 (ATT) / 8.9e-11 (SE) across panel and repeated cross-sections, both
+  base periods, `anticipation` 0 and 1, with and without covariates
+  (`tests/reference_parity/test_cs_notyet_cutoff_parity.py`). The old rule is
+  what Stata `csdid, asinr` does, and the docs had called it the R
+  convention: on `mpdta` R `did` gives ATT(2007, 2004) = 0.033813 (the csdid
+  default number), not asinr's 0.032971. It remains available as
+  `notyet_cutoff="asinr"`, still pinned to Stata. `notyet_cutoff` is now also
+  honoured for repeated cross-sections, where it was ignored.
+- **`sp.did_bcf` compared treated and never-treated units over different
+  calendar windows**: never-treated units were split at the median period
+  whatever the cohort's adoption date, so any non-linear common trend
+  entered the ATT (common quadratic trend, true ATT 1: cohort CATTs 0.01 and
+  1.64, now 1.07 and 1.03). Each cohort is now compared with never-treated
+  units over its own pre and post windows. The covariate-path standard error
+  (the average posterior spread divided by sqrt(n)) is replaced by the
+  bootstrap standard deviation of the cohort ATT, combined conservatively
+  across cohorts; the silent fallback to a difference in means on any
+  exception is removed. The docstring no longer attributes the estimator to
+  [@souto2025forests], whose model is specified in outcome levels.
 
 ## [1.28.0] — 2026-09-13
 

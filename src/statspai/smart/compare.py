@@ -399,13 +399,25 @@ def compare_estimators(
                 name = "Double/Debiased ML"
 
             elif method == "causal_forest":
+                if not covariates:
+                    raise ValueError(
+                        "method='causal_forest' requires covariates (effect modifiers)."
+                    )
+                # Repeated units (panel id) must be clustered: the forest's
+                # honesty and the AIPW standard error assume independent rows
+                # otherwise.
                 r = sp.causal_forest(
-                    data=df, y=y, treatment=treatment, covariates=covariates[:20]
+                    data=df,
+                    y=y,
+                    d=treatment,
+                    x=covariates[:20],
+                    clusters=id if id else None,
                 )
-                est = r.estimate if hasattr(r, "estimate") else r.ate
-                se = r.se if hasattr(r, "se") else r.ate_se
+                ate = r.average_treatment_effect()
+                est = ate["estimate"]
+                se = ate["se"]
                 results["Causal Forest"] = r
-                name = "Causal Forest (GRF)"
+                name = "Causal Forest (GRF, AIPW ATE)"
 
             elif method == "panel_fe" and id and time:
                 r = sp.panel(

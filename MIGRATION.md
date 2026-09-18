@@ -170,6 +170,99 @@ the root-found endpoints, so printed intervals widen slightly.
 
 ---
 
+<a id="causal-forest-grf-engine"></a>
+
+## Unreleased — ⚠️ `sp.causal_forest` grows generalized random forests
+
+**Who is affected.** Every user of `sp.causal_forest` / `sp.CausalForest`:
+CATE predictions, `effect_interval`, and every in-sample statistic
+(`average_treatment_effect`, `ate()`, `att()`, `calibration_test`, `rate`,
+`best_linear_projection`, `forest_diagnostics`) change numerically.
+
+**What was wrong.** Trees were scikit-learn regression trees fitted to the
+*treatment residual*, so splits followed the propensity residual rather than
+effect heterogeneity (CATE RMSE 1.02 vs 0.31 for R grf on a simple design);
+leaves with fewer than two honest rows kept the mean treatment residual as
+their "effect"; in-sample statistics used predictions from trees that had seen
+the rows; `effect_interval` returned percentiles of single-tree predictions.
+
+**What changes.**
+
+| | Before | Now |
+| --- | --- | --- |
+| Splitting | CART on `T - T_hat` | GRF causal gradient, stabilised splits |
+| Default trees | 100 | 2000 |
+| Nuisances | 3-fold sklearn RF | out-of-bag regression forests (or cross-fitted user models) |
+| `predict()` on training rows | in-sample | out-of-bag |
+| `effect_interval` | tree percentiles | little-bag variance, normal interval |
+| Clusters / panel FE | not supported | `clusters=`, `fe=` |
+| `calibration_test`, BLP, ATO | StatsPAI conventions | grf definitions (see CHANGELOG) |
+
+**To reproduce old numbers** for one release:
+
+```python
+cf = sp.causal_forest(..., split_rule="legacy", n_estimators=100)  # DeprecationWarning
+```
+
+**Things that now raise.** `bootstrap=True` (GRF subsamples without
+replacement); `max_samples > 0.5` together with `ci_group_size >= 2` (the
+default `ci_group_size=None` drops to 1 with a warning); passing a subset of
+rows as `X`/`Y`/`T` to `calibration_test`, `rate`, `average_treatment_effect`
+or `best_linear_projection` (these are defined on the training rows' OOB
+predictions — fit a separate forest on the evaluation sample instead).
+
+**`sp.honest_variance` is deprecated.** Its SE shrank to zero as `n_splits`
+grew. Use `forest.average_treatment_effect()`.
+
+---
+
+<a id="cs-notyet-cutoff"></a>
+
+## Unreleased — ⚠️ `callaway_santanna(control_group="notyettreated")` control sets
+
+**Who is affected.** Pre-treatment (placebo) cells under
+`base_period="universal"` when some cohort is first treated between the cell's
+period `t` and the base period `g - 1`; and every cell when `anticipation > 0`.
+Post-treatment cells with `anticipation = 0` and every `base_period="varying"`
+cell with `anticipation = 0` are unchanged, as are aggregates built only from
+them.
+
+**What was wrong.** Units counted as not yet treated when `G > t`. R `did`
+requires `G > max(t, base) + anticipation`: a control must be untreated in both
+periods of the 2x2 comparison. A cohort treated before the universal base
+period had its treated base-period outcome used as a control, and anticipation
+was ignored.
+
+**What changes.** Every ATT(g, t) and SE now matches R `did` 2.3.0 to
+machine precision in all tested configurations. Pre-trend tests and event
+studies that include affected placebo cells can change materially — rerun them.
+`notyet_cutoff="cohort"` (Stata `csdid`'s default) is unchanged.
+
+**To reproduce the old numbers**, or Stata `csdid, ..., asinr`, pass
+`notyet_cutoff="asinr"`. The docs used to say `asinr` was R's convention; that
+is true only under `base_period="varying"`.
+
+---
+
+<a id="did-bcf-windows"></a>
+
+## Unreleased — ⚠️ `sp.did_bcf` compares cohorts with controls over the same periods
+
+**Who is affected.** All `sp.did_bcf` users; the ATT, per-cohort CATTs and
+standard errors change.
+
+**What was wrong.** Never-treated units were split into pre and post at the
+median period regardless of each cohort's adoption date, so a non-linear
+common trend biased the ATT; the covariate-path SE was not a valid standard
+error; errors silently fell back to a difference in means.
+
+**What changes.** Each cohort `g` is compared with never-treated units over
+`t < g` and `t >= g`; SEs are influence-function based (no covariates) or
+bootstrap based and conservatively combined (covariates); failures raise.
+`treat=` may also be an absorbing 0/1 indicator. For heterogeneous effects with
+group-time inference, prefer `sp.did_forest`.
+---
+
 <a id="synth-placebo-pvalue"></a>
 
 ## Unreleased — ⚠️ Synthetic-control placebo p-values now rank the treated unit too

@@ -22,7 +22,7 @@ fast enough for typical observational datasets.
 References
 ----------
 Athey, S., Tibshirani, J., & Wager, S. (2019). "Generalized random
-forests." *Annals of Statistics*, 47(2), 1148-1178. [@athey2019surrogate]
+forests." *Annals of Statistics*, 47(2), 1148-1178. [@athey2019generalized]
 
 Nie, X., Brunskill, E., & Wager, S. (2021). "Learning when-to-treat
 policies." *JASA*, 116(533), 392-409. [@nie2021learning]
@@ -31,14 +31,14 @@ policies." *JASA*, 116(533), 392-409. [@nie2021learning]
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, Dict, Any
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
+
 from .._result_serialize import ResultProtocolMixin
 
 

@@ -170,6 +170,8 @@ LIMITATIONS_DESCRIPTIVE_ONLY: Dict[str, List[str]] = {
     # cross-language row is retained only as a disclosed gap.
     "causal_forest": [
         "validated against grf on clean-overlap designs only",
+        "compared with grf only statistically",
+        "calibration slope tests for heterogeneity",
     ],
     "did_imputation": [
         "untreated-only TWFE",
@@ -250,6 +252,31 @@ def _runtime_map() -> (
     )
     folds_irm = np.arange(n) % 5
 
+    def _fe_forest_average():
+        panel = pd.DataFrame(
+            {
+                "y": rng.normal(size=160),
+                "unit": np.repeat(np.arange(40), 4),
+                "time": np.tile(np.arange(4), 40),
+                "x": np.repeat(rng.normal(size=40), 4),
+            }
+        )
+        panel["d"] = (
+            (panel["time"] >= np.repeat(rng.choice([2, 3, 9], size=40), 4))
+        ).astype(float)
+        forest = sp.causal_forest(
+            data=panel,
+            y="y",
+            d="d",
+            x=["x"],
+            id="unit",
+            time="time",
+            fe="twoway",
+            n_estimators=50,
+            random_state=0,
+        )
+        return forest.average_treatment_effect()
+
     return {
         ("dml", "internal explicit fold_indices require n_rep=1"): (
             lambda: sp.dml(
@@ -262,6 +289,12 @@ def _runtime_map() -> (
                 n_rep=2,
                 store_oof=True,
             ),
+            MethodIncompatibility,
+        ),
+        ("causal_forest", "not implemented for fe= forests"): (
+            # A within-unit design has no propensity score, so the
+            # doubly-robust score is undefined; the call is refused.
+            _fe_forest_average,
             MethodIncompatibility,
         ),
         ("did_balance", "one table per treated cohort"): (

@@ -21,19 +21,21 @@ Use ``from statspai.forest import ...`` going forward.
 
 from .causal_forest import CausalForest, causal_forest
 from .forest_inference import (
-    calibration_test,
-    test_calibration,
-    rate,
-    honest_variance,
     average_treatment_effect,
+    calibrate_cate,
+    calibration_test,
     forest_diagnostics,
+    honest_variance,
+    rate,
+    test_calibration,
 )
-from .multi_arm_forest import multi_arm_forest, MultiArmForestResult
-from .iv_forest import iv_forest, IVForestResult
+from .iv_forest import IVForestResult, iv_forest
+from .multi_arm_forest import MultiArmForestResult, multi_arm_forest
 
 __all__ = [
     "CausalForest",
     "causal_forest",
+    "calibrate_cate",
     "calibration_test",
     "test_calibration",
     "rate",

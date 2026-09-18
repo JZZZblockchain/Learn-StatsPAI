@@ -676,9 +676,10 @@
         },
         "notyet_cutoff": {
           "default": "period",
-          "description": "Which date a control must still be untreated at when control_group='notyettreated': 'period' (as of t; R did and csdid's asinr) or 'cohort' (as of g; csdid default).",
+          "description": "Which date a control must still be untreated at when control_group='notyettreated': 'period' (G > max(t, base) + anticipation; R did), 'asinr' (G > t; csdid asinr) or 'cohort' (G > max(t, g); csdid default).",
           "enum": [
             "period",
+            "asinr",
             "cohort"
           ],
           "type": "string"
@@ -1314,27 +1315,200 @@
     }
   },
   {
-    "description": "Causal Forest for heterogeneous treatment effect estimation (CATE). Validation: certified evidence with scoped limitations. Known limitations: The AIPW ATE/ATT are validated against grf on clean-overlap designs only; under severe propensity-overlap loss the AIPW influence function inflates the standard error (conservative, over-covering inference), so inspect the sp.audit overlap diagnostic before interpreting the ATE on that kind of sample.",
+    "description": "Honest generalized random forest for conditional average treatment effects (CATE). Default engine reimplements the GRF algorithm: splits on the causal gradient pseudo-outcome, out-of-bag nuisances and predictions, little-bag variances, cluster-aware sampling and inference. fe='twoway' gives a causal forest with fixed effects for panels (unit and period effects removed within every node and leaf). Validation: certified evidence with scoped limitations. Known limitations: The AIPW ATE/ATT are validated against grf on clean-overlap designs only; under severe propensity-overlap loss the AIPW influence function inflates the standard error (conservative, over-covering inference), so inspect the sp.audit overlap diagnostic before interpreting the ATE on that kind of sample; The forest is compared with grf only statistically (tier T3: RMSE, pointwise variances, coverage), not bit-for-bit; given a fitted forest, the inference operators match grf / sandwich to 1e-14; Doubly-robust averages (average_treatment_effect, best_linear_projection, rate) are not implemented for fe= forests, which have no propensity score; use sp.did_forest for group-time averages; For fe= forests the calibration slope tests for heterogeneity only; it comes from a globally within-transformed regression and does not de-attenuate CATE predictions.",
     "name": "causal_forest",
     "parameters": {
       "properties": {
+        "W_hat": {
+          "description": "Precomputed out-of-sample E[T | X, W] (skips the treatment nuisance forest).",
+          "type": "string"
+        },
+        "Y_hat": {
+          "description": "Precomputed out-of-sample E[Y | X, W] (skips the outcome nuisance forest).",
+          "type": "string"
+        },
+        "clusters": {
+          "description": "Cluster ids or column name; sampling, honesty, cross-fitting and standard errors respect clusters. Always set for repeated observations of a unit.",
+          "type": "string"
+        },
+        "d": {
+          "description": "Treatment column.",
+          "type": "string"
+        },
         "data": {
           "description": "pandas DataFrame containing the variables used by the estimator.",
           "type": "string"
         },
-        "formula": {
-          "description": "'y ~ treatment | x1 + x2' (pipe separates covariates)",
+        "fe": {
+          "description": "Panel fixed effects removed within nodes and leaves.",
+          "enum": [
+            "unit",
+            "twoway"
+          ],
           "type": "string"
         },
+        "formula": {
+          "description": "'y ~ treatment | x1 + x2 [| w1 + w2]' (pipe separates effect modifiers and controls). Alternatively use y/d/x/w column names or Y/T/X/W arrays.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unit id column (fe=); unit= is an alias.",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Share of clusters per tree.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "GRF min.node.size.",
+          "type": "integer"
+        },
         "n_estimators": {
-          "default": 100,
+          "default": 2000,
           "description": "Number of trees (``n_trees`` is accepted as an alias).",
           "type": "integer"
+        },
+        "random_state": {
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_rule": {
+          "default": "grf",
+          "description": "'legacy' reproduces the pre-1.29 estimator (deprecated).",
+          "enum": [
+            "grf",
+            "legacy"
+          ],
+          "type": "string"
+        },
+        "time": {
+          "description": "Period column (fe='twoway').",
+          "type": "string"
+        },
+        "w": {
+          "description": "Control columns (nuisances only).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "x": {
+          "description": "Effect-modifier columns.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Difference-in-differences causal forests for staggered adoption: one honest causal forest per clean Callaway-Sant'Anna group-time comparison on the long-differenced outcome, doubly-robust ATT(g,t), influence-function event study and overall ATT, unit-level CATEs and per-cell heterogeneity tests. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "did_forest",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Level for confidence intervals.",
+          "type": "number"
+        },
+        "anticipation": {
+          "default": 0,
+          "description": "anticipation parameter (int).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster column constant within unit.",
+          "type": "string"
+        },
+        "cohort": {
+          "description": "First treatment period (0/NaN = never treated).",
+          "type": "string"
+        },
+        "control_group": {
+          "default": "notyettreated",
+          "description": "control_group parameter (str).",
+          "enum": [
+            "notyettreated",
+            "nevertreated"
+          ],
+          "type": "string"
+        },
+        "data": {
+          "description": "Long panel.",
+          "type": "string"
+        },
+        "event_window": {
+          "description": "event_window parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forest_kwargs": {
+          "description": "Extra sp.CausalForest arguments (min_samples_leaf, mtry, honesty_fraction, ...).",
+          "type": "object"
+        },
+        "id": {
+          "description": "Unit id column; unit= is an alias.",
+          "type": "string"
+        },
+        "min_group_size": {
+          "default": 20,
+          "description": "min_group_size parameter (int).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 1000,
+          "description": "Trees per group-time forest.",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads per forest (-1 = all cores).",
+          "type": "integer"
+        },
+        "propensity_clip": {
+          "default": 0.001,
+          "description": "Upper clip for the cohort-membership probability in the control weights e/(1-e).",
+          "type": "number"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Seed; cell k uses random_state + k.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Numeric period.",
+          "type": "string"
+        },
+        "x": {
+          "description": "Time-invariant effect modifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
         }
       },
       "required": [
-        "formula",
-        "data"
+        "data",
+        "y",
+        "id",
+        "time",
+        "cohort",
+        "x"
       ],
       "type": "object"
     }
@@ -11843,7 +12017,7 @@
     }
   },
   {
-    "description": "Bayesian Causal Forests DiD. Fits a BART-style ensemble with treatment and prognostic terms on the DiD residuals, providing heterogeneous treatment-effect posterior draws per unit. Useful for machine-learning DiD with covariates.",
+    "description": "DiD with a BCF-style forest on long-differenced outcomes: each cohort is compared with never-treated units over its own pre and post periods, and a prognostic forest plus treatment-effect booster (bootstrap uncertainty, not MCMC) is fitted to the long difference. For heterogeneous effects with group-time inference prefer sp.did_forest.",
     "name": "did_bcf",
     "parameters": {
       "properties": {
@@ -11866,6 +12040,11 @@
         "id": {
           "description": "Unit, subject, or panel identifier column.",
           "type": "string"
+        },
+        "n_bootstrap": {
+          "default": 100,
+          "description": "Bootstrap replications of the BCF fit per cohort (covariate path).",
+          "type": "integer"
         },
         "n_trees": {
           "default": 50,
@@ -21033,56 +21212,115 @@
     "name": "CausalForest",
     "parameters": {
       "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha``: minimum share of the parent's treatment variation each child of a stabilised split must retain.",
+          "type": "number"
+        },
         "bootstrap": {
-          "default": true,
-          "description": "Whether to use bootstrap sampling for trees",
+          "description": "Not used by the grf engine (trees are grown on subsamples drawn without replacement). Retained for the legacy engine.",
           "type": "boolean"
+        },
+        "ci_group_size": {
+          "description": "Trees per little bag (``1`` disables variance estimates). Defaults to 2 when ``max_samples <= 0.5`` and to 1, with a warning, otherwise.",
+          "type": "integer"
         },
         "discrete_treatment": {
           "default": true,
-          "description": "Whether treatment is discrete (binary/categorical) or continuous",
+          "description": "Whether treatment is binary (0/1). Continuous treatments are supported by the causal forest itself; doubly-robust averages require a binary treatment.",
           "type": "boolean"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "grf ``equalize.cluster.weights``: draw the same number of observations from every cluster and weight clusters equally in averages.",
+          "type": "boolean"
+        },
+        "fe": {
+          "description": "Panel fixed effects removed within every node and leaf. Requires ``id=`` (and ``time=`` for ``\"twoway\"``) at fit time; trees are then sampled by unit.",
+          "enum": [
+            "unit",
+            "twoway"
+          ],
+          "type": "string"
         },
         "honest": {
           "default": true,
-          "description": "Whether to use honest estimation (separate samples for splitting and effects)",
+          "description": "grf ``honesty``: grow the tree on one half of the drawn clusters and estimate leaves on the other.",
           "type": "boolean"
         },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "honesty_fraction parameter (float).",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "honesty_prune_leaves parameter (bool).",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
         "max_depth": {
-          "description": "Maximum depth of trees",
+          "description": "Optional depth cap (grf has none).",
           "type": "integer"
         },
         "max_samples": {
           "default": 0.5,
-          "description": "Fraction of samples to use for each tree",
+          "description": "Fraction of clusters drawn per tree (grf ``sample.fraction``); at most 0.5 when ``ci_group_size > 1``.",
           "type": "number"
         },
         "min_samples_leaf": {
           "default": 5,
-          "description": "Minimum number of samples required to be at a leaf node",
+          "description": "grf ``min.node.size``: a node with at most this many growing samples is not split, and each child of a stabilised split must hold at least this many treated-like and control-like samples.",
           "type": "integer"
         },
         "model_t": {
-          "description": "Model for treatment propensity (first stage)",
+          "description": "scikit-learn estimators for ``E[Y | X, W]`` and ``E[T | X, W]``. When omitted, grf regression forests with out-of-bag predictions are used. Supplied estimators are cross-fitted in ``nuisance_folds`` folds that never split a cluster.",
           "type": "string"
         },
         "model_y": {
-          "description": "Model for outcome regression (first stage)",
+          "description": "scikit-learn estimators for ``E[Y | X, W]`` and ``E[T | X, W]``. When omitted, grf regression forests with out-of-bag predictions are used. Supplied estimators are cross-fitted in ``nuisance_folds`` folds that never split a cluster.",
           "type": "string"
         },
+        "mtry": {
+          "description": "Mean number of candidate variables per split (grf default ``min(ceil(sqrt(p) + 20), p)``).",
+          "type": "integer"
+        },
         "n_estimators": {
-          "default": 100,
-          "description": "Number of trees in the forest",
+          "default": 2000,
+          "description": "Number of trees (grf ``num.trees``). Rounded up to a multiple of ``ci_group_size``.",
           "type": "integer"
         },
         "n_jobs": {
           "default": 1,
-          "description": "Number of parallel jobs",
+          "description": "Threads used to grow trees (-1 = all cores).",
+          "type": "integer"
+        },
+        "nuisance_folds": {
+          "default": 3,
+          "description": "Cross-fitting folds for user-supplied nuisance estimators.",
           "type": "integer"
         },
         "random_state": {
-          "description": "Random state for reproducibility",
+          "description": "Seed. Results are reproducible for a given seed and ``n_jobs``- independent.",
           "type": "integer"
+        },
+        "split_rule": {
+          "default": "grf",
+          "description": "``\"legacy\"`` reproduces the pre-1.29 estimator and is deprecated.",
+          "enum": [
+            "grf",
+            "legacy"
+          ],
+          "type": "string"
+        },
+        "stabilize_splits": {
+          "default": true,
+          "description": "stabilize_splits parameter (bool).",
+          "type": "boolean"
         },
         "verbose": {
           "default": 0,
@@ -21095,7 +21333,32 @@
     }
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Rescale CATE predictions by their best-linear-predictor calibration. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "calibrate_cate",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Level for the reported slope confidence intervals.",
+          "type": "number"
+        },
+        "forest": {
+          "description": "A forest fitted with the GRF engine (``split_rule=\"grf\"``).",
+          "type": "string"
+        },
+        "newdata": {
+          "description": "Effect-modifier rows to calibrate. ``None`` calibrates the out-of-bag predictions of the training rows. ``X=`` is accepted as an alias.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "calibration_test",
     "parameters": {
       "properties": {
@@ -21128,7 +21391,7 @@
     }
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "test_calibration",
     "parameters": {
       "properties": {
@@ -21161,7 +21424,7 @@
     }
   },
   {
-    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Rank-weighted average treatment effect (RATE) [@yadlowsky2025evaluating]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "rate",
     "parameters": {
       "properties": {
@@ -52048,6 +52311,67 @@
         "estimate_dr",
         "se_dr",
         "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`did_forest`.",
+    "name": "DIDForestResult",
+    "parameters": {
+      "properties": {
+        "att_gt": {
+          "description": "att_gt parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "dropped_cells": {
+          "description": "dropped_cells parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "event_study": {
+          "description": "event_study parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "group_effects": {
+          "description": "group_effects parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "n_clusters": {
+          "description": "Number of clusters.",
+          "type": "integer"
+        },
+        "n_units": {
+          "description": "Number of units.",
+          "type": "integer"
+        },
+        "overall": {
+          "description": "overall parameter (Dict[str, float]).",
+          "type": "object"
+        },
+        "pretrend_test": {
+          "description": "pretrend_test parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "settings": {
+          "default": null,
+          "description": "settings parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "unit_cate": {
+          "description": "unit_cate parameter (pd.DataFrame).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "att_gt",
+        "event_study",
+        "overall",
+        "group_effects",
+        "pretrend_test",
+        "unit_cate",
+        "dropped_cells",
+        "n_units",
+        "n_clusters"
       ],
       "type": "object"
     }

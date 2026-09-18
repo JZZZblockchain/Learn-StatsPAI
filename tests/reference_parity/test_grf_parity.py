@@ -32,6 +32,7 @@ import json
 import math
 import pathlib
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -118,12 +119,32 @@ def test_grf_plugin_is_documented_convenience_estimand(fitted_cf, r_reference):
     the plug-in mean as validated.
     """
     plug_in = float(fitted_cf.ate())
-    aipw = float(fitted_cf.average_treatment_effect(target_sample="all")["estimate"])
+    detail = fitted_cf.average_treatment_effect(target_sample="all")
+    aipw = float(detail["estimate"])
     assert math.isfinite(plug_in)
-    assert 0.01 < abs(plug_in - aipw) < 0.25, (
-        f"plug-in mean ({plug_in:.4f}) should remain a distinct CATE-summary "
-        f"path from the AIPW estimate ({aipw:.4f}); semantics may have changed."
+    # The plug-in path is the mean of the out-of-bag CATE predictions ...
+    assert plug_in == pytest.approx(float(fitted_cf.predict().mean()), abs=1e-12)
+    # ... and the AIPW path adds the doubly-robust correction on top of it.
+    assert detail["method"] == "aipw"
+    scores_mean = float(
+        np.mean(
+            fitted_cf.predict()
+            + (fitted_cf._T_original - np.clip(fitted_cf._e_insample, 0.01, 0.99))
+            / (
+                np.clip(fitted_cf._e_insample, 0.01, 0.99)
+                * (1 - np.clip(fitted_cf._e_insample, 0.01, 0.99))
+            )
+            * (
+                fitted_cf._Y_original
+                - fitted_cf._m_insample
+                - (fitted_cf._T_original - np.clip(fitted_cf._e_insample, 0.01, 0.99))
+                * fitted_cf.predict()
+            )
+        )
     )
+    assert aipw == pytest.approx(scores_mean, abs=1e-12)
+    # With a well-fitted forest the two are close but not identical.
+    assert abs(plug_in - aipw) < 0.25
 
 
 def test_grf_fixture_meta(r_reference):

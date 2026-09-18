@@ -125,9 +125,11 @@ report = sp.cs_report(data, y="y", t="t", g="g", i="id",
 | -------------------------------------------- | --------------------------------------------------- |
 | `DoubleML::DoubleMLPLR$new(...)`             | `sp.dml(..., model="plr")`                          |
 | `DoubleML::DoubleMLIRM$new(...)`             | `sp.dml(..., model="irm")`                          |
-| `grf::causal_forest(X, Y, W)`                | `sp.causal_forest(X, Y, W)`                         |
-| `grf::causal_forest(...)$predict(...)`       | `forest.predict(X_new)`                              |
-| `grf::instrumental_forest(...)`              | `sp.causal_forest(..., instrumental=True)`          |
+| `grf::causal_forest(X, Y, W)`                | `sp.causal_forest(Y=Y, T=W, X=X)`                   |
+| `grf::causal_forest(X, Y, W, clusters = g)`  | `sp.causal_forest(Y=Y, T=W, X=X, clusters=g)`       |
+| `predict(cf, X.new)` / `predict(cf)`         | `forest.effect(X_new)` / `forest.predict()` (OOB)   |
+| `grf::test_calibration(cf)`                  | `sp.calibration_test(forest)`                       |
+| `grf::instrumental_forest(...)`              | `sp.iv_forest(...)`                                 |
 | `SuperLearner::SuperLearner(...)`            | `sp.tmle(...)` with custom learners                 |
 | `policytree::policy_tree(...)`               | `sp.policy_tree(X, reward)`                         |
 | `causalTree::honest.causalTree(...)`         | `sp.causal_forest(..., honest=True)`                |

@@ -3,8 +3,14 @@
 Covers the three option axes that Stata exposes and StatsPAI gained in the
 DiD option-depth campaign:
 
-* ``notyet_cutoff`` — csdid's ``asinr`` (R convention, StatsPAI default)
-  versus csdid's own default for pre-treatment ATT(g,t).
+* ``notyet_cutoff`` — csdid's ``asinr`` (``notyet_cutoff='asinr'``) versus
+  csdid's own default (``'cohort'``) for pre-treatment ATT(g,t).  StatsPAI's
+  default ``'period'`` is R ``did``'s rule, ``G > max(t, base) +
+  anticipation``; under the universal base used here it coincides with
+  csdid's default on every pre-treatment cell of ``mpdta``, and R ``did``
+  2.3.0 reports those same numbers (the full R pin is in
+  ``test_cs_notyet_cutoff_parity.py``).  Until 1.29 the docs described
+  ``asinr`` as the R convention; that holds only under a varying base.
 * ``estimator='ipw'``/``'stdipw'`` versus ``'ipw_abadie'`` — csdid's
   ``method(stdipw)`` and ``method(ipw)`` respectively.
 
@@ -137,11 +143,24 @@ def _assert_matches(got: dict, want: dict, label: str) -> None:
 
 
 class TestNotyetCutoff:
-    """csdid ``asinr`` vs csdid default, i.e. notyet_cutoff='period'|'cohort'."""
+    """csdid ``asinr`` vs csdid default: notyet_cutoff='asinr'|'cohort'."""
 
-    def test_period_cutoff_matches_stata_asinr(self):
+    def test_asinr_cutoff_matches_stata_asinr(self):
+        got = _atts(
+            estimator="reg", control_group="notyettreated", notyet_cutoff="asinr"
+        )
+        _assert_matches(got, STATA_ASINR, "notyet_cutoff='asinr'")
+
+    def test_default_period_cutoff_is_r_did_rule(self):
+        """R did's rule equals csdid's default on mpdta's universal-base cells.
+
+        R ``did::att_gt(control_group='notyettreated', base_period='universal',
+        est_method='reg')`` returns ATT(2007, 2004) = 0.033813 and ATT(2006,
+        2003) = 0.004502 on this file -- the csdid-default numbers, not the
+        asinr ones (0.032971 / 0.001080).
+        """
         got = _atts(estimator="reg", control_group="notyettreated")
-        _assert_matches(got, STATA_ASINR, "notyet_cutoff='period'")
+        _assert_matches(got, STATA_CSDID_DEFAULT, "notyet_cutoff='period' (R did)")
 
     def test_cohort_cutoff_matches_stata_csdid_default(self):
         got = _atts(
@@ -158,7 +177,9 @@ class TestNotyetCutoff:
         applied to every cell: post-treatment ATT(2006,2007) moved from
         -0.0412 to -0.0242. Pin it directly so the scoping cannot regress.
         """
-        period = _atts(estimator="reg", control_group="notyettreated")
+        period = _atts(
+            estimator="reg", control_group="notyettreated", notyet_cutoff="asinr"
+        )
         cohort = _atts(
             estimator="reg",
             control_group="notyettreated",

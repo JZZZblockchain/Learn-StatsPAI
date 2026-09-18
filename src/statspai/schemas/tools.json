@@ -2446,6 +2446,31 @@
     "name": "bvar"
   },
   {
+    "description": "Rescale CATE predictions by their best-linear-predictor calibration. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Level for the reported slope confidence intervals.",
+          "type": "number"
+        },
+        "forest": {
+          "description": "A forest fitted with the GRF engine (``split_rule=\"grf\"``).",
+          "type": "string"
+        },
+        "newdata": {
+          "description": "Effect-modifier rows to calibrate. ``None`` calibrates the out-of-bag predictions of the training rows. ``X=`` is accepted as an alias.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    },
+    "name": "calibrate_cate"
+  },
+  {
     "description": "Calibrate the strength of an unobserved confounder required to",
     "input_schema": {
       "properties": {
@@ -2487,7 +2512,7 @@
     "name": "calibrate_confounding_strength"
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
+    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
     "input_schema": {
       "properties": {
         "T": {
@@ -2949,22 +2974,93 @@
     "name": "causal_dqn"
   },
   {
-    "description": "Causal Forest for heterogeneous treatment effect estimation (CATE). Validation: certified evidence with scoped limitations. Known limitations: The AIPW ATE/ATT are validated against grf on clean-overlap designs only; under severe propensity-overlap loss the AIPW influence function inflates the standard error (conservative, over-covering inference), so inspect the sp.audit overlap diagnostic before interpreting the ATE on that kind of sample. Assumptions: Unconfoundedness: Y(d) perp D | X; Overlap: 0 < P(D=1 | X) < 1 for the estimand support; Honest splitting: splits and estimates use disjoint samples (enforced by default). Pre-conditions: formula uses pipe separator: 'y ~ treatment | x_1 + x_2 + ...'; treatment is binary 0/1 (use sp.multi_arm_forest for multi-valued); covariates are numeric; encode categoricals beforehand. Failure modes: Calibration test (sp.calibration_test) rejects -> CATE predictions are miscalibrated -- increase n_trees, add variables, or switch to a DR-Learner; Variance of CATE estimates too large to be useful -> Need more observations or narrower conditioning set; consider GATE on discrete subgroups; Extreme propensity scores in part of the covariate space -...",
+    "description": "Honest generalized random forest for conditional average treatment effects (CATE). Default engine reimplements the GRF algorithm: splits on the causal gradient pseudo-outcome, out-of-bag nuisances and predictions, little-bag variances, cluster-aware sampling and inference. fe='twoway' gives a causal forest with fixed effects for panels (unit and period effects removed within every node and leaf). Validation: certified evidence with scoped limitations. Known limitations: The AIPW ATE/ATT are validated against grf on clean-overlap designs only; under severe propensity-overlap loss the AIPW influence function inflates the standard error (conservative, over-covering inference), so inspect the sp.audit overlap diagnostic before interpreting the ATE on that kind of sample; The forest is compared with grf only statistically (tier T3: RMSE, pointwise variances, coverage), not bit-for-bit; given a fitted forest, the inference operators match grf / sandwich to 1e-14; Doubly-robust averages (average_treatment_effect, best_linear_projection, rate) are not implemented for fe= forests, which have no propensity score; use sp.did_forest for group-time averages; For fe= forests the calibration slo...",
     "input_schema": {
       "properties": {
-        "formula": {
-          "description": "'y ~ treatment | x1 + x2' (pipe separates covariates)",
+        "W_hat": {
+          "description": "Precomputed out-of-sample E[T | X, W] (skips the treatment nuisance forest).",
           "type": "string"
         },
+        "Y_hat": {
+          "description": "Precomputed out-of-sample E[Y | X, W] (skips the outcome nuisance forest).",
+          "type": "string"
+        },
+        "clusters": {
+          "description": "Cluster ids or column name; sampling, honesty, cross-fitting and standard errors respect clusters. Always set for repeated observations of a unit.",
+          "type": "string"
+        },
+        "d": {
+          "description": "Treatment column.",
+          "type": "string"
+        },
+        "fe": {
+          "description": "Panel fixed effects removed within nodes and leaves.",
+          "enum": [
+            "unit",
+            "twoway"
+          ],
+          "type": "string"
+        },
+        "formula": {
+          "description": "'y ~ treatment | x1 + x2 [| w1 + w2]' (pipe separates effect modifiers and controls). Alternatively use y/d/x/w column names or Y/T/X/W arrays.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unit id column (fe=); unit= is an alias.",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Share of clusters per tree.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "GRF min.node.size.",
+          "type": "integer"
+        },
         "n_estimators": {
-          "default": 100,
+          "default": 2000,
           "description": "Number of trees (``n_trees`` is accepted as an alias).",
           "type": "integer"
+        },
+        "random_state": {
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_rule": {
+          "default": "grf",
+          "description": "'legacy' reproduces the pre-1.29 estimator (deprecated).",
+          "enum": [
+            "grf",
+            "legacy"
+          ],
+          "type": "string"
+        },
+        "time": {
+          "description": "Period column (fe='twoway').",
+          "type": "string"
+        },
+        "w": {
+          "description": "Control columns (nuisances only).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "x": {
+          "description": "Effect-modifier columns.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome column.",
+          "type": "string"
         }
       },
-      "required": [
-        "formula"
-      ],
+      "required": [],
       "type": "object"
     },
     "name": "causal_forest"
@@ -5686,7 +5782,7 @@
     "name": "did_balance"
   },
   {
-    "description": "Bayesian Causal Forests DiD. Fits a BART-style ensemble with treatment and prognostic terms on the DiD residuals, providing heterogeneous treatment-effect posterior draws per unit. Useful for machine-learning DiD with covariates. Assumptions: Parallel trends: treated and control groups would have followed the same trajectory absent treatment; No anticipation: outcomes in pre-treatment periods are unaffected by future treatment; SUTVA: no spillovers between units. Pre-conditions: data is panel or repeated cross-section with a time column; treat column is binary (0/1) for 2x2, or first-treatment-period (int) for staggered; at least one pre-treatment period (>= 2 periods for 2x2; >= 3 recommended for event study). Failure modes: Pre-trend joint test p < 0.05 (or underpowered at 0.10) -> Use sp.sensitivity_rr (Rambachan & Roth honest CI) or switch to sp.callaway_santanna; Staggered treatment timing with TWFE method -> TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation; Pre-trend test underpowered (Roth 2022) -> Check sp.pretrends_power -- if low, report honest CI via sp.sensitivity_rr. Alternatives: sp.did_imputation, sp.drdid, sp.callaway_santanna,...",
+    "description": "DiD with a BCF-style forest on long-differenced outcomes: each cohort is compared with never-treated units over its own pre and post periods, and a prognostic forest plus treatment-effect booster (bootstrap uncertainty, not MCMC) is fitted to the long difference. For heterogeneous effects with group-time inference prefer sp.did_forest. Assumptions: Parallel trends: treated and control groups would have followed the same trajectory absent treatment; No anticipation: outcomes in pre-treatment periods are unaffected by future treatment; SUTVA: no spillovers between units. Pre-conditions: data is panel or repeated cross-section with a time column; treat column is binary (0/1) for 2x2, or first-treatment-period (int) for staggered; at least one pre-treatment period (>= 2 periods for 2x2; >= 3 recommended for event study). Failure modes: Pre-trend joint test p < 0.05 (or underpowered at 0.10) -> Use sp.sensitivity_rr (Rambachan & Roth honest CI) or switch to sp.callaway_santanna; Staggered treatment timing with TWFE method -> TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation; Pre-trend test underpowered (Roth 2022) -> Check sp.pretrends_power -- if l...",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -5704,6 +5800,11 @@
         "id": {
           "description": "Unit, subject, or panel identifier column.",
           "type": "string"
+        },
+        "n_bootstrap": {
+          "default": 100,
+          "description": "Bootstrap replications of the BCF fit per cohort (covariate path).",
+          "type": "integer"
         },
         "n_trees": {
           "default": 50,
@@ -5818,6 +5919,104 @@
       "type": "object"
     },
     "name": "did_estimate"
+  },
+  {
+    "description": "Difference-in-differences causal forests for staggered adoption: one honest causal forest per clean Callaway-Sant'Anna group-time comparison on the long-differenced outcome, doubly-robust ATT(g,t), influence-function event study and overall ATT, unit-level CATEs and per-cell heterogeneity tests. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Conditional parallel trends given x for the chosen comparison group; No anticipation beyond `anticipation` periods; Overlap: every covariate profile has comparison units. Pre-conditions: absorbing (staggered) treatment coded by first treatment period; covariates are fixed per unit (baseline values); enough treated and comparison units per group-time cell (min_group_size). Failure modes: pretrend_test p-value small -> Pre-period placebos reject parallel trends; add covariates or bound the violation; AssumptionWarning: group-time cells were dropped -> Inspect result.dropped_cells; lower min_group_size or restrict event_window; Pre-trend joint test p < 0.05 (or underpowered at 0.10) -> Use sp.sensitivity_rr (Rambachan & Roth honest CI) or switch to sp.callaway_santanna. Alterna...",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Level for confidence intervals.",
+          "type": "number"
+        },
+        "anticipation": {
+          "default": 0,
+          "description": "anticipation parameter (int).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster column constant within unit.",
+          "type": "string"
+        },
+        "cohort": {
+          "description": "First treatment period (0/NaN = never treated).",
+          "type": "string"
+        },
+        "control_group": {
+          "default": "notyettreated",
+          "description": "control_group parameter (str).",
+          "enum": [
+            "notyettreated",
+            "nevertreated"
+          ],
+          "type": "string"
+        },
+        "event_window": {
+          "description": "event_window parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forest_kwargs": {
+          "description": "Extra sp.CausalForest arguments (min_samples_leaf, mtry, honesty_fraction, ...).",
+          "type": "object"
+        },
+        "id": {
+          "description": "Unit id column; unit= is an alias.",
+          "type": "string"
+        },
+        "min_group_size": {
+          "default": 20,
+          "description": "min_group_size parameter (int).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 1000,
+          "description": "Trees per group-time forest.",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads per forest (-1 = all cores).",
+          "type": "integer"
+        },
+        "propensity_clip": {
+          "default": 0.001,
+          "description": "Upper clip for the cohort-membership probability in the control weights e/(1-e).",
+          "type": "number"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Seed; cell k uses random_state + k.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Numeric period.",
+          "type": "string"
+        },
+        "x": {
+          "description": "Time-invariant effect modifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cohort",
+        "id",
+        "time",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "did_forest"
   },
   {
     "description": "Heterogeneous-adoption DiD using quasi-untreateded groups. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
@@ -18522,7 +18721,7 @@
     "name": "quasi_untreated_test"
   },
   {
-    "description": "Rank-Average Treatment Effect (Yadlowsky et al. 2023). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
+    "description": "Rank-weighted average treatment effect (RATE) [@yadlowsky2025evaluating]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
     "input_schema": {
       "properties": {
         "T": {
@@ -25494,7 +25693,7 @@
     "name": "test"
   },
   {
-    "description": "BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
+    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Unconfoundedness given the covariates; Overlap / positivity; Honesty: separate subsamples are used to choose splits and to estimate effects. Pre-conditions: Covariates, treatment, and outcome with enough data to grow an honest forest. Failure modes: Calibration test rejects -- the forest's heterogeneity is not well calibrated -> Increase the sample / number of trees, or fall back to a doubly-robust learner. Alternatives: sp.dml, sp.auto_cate, sp.tmle. Typical minimum N: 1000.",
     "input_schema": {
       "properties": {
         "T": {

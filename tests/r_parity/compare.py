@@ -545,17 +545,17 @@ TOLERANCES: dict[str, dict[str, float]] = {
     },  # point-only native FW/zeta ATT parity
     "13_causal_forest": {
         "rel_est": 0.01,  # B/T3: graded against combined Monte Carlo error
-        # of two independent forests. Observed worst 0.47% (ATT, 2.1x
-        # margin); the ATE headline sits at 0.19%. Widened from 0.005
-        # when the ATT row moved onto grf's own plug-in + correction
-        # estimator: the two sides now run the *same* estimator, so the
-        # residual is pure forest MC rather than a convention gap, and
-        # 0.005 left only 1.07x margin against machine-to-machine drift.
-        "rel_se": 0.25,  # B: the AIPW *operator* is pinned exactly (see
-        # tests/reference_parity/test_grf_aipw_operator_parity.py), so
-        # this band covers forest RNG only. Observed worst 7.7% (ATE,
-        # 3.2x margin); tightened from 0.50 after the ATT convention fix
-        # removed the historical 14.6% ATT row (now 0.087%).
+        # of two independent forests. Since 1.29 sp.causal_forest runs its
+        # own GRF engine (gradient splits, OOB nuisances, little bags);
+        # observed ATE 0.24% / ATT 0.38% (2.6x margin). The engine's
+        # statistical parity with grf (RMSE, pointwise variances, coverage)
+        # is gated in tests/reference_parity/test_grf_engine_statistical_parity.py.
+        "rel_se": 0.05,  # B: the AIPW *operator* is pinned exactly (see
+        # tests/reference_parity/test_grf_aipw_operator_parity.py and the
+        # clustered operator parity), so this band covers forest RNG only.
+        # Tightened from 0.25 in 1.29: with the GRF engine the observed
+        # worst is 0.63% (ATT; ATE 0.22%, was 7.7% under the pre-1.29
+        # engine), a 7.9x margin.
     },  # clean-overlap AIPW vs grf (post-nuisance-regularisation MC gap)
     "14_ols_cluster": {
         "rel_est": 1e-6,
@@ -745,7 +745,12 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # Left-truncated normal regression. truncreg runs maxLik method='NR'
     # to converge past the BFGS default stopping point; sigma rows are
     # compared on the natural scale (sp delta-maps exp(ln_sigma)).
-    "62_truncreg": {"rel_est": 1e-6, "rel_se": 1e-4},
+    # Since the vce-grammar rewrite sp.truncreg Newton-polishes the optimum
+    # and takes SEs from the exact Hessian: vs R 3.5e-10 est / 5.4e-10 SE,
+    # vs Stata 7.9e-8 / 2.4e-7 (Stata's ml stopping rule). SE budget
+    # tightened from 1e-4, which had admitted the ~1e-5 drift of the former
+    # finite-difference Hessian.
+    "62_truncreg": {"rel_est": 1e-6, "rel_se": 1e-6},
     # Zero-inflated Poisson (logit inflation). zeroinfl runs at
     # reltol=1e-14; worst observed gap ~1e-7 est / ~6e-6 SE.
     "63_zip": {"rel_est": 1e-6, "rel_se": 1e-4},

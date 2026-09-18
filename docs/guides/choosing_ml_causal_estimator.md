@@ -116,7 +116,11 @@ r = q.estimate(n_estimators=500, random_state=0)
 cate = r.underlying.effect(df[['age', 'edu', 'exp']].to_numpy())
 ```
 
-Binary treatment only — for continuous T, use `design='dml'`.
+Doubly-robust ATT/ATC need a binary treatment; with a continuous
+treatment `average_treatment_effect()` reports the average partial effect.
+Several rows per unit: pass `clusters=`. Panel heterogeneity with unit and
+period effects, or staggered adoption: see
+[Heterogeneous effects with panel data](heterogeneity_panel_forests.md).
 
 ## 2. Comparison
 

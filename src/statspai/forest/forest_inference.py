@@ -3,25 +3,15 @@ GRF-style inference add-ons for the StatsPAI CausalForest.
 
 Implements:
 
-- :func:`test_calibration`: Chernozhukov-Demirer-Duflo-Fernández-Val
-  (2020, CDDF henceforth) "Best Linear Predictor of CATE" calibration
-  test. Regresses the orthogonal pseudo-outcome on the predicted CATE
-  (the "mean forest prediction") and a demeaned version of it (the
-  "differential forest prediction"); tests the joint/individual
-  significance. Under correct ATE calibration the first coefficient is
-  1; under non-trivial CATE heterogeneity the second is >0.
-
-- :func:`rate`: Rank-Average Treatment Effect (Yadlowsky, Fleming,
-  Shah, Tibshirani, Wager 2023). Integrates the difference between the
-  ATE on the top-``q`` predicted-CATE fraction and the overall ATE,
-  producing an AUTOC (area-under the TOC curve) statistic with a
-  valid normal-approximation confidence interval built from half-
-  sample splits.
-
-- :func:`honest_variance`: subsample-splitting variance estimate for
-  aggregate quantities (ATE / GATE) computed on a forest with honest
-  sample splits. Uses the half-sample delta-method bootstrap of Wager-
-  Athey (2018).
+- :func:`calibration_test` (alias ``test_calibration``): the best linear
+  predictor calibration test of CATE predictions [@chernozhukov2025generic].
+  Under correct average calibration the "mean forest prediction"
+  coefficient is 1; under real heterogeneity the "differential forest
+  prediction" coefficient is > 0.
+- :func:`calibrate_cate`: CATE predictions rescaled by that calibration.
+- :func:`rate`: rank-weighted average treatment effect (AUTOC / QINI)
+  [@yadlowsky2025evaluating].
+- :func:`honest_variance`: deprecated; see its docstring.
 - :func:`average_treatment_effect`: GRF-style ATE/ATT/ATC/ATO aggregation
   of CATE predictions with effective sample size and normal CIs.
 - :func:`forest_diagnostics`: overlap and CATE-distribution diagnostics.
@@ -32,17 +22,12 @@ never mutate the forest.
 
 References
 ----------
-Chernozhukov, V., Demirer, M., Duflo, E., Fernández-Val, I. (2020).
-"Generic Machine Learning Inference on Heterogeneous Treatment Effects
-in Randomized Experiments, with an Application to Immunization in India."
-NBER WP 24678. [@chernozhukov2020generic]
+[@chernozhukov2025generic] -- best linear predictor calibration test
+(NBER Working Paper 24678 in its 2018 version).
 
-Yadlowsky, S., Fleming, S., Shah, N., Brunskill, E., Wager, S. (2021).
-"Evaluating Treatment Prioritization Rules via Rank-Weighted Average
-Treatment Effects." arXiv:2111.07966.
+[@yadlowsky2025evaluating] -- rank-weighted average treatment effects.
 
-Athey, S., Tibshirani, J., Wager, S. (2019). "Generalized Random
-Forests." Annals of Statistics, 47(2), 1148-1178. [@athey2019surrogate]
+[@athey2019generalized] -- generalized random forests.
 """
 
 from __future__ import annotations
@@ -54,6 +39,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..exceptions import AssumptionWarning, DataInsufficient, MethodIncompatibility
 
 if TYPE_CHECKING:
@@ -146,8 +132,40 @@ def _prepare_forest_vector(
     return arr
 
 
+def _require_training_rows(
+    forest: "CausalForest",
+    X: Optional[np.ndarray],
+    Y: Optional[np.ndarray],
+    T: Optional[np.ndarray],
+    context: str,
+) -> None:
+    """GRF-engine inference is defined on the training rows only."""
+    for name, given, stored in (
+        ("X", X, forest._X_original),
+        ("Y", Y, forest._Y_original),
+        ("T", T, forest._T_original),
+    ):
+        if given is None:
+            continue
+        arr = np.asarray(given, dtype=np.float64)
+        ref = np.asarray(stored, dtype=np.float64)
+        if name != "X":
+            arr = arr.ravel()
+            ref = ref.ravel()
+        if arr.shape != ref.shape or not np.array_equal(arr, ref):
+            raise MethodIncompatibility(
+                f"{context}: for GRF-engine forests the test uses the "
+                f"out-of-bag predictions and nuisances of the training data, "
+                f"so {name} must be omitted or equal the fitted {name}.",
+                recovery_hint=(
+                    "Fit a separate forest on the evaluation sample, or omit "
+                    "X, Y and T."
+                ),
+            )
+
+
 # ======================================================================
-# test_calibration (Chernozhukov-Demirer-Duflo-Fernández-Val 2020)
+# calibration_test [@chernozhukov2025generic]
 # ======================================================================
 
 
@@ -158,9 +176,21 @@ def calibration_test(
     T: Optional[np.ndarray] = None,
     alpha: float = 0.05,
 ) -> pd.DataFrame:
-    """BLP-of-CATE calibration test (Chernozhukov-Demirer-Duflo-Fernandez-Val 2020).
+    """Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic].
 
-    Pseudo-outcome regression:
+    For forests fitted with the GRF engine (the default) the test is run on
+    **out-of-bag** predictions, in the form of ``grf::test_calibration``:
+    ``Y - Y_hat`` is regressed on ``(W - W_hat) * mean(tau)`` and
+    ``(W - W_hat) * (tau - mean(tau))`` with observation weights and an HC3
+    (cluster-robust when the forest has clusters) covariance.  The frame
+    adds ``t_vs_zero`` / ``p_one_sided``, grf's one-sided tests against 0.
+    ``beta_differential`` is also the slope by which the predictions should
+    be rescaled around their mean (see :func:`calibrate_cate`).  For
+    ``fe=`` forests the regression uses unit/period within-transformed
+    variables.  ``X``, ``Y``, ``T`` may only restate the training data.
+
+    Legacy forests (``split_rule="legacy"``) keep the pseudo-outcome
+    regression below on in-sample predictions:
 
         Ψ_i = α + β₁ · τ̂(X_i) + β₂ · (τ̂(X_i) - Eτ̂) + ε_i
 
@@ -216,7 +246,6 @@ def calibration_test(
     """
     _require_fitted_forest(forest, "calibration_test()")
     alpha_value = _validate_alpha(alpha, "calibration_test()")
-
     X_ = _prepare_forest_features(forest, X, "calibration_test()")
     Y_ = _prepare_forest_vector(
         Y if Y is not None else getattr(forest, "_Y_original", None),
@@ -235,6 +264,11 @@ def calibration_test(
             "calibration_test() requires at least 3 rows.",
             recovery_hint="Use a larger sample for the calibration regression.",
         )
+    from . import _grf_inference as _gi
+
+    if _gi.is_grf_forest(forest):
+        _require_training_rows(forest, X, Y, T, "calibration_test()")
+        return _gi.calibration_blp(forest, alpha=alpha_value)
 
     tau_hat = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
     tau_bar = float(tau_hat.mean())
@@ -338,7 +372,7 @@ def _get_nuisances(
 
 
 # ======================================================================
-# RATE (Yadlowsky-Fleming-Shah-Tibshirani-Wager 2023)
+# RATE [@yadlowsky2025evaluating]
 # ======================================================================
 
 
@@ -352,7 +386,7 @@ def rate(
     alpha: float = 0.05,
     seed: Optional[int] = None,
 ) -> Dict[str, float]:
-    """Rank-Average Treatment Effect (Yadlowsky et al. 2023).
+    """Rank-weighted average treatment effect (RATE) [@yadlowsky2025evaluating].
 
     Let ``S(x) = τ̂(x)`` denote a prioritisation score (higher = higher
     priority). Define the TOC (targeting operator characteristic) curve:
@@ -387,6 +421,13 @@ def rate(
     which replaces the conservative half-sample estimator used in the
     earlier draft of this function.
 
+    For GRF-engine forests the priorities are the out-of-bag CATE
+    predictions, the pseudo-outcomes are the forest's AIPW scores, and the
+    variance sums contributions within clusters.  Because priorities and
+    evaluation share one sample, RATE here is a *diagnostic*; for a
+    pre-registered test of targeting value, fit the forest on a training
+    split and evaluate on a held-out split.
+
     Parameters
     ----------
     forest : fitted CausalForest
@@ -404,13 +445,12 @@ def rate(
     Returns
     -------
     dict with keys ``estimate``, ``se``, ``ci_low``, ``ci_high``,
-    ``target``, ``toc_curve`` (``(q_grid, 2)``), ``n``, ``method``.
+    ``target``, ``toc_curve`` (``(q_grid, 2)``), ``n``, ``method``,
+    ``priority_source``, ``n_clusters``.
 
     References
     ----------
-    Yadlowsky, S., Fleming, S., Shah, N., Brunskill, E., Wager, S.
-    (2021). "Evaluating Treatment Prioritization Rules via Rank-
-    Weighted Average Treatment Effects." arXiv:2111.07966.
+    [@yadlowsky2025evaluating]
 
     Examples
     --------
@@ -433,8 +473,8 @@ def rate(
     ... )
     >>> res = sp.rate(cf, target="AUTOC")
     >>> sorted(res.keys())
-    ['ci_high', 'ci_low', 'estimate', 'method', 'n', 'se', \
-'target', 'toc_curve']
+    ['ci_high', 'ci_low', 'estimate', 'method', 'n', 'n_clusters', \
+'priority_source', 'se', 'target', 'toc_curve']
     >>> res["toc_curve"].shape
     (100, 2)
     """
@@ -486,10 +526,26 @@ def rate(
             recovery_hint="Use a larger sample for RATE inference.",
         )
 
-    m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
-    e_hat = np.clip(e_hat, 0.02, 0.98)
-    psi = _construct_pseudo_outcome(Y_, T_, e_hat, m_hat, forest, X_)
-    tau_hat = np.asarray(forest.effect(X_)).ravel()
+    from . import _grf_inference as _gi
+
+    cluster_codes: Optional[np.ndarray] = None
+    if _gi.is_grf_forest(forest):
+        _require_training_rows(forest, X, Y, T, "rate()")
+        _gi._require_dr(forest, "rate()")
+        if not np.all(np.isin(np.unique(T_), (0.0, 1.0))):
+            raise MethodIncompatibility(
+                "rate(): RATE requires a binary treatment.",
+                recovery_hint="Fit the forest with a 0/1 treatment.",
+            )
+        tau_hat = np.asarray(forest._oob_tau, dtype=np.float64)
+        psi, *_ = _gi.dr_scores(forest, tau_hat, clip=0.02)
+        if getattr(forest, "_clusters", None) is not None:
+            cluster_codes = np.asarray(forest._clusters, dtype=np.int64)
+    else:
+        m_hat, e_hat = _get_nuisances(forest, X_, Y_, T_)
+        e_hat = np.clip(e_hat, 0.02, 0.98)
+        psi = _construct_pseudo_outcome(Y_, T_, e_hat, m_hat, forest, X_)
+        tau_hat = np.asarray(forest.effect(X_)).ravel()
     psi_bar = float(psi.mean())
 
     # Descending rank by τ̂ (rank 1 = highest priority).  Ties: stable
@@ -532,9 +588,18 @@ def rate(
     # Influence-function variance: Var_hat(φ) / n, using the n-1
     # denominator for the centred sum of squares.
     phi_centered = phi - phi.mean()
-    var_est = (
-        float(phi_centered @ phi_centered) / (n * (n - 1)) if n > 1 else float("nan")
-    )
+    if cluster_codes is not None:
+        # Clustered influence-function variance: sum the centred
+        # contributions within clusters before squaring.
+        n_groups = int(cluster_codes.max()) + 1
+        summed = np.bincount(cluster_codes, weights=phi_centered, minlength=n_groups)
+        var_est = float(summed @ summed) / n**2 * n_groups / (n_groups - 1)
+    else:
+        var_est = (
+            float(phi_centered @ phi_centered) / (n * (n - 1))
+            if n > 1
+            else float("nan")
+        )
     se = float(np.sqrt(max(var_est, 0.0)))
     z = stats.norm.ppf(1 - alpha_value / 2)
     ci = (estimate - z * se, estimate + z * se)
@@ -555,7 +620,13 @@ def rate(
         "target": target_key,
         "toc_curve": toc_grid,
         "n": n,
-        "method": "Influence-function SE (Yadlowsky et al. 2023)",
+        "method": "Influence-function SE (Yadlowsky et al. 2025)",
+        "priority_source": (
+            "out_of_bag"
+            if getattr(forest, "_oob_tau", None) is not None
+            else "in_sample"
+        ),
+        "n_clusters": None if cluster_codes is None else int(cluster_codes.max()) + 1,
     }
 
 
@@ -614,6 +685,27 @@ def honest_variance(
     True
     """
     _require_fitted_forest(forest, "honest_variance()")
+    warnings.warn(
+        "honest_variance() is deprecated: its half-sample dispersion of fixed "
+        "CATE predictions does not measure sampling uncertainty and shrinks "
+        "with n_splits. For GRF-engine forests it now returns the "
+        "doubly-robust ATE and its influence-function SE; use "
+        "average_treatment_effect() directly.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from . import _grf_inference as _gi
+
+    if _gi.is_grf_forest(forest) and X is None:
+        res = _gi.average_effect(forest, "all", alpha=0.05, clip=0.01)
+        return {
+            "ate": res["estimate"],
+            "se": res["se"],
+            "ci_low": res["ci_low"],
+            "ci_high": res["ci_high"],
+            "plug_in_mean": float(np.mean(forest._oob_tau)),
+            "method": "aipw",
+        }
     if (
         isinstance(n_splits, bool)
         or not isinstance(n_splits, (int, np.integer))
@@ -876,6 +968,16 @@ def average_treatment_effect(
     formed (out-of-sample ``X`` with no stored nuisances) the function
     falls back to the plug-in CATE average and sets ``method='plug_in'``.
 
+    For forests fitted with the GRF engine (the default) the CATE entering
+    the score is the **out-of-bag** prediction, observation weights follow
+    ``equalize_cluster_weights``, standard errors are cluster-robust when
+    the forest has clusters, and ``target_sample="overlap"`` is the
+    partially linear (overlap-weighted) effect from regressing
+    ``Y - Y_hat`` on ``W - W_hat`` -- the definitions used by
+    ``grf::average_treatment_effect``.  ``X`` / ``T`` may only restate the
+    training data.  Forests with fixed effects raise: no propensity exists
+    for a within-unit design.
+
     Parameters
     ----------
     clip : float, default 0.01
@@ -969,6 +1071,9 @@ def average_treatment_effect(
             diagnostics={"clip": clip},
         )
 
+    from . import _grf_inference as _gi
+
+    grf_forest = _gi.is_grf_forest(forest)
     use_insample = X is None and T is None
     if X is None:
         X_ = np.asarray(forest._X_original, dtype=np.float64)
@@ -988,7 +1093,10 @@ def average_treatment_effect(
                 "average_treatment_effect(): X must be numeric.",
                 recovery_hint="Pass X shaped (n_samples, n_features).",
             ) from exc
-    tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
+    if grf_forest:
+        tau, _ = _gi.training_cate(forest, X_ if X is not None else None)
+    else:
+        tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
     try:
         T_ = np.asarray(
             T if T is not None else getattr(forest, "_T_original", None),
@@ -1061,6 +1169,10 @@ def average_treatment_effect(
     # and says so, rather than raising on a fitted forest a user may only
     # want a descriptive average from.
     binary_treatment = bool(np.all(np.isin(np.unique(T_), (0.0, 1.0))))
+    if grf_forest:
+        _require_training_rows(forest, X, None, T, "average_treatment_effect()")
+        if binary_treatment or target in ("all", "overlap"):
+            return _gi.average_effect(forest, target, alpha_value, clip_value)
     if not binary_treatment:
         warnings.warn(
             "average_treatment_effect: the doubly-robust (AIPW) score "
@@ -1241,7 +1353,12 @@ def forest_diagnostics(
         )
 
     X_ = _prepare_forest_features(forest, X, "forest_diagnostics()")
-    tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
+    from . import _grf_inference as _gi
+
+    if _gi.is_grf_forest(forest):
+        tau, _ = _gi.training_cate(forest, X_ if X is not None else None)
+    else:
+        tau = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
     if X is not None and T is None:
         raise MethodIncompatibility(
             "forest_diagnostics(): T is required when X is supplied.",
@@ -1297,6 +1414,140 @@ def forest_diagnostics(
     }
 
 
+@accepts_aliases(X="newdata")
+def calibrate_cate(
+    forest: "CausalForest",
+    newdata: Optional[np.ndarray] = None,
+    alpha: float = 0.05,
+) -> Dict[str, Any]:
+    """Rescale CATE predictions by their best-linear-predictor calibration.
+
+    Forest CATE predictions are shrunk toward their mean: leaf averaging and
+    honest subsampling regularise, so the spread of ``tau_hat`` understates
+    the spread of ``tau``.  The calibration regression of
+    :func:`calibration_test` estimates the slope ``beta_differential`` of
+    the effect signal on the (out-of-bag) predictions; this function returns
+
+        tau_cal(x) = beta_mean * mean(tau_oob)
+                     + beta_differential * (tau_hat(x) - mean(tau_oob))
+
+    for the training rows (``newdata=None``, out-of-bag) or for new rows.
+    Because the slope is estimated on out-of-bag predictions it tends to 0
+    when the effect is homogeneous, so the correction does not manufacture
+    heterogeneity.
+
+    Forests with fixed effects: the regression uses globally
+    within-transformed variables, as proposed by [@aytug2026attenuated].
+    Global two-way demeaning is exact only when the effect is homogeneous,
+    so the heterogeneity *test* keeps its size, but the slope is not a
+    de-attenuation factor.  In StatsPAI's own simulations (staggered
+    adoption selected on unit effects, N = 300 units, T = 6) the OOB
+    predictions of the FE forest had a slope of 0.65-0.91 on the true
+    effect while ``beta_differential`` stayed at 0.88-1.07, and calibrated
+    predictions did not reduce RMSE.  A warning is emitted for FE forests.
+
+    Parameters
+    ----------
+    forest : CausalForest
+        A forest fitted with the GRF engine (``split_rule="grf"``).
+    newdata : array-like, optional
+        Effect-modifier rows to calibrate.  ``None`` calibrates the
+        out-of-bag predictions of the training rows.  ``X=`` is accepted as
+        an alias.
+    alpha : float, default 0.05
+        Level for the reported slope confidence intervals.
+
+    Returns
+    -------
+    dict
+        ``cate`` (calibrated predictions), ``raw_cate``, ``beta_mean``,
+        ``beta_differential``, their ``*_se``, ``calibration`` (the full
+        :func:`calibration_test` frame), ``heterogeneity_detected``
+        (one-sided 5% test of ``beta_differential > 0``) and ``warnings``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> n = 1000
+    >>> X = rng.normal(size=(n, 3))
+    >>> T = rng.integers(0, 2, n)
+    >>> Y = X[:, 1] + (1 + X[:, 0]) * T + rng.normal(size=n)
+    >>> cf = sp.causal_forest(Y=Y, T=T, X=X, n_estimators=400, random_state=0)
+    >>> cal = sp.calibrate_cate(cf)
+    >>> cal["cate"].shape
+    (1000,)
+
+    References
+    ----------
+    [@chernozhukov2025generic], [@aytug2026attenuated]
+    """
+    _require_fitted_forest(forest, "calibrate_cate()")
+    alpha_value = _validate_alpha(alpha, "calibrate_cate()")
+    from . import _grf_inference as _gi
+
+    if not _gi.is_grf_forest(forest):
+        raise MethodIncompatibility(
+            "calibrate_cate() needs out-of-bag predictions, which only "
+            "GRF-engine forests provide.",
+            recovery_hint="Refit with the default split_rule='grf'.",
+        )
+    table = _gi.calibration_blp(forest, alpha=alpha_value)
+    b_mean = float(table.loc["mean_forest_prediction", "coef"])
+    b_diff = float(table.loc["differential_forest_prediction", "coef"])
+    oob = np.asarray(forest._oob_tau, dtype=np.float64)
+    w = _gi._weights(forest, oob.size)
+    tau_bar = float(np.sum(w * oob) / np.sum(w))
+    if newdata is None:
+        raw = oob.copy()
+    else:
+        raw = np.asarray(
+            forest.effect(
+                _prepare_forest_features(forest, newdata, "calibrate_cate()")
+            ),
+            dtype=np.float64,
+        ).ravel()
+    calibrated = b_mean * tau_bar + b_diff * (raw - tau_bar)
+    detected = bool(table.loc["differential_forest_prediction", "p_one_sided"] < 0.05)
+    notes = []
+    if _gi.is_fe_forest(forest):
+        notes.append(
+            "for forests with fixed effects the calibration slope comes from "
+            "a globally within-transformed regression, which is misspecified "
+            "when effects are heterogeneous; it tests for heterogeneity but "
+            "does not correct the shrinkage of the CATE predictions."
+        )
+    if not detected:
+        notes.append(
+            "beta_differential is not significantly positive: the forest's "
+            "ranking carries no detectable heterogeneity, so calibrated "
+            "predictions are close to a constant effect."
+        )
+    if b_diff < 0:
+        notes.append(
+            "beta_differential is negative: predictions are anti-correlated "
+            "with the effect signal; do not interpret the CATE ranking."
+        )
+    for note in notes:
+        warnings.warn(f"calibrate_cate(): {note}", AssumptionWarning, stacklevel=2)
+    return {
+        "cate": calibrated,
+        "raw_cate": raw,
+        "beta_mean": b_mean,
+        "beta_mean_se": float(table.loc["mean_forest_prediction", "se"]),
+        "beta_differential": b_diff,
+        "beta_differential_se": float(
+            table.loc["differential_forest_prediction", "se"]
+        ),
+        "mean_oob_prediction": tau_bar,
+        "calibration": table,
+        "heterogeneity_detected": detected,
+        "warnings": notes,
+        "method": "blp_oob",
+    }
+
+
 # GRF-compatible alias: the R ``grf`` package exposes this test as
 # ``test_calibration``. We keep ``test_calibration`` as an alias so
 # users familiar with GRF can reach for the same name, while the
@@ -1305,6 +1556,7 @@ test_calibration = calibration_test
 
 
 __all__ = [
+    "calibrate_cate",
     "calibration_test",
     "test_calibration",
     "rate",

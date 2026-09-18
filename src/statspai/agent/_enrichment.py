@@ -126,6 +126,16 @@ _FOLLOWUP_BY_TOOL: Dict[str, List[Dict[str, Any]]] = {
             "rationale": "Best linear projection — is heterogeneity real?",
         },
         {"tool": "calibration_test", "rationale": "Calibration of CATE predictions."},
+        {
+            "tool": "calibrate_cate",
+            "rationale": "Rescale out-of-bag CATEs by their calibration slope.",
+        },
+    ],
+    "did_forest": [
+        {
+            "tool": "calibration_test",
+            "rationale": "Per-cell heterogeneity tests are in result.att_gt.",
+        },
     ],
     "metalearner": [
         {"tool": "cate_summary"},
@@ -330,6 +340,13 @@ _CITATIONS_BY_TOOL: Dict[str, List[str]] = {
     "regress": [],
     "dml": ["chernozhukov2018double"],
     "causal_forest": ["athey2019generalized", "wager2018estimation"],
+    "did_forest": [
+        "gavrilova2025difference",
+        "callaway2021difference",
+        "athey2019generalized",
+    ],
+    "calibrate_cate": ["chernozhukov2025generic"],
+    "calibration_test": ["chernozhukov2025generic"],
     "metalearner": ["kunzel2019metalearners"],
     "tmle": ["vanderlaan2011targeted"],
     "drdid": ["santanna2020doubly"],

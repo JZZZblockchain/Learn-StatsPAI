@@ -39,13 +39,13 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 
 | Module              | LOC    | Files | Registered functions (`sp.*`) |
 | ------------------- | -----: | ----: | ----------------------------: |
-| `did` | 37,788 | 51 | 83 |
+| `did` | 38,687 | 52 | 85 |
 | `synth` | 23,757 | 32 | 55 |
 | `rd` | 18,000 | 27 | 53 |
 | `regression` | 17,944 | 22 | 39 |
-| `smart` | 15,683 | 20 | 31 |
+| `smart` | 15,695 | 20 | 31 |
 | `output` | 12,711 | 21 | 40 |
-| `agent` | 12,464 | 32 | 4 |
+| `agent` | 12,481 | 32 | 4 |
 | `matching` | 9,789 | 14 | 25 |
 | `core` | 9,593 | 15 | 5 |
 | `decomposition` | 9,547 | 19 | 32 |
@@ -55,6 +55,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,668 | 13 | 25 |
 | `spatial` | 6,968 | 30 | 38 |
+| `forest` | 6,722 | 9 | 9 |
 | `plots` | 6,002 | 7 | 8 |
 | `bayes` | 5,170 | 12 | 19 |
 | `dml` | 5,090 | 12 | 14 |
@@ -71,7 +72,6 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `dag` | 3,500 | 9 | 23 |
 | `tmle` | 3,403 | 6 | 11 |
 | `timeseries` | 3,389 | 9 | 20 |
-| `forest` | 3,371 | 5 | 8 |
 | `survival` | 3,304 | 6 | 12 |
 | `neural_causal` | 3,275 | 6 | 16 |
 | `robustness` | 2,986 | 6 | 11 |
@@ -90,7 +90,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `proximal` | 2,030 | 8 | 13 |
 | `policy_learning` | 1,961 | 5 | 8 |
 | `causal_text` | 1,705 | 4 | 4 |
-| `bcf` | 1,646 | 5 | 8 |
+| `bcf` | 1,652 | 5 | 8 |
 | `fixest` | 1,634 | 3 | 4 |
 | `target_trial` | 1,457 | 7 | 9 |
 | `mediation` | 1,456 | 4 | 6 |
@@ -126,7 +126,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `checks` | 152 | 2 | 0 |
 | `causal` | 111 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **396,985** | **758** | **1183** |
+| **Total** | **401,524** | **763** | **1186** |
 ## 3 · Causal-inference coverage matrix (full)
 
 Legend: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.

@@ -11,11 +11,11 @@ import statspai as sp
 from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.forest.causal_forest import CausalForest
 from statspai.forest.forest_inference import (
-    calibration_test,
-    rate,
-    honest_variance,
     average_treatment_effect,
+    calibration_test,
     forest_diagnostics,
+    honest_variance,
+    rate,
 )
 
 
@@ -111,7 +111,11 @@ def test_calibration_and_rate_validate_inputs_and_subsamples():
     with pytest.raises(DataInsufficient, match="at least 3 rows"):
         calibration_test(cf, X=X[:2], Y=Y[:2], T=T[:2])
 
-    cal = calibration_test(cf, X=X[:20], Y=Y[:20], T=T[:20])
+    # GRF-engine forests run the test on the training rows' out-of-bag
+    # predictions; a subsample has no matching nuisances and is refused.
+    with pytest.raises(MethodIncompatibility, match="out-of-bag"):
+        calibration_test(cf, X=X[:20], Y=Y[:20], T=T[:20])
+    cal = calibration_test(cf, X=X, Y=Y, T=T)
     assert list(cal.index) == [
         "mean_forest_prediction",
         "differential_forest_prediction",
@@ -144,9 +148,12 @@ def test_calibration_and_rate_validate_inputs_and_subsamples():
     with pytest.raises(DataInsufficient, match="at least 2 rows"):
         rate(cf, X=X[:1], Y=Y[:1], T=T[:1])
 
-    out = rate(cf, X=X[:20], Y=Y[:20], T=T[:20], target="autoc", q_grid=5)
+    with pytest.raises(MethodIncompatibility, match="out-of-bag"):
+        rate(cf, X=X[:20], Y=Y[:20], T=T[:20], target="autoc", q_grid=5)
+    out = rate(cf, target="autoc", q_grid=5)
     assert out["target"] == "AUTOC"
-    assert out["n"] == 20
+    assert out["n"] == len(Y)
+    assert out["priority_source"] == "out_of_bag"
     assert out["toc_curve"].shape == (5, 2)
 
 

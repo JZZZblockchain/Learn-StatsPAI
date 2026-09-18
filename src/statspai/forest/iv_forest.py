@@ -26,19 +26,19 @@ and the average LATE with bootstrap SE.
 References
 ----------
 Athey, S., Tibshirani, J., & Wager, S. (2019). "Generalized random
-forests." *Annals of Statistics*, 47(2), 1148-1178. [@athey2019surrogate]
+forests." *Annals of Statistics*, 47(2), 1148-1178. [@athey2019generalized]
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, Dict, Any
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 from sklearn.ensemble import RandomForestRegressor
+
 from .._result_serialize import ResultProtocolMixin
 
 
