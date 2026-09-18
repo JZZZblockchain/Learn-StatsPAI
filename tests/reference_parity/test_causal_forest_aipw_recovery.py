@@ -4,9 +4,10 @@ No R, no fixtures: builds a clean-overlap deterministic DGP with an
 analytically known average treatment effect and asserts that
 ``sp.causal_forest.average_treatment_effect`` (the doubly-robust AIPW
 estimand grf reports) recovers the truth within 4 standard errors.  It
-also asserts that the **plug-in** mean of the CATE predictions
-(``cf.ate()``) is materially more biased than the AIPW estimate, which
-is the whole reason the headline aggregation was switched to AIPW.
+also asserts that the **plug-in** mean of the CATE predictions is
+materially more biased than the AIPW estimate, which is the whole reason
+the headline aggregation is AIPW --- and, since 1.29, the reason
+``cf.ate()`` returns the AIPW estimate rather than the plug-in one.
 
 This is the Tier-1 (no external language required) evidence behind the
 module-13 causal-forest parity row; the cross-language agreement with
@@ -129,10 +130,18 @@ def test_plugin_is_more_biased_than_aipw(fitted):
 
     This is the quantitative justification for using AIPW as the headline
     aggregation: on a clean-overlap DGP the plug-in mean overshoots.
+
+    Until 1.29 this test read the plug-in average off ``cf.ate()``, which
+    is what made the defect visible: the accessor was returning the
+    aggregation this test calls the more biased one, while attaching the
+    other one's standard error.  The plug-in average is now read from
+    ``detail``, where it belongs.
     """
     cf, true_ate, _ = fitted
-    plug_in = cf.ate()
+    effect = cf.ate()
+    plug_in = effect.detail["plug_in_estimate"]
     aipw = cf.average_treatment_effect(target_sample="all")["estimate"]
+    assert float(effect) == pytest.approx(aipw, rel=0, abs=0)
     assert abs(plug_in - true_ate) > abs(aipw - true_ate), (
         f"plug-in |bias|={abs(plug_in - true_ate):.4f} should exceed AIPW "
         f"|bias|={abs(aipw - true_ate):.4f} (plug-in={plug_in:.4f}, "

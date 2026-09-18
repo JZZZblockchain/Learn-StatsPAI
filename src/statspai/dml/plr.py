@@ -59,10 +59,16 @@ class DoubleMLPLR(_DoubleMLBase):
     _ML_M_TARGET_BINARY = False  # PLR is agnostic to D type
     _SUPPORTS_SAMPLE_WEIGHT = True
     # DoubleML-compatible score variants. 'partialling out' (default)
-    # reproduces the historical StatsPAI estimator bit-for-bit; 'IV-type'
-    # swaps the moment denominator from Σ v̂² to Σ v̂·D (Chernozhukov
-    # et al. 2018; DoubleML PLR). Both use ĝ = E[Y|X] as the outcome
-    # nuisance, so no extra learner is required.
+    # reproduces the historical StatsPAI estimator bit-for-bit. 'IV-type'
+    # is the score of Chernozhukov et al. (2018, eq. 4.4) as DoubleML
+    # implements it: psi = (Y - D*theta - g(X)) * (D - m(X)) with a THIRD
+    # nuisance g(X) = E[Y - theta~ D | X], where theta~ is the preliminary
+    # partialling-out estimate on the same partition and g is cross-fitted
+    # with a clone of the outcome learner on the adjusted outcome
+    # Y - theta~ D. Before 1.29.0 the option substituted l(X) = E[Y|X] for
+    # g(X) while keeping the IV-type denominator Sum v*D; that variant is
+    # unbiased at the truth but not Neyman-orthogonal in m, and it agreed
+    # with neither DoubleML port (0.40 s.e. off on the ML4CI benchmark).
     _VALID_SCORES = {"partialling out", "IV-type"}
     _DEFAULT_SCORE = "partialling out"
 
@@ -90,9 +96,17 @@ class DoubleMLPLR(_DoubleMLBase):
             d_resid[test_idx] = D[test_idx] - ml_m.predict(X[test_idx])
 
         if self.score == "IV-type":
-            # DoubleML IV-type PLR score: same numerator Σ v̂·û but the
-            # moment denominator is Σ v̂·D instead of Σ v̂². ĝ = E[Y|X] is
-            # the same outcome nuisance as partialling-out (here y_resid).
+            # DoubleML IV-type PLR score (Chernozhukov et al. 2018, eq. 4.4;
+            # doubleml.plm.DoubleMLPLR._nuisance_est). Three nuisances:
+            # l(X) = E[Y|X] and m(X) = E[D|X] give the preliminary
+            # partialling-out estimate theta~; g(X) = E[Y - theta~ D | X] is
+            # then cross-fitted on the SAME splits and enters the score as
+            #     psi_a = -(D - m) * D,   psi_b = (D - m) * (Y - g).
+            # With a linear smoother for all three nuisances this coincides
+            # exactly with partialling out (the identity is proved and
+            # verified in the ML4CI companion paper); with a regularised or
+            # nonlinear learner it is a distinct, Neyman-orthogonal
+            # estimator.
             if sample_weight is not None:
                 from statspai.exceptions import MethodIncompatibility
 
@@ -100,8 +114,22 @@ class DoubleMLPLR(_DoubleMLBase):
                     "dml.plr: score='IV-type' does not support sample_weight; "
                     "use score='partialling out' (the default) for weighted PLR."
                 )
+            denom0 = float(np.sum(d_resid * d_resid))
+            if denom0 < 1e-12:
+                raise RuntimeError(  # pragma: no cover
+                    "PLR IV-type preliminary denominator ≈ 0; check covariate "
+                    "informativeness."
+                )
+            theta_initial = float(np.sum(d_resid * y_resid) / denom0)
+            y_adj = Y - theta_initial * D
+            g_hat = np.zeros(n, dtype=float)
+            for train_idx, test_idx in splits:
+                ml_g2 = self._fit_weighted(
+                    self.ml_g, X[train_idx], y_adj[train_idx], None
+                )
+                g_hat[test_idx] = ml_g2.predict(X[test_idx])
             psi_a = -d_resid * D
-            psi_b = d_resid * y_resid
+            psi_b = d_resid * (Y - g_hat)
             mean_a = float(np.mean(psi_a))
             if abs(mean_a) < 1e-12:
                 raise RuntimeError(  # pragma: no cover

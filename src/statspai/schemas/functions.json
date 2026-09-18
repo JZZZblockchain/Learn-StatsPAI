@@ -1326,9 +1326,9 @@
           "description": "'y ~ treatment | x1 + x2' (pipe separates covariates)",
           "type": "string"
         },
-        "n_trees": {
+        "n_estimators": {
           "default": 100,
-          "description": "Number of trees.",
+          "description": "Number of trees (``n_trees`` is accepted as an alias).",
           "type": "integer"
         }
       },

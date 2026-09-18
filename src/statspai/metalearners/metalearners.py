@@ -861,6 +861,22 @@ def metalearner(
     coverage. ⚠️ This is a correctness fix; numerical results will
     change for non-DR learners.
 
+    **What ``se`` does and does not describe.** A consequence of the
+    convention above is that ``result.estimate`` and ``result.se`` are
+    numerically *identical* across ``learner='s'``, ``'t'``, ``'x'`` and
+    ``'dr'`` when the same outcome and propensity models are supplied:
+    they describe the AIPW average, not the chosen learner. The
+    learner-specific quantity is the fitted effect function
+    ``result.model_info['cate']`` and its mean
+    ``result.model_info['cate_mean']``, for which **no standard error is
+    provided** (``model_info['cate_mean_se'] is None``). Pairing
+    ``cate_mean`` with ``se`` produces an interval for the wrong
+    functional; the learner-controlled Monte Carlo in the ML4CI companion
+    paper shows the resulting coverage number measures the mismatch
+    rather than the estimator. To compare learners at the average,
+    compare ``cate_mean`` across calls and bootstrap the whole procedure
+    for its uncertainty.
+
     References
     ----------
     Künzel, S. R., Sekhon, J. S., Bickel, P. J. and Yu, B. (2019).
@@ -1043,6 +1059,13 @@ def metalearner(
         # guide.
         "se_method": "aipw_influence_function",
         "ate_method": "aipw_dr_pseudo_outcome",
+        # ``estimate`` / ``se`` describe the AIPW average and are invariant
+        # to ``learner=``; ``cate_mean`` is the learner-specific average of
+        # the fitted effect function and ships no standard error.  Stated
+        # here so a caller (or an agent reading the result) cannot pair the
+        # two by accident.
+        "se_refers_to": "estimate (AIPW average), not cate_mean",
+        "cate_mean_se": None,
         "covariates": covariates,
         "_estimator": est,
         "cate": cate,

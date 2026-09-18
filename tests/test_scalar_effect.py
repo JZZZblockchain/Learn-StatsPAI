@@ -50,12 +50,26 @@ class TestScalarEffectClass:
 
 
 class TestForestATE:
-    def test_value_is_plugin_mean_cate(self):
+    def test_value_is_the_doubly_robust_estimate_its_interval_describes(self):
         cf, X, _ = _fit_forest()
         a = cf.ate(X)
-        # Backward compatibility: float value must equal the historical
-        # plug-in mean CATE, bit for bit.
-        assert float(a) == float(cf.effect(X).mean())
+        # Before 1.29 the float value was the plug-in mean CATE while the
+        # SE, CI and p came from the AIPW score, so the printed interval
+        # was not centred on the number beside it.  The float is now the
+        # quantity the inference belongs to.
+        assert float(a) == pytest.approx(a.detail["estimate"], rel=0, abs=0)
+        lo, hi = a.ci
+        assert lo <= float(a) <= hi
+        assert (lo + hi) / 2 == pytest.approx(float(a), rel=1e-12)
+
+    def test_plug_in_average_is_kept_in_detail(self):
+        cf, X, _ = _fit_forest()
+        a = cf.ate(X)
+        plug_in = float(cf.effect(X).mean())
+        assert a.detail["plug_in_estimate"] == pytest.approx(plug_in, rel=0, abs=0)
+        assert a.detail["plug_in_minus_aipw"] == pytest.approx(
+            plug_in - a.detail["estimate"], rel=1e-12
+        )
 
     def test_inference_attached(self):
         cf, X, _ = _fit_forest()
@@ -71,7 +85,12 @@ class TestForestATE:
         t = cf.att(X, T)
         assert isinstance(t, sp.ScalarEffect)
         assert t.estimand == "ATT"
-        assert float(t) == pytest.approx(float(cf.effect(X)[np.asarray(T) == 1].mean()))
+        # The float is the doubly-robust ATT score; the plug-in mean over
+        # the treated rows is kept alongside it.
+        assert float(t) == pytest.approx(t.detail["estimate"], rel=0, abs=0)
+        assert t.detail["plug_in_estimate"] == pytest.approx(
+            float(cf.effect(X)[np.asarray(T) == 1].mean()), rel=0, abs=0
+        )
         assert t.se is not None
 
     def test_att_no_treated_raises(self):

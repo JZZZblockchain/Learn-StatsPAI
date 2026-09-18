@@ -19,16 +19,17 @@ Treatment and Structural Parameters." *Econometrics Journal*, 21(1), C1-C68.
 [@chernozhukov2018double]
 """
 
-from typing import Optional, List, Any, Union
+from typing import Any, List, Optional, Union
+
 import pandas as pd
 
 from ..core.results import CausalResult
 from ..exceptions import MethodIncompatibility
 from ._base import _DoubleMLBase
-from .plr import DoubleMLPLR
+from .iivm import DoubleMLIIVM
 from .irm import DoubleMLIRM
 from .pliv import DoubleMLPLIV
-from .iivm import DoubleMLIIVM
+from .plr import DoubleMLPLR
 
 _MODEL_REGISTRY = {
     "plr": DoubleMLPLR,
@@ -116,7 +117,17 @@ def dml(
     score : str, optional
         Orthogonal score variant (DoubleML-compatible). Model-specific:
 
-        - ``model='plr'`` : ``'partialling out'`` (default) or ``'IV-type'``
+        - ``model='plr'`` : ``'partialling out'`` (default) or ``'IV-type'``.
+          The IV-type score fits a third nuisance
+          ``g(X) = E[Y - theta~ D | X]`` (cross-fitted on the same
+          partition with a clone of ``ml_g``, ``theta~`` the preliminary
+          partialling-out estimate) and solves
+          ``E[(Y - D theta - g(X))(D - m(X))] = 0``, exactly as both
+          DoubleML ports do. With linear nuisance learners it coincides
+          with partialling out to machine precision; with regularised or
+          nonlinear learners it is a distinct estimator. Versions before
+          1.29.0 used ``l(X) = E[Y|X]`` in place of ``g(X)`` and did not
+          reproduce DoubleML (see MIGRATION.md).
         - ``model='irm'`` : ``'ATE'`` (default) or ``'ATTE'`` (effect on
           the treated)
 

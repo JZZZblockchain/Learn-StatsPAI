@@ -5,6 +5,85 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="forest-scalar-effect-doubly-robust"></a>
+
+## Unreleased — ⚠️ `CausalForest.ate()` / `.att()` return the doubly-robust estimate, not the plug-in average
+
+**Who is affected.** Anyone who takes the *float value* of
+`sp.causal_forest(...).ate()` or `.att()` — that is, `float(effect)`,
+`f"{effect:.3f}"`, arithmetic on it, or its `to_dict()["estimate"]`.
+`average_treatment_effect()` is unchanged, and so is any code that already
+read `detail["estimate"]`.
+
+**What changed.** The float was the plug-in average of the fitted CATE
+predictions, while `.se`, `.ci` and `.pvalue` came from the doubly-robust
+(AIPW) score, whose point estimate is a different number. The printed
+interval was therefore not centred on the value printed beside it. On a
+misspecified binary design (n = 1,500, 500 trees) the gap is 0.049 for the
+ATE and 0.120 for the ATT against a standard error of 0.081; it grows where
+the fitted propensity approaches its bounds, which is exactly where a
+practitioner most needs the two to agree.
+
+The float is now the doubly-robust estimate — the quantity its own interval
+covers, and what `grf::average_treatment_effect` returns. Nothing else moves:
+
+```python
+e = cf.ate()
+float(e)                          # doubly-robust estimate (was: plug-in mean CATE)
+e.detail["estimate"]              # same number, unchanged
+e.detail["plug_in_estimate"]      # the old float value
+e.detail["plug_in_minus_aipw"]    # their difference, as a diagnostic
+cf.average_treatment_effect()     # unchanged
+```
+
+**To keep the old number**, read `e.detail["plug_in_estimate"]`, or take the
+mean of `cf.effect(X)` directly. Note that the old float does not have a
+valid standard error attached to it: the dispersion of fitted effects is not
+an influence-function variance for their mean.
+
+**Continuous treatments are unaffected**: there the aggregation already
+falls back to the plug-in average (see the 1.25.0 entry below), the method
+is reported as `plug_in`, and the float stays the plug-in value.
+
+---
+
+<a id="dml-plr-ivtype"></a>
+
+## Unreleased — ⚠️ `sp.dml(model="plr", score="IV-type")` now matches DoubleML
+
+**Who is affected.** Callers of `sp.dml(..., model="plr", score="IV-type")`
+(and `sp.DoubleMLPLR(..., score="IV-type")`). The default score,
+`"partialling out"`, is untouched and reproduces earlier output bit for bit.
+
+**What changed.** The IV-type score of Chernozhukov et al. (2018) uses a third
+nuisance `g(X) = E[Y − θ̃D | X]`, fitted on the outcome adjusted by a
+preliminary partialling-out estimate `θ̃`. StatsPAI had substituted
+`l(X) = E[Y|X]` for it while keeping the IV-type denominator `Σ v̂·D`. The
+substitute is unbiased at the truth but not Neyman-orthogonal in the
+propensity nuisance, so first-stage regularisation error entered the estimate
+at first order, and it agreed with neither DoubleML port (0.40 s.e. off on a
+fold-controlled benchmark). The option now fits `g` — cross-fitted on the same
+partition with a clone of `ml_g` — and evaluates
+`ψ = (Y − Dθ − ĝ)(D − m̂)`.
+
+**How much numbers move.** With linear nuisance learners the corrected
+IV-type estimate equals the partialling-out estimate exactly, so anything
+previously reported under `score="IV-type"` with OLS first stages moves to the
+partialling-out number (for the benchmark above, from 1.0232 to 1.0094). With
+regularised or nonlinear learners the corrected estimator is distinct from
+partialling out and from the old variant; expect movement of the order of the
+first-stage regularisation bias. Standard errors change with the score.
+
+**Reproducing the old numbers.** Not supported: the old moment was not a
+documented estimator. Compute
+`Σ v̂ û / Σ v̂ D` by hand from `result.model_info` residuals if an exact
+replication of a past table is required.
+
+**Cost.** One additional cross-fitted regression per fold (the third
+nuisance), so an IV-type fit takes roughly 1.5 times as long as before.
+
+---
+
 <a id="stata-vce-grammar"></a>
 
 ## Unreleased — ⚠️ Standard errors, p-values, `test` / `lincom` and `margins` follow Stata

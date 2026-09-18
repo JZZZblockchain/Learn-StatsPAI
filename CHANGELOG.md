@@ -62,6 +62,21 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Changed
 
+- **`sp.metalearner` states what its standard error refers to.**
+  `result.estimate` / `result.se` are the AIPW average and are numerically
+  identical across `learner='s'|'t'|'x'|'dr'`; the learner-specific
+  quantity is `model_info['cate_mean']`, which ships no standard error.
+  The docstring now says so explicitly and `model_info` carries
+  `se_refers_to` and `cate_mean_se = None`, so a caller cannot pair the
+  two by accident. No numerical change.
+- **Neural estimators (`sp.tarnet`, `sp.dragonnet`, `sp.cfrnet`) flag their
+  standard error.** `se` is the bootstrap dispersion of the mean of the
+  fitted individual effects with the network held fixed
+  (`se_method = 'unit_bootstrap_cate_plugin'`), which ignores estimation
+  uncertainty in the network; the ML4CI Monte Carlo finds it at 0.3–0.9 of
+  the sampling dispersion. `model_info` now carries
+  `se_valid_for_ate = False` and an `se_note`. No numerical change.
+
 - Printed summaries: coefficient tables label the statistic `z` / `P>|z|`
   for likelihood-based fits (the p-values already used the normal);
   diagnostics print counts as integers (`N instruments : 1`, not `1.0000`);
@@ -85,6 +100,16 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Fixed
 
+- **`sp.causal_forest` accepted a keyword its registry entry did not name
+  and rejected the one it did.** The registry advertised `n_trees` while
+  the callable only took `n_estimators`, so a caller following
+  `sp.describe_function("causal_forest")` got a `TypeError`. The registry
+  now names `n_estimators` and the function accepts `n_trees` as an alias
+  (through `@accepts_aliases`, so passing both raises `TypeError` and
+  the alias is listed by `sp.describe_function`). Found by the ML4CI
+  agent-surface audit; it was the only hard schema-versus-signature
+  failure among 252 audited callables.
+
 - **`sp.from_stata` post-estimation translations run.** `margins, dydx(x)`
   emitted `dydx=`, `test x1 x2` emitted `terms=`, and `contrast x` emitted
   `terms=` — keywords `sp.margins`, `sp.test` and `sp.contrast` do not take,
@@ -107,6 +132,51 @@ All notable changes to StatsPAI will be documented in this file.
   at-a-glance LOC figures regenerated from `scripts/registry_stats.py`.
 
 ### ⚠️ Correctness
+
+- **`sp.dml(model="plr", score="IV-type")` now computes DoubleML's IV-type
+  score.** The option fits the third nuisance `g(X) = E[Y − θ̃D | X]`
+  (cross-fitted on the same partition with a clone of `ml_g`, `θ̃` the
+  preliminary partialling-out estimate) and solves
+  `E[(Y − Dθ − g(X))(D − m(X))] = 0`, as `doubleml.DoubleMLPLR` does in both
+  its ports. Since the option was introduced it had substituted
+  `l(X) = E[Y|X]` for `g(X)` while keeping the IV-type denominator `Σ v̂·D`.
+  That variant is unbiased at the truth but is **not Neyman-orthogonal in
+  the propensity nuisance** — the Gateaux derivative of its moment in the
+  direction of `m̂` is `θ₀·E[m₀(X)δ(X)]`, so regularisation error in `m̂`
+  entered the estimate at first order — and it reproduced neither DoubleML
+  port: on the ML4CI benchmark (n = 2,000, p = 20, five shared folds, OLS
+  learners) it returned 1.0232 where both ports return 1.0094, a gap of
+  0.40 standard errors that the unpinned parity test's 0.05 tolerance
+  could not see. With linear nuisance learners the corrected option
+  coincides with partialling out to machine precision (the ML4CI companion
+  paper's Proposition 1); with regularised learners it is a distinct
+  estimator, and its standard error changes accordingly.
+  `tests/test_dml_ivtype_reference.py` pins it to DoubleML-for-Python on a
+  shared fold vector to 1e-10 (linear) and 1e-8 (lasso). Found by the
+  fold-controlled reconciliation in the ML4CI companion paper. See
+  MIGRATION.md.
+
+- **`sp.causal_forest(...).ate()` and `.att()` now return the doubly-robust
+  estimate their own standard error describes.** The float value was the
+  plug-in average of the fitted CATE predictions while `.se`, `.ci` and
+  `.pvalue` came from the GRF-style AIPW score, whose point estimate is a
+  different number: on a misspecified binary design (n = 1,500, 500 trees)
+  the two differ by 0.049 for the ATE and 0.120 for the ATT against a
+  standard error of 0.081, so the printed interval was not centred on the
+  number beside it and a caller who compared the point estimate with a
+  benchmark was not comparing the quantity the interval covered. The float
+  is now the doubly-robust estimate — what `grf::average_treatment_effect`
+  returns — and the plug-in average is kept in
+  `detail["plug_in_estimate"]`, with the difference in
+  `detail["plug_in_minus_aipw"]` as a diagnostic (it grows where the
+  fitted propensity approaches its bounds). A continuous treatment, where
+  the score cannot be formed and the aggregation falls back to the plug-in
+  average, is unaffected. The package's own reference-parity test
+  `test_causal_forest_aipw_recovery.py::test_plugin_is_more_biased_than_aipw`
+  asserted that the plug-in average is the more biased aggregation while
+  reading it off `cf.ate()`, which is what made the defect visible. Found
+  while tracing the causal forest's miss on the LaLonde benchmark in the
+  ML4CI companion paper. See MIGRATION.md.
 
 - **ML robust / cluster standard errors now follow Stata.** `vce="robust"`
   on likelihood-based estimators omitted Stata's N/(N-1) factor (SEs

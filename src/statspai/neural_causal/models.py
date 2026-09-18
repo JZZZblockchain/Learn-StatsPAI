@@ -630,6 +630,21 @@ def _basic_neural_info(
         "loss_history": history,
         "training_history": _history_frame(history),
         "se_method": "unit_bootstrap_cate_plugin",
+        # The reported ``se`` is the bootstrap standard deviation of the
+        # mean of the *fitted* individual effects, holding the trained
+        # network fixed.  It ignores estimation uncertainty in the network
+        # itself and is not a standard error for the average treatment
+        # effect; a learner-controlled Monte Carlo (the ML4CI companion
+        # paper) finds it at 0.3-0.9 of the sampling dispersion.  A valid
+        # interval needs a bootstrap that refits the network on each
+        # resample.  Flagged here so downstream consumers can tell.
+        "se_valid_for_ate": False,
+        "se_note": (
+            "se is a plug-in dispersion of the fitted individual effects "
+            "(network held fixed), not an influence-function or refit-"
+            "bootstrap standard error for the ATE; treat the interval as "
+            "descriptive."
+        ),
         "mu0": mu0,
         "mu1": mu1,
         "cate": cate,
@@ -1897,7 +1912,14 @@ def _bootstrap_ate_se(
     n_bootstrap: int,
     random_state: int,
 ) -> float:
-    """Bootstrap standard error of ATE from individual CATE values."""
+    """Bootstrap standard deviation of the mean of the fitted CATE values.
+
+    This resamples the *fitted* individual effects with the network held
+    fixed, so it captures the dispersion of the effect function across
+    units and nothing about the sampling variability of the network. It
+    is reported as ``se`` for backward compatibility and flagged in
+    ``model_info['se_valid_for_ate'] = False``; see ``_basic_neural_info``.
+    """
     rng = np.random.RandomState(random_state)
     n = len(cate)
     boot_means = np.array(

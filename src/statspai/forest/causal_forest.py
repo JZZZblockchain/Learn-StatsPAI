@@ -30,6 +30,7 @@ from sklearn.model_selection import cross_val_predict
 from sklearn.tree import DecisionTreeRegressor
 
 # Import our core classes
+from .._aliases import accepts_aliases
 from ..core.base import BaseModel
 from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
 
@@ -1276,13 +1277,22 @@ class CausalForest(BaseModel):
         X: Optional[np.ndarray],
         T: Optional[np.ndarray] = None,
     ) -> "ScalarEffect":
-        """Wrap a plug-in scalar effect with AIPW inference.
+        """Return the doubly-robust scalar effect with its own inference.
 
-        The float value is the historical plug-in aggregation of CATE
-        predictions (unchanged); SE / CI / p come from the GRF-style
-        doubly-robust score in :func:`average_treatment_effect`.  When
-        the score cannot be formed the value is returned with the
-        failure reason attached instead of silently dropping inference.
+        ``value`` is the plug-in aggregation of the CATE predictions.  It
+        is *not* the quantity the standard error describes: the SE, CI and
+        p-value come from the GRF-style doubly-robust score in
+        :func:`average_treatment_effect`, whose point estimate is the AIPW
+        mean.  Until 1.29 the float value was the plug-in one, so the
+        printed interval was not centred on the number beside it and the
+        two could differ by more than a standard error under thin overlap.
+        The float is now the doubly-robust estimate --- the quantity the
+        interval belongs to, and the one ``grf::average_treatment_effect``
+        returns --- with the plug-in average kept in
+        ``detail['plug_in_estimate']``.
+
+        When the score cannot be formed the plug-in value is returned with
+        the failure reason attached instead of silently dropping inference.
         """
         from ..core.results import ScalarEffect
 
@@ -1290,8 +1300,20 @@ class CausalForest(BaseModel):
             detail = self.average_treatment_effect(
                 X=X, T=T, target_sample=target_sample
             )
+            detail = dict(detail)
+            detail["plug_in_estimate"] = float(value)
+            # The plug-in average and the doubly-robust estimate answer the
+            # same question by different arithmetic; a large gap is a
+            # diagnostic (it grows where the fitted propensity approaches
+            # its bounds), so it is recorded rather than hidden.
+            detail["plug_in_minus_aipw"] = float(value) - float(detail["estimate"])
+            point = (
+                float(detail["estimate"])
+                if detail.get("method") != "plug_in"
+                else float(value)
+            )
             return ScalarEffect(
-                value,
+                point,
                 estimand=estimand,
                 se=detail.get("se"),
                 ci=(detail["ci_low"], detail["ci_high"]),
@@ -1323,12 +1345,17 @@ class CausalForest(BaseModel):
         """Average Treatment Effect.
 
         Returns a :class:`~statspai.core.results.ScalarEffect` — a
-        ``float`` whose value is the plug-in mean CATE (identical to
-        the historical return) and which additionally carries the
-        GRF-style doubly-robust (AIPW) inference: ``.se``, ``.ci``,
-        ``.pvalue``, and the full aggregation payload in ``.detail``.
-        Printing the result shows the inference; arithmetic and
-        formatting behave exactly like the bare float did.
+        ``float`` whose value is the GRF-style doubly-robust (AIPW)
+        average, the quantity ``.se``, ``.ci`` and ``.pvalue`` describe,
+        with the full aggregation payload in ``.detail`` and the plug-in
+        mean CATE in ``.detail['plug_in_estimate']``.  Printing the
+        result shows the inference; arithmetic and formatting behave
+        exactly like a bare float.
+
+        .. versionchanged:: 1.29.0
+           The float value was the plug-in mean CATE before 1.29; it is
+           now the doubly-robust estimate, so the point estimate and its
+           interval refer to the same quantity.  See ``MIGRATION.md``.
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -1343,10 +1370,15 @@ class CausalForest(BaseModel):
     ) -> "ScalarEffect":
         """Average Treatment Effect on the Treated.
 
-        Returns a :class:`~statspai.core.results.ScalarEffect` — the
-        historical plug-in mean CATE over treated rows as the float
-        value, with GRF-style doubly-robust (ATT-score) inference
-        attached as ``.se`` / ``.ci`` / ``.pvalue`` / ``.detail``.
+        Returns a :class:`~statspai.core.results.ScalarEffect` whose float
+        value is the GRF-style doubly-robust ATT score, with its own
+        inference attached as ``.se`` / ``.ci`` / ``.pvalue`` /
+        ``.detail`` and the plug-in mean CATE over treated rows in
+        ``.detail['plug_in_estimate']``.
+
+        .. versionchanged:: 1.29.0
+           The float value was the plug-in average before 1.29.  See
+           ``MIGRATION.md``.
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -1394,6 +1426,11 @@ class CausalForest(BaseModel):
         return self._scalar_effect(value, "ATT", "treated", X, T=T_arr)
 
 
+# ``n_trees`` is the name grf's documentation uses for the tree count; the
+# ML4CI agent-surface audit found it the one documented keyword the callable
+# rejected.  Passing both spellings is a TypeError, as for any duplicate
+# argument.
+@accepts_aliases(_strict=True, _warn=False, n_trees="n_estimators")
 def causal_forest(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
