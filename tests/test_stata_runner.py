@@ -67,6 +67,17 @@ class TestStataRunner:
         got = _quiet(sp.stata, "logit yb x1 x2\nmargins, dydx(*)", data=df)
         pd.testing.assert_frame_equal(got, _quiet(sp.margins, fit, data=df))
 
+    def test_chained_postestimation_does_not_warn_about_piping(self, df):
+        # The "pipe the previous result_id" notes are for sp.from_stata
+        # callers; sp.stata pipes the result itself, so they are noise here.
+        script = (
+            "logit yb x1 x2, vce(cluster firm)\n"
+            "margins, dydx(x1)\ntest x1 = x2\nlincom x1 + x2"
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            sp.stata(script, data=df)
+
     def test_result_argument_for_postestimation_only_script(self, df):
         fit = _quiet(sp.regress, "y ~ x1 + x2", data=df)
         assert sp.stata("lincom x1 - x2", result=fit) == sp.lincom(fit, "x1 - x2")

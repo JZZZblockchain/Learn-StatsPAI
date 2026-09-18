@@ -96,11 +96,25 @@ def margins(
         frame = frame.copy()
         for name, value in at.items():
             frame[name] = value
+    base_vars = _term_variables(params.index)
+    present = [v for v in base_vars if v in frame.columns]
+    incomplete = frame[present].isna().any(axis=1) if present else None
+    if incomplete is not None and bool(incomplete.any()):
+        raise MethodIncompatibility(
+            f"margins: {int(incomplete.sum())} row(s) of data have missing "
+            f"values in model variables {present}; marginal effects averaged "
+            "over them are undefined.",
+            recovery_hint=(
+                "Omit data= to average over the fitted model's own estimation "
+                "sample (Stata's e(sample)), or pass data restricted to "
+                "complete rows."
+            ),
+            diagnostics={"n_incomplete": int(incomplete.sum())},
+        )
     if method == "mem":
         # Stata ``atmeans``: every component at its sample mean.
         frame = frame.mean(numeric_only=True).to_frame().T
 
-    base_vars = _term_variables(params.index)
     if variables is None:
         variables = [v for v in base_vars if not _is_factor_variable(v, params.index)]
     else:

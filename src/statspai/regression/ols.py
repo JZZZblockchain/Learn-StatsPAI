@@ -10,6 +10,7 @@ import pandas as pd
 from scipy import stats
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.base import BaseEstimator, BaseModel
 from ..core.results import EconometricResults
 from ..core.utils import _coerce_string_extension_dtypes, create_design_matrices
@@ -1135,6 +1136,7 @@ class OLSRegression(BaseModel):
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def regress(
     formula: str,
     data: pd.DataFrame,

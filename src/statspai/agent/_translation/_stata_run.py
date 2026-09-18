@@ -22,6 +22,7 @@ from ...exceptions import MethodIncompatibility
 __all__ = ["stata"]
 
 _PLACEHOLDER = re.compile(r"<[A-Za-z_][A-Za-z0-9_ ]*>")
+_PIPE_NOTE = re.compile(r"\bpipe\b")
 
 
 def _accepts(fn: Any, name: str) -> bool:
@@ -29,6 +30,31 @@ def _accepts(fn: Any, name: str) -> bool:
         return name in inspect.signature(fn).parameters
     except (TypeError, ValueError):  # pragma: no cover - builtins
         return False
+
+
+def _uses_estimation_sample(fn: Any, result: Any) -> bool:
+    """True when ``fn`` can run on ``result`` alone, averaging over the
+    fitted model's own estimation sample as Stata's post-estimation
+    commands do over ``e(sample)``.  Passing the raw data instead would
+    bring back rows the fit dropped (missing values, markout)."""
+    try:
+        param = inspect.signature(fn).parameters["data"]
+    except (KeyError, TypeError, ValueError):
+        return False
+    if param.default is inspect.Parameter.empty:
+        return False
+    info = getattr(result, "data_info", None) or {}
+    X, names = info.get("X"), info.get("var_names")
+    params = getattr(result, "params", None)
+    if X is None or names is None or params is None:
+        return False
+    names = list(names)
+    return (
+        getattr(X, "ndim", 0) == 2
+        and X.shape[1] == len(names)
+        and names == [str(p) for p in params.index]
+        and not any("[" in n or ":" in n for n in names)
+    )
 
 
 def _command_lines(commands: str) -> List[str]:
@@ -125,14 +151,21 @@ def stata(
                 recovery_hint=f"Run it directly: {out.get('python_code')}",
                 diagnostics={"command": line, "translation": out},
             )
+        code = str(out.get("python_code") or "")
+        chained = out["tool"] == "marginsplot" or code.startswith(
+            f"sp.{out['tool']}(result"
+        )
         for note in notes:
+            # "pipe the previous result" is advice for callers of
+            # sp.from_stata; this runner does the piping itself.
+            if chained and _PIPE_NOTE.search(note):
+                continue
             warnings.warn(f"sp.stata: {note}", UserWarning, stacklevel=2)
 
         fn: Any = sp
         for part in str(out["tool"]).split("."):
             fn = getattr(fn, part)
         arguments = dict(out.get("arguments") or {})
-        code = str(out.get("python_code") or "")
         if out["tool"] == "marginsplot":
             if not isinstance(output, pd.DataFrame):
                 raise TypeError(
@@ -140,13 +173,17 @@ def stata(
                     "`margins` command in the same call."
                 )
             output = fn(output)
-        elif code.startswith(f"sp.{out['tool']}(result"):
+        elif chained:
             if last is None:
                 raise TypeError(
                     f"sp.stata: {line!r} is a post-estimation command; run an "
                     "estimation command first or pass result=."
                 )
-            if _accepts(fn, "data") and "data" not in arguments:
+            if (
+                _accepts(fn, "data")
+                and "data" not in arguments
+                and not _uses_estimation_sample(fn, last)
+            ):
                 if data is None and "data=df" in code:
                     raise TypeError(f"sp.stata: {line!r} needs data=<DataFrame>.")
                 if data is not None:

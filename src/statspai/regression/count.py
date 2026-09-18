@@ -20,6 +20,7 @@ import pandas as pd
 from scipy import optimize, special, stats
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
 from ..exceptions import DataInsufficient, MethodIncompatibility, NumericalInstability
@@ -954,6 +955,7 @@ def _overdispersion_test(y: np.ndarray, mu: np.ndarray) -> Tuple[float, float]:
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def poisson(
     formula: Optional[str] = None,
     data: pd.DataFrame = None,
@@ -1179,6 +1181,7 @@ def poisson(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def nbreg(
     formula: Optional[str] = None,
     data: pd.DataFrame = None,
@@ -2075,6 +2078,7 @@ def _ppmlhdfe_conley(
     return base
 
 
+@markout_clusters
 def ppmlhdfe(
     formula: Optional[str] = None,
     data: pd.DataFrame = None,

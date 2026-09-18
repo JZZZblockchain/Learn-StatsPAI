@@ -18,6 +18,7 @@ import json
 import re
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 import statspai as sp
@@ -114,7 +115,15 @@ def outputs(card):
         covariates=CARD_CONTROLS,
         engines=["statspai", "linearmodels"],
     )
+    hiv = sp.datasets.thornton_hiv(complete_case=True)
+    logit = sp.logit(
+        "got ~ any + distvct + male + age", data=hiv, vce="cluster villnum"
+    )
+    ame = sp.margins(logit, variables=["any"])
     return {
+        "hiv": hiv,
+        "logit": logit,
+        "ame": ame,
         "ols": ols,
         "iv": iv,
         "ar": ar,
@@ -132,6 +141,7 @@ SUMMARY_BLOCKS = [
     ("overall", "aggte[simple]"),
     ("rd", "Sharp RD Estimation"),
     ("sc", "Synthetic Control Method"),
+    ("logit", "Model: Logit"),
 ]
 
 
@@ -193,3 +203,54 @@ def test_readme_lalonde_export_narrative():
     )
     assert round(naive.params["treat"]) == -635
     assert round(full.params["treat"]) == 1548
+
+
+@pytest.mark.parametrize("readme", READMES, ids=lambda p: p.name)
+def test_readme_margins_block_matches_live_output(readme, outputs):
+    _assert_lines_in_order(
+        _block(readme, "dy/dx"), str(outputs["ame"].round(4)), readme.name
+    )
+
+
+def test_readme_logit_example_matches_stata(outputs):
+    # Stata 18 MP on the same 2,825 rows (119 villages):
+    #   logit got any distvct male age, vce(cluster villnum)
+    #   margins, dydx(any) / test distvct / lincom any + male
+    fit, ame = outputs["logit"], outputs["ame"]
+    # Stata drops the rows with a missing cluster id / age itself.
+    assert int(fit.data_info["nobs"]) == 2825
+    assert fit.model_info["n_clusters"] == 119
+    assert fit.model_info["n_missing_cluster_dropped"] == 4
+    assert fit.params["any"] == pytest.approx(2.01780052, abs=5e-8)
+    assert fit.std_errors["any"] == pytest.approx(0.09938486, abs=5e-8)
+    assert fit.std_errors["distvct"] == pytest.approx(0.04077092, abs=5e-8)
+    (row,) = ame.itertuples(index=False)
+    assert row[1] == pytest.approx(0.3558466, abs=5e-7)
+    assert row[2] == pytest.approx(0.0144976, abs=5e-7)
+    assert fit.test("distvct = 0")["statistic"] == pytest.approx(17.31381895, rel=1e-6)
+    lc = fit.lincom("any + male")
+    assert lc["estimate"] == pytest.approx(1.96477656, abs=5e-8)
+    assert lc["se"] == pytest.approx(0.14120214, abs=5e-8)
+
+
+def test_readme_stata_runner_reproduces_margins(outputs):
+    ame = sp.stata(
+        "logit got any distvct male age, vce(cluster villnum)\n" "margins, dydx(any)",
+        data=outputs["hiv"],
+    )
+    pd.testing.assert_frame_equal(ame, outputs["ame"])
+
+
+def test_readme_house_style_aliases_are_the_same_call():
+    mp = sp.datasets.mpdta()
+    native = sp.callaway_santanna(
+        data=mp, y="lemp", t="year", i="countyreal", g="first_treat"
+    )
+    alias = sp.callaway_santanna(
+        data=mp, y="lemp", time="year", id="countyreal", first_treat="first_treat"
+    )
+    a = sp.aggte(native, type="simple", bstrap=False)
+    b = sp.aggte(alias, type="simple", bstrap=False)
+    assert (a.estimate, a.se) == (b.estimate, b.se)
+    with pytest.raises(TypeError, match="did you mean 'running'"):
+        sp.rdrobust(data=sp.datasets.lee_2008_senate(), y="y", runing="x", cutoff=0)

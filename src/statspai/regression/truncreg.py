@@ -20,6 +20,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 from ._optim_helpers import robust_convergence
 
@@ -29,6 +30,7 @@ def _as_float_array(value: Any) -> np.ndarray:
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def truncreg(
     data: Optional[pd.DataFrame] = None,
     y: Optional[str] = None,

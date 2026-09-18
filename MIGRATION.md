@@ -96,6 +96,22 @@ nuisance), so an IV-type fit takes roughly 1.5 times as long as before.
 
 ---
 
+<a id="cluster-markout"></a>
+
+## Unreleased — ⚠️ Missing cluster variable: rows are dropped, as in Stata
+
+**Who is affected.** Anyone who fitted `sp.ivreg` / `sp.iv` / `sp.liml` with
+`cluster=` / `vce="cluster v"` on data where `v` has missing values: those
+rows used to stay in the fit, so the coefficients and standard errors were not
+Stata's. Other estimators raised (or already dropped the rows) and now run.
+
+**What changes.** Rows with a missing cluster variable leave the estimation
+sample on every estimator that takes the `vce()` grammar, with a
+`StatsPAIWarning` and `model_info["n_missing_cluster_dropped"]`. To keep a
+row, give it a cluster label (for example its own singleton cluster) before
+fitting. `sp.margins(fit, data=df)` raises when `df` has missing model
+variables instead of returning NaN; omit `data=` to use the estimation sample.
+
 <a id="stata-vce-grammar"></a>
 
 ## Unreleased — ⚠️ Standard errors, p-values, `test` / `lincom` and `margins` follow Stata

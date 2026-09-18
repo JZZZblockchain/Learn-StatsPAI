@@ -35,6 +35,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from ..core._vcov_spec import markout_clusters
 from ..core.base import BaseEstimator, BaseModel
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
@@ -2325,6 +2326,7 @@ def iv(
 _IV_WILD_VCOV = frozenset({"wild", "wildbootstrap", "wild_cluster", "wre", "boottest"})
 
 
+@markout_clusters
 def ivreg(
     formula: str,
     data: pd.DataFrame,

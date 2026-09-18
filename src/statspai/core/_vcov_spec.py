@@ -17,14 +17,19 @@ accepts both spellings and translates to its native one.
 :func:`normalize_vcov` is the one shared primitive.
 """
 
+import functools
+import inspect
+import os
 import re
+import sys
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, Iterable, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Tuple
 
-from ..exceptions import MethodIncompatibility
+from ..exceptions import MethodIncompatibility, StatsPAIWarning, warn
 
 __all__ = [
     "SERequest",
+    "markout_clusters",
     "normalize_vcov",
     "parse_se_request",
     "reject_unknown_kwargs",
@@ -422,3 +427,103 @@ def parse_se_request(
             diagnostics={"robust": repr(robust), "kind": kind},
         )
     return SERequest(kind=kind, cluster=cluster, spelling=robust)
+
+
+def _named_clusters(value: Any) -> List[str]:
+    """Column names a ``robust=`` / ``vce=`` / ``cluster=`` / ``vcov=`` value
+    clusters on; anything that is not a column name (arrays, bools) is
+    ignored here and left to the estimator."""
+    if isinstance(value, str):
+        text = value.strip()
+        wrapped = _VCE_WRAPPER.match(text)
+        if wrapped is not None:
+            text = wrapped.group("body").strip()
+        parts = text.replace(",", " ").split()
+        if parts and _SE_KIND_SYNONYMS.get(parts[0].lower()) in _NEEDS_CLUSTER:
+            return parts[1:]
+        return []
+    if isinstance(value, dict):
+        return [n for v in value.values() for n in _named_clusters_plain(v)]
+    return []
+
+
+def _named_clusters_plain(value: Any) -> List[str]:
+    if isinstance(value, str):
+        return [value]
+    if _is_str_list(value):
+        return list(value)
+    return []
+
+
+_PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _caller_stacklevel() -> int:
+    """``stacklevel`` for :func:`statspai.exceptions.warn`, called from the
+    wrapper below, that points at the first frame outside the package (the
+    wrapper may sit under ``accepts_aliases`` or a dispatcher)."""
+    level = 2  # warn() -> wrapper
+    frame = sys._getframe(2)  # the wrapper's caller
+    while frame is not None and os.path.abspath(frame.f_code.co_filename).startswith(
+        _PACKAGE_DIR + os.sep
+    ):
+        level += 1
+        frame = frame.f_back
+    return level + 1
+
+
+def markout_clusters(func: Callable) -> Callable:
+    """Exclude rows whose cluster variable is missing, as Stata does.
+
+    Stata's ``vce(cluster v)`` marks observations with missing ``v`` out of
+    the estimation sample (R ``fixest`` does the same with a note).  Without
+    this, estimators disagreed: some raised, some dropped the rows, and some
+    kept them in the fit.  The decorator resolves the cluster column(s) from
+    ``cluster=``, an inline ``vce="cluster v"`` / ``robust=`` spelling or a
+    ``vcov={"CRV1": "v"}`` dict, drops the rows where any of them is missing,
+    emits a :class:`~statspai.exceptions.StatsPAIWarning` giving the count,
+    and records it as ``model_info["n_missing_cluster_dropped"]``.  Columns
+    passed as arrays, and a sample in which every cluster label is missing,
+    are left to the estimator.
+    """
+    sig = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            bound = sig.bind_partial(*args, **kwargs)
+        except TypeError:
+            return func(*args, **kwargs)
+        arguments = bound.arguments
+        data = arguments.get("data")
+        if data is None or not hasattr(data, "columns"):
+            return func(*args, **kwargs)
+        names: List[str] = []
+        for key in ("robust", "vce", "vcov"):
+            names += _named_clusters(arguments.get(key))
+        names += _named_clusters_plain(arguments.get("cluster"))
+        names = [n for n in dict.fromkeys(names) if n in data.columns]
+        if not names:
+            return func(*args, **kwargs)
+        missing = data[names].isna().any(axis=1)
+        n_missing = int(missing.sum())
+        if n_missing == 0 or n_missing == len(data):
+            return func(*args, **kwargs)
+        warn(
+            StatsPAIWarning,
+            f"{func.__name__}: {n_missing} observation(s) with a missing "
+            f"cluster variable ({', '.join(names)}) excluded from the "
+            "estimation sample, as Stata's vce(cluster) does.",
+            stacklevel=_caller_stacklevel(),
+            recovery_hint="Drop or recode those rows before fitting to "
+            "silence this warning.",
+            diagnostics={"cluster": names, "n_dropped": n_missing},
+        )
+        arguments["data"] = data.loc[~missing]
+        result = func(*bound.args, **bound.kwargs)
+        info = getattr(result, "model_info", None)
+        if isinstance(info, dict):
+            info["n_missing_cluster_dropped"] = n_missing
+        return result
+
+    return wrapper

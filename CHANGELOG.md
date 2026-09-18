@@ -184,6 +184,13 @@ All notable changes to StatsPAI will be documented in this file.
   counterpart (`eyex`, `over()` ...) are refused instead of being mapped to
   average marginal effects. The structural translation sweep exempted
   post-estimation tools; a new test dispatches each payload on a fitted model.
+- `sp.stata` no longer warns "pipe the previous estimator's result_id" on
+  `margins` / `test` / `lincom` / `contrast` / `marginsplot` lines: that note
+  is advice for `sp.from_stata` callers, and `sp.stata` does the piping itself.
+- README: a sixth beginner example (clustered logit + `margins` / `test` /
+  `lincom` / `sp.stata`, checked against Stata 18), the `vce()` grammar and
+  house-style argument names in the Stata/R table, and refreshed tier counts;
+  the new outputs are pinned by `tests/test_readme_examples.py`.
 - `sp.from_stata("xtreg y x, fe")` without a panel id printed
   `sp.feols('y ~ x', ...)` — a runnable pooled regression; the formula now
   keeps the `| <panel_id>` fixed-effect placeholder.
@@ -277,6 +284,28 @@ All notable changes to StatsPAI will be documented in this file.
   reading it off `cf.ate()`, which is what made the defect visible. Found
   while tracing the causal forest's miss on the LaLonde benchmark in the
   ML4CI companion paper. See MIGRATION.md.
+
+- **Rows with a missing cluster variable leave the estimation sample, on
+  every estimator that takes the Stata `vce()` grammar** (`regress`, `ivreg`,
+  `liml`, `glm`, `logit`, `probit`, `cloglog`, `poisson`, `nbreg`,
+  `ppmlhdfe`, `ologit`, `oprobit`, `mlogit`, `clogit`, `zip_model`, `zinb`,
+  `hurdle`, `truncreg`, `biprobit`, `etregress`, `fracreg`, `betareg`,
+  `panel_logit`, `panel_probit`), as Stata's `vce(cluster v)` and R
+  `fixest` do. A `StatsPAIWarning` gives the count and
+  `model_info["n_missing_cluster_dropped"]` records it. Before, the
+  estimators disagreed: `regress`, `glm`, `logit` and the count / zero-inflated
+  models raised, the ordered and multinomial logits dropped the rows, and
+  `ivreg` / `liml` **kept them in the fit** -- coefficients and clustered
+  standard errors then differed from Stata's (and from the same call on the
+  complete rows). One decorator (`core._vcov_spec.markout_clusters`) now does
+  it for all of them; `tests/test_cluster_markout.py` pins every estimator to
+  its fit on the complete rows.
+- **`sp.margins(fit, data=df)` returned NaN** when `df` had a missing value in
+  a model variable (for example the rows the fit itself had dropped). It now
+  raises `MethodIncompatibility` naming the row count; omit `data=` to average
+  over the fit's own estimation sample (Stata's `e(sample)`). `sp.stata`'s
+  `margins` line no longer passes the raw data when the fit carries its
+  design, so it averages over the estimation sample as Stata does.
 
 - **ML robust / cluster standard errors now follow Stata.** `vce="robust"`
   on likelihood-based estimators omitted Stata's N/(N-1) factor (SEs

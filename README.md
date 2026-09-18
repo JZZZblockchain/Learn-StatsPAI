@@ -27,6 +27,11 @@ It is meant to be a practical replacement path for new Python-first work:
   `synth`, `psmatch2`, `esttab` / `outreg2`.
 - R-style routines: `lm`, `fixest`, `did`, `rdrobust`, `Synth`, `DoubleML`,
   `MatchIt`, `modelsummary`, `broom`.
+- Stata conventions where they matter: `vce="robust"` / `vce="cluster firm"`
+  on `regress`, `ivreg` and the likelihood estimators, Stata's small-sample
+  factors and z / t reference distributions, `test` / `lincom` /
+  `margins, dydx()` after any fit, and `sp.stata("...", data=df)` to run
+  Stata command lines you already have.
 - Python-native outputs: `.summary()`, `.tidy()`, `.plot()`, `.to_latex()`,
   `.to_docx()`, `.to_agent_summary()` where supported by the result object.
 - Agent-native access: every public function is registered with a
@@ -50,7 +55,7 @@ The API is broad, and the numerical evidence behind it is uneven: some
 estimators are checked against R/Stata on identical data, others only against
 known-truth simulations, and many are API-stable without a numerical-parity
 claim yet. Every function carries a `validation_status` that says which case
-applies: `validation_status` distinguishes certified/validated evidence from API-stable breadth. See
+applies — certified or validated evidence versus API-stable breadth. See
 [Validation](#validation-what-has-been-checked-and-what-has-not) before relying
 on a number for publication.
 
@@ -100,7 +105,9 @@ At a glance: 1,186 registered functions across 87 submodules; 397k LOC (core) + 
 
 | What you used before | Stata / R examples | StatsPAI entry point |
 | --- | --- | --- |
-| OLS / robust SE | `reg y x, vce(robust)` / `lm()` + `sandwich` | `sp.regress(..., robust="hc1")` |
+| OLS / robust SE | `reg y x, vce(robust)` / `lm()` + `sandwich` | `sp.regress("y ~ x", data=df, vce="robust")` |
+| Clustered SE | `vce(cluster firm)` / `sandwich::vcovCL()`, `feols(..., cluster = ~firm)` | `vce="cluster firm"` (or `cluster="firm"`); `sp.feols(..., cluster="firm")` |
+| Logit / probit / count models | `logit`, `probit`, `poisson`, `nbreg` / `glm()`, `MASS::glm.nb()` | `sp.logit()`, `sp.probit()`, `sp.poisson()`, `sp.nbreg()`, `sp.glm()` |
 | IV / 2SLS | `ivregress 2sls` / `AER::ivreg()` | `sp.ivreg("y ~ (d ~ z) + x", data=df)` |
 | High-dimensional FE | `reghdfe` / `fixest::feols()` | `sp.feols("y ~ x \| firm + year", data=df)` |
 | Staggered DiD | `csdid` / `did::att_gt()` | `sp.callaway_santanna()` + `sp.aggte()` |
@@ -108,9 +115,33 @@ At a glance: 1,186 registered functions across 87 submodules; 397k LOC (core) + 
 | Synthetic control | `synth` / `Synth::synth()` | `sp.synth()` |
 | Matching / PSM | `psmatch2` / `MatchIt` | `sp.psmatch2()`, `sp.match()` |
 | Double machine learning | `ddml` / `DoubleML` | `sp.dml()` |
-| Post-estimation | `test`, `margins` | `sp.test()`, `sp.margins()` |
+| Post-estimation | `test`, `lincom`, `margins, dydx()` | `fit.test()`, `fit.lincom()`, `sp.margins(fit)` |
 | Publication tables | `esttab`, `outreg2` / `modelsummary` | `sp.regtable()` |
+| Run Stata lines as they are | a `.do` snippet | `sp.stata("logit y x, vce(cluster id)\nmargins, dydx(x)", data=df)` |
 | Translate a command | — | `sp.from_stata("reghdfe y x, absorb(id year)")`, `sp.from_r("feols(...)")` |
+
+On `regress`, `ivreg`, `glm`, `logit`, `probit`, `poisson`, `nbreg`, the
+ordered / multinomial / conditional logits, the zero-inflated and hurdle
+models, `liml` and more, `vce=` / `robust=` follow Stata's `vce()` grammar
+(`sp.feols` keeps fixest's `vcov=` / `cluster=`): `True`, `"robust"`,
+`"vce(robust)"`, `"oim"`, `"hc0"`–`"hc3"`, and a cluster variable written
+inline (`"cluster firm"`, `"vce(cluster firm)"`, `"cl firm"`). A spelling an
+estimator does not implement raises an error instead of quietly falling back
+to different standard errors. Robust and cluster SEs apply Stata's
+small-sample factors, clustered OLS / IV use t(G-1), and likelihood-based fits
+report z. The oim / robust / cluster standard errors of 29 estimators are
+pinned to Stata 18 at the 1e-6 parity budget (three documented exceptions
+where the two optimisers stop at slightly different points). See the
+[shared argument grammar](docs/guides/grammar.md) guide.
+
+Causal entry points also accept one shared set of argument names next to each
+estimator's native spelling: `id=` for the panel unit, `time=`,
+`first_treat=` for adoption cohorts, `covariates=`, and `running=` /
+`cutoff=` for RD. `sp.callaway_santanna(data=mp, y="lemp", time="year",
+id="countyreal", first_treat="first_treat")` is the same call as the
+`t=` / `i=` / `g=` version below; a misspelt keyword names the closest one
+(`runing=` → "did you mean 'running'?"), and
+`sp.describe_function(name)["aliases"]` lists the accepted spellings.
 
 `sp.esttab()`, `sp.outreg2()`, and `sp.modelsummary()` still exist, but they are
 deprecated thin wrappers over `sp.regtable()` and emit a `DeprecationWarning`.
@@ -140,7 +171,13 @@ interface across the everyday Stata/R empirical workflow.
 
 ## Beginner Examples With Results
 
-The outputs below were produced with StatsPAI 1.28.0 on the bundled datasets.
+The outputs below were produced with the current `main` on the bundled
+datasets. Examples 1–5 also run on the PyPI release 1.28.0 (a few printed
+digits differ where `main` has since fixed them; see the CHANGELOG);
+example 6 uses the Stata `vce()` grammar and post-estimation commands that
+are on `main` but not yet in a PyPI release — until the next release, install
+them with
+`pip install "statspai @ git+https://github.com/brycewang-stanford/StatsPAI"`.
 Long summaries are abridged (`...` marks omitted lines); the numbers are pinned
 by `tests/test_readme_examples.py` and `tests/test_synth_placebo_pvalue.py`, so
 they cannot silently drift from the code again.
@@ -414,6 +451,79 @@ ATT of about `-19.59` rather than `-19.76`; pass `backend="synth"` (needs a
 local R with the `Synth` package; outcome-lag specification only) when you need
 R's exact numbers.
 
+### 6. Logit, clustered SEs and post-estimation: Stata's `logit` + `margins`
+
+Question: in Thornton's Malawi experiment, how much did a randomly offered
+cash incentive raise the probability that people collected their HIV test
+results? Villages are the clusters.
+
+```python
+import statspai as sp
+
+hiv = sp.datasets.thornton_hiv(complete_case=True)
+fit = sp.logit("got ~ any + distvct + male + age", data=hiv,
+               vce="cluster villnum")
+print(fit.summary())
+print(sp.margins(fit, variables=["any"]).round(4))   # margins, dydx(any)
+```
+
+Result:
+
+```text
+Model: Logit
+Method: Maximum Likelihood (Newton-Raphson)
+Dependent Variable: got
+...
+           Coefficient  Std. Error  z-statistic  P>|z|  [0.025  0.975]
+Intercept      -0.6370      0.2010      -3.1691 0.0015 -1.0310 -0.2431
+any             2.0178      0.0994      20.3029 0.0000  1.8230  2.2126
+distvct        -0.1696      0.0408      -4.1610 0.0000 -0.2496 -0.0897
+male           -0.0530      0.1051      -0.5046 0.6139 -0.2590  0.1529
+age             0.0100      0.0034       2.9046 0.0037  0.0032  0.0167
+...
+```
+
+```text
+  variable   dy/dx      se        z  pvalue  ci_lower  ci_upper
+0      any  0.3558  0.0145  24.5453     0.0    0.3274    0.3843
+```
+
+As in Stata, the 9 rows with a missing `age` or village id leave the
+estimation sample (N = 2,825, 119 villages); the 4 dropped for a missing
+cluster variable are reported in a `StatsPAIWarning` and in
+`fit.model_info["n_missing_cluster_dropped"]`.
+
+The logit coefficient is on the log-odds scale; `sp.margins` reports what
+Stata's `margins, dydx(any)` reports — the average marginal effect on the
+probability, with a delta-method standard error. Being offered any incentive
+raised the probability of collecting results by about 36 percentage points.
+The coefficients, the village-clustered standard errors, and the marginal
+effect match Stata 18 `logit ..., vce(cluster villnum)` followed by
+`margins, dydx(any)` (0.3558466, SE 0.0144976).
+
+Tests and linear combinations use the full covariance matrix and the fit's own
+reference distribution (χ² / z here, F / t after OLS):
+
+```python
+fit.test("distvct = 0")    # chi2(1) = 17.31, p < 0.001  (Stata: test distvct)
+fit.lincom("any + male")   # 1.9648, SE 0.1412           (Stata: lincom any + male)
+```
+
+If you already have the Stata lines, run them as they are:
+
+```python
+ame = sp.stata("""
+logit got any distvct male age, vce(cluster villnum)
+margins, dydx(any)
+""", data=hiv)
+```
+
+`sp.stata` returns the output of the last line — here the same marginal-effects
+table. A line it cannot translate faithfully (for example `xtreg, fe` without
+the panel id that `xtset` would have supplied) raises instead of running a
+different model; `sp.from_stata(line)` shows the Python call without running
+it.
+
 ---
 
 ## Export Results
@@ -521,7 +631,8 @@ r2 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper + expersq + black + south + smsa"
 
 print(r1.summary())                          # human-readable table
 print(r1.tidy().head())                      # broom-style dataframe
-print(sp.test(r1, "black = south"))          # Wald test, like Stata's `test`
+print(r1.test("black = south"))              # Wald test, like Stata's `test`
+print(r1.lincom("black - south"))            # like Stata's `lincom`
 tbl = sp.regtable(r1, r2, model_labels=["OLS", "2SLS"])
 tbl.to_word("table.docx")                    # Word table
 tbl.to_excel("results.xlsx")                 # Excel table
@@ -556,11 +667,13 @@ The same registry that powers `sp.help()` is exposed three ways.
 ```python
 import statspai as sp
 
+sp.list_functions(core=True)                   # the ~30 everyday verbs, in order
 sp.list_functions(category="causal")[:5]      # names
-sp.describe_function("rdrobust")               # parameters, returns, validation
+sp.describe_function("rdrobust")               # parameters, aliases, validation
 sp.function_schema("rdrobust")                 # JSON schema for tool calling
 sp.from_stata("reghdfe y x, absorb(id year) vce(cluster id)")
 # {'tool': 'feols', 'python_code': "sp.feols('y ~ x | id + year', data=df, cluster='id')", ...}
+sp.stata("regress y x, vce(cluster id)", data=df)   # translate and run
 ```
 
 **From the shell** — `statspai list`, `statspai describe rdrobust`,
@@ -603,13 +716,14 @@ print(sp.describe_function("ivreg")["validation_status"])   # 'certified'
 print(sp.list_functions(validation_status="certified")[:5])
 ```
 
-Every registered function carries one of these tiers (counts as of 1.28.0):
+Every registered function carries one of these tiers (counts on the current
+`main`; `sp.list_functions(validation_status=...)` gives the live numbers):
 
 | `validation_status` | Meaning | Functions |
 | --- | --- | ---: |
 | `certified` | compared with a named external reference implementation (R, Stata, or the method authors' Python package) on identical inputs, within a pre-registered tolerance | 223 |
 | `validated` | known-truth simulation, published-number, coverage, or documented-convention evidence, but not in the main R/Stata harness | 206 |
-| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 750 |
+| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 751 |
 | `experimental` | method or API may still change | 3 |
 
 In other words, roughly a third of the registered surface carries numerical

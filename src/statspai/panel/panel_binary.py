@@ -24,6 +24,7 @@ import pandas as pd
 from scipy import optimize, special, stats
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 
 # --------------- helpers ---------------
@@ -459,6 +460,7 @@ def _wrap_re_result(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def panel_logit(
     data: pd.DataFrame,
     y: str,
@@ -622,6 +624,7 @@ def panel_logit(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def panel_probit(
     data: pd.DataFrame,
     y: str,

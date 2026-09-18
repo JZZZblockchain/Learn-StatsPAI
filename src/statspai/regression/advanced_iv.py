@@ -36,11 +36,13 @@ import numpy as np
 import pandas as pd
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 from ..exceptions import MethodIncompatibility
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def liml(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,

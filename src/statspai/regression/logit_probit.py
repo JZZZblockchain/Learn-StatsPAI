@@ -29,6 +29,7 @@ import pandas as pd
 from scipy import stats
 
 from .._aliases import accepts_aliases
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 from ..core.utils import create_design_matrices
 
@@ -753,6 +754,7 @@ def _fit_binary(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def logit(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
@@ -844,6 +846,7 @@ def logit(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def probit(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
@@ -928,6 +931,7 @@ def probit(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def cloglog(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,

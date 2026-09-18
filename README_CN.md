@@ -21,6 +21,7 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
 
 - Stata 风格：`regress`、`ivregress`、`reghdfe`、`csdid`、`rdrobust`、`synth`、`psmatch2`、`esttab` / `outreg2`。
 - R 风格：`lm`、`fixest`、`did`、`rdrobust`、`Synth`、`DoubleML`、`MatchIt`、`modelsummary`、`broom`。
+- 关键处遵循 Stata 约定：`regress`、`ivreg` 和各类似然估计器都接受 `vce="robust"` / `vce="cluster firm"`，稳健 / 聚类标准误采用 Stata 的小样本修正和 z / t 参考分布；任何拟合结果之后都可以做 `test` / `lincom` / `margins, dydx()`；已有的 Stata 命令行可直接用 `sp.stata("...", data=df)` 运行。
 - Python 输出：在支持的结果对象上直接用 `.summary()`、`.tidy()`、`.plot()`、`.to_latex()`、`.to_docx()`、`.to_agent_summary()`。
 - Agent 原生：每个公开函数都在注册表里带机器可读 schema（`sp.list_functions()`、`sp.describe_function()`、`sp.function_schema()`），随包附带的 `statspai-mcp` 服务把估计器暴露给 Claude Code、Claude Desktop、Cursor 等 MCP 客户端。
 - Stata Agent 协同：我们自己开发的 [`stata-code`](https://github.com/brycewang-stanford/stata-code/)
@@ -31,7 +32,7 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
   和 [`Paper-WorkFlow`](https://github.com/brycewang-stanford/Paper-WorkFlow)
   可以和 StatsPAI 以及 agent 一起使用，作为方法选择、期刊要求、论文流程和可复现检查的技能层。
 
-这不是说每个 Stata/R 命令都已经逐字节复现。API 覆盖面很广，但背后的数值证据并不均匀：有的估计器在同一份数据上与 R/Stata 逐一对照过，有的只用已知真值的模拟验证过，还有很多目前只承诺接口稳定、没有数值对齐声明。每个函数都带有 `validation_status` 标明属于哪种情况，它把 certified / validated / api_stable 区分开：前两档有数值证据，api_stable 只表示接口稳定。论文要用某个数字之前，请先看[验证状态](#验证状态哪些核验过哪些还没有)。
+这不是说每个 Stata/R 命令都已经逐字节复现。API 覆盖面很广，但背后的数值证据并不均匀：有的估计器在同一份数据上与 R/Stata 逐一对照过，有的只用已知真值的模拟验证过，还有很多目前只承诺接口稳定、没有数值对齐声明。每个函数都带有 `validation_status` 标明属于哪种情况：certified / validated 两档有数值证据，api_stable 只表示接口稳定。论文要用某个数字之前，请先看[验证状态](#验证状态哪些核验过哪些还没有)。
 
 ---
 
@@ -70,7 +71,9 @@ StatsPAI 内置 14 个可离线加载的数据集。大部分是真实的已发�
 
 | 原来的工作流 | Stata / R 写法 | StatsPAI 入口 |
 | --- | --- | --- |
-| OLS / 稳健标准误 | `reg y x, vce(robust)` / `lm()` + `sandwich` | `sp.regress(..., robust="hc1")` |
+| OLS / 稳健标准误 | `reg y x, vce(robust)` / `lm()` + `sandwich` | `sp.regress("y ~ x", data=df, vce="robust")` |
+| 聚类标准误 | `vce(cluster firm)` / `sandwich::vcovCL()`、`feols(..., cluster = ~firm)` | `vce="cluster firm"`（或 `cluster="firm"`）；`sp.feols(..., cluster="firm")` |
+| Logit / probit / 计数模型 | `logit`、`probit`、`poisson`、`nbreg` / `glm()`、`MASS::glm.nb()` | `sp.logit()`、`sp.probit()`、`sp.poisson()`、`sp.nbreg()`、`sp.glm()` |
 | IV / 2SLS | `ivregress 2sls` / `AER::ivreg()` | `sp.ivreg("y ~ (d ~ z) + x", data=df)` |
 | 高维固定效应 | `reghdfe` / `fixest::feols()` | `sp.feols("y ~ x \| firm + year", data=df)` |
 | 交错 DiD | `csdid` / `did::att_gt()` | `sp.callaway_santanna()` + `sp.aggte()` |
@@ -78,9 +81,14 @@ StatsPAI 内置 14 个可离线加载的数据集。大部分是真实的已发�
 | 合成控制 | `synth` / `Synth::synth()` | `sp.synth()` |
 | 匹配 / PSM | `psmatch2` / `MatchIt` | `sp.psmatch2()`、`sp.match()` |
 | 双重机器学习 | `ddml` / `DoubleML` | `sp.dml()` |
-| 估计后检验 | `test`、`margins` | `sp.test()`、`sp.margins()` |
+| 估计后检验 | `test`、`lincom`、`margins, dydx()` | `fit.test()`、`fit.lincom()`、`sp.margins(fit)` |
 | 论文表格 | `esttab`、`outreg2` / `modelsummary` | `sp.regtable()` |
+| 直接运行 Stata 命令行 | 一段 `.do` 代码 | `sp.stata("logit y x, vce(cluster id)\nmargins, dydx(x)", data=df)` |
 | 翻译命令 | — | `sp.from_stata("reghdfe y x, absorb(id year)")`、`sp.from_r("feols(...)")` |
+
+在 `regress`、`ivreg`、`glm`、`logit`、`probit`、`poisson`、`nbreg`、有序 / 多项 / 条件 logit、零膨胀与 hurdle 模型、`liml` 等估计器上，`vce=` / `robust=` 遵循 Stata 的 `vce()` 语法（`sp.feols` 保留 fixest 的 `vcov=` / `cluster=`）：`True`、`"robust"`、`"vce(robust)"`、`"oim"`、`"hc0"`–`"hc3"`，以及直接写出聚类变量（`"cluster firm"`、`"vce(cluster firm)"`、`"cl firm"`）。估计器不支持的写法会直接报错，而不是悄悄换成另一种标准误。稳健和聚类标准误采用 Stata 的小样本因子，聚类的 OLS / IV 用 t(G-1)，基于似然的估计报告 z。29 个估计器的 oim / robust / cluster 标准误以 1e-6 的对齐预算钉在 Stata 18 上（另有三处有文档的例外：两边优化器停在略微不同的点）。详见[统一参数语法](docs/guides/grammar.md)。
+
+因果估计入口在各自原生参数名之外，还接受一套统一的参数名：面板个体用 `id=`，时间用 `time=`，处理批次用 `first_treat=`，协变量用 `covariates=`，RD 用 `running=` / `cutoff=`。`sp.callaway_santanna(data=mp, y="lemp", time="year", id="countyreal", first_treat="first_treat")` 与下文 `t=` / `i=` / `g=` 的写法完全等价；拼错的参数会提示最接近的名字（`runing=` → "did you mean 'running'?"），`sp.describe_function(name)["aliases"]` 列出所有可用写法。
 
 `sp.esttab()`、`sp.outreg2()`、`sp.modelsummary()` 仍然可用，但已是 `sp.regtable()` 的弃用薄封装，调用时会发出 `DeprecationWarning`。
 
@@ -106,7 +114,7 @@ StatsPAI 想做的是一个覆盖面广的 Stata/R 风格实证工作台。下�
 
 ## 新手案例：代码和结果一起看
 
-下面的输出由 StatsPAI 1.28.0 在内置数据集上实际运行得到。较长的 summary 做了节选（`...` 表示省略的行）；这些数字由 `tests/test_readme_examples.py` 和 `tests/test_synth_placebo_pvalue.py` 钉住，今后不会再悄悄与代码脱节。
+下面的输出由当前 `main` 在内置数据集上实际运行得到。例 1–5 在 PyPI 版 1.28.0 上也能运行（`main` 之后修正过的少数打印数字会略有不同，见 CHANGELOG）；例 6 用到的 Stata `vce()` 语法和估计后命令已在 `main` 上、但尚未进入 PyPI 发行版——下一版发布前可用 `pip install "statspai @ git+https://github.com/brycewang-stanford/StatsPAI"` 安装。较长的 summary 做了节选（`...` 表示省略的行）；这些数字由 `tests/test_readme_examples.py` 和 `tests/test_synth_placebo_pvalue.py` 钉住，今后不会再悄悄与代码脱节。
 
 ### 1. OLS：替代第一条 `regress` / `lm`
 
@@ -336,6 +344,63 @@ California 的 post/pre RMSPE 比值在 39 个州里排第 3，所以 p = 3/39 �
 
 读这个数字时要带上它的前提（完整 summary 里也会打印）：在真实数据上，经典 SCM 的权重往往不是唯一识别的，不同的正确求解器可能落在不同的 donor 权重上。StatsPAI 的原生求解器在唯一识别的设计上经过认证，其他情形标注为"依赖识别"。在这个设定上，R `Synth` 得到的 ATT 约为 `-19.59` 而不是 `-19.76`；需要 R 的精确数字时，传 `backend="synth"`（需要本机装有 R 和 `Synth` 包，只支持结果滞后项设定）。
 
+### 6. Logit、聚类标准误与估计后命令：替代 Stata 的 `logit` + `margins`
+
+问题：在 Thornton 的马拉维实验里，随机提供的现金激励让人们去领取 HIV 检测结果的概率提高了多少？以村为聚类。
+
+```python
+import statspai as sp
+
+hiv = sp.datasets.thornton_hiv(complete_case=True)
+fit = sp.logit("got ~ any + distvct + male + age", data=hiv,
+               vce="cluster villnum")
+print(fit.summary())
+print(sp.margins(fit, variables=["any"]).round(4))   # margins, dydx(any)
+```
+
+结果：
+
+```text
+Model: Logit
+Method: Maximum Likelihood (Newton-Raphson)
+Dependent Variable: got
+...
+           Coefficient  Std. Error  z-statistic  P>|z|  [0.025  0.975]
+Intercept      -0.6370      0.2010      -3.1691 0.0015 -1.0310 -0.2431
+any             2.0178      0.0994      20.3029 0.0000  1.8230  2.2126
+distvct        -0.1696      0.0408      -4.1610 0.0000 -0.2496 -0.0897
+male           -0.0530      0.1051      -0.5046 0.6139 -0.2590  0.1529
+age             0.0100      0.0034       2.9046 0.0037  0.0032  0.0167
+...
+```
+
+```text
+  variable   dy/dx      se        z  pvalue  ci_lower  ci_upper
+0      any  0.3558  0.0145  24.5453     0.0    0.3274    0.3843
+```
+
+和 Stata 一样，`age` 或村编号缺失的 9 行不进入估计样本（N = 2,825，119 个村）；其中因聚类变量缺失而剔除的 4 行会以 `StatsPAIWarning` 提示，并记录在 `fit.model_info["n_missing_cluster_dropped"]`。
+
+logit 系数在对数几率尺度上；`sp.margins` 报告的是 Stata `margins, dydx(any)` 报告的量——概率上的平均边际效应，配 delta 方法标准误。获得任意激励使领取结果的概率提高约 36 个百分点。系数、按村聚类的标准误和边际效应都与 Stata 18 的 `logit ..., vce(cluster villnum)` 加 `margins, dydx(any)` 一致（0.3558466，SE 0.0144976）。
+
+检验和线性组合使用完整协方差矩阵以及该拟合自己的参考分布（这里是 χ² / z，OLS 之后是 F / t）：
+
+```python
+fit.test("distvct = 0")    # chi2(1) = 17.31, p < 0.001  （Stata: test distvct）
+fit.lincom("any + male")   # 1.9648, SE 0.1412           （Stata: lincom any + male）
+```
+
+如果手上已经有 Stata 命令，可以原样运行：
+
+```python
+ame = sp.stata("""
+logit got any distvct male age, vce(cluster villnum)
+margins, dydx(any)
+""", data=hiv)
+```
+
+`sp.stata` 返回最后一行的输出——这里就是同一张边际效应表。无法忠实翻译的命令（例如缺少 `xtset` 所提供面板 id 的 `xtreg, fe`）会直接报错，而不是跑一个不同的模型；只想看对应的 Python 调用而不运行，用 `sp.from_stata(line)`。
+
 ---
 
 ## 导出结果
@@ -429,7 +494,8 @@ r2 = sp.ivreg("lwage ~ (educ ~ nearc4) + exper + expersq + black + south + smsa"
 
 print(r1.summary())                          # 人类可读表格
 print(r1.tidy().head())                      # broom 风格 dataframe
-print(sp.test(r1, "black = south"))          # Wald 检验，对应 Stata 的 `test`
+print(r1.test("black = south"))              # Wald 检验，对应 Stata 的 `test`
+print(r1.lincom("black - south"))            # 对应 Stata 的 `lincom`
 tbl = sp.regtable(r1, r2, model_labels=["OLS", "2SLS"])
 tbl.to_word("table.docx")                    # Word 表
 tbl.to_excel("results.xlsx")                 # Excel 表
@@ -464,11 +530,13 @@ tbl.to_excel("results.xlsx")                 # Excel 表
 ```python
 import statspai as sp
 
+sp.list_functions(core=True)                   # 约 30 个日常动词，按使用顺序
 sp.list_functions(category="causal")[:5]      # 函数名
-sp.describe_function("rdrobust")               # 参数、返回值、验证状态
+sp.describe_function("rdrobust")               # 参数、别名、验证状态
 sp.function_schema("rdrobust")                 # 供工具调用的 JSON schema
 sp.from_stata("reghdfe y x, absorb(id year) vce(cluster id)")
 # {'tool': 'feols', 'python_code': "sp.feols('y ~ x | id + year', data=df, cluster='id')", ...}
+sp.stata("regress y x, vce(cluster id)", data=df)   # 翻译并运行
 ```
 
 **在命令行里**——`statspai list`、`statspai describe rdrobust`、`statspai search "synthetic control"`。
@@ -504,13 +572,13 @@ print(sp.describe_function("ivreg")["validation_status"])   # 'certified'
 print(sp.list_functions(validation_status="certified")[:5])
 ```
 
-每个注册函数都属于以下一档（数量截至 1.28.0）：
+每个注册函数都属于以下一档（数量对应当前 `main`；`sp.list_functions(validation_status=...)` 给出实时数字）：
 
 | `validation_status` | 含义 | 函数数 |
 | --- | --- | ---: |
 | `certified` | 在相同输入上与指定的外部参考实现（R、Stata，或方法作者维护的 Python 包）对照，落在预注册容差之内 | 223 |
 | `validated` | 有已知真值模拟、已发表数字、覆盖率或有文档的约定差异等证据，但不在 R/Stata 主对齐 harness 中 | 206 |
-| `api_stable` | 公开接口稳定；有单元测试，但**不声明数值验证** | 750 |
+| `api_stable` | 公开接口稳定；有单元测试，但**不声明数值验证** | 751 |
 | `experimental` | 方法或 API 仍可能变化 | 3 |
 
 也就是说，目前大约三分之一的注册函数带有数值证据。覆盖面不等于验证，请检查你依赖的那些函数属于哪一档。

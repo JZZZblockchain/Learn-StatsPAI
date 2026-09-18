@@ -39,6 +39,7 @@ from scipy import optimize, special, stats
 
 from .._aliases import accepts_aliases
 from ..core._vcov import ml_vcov
+from ..core._vcov_spec import markout_clusters
 from ..core.results import EconometricResults
 from ..core.utils import parse_formula
 from ._optim_helpers import (
@@ -204,6 +205,7 @@ def _vuong_test(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def zip_model(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
@@ -523,6 +525,7 @@ def _compute_zip_score_obs(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def zinb(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
@@ -799,6 +802,7 @@ def _compute_zi_score_obs(
 
 
 @accepts_aliases(vce="robust")
+@markout_clusters
 def hurdle(
     formula: Optional[str] = None,
     data: Optional[pd.DataFrame] = None,
