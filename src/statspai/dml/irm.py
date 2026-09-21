@@ -286,15 +286,20 @@ class DoubleMLIRM(_DoubleMLBase):
         # ---- trimming + IPW normalization + score (full-vector) ------
         lo, hi = self.trimming_threshold, 1.0 - self.trimming_threshold
         if self.score == "ATE" and not self.normalize_ipw:
+            # Ordinary propensity regressors may predict outside [0, 1];
+            # preserve upstream clipping, including weighted ATE. Retained
+            # records instead validate the raw probability contract strictly.
+            scoring_propensity = (
+                m_hat_full if capture is not None else np.clip(m_hat_full, lo, hi)
+            )
             canonical = score_binary_ate(
                 y=Y,
                 d=D,
                 g0=g0_full,
                 g1=g1_full,
-                ps_raw=m_hat_full,
+                ps_raw=scoring_propensity,
                 trimming_threshold=self.trimming_threshold,
             )
-            capture = self.__dict__.get("_oof_rep_capture")
             if capture is not None:
                 capture.record_internal_score(
                     g0=g0_full,
