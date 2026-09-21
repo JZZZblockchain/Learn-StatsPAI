@@ -70,7 +70,9 @@ def validated_score_arrays(
     return {**scores, "theta": theta, "se": se}
 
 
-def validated_aggregation(value: Any, theta, se) -> dict[str, Any]:
+def validated_aggregation(
+    value: Any, theta: np.ndarray, se: np.ndarray
+) -> dict[str, Any]:
     result = _json.require_keys(
         _json.copy_json(value, "aggregation"),
         {"rule", "theta", "se"},

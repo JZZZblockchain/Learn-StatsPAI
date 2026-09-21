@@ -7,6 +7,28 @@ of causal identification.
 
 ## Retaining an internal fit
 
+This complete synthetic example retains three repetitions:
+
+```python
+import numpy as np
+import pandas as pd
+import statspai as sp
+
+rng = np.random.default_rng(42)
+x = rng.normal(size=200)
+d = np.tile([0, 1], 100)
+df = pd.DataFrame({"x": x, "d": d, "y": 2 * d + x + rng.normal(size=200)})
+result = sp.dml(
+    df, y="y", treat="d", covariates=["x"], model="irm",
+    ml_g="linear", ml_m="logistic", n_folds=2, n_rep=3,
+    store_oof=True, observation_ids=[f"unit:{i}" for i in range(len(df))],
+)
+bundle = result.get_oof()
+assert len(bundle.to_frame()) == 600
+assert len(result.get_residuals(rep=0)) == 200
+assert len(bundle.score_concentration()) == 3
+```
+
 Pass `store_oof=True` and, when stable row identifiers are available, provide
 them through `observation_ids`:
 
@@ -24,6 +46,20 @@ the origin `statspai_internal`.
 
 The feature is opt-in. A fit without `store_oof=True` keeps the historical
 result behavior and `result.get_oof()` raises a stable unavailable error.
+
+The public estimator parameters are described in `sp.describe_function("dml")`
+and its generated schema. `OOFPredictions` and `OOFBundle` are factory-only
+value objects, explicitly excluded from the agent's callable estimator catalog;
+construct them through `from_arrays` or `from_json`. The individual-level
+controls are Python-only and are rejected by generic agent payload handling.
+The package's ordinary result JSON does not include retained records.
+
+Internal retained fits require at least 10 training observations in each
+treatment arm of every outer fold and raise `DataInsufficient` otherwise.
+Explicit internal fold assignments require a single repeat. PLR, PLIV, IIVM,
+ATTE, weighted fits, and normalized IPW do not support OOF retention yet and
+fail explicitly if requested. Their ordinary fitting paths remain available,
+including the current upstream three-nuisance IV-type PLR implementation.
 
 ## Scoring external predictions
 

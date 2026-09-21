@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from statspai import dml
-from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.dml._irm_score import score_binary_ate
 from statspai.dml._oof_retention import (
     AnalysisIdentity,
@@ -16,10 +15,12 @@ from statspai.dml._oof_retention import (
     external_analysis_identity,
 )
 from statspai.dml.irm import DoubleMLIRM
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 from .dml_oof_export_helpers import (
     NoFitClassifier,
     NoFitRegressor,
+    TrainingMeanRegressor,
     external_estimator,
     external_literal_fixture,
     internal_estimator,
@@ -27,7 +28,6 @@ from .dml_oof_export_helpers import (
     internal_partitions,
     partition_splits,
     reset_internal_audits,
-    TrainingMeanRegressor,
 )
 from .dml_oof_helpers import tiny_bundle
 

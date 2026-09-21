@@ -14,6 +14,7 @@ __citation__: str
 STABILITY_TIERS: frozenset[str]
 TARGET_ITEMS: list[str]
 
+# Public function / class re-exports
 # Submodule re-exports (preserve ``sp.X.Y`` access)
 from . import epi as epi
 from . import exceptions as exceptions
@@ -21,8 +22,6 @@ from . import iv as iv
 from . import longitudinal as longitudinal
 from . import mendelian as mendelian
 from . import question as question
-
-# Public function / class re-exports
 from . import target_trial as tte
 from ._agent_docs import render_agent_block as render_agent_block
 from ._agent_docs import render_agent_blocks as render_agent_blocks
@@ -232,10 +231,10 @@ from .deepiv.deep_iv import DeepIV as DeepIV
 from .deepiv.deep_iv import deepiv as deepiv
 from .diagnostics.battery import diagnose_result as diagnose_result
 from .diagnostics.estat import estat as estat
+from .diagnostics.evalue import bias_factor as bias_factor
 from .diagnostics.evalue import evalue as evalue
 from .diagnostics.evalue import evalue_from_result as evalue_from_result
 from .diagnostics.evalue import evalue_rd as evalue_rd
-from .diagnostics.evalue import bias_factor as bias_factor
 from .diagnostics.hausman import hausman_test as hausman_test
 from .diagnostics.late_test import KitagawaResult as KitagawaResult
 from .diagnostics.late_test import kitagawa_test as kitagawa_test
@@ -416,11 +415,11 @@ from .inference.conley import conley as conley
 from .inference.front_door import front_door as front_door
 from .inference.g_computation import g_computation as g_computation
 from .inference.ipw import ipw as ipw
-from .inference.meta_analysis import MetaAnalysisResult as MetaAnalysisResult
-from .inference.meta_analysis import meta_analysis as meta_analysis
 from .inference.jackknife import cr2_se as cr2_se
 from .inference.jackknife import jackknife_se as jackknife_se
 from .inference.jackknife import wild_cluster_boot as wild_cluster_boot
+from .inference.meta_analysis import MetaAnalysisResult as MetaAnalysisResult
+from .inference.meta_analysis import meta_analysis as meta_analysis
 from .inference.multiway_cluster import cluster_robust_se as cluster_robust_se
 from .inference.multiway_cluster import cr3_jackknife_vcov as cr3_jackknife_vcov
 from .inference.multiway_cluster import multiway_cluster_vcov as multiway_cluster_vcov
@@ -498,10 +497,10 @@ from .matching.ps_diagnostics import overlap_plot as overlap_plot
 from .matching.ps_diagnostics import propensity_score as propensity_score
 from .matching.ps_diagnostics import ps_balance as ps_balance
 from .matching.ps_diagnostics import trimming as trimming
-from .matching.sbw import SBWResult as SBWResult
-from .matching.sbw import sbw as sbw
 from .matching.psmatch2 import PSMatch2Result as PSMatch2Result
 from .matching.psmatch2 import psmatch2 as psmatch2
+from .matching.sbw import SBWResult as SBWResult
+from .matching.sbw import sbw as sbw
 from .matrix_completion.mc_panel import MCPanel as MCPanel
 from .matrix_completion.mc_panel import mc_panel as mc_panel
 from .mediation.mediate import MediationAnalysis as MediationAnalysis
@@ -645,8 +644,8 @@ from .output.modelsummary import coefplot as coefplot
 from .output.modelsummary import modelsummary as modelsummary
 from .output.outreg2 import OutReg2 as OutReg2
 from .output.outreg2 import outreg2 as outreg2
-from .output.paper_tables import PaperTables as PaperTables
 from .output.paper_tables import TEMPLATES as PAPER_TABLE_TEMPLATES
+from .output.paper_tables import PaperTables as PaperTables
 from .output.paper_tables import paper_tables as paper_tables
 from .output.regression_table import RegtableResult as RegtableResult
 from .output.regression_table import regtable as regtable

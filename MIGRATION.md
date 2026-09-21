@@ -5,6 +5,18 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+## Unreleased — DML orthogonality diagnostic is unavailable
+
+`dml_diagnostics(result).orth_stat` and `.orth_pvalue` now return `None`.
+The old calculation used a series centered by construction, so its near-one
+p-value provided no evidence about nuisance quality or causal identification.
+Check `.orthogonality_status` and the explanatory `.orth_warning` rather than
+formatting these fields as floats. Fitted effects, standard errors, and
+confidence intervals are unchanged. Retained OOF score concentration is an
+optional descriptive diagnostic, not a replacement hypothesis test.
+
+---
+
 <a id="forest-scalar-effect-doubly-robust"></a>
 
 ## Unreleased — ⚠️ `CausalForest.ate()` / `.att()` return the doubly-robust estimate, not the plug-in average

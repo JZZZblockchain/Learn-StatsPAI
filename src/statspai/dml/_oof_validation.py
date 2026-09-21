@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, NamedTuple, Optional, Tuple, Type, overload
+from typing import Any, NamedTuple, Optional, Sequence, Tuple, Type, overload
 
 import numpy as np
 
+from ..exceptions import MethodIncompatibility
 from . import _oof_serialization as _json
 
 _RECORD_KEYS = set(
@@ -35,6 +36,7 @@ class ArrayView:
     """Descriptor returning a fresh read-only NumPy header for a snapshot."""
 
     __slots__ = ("_storage_name",)
+    _storage_name: str
 
     def __init__(self, storage_name: str) -> None:
         object.__setattr__(self, "_storage_name", storage_name)
@@ -144,7 +146,9 @@ def validated_source(value: Any) -> dict[str, Any]:
     return dict(result)
 
 
-def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]]:
+def validated_training_records(
+    value: Any, ids: Sequence[str], d: np.ndarray, folds: np.ndarray
+) -> list[dict[str, Any]]:
     records = _json.copy_json(value, "training_records")
     if not isinstance(records, list):
         raise TypeError("training_records must be a list")
@@ -153,16 +157,20 @@ def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]
     for rep, labels in enumerate(folds):
         unique = np.unique(labels)
         if len(unique) < 2 or not np.array_equal(unique, np.arange(len(unique))):
-            raise ValueError(f"fold_ids repeat {rep} must be contiguous 0..K-1")
+            raise MethodIncompatibility(
+                f"fold_ids repeat {rep} must be contiguous 0..K-1"
+            )
         labels_by_rep.append(unique)
     if len({len(labels) for labels in labels_by_rep}) != 1:
-        raise ValueError("all repeats must use the same number of folds")
+        raise MethodIncompatibility("all repeats must use the same number of folds")
     expected_pairs = [
         (rep, int(fold)) for rep, labels in enumerate(labels_by_rep) for fold in labels
     ]
     expected_pair_set = set(expected_pairs)
     if len(records) != len(expected_pairs):
-        raise ValueError("training_records must cover every repeat/fold once")
+        raise MethodIncompatibility(
+            "training_records must cover every repeat/fold once"
+        )
 
     actual_pairs = []
     for index, record in enumerate(records):
@@ -172,9 +180,9 @@ def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]
             raise ValueError("record rep and fold_id must be integers")
         actual_pairs.append((rep, fold))
         if (rep, fold) not in expected_pair_set:
-            raise ValueError("record repeat/fold is outside fold_ids")
+            raise MethodIncompatibility("record repeat/fold is outside fold_ids")
         if record["origin"] not in {"statspai_internal", "caller_declared"}:
-            raise ValueError("training record origin is invalid")
+            raise MethodIncompatibility("training record origin is invalid")
 
         train = _id_list(record["train_ids"], known, "train_ids")
         test = _id_list(record["test_ids"], known, "test_ids")
@@ -182,9 +190,13 @@ def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]
         held_out = set(expected_test)
         expected_train = [row for row in ids if row not in held_out]
         if test != expected_test or train != expected_train:
-            raise ValueError("train/test IDs must be ordered strict fold complements")
+            raise MethodIncompatibility(
+                "train/test IDs must be ordered strict fold complements"
+            )
         if {treatment[row] for row in train} != {0, 1}:
-            raise ValueError("each training fold must contain both treatment arms")
+            raise MethodIncompatibility(
+                "each training fold must contain both treatment arms"
+            )
 
         nuisance = _json.require_keys(
             record["nuisance_train_ids"], _LEARNERS, "nuisance IDs"
@@ -196,7 +208,9 @@ def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]
         }
         for learner, expected in expected_nuisance.items():
             if _id_list(nuisance[learner], known, f"nuisance.{learner}") != expected:
-                raise ValueError(f"nuisance.{learner} has wrong arm/training scope")
+                raise MethodIncompatibility(
+                    f"nuisance.{learner} has wrong arm/training scope"
+                )
 
         preprocessing = _json.require_keys(
             record["preprocessing_train_ids"], _LEARNERS, "preprocessing IDs"
@@ -208,15 +222,19 @@ def validated_training_records(value: Any, ids, d, folds) -> list[dict[str, Any]
             declared_ids = set(declared)
             canonical = [row for row in train if row in declared_ids]
             if declared != canonical:
-                raise ValueError(
+                raise MethodIncompatibility(
                     f"preprocessing.{learner} must be an ordered training subset"
                 )
     if actual_pairs != expected_pairs:
-        raise ValueError("training_records must be sorted by repeat and fold")
+        raise MethodIncompatibility(
+            "training_records must be sorted by repeat and fold"
+        )
     return records
 
 
-def validated_input_mapping(kept: Any, dropped: Any, n_obs: int):
+def validated_input_mapping(
+    kept: Any, dropped: Any, n_obs: int
+) -> Tuple[np.ndarray, np.ndarray]:
     kept = immutable_array(kept, "input_positions", 1, integer=True)
     dropped = immutable_array(dropped, "dropped_positions", 1, integer=True)
     if len(kept) != n_obs or np.any(kept < 0) or np.any(dropped < 0):
@@ -233,7 +251,9 @@ def validated_input_mapping(kept: Any, dropped: Any, n_obs: int):
     return kept, dropped
 
 
-def validated_metadata(value: Any, info: Mapping[str, Any], ps_used) -> dict:
+def validated_metadata(
+    value: Any, info: Mapping[str, Any], ps_used: np.ndarray
+) -> dict:
     result = _json.copy_json(value, "metadata")
     if not isinstance(result, Mapping):
         raise TypeError("metadata must be a mapping")
@@ -250,13 +270,17 @@ def validated_metadata(value: Any, info: Mapping[str, Any], ps_used) -> dict:
     if engine not in engines:
         raise ValueError("metadata.scoring_engine is invalid")
     if {row["origin"] for row in info["training_records"]} != {engines[engine]}:
-        raise ValueError("metadata scoring engine disagrees with training origin")
+        raise MethodIncompatibility(
+            "metadata scoring engine disagrees with training origin"
+        )
     if result["score"] != "ATE" or result["psi_a"] != -1:
-        raise ValueError("metadata must declare score='ATE' and psi_a=-1")
+        raise MethodIncompatibility("metadata must declare score='ATE' and psi_a=-1")
     if result["variance_policy"] != "ddof0":
-        raise ValueError("metadata.variance_policy must be 'ddof0'")
+        raise MethodIncompatibility("metadata.variance_policy must be 'ddof0'")
     if result["normalize_ipw"] is not False:
-        raise ValueError("metadata.normalize_ipw must be false in schema version 1")
+        raise MethodIncompatibility(
+            "metadata.normalize_ipw must be false in schema version 1"
+        )
     threshold = result["trimming_threshold"]
     if (
         isinstance(threshold, bool)

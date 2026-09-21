@@ -181,11 +181,11 @@ class TestCausalDiscoveryViz:
 
     def test_module_exports_helpers(self):
         from statspai.causal_discovery import (
-            to_networkx,
-            to_dot,
-            plot_dag,
             edge_list,
+            plot_dag,
             shd,
+            to_dot,
+            to_networkx,
         )
 
         # Standalone usage on a 3-node DAG

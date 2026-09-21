@@ -10,7 +10,8 @@ import pytest
 from sklearn.pipeline import Pipeline
 
 from statspai import OOFPredictions
-from statspai.dml.double_ml import DoubleML, dml as library_dml
+from statspai.dml.double_ml import DoubleML
+from statspai.dml.double_ml import dml as library_dml
 from statspai.dml.irm import DoubleMLIRM
 
 from .dml_oof_export_helpers import (
@@ -261,11 +262,7 @@ def test_external_bundle_matches_transparent_aipw_formula_row_by_row():
 def test_external_bundle_matches_independent_doubleml_style_moment_calculation():
     """The DoubleML linear-score convention independently reproduces theta and SE."""
     doubleml = pytest.importorskip("doubleml")
-    from doubleml.utils import (
-        DMLDummyClassifier,
-        DMLDummyRegressor,
-        PSProcessorConfig,
-    )
+    from doubleml.utils import DMLDummyClassifier, DMLDummyRegressor, PSProcessorConfig
 
     frame, predictions = _parity_fixture()
     bundle = (

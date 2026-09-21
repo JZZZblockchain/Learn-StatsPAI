@@ -20472,6 +20472,11 @@
           "description": "_score parameter (Optional[np.ndarray]).",
           "type": "string"
         },
+        "_score_label": {
+          "default": "Centered stored residual",
+          "description": "_score_label parameter (str).",
+          "type": "string"
+        },
         "balance_table": {
           "default": null,
           "description": "balance_table parameter (pd.DataFrame).",
@@ -20500,17 +20505,25 @@
           "type": "integer"
         },
         "orth_pvalue": {
-          "default": 1.0,
-          "description": "orth_pvalue parameter (float).",
+          "description": "orth_pvalue parameter (Optional[float]).",
           "type": "number"
         },
         "orth_stat": {
-          "default": 0.0,
-          "description": "orth_stat parameter (float).",
+          "description": "orth_stat parameter (Optional[float]).",
           "type": "number"
         },
         "orth_warning": {
           "description": "orth_warning parameter (Optional[str]).",
+          "type": "string"
+        },
+        "orthogonality_reason": {
+          "default": "A solved estimating equation is not a test of Neyman orthogonality or identification.",
+          "description": "orthogonality_reason parameter (str).",
+          "type": "string"
+        },
+        "orthogonality_status": {
+          "default": "not_tested",
+          "description": "orthogonality_status parameter (str).",
           "type": "string"
         },
         "overlap_table": {

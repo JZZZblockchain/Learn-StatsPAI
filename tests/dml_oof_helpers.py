@@ -45,9 +45,9 @@ def tiny_inputs(n_rep=1):
     fold_ids = np.tile([0, 0, 1, 1], (n_rep, 1))
     kwargs = {
         "ids": ids,
-        "y": df.y.to_numpy(),
-        "d": df.d.to_numpy(),
-        "x": df[["x"]].to_numpy(),
+        "y": df.y.to_numpy(copy=True),
+        "d": df.d.to_numpy(copy=True),
+        "x": df[["x"]].to_numpy(copy=True),
         "covariate_names": ["x"],
         "g0": np.ones((n_rep, 4)),
         "g1": np.full((n_rep, 4), 3.0),

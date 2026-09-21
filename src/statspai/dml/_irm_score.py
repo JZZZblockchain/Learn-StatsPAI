@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -30,6 +30,7 @@ class _ScoreArrayView:
     """Return a fresh guarded header over one Task 3 byte snapshot."""
 
     __slots__ = ("_storage_name",)
+    _storage_name: str
 
     def __init__(self, storage_name: str) -> None:
         object.__setattr__(self, "_storage_name", storage_name)
@@ -56,9 +57,9 @@ class IRMScore:
     theta: float
     se: float
 
-    ps_used = _ScoreArrayView("_ps_used")
-    psi_b = _ScoreArrayView("_psi_b")
-    psi = _ScoreArrayView("_psi")
+    ps_used = cast(np.ndarray, _ScoreArrayView("_ps_used"))
+    psi_b = cast(np.ndarray, _ScoreArrayView("_psi_b"))
+    psi = cast(np.ndarray, _ScoreArrayView("_psi"))
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         raise TypeError("IRMScore must be created by score_binary_ate()")

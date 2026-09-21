@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import operator
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
 from . import _oof_serialization as _json
-from .oof import OOFBundle
+from .oof import OOFBundle, OOFPredictions
 
 _UNAVAILABLE = (
     "OOF records are unavailable; refit a supported model='irm' ATE "
@@ -27,7 +27,7 @@ _BUNDLE_ARRAYS = (
 )
 
 
-def _array_structure(value: Any, names) -> tuple:
+def _array_structure(value: Any, names: Sequence[str]) -> tuple:
     return tuple(
         (name, getattr(value, name).dtype.str, getattr(value, name).shape)
         for name in names
@@ -46,7 +46,7 @@ def _prediction_structure(predictions: Any) -> tuple:
     )
 
 
-def _clone_predictions(predictions: Any):
+def _clone_predictions(predictions: OOFPredictions) -> OOFPredictions:
     """Clone only after checking live values, hashes, and array headers."""
     payload = predictions._payload()
     expected = _json.prediction_hashes(payload)
@@ -121,10 +121,12 @@ def _row_columns(bundle: "OOFBundle") -> dict:
     }
     return {
         "rep": rep,
-        "row_id": np.tile(bundle.predictions.ids, repeats),
+        "row_id": pd.Series(np.tile(bundle.predictions.ids, repeats), dtype=object),
         "input_position": np.tile(bundle.input_positions, repeats),
         "fold_id": folds,
-        "training_origin": [origins[(int(r), int(f))] for r, f in zip(rep, folds)],
+        "training_origin": pd.Series(
+            [origins[(int(r), int(f))] for r, f in zip(rep, folds)], dtype=object
+        ),
     }
 
 

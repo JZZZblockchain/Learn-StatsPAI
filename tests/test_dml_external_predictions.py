@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import math
+import hashlib
 import importlib
 import inspect
-import hashlib
 import json
+import math
 import pydoc
 import typing
 from pathlib import Path
@@ -20,7 +20,8 @@ import statspai as sp
 from statspai import OOFPredictions
 from statspai.agent.tools import tool_manifest
 from statspai.dml._base import _DoubleMLBase
-from statspai.dml.double_ml import DoubleML, dml as library_dml
+from statspai.dml.double_ml import DoubleML
+from statspai.dml.double_ml import dml as library_dml
 from statspai.dml.irm import DoubleMLIRM
 from statspai.exceptions import MethodIncompatibility
 
@@ -720,9 +721,10 @@ _PYTHON_ONLY_NAMES = {
     "observation_ids",
 }
 _PRECHANGE_NON_DML_HASHES = {
-    "functions.json": "1ec90142f89c7700a9f827ec4027a346eef45aa0c1bd1f8d7f32e3f413aaca84",  # noqa: E501
-    "agent_cards.json": "e1d72fec4d99b7dfbc77fea96db1a1d2d31ebbe504e7aad814cd4240e0ba6546",  # noqa: E501
-    "tools.json": "4bfc3724754783efeefb9604f285027e7ef19194f4d89fb0b6fa3e1ee9289507",
+    # Current upstream 42147197, excluding this PR's two DML API entries.
+    "functions.json": "f2c5d9a4e5da3cc454f3c117e0ac8b6d88665505c00d5e63796fba9fe7752633",  # noqa: E501
+    "agent_cards.json": "7b08027400be24d27b597362388725fb86cc7c8e21207294a69948fd112c2a6f",  # noqa: E501
+    "tools.json": "ccfb1057df23752e1bc5616f946378eb6e24538ca25194e6028dc7f3a0706e93",
 }
 _LIVE_DML_SCHEMAS = {
     "functions.json": lambda: sp.function_schema("dml")["parameters"],
@@ -744,7 +746,9 @@ def _artifact_parameter_schema(filename, entry):
 
 
 def _canonical_non_dml_hash(entries):
-    others = [entry for entry in entries if entry.get("name") != "dml"]
+    others = [
+        entry for entry in entries if entry.get("name") not in {"dml", "DMLDiagnostics"}
+    ]
     payload = json.dumps(
         others, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode()

@@ -11,8 +11,8 @@ import pandas as pd
 from ..exceptions import MethodIncompatibility
 
 if TYPE_CHECKING:
-    from ._decision import DecisionSummary
     from ..dml.oof import OOFBundle
+    from ._decision import DecisionSummary
 else:
     OOFBundle = Any
 
@@ -2808,13 +2808,56 @@ class CausalResult:
         self._citation_key = _citation_key
 
     def get_oof(self) -> "OOFBundle":
-        """Return an independent snapshot of retained repeated-cross-fit OOF data."""
+        """Return an independent snapshot of retained repeated-cross-fit OOF data.
+
+        Returns
+        -------
+        OOFBundle
+            All retained repeats, row identities, predictions and scores.
+            Requires an unweighted IRM ATE fit with ``store_oof=True``;
+            otherwise raises ValueError. Ordinary result serialization omits
+            this individual-level snapshot; use its explicit JSON exporter.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> callable(sp.CausalResult.get_oof)
+        True
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for the versioned data contract.
+        """
         from ..dml.oof import _get_result_oof
 
         return _get_result_oof(self)
 
     def get_residuals(self, rep: Optional[int] = None) -> pd.DataFrame:
-        """Return retained IRM residual/score rows, optionally for one repeat."""
+        """Return retained IRM residual/score rows, optionally for one repeat.
+
+        Parameters
+        ----------
+        rep : int or None, default None
+            Zero-based repeat selector; None returns every repeat. Booleans
+            and nonintegers are rejected, as are out-of-range repeats.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Fresh row/fold identities, centered score ``psi``, outcome
+            residual ``y_minus_gd``, and treatment residual
+            ``d_minus_ps_raw``. Requires retained IRM ATE records.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> callable(sp.CausalResult.get_residuals)
+        True
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for residual definitions.
+        """
         from ..dml.oof import _get_result_residuals
 
         return _get_result_residuals(self, rep=rep)

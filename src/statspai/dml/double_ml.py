@@ -392,6 +392,31 @@ class DoubleML:
         predictions are allowed when the explicit partition is equivalent for
         every repeat. ``external_predictions``, ``store_oof``, and
         ``observation_ids`` are Python-only controls.
+
+        Parameters
+        ----------
+        external_predictions : OOFPredictions or None, default None
+            In-memory predictions and declared training scopes, aligned to
+            every analysis row, fold, and repeat.
+        store_oof : bool, default False
+            Retain complete IRM ATE records for explicit audit export.
+        observation_ids : sequence of str or None, default None
+            Unique input row identifiers; generated ordinals otherwise.
+
+        Returns
+        -------
+        CausalResult
+            The configured model's effect and uncertainty.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> callable(sp.DoubleML.fit)
+        True
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for the audit contract.
         """
         return self._impl.fit(
             external_predictions=external_predictions,

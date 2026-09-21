@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping, Tuple
+from typing import Any, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -16,16 +16,17 @@ from . import _oof_validation as _v
 
 _PREDICTION_ARRAYS = ("y", "d", "x", "g0", "g1", "ps_raw", "fold_ids")
 _BUNDLE_ARRAYS = "ps_used psi_b psi theta se input_positions dropped_positions".split()
+_T = TypeVar("_T")
 
 
-def _make(cls, values):
+def _make(cls: Type[_T], values: Mapping[str, Any]) -> _T:
     instance = object.__new__(cls)
     for name, value in values.items():
         object.__setattr__(instance, name, value)
     return instance
 
 
-def _snapshots(values, names):
+def _snapshots(values: Mapping[str, Any], names: Sequence[str]) -> dict[str, Any]:
     return {f"_{name}": _v.snapshot_array(values[name]) for name in names}
 
 
@@ -36,6 +37,26 @@ class OOFPredictions:
     Records marked ``caller_declared`` describe claims StatsPAI can check for
     structural consistency, not training behavior StatsPAI observed. Public
     array access returns a fresh read-only NumPy header over immutable bytes.
+
+    Parameters
+    ----------
+    None
+        Construct with :meth:`from_arrays`, not the class constructor.
+
+    Returns
+    -------
+    OOFPredictions
+        Immutable schema-v1 data, predictions, folds, and declared scopes.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> sp.OOFPredictions.__name__
+    'OOFPredictions'
+
+    References
+    ----------
+    See ``docs/dml_oof_audit.md`` for the data contract.
     """
 
     __slots__ = (
@@ -58,26 +79,62 @@ class OOFPredictions:
     ps_raw = _v.ArrayView("_ps_raw")
     fold_ids = _v.ArrayView("_fold_ids")
 
-    def __init__(self, *_args, **_kwargs) -> None:
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         raise TypeError("OOFPredictions must be created with from_arrays()")
 
     @classmethod
     def from_arrays(
         cls,
         *,
-        ids,
-        y,
-        d,
-        x,
-        covariate_names,
-        g0,
-        g1,
-        ps_raw,
-        fold_ids,
-        training_records,
-        source,
+        ids: Sequence[str],
+        y: Any,
+        d: Any,
+        x: Any,
+        covariate_names: Sequence[str],
+        g0: Any,
+        g1: Any,
+        ps_raw: Any,
+        fold_ids: Any,
+        training_records: Sequence[Mapping[str, Any]],
+        source: Mapping[str, Any],
     ) -> "OOFPredictions":
-        """Validate and defensively copy a complete analysis-sample snapshot."""
+        """Validate and defensively copy a complete analysis-sample snapshot.
+
+        Parameters
+        ----------
+        ids : sequence of str
+            Unique row identifiers in analysis order.
+        y, d : array-like of shape (n_obs,)
+            Finite outcomes and binary treatment containing both arms.
+        x : array-like of shape (n_obs, n_covariates)
+            Finite covariate matrix in the declared column order.
+        covariate_names : sequence of str
+            Unique covariate names.
+        g0, g1, ps_raw : array-like of shape (n_rep, n_obs)
+            Outcome predictions by arm and raw propensities in [0, 1].
+        fold_ids : array-like of int of shape (n_rep, n_obs)
+            Complete held-out fold assignments for each repeat.
+        training_records : sequence of mapping
+            One record per repeat/fold declaring disjoint train/test IDs and
+            nuisance and preprocessing training scopes. See the audit guide.
+        source : mapping
+            Engine, recipe, seed, and software version provenance.
+
+        Returns
+        -------
+        OOFPredictions
+            Validated independent snapshot with corruption hashes.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> callable(sp.OOFPredictions.from_arrays)
+        True
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for training-record fields.
+        """
         y = _v.immutable_array(y, "y", 1)
         d = _v.immutable_array(d, "d", 1)
         x = _v.immutable_array(x, "x", 2)
@@ -140,14 +197,35 @@ class OOFPredictions:
 
     @property
     def n_rep(self) -> int:
-        return self.g0.shape[0]
+        return int(self.g0.shape[0])
 
     @property
     def n_folds(self) -> int:
         return len(np.unique(self.fold_ids[0]))
 
-    def validate_alignment(self, *, ids, y, d, x, covariate_names) -> None:
-        """Raise unless current analysis inputs exactly match this row order."""
+    def validate_alignment(
+        self,
+        *,
+        ids: Sequence[str],
+        y: Any,
+        d: Any,
+        x: Any,
+        covariate_names: Sequence[str],
+    ) -> None:
+        """Raise unless current analysis inputs exactly match this row order.
+
+        Parameters
+        ----------
+        ids, covariate_names : sequence of str
+            Ordered identifiers to compare with the snapshot.
+        y, d, x : array-like
+            Observed arrays to compare exactly, including shape.
+
+        Returns
+        -------
+        None
+            Raises ValueError on any mismatch.
+        """
         try:
             checks = {
                 "ids": tuple(ids) == self.ids,
@@ -164,7 +242,7 @@ class OOFPredictions:
                 "OOFPredictions alignment failed for: " + ", ".join(failed)
             )
 
-    def _payload(self):
+    def _payload(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "ids": list(self.ids),
@@ -177,12 +255,23 @@ class OOFPredictions:
             "hashes": dict(self.hashes),
         }
 
-    def to_json(self, path) -> None:
-        """Write deterministic UTF-8 JSON with three partition hashes."""
+    def to_json(self, path: Union[str, Path]) -> None:
+        """Write deterministic UTF-8 JSON with three partition hashes.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Destination for individual-level data, predictions, and scopes.
+
+        Returns
+        -------
+        None
+            Writes schema-v1 JSON to the requested path.
+        """
         Path(path).write_bytes(_json.canonical_bytes(self._payload()))
 
     @classmethod
-    def _from_payload(cls, payload):
+    def _from_payload(cls, payload: Any) -> "OOFPredictions":
         payload = _json.require_keys(payload, _json.PREDICTION_KEYS, "prediction")
         if payload["schema_version"] != _json.PREDICTION_SCHEMA:
             raise ValueError(
@@ -205,11 +294,22 @@ class OOFPredictions:
         return result
 
     @classmethod
-    def from_json(cls, path):
-        """Read only after checking schema, duplicate keys, and stored hashes."""
+    def from_json(cls, path: Union[str, Path]) -> "OOFPredictions":
+        """Read only after checking schema, duplicate keys, and stored hashes.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Schema-v1 prediction JSON file.
+
+        Returns
+        -------
+        OOFPredictions
+            Validated independent snapshot.
+        """
         return cls._from_payload(_json.read_json(path, "OOFPredictions"))
 
-    def _clone(self):
+    def _clone(self) -> "OOFPredictions":
         return type(self).from_arrays(
             ids=self.ids,
             covariate_names=self.covariate_names,
@@ -221,7 +321,28 @@ class OOFPredictions:
 
 @dataclass(frozen=True, init=False, eq=False, repr=False)
 class OOFBundle:
-    """Validated StatsPAI binary-ATE score output with bounded ULP slack."""
+    """Validated StatsPAI binary-ATE score output with bounded ULP slack.
+
+    Parameters
+    ----------
+    None
+        Obtain from a retained result or construct with :meth:`from_arrays`.
+
+    Returns
+    -------
+    OOFBundle
+        Immutable schema-v1 predictions, scores, and repeat aggregation.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> sp.OOFBundle.__name__
+    'OOFBundle'
+
+    References
+    ----------
+    See ``docs/dml_oof_audit.md`` for score and variance conventions.
+    """
 
     __slots__ = (
         "schema_version predictions _ps_used _psi_b _psi _theta _se "
@@ -242,25 +363,46 @@ class OOFBundle:
     input_positions = _v.ArrayView("_input_positions")
     dropped_positions = _v.ArrayView("_dropped_positions")
 
-    def __init__(self, *_args, **_kwargs) -> None:
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         raise TypeError("OOFBundle must be created with from_arrays()")
 
     @classmethod
     def from_arrays(
         cls,
         *,
-        predictions,
-        ps_used,
-        psi_b,
-        psi,
-        theta,
-        se,
-        input_positions,
-        dropped_positions,
-        aggregation,
-        metadata,
+        predictions: OOFPredictions,
+        ps_used: Any,
+        psi_b: Any,
+        psi: Any,
+        theta: Any,
+        se: Any,
+        input_positions: Any,
+        dropped_positions: Any,
+        aggregation: Mapping[str, Any],
+        metadata: Mapping[str, Any],
     ) -> "OOFBundle":
-        """Validate and copy canonical binary-ATE scoring output."""
+        """Validate and copy canonical binary-ATE scoring output.
+
+        Parameters
+        ----------
+        predictions : OOFPredictions
+            Complete validated analysis snapshot.
+        ps_used, psi_b, psi : array-like of shape (n_rep, n_obs)
+            Clipped propensities, AIPW pseudo-outcomes, and centered scores.
+        theta, se : array-like of shape (n_rep,)
+            Per-repeat effects and standard errors.
+        input_positions, dropped_positions : array-like of int
+            Disjoint mappings covering the original input row positions.
+        aggregation : mapping
+            Validated median-effect and median-variance aggregation record.
+        metadata : mapping
+            Trimming, fit, and provenance metadata required by schema v1.
+
+        Returns
+        -------
+        OOFBundle
+            Independent snapshot; inconsistent scores or mappings raise.
+        """
         if not isinstance(predictions, OOFPredictions):
             raise TypeError("predictions must be OOFPredictions")
         prediction_arrays = {
@@ -306,7 +448,7 @@ class OOFBundle:
         object.__setattr__(instance, "hash", _json.digest(instance._unsigned_payload()))
         return instance
 
-    def _unsigned_payload(self):
+    def _unsigned_payload(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "predictions": self.predictions._payload(),
@@ -322,34 +464,80 @@ class OOFBundle:
             "metadata": _json.plain(self.metadata),
         }
 
-    def _payload(self):
+    def _payload(self) -> dict[str, Any]:
         result = self._unsigned_payload()
         result["hash"] = self.hash
         return result
 
     def to_frame(self) -> pd.DataFrame:
-        """Return repeat-major score rows without individual covariate values."""
+        """Return repeat-major score rows without individual covariate values.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Fresh row/fold identity, outcomes, treatments, predictions and
+            scores, with one row per repeat and analysis observation.
+        """
         from ._oof_result import bundle_frame
 
         return bundle_frame(self)
 
     def score_concentration(self, *, top_fraction: float = 0.01) -> tuple[dict, ...]:
-        """Return per-repeat concentration diagnostics for centered scores."""
+        """Return per-repeat concentration diagnostics for centered scores.
+
+        Parameters
+        ----------
+        top_fraction : float, default 0.01
+            Fraction in (0, 1] used for the largest squared-score share sum.
+
+        Returns
+        -------
+        tuple of dict
+            One independent JSON-ready record per repeat, with cmax, z_c,
+            top_share, h and effective_score_count. Undefined diagnostics
+            have status='diagnostic_unavailable' and explicit failure_reason.
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for definitions; these are diagnostics,
+        not tests of causal identification.
+        """
         from ._score_concentration import score_concentration
 
         return score_concentration(self.psi, top_fraction=top_fraction)
 
-    def to_json(self, path) -> None:
+    def to_json(self, path: Union[str, Path]) -> None:
         """Write full individual-level IDs, Y, D, X, nuisance predictions, and scores.
 
         Choose the path, permissions, and sharing scope under the applicable
         user-data policy; the file carries one whole-bundle hash.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Destination for full individual-level schema-v1 records.
+
+        Returns
+        -------
+        None
+            Writes deterministic UTF-8 JSON.
         """
         Path(path).write_bytes(_json.canonical_bytes(self._payload()))
 
     @classmethod
-    def from_json(cls, path):
-        """Read only after checking schema, duplicate keys, and stored hash."""
+    def from_json(cls, path: Union[str, Path]) -> "OOFBundle":
+        """Read only after checking schema, duplicate keys, and stored hash.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Schema-v1 bundle JSON file.
+
+        Returns
+        -------
+        OOFBundle
+            Validated independent snapshot, including reconstructed scores.
+        """
         payload = _json.require_keys(
             _json.read_json(path, "OOFBundle"), _json.BUNDLE_KEYS, "bundle"
         )
@@ -379,25 +567,25 @@ class OOFBundle:
         return result
 
 
-def _clone_oof_predictions(predictions):
+def _clone_oof_predictions(predictions: OOFPredictions) -> OOFPredictions:
     from ._oof_result import _clone_predictions
 
     return _clone_predictions(predictions)
 
 
-def _attach_result_oof(result, bundle) -> None:
+def _attach_result_oof(result: Any, bundle: OOFBundle) -> None:
     from ._oof_result import attach_result_oof
 
     attach_result_oof(result, bundle)
 
 
-def _get_result_oof(result):
+def _get_result_oof(result: Any) -> OOFBundle:
     from ._oof_result import get_result_oof
 
     return get_result_oof(result)
 
 
-def _get_result_residuals(result, *, rep=None):
+def _get_result_residuals(result: Any, *, rep: Optional[int] = None) -> pd.DataFrame:
     from ._oof_result import get_result_residuals
 
     return get_result_residuals(result, rep)

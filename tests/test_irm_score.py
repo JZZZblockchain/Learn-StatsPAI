@@ -384,7 +384,7 @@ def test_score_binary_ate_calls_the_shared_leaf_once_with_clipped_propensity(
     ],
 )
 def test_internal_irm_prechange_literal_goldens(kind, estimate, se, y_residual_block):
-    """Literal anchors captured at reviewed base 4e18e20d before IRM refactoring."""
+    """Literal IRM anchors, with upstream's stable normal-tail p-value."""
     result = _internal_estimator(kind).fit()
     info = result.model_info
 
@@ -396,7 +396,8 @@ def test_internal_irm_prechange_literal_goldens(kind, estimate, se, y_residual_b
             map(float.fromhex, ["0x1.ffffffffffffcp+49", "0x1.0000000000002p+50"])
         )
     else:
-        assert result.pvalue == float.fromhex("0x1.9e25951000000p-24")
+        # Current upstream uses 2 * norm.sf, avoiding 1 - cdf cancellation.
+        assert result.pvalue == float.fromhex("0x1.9e25950c577f9p-24")
         assert result.ci == tuple(
             map(float.fromhex, ["0x1.43d7ecd46602ep+1", "0x1.5e140995ccfe9p+2"])
         )

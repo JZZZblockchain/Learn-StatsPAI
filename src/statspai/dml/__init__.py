@@ -20,20 +20,20 @@ Treatment and Structural Parameters." *Econometrics Journal*, 21(1),
 C1-C68. [@chernozhukov2018double]
 """
 
-from .double_ml import dml, DoubleML
-from .plr import DoubleMLPLR
-from .irm import DoubleMLIRM
-from .pliv import DoubleMLPLIV
+from ._diagnostics import DMLDiagnostics, dml_diagnostics
+from ._sensitivity import DMLSensitivityResult, dml_sensitivity
+from .double_ml import DoubleML, dml
 from .iivm import DoubleMLIIVM
+from .irm import DoubleMLIRM
 from .model_averaging import (
+    DMLAveragingResult,
     dml_model_averaging,
     model_averaging_dml,
-    DMLAveragingResult,
 )
-from .panel_dml import dml_panel, DMLPanelResult
-from ._sensitivity import dml_sensitivity, DMLSensitivityResult
-from ._diagnostics import dml_diagnostics, DMLDiagnostics
 from .oof import OOFBundle, OOFPredictions
+from .panel_dml import DMLPanelResult, dml_panel
+from .pliv import DoubleMLPLIV
+from .plr import DoubleMLPLR
 
 __all__ = [
     "dml",

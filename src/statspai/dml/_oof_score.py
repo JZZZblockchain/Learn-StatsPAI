@@ -22,7 +22,9 @@ def _real_array(value: Any, name: str) -> np.ndarray:
     return result
 
 
-def binary_ate_pseudo_outcome(y, d, g0, g1, ps_used) -> np.ndarray:
+def binary_ate_pseudo_outcome(
+    y: Any, d: Any, g0: Any, g1: Any, ps_used: Any
+) -> np.ndarray:
     """Return the canonical binary-treatment ATE AIPW pseudo-outcome.
 
     Inputs must be finite, real, equally shaped one- or two-dimensional

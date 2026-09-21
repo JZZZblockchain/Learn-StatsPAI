@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -49,6 +49,7 @@ def external_analysis_identity(
 
 def _internal_software_versions() -> Mapping[str, str]:
     import sklearn
+
     import statspai
 
     return {
@@ -100,7 +101,9 @@ def _validated_indices(v: Any, n_obs: int, name: str) -> np.ndarray:
     return result
 
 
-def _validated_splits(capture: "OOFRepCapture", splits, minimum: int):
+def _validated_splits(
+    capture: "OOFRepCapture", splits: Any, minimum: int
+) -> Tuple[np.ndarray, list[dict[str, Any]]]:
     if not isinstance(splits, Sequence):
         raise ValueError("splits must be a sequence")
     rows = list(splits)
@@ -144,6 +147,10 @@ def _validated_splits(capture: "OOFRepCapture", splits, minimum: int):
 
 
 class OOFRepCapture:
+    _arrays: dict[str, np.ndarray]
+    _records: Optional[list[dict[str, Any]]]
+    _score: Optional[IRMScore]
+
     def __init__(self, owner: Any, mode: str, rep: int, rng_seed: int) -> None:
         self._owner, self._mode, self._rep = owner, mode, rep
         self._rng_seed, self._stage = rng_seed, "new"
@@ -153,14 +160,21 @@ class OOFRepCapture:
         if (self._mode, self._stage) != (mode, stage):
             raise RuntimeError(message)
 
-    def record_internal_splits(self, splits, *, min_subgroup_fit: int) -> None:
+    def record_internal_splits(self, splits: Any, *, min_subgroup_fit: int) -> None:
         self._require("internal", "new", "internal split capture is invalid")
         fold_ids, records = _validated_splits(self, splits, min_subgroup_fit)
         self._arrays["fold_ids"], self._records = fold_ids, records
         self._stage = "split"
 
     def record_internal_score(
-        self, *, g0, g1, ps_raw, score, fallback_g0: int, fallback_g1: int
+        self,
+        *,
+        g0: Any,
+        g1: Any,
+        ps_raw: Any,
+        score: IRMScore,
+        fallback_g0: int,
+        fallback_g1: int,
     ) -> None:
         self._require("internal", "split", "internal score capture is invalid")
         if (fallback_g0, fallback_g1) != (0, 0) or not isinstance(score, IRMScore):
@@ -183,9 +197,27 @@ class OOFRepCapture:
 
 class OOFRetention:
     _predictions: Optional["OOFPredictions"]
+    _captures: list[OOFRepCapture]
+    _active: Optional[OOFRepCapture]
+    _mode: str
+    _n_rep: int
+    _n_folds: int
+    _trimming_threshold: float
+    _identity: AnalysisIdentity
+    _built: bool
+    _prediction_base: dict[str, Any]
+    _y: np.ndarray
+    _d: np.ndarray
 
     @classmethod
-    def _new(cls, mode, identity, n_rep, n_folds, threshold):
+    def _new(
+        cls,
+        mode: str,
+        identity: AnalysisIdentity,
+        n_rep: int,
+        n_folds: int,
+        threshold: float,
+    ) -> "OOFRetention":
         instance = object.__new__(cls)
         instance._mode, instance._n_rep, instance._n_folds = mode, n_rep, n_folds
         instance._trimming_threshold = threshold
@@ -197,15 +229,15 @@ class OOFRetention:
     def internal(
         cls,
         *,
-        y,
-        d,
-        x,
-        covariate_names,
-        identity,
-        n_rep,
-        n_folds,
-        random_state,
-        trimming_threshold,
+        y: Any,
+        d: Any,
+        x: Any,
+        covariate_names: Sequence[str],
+        identity: AnalysisIdentity,
+        n_rep: int,
+        n_folds: int,
+        random_state: int,
+        trimming_threshold: float,
     ) -> "OOFRetention":
         instance = cls._new("internal", identity, n_rep, n_folds, trimming_threshold)
         y = _v.immutable_array(y, "y", 1)
@@ -221,7 +253,7 @@ class OOFRetention:
             f"{identity.observation_ids_source}; fit_seed is random_state + rep "
             "for split/call provenance and does not override learner randomness"
         )
-        source = {"engine": "statspai_irm_internal", "recipe": recipe}
+        source: dict[str, Any] = {"engine": "statspai_irm_internal", "recipe": recipe}
         source["seed"] = int(random_state)
         source["software_versions"] = dict(_internal_software_versions())
         base = {"ids": instance._identity.ids, "y": y, "d": d, "x": x}
@@ -232,7 +264,13 @@ class OOFRetention:
 
     @classmethod
     def external(
-        cls, *, predictions, identity, n_rep, n_folds, trimming_threshold
+        cls,
+        *,
+        predictions: OOFPredictions,
+        identity: AnalysisIdentity,
+        n_rep: int,
+        n_folds: int,
+        trimming_threshold: float,
     ) -> "OOFRetention":
         instance = cls._new("external", identity, n_rep, n_folds, trimming_threshold)
         instance._predictions = _clone_oof_predictions(predictions)
@@ -248,7 +286,8 @@ class OOFRetention:
         valid = capture is self._active and capture._owner is self
         if not valid or capture._stage != "scored":
             raise RuntimeError("OOF repeat capture is incomplete or foreign")
-        if theta != capture._score.theta or se != capture._score.se:
+        score = cast(IRMScore, capture._score)
+        if theta != score.theta or se != score.se:
             raise RuntimeError("fit result disagrees with captured IRMScore")
         self._captures.append(capture)
         self._active = None
@@ -262,13 +301,17 @@ class OOFRetention:
         external = self._mode == "external"
         captures = self._captures
         if external:
-            predictions = self._predictions
+            predictions = cast(OOFPredictions, self._predictions)
         else:
-            arrays = {
+            arrays: dict[str, Any] = {
                 name: np.stack([capture._arrays[name] for capture in captures])
                 for name in ("g0", "g1", "ps_raw", "fold_ids")
             }
-            records = [item for capture in captures for item in capture._records]
+            records = [
+                item
+                for capture in captures
+                for item in cast(list[dict[str, Any]], capture._records)
+            ]
             predictions = OOFPredictions.from_arrays(
                 training_records=records, **self._prediction_base, **arrays
             )

@@ -17,12 +17,12 @@ from scipy import stats
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility
+from . import _oof_retention as _retention
 from ._external_predictions import (
     validate_external_partitions,
     validate_external_prediction_input,
 )
 from ._learners import resolve_learner
-from . import _oof_retention as _retention
 from .oof import OOFPredictions, _attach_result_oof
 
 
@@ -572,6 +572,34 @@ class _DoubleMLBase:
         store_oof: bool = False,
         observation_ids: Optional[Sequence[str]] = None,
     ) -> CausalResult:
+        """Fit the configured DML model and optionally retain IRM ATE records.
+
+        Parameters
+        ----------
+        external_predictions : OOFPredictions or None, default None
+            Validated in-memory predictions aligned exactly to observed rows.
+            Supported for unweighted, unnormalised binary IRM ATE only.
+        store_oof : bool, default False
+            Retain all repeats for ``get_oof()`` and ``get_residuals()``.
+            Internal retained fits reject subgroup-mean fallback.
+        observation_ids : sequence of str or None, default None
+            Unique IDs in input row order; generated ordinal IDs otherwise.
+
+        Returns
+        -------
+        CausalResult
+            Effect and uncertainty with optional independent OOF snapshot.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> callable(sp.DoubleMLIRM.fit)
+        True
+
+        References
+        ----------
+        See ``docs/dml_oof_audit.md`` for the versioned audit contract.
+        """
         _retention.validate_oof_request_scope(
             model_tag=self._MODEL_TAG,
             score=self.score,

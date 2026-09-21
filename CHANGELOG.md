@@ -6,6 +6,21 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **Opt-in IRM ATE OOF audit records.** `sp.dml`, `sp.DoubleML.fit`, and
+  `sp.DoubleMLIRM.fit` accept `store_oof`, `observation_ids`, and in-memory
+  `external_predictions`. `sp.OOFPredictions` validates row/fold alignment and
+  declared training scopes; `sp.OOFBundle` exports all cross-fit repeats with
+  versioned, hash-checked JSON. `result.get_oof()` and `get_residuals()` return
+  defensive snapshots; `bundle.score_concentration()` reports squared-score
+  concentration with explicit unavailable states. The supported audit path is
+  unweighted, unnormalised binary IRM ATE. Normal fits retain their numerical
+  behavior, and ordinary result serialization excludes individual OOF arrays.
+  See `docs/dml_oof_audit.md` for scope and provenance limitations.
+- **DML diagnostic semantics correction.** The former orthogonality p-value
+  tested a score centered by construction and was uninformative. Its statistic
+  and p-value are now unavailable (`None`) with an explicit explanation;
+  IRM plots label the displayed series as a centered IRM score residual.
+
 - **One Stata `vce()` grammar on every SE-bearing regression estimator.**
   `robust=` / `vce=` accept `True`, `"robust"`, `"vce(robust)"`, `"r"`,
   `"oim"`, `"hc0"`–`"hc3"`, and a cluster variable written inline —

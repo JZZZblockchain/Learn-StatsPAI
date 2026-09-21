@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import sklearn
-import statspai
 
+import statspai
 from statspai import CausalResult, OOFBundle
 from statspai.agent.tools._helpers import _default_serializer
 from statspai.dml._oof_result import clone_bundle
