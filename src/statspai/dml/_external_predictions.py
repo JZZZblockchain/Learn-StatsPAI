@@ -13,7 +13,7 @@ import numpy as np
 
 from ..exceptions import IdentificationFailure
 from ._oof_validation import validated_names
-from .oof import OOFPredictions
+from .oof import OOFPredictions, _clone_oof_predictions
 
 _HASH_KEYS = {"data", "predictions_and_folds", "training_source"}
 _PAYLOAD_KEYS = {
@@ -29,6 +29,7 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 class ExternalPredictionInput:
     """Detached analysis arrays and validated external identity metadata."""
 
+    predictions: OOFPredictions
     y: np.ndarray
     d: np.ndarray
     x: np.ndarray
@@ -145,6 +146,7 @@ def validate_external_prediction_input(
             "model='irm' requires variation in D (both 0 and 1); "
             "ATE is not identified with a constant treatment."
         )
+    predictions = _clone_oof_predictions(predictions)
     if predictions.n_rep != n_rep:
         raise ValueError(
             "external prediction repeats do not match n_rep: "
@@ -169,7 +171,7 @@ def validate_external_prediction_input(
         covariate_names=covariate_names,
     )
     hashes = MappingProxyType(_copy_hashes(predictions.hashes))
-    return ExternalPredictionInput(y, d, x, id_source, hashes)
+    return ExternalPredictionInput(predictions, y, d, x, id_source, hashes)
 
 
 def _raw_oof_provenance_payload(
@@ -212,7 +214,7 @@ def _validate_oof_provenance_payload(
     if type(payload["external_predictions_provided"]) is not bool:
         raise TypeError("external_predictions_provided must be a bool")
     if type(payload["store_oof"]) is not bool:
-        raise TypeError("store_oof provenance must be a bool")
+        raise TypeError("store_oof must be a bool")
     hashes = payload["external_predictions_hashes"]
     if payload["external_predictions_provided"]:
         if type(hashes) is not dict:
@@ -236,6 +238,12 @@ def build_oof_provenance_payload(
     observation_ids: Optional[Sequence[str]],
 ) -> dict[str, Any]:
     """Build and validate the tiny functional-dispatcher OOF payload."""
+    if external_predictions is not None and not isinstance(
+        external_predictions, OOFPredictions
+    ):
+        raise TypeError(
+            "external_predictions must be an in-memory OOFPredictions instance"
+        )
     requested = (
         external_predictions is not None or store_oof or observation_ids is not None
     )

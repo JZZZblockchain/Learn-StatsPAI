@@ -333,6 +333,12 @@ class OOFBundle:
 
         return bundle_frame(self)
 
+    def score_concentration(self, *, top_fraction: float = 0.01) -> tuple[dict, ...]:
+        """Return per-repeat concentration diagnostics for centered scores."""
+        from ._score_concentration import score_concentration
+
+        return score_concentration(self.psi, top_fraction=top_fraction)
+
     def to_json(self, path) -> None:
         """Write full individual-level IDs, Y, D, X, nuisance predictions, and scores.
 

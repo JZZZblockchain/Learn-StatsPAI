@@ -243,12 +243,12 @@ def dml(
         normalize_ipw=normalize_ipw,
         trimming_threshold=trimming_threshold,
     )
-    _result = estimator.fit(
+    oof_provenance = build_oof_provenance_payload(
         external_predictions=external_predictions,
         store_oof=store_oof,
         observation_ids=observation_ids,
     )
-    oof_provenance = build_oof_provenance_payload(
+    _result = estimator.fit(
         external_predictions=external_predictions,
         store_oof=store_oof,
         observation_ids=observation_ids,

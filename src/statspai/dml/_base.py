@@ -618,6 +618,7 @@ class _DoubleMLBase:
                     raw_fold is not None and np.asarray(pd.isna(raw_fold)).any()
                 ),
             )
+            external_predictions = external_input.predictions
             Y, D, X = external_input.y, external_input.d, external_input.x
             if raw_fold is not None:
                 normalized_fold = self._validate_fold_indices(
