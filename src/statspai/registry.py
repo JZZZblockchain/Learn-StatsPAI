@@ -1937,7 +1937,8 @@ def _build_registry() -> None:
                 "Python-only and absent from JSON/MCP inputs; external records "
                 "accept no dict, JSON string, or file path.",
                 "store_oof=True retains individual-level records for get_oof() "
-                "and get_residuals(); ordinary serialization omits them.",
+                "and get_residuals() in memory only; ordinary serialization "
+                "omits them.",
                 "Retained IRM needs at least 10 rows per treatment arm in each "
                 "training fold or raises DataInsufficient instead of fallback; "
                 "internal explicit fold_indices require n_rep=1, "

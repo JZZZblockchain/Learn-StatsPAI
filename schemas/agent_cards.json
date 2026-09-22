@@ -1707,7 +1707,7 @@
     ],
     "category": "causal",
     "cost_profile": "",
-    "description": "Double/Debiased Machine Learning supports PLR, binary-D IRM, PLIV, and binary-D/binary-Z IIVM. Python-only external OOFPredictions supports unweighted, unnormalised IRM ATE scoring with exact alignment; caller_declared records are declarations rather than proof against leakage. Validation: certified evidence with scoped limitations. Known limitations: external_predictions, store_oof, and observation_ids are Python-only and absent from JSON/MCP inputs; external records accept no dict, JSON string, or file path; store_oof=True retains individual-level records for get_oof() and get_residuals(); ordinary serialization omits them; Retained IRM needs at least 10 rows per treatment arm in each training fold or raises DataInsufficient instead of fallback; internal explicit fold_indices require n_rep=1, while external repeated IRM records are allowed when the explicit partition is equivalent for every repeat.",
+    "description": "Double/Debiased Machine Learning supports PLR, binary-D IRM, PLIV, and binary-D/binary-Z IIVM. Python-only external OOFPredictions supports unweighted, unnormalised IRM ATE scoring with exact alignment; caller_declared records are declarations rather than proof against leakage. Validation: certified evidence with scoped limitations. Known limitations: external_predictions, store_oof, and observation_ids are Python-only and absent from JSON/MCP inputs; external records accept no dict, JSON string, or file path; store_oof=True retains individual-level records for get_oof() and get_residuals() in memory only; ordinary serialization omits them; Retained IRM needs at least 10 rows per treatment arm in each training fold or raises DataInsufficient instead of fallback; internal explicit fold_indices require n_rep=1, while external repeated IRM records are allowed when the explicit partition is equivalent for every repeat.",
     "example": "sp.dml(df, y=\"wage\", treat=\"training\", covariates=[\"age\",\"edu\"], model=\"plr\")",
     "failure_modes": [
       {
@@ -1744,7 +1744,7 @@
     "inherits_from": null,
     "limitations": [
       "external_predictions, store_oof, and observation_ids are Python-only and absent from JSON/MCP inputs; external records accept no dict, JSON string, or file path.",
-      "store_oof=True retains individual-level records for get_oof() and get_residuals(); ordinary serialization omits them.",
+      "store_oof=True retains individual-level records for get_oof() and get_residuals() in memory only; ordinary serialization omits them.",
       "Retained IRM needs at least 10 rows per treatment arm in each training fold or raises DataInsufficient instead of fallback; internal explicit fold_indices require n_rep=1, while external repeated IRM records are allowed when the explicit partition is equivalent for every repeat."
     ],
     "name": "dml",
@@ -1757,7 +1757,7 @@
     ],
     "reference": "Chernozhukov et al. (2018) Econometrics Journal",
     "signature": {
-      "description": "Double/Debiased Machine Learning supports PLR, binary-D IRM, PLIV, and binary-D/binary-Z IIVM. Python-only external OOFPredictions supports unweighted, unnormalised IRM ATE scoring with exact alignment; caller_declared records are declarations rather than proof against leakage. Validation: certified evidence with scoped limitations. Known limitations: external_predictions, store_oof, and observation_ids are Python-only and absent from JSON/MCP inputs; external records accept no dict, JSON string, or file path; store_oof=True retains individual-level records for get_oof() and get_residuals(); ordinary serialization omits them; Retained IRM needs at least 10 rows per treatment arm in each training fold or raises DataInsufficient instead of fallback; internal explicit fold_indices require n_rep=1, while external repeated IRM records are allowed when the explicit partition is equivalent for every repeat.",
+      "description": "Double/Debiased Machine Learning supports PLR, binary-D IRM, PLIV, and binary-D/binary-Z IIVM. Python-only external OOFPredictions supports unweighted, unnormalised IRM ATE scoring with exact alignment; caller_declared records are declarations rather than proof against leakage. Validation: certified evidence with scoped limitations. Known limitations: external_predictions, store_oof, and observation_ids are Python-only and absent from JSON/MCP inputs; external records accept no dict, JSON string, or file path; store_oof=True retains individual-level records for get_oof() and get_residuals() in memory only; ordinary serialization omits them; Retained IRM needs at least 10 rows per treatment arm in each training fold or raises DataInsufficient instead of fallback; internal explicit fold_indices require n_rep=1, while external repeated IRM records are allowed when the explicit partition is equivalent for every repeat.",
       "name": "dml",
       "parameters": {
         "properties": {

@@ -44,6 +44,14 @@ ALLOWED_PHRASES: Tuple[str, ...] = (
 
 
 LIMITATIONS_DESCRIPTIVE_ONLY: Dict[str, List[str]] = {
+    "dml": [
+        # Interface-scope statements about the opt-in OOF audit path, not
+        # code paths that raise: the three controls are keyword-only Python
+        # objects that the JSON/MCP schema deliberately omits, and retained
+        # records live on the result object rather than in its serialization.
+        "Python-only and absent from JSON/MCP inputs",
+        "in memory only; ordinary serialization omits them",
+    ],
     "fect": [
         # Scope statements, not code paths that raise: fect's inference is
         # resampling-based by design (the R package offers bootstrap and
@@ -233,7 +241,29 @@ def _runtime_map() -> (
         }
     )
 
+    df_irm = pd.DataFrame(
+        {
+            "y": rng.normal(size=n),
+            "d": rng.integers(0, 2, size=n),
+            "x": rng.normal(size=n),
+        }
+    )
+    folds_irm = np.arange(n) % 5
+
     return {
+        ("dml", "internal explicit fold_indices require n_rep=1"): (
+            lambda: sp.dml(
+                df_irm,
+                y="y",
+                treat="d",
+                covariates=["x"],
+                model="irm",
+                fold_indices=folds_irm,
+                n_rep=2,
+                store_oof=True,
+            ),
+            MethodIncompatibility,
+        ),
         ("did_balance", "one table per treated cohort"): (
             # The normalized difference is a two-group statistic, so the
             # audit is per-cohort. Asking for several at once is rejected
