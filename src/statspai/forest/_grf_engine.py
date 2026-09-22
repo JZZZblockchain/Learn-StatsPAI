@@ -59,6 +59,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
+
 try:  # numba is a core dependency; the fallback keeps imports safe.
     from numba import njit, prange  # type: ignore[import-untyped]
 
@@ -1153,7 +1155,9 @@ class GRFForest:
         :meth:`predict_oob`.
         """
         if X is None:
-            raise ValueError("use predict_oob(X_train) for out-of-bag predictions")
+            raise MethodIncompatibility(
+                "use predict_oob(X_train) for out-of-bag predictions"
+            )
         X = np.ascontiguousarray(X, dtype=np.float64)
         rows = np.arange(X.shape[0], dtype=np.int64)
         return _predict_kernel(
@@ -1179,7 +1183,7 @@ class GRFForest:
     ) -> Tuple[np.ndarray, np.ndarray]:
         X_train = np.ascontiguousarray(X_train, dtype=np.float64)
         if X_train.shape[0] != self.n_train:
-            raise ValueError("predict_oob needs the training matrix")
+            raise MethodIncompatibility("predict_oob needs the training matrix")
         rows = np.arange(self.n_train, dtype=np.int64)
         return _predict_kernel(
             self.kind,
@@ -1307,14 +1311,14 @@ def train_forest(
         else np.ascontiguousarray(sample_weight, dtype=np.float64).ravel()
     )
     if ci_group_size > 1 and sample_fraction > 0.5:
-        raise ValueError(
+        raise MethodIncompatibility(
             "When confidence intervals are enabled (ci_group_size > 1), "
             "sample_fraction must be at most 0.5."
         )
     codes, cl_offsets, cl_members = _cluster_csr(clusters, n)
     if int(kind) == KIND_CAUSAL_FE:
         if unit is None:
-            raise ValueError("KIND_CAUSAL_FE requires unit codes")
+            raise MethodIncompatibility("KIND_CAUSAL_FE requires unit codes")
         unit_codes = np.ascontiguousarray(unit, dtype=np.int64).ravel()
         time_codes = (
             np.zeros(n, dtype=np.int64)
@@ -1337,11 +1341,11 @@ def train_forest(
         samples_per_cluster = int(cluster_sizes.max())
     n_clusters = int(cl_offsets.size - 1)
     if int(n_clusters * sample_fraction) < 1:
-        raise ValueError(
+        raise DataInsufficient(
             "sample_fraction is too small: no clusters would be drawn per tree."
         )
     if honesty and int(math.ceil(n_clusters * sample_fraction * honesty_fraction)) < 1:
-        raise ValueError("honesty_fraction leaves no samples to grow trees on.")
+        raise DataInsufficient("honesty_fraction leaves no samples to grow trees on.")
 
     # num_trees is rounded to a multiple of ci_group_size.
     L = int(ci_group_size)
