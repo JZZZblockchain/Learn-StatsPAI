@@ -28,11 +28,11 @@ _HAS_DOUBLEML = importlib.util.find_spec("doubleml") is not None
 # BELOW a published floor is a regression worth failing on. Do not lower these
 # numbers without retiring the corresponding manuscript claim.
 JSS_HEADLINE_TEST_COUNTS = {
-    "reference_parity": 124,
-    "external_parity": 54,
-    "coverage_monte_carlo": 12,
+    "reference_parity": 4285,
+    "external_parity": 88,
+    "coverage_monte_carlo": 32,
 }
-# Published floor (1.16.0 manuscript), not an exact target — validation
+# Published floor (1.29.0 manuscript snapshot), not an exact target — validation
 # *grade* is derived dynamically from test evidence (VALIDATED_GRADE_MARKERS
 # below), so adding reference-parity tests promotes more symbols to
 # certified/validated. That growth is the intended effect of new parity work,

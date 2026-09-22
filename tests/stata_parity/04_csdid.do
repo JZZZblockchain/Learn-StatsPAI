@@ -79,6 +79,16 @@ foreach spec in event group calendar {
                 local key = substr("`key'", 2, .)
             }
             stata_parity_row, stat(`spec'_`key') est(`bv') std(`sv') nob(`n')
+            * GAverage holds the cohort shares fixed when it aggregates the
+            * per-cohort influence functions; did::aggte and sp.aggte add the
+            * share-estimation term (did:::wif), so `group_overall` is a
+            * documented 0.27% SE convention gap on the Stata side. Emit the
+            * same GAverage a second time under the name of StatsPAI's
+            * sp.aggte(share_variance=False) row so the csdid convention is
+            * pinned by a joining row rather than described in a note.
+            if ("`spec'" == "group" & "`key'" == "overall") {
+                stata_parity_row, stat(group_overall_fixedshare) est(`bv') std(`sv') nob(`n')
+            }
         }
     }
 }
@@ -87,5 +97,6 @@ stata_parity_extra, key(base_period) val("universal (csdid long2)")
 stata_parity_extra, key(estimator) val(reg)
 stata_parity_extra, key(control_group) val(nevertreated)
 stata_parity_extra, key(stata_command) val("csdid ... method(reg) long2 | estat simple/event/group/calendar")
+stata_parity_extra, key(group_overall_convention) val("estat group GAverage holds cohort shares fixed; joins sp.aggte(share_variance=False) as group_overall_fixedshare")
 
 stata_parity_close, module(04_csdid)

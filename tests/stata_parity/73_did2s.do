@@ -14,15 +14,18 @@
 * `treat` column; this script rebuilds it explicitly and asserts the two
 * agree so an upstream fixture change cannot silently redefine treatment.
 *
-* SE convention. Like the R package, `did2s` propagates first-stage
-* estimation error into the second-stage variance; sp.gardner_did's default
-* vce="analytic" clusters the stage-2 residuals only and therefore lands
-* low. This is the documented convention gap the module exists to record,
-* and the Stata SE lands on R's number (rel 2.6e-10), which is the useful
-* evidence: the gap is a StatsPAI default choice, not an R quirk. The
-* Python side emits the matching bootstrap SE alongside.
+* SE convention. Like the R package, `did2s` reports Gardner's (2022)
+* corrected clustered variance: first-stage estimation error is propagated
+* into the second-stage sandwich and no small-sample cluster factor is
+* applied. sp.gardner_did's default vce="analytic" builds the same two-stage
+* influence function, so estimate and SE are both strict parity rows. Stata
+* solves the first stage exactly (as StatsPAI does), so the Stata SE lands
+* on the Python SE at rel 1e-14 while R's fixest demeaning tolerance leaves
+* both at ~1e-10 / 1e-8 from R. The Python side also emits a
+* `static_ATT_stage2_se` diagnostic (the pre-correction stage-2-only SE,
+* ~26% low) that has no Stata counterpart.
 *
-* Tolerance: rel < 1e-6 on the point estimate.
+* Tolerance: rel < 1e-6 on the point estimate and on the SE.
 
 version 18
 clear all
@@ -53,7 +56,7 @@ local hi = `bv' + ${STATA_PARITY_Z95} * `sv'
 stata_parity_row, stat(static_ATT) est(`bv') std(`sv') cilo(`lo') cihi(`hi') nob(`n')
 
 stata_parity_extra, key(stata_command) val("did2s lemp, first_stage(i.countyreal i.year) second_stage(treated) treatment(treated) cluster(countyreal)")
-stata_parity_extra, key(se_convention) val("did2s propagates stage-1 estimation error, matching did2s::did2s in R; sp.gardner_did vce='analytic' does not and is the documented gap")
+stata_parity_extra, key(se_convention) val("did2s corrected two-stage clustered variance (stage-1 estimation error propagated, no small-sample factor), matching did2s::did2s in R and sp.gardner_did vce='analytic'")
 stata_parity_extra, key(stata_bridge_status) val("materialized 2026-08-06 with licensed Stata 18")
 
 stata_parity_close, module(73_did2s)

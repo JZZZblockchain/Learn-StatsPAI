@@ -2673,7 +2673,11 @@ def _build_registry() -> None:
                         "Stata SE (1.50-1.69x, too wide); 'ai' the simple "
                         "matched-pair SE (0.56-0.91x, never reaches nominal "
                         "coverage); 'bootstrap' resamples within arm and "
-                        "re-estimates the propensity score each draw."
+                        "re-estimates the propensity score each draw. "
+                        "'abadie_imbens_2016' is the Abadie-Imbens (2016) "
+                        "estimated-propensity-score variance Stata teffects "
+                        "psmatch reports (population ATT; the score-estimation "
+                        "term can be negative)."
                     ),
                     [
                         "auto",
@@ -2681,6 +2685,7 @@ def _build_registry() -> None:
                         "psmatch2",
                         "abadie_imbens",
                         "abadie_imbens_pop",
+                        "abadie_imbens_2016",
                         "bootstrap",
                     ],
                 ),
@@ -7513,14 +7518,35 @@ def _build_registry() -> None:
                     "str",
                     False,
                     None,
-                    "Cluster variable for Stage-2 SEs (defaults to group)",
+                    "Cluster variable for the two-stage clustered SEs (defaults to group)",
+                ),
+                ParamSpec(
+                    "vce",
+                    "str",
+                    False,
+                    "analytic",
+                    "Standard errors: 'analytic' (did2s corrected two-stage clustered "
+                    "variance, stage-1 estimation error propagated; the did2s/R and "
+                    "Stata convention), 'stage2' (pre-1.29 stage-2-only SE), "
+                    "'bootstrap' (cluster bootstrap of both stages), or 'none'",
+                    ["analytic", "stage2", "bootstrap", "none"],
+                ),
+                ParamSpec(
+                    "n_boot",
+                    "int",
+                    False,
+                    199,
+                    "Cluster-bootstrap replications when vce='bootstrap'",
+                ),
+                ParamSpec(
+                    "boot_seed", "int", False, None, "Seed for the cluster bootstrap"
                 ),
                 ParamSpec("alpha", "float", False, 0.05),
             ],
             returns="CausalResult",
             example='sp.gardner_did(df, y="wage", group="county", time="year", first_treat="first_treat", event_study=True)',
             tags=["did", "causal", "staggered", "two-stage", "did2s"],
-            reference="Gardner (2021), arXiv:2207.05943. Butts & Gardner (2022), R Journal 14(3).",
+            reference="Gardner (2022) arXiv:2207.05943 [@gardner2022twostage]; Butts & Gardner (2022) R Journal [@butts2022stage]",
         )
     )
 
@@ -11195,6 +11221,114 @@ def _build_registry() -> None:
                 ParamSpec("n_boot", "int", False, 200, "Bootstrap replications"),
                 ParamSpec("seed", "int", False, None, "Bootstrap seed"),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "cv",
+                    "bool",
+                    False,
+                    False,
+                    "Choose r (method='ife') or lam (method='mc') by fect's "
+                    "cross-validation (fect CV = TRUE); the CV table is stored in "
+                    "model_info['cv'].",
+                ),
+                ParamSpec(
+                    "r_range",
+                    "list",
+                    False,
+                    None,
+                    "(r_min, r_max) factor-number grid for cv=True; default (0, 5), "
+                    "capped by the data as fect does.",
+                ),
+                ParamSpec(
+                    "nlambda",
+                    "int",
+                    False,
+                    10,
+                    "Length of fect's default penalty grid for method='mc' with "
+                    "cv=True: nlambda - 1 values log-spaced over three decades below "
+                    "the largest singular value, plus 0.",
+                ),
+                ParamSpec(
+                    "lambda_grid",
+                    "list",
+                    False,
+                    None,
+                    "Explicit penalty grid for method='mc' with cv=True (fect "
+                    "lambda = c(...)); overrides nlambda.",
+                ),
+                ParamSpec("k", "int", False, 20, "Number of CV folds (fect k)."),
+                ParamSpec(
+                    "cv_prop",
+                    "float",
+                    False,
+                    0.1,
+                    "fect cv.prop: share of eligible units sampled per fold "
+                    "('rolling') or of untreated cells hidden per fold ('block' / "
+                    "'treated_units').",
+                ),
+                ParamSpec(
+                    "cv_method",
+                    "str",
+                    False,
+                    "rolling",
+                    "Holdout design (fect cv.method): 'rolling' anchors a block of "
+                    "cv_nobs periods per sampled unit and hides everything after it; "
+                    "'block' hides cv_nobs-period blocks from all units' untreated "
+                    "cells; 'treated_units' draws those blocks from treated units' "
+                    "pre-treatment cells only.",
+                    ["rolling", "block", "treated_units"],
+                ),
+                ParamSpec(
+                    "cv_nobs",
+                    "int",
+                    False,
+                    3,
+                    "Periods per holdout block (fect cv.nobs).",
+                ),
+                ParamSpec(
+                    "cv_donut",
+                    "int",
+                    False,
+                    1,
+                    "Cells removed at each end of a block before scoring ('block' / "
+                    "'treated_units'; fect cv.donut).",
+                ),
+                ParamSpec(
+                    "cv_buffer",
+                    "int",
+                    False,
+                    1,
+                    "Periods hidden before the anchor in the rolling holdout (fect "
+                    "cv.buffer).",
+                ),
+                ParamSpec(
+                    "criterion",
+                    "str",
+                    False,
+                    "mspe",
+                    "CV score minimised (fect criterion): pooled MSPE, geometric-mean "
+                    "MSPE, count-weighted mean absolute residual by relative period, "
+                    "or fect's PC information criterion (method='ife' only, no "
+                    "holdout).",
+                    ["mspe", "gmspe", "moment", "pc"],
+                ),
+                ParamSpec(
+                    "cv_rule",
+                    "str",
+                    False,
+                    "1se",
+                    "Re-pick after the scan (fect cv.rule): smallest r / largest lam "
+                    "within one fold-level SE of the minimum, within 1 %, or the "
+                    "minimum.",
+                    ["1se", "min", "1pct"],
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    None,
+                    "Seed for the CV fold draws (R's fold stream is not reproducible "
+                    "from numpy; the selection is compared to R statistically).",
+                ),
             ],
             returns="CausalResult",
             example=(
@@ -13731,6 +13865,15 @@ def _build_registry() -> None:
                 ParamSpec("cband", "bool", False, True, "Uniform confidence band"),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("random_state", "int", False, None),
+                ParamSpec(
+                    "share_variance",
+                    "bool",
+                    False,
+                    True,
+                    "Carry the estimated-cohort-share term (R did:::wif) into the "
+                    "aggregated variance; False holds the shares fixed as Stata "
+                    "csdid's estat group does",
+                ),
             ],
             returns="CausalResult",
             example='sp.aggte(cs_result, type="dynamic")',

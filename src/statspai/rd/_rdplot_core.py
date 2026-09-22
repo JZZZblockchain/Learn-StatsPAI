@@ -29,9 +29,22 @@ _BINSELECT = ("es", "espr", "esmv", "esmvpr", "qs", "qspr", "qsmv", "qsmvpr")
 
 
 def _r_seq(start: float, stop: float, by: float) -> np.ndarray:
-    """R ``seq(from, to, by)`` for ``by > 0``, including its end capping."""
+    """R ``seq(from, to, by)`` for ``by > 0``, including its end capping.
+
+    When ``(stop - start) / by`` is an integer up to rounding -- the case
+    for rdplot's evenly spaced bins, where ``by = range / J`` -- the last
+    element is snapped to ``stop`` exactly. ``start + n * by`` can land one
+    ulp *below* ``stop`` (Lee-Senate replica: 0.86351160056104**53** vs
+    **54**), and then the maximum observation falls outside the last bin:
+    ``findInterval(..., rightmost.closed = TRUE)`` returns ``J + 1`` and the
+    bin-edge lookup indexes past the end (R silently produces an ``NA``
+    bin centre there; here it raised ``IndexError``).
+    """
     n = int((stop - start) / by + 1e-10)
-    return np.minimum(start + np.arange(n + 1) * by, stop)
+    out = np.minimum(start + np.arange(n + 1) * by, stop)
+    if out.size and abs(out[-1] - stop) <= 1e-9 * max(1.0, abs(stop)):
+        out[-1] = stop
+    return out
 
 
 def _kweight(x: np.ndarray, c: float, h: float, kernel: str) -> np.ndarray:

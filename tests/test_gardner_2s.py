@@ -1,5 +1,9 @@
 """Tests for Gardner (2021) two-stage DID estimator."""
 
+import json
+import pathlib
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -101,3 +105,106 @@ def test_gardner_cluster_parameter():
     )
     assert r_default.estimate == pytest.approx(r_cluster.estimate)
     assert r_default.se == pytest.approx(r_cluster.se)
+
+
+# ---------------------------------------------------------------------------
+# Two-stage corrected variance (did2s parity)
+# ---------------------------------------------------------------------------
+
+_PARITY = pathlib.Path(__file__).resolve().parent / "r_parity"
+
+# The pre-correction default: stage-2-only cluster sandwich on the committed
+# mpdta fixture (tests/r_parity/results/73_did2s_py.json as committed before
+# the correction, statistic static_ATT). Kept so vce='stage2' is pinned to the
+# number users saw before the default changed.
+_LEGACY_STAGE2_SE_MPDTA = 0.005117728129401425
+
+
+def _mpdta_fixture():
+    return pd.read_csv(_PARITY / "data" / "73_did2s.csv")
+
+
+def _r_golden():
+    with open(_PARITY / "results" / "73_did2s_R.json", encoding="utf-8") as fh:
+        rows = json.load(fh)["rows"]
+    (row,) = [r for r in rows if r["statistic"] == "static_ATT"]
+    return float(row["estimate"]), float(row["se"])
+
+
+def test_gardner_default_se_matches_r_did2s_golden():
+    """vce='analytic' reproduces did2s::did2s's corrected clustered SE.
+
+    Tolerance rel 1e-6 is the Track A budget (compare.py::TOLERANCES);
+    observed 2.7e-10 (the residual is fixest's first-stage demeaning
+    tolerance, which also produces the 4.8e-8 point-estimate gap).
+    """
+    est_r, se_r = _r_golden()
+    df = _mpdta_fixture()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        r = sp.gardner_did(
+            df, y="lemp", group="countyreal", time="year", first_treat="first_treat"
+        )
+    assert not [w for w in caught if "gardner_did" in str(w.message)]
+    assert r.estimate == pytest.approx(est_r, rel=1e-6)
+    assert r.se == pytest.approx(se_r, rel=1e-6)
+    assert r.model_info["vce"] == "analytic"
+    assert "did2s" in r.model_info["se_convention"]
+
+
+def test_gardner_stage2_reproduces_legacy_se():
+    """vce='stage2' returns the pre-correction number, unchanged, and warns."""
+    df = _mpdta_fixture()
+    with pytest.warns(UserWarning, match="understates"):
+        r = sp.gardner_did(
+            df,
+            y="lemp",
+            group="countyreal",
+            time="year",
+            first_treat="first_treat",
+            vce="stage2",
+        )
+    assert r.se == pytest.approx(_LEGACY_STAGE2_SE_MPDTA, rel=1e-12)
+    # Same point estimate as the default; only the variance convention moved.
+    default = sp.gardner_did(
+        df, y="lemp", group="countyreal", time="year", first_treat="first_treat"
+    )
+    assert r.estimate == pytest.approx(default.estimate, rel=1e-12)
+    assert r.se < default.se
+
+
+def test_gardner_event_study_overall_se_uses_cross_horizon_covariance():
+    """In event-study mode the overall ATT SE is w'Vw over the post horizons."""
+    df = _synthetic_staggered_panel(seed=6, N=120, T=8)
+    r = sp.gardner_did(
+        df,
+        y="y",
+        group="id",
+        time="t",
+        first_treat="first_treat",
+        event_study=True,
+        horizon=[-2, -1, 0, 1, 2],
+    )
+    es = r.model_info["event_study"]
+    vcov = es["vcov"]
+    post = ["D_k+0", "D_k+1", "D_k+2"]
+    counts = np.array(
+        [
+            ((df["t"] - df["first_treat"]) == k)[df["first_treat"] > 0].sum()
+            for k in (0, 1, 2)
+        ],
+        dtype=float,
+    )
+    w = counts / counts.sum()
+    V = vcov.loc[post, post].to_numpy()
+    assert r.se == pytest.approx(float(np.sqrt(w @ V @ w)), rel=1e-12)
+    for k in post:
+        assert es["se"][k] == pytest.approx(float(np.sqrt(vcov.loc[k, k])), rel=1e-12)
+
+
+def test_gardner_rejects_unknown_vce():
+    df = _synthetic_staggered_panel(seed=7, N=60, T=6)
+    with pytest.raises(ValueError, match="vce must be"):
+        sp.gardner_did(
+            df, y="y", group="id", time="t", first_treat="first_treat", vce="robust"
+        )

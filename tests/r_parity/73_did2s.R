@@ -4,13 +4,15 @@
 # did2s::did2s with a two-way FE first stage and a static treatment
 # indicator in the second stage.
 #
-# Tolerance: rel < 1e-6 on the point estimate. The standard errors are
-# NOT expected to match: did2s propagates first-stage estimation error
-# into the second-stage variance, while sp.gardner_did's default
-# vce='analytic' clusters the stage-2 residuals only. That gap is a
-# documented inference convention (sp.gardner_did warns about it and
-# vce='bootstrap' recovers R's SE to ~3%), so the SE row is emitted for
-# the discrepancy taxonomy rather than asserted as a pass.
+# Tolerance: rel < 1e-6 on the point estimate and on the SE. did2s reports
+# the corrected clustered variance of Gardner (2022), which propagates
+# first-stage estimation error into the second-stage sandwich with no
+# small-sample cluster factor; sp.gardner_did's default vce='analytic'
+# builds the same two-stage influence function, so the SE row is a strict
+# parity assertion (observed rel 2.7e-10; the residual is fixest's
+# iterative-demeaning tolerance in the first stage, which also shows in
+# the 4.8e-8 point-estimate gap -- Stata's exact first stage lands on the
+# Python SE at 1e-14).
 
 .args <- commandArgs(trailingOnly = FALSE)
 .file_arg <- grep("^--file=", .args, value = TRUE)

@@ -9,14 +9,14 @@ This is the Python counterpart of `REPRODUCIBILITY_REPORT.md`. Both sides matter
 | `01_ols` | ✅ reproduces | same bytes | 7/7 | 2.32e-13 | 8.60e-15 |
 | `02_iv` | ✅ reproduces | same bytes | 7/7 | 0.00e+00 | 1.11e-15 |
 | `03_hdfe` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
-| `04_csdid` | ✅ reproduces | same bytes | 18/18 | 0.00e+00 | 0.00e+00 |
+| `04_csdid` | ✅ reproduces | same bytes | 19/19 | 0.00e+00 | 0.00e+00 |
 | `05_sunab` | ✅ reproduces | same bytes | 16/16 | 0.00e+00 | 0.00e+00 |
 | `06_rd` | ✅ reproduces | same bytes | 8/8 | 0.00e+00 | 0.00e+00 |
 | `07_scm` | ✅ reproduces | same bytes | 18/18 | 0.00e+00 | 0.00e+00 |
 | `08_dml` | ✅ reproduces | same bytes | 1/1 | 0.00e+00 | 0.00e+00 |
 | `09_rddensity` | ✅ reproduces | same bytes | 6/6 | 0.00e+00 | 0.00e+00 |
 | `10_honest_did` | ✅ reproduces | in-script | 11/11 | 0.00e+00 | 0.00e+00 |
-| `11_psm` | ✅ reproduces | same bytes | 4/4 | 0.00e+00 | 0.00e+00 |
+| `11_psm` | ✅ reproduces | same bytes | 5/5 | 0.00e+00 | 0.00e+00 |
 | `12_sdid` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
 | `13_causal_forest` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
 | `14_ols_cluster` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |

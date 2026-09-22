@@ -86,6 +86,25 @@ def main() -> None:
             )
         )
 
+    # Stata csdid's `estat group` GAverage holds the cohort shares fixed
+    # when it aggregates the per-cohort influence functions, whereas R did
+    # and sp.aggte add the share-estimation term (did:::wif). Emit the
+    # fixed-share aggregate under its own name so the Stata convention is
+    # pinned as a joining row (py <-> Stata) instead of being explained in
+    # prose; the default `group_overall` row keeps the did convention.
+    agg_fixed = sp.aggte(
+        fit, type="group", bstrap=False, cband=False, share_variance=False
+    )
+    rows.append(
+        ParityRecord(
+            module=MODULE,
+            side="py",
+            statistic="group_overall_fixedshare",
+            estimate=float(agg_fixed.estimate),
+            se=float(agg_fixed.se),
+        )
+    )
+
     write_results(
         MODULE,
         "py",
@@ -96,18 +115,18 @@ def main() -> None:
             "base_period": "universal",
             "method": fit.method,
             "group_overall_stata_gap": (
-                "One row is not a three-way match. group_overall: StatsPAI "
-                "and R did::aggte agree to 1.2e-16; Stata csdid's estat group "
-                "GAverage standard error differs by 2.7e-3 (0.27%). The point "
-                "estimate matches all three. Mechanism (reconstructed, "
-                "2026-09-05): csdid aggregates the per-cohort influence "
+                "group_overall is a two-way (StatsPAI/R) match, not a "
+                "three-way one: StatsPAI and R did::aggte agree to 1.2e-16; "
+                "Stata csdid's estat group GAverage standard error differs by "
+                "2.7e-3 (0.27%). Point estimates match on all three sides. "
+                "Mechanism: csdid aggregates the per-cohort influence "
                 "functions with the cohort shares held fixed, whereas did and "
-                "StatsPAI add the share-estimation term (did:::wif). Rebuilding "
-                "the fixed-share aggregate from StatsPAI's joint cell "
-                "influence functions returns csdid's SE to 1e-8; an earlier "
-                "independent-cell reconstruction overshot (0.00746) because "
-                "it dropped the covariance between cells that share control "
-                "units."
+                "StatsPAI add the share-estimation term (did:::wif). The "
+                "group_overall_fixedshare row runs sp.aggte(share_variance="
+                "False) and joins csdid's GAverage SE at machine precision "
+                "(rel 6e-15), so the convention is pinned rather than "
+                "asserted; R did has no fixed-share option, so that row has "
+                "no R side by construction."
             ),
             "base_period_note": (
                 "base_period is pinned explicitly on BOTH sides. StatsPAI "

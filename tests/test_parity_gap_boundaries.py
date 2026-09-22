@@ -122,10 +122,11 @@ def test_stata_skip_reasons_are_not_reported_as_missing_harnesses():
     missing = {
         row["module_id"] for row in rows if row["kind"] == "stata_harness_missing"
     }
+    # 18_augsynth and 19_gsynth left this set on 2026-09-22 when their
+    # audited Stata/Mata bridges were materialised; 13_causal_forest waits
+    # for Stata 19's `cate`.
     skipped = {
         "13_causal_forest",
-        "18_augsynth",
-        "19_gsynth",
     }
     assert skipped.isdisjoint(missing)
 
@@ -177,18 +178,10 @@ def test_stata_skip_reasons_are_not_reported_as_missing_harnesses():
     # one down.
     assert {
         "13_causal_forest",
-        "18_augsynth",
-        "19_gsynth",
     }.issubset(set(not_materialized))
-    assert "allsynth" in not_materialized["18_augsynth"]["description"]
-    assert "K + 2" in not_materialized["18_augsynth"]["description"]
-    assert "distinct" in not_materialized["18_augsynth"]["description"]
+    assert "18_augsynth" not in not_materialized
+    assert "19_gsynth" not in not_materialized
     assert "Stata 19" in not_materialized["13_causal_forest"]["description"]
-    assert "fect_stata" in not_materialized["19_gsynth"]["description"]
-    assert "0.679854" in not_materialized["19_gsynth"]["description"]
-    assert (
-        "force(two-way/unit/time/none)" in not_materialized["19_gsynth"]["description"]
-    )
 
 
 def test_dml_dfl_rif_and_cr2_have_materialized_stata_mata_bridges():

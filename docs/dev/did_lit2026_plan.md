@@ -101,6 +101,14 @@ direction is not uniform (one horizon reaches 1.52x), so an omitted
 positive variance term is not the whole story. Pinned as a measurement,
 not fixed.
 
+*Follow-up (2026-09-22, JSS final pass):* fixed. `sp.gardner_did`'s default
+`vce='analytic'` is now the did2s corrected clustered variance (stage-2
+sandwich built from the two-stage influence function, no small-sample
+factor); all 26 horizon SEs reproduce did2s at rel 2.1e-14 and the static
+mpdta SE matches R at 2.7e-10 / Stata at 1.3e-14. The old stage-2-only SE
+is kept as `vce='stage2'` and the 0.71x measurement above is now pinned
+against that option (`test_gardner_stage2_event_study_ses_are_smaller_than_did2s`).
+
 ### 1.4 Parity-module packaging (**done**), and what it exposed
 
 `84_bjs_pretrends` pins the lead vector against Stata at rel < 1e-14 and

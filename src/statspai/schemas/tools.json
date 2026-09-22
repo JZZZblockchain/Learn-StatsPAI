@@ -189,6 +189,11 @@
           "description": "Output of sp.callaway_santanna or sp.did with staggered=True",
           "type": "string"
         },
+        "share_variance": {
+          "default": true,
+          "description": "Carry the estimated-cohort-share term (R did:::wif) into the aggregated variance; False holds the shares fixed as Stata csdid's estat group does",
+          "type": "boolean"
+        },
         "type": {
           "default": "simple",
           "description": "Aggregation type",
@@ -5867,9 +5872,10 @@
         },
         "vce": {
           "default": "analytic",
-          "description": "Standard-error mode. ``'analytic'`` clusters the Stage-2 residuals (fast) but ignores the variance from estimating the Stage-1 fixed effects and is **anti-conservative** (empirically ~0.78 coverage at a nominal 95% level); a ``UserWarning`` recommends ``'bootstrap'``. ``'bootstrap'`` resamples whole clusters and re-runs the full two-step procedure (Gardner 2021 / ``did2s``), substantially improving coverage (~0.90 vs ~0.78 in simulations; it approaches nominal as the number of clusters grows). Point estimates are identical either way.",
+          "description": "Standard-error mode. ``'analytic'`` is the two-stage corrected clustered variance of Gardner (2022): the Stage-2 cluster sandwich is built from the influence function of *both* stages, so the estimation error of the Stage-1 fixed effects is propagated. It reproduces R ``did2s::did2s`` and Stata ``did2s`` (rel < 1e-6 on the mpdta fixture) and carries no small-sample cluster factor, as they do not. ``'stage2'`` is the previous default: it clusters the Stage-2 residuals alone (with the ``G/(G-1)(n-1)/(n-k)`` factor) as if the imputed counterfactual were known data, and understates uncertainty (about 26% low on mpdta; empirically ~0.78 coverage at a nominal 95% level). It is kept so earlier numbers can be reproduced and emits a ``UserWarning``. ``'bootstrap'`` resamples whole clusters and re-runs the full two-step procedure (``did2s(bootstrap = TRUE)``). ``'none'`` is the fast internal path used by the bootstrap replicates (Stage-2 SE, no warning). Point estimates are identical in every mode.",
           "enum": [
             "analytic",
+            "stage2",
             "bootstrap"
           ],
           "type": "string"
@@ -9128,6 +9134,62 @@
           },
           "type": "array"
         },
+        "criterion": {
+          "default": "mspe",
+          "description": "CV score minimised (fect criterion): pooled MSPE, geometric-mean MSPE, count-weighted mean absolute residual by relative period, or fect's PC information criterion (method='ife' only, no holdout).",
+          "enum": [
+            "mspe",
+            "gmspe",
+            "moment",
+            "pc"
+          ],
+          "type": "string"
+        },
+        "cv": {
+          "default": false,
+          "description": "Choose r (method='ife') or lam (method='mc') by fect's cross-validation (fect CV = TRUE); the CV table is stored in model_info['cv'].",
+          "type": "boolean"
+        },
+        "cv_buffer": {
+          "default": 1,
+          "description": "Periods hidden before the anchor in the rolling holdout (fect cv.buffer).",
+          "type": "integer"
+        },
+        "cv_donut": {
+          "default": 1,
+          "description": "Cells removed at each end of a block before scoring ('block' / 'treated_units'; fect cv.donut).",
+          "type": "integer"
+        },
+        "cv_method": {
+          "default": "rolling",
+          "description": "Holdout design (fect cv.method): 'rolling' anchors a block of cv_nobs periods per sampled unit and hides everything after it; 'block' hides cv_nobs-period blocks from all units' untreated cells; 'treated_units' draws those blocks from treated units' pre-treatment cells only.",
+          "enum": [
+            "rolling",
+            "block",
+            "treated_units"
+          ],
+          "type": "string"
+        },
+        "cv_nobs": {
+          "default": 3,
+          "description": "Periods per holdout block (fect cv.nobs).",
+          "type": "integer"
+        },
+        "cv_prop": {
+          "default": 0.1,
+          "description": "fect cv.prop: share of eligible units sampled per fold ('rolling') or of untreated cells hidden per fold ('block' / 'treated_units').",
+          "type": "number"
+        },
+        "cv_rule": {
+          "default": "1se",
+          "description": "Re-pick after the scan (fect cv.rule): smallest r / largest lam within one fold-level SE of the minimum, within 1 %, or the minimum.",
+          "enum": [
+            "1se",
+            "min",
+            "1pct"
+          ],
+          "type": "string"
+        },
         "force": {
           "default": "two-way",
           "description": "Additive fixed effects in the Y(0) model.",
@@ -9139,9 +9201,21 @@
           ],
           "type": "string"
         },
+        "k": {
+          "default": 20,
+          "description": "Number of CV folds (fect k).",
+          "type": "integer"
+        },
         "lam": {
           "description": "Nuclear-norm penalty on fect's raw scale (method='mc'); the result records lambda_norm = lam / largest singular value.",
           "type": "number"
+        },
+        "lambda_grid": {
+          "description": "Explicit penalty grid for method='mc' with cv=True (fect lambda = c(...)); overrides nlambda.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "max_iter": {
           "default": 1000,
@@ -9167,9 +9241,25 @@
           "description": "Bootstrap replications",
           "type": "integer"
         },
+        "nlambda": {
+          "default": 10,
+          "description": "Length of fect's default penalty grid for method='mc' with cv=True: nlambda - 1 values log-spaced over three decades below the largest singular value, plus 0.",
+          "type": "integer"
+        },
         "r": {
           "default": 0,
           "description": "Number of latent factors (method='ife')",
+          "type": "integer"
+        },
+        "r_range": {
+          "description": "(r_min, r_max) factor-number grid for cv=True; default (0, 5), capped by the data as fect does.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "description": "Seed for the CV fold draws (R's fold stream is not reproducible from numpy; the selection is compared to R statistically).",
           "type": "integer"
         },
         "seed": {
@@ -10289,8 +10379,12 @@
           "description": "Significance level for confidence intervals and tests.",
           "type": "number"
         },
+        "boot_seed": {
+          "description": "Seed for the cluster bootstrap",
+          "type": "integer"
+        },
         "cluster": {
-          "description": "Cluster variable for Stage-2 SEs (defaults to group)",
+          "description": "Cluster variable for the two-stage clustered SEs (defaults to group)",
           "type": "string"
         },
         "controls": {
@@ -10320,8 +10414,24 @@
           },
           "type": "array"
         },
+        "n_boot": {
+          "default": 199,
+          "description": "Cluster-bootstrap replications when vce='bootstrap'",
+          "type": "integer"
+        },
         "time": {
           "description": "Time column",
+          "type": "string"
+        },
+        "vce": {
+          "default": "analytic",
+          "description": "Standard errors: 'analytic' (did2s corrected two-stage clustered variance, stage-1 estimation error propagated; the did2s/R and Stata convention), 'stage2' (pre-1.29 stage-2-only SE), 'bootstrap' (cluster bootstrap of both stages), or 'none'",
+          "enum": [
+            "analytic",
+            "stage2",
+            "bootstrap",
+            "none"
+          ],
           "type": "string"
         },
         "y": {
@@ -11842,8 +11952,16 @@
           "type": "number"
         },
         "bw": {
-          "description": "Kernel bandwidth on the moderator's scale (before the adaptive density scaling). Required for ``estimator='kernel'``; interflex's cross-validated choice is not ported.",
+          "description": "Kernel bandwidth on the moderator's scale (before the adaptive density scaling). ``estimator='kernel'`` needs either ``bw`` or ``cv=True``, which selects it by interflex's cross-validation (``interflex(bw = NULL)``).",
           "type": "number"
+        },
+        "bw_grid": {
+          "default": 30,
+          "description": "interflex ``grid``: an integer gives that many candidates log-spaced from ``range(x)/100`` to ``range(x)``; a sequence is used as the grid.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "cutoffs": {
           "description": "cutoffs parameter (Optional[Sequence[float]]).",
@@ -11851,6 +11969,11 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "cv": {
+          "default": false,
+          "description": "Kernel estimator only: choose ``bw`` by interflex's k-fold cross-validation. Observations are split into ``kfold`` folds stratified on ``d`` (``interflex:::createFolds``); for every candidate bandwidth the local-linear coefficients are fitted on the training folds over the evaluation grid (with the training sample's moderator density for the adaptive scaling), carried to each test observation by linear interpolation between its two nearest grid points, and the mean squared (``metric='mse'``) or absolute (``'mae'``) prediction error of ``y`` is averaged over folds; the bandwidth minimising it, divided by the number of evaluation points that produced a fit, is chosen exactly as the R package does. Requires ``bw=None``.",
+          "type": "boolean"
         },
         "d": {
           "description": "Outcome, treatment (binary 0/1 or continuous) and moderator.",
@@ -11863,6 +11986,20 @@
             "binning",
             "linear",
             "kernel"
+          ],
+          "type": "string"
+        },
+        "kfold": {
+          "default": 10,
+          "description": "Number of folds (interflex ``kfold``).",
+          "type": "integer"
+        },
+        "metric": {
+          "default": "mse",
+          "description": "CV loss (interflex ``metric``).",
+          "enum": [
+            "mse",
+            "mae"
           ],
           "type": "string"
         },
@@ -11879,6 +12016,10 @@
         "neval": {
           "default": 50,
           "description": "Evaluation points, equally spaced over the moderator's range.",
+          "type": "integer"
+        },
+        "random_state": {
+          "description": "Seed for the fold assignment. interflex draws its folds with R's stream, so the selection is compared to R statistically (across seeds), not byte for byte.",
           "type": "integer"
         },
         "seed": {
@@ -14265,13 +14406,14 @@
         },
         "se_method": {
           "default": "auto",
-          "description": "Standard error. 'auto' resolves to 'abadie_imbens' for nearest-neighbour, 'psmatch2' for kernel / radius, 'bootstrap' for llr. 'abadie_imbens' is the sample-ATT conditional variance (Stata psmatch2 ai()) and the only option measured to be correctly sized (0.95-1.04x the sampling SD, coverage 0.905-0.956 over 36 designs x 1000 reps; see benchmarks/matching_se_coverage.py). 'abadie_imbens_pop' is the population-ATT variance Matching::Match reports; 'psmatch2' the analytic Stata SE (1.50-1.69x, too wide); 'ai' the simple matched-pair SE (0.56-0.91x, never reaches nominal coverage); 'bootstrap' resamples within arm and re-estimates the propensity score each draw.",
+          "description": "Standard error. 'auto' resolves to 'abadie_imbens' for nearest-neighbour, 'psmatch2' for kernel / radius, 'bootstrap' for llr. 'abadie_imbens' is the sample-ATT conditional variance (Stata psmatch2 ai()) and the only option measured to be correctly sized (0.95-1.04x the sampling SD, coverage 0.905-0.956 over 36 designs x 1000 reps; see benchmarks/matching_se_coverage.py). 'abadie_imbens_pop' is the population-ATT variance Matching::Match reports; 'psmatch2' the analytic Stata SE (1.50-1.69x, too wide); 'ai' the simple matched-pair SE (0.56-0.91x, never reaches nominal coverage); 'bootstrap' resamples within arm and re-estimates the propensity score each draw. 'abadie_imbens_2016' is the Abadie-Imbens (2016) estimated-propensity-score variance Stata teffects psmatch reports (population ATT; the score-estimation term can be negative).",
           "enum": [
             "auto",
             "ai",
             "psmatch2",
             "abadie_imbens",
             "abadie_imbens_pop",
+            "abadie_imbens_2016",
             "bootstrap"
           ],
           "type": "string"

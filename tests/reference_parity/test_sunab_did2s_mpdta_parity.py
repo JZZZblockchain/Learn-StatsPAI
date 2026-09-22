@@ -19,11 +19,14 @@ Two convention notes, both verified rather than assumed:
    vector itself* is convention-free and is pinned coefficient by coefficient.
 
 2. **Gardner two-stage standard errors.** The point estimate matches R to
-   ~1e-8. The default ``vce='analytic'`` SE clusters the stage-2 residuals and
-   ignores the variance from estimating the stage-1 fixed effects, so it comes
-   in ~18% below R's (which propagates both stages); ``vce='bootstrap'``
-   recovers it to within ~3%. ``sp.gardner_did`` already warns about this, and
-   the bands below pin the known gap so a drift in either direction is caught.
+   ~1e-8 and the SE to ~1e-9 (R's value below is stored to 10 significant
+   digits). The default ``vce='analytic'`` is the did2s corrected clustered
+   variance -- the stage-2 sandwich built from the two-stage influence
+   function, so the stage-1 fixed-effect estimation error is propagated with
+   no small-sample factor, exactly as ``did2s::did2s`` does. The
+   pre-correction stage-2-only SE is still reachable as ``vce='stage2'``
+   (~18% low on this fixture) and is pinned below so its size stays on
+   record; ``vce='bootstrap'`` agrees with the analytic SE to bootstrap noise.
 
 Data provenance
 ---------------
@@ -212,36 +215,58 @@ def test_gardner_point_estimate_matches_did2s(mpdta):
     assert res.estimate == pytest.approx(R_DID2S_STATIC[0], abs=1e-7)
 
 
-def test_gardner_analytic_se_understates_and_bootstrap_recovers(mpdta):
-    """Pin the documented two-stage SE convention gap.
+def test_gardner_analytic_se_matches_did2s(mpdta):
+    """The default SE is did2s's corrected two-stage clustered variance.
 
-    ``vce='analytic'`` ignores stage-1 estimation error and lands ~18% below
-    R's; ``vce='bootstrap'`` propagates both stages and recovers it.  Bands are
-    deliberately loose enough for bootstrap noise but tight enough to catch a
-    regression in either direction.
+    R's SE is stored to 10 significant digits, so rel 1e-8 is the tightest
+    honest bound (observed 5.8e-10). No warning is expected on the default
+    path.
     """
     se_r = R_DID2S_STATIC[1]
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         analytic = sp.gardner_did(
             mpdta, y="lemp", group="countyreal", time="year", first_treat="first_treat"
         )
-        boot = sp.gardner_did(
+    assert not [w for w in caught if "gardner_did" in str(w.message)]
+    assert analytic.se == pytest.approx(se_r, rel=1e-8)
+
+
+def test_gardner_stage2_se_understates_and_bootstrap_agrees(mpdta):
+    """Pin the size of the legacy stage-2-only SE against the reference.
+
+    ``vce='stage2'`` ignores stage-1 estimation error and lands ~18% below
+    R's on this fixture (it was the default before the correction and warns);
+    ``vce='bootstrap'`` propagates both stages and lands within bootstrap
+    noise of R.  Bands are loose enough for bootstrap noise but tight enough
+    to catch a regression in either direction.
+    """
+    se_r = R_DID2S_STATIC[1]
+
+    with pytest.warns(UserWarning, match="stage2"):
+        legacy = sp.gardner_did(
             mpdta,
             y="lemp",
             group="countyreal",
             time="year",
             first_treat="first_treat",
-            vce="bootstrap",
+            vce="stage2",
         )
+    boot = sp.gardner_did(
+        mpdta,
+        y="lemp",
+        group="countyreal",
+        time="year",
+        first_treat="first_treat",
+        vce="bootstrap",
+    )
 
-    assert 0.75 < analytic.se / se_r < 0.90, (
-        f"analytic/R SE ratio {analytic.se / se_r:.4f} left the known band — "
-        "the two-stage variance convention changed"
+    assert 0.70 < legacy.se / se_r < 0.85, (
+        f"stage2/R SE ratio {legacy.se / se_r:.4f} left the known band — "
+        "the legacy stage-2 variance changed"
     )
     assert 0.90 < boot.se / se_r < 1.10, (
         f"bootstrap/R SE ratio {boot.se / se_r:.4f}: the bootstrap should "
         "recover R's two-stage SE"
     )
-    assert boot.estimate == pytest.approx(analytic.estimate, rel=1e-12)
+    assert boot.estimate == pytest.approx(legacy.estimate, rel=1e-12)

@@ -38,13 +38,14 @@ Analysis* 27(2), 163--192.
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 __all__ = ["interflex", "interflex_plot"]
 
@@ -175,6 +176,193 @@ def _gaussian_loglik(resid: np.ndarray, w: Optional[np.ndarray]) -> float:
 
 
 # ----------------------------------------------------------------------
+# Bandwidth cross-validation (port of interflex.kernel's CV block)
+# ----------------------------------------------------------------------
+
+
+def _create_folds(labels: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
+    """Port of ``interflex:::createFolds(factor(D), k, list = FALSE)``:
+    within each level of ``labels``, ``n_level %/% k`` full copies of
+    ``1..k`` plus ``n_level %% k`` spare fold ids drawn at random, all
+    shuffled; a level with fewer than ``k`` members gets ``n_level``
+    distinct fold ids. Returns 0-based fold ids."""
+    n = len(labels)
+    fold = np.zeros(n, dtype=int)
+    if k >= n:
+        return np.arange(n)
+    for lev in np.unique(labels):
+        pos = np.where(labels == lev)[0]
+        m = len(pos)
+        reps, spares = divmod(m, k)
+        if reps > 0:
+            seq = np.tile(np.arange(k), reps)
+            if spares > 0:
+                seq = np.concatenate([seq, rng.choice(k, size=spares, replace=False)])
+            fold[pos] = rng.permutation(seq)
+        else:
+            fold[pos] = rng.choice(k, size=m, replace=False)
+    return fold
+
+
+def _kernel_cv(
+    Y: np.ndarray,
+    D: np.ndarray,
+    X: np.ndarray,
+    Z: np.ndarray,
+    W: np.ndarray,
+    x_eval: np.ndarray,
+    bw_grid: Union[int, Sequence[float]],
+    kfold: int,
+    metric: str,
+    rng: np.random.Generator,
+) -> Dict[str, Any]:
+    """The cross-validation of ``interflex:::interflex.kernel`` (``bw = NULL``):
+
+    - grid: ``exp(seq(log(range/100), log(range), length.out = grid))``;
+    - folds: ``createFolds(factor(D))`` over observations;
+    - per fold and bandwidth: local-linear WLS on the training sample at
+      every point of the *full-sample* evaluation grid ``x_eval`` (as the
+      R code does), adaptive bandwidth from the training sample's
+      ``density()``; the coefficient vector (including the grid point
+      ``x0``) is interpolated to each test observation between its two
+      nearest grid points (``esCoef.cv``), the linear predictor is
+      formed, and the MSE / MAE of ``y`` is recorded; folds with fewer
+      than three usable test observations or fewer than ``neval / 2``
+      converged grid fits score ``NA``, later replaced by the worst fold;
+    - selection: ``which.min(MSE / Num.Eff.Points)`` over the grid.
+    """
+    if isinstance(bw_grid, (int, np.integer)):
+        n_grid = int(bw_grid)
+        if n_grid < 2:
+            raise ValueError("bw_grid must have at least two candidates")
+        rng_x = float(X.max() - X.min())
+        grid = np.exp(np.linspace(np.log(rng_x / 100.0), np.log(rng_x), n_grid))
+    else:
+        grid = np.asarray(list(bw_grid), dtype=float)
+        if grid.size == 0 or np.any(grid <= 0):
+            raise ValueError("bw_grid must be positive bandwidths")
+    if int(kfold) < 2:
+        raise ValueError("kfold must be >= 2")
+    # factor(D): every distinct value of D is a stratum (two for a 0/1 D).
+    fold = _create_folds(D, int(kfold), rng)
+    neval = len(x_eval)
+    pz = Z.shape[1]
+
+    def _fold_error(bw: float, train: np.ndarray, test: np.ndarray):
+        Xt, Yt, Dt, Zt, Wt = X[train], Y[train], D[train], Z[train], W[train]
+        xd, yd, _ = r_density(Xt)
+        dens_mean = float(np.exp(np.mean(np.log(yd[yd > 0]))))
+        rows = []
+        for x0 in x_eval:
+            delta = Xt - x0
+            temp = yd[int(np.argmin(np.abs(xd - x0)))]
+            bw_use = bw * np.sqrt(dens_mean / temp)
+            w = stats.norm.pdf(delta / bw_use) * Wt
+            if np.any(w == 0):
+                nz = w[w != 0]
+                if nz.size == 0:
+                    continue
+                w = w + nz.min()
+            if w.max() == 0:
+                continue
+            Xl = np.column_stack([np.ones(len(Yt)), delta, Dt, Dt * delta, Zt])
+            sw = np.sqrt(w)
+            beta, *_ = np.linalg.lstsq(Xl * sw[:, None], Yt * sw, rcond=None)
+            if not np.all(np.isfinite(beta)):
+                continue
+            rows.append(np.concatenate([[x0], beta]))
+        n_eff = len(rows)
+        if n_eff <= neval / 2:
+            return np.nan, np.nan, np.nan
+        coef = np.asarray(rows)
+        xg = coef[:, 0]
+        inside = (X[test] >= Xt.min()) & (X[test] <= Xt.max())
+        tidx = test[inside]
+        if len(tidx) < 3:
+            return np.nan, np.nan, np.nan
+        preds = np.empty(len(tidx))
+        for i, ii in enumerate(tidx):
+            xi = X[ii]
+            dist = np.abs(xg - xi)
+            l1 = int(np.argmin(dist))
+            d1 = dist[l1]
+            dist2 = dist.copy()
+            dist2[l1] = np.inf
+            l2 = int(np.argmin(dist2))
+            d2 = dist2[l2]
+            if d1 == 0:
+                c = coef[l1]
+            elif d2 == 0:
+                c = coef[l2]
+            else:
+                c = (coef[l1] * d2 + coef[l2] * d1) / (d1 + d2)
+            x0i = c[0]
+            b0, bdx, bD, bDdx = c[1], c[2], c[3], c[4]
+            link = b0 + bD * D[ii] + bDdx * (xi - x0i) * D[ii] + bdx * (xi - x0i)
+            if pz:
+                link += float(Z[ii] @ c[5 : 5 + pz])
+            preds[i] = link
+        true = Y[tidx]
+        if len(np.unique(true)) <= 1 or len(preds) < 3:
+            return np.nan, np.nan, np.nan
+        return (
+            n_eff,
+            float(np.mean((true - preds) ** 2)),
+            float(np.mean(np.abs(true - preds))),
+        )
+
+    err = np.full((len(grid), int(kfold), 3), np.nan)
+    for gi, bw in enumerate(grid):
+        for j in range(int(kfold)):
+            test = np.where(fold == j)[0]
+            train = np.where(fold != j)[0]
+            if len(test) == 0:
+                continue
+            err[gi, j] = _fold_error(float(bw), train, test)
+        # interflex: a fold that failed takes the worst finite fold's value
+        for c in range(3):
+            colv = err[gi, :, c]
+            if np.any(np.isnan(colv)) and not np.all(np.isnan(colv)):
+                colv[np.isnan(colv)] = np.nanmax(colv)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        means = np.nanmean(err, axis=1)
+    table = pd.DataFrame(
+        {
+            "bw": grid,
+            "num_eff_points": means[:, 0],
+            "mse": means[:, 1],
+            "mae": means[:, 2],
+        }
+    )
+    score = (
+        table["mse" if metric == "mse" else "mae"].to_numpy()
+        / table["num_eff_points"].to_numpy()
+    )
+    if not np.any(np.isfinite(score)):
+        raise DataInsufficient(
+            "Bandwidth cross-validation produced no finite loss on any candidate.",
+            recovery_hint="Pass bw= explicitly or widen bw_grid.",
+        )
+    pick = int(np.nanargmin(score))
+    fold_losses = pd.DataFrame(
+        err[:, :, 1 if metric == "mse" else 2],
+        columns=[f"fold_{j + 1}" for j in range(int(kfold))],
+    )
+    fold_losses.insert(0, "bw", grid)
+    return {
+        "grid": grid,
+        "kfold": int(kfold),
+        "metric": metric,
+        "table": table,
+        "fold_losses": fold_losses,
+        "fold_sizes": np.bincount(fold, minlength=int(kfold)).tolist(),
+        "selected": float(grid[pick]),
+        "selected_index": pick,
+    }
+
+
+# ----------------------------------------------------------------------
 # Public API
 # ----------------------------------------------------------------------
 
@@ -201,6 +389,11 @@ def interflex(
     n_boot: int = 200,
     seed: Optional[int] = None,
     alpha: float = 0.05,
+    cv: bool = False,
+    kfold: int = 10,
+    bw_grid: Union[int, Sequence[float]] = 30,
+    metric: str = "mse",
+    random_state: Optional[int] = None,
 ) -> CausalResult:
     """
     Conditional marginal effects of ``d`` across a moderator ``x``
@@ -219,8 +412,9 @@ def interflex(
         binning estimator; ``cutoffs`` overrides the quantiles.
     bw : float, optional
         Kernel bandwidth on the moderator's scale (before the adaptive
-        density scaling). Required for ``estimator='kernel'``; interflex's
-        cross-validated choice is not ported.
+        density scaling). ``estimator='kernel'`` needs either ``bw`` or
+        ``cv=True``, which selects it by interflex's cross-validation
+        (``interflex(bw = NULL)``).
     neval : int, default 50
         Evaluation points, equally spaced over the moderator's range.
     x_eval : sequence, optional
@@ -257,6 +451,31 @@ def interflex(
     n_boot, seed : int
         Bootstrap replications and seed.
     alpha : float, default 0.05
+    cv : bool, default False
+        Kernel estimator only: choose ``bw`` by interflex's k-fold
+        cross-validation. Observations are split into ``kfold`` folds
+        stratified on ``d`` (``interflex:::createFolds``); for every
+        candidate bandwidth the local-linear coefficients are fitted on
+        the training folds over the evaluation grid (with the training
+        sample's moderator density for the adaptive scaling), carried to
+        each test observation by linear interpolation between its two
+        nearest grid points, and the mean squared (``metric='mse'``) or
+        absolute (``'mae'``) prediction error of ``y`` is averaged over
+        folds; the bandwidth minimising it, divided by the number of
+        evaluation points that produced a fit, is chosen exactly as the
+        R package does. Requires ``bw=None``.
+    kfold : int, default 10
+        Number of folds (interflex ``kfold``).
+    bw_grid : int or sequence of float, default 30
+        interflex ``grid``: an integer gives that many candidates
+        log-spaced from ``range(x)/100`` to ``range(x)``; a sequence is
+        used as the grid.
+    metric : {'mse', 'mae'}, default 'mse'
+        CV loss (interflex ``metric``).
+    random_state : int, optional
+        Seed for the fold assignment. interflex draws its folds with R's
+        stream, so the selection is compared to R statistically (across
+        seeds), not byte for byte.
 
     Returns
     -------
@@ -266,12 +485,17 @@ def interflex(
         chosen estimator; ``.detail`` is the marginal-effect table on
         the evaluation grid (``linear`` / ``kernel``) or at the bin
         medians (``binning``); ``.model_info["tests"]`` carries the
-        L-kurtosis of ``x`` and the Wald / LR p-values.
+        L-kurtosis of ``x`` and the Wald / LR p-values. With ``cv=True``
+        ``.model_info["bw_cv"]`` is the selected bandwidth and
+        ``.model_info["cv"]`` holds the grid and the CV ``table``
+        (interflex's ``CV.output``: ``bw``, ``num_eff_points``, ``mse``,
+        ``mae``) plus the per-fold losses.
 
     Examples
     --------
     >>> import statspai as sp
-    >>> res = sp.interflex(df, y="Y", d="D", x="X", estimator="binning")  # doctest: +SKIP
+    >>> res = sp.interflex(df, y="Y", d="D", x="X",
+    ...                    estimator="binning")  # doctest: +SKIP
     >>> res.model_info["tests"]["p_wald"]  # doctest: +SKIP
 
     References
@@ -283,8 +507,21 @@ def interflex(
         raise ValueError("estimator must be 'linear', 'binning', or 'kernel'")
     if vce not in {"robust", "homoscedastic", "bootstrap"}:
         raise ValueError("vce must be 'robust', 'homoscedastic', or 'bootstrap'")
-    if estimator == "kernel" and (bw is None or float(bw) <= 0):
-        raise ValueError("estimator='kernel' needs a positive bandwidth bw=")
+    cv = bool(cv)
+    if cv and estimator != "kernel":
+        raise MethodIncompatibility(
+            "cv=True selects the bandwidth of estimator='kernel' only"
+        )
+    if cv and bw is not None:
+        raise MethodIncompatibility("cv=True chooses bw; do not pass bw= as well")
+    if estimator == "kernel" and not cv and (bw is None or float(bw) <= 0):
+        raise ValueError(
+            "estimator='kernel' needs a positive bandwidth bw= (or cv=True to "
+            "cross-validate it)"
+        )
+    metric = str(metric).lower()
+    if metric not in {"mse", "mae"}:
+        raise ValueError("metric must be 'mse' or 'mae'")
     if vce == "bootstrap" and estimator != "kernel":
         raise ValueError(
             "vce='bootstrap' is available for estimator='kernel'; the linear "
@@ -463,9 +700,24 @@ def interflex(
             }
         )
     else:
+        base_w = np.ones(n) if W is None else W
+        cv_info: Optional[Dict[str, Any]] = None
+        if cv:
+            cv_info = _kernel_cv(
+                Y,
+                D,
+                X,
+                Z,
+                base_w,
+                grid,
+                bw_grid,
+                int(kfold),
+                metric,
+                np.random.default_rng(random_state),
+            )
+            bw = cv_info["selected"]
         xd, yd, bw_dens = r_density(X)
         dens_mean = float(np.exp(np.mean(np.log(yd[yd > 0]))))
-        base_w = np.ones(n) if W is None else W
 
         def _local_fit(Yv, Dv, Xv, Zv, wv, x_pt):
             delta = Xv - x_pt
@@ -521,6 +773,9 @@ def interflex(
                 "density_geometric_mean": dens_mean,
             }
         )
+        if cv_info is not None:
+            model_info["cv"] = cv_info
+            model_info["bw_cv"] = float(bw)
 
     if se_me is not None:
         detail["ci_lower"] = detail["me"] - z_crit * detail["se"]

@@ -233,9 +233,16 @@ def test_strictness_tier_breakdown_matches_current_artifacts():
     # equal on all three sides. That last row is the one that matters: the
     # superseded implementation used 8-27 observations where the reference
     # used 519-743, and integer counts cannot be reconciled by a tolerance.
+    # 27_glmm_aghq moved from the machine tier to the iterative tier on
+    # 2026-09-22 (rel_est 1e-6 -> 5e-6). Not a convention gap: all three
+    # sides maximise the same 8-point AGQ likelihood (logLik joins R at
+    # 1e-13) but the objective is flat along (intercept, sqrt(var)), and
+    # lme4's own optimisers scatter by 1e-6..1e-5 around bobyqa at the
+    # same deviance to 1e-10. The budget is the measured reference-side
+    # optimiser noise floor; see compare.py and r_parity_tolerances.md.
     assert compare.tier_breakdown(rendered_modules) == {
-        "machine": 80,
-        "iterative": 7,
+        "machine": 79,
+        "iterative": 8,
         "moderate": 1,
         "methodological": 1,
     }
@@ -251,7 +258,8 @@ def test_machine_level_promotions_have_headline_headroom():
         "20_bacon",
         "24_coxph",
         "25_lmm",
-        "27_glmm_aghq",
+        # 27_glmm_aghq: iterative tier since 2026-09-22 (optimiser noise
+        # floor on a flat AGQ objective), guarded by its own test below.
         "28_frontier",
         "30_oaxaca",
         "31_dfl",
@@ -444,18 +452,27 @@ def test_glmm_parity_uses_tight_optimizer_solution_with_se_convention_guard():
     py_payload = _read_json(R_RESULTS / "27_glmm_aghq_py.json")
     rows = {row.statistic: row for row in compare.collect("27_glmm_aghq")}
 
-    assert compare.TOLERANCES["27_glmm_aghq"]["rel_est"] == 1e-6
+    # 5e-6 is the reference-side optimiser noise floor on this fixture:
+    # lme4 bobyqa / nloptwrap / optimx-nlminb land 1.1e-6..1.5e-6 apart in
+    # the intercept while reproducing the deviance to 1e-10, and Stata
+    # melogit (mvaghermite) sits 2e-8 from StatsPAI. The logLik row is
+    # the proof that the likelihood itself is shared (rel 1e-13 vs R).
+    assert compare.TOLERANCES["27_glmm_aghq"]["rel_est"] == 5e-6
     assert compare.TOLERANCES["27_glmm_aghq"]["rel_se"] == 2e-5
-    assert compare.tolerance_tier("27_glmm_aghq") == "machine"
+    assert compare.tolerance_tier("27_glmm_aghq") == "iterative"
     assert py_payload["extra"]["optimizer_tol"] == 1e-12
     assert py_payload["extra"]["optimizer_maxiter"] == 5000
     assert "AGHQ reference optimiser budget" in py_payload["extra"]["optimizer_note"]
 
     for statistic in ("beta_intercept", "beta_x1"):
-        assert rows[statistic].rel_est < 1e-6
-        assert rows[statistic].rel_est_st < 1e-6
+        assert rows[statistic].rel_est < 5e-6
+        assert rows[statistic].rel_est_st < 5e-6
         assert rows[statistic].rel_se < 5e-2
         assert rows[statistic].rel_se_st < 5e-2
+    # The shared-likelihood guard: if this ever drifts, the sides are no
+    # longer computing the same quadrature approximation and the 5e-6
+    # optimiser-noise budget is no longer the right explanation.
+    assert rows["logLik"].rel_est < 1e-9
 
 
 def test_oaxaca_rows_do_not_mix_twofold_and_threefold_definitions():

@@ -32,7 +32,7 @@ StatsPAI 面向那些原本需要在 Stata、R 和 Python 之间来回切换的�
   和 [`Paper-WorkFlow`](https://github.com/brycewang-stanford/Paper-WorkFlow)
   可以和 StatsPAI 以及 agent 一起使用，作为方法选择、期刊要求、论文流程和可复现检查的技能层。
 
-这不是说每个 Stata/R 命令都已经逐字节复现。API 覆盖面很广，但背后的数值证据并不均匀：有的估计器在同一份数据上与 R/Stata 逐一对照过，有的只用已知真值的模拟验证过，还有很多目前只承诺接口稳定、没有数值对齐声明。每个函数都带有 `validation_status` 标明属于哪种情况：certified / validated 两档有数值证据，api_stable 只表示接口稳定。论文要用某个数字之前，请先看[验证状态](#验证状态哪些核验过哪些还没有)。
+这不是说每个 Stata/R 命令都已经逐字节复现。API 覆盖面很广，但背后的数值证据并不均匀：有的估计器在同一份数据上与 R/Stata 逐一对照过，有的只用已知真值的模拟验证过，还有很多目前只承诺接口稳定、没有数值对齐声明。每个函数都带有 `validation_status` 标明属于哪种情况（certified / validated / api_stable）：certified / validated 两档有数值证据，api_stable 只表示接口稳定。论文要用某个数字之前，请先看[验证状态](#验证状态哪些核验过哪些还没有)。
 
 ---
 
@@ -114,7 +114,7 @@ StatsPAI 想做的是一个覆盖面广的 Stata/R 风格实证工作台。下�
 
 ## 新手案例：代码和结果一起看
 
-下面的输出由当前 `main` 在内置数据集上实际运行得到。例 1–5 在 PyPI 版 1.28.0 上也能运行（`main` 之后修正过的少数打印数字会略有不同，见 CHANGELOG）；例 6 用到的 Stata `vce()` 语法和估计后命令已在 `main` 上、但尚未进入 PyPI 发行版——下一版发布前可用 `pip install "statspai @ git+https://github.com/brycewang-stanford/StatsPAI"` 安装。较长的 summary 做了节选（`...` 表示省略的行）；这些数字由 `tests/test_readme_examples.py` 和 `tests/test_synth_placebo_pvalue.py` 钉住，今后不会再悄悄与代码脱节。
+下面的输出由 StatsPAI 1.29.0 在内置数据集上实际运行得到。例 6 用到的 Stata `vce()` 语法和估计后命令自 1.29.0 起进入发行版；在更早的版本上可用 `pip install "statspai @ git+https://github.com/brycewang-stanford/StatsPAI"` 从源码安装。较长的 summary 做了节选（`...` 表示省略的行）；这些数字由 `tests/test_readme_examples.py` 和 `tests/test_synth_placebo_pvalue.py` 钉住，今后不会再悄悄与代码脱节。
 
 ### 1. OLS：替代第一条 `regress` / `lm`
 
@@ -576,9 +576,9 @@ print(sp.list_functions(validation_status="certified")[:5])
 
 | `validation_status` | 含义 | 函数数 |
 | --- | --- | ---: |
-| `certified` | 在相同输入上与指定的外部参考实现（R、Stata，或方法作者维护的 Python 包）对照，落在预注册容差之内 | 223 |
-| `validated` | 有已知真值模拟、已发表数字、覆盖率或有文档的约定差异等证据，但不在 R/Stata 主对齐 harness 中 | 208 |
-| `api_stable` | 公开接口稳定；有单元测试，但**不声明数值验证** | 752 |
+| `certified` | 在相同输入上与指定的外部参考实现（R、Stata，或方法作者维护的 Python 包）对照，落在预注册容差之内 | 414 |
+| `validated` | 有已知真值模拟、已发表数字、覆盖率或有文档的约定差异等证据，但不在 R/Stata 主对齐 harness 中 | 128 |
+| `api_stable` | 公开接口稳定；有单元测试，但**不声明数值验证** | 641 |
 | `experimental` | 方法或 API 仍可能变化 | 3 |
 
 也就是说，目前大约三分之一的注册函数带有数值证据。覆盖面不等于验证，请检查你依赖的那些函数属于哪一档。
@@ -676,7 +676,7 @@ StatsPAI 的同行评审论文已发表于 *Journal of Open Source Software*（2
   title   = {StatsPAI: A Unified, Agent-Native Python Toolkit for
              Causal Inference and Applied Econometrics},
   year    = {2026},
-  version = {1.28.0},
+  version = {1.29.0},
   doi     = {10.5281/zenodo.19933900},
   url     = {https://doi.org/10.5281/zenodo.19933900},
   license = {MIT}

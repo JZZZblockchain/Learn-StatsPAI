@@ -102,6 +102,18 @@ m = sp.psmatch2(df, treat='d', outcome='y', covariates=X, ai=2)      # ai(2): 2 
   controls); prefer `ai=J` for nearest-neighbour inference.
 - `se='bootstrap'` — see below. Not a Stata psmatch2 option, and the only
   inference available for `method='llr'`.
+- `sp.match(..., se_method='abadie_imbens_2016')` (also via `sp.psm`) —
+  Stata **`teffects psmatch`**'s number rather than psmatch2's: the
+  Abadie–Imbens (2016) variance for matching on an *estimated* propensity
+  score, `σ²_δ − c'V_γ c + d'V_γ d`, i.e. the AI-2006 population-ATT
+  variance corrected for the sampling variability of the logit
+  coefficients. `ai_matches=J` is `teffects ... vce(robust, nn(J+1))`
+  (Stata counts the unit itself). On the NSW-DW replica it reproduces
+  `teffects psmatch ..., atet` at rel 6e-8: 621.79 against 643.35 for
+  `psmatch2, ai(1)` — the two Stata commands differ because they target
+  different estimands (population vs sample ATT) and only `teffects`
+  charges for the estimated score (that term is *negative* here). The
+  formula's terms are in `result.model_info['ai2016_components']`.
 
 #### Which standard error actually covers?
 

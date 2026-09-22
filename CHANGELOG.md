@@ -2,7 +2,7 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
-## [Unreleased]
+## [1.29.0] — 2026-09-22
 
 ### ⚠️ Cross-language parity campaign, phase 3 (StatsPAI vs R / Stata)
 
@@ -1784,7 +1784,7 @@ Stata. Not fixed in this release: `src/statspai/postestimation/` is being rework
   a fixed 14-character column ran long labels into their neighbours.
 - `WeakIVConfidenceSet` has a compact `repr` instead of dumping every grid
   array.
-- `examples/rd_lee.py` and the RD snippet in `docs/joss_reviewer_guide.md`
+- `examples/rd_lee.py` and the RD snippet in the review-time documentation
   crashed (they used columns `lee_2008_senate()` no longer returns);
   `tests/test_example_scripts.py` now runs every example script.
 - `sp.datasets.lee_2008_senate()` documentation no longer attributes the
@@ -2025,6 +2025,157 @@ Stata. Not fixed in this release: `src/statspai/postestimation/` is being rework
   across cohorts; the silent fallback to a difference in means on any
   exception is removed. The docstring no longer attributes the estimator to
   [@souto2025forests], whose model is specified in outcome levels.
+
+### ⚠️ JSS Track A closure: the last open cross-language rows (StatsPAI vs R / Stata)
+
+Closes the items the JSS manuscript's tolerance ledger still carried as open
+or convention-only after phase 3. Every number below is on the committed
+same-byte fixtures of `tests/r_parity/` and `tests/stata_parity/`; both
+reference sides re-derive with zero drift (R 89/89, Stata 85/85, Python 89/89).
+
+#### ⚠️ Correctness
+
+- **`sp.gardner_did` / `sp.did_2stage`: the default standard error is now the
+  did2s corrected two-stage clustered variance.** The previous default
+  (`vce='analytic'`) clustered only the Stage-2 residuals, treating the imputed
+  counterfactual as known, and understated uncertainty (~26% on `mpdta`; the
+  docstring warned of ~0.78 coverage at a nominal 95%). The default now builds
+  the Stage-2 cluster sandwich from the influence function of *both* stages,
+  exactly as R `did2s::did2s` 1.2.1 and Stata `did2s` do
+  [@gardner2022twostage; @butts2022stage]: with `X1` the Stage-1 design, `X10`
+  that design with treated rows zeroed, `e1` the Stage-1 residual and `X2` /
+  `e2` the Stage-2 design and residual, `gamma = (X10'X10)^{-1} X1'X2`,
+  `s_g = sum_{i in g} (x2_i e2_i - gamma' x10_i e1_i)`,
+  `V = (X2'X2)^{-1} [sum_g s_g s_g'] (X2'X2)^{-1}`, with no small-sample cluster
+  factor (neither reference applies one). On the mpdta replica the static-ATT
+  SE moves from 0.0051177 to 0.0069036 and agrees with R `did2s` at rel
+  2.7e-10 and Stata `did2s` at 1.3e-14; all 26 event-study horizon SEs match
+  `did2s` at 2.1e-14. Point estimates are unchanged in every mode. The
+  event-study overall ATT SE is now the delta-method SE through the full
+  cross-horizon covariance (`model_info['event_study']['vcov']`) instead of
+  treating horizons as independent. `vce='stage2'` reproduces the pre-1.29
+  number bit for bit (with a warning); `model_info['se_convention']` records
+  which variance was used. Track A module `73_did2s` registers `rel_se: 1e-6`
+  and its SE is a strict three-way parity row rather than a documented gap.
+  See MIGRATION.md.
+
+#### Added
+
+- **`sp.aggte(..., share_variance=True)`.** The aggregated Callaway--Sant'Anna
+  variance carries the sampling variability of the estimated cohort shares
+  (R `did:::wif`, the authors' convention) by default; `share_variance=False`
+  holds the shares fixed, which is what Stata `csdid`'s `estat group`
+  `GAverage` does. Point estimates are identical either way; only the
+  `'group'` overall (and any multi-cohort cell) SE moves. On the `mpdta`
+  replica the fixed-share group-overall SE joins `csdid` at rel 6.2e-15, so
+  Track A module 04 now pins the Stata convention as a joining row
+  (`group_overall_fixedshare`) instead of a 0.27% note.
+  `result.model_info["share_variance"]` records the choice.
+- **`sp.match` / `sp.psm`: `se_method='abadie_imbens_2016'`**, the Abadie &
+  Imbens (2016) variance for nearest-neighbour ATT matching on an *estimated*
+  logit propensity score [@abadie2016matching] -- what Stata
+  `teffects psmatch (y) (t x, logit), atet` reports:
+  `var = sigma^2_delta - c'V_gamma c + d'V_gamma d` with `sigma^2_delta` the
+  population-ATT base term (`[sum_treated (y_i - yhat0_i - delta)^2 +
+  sum_i xi2_i (K_i^2 - K'_i)] / N1^2`), `c`, `d` the score-derivative vectors
+  of the Stata manual ([CAUSAL] teffects nnmatch, "PSM, ATE, and ATET variance
+  adjustment") and `V_gamma` the logit observed-information covariance (new
+  module `src/statspai/matching/_ai2016.py`; the terms are returned in
+  `model_info['ai2016_components']`). Conventions pinned against Stata 18: the
+  within-arm conditional-variance set is the unit plus its `ai_matches`
+  nearest same-arm units, ties included (`ai_matches=J` is Stata `nn(J+1)`);
+  the extra clustering behind `d(delta)/d(gamma)` is Euclidean on the raw
+  covariates with ties; neighbour sets are found on the unclipped score. On
+  `sp.datasets.nsw_dw()` (Track A `11_psm`) the SE is 621.79328 against
+  Stata's 621.79325 (rel 6.4e-8; with `ai_matches=2`, Stata `nn(3)`, rel
+  < 1e-6), and plugging Stata's own `e(bps)`/`e(Vps)` into the formula
+  reproduces `e(V)` to 1e-12, so the residual is Stata's ML stopping rule.
+  Term by term: base SE 673.42, `c'Vc = 74,905`, `d'Vd = 8,036` -- the
+  estimated-score term is *negative* for the ATT here, which is why the
+  corrected SE sits below the psmatch2 `ai(1)` SE (643.35). The default
+  (`'abadie_imbens'`, Abadie--Imbens 2006 sample-ATT, = `psmatch2, ai(J)`) is
+  unchanged; the 3.4% between the two Stata commands is now a documented
+  convention with two named sources (population- vs sample-ATT target, and
+  the estimated-score term only `teffects` charges for) rather than an open
+  item. Requires `distance='propensity'`, `method='nearest'`,
+  `estimand='ATT'`, `bias_correction=False`; anything else raises
+  `MethodIncompatibility`.
+- **`sp.fect(cv=True)`**: fect's cross-validation for the factor number
+  (`method='ife'`, grid `r_range=(0, 5)`) and the nuclear-norm penalty
+  (`method='mc'`, fect's `nlambda=10` log grid or `lambda_grid=`), with fect's
+  rolling / block / treated-units holdouts (`cv_method`, `cv_prop`, `cv_nobs`,
+  `cv_donut`, `cv_buffer`, `k`), criteria `mspe` / `gmspe` / `moment` / `pc`
+  and the `cv_rule` (`1se` / `min` / `1pct`) re-pick; the CV table is in
+  `model_info["cv"]`, the selection in `r_cv` / `lambda_cv`; the final fit is
+  refitted at the selected value, so `sp.fect(cv=True)` equals
+  `sp.fect(r=<selected>)` bit for bit. Evidence: the CV scoring equals fect's
+  on identical folds (rel 5.9e-8 ife, 6.5e-9 mc) and the curve and selection
+  agree with R across 20 fold seeds (T3;
+  `tests/reference_parity/test_fect_interflex_cv_parity.py`). Note that
+  `fect()`'s user-facing default is `cv.method = "rolling"` (the `"all_units"`
+  in `fect.default`'s signature is overridden), which the port follows.
+- **`sp.interflex(estimator='kernel', cv=True)`**: interflex's bandwidth
+  cross-validation (`kfold`, `bw_grid`, `metric`, `random_state`); the CV table
+  is in `model_info["cv"]`, the selection in `bw_cv`. Evidence: per-fold
+  losses equal interflex's `getError.CV` on identical folds (rel 2.8e-13);
+  curve and selection agree with R across 20 fold seeds (T3). The JSS
+  manuscript's "CV selectors not ported" limitation is closed.
+- **Stata bridges for Track A `18_augsynth` and `19_gsynth`** (audited
+  Stata/Mata algorithm bridges, the same class as `08_dml`). `18_augsynth.do`
+  reproduces `augsynth` 0.2.0's Ridge ASCM (simplex-QP SCM weights on
+  donor-mean-centred pre-period outcomes, the 21-point lambda path with
+  leave-one-period-out folds and the 1-SE rule recomputed in Mata, ridge
+  correction): ATT within 1.7e-8 of StatsPAI and 7.9e-6 of R, where the R
+  residual is `augsynth::synth_qp`'s OSQP stopping tolerance (eps 1e-8; at
+  1e-13 augsynth agrees with both exact solvers to 1e-11). `allsynth` (SSC
+  1.32) refuses the fixture (`K + 2` donors) and, where it runs, is a
+  different estimand. `19_gsynth.do` implements gsynth's control-only factor
+  convention (two-way demeaned control panel, rank-r SVD, treated-unit
+  pre-period projection on `[1, F]`, r fixed at the R `r.cv`): ATT within
+  2.2e-15 of StatsPAI and 7.4e-14 of R. `fect_stata method(ife)` is a
+  different estimator (IFEct EM over all untreated cells; converged R
+  `fect(method="ife")` -0.33206 vs gsynth -0.32417) and is emitted as the
+  unjoined `ife_att_avg_fect_stata` diagnostic; `fect_stata` has no
+  `method(gsynth)`. `compare.py::STATA_SKIP_REASON` is down to four modules
+  (13, 77, 79, 80); 85 of 89 Track A modules carry a Stata reference.
+
+#### Fixed
+
+- **`sp.rdplot` raised `IndexError` when the largest running-variable value
+  fell one ulp past the last evenly spaced bin edge** (the phase-3
+  `_rdplot_core` port of `rdrobust::rdplot`; on the Lee-Senate replica
+  `x_max = 0.8635116005610454` while `seq(c, x_max, range/J)` ended at
+  `0.8635116005610453`). The R port's `seq` now snaps its last element to
+  the endpoint, so the maximum observation is inside the last bin as
+  `findInterval(rightmost.closed = TRUE)` intends; bin means and counts are
+  unchanged for every other observation. Found by the JSS figure script
+  (`ex04_lee_rd`), which is why the worked examples are executed rather than
+  summarised.
+
+#### Changed (parity harness)
+
+- Track A `27_glmm_aghq` moves from the machine tier to the iterative tier
+  (`rel_est` 1e-6 -> 5e-6). Not a convention gap: the `logLik` row joins
+  `lme4` at 1e-13 and `lme4`'s own deviance function reproduces StatsPAI's
+  optimum to 5e-11, but the 8-point AGQ objective is flat along (intercept,
+  sqrt(var)) and `lme4`'s optimisers (`bobyqa`, `nloptwrap`, `optimx/nlminb`)
+  scatter by 1.1e-6 to 1.5e-6 in the intercept at the same deviance; Stata
+  `melogit` (`mvaghermite`) sits 2e-8 from StatsPAI and all sides agree to
+  3e-8 at 30 quadrature points. The contract test now also guards `logLik` at
+  1e-9 so quadrature drift cannot hide behind the optimiser-noise budget.
+  Registered in `docs/dev/r_parity_tolerances.md` ("Loosening applied
+  2026-09-22"). Strictness tiers are now 79 machine / 8 iterative / 1
+  moderate / 1 T4.
+- Track A `18_augsynth`'s 2e-5 point budget is re-graded A (mechanism: OSQP
+  tolerance on the R side), unchanged in value.
+- `sp.gardner_did` no longer emits the "0/n bootstrap replicates succeeded"
+  `RuntimeWarning` in static mode (the per-coefficient series was never
+  filled there; the reported SE was always the correct overall bootstrap SE),
+  and warns when the cluster variable has a single level under the default
+  `vce`.
+- `paper.bib` gains `abadie2016matching` (Abadie & Imbens 2016, Econometrica
+  84(2), 781-807, DOI 10.3982/ECTA11293; refs verified via Crossref and
+  doi.org).
 
 ## [1.28.0] — 2026-09-13
 

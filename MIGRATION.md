@@ -5,7 +5,7 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
-## Unreleased — DML orthogonality diagnostic is unavailable
+## 1.29.0 — DML orthogonality diagnostic is unavailable
 
 `dml_diagnostics(result).orth_stat` and `.orth_pvalue` now return `None`.
 The old calculation used a series centered by construction, so its near-one
@@ -19,7 +19,7 @@ optional descriptive diagnostic, not a replacement hypothesis test.
 
 <a id="forest-scalar-effect-doubly-robust"></a>
 
-## Unreleased — ⚠️ `CausalForest.ate()` / `.att()` return the doubly-robust estimate, not the plug-in average
+## 1.29.0 — ⚠️ `CausalForest.ate()` / `.att()` return the doubly-robust estimate, not the plug-in average
 
 **Who is affected.** Anyone who takes the *float value* of
 `sp.causal_forest(...).ate()` or `.att()` — that is, `float(effect)`,
@@ -61,7 +61,7 @@ is reported as `plug_in`, and the float stays the plug-in value.
 
 <a id="dml-plr-ivtype"></a>
 
-## Unreleased — ⚠️ `sp.dml(model="plr", score="IV-type")` now matches DoubleML
+## 1.29.0 — ⚠️ `sp.dml(model="plr", score="IV-type")` now matches DoubleML
 
 **Who is affected.** Callers of `sp.dml(..., model="plr", score="IV-type")`
 (and `sp.DoubleMLPLR(..., score="IV-type")`). The default score,
@@ -98,7 +98,7 @@ nuisance), so an IV-type fit takes roughly 1.5 times as long as before.
 
 <a id="cluster-markout"></a>
 
-## Unreleased — ⚠️ Missing cluster variable: rows are dropped, as in Stata
+## 1.29.0 — ⚠️ Missing cluster variable: rows are dropped, as in Stata
 
 **Who is affected.** Anyone who fitted `sp.ivreg` / `sp.iv` / `sp.liml` with
 `cluster=` / `vce="cluster v"` on data where `v` has missing values: those
@@ -114,7 +114,7 @@ variables instead of returning NaN; omit `data=` to use the estimation sample.
 
 <a id="parity-campaign-phase3"></a>
 
-## Unreleased — ⚠️ Cross-language campaign phase 3: 174 defects fixed against R / Stata references (round 1: 125, round 2: 49)
+## 1.29.0 — ⚠️ Cross-language campaign phase 3: 174 defects fixed against R / Stata references (round 1: 125, round 2: 49)
 
 **Who is affected.** Anyone who reported numbers from the functions below.
 Phase 3 compared survival / epidemiology, time series, inference and
@@ -361,7 +361,7 @@ column names it. "—" means no route back is offered.
 
 <a id="stata-vce-grammar"></a>
 
-## Unreleased — ⚠️ Standard errors, p-values, `test` / `lincom` and `margins` follow Stata
+## 1.29.0 — ⚠️ Standard errors, p-values, `test` / `lincom` and `margins` follow Stata
 
 **Who is affected.** Anyone who reported, from the estimators below, a robust
 or clustered standard error, a p-value or confidence interval of a clustered
@@ -401,7 +401,7 @@ had model-based (or HC1) standard errors. Rerun them.
 
 <a id="iv-first-stage-f-vce"></a>
 
-## Unreleased — ⚠️ IV first-stage F follows the requested vcov; `sp.cross_validate` engines aligned
+## 1.29.0 — ⚠️ IV first-stage F follows the requested vcov; `sp.cross_validate` engines aligned
 
 **Who is affected.** Anyone reading the first-stage F from `sp.ivreg` /
 `sp.iv` / `sp.lasso_iv` fitted with `robust=` or `cluster=` (diagnostics,
@@ -435,7 +435,7 @@ the root-found endpoints, so printed intervals widen slightly.
 
 <a id="causal-forest-grf-engine"></a>
 
-## Unreleased — ⚠️ `sp.causal_forest` grows generalized random forests
+## 1.29.0 — ⚠️ `sp.causal_forest` grows generalized random forests
 
 **Who is affected.** Every user of `sp.causal_forest` / `sp.CausalForest`:
 CATE predictions, `effect_interval`, and every in-sample statistic
@@ -481,7 +481,7 @@ grew. Use `forest.average_treatment_effect()`.
 
 <a id="cs-notyet-cutoff"></a>
 
-## Unreleased — ⚠️ `callaway_santanna(control_group="notyettreated")` control sets
+## 1.29.0 — ⚠️ `callaway_santanna(control_group="notyettreated")` control sets
 
 **Who is affected.** Pre-treatment (placebo) cells under
 `base_period="universal"` when some cohort is first treated between the cell's
@@ -509,7 +509,7 @@ is true only under `base_period="varying"`.
 
 <a id="did-bcf-windows"></a>
 
-## Unreleased — ⚠️ `sp.did_bcf` compares cohorts with controls over the same periods
+## 1.29.0 — ⚠️ `sp.did_bcf` compares cohorts with controls over the same periods
 
 **Who is affected.** All `sp.did_bcf` users; the ATT, per-cohort CATTs and
 standard errors change.
@@ -526,9 +526,53 @@ bootstrap based and conservatively combined (covariates); failures raise.
 group-time inference, prefer `sp.did_forest`.
 ---
 
+<a id="gardner-did-two-stage-se"></a>
+
+## 1.29.0 — ⚠️ `sp.gardner_did` / `sp.did_2stage`: default standard error is the did2s corrected two-stage variance
+
+**Who is affected.** Anyone reading `.se`, `.ci`, `.pvalue` or the
+event-study standard errors from `sp.gardner_did` (or the `sp.did_2stage`
+alias) with the default `vce`. Point estimates are unchanged in every mode.
+
+**What changed.** The default `vce='analytic'` clustered only the Stage-2
+residuals, treating the imputed counterfactual as known data; it understated
+uncertainty (~26% on `mpdta`, a median 0.71x per horizon in event studies).
+It now propagates the Stage-1 fixed-effect estimation error into the
+Stage-2 clustered variance -- Gardner (2022)'s corrected variance, exactly
+what R `did2s::did2s` 1.2.1 and Stata `did2s` report -- with no
+small-sample cluster factor, because neither reference applies one.
+
+| fixture | statistic | before (stage-2 only) | after (corrected) | R `did2s` | Stata `did2s` |
+| --- | --- | ---: | ---: | ---: | ---: |
+| mpdta replica (`tests/r_parity/data/73_did2s.csv`) | static ATT SE | 0.0051177 | 0.0069036 | 0.0069036 | 0.0069036 |
+| original mpdta (`02_mpdta_original.csv`) | static ATT SE | 0.0110838 | 0.0134784 | 0.0134784 | -- |
+
+**To recover the previous numbers** pass `vce='stage2'`:
+
+```python
+import statspai as sp
+res_old = sp.gardner_did(df, y="lemp", group="countyreal", time="year",
+                         first_treat="first_treat", vce="stage2")
+```
+
+It reproduces the old SE exactly (`0.005117728129401425` on the fixture) and
+warns that it understates. `vce='bootstrap'` is unchanged and agrees with the
+new default within bootstrap noise. `model_info['se_convention']` records
+which variance a result carries.
+
+**If you compared against R or Stata `did2s` before**, the SE gap you had to
+explain away is gone; drop any manual rescaling. In event studies `res.se`
+for the overall ATT now accounts for the cross-horizon covariance
+(`model_info['event_study']['vcov']`), and per-horizon SEs match `did2s`'s
+`i(rel_time, ...)` second stage horizon by horizon (rel 2.1e-14 on the
+Roth panel of `tests/test_did_event_study_conventions.py`).
+
+---
+
+
 <a id="synth-placebo-pvalue"></a>
 
-## Unreleased — ⚠️ Synthetic-control placebo p-values now rank the treated unit too
+## 1.29.0 — ⚠️ Synthetic-control placebo p-values now rank the treated unit too
 
 **Who is affected.** Anyone who reported a placebo (permutation) p-value from a
 native `sp.synth` estimator — classic SCM and the penalized, demeaned, robust,
@@ -564,7 +608,7 @@ fail, instead of silently dropping them, and lists them in
 
 <a id="prodest-sweep"></a>
 
-## Unreleased — ⚠️ Production functions follow Stata / R `prodest`
+## 1.29.0 — ⚠️ Production functions follow Stata / R `prodest`
 
 **Who is affected.** Every call to the following, and markups computed from
 them:
@@ -597,7 +641,7 @@ them:
 
 <a id="xtdpdsys-stata-convention"></a>
 
-## Unreleased — ⚠️ `sp.xtdpdsys` now reproduces Stata's `xtdpdsys`
+## 1.29.0 — ⚠️ `sp.xtdpdsys` now reproduces Stata's `xtdpdsys`
 
 **Who is affected.** Anyone who called `sp.xtdpdsys` with exogenous
 regressors (`x=`). Pure autoregressions are affected only through the
@@ -617,7 +661,7 @@ one-step weight (`h`), and on `abdata` moved by less than 1e-12.
 
 <a id="decomp-sweep"></a>
 
-## Unreleased — ⚠️ Decomposition: `das_gupta`, `gap_closing`, Yu-Elwert, Gini RIF, FFL
+## 1.29.0 — ⚠️ Decomposition: `das_gupta`, `gap_closing`, Yu-Elwert, Gini RIF, FFL
 
 | Function | Affected calls | What changes | Size |
 | --- | --- | --- | --- |
@@ -644,7 +688,7 @@ swap the two names it previously relied on; re-run Gini RIF regressions.
 
 <a id="mr-sweep"></a>
 
-## Unreleased — ⚠️ Mendelian randomisation brought in line with the R packages
+## 1.29.0 — ⚠️ Mendelian randomisation brought in line with the R packages
 
 **Who is affected.** Anyone using `sp.mendelian`: the MR estimators and
 diagnostics were compared with `MendelianRandomization`, `TwoSampleMR`,
@@ -687,7 +731,7 @@ diagnostics were compared with `MendelianRandomization`, `TwoSampleMR`,
 
 <a id="evidence-grade-closed-form"></a>
 
-## Unreleased — ⚠️ 23 functions are no longer graded as matching R / Stata
+## 1.29.0 — ⚠️ 23 functions are no longer graded as matching R / Stata
 
 **Who is affected.** Anyone who cited `sp.parity_status(fn)` /
 `docs/parity.md` for one of the functions below as evidence of agreement
@@ -717,7 +761,7 @@ comparison.
 
 <a id="dyadic-directed"></a>
 
-## Unreleased — ⚠️ `sp.dyadic_regression` on directed dyads
+## 1.29.0 — ⚠️ `sp.dyadic_regression` on directed dyads
 
 **Who is affected.** Anyone who passed `sp.dyadic_regression` data in which
 the same two nodes appear in more than one row — most commonly directed
@@ -1328,7 +1372,7 @@ value is the average of `tau(x)` and its standard error is descriptive.
 
 <a id="weak-iv-rank-deficient"></a>
 
-## Unreleased — ⚠️ Sun–Abraham, GLMM, and PPML-HDFE standard errors realigned to their references
+## 1.29.0 — ⚠️ Sun–Abraham, GLMM, and PPML-HDFE standard errors realigned to their references
 
 Point estimates do not change. Standard errors move by 0.1%–2% because
 each estimator now reproduces the reference implementation's variance
@@ -1345,7 +1389,7 @@ To reproduce pre-1.24.0 numbers: `sp.ppmlhdfe(..., robust="hc0")` gives the
 bare sandwich; the old Sun–Abraham and GLMM variances are not reproducible
 because they were not a documented convention.
 
-## Unreleased — ⚠️ weak-IV confidence sets refuse collinear instruments
+## 1.29.0 — ⚠️ weak-IV confidence sets refuse collinear instruments
 
 **Who is affected.** Callers of `sp.iv.anderson_rubin_ci` and
 `sp.iv.clr_ci` whose instruments are collinear after the exogenous
@@ -1365,7 +1409,7 @@ combination of the others or of the exogenous controls.
 
 <a id="ges-tie-break"></a>
 
-## Unreleased — ⚠️ `sp.ges` edge orientation is now deterministic
+## 1.29.0 — ⚠️ `sp.ges` edge orientation is now deterministic
 
 **Who is affected.** Anyone comparing `sp.ges` output across machines, or who
 observed an implausible complete undirected graph.
@@ -1387,7 +1431,7 @@ the same graph everywhere; re-run and re-pin if so.
 
 <a id="did-imputation-analytic-se"></a>
 
-## Unreleased — ⚠️ `sp.did_imputation` analytic standard errors changed
+## 1.29.0 — ⚠️ `sp.did_imputation` analytic standard errors changed
 
 **Who is affected.** Anyone who used `sp.did_imputation` (or its aliases
 `sp.bjs` / `sp.borusyak_jaravel_spiess`) with the default
@@ -1428,7 +1472,7 @@ right answer.
 
 <a id="did-imputation-pretrend-method"></a>
 
-## Unreleased — ⚠️ `sp.did_imputation` pre-trend coefficients changed
+## 1.29.0 — ⚠️ `sp.did_imputation` pre-trend coefficients changed
 
 **Who is affected.** Anyone who read the **pre-treatment** rows of
 `sp.did_imputation(...).model_info['event_study']`, or the
@@ -1493,7 +1537,7 @@ way. It is documented in `sp.event_study_convention()` and left alone
 pending a matched reference run against R `did2s`.
 <a id="hdfe-iv-inference"></a>
 
-## Unreleased — ⚠️ HDFE-IV standard errors and diagnostics realigned to `ivreghdfe`
+## 1.29.0 — ⚠️ HDFE-IV standard errors and diagnostics realigned to `ivreghdfe`
 
 **Who is affected.** Anyone who ran `sp.iv(absorb=...)`, or who quoted a
 `Kleibergen–Paap rk LM`, a first-stage `KP rk Wald F`, a Sargan statistic
@@ -1536,7 +1580,7 @@ pins 30 quantities against Stata 18 MP (`ivreghdfe` 1.1.4, `ivreg2`
 
 <a id="functional-form-test-default-binning"></a>
 
-## Unreleased — ⚠️ `sp.functional_form_test` default binning changed
+## 1.29.0 — ⚠️ `sp.functional_form_test` default binning changed
 
 **Who is affected.** Anyone who called `sp.functional_form_test` in
 1.21.0 or 1.22.0 **without** passing `n_bins` or `binpoints`. If you
@@ -1584,7 +1628,7 @@ explicit `n_bins` now raises rather than silently preferring
 
 <a id="staggered-rollout-singleton-cohorts"></a>
 
-## Unreleased — `sp.staggered_rollout` no longer raises on singleton cohorts
+## 1.29.0 — `sp.staggered_rollout` no longer raises on singleton cohorts
 
 **Who is affected.** Anyone whose panel has a treatment cohort
 containing exactly one unit.
@@ -1606,7 +1650,7 @@ singleton cohorts take an identical path.
 
 <a id="drdid-full-family"></a>
 
-## Unreleased — ⚠️ `sp.drdid` on repeated cross-sections changes
+## 1.29.0 — ⚠️ `sp.drdid` on repeated cross-sections changes
 
 **Who is affected.** Anyone calling `sp.drdid` **without** `id=`. The
 `id=` panel path is unaffected except in its last few digits (see the
@@ -1667,7 +1711,7 @@ SE. Anything with `method='imp'` shifts slightly, toward the reference.
 
 <a id="cs-clustered-bootstrap-unequal-clusters"></a>
 
-## Unreleased — ⚠️ clustered CS bootstrap SEs change on unequal clusters
+## 1.29.0 — ⚠️ clustered CS bootstrap SEs change on unequal clusters
 
 **Who is affected.** Anyone calling
 `sp.callaway_santanna(..., clustervars=<var>, bstrap=True)` — or
@@ -1715,7 +1759,7 @@ fit = sp.callaway_santanna(df, y="lemp", g="first_treat", t="year",
 
 <a id="cs-anticipation-varying-base"></a>
 
-## Unreleased — ⚠️ `anticipation>0` pre-treatment placebos change
+## 1.29.0 — ⚠️ `anticipation>0` pre-treatment placebos change
 
 **Who is affected.** Anyone calling `sp.callaway_santanna` (or `sp.did`
 routing to it) with **both** `anticipation > 0` **and**
@@ -1744,7 +1788,7 @@ to the neighbouring observed period instead of losing the cell.
 
 <a id="cs-allow-unbalanced-panel"></a>
 
-## Unreleased — `allow_unbalanced_panel` on `sp.callaway_santanna`
+## 1.29.0 — `allow_unbalanced_panel` on `sp.callaway_santanna`
 
 **Nothing breaks.** This is a new opt-in argument, defaulting to `False`,
 which is the previous behaviour.
@@ -1780,7 +1824,7 @@ used.
 
 <a id="did-weights-and-ipw-se"></a>
 
-## Unreleased — DiD unit weights, and IPW standard errors
+## 1.29.0 — DiD unit weights, and IPW standard errors
 
 Two output-changing fixes in the DiD family, both prompted by Baker,
 Callaway, Cunningham, Goodman-Bacon & Sant'Anna (2026), *JEL* 64(2),
@@ -1892,7 +1936,7 @@ accepted and did nothing:
 
 <a id="precision-vocabulary"></a>
 
-## Unreleased — one precision vocabulary for every exporter
+## 1.29.0 — one precision vocabulary for every exporter
 
 **What changed.** Precision used to be spelled differently by every
 exporter, and the ``"auto"`` sentinel only worked in ``sp.regtable``.
@@ -1947,7 +1991,7 @@ result.to_markdown(digits=4)            # pre-Unreleased default
 
 <a id="table-precision-pairing"></a>
 
-## Unreleased — ⚠️ regression-table decimal places change
+## 1.29.0 — ⚠️ regression-table decimal places change
 
 **What changed.** Two things, both in the table renderer only. No estimator,
 no standard error, no p-value is affected — this is presentation.
@@ -2008,7 +2052,7 @@ sp.esttab(m1, m2, fmt="%.4f")         # pre-Unreleased esttab / modelsummary
 
 <a id="aggte-weight-influence"></a>
 
-## Unreleased — ⚠️ `sp.aggte` standard errors get larger
+## 1.29.0 — ⚠️ `sp.aggte` standard errors get larger
 
 **What changed.** The Callaway–Sant'Anna aggregation weights are
 *estimated* cohort shares $\hat p_g = \widehat{P}(G = g)$, not constants.
@@ -2057,7 +2101,7 @@ R `did` on real data. See
 
 <a id="vcov-silently-ignored"></a>
 
-## Unreleased — ⚠️ `vcov=` on `sp.regress` / `sp.ivreg` was ignored
+## 1.29.0 — ⚠️ `vcov=` on `sp.regress` / `sp.ivreg` was ignored
 
 **What changed.** `sp.regress` and `sp.ivreg` accepted a `vcov=`
 argument — the pyfixest spelling used by `sp.feols` — and silently
@@ -2109,7 +2153,7 @@ implemented, it will now fail loudly instead of being ignored.
 
 <a id="hausman-integer-dtype"></a>
 
-## Unreleased — ⚠️ Durbin-Wu-Hausman test with integer treatments
+## 1.29.0 — ⚠️ Durbin-Wu-Hausman test with integer treatments
 
 **What changed.** The endogeneity test reported by `sp.ivreg` /
 `sp.iv` computed its first-stage residuals in the dtype of the
@@ -2130,7 +2174,7 @@ treatment with `.astype(float)` reproduced the correct value under the
 old code.
 <a id="sunab-share-variance"></a>
 
-## Unreleased — ⚠️ `sp.sun_abraham` standard errors rise at multi-cohort event times
+## 1.29.0 — ⚠️ `sp.sun_abraham` standard errors rise at multi-cohort event times
 
 **What changed.** The interaction-weighted estimator is
 δ̂_ℓ = Σ_g ŵ_{g,ℓ} β̂_{g,ℓ} — a product of *two* estimated objects. Sun &

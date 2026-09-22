@@ -55,7 +55,7 @@ The API is broad, and the numerical evidence behind it is uneven: some
 estimators are checked against R/Stata on identical data, others only against
 known-truth simulations, and many are API-stable without a numerical-parity
 claim yet. Every function carries a `validation_status` that says which case
-applies — certified or validated evidence versus API-stable breadth. See
+applies: `validation_status` distinguishes certified/validated evidence from API-stable breadth. See
 [Validation](#validation-what-has-been-checked-and-what-has-not) before relying
 on a number for publication.
 
@@ -171,12 +171,11 @@ interface across the everyday Stata/R empirical workflow.
 
 ## Beginner Examples With Results
 
-The outputs below were produced with the current `main` on the bundled
-datasets. Examples 1–5 also run on the PyPI release 1.28.0 (a few printed
-digits differ where `main` has since fixed them; see the CHANGELOG);
-example 6 uses the Stata `vce()` grammar and post-estimation commands that
-are on `main` but not yet in a PyPI release — until the next release, install
-them with
+The outputs below were produced with StatsPAI 1.29.0 on the bundled
+datasets and are pinned by `tests/test_readme_examples.py`, so they cannot
+drift from the code silently. Example 6 uses the Stata `vce()` grammar and
+post-estimation commands introduced in 1.29.0; on an older release install
+from source with
 `pip install "statspai @ git+https://github.com/brycewang-stanford/StatsPAI"`.
 Long summaries are abridged (`...` marks omitted lines); the numbers are pinned
 by `tests/test_readme_examples.py` and `tests/test_synth_placebo_pvalue.py`, so
@@ -721,9 +720,9 @@ Every registered function carries one of these tiers (counts on the current
 
 | `validation_status` | Meaning | Functions |
 | --- | --- | ---: |
-| `certified` | compared with a named external reference implementation (R, Stata, or the method authors' Python package) on identical inputs, within a pre-registered tolerance | 223 |
-| `validated` | known-truth simulation, published-number, coverage, or documented-convention evidence, but not in the main R/Stata harness | 208 |
-| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 752 |
+| `certified` | compared with a named external reference implementation (R, Stata, or the method authors' Python package) on identical inputs, within a pre-registered tolerance | 414 |
+| `validated` | known-truth simulation, published-number, coverage, or documented-convention evidence, but not in the main R/Stata harness | 128 |
+| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 641 |
 | `experimental` | method or API may still change | 3 |
 
 In other words, roughly a third of the registered surface carries numerical
@@ -855,7 +854,7 @@ many result objects expose estimator-level citation helpers.
   title   = {StatsPAI: A Unified, Agent-Native Python Toolkit for
              Causal Inference and Applied Econometrics},
   year    = {2026},
-  version = {1.28.0},
+  version = {1.29.0},
   doi     = {10.5281/zenodo.19933900},
   url     = {https://doi.org/10.5281/zenodo.19933900},
   license = {MIT}

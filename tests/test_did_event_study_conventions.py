@@ -553,15 +553,16 @@ def test_in_sample_leads_are_the_did2s_convention(roth_a):
         assert float(es.loc[k]) == pytest.approx(expected, abs=1e-9)
 
 
-def test_gardner_analytic_event_study_ses_are_smaller_than_did2s(roth_a):
-    """The documented SE understatement, measured against the reference.
+def test_gardner_event_study_ses_match_r_did2s(roth_a):
+    """Every horizon SE reproduces did2s's corrected two-stage variance.
 
-    ``sp.gardner_did`` warns that its analytic standard error ignores the
-    variance from estimating the stage-one fixed effects. That warning
-    has never been priced against did2s, which carries the two-stage
-    correction. It is priced here so the caveat is a number rather than
-    an adjective, and so a future change that silently closes or widens
-    the gap has to move this test.
+    ``sp.gardner_did``'s default ``vce='analytic'`` builds the stage-2
+    cluster sandwich from the two-stage influence function, exactly as
+    ``did2s::did2s`` does, so the per-horizon SEs are a strict parity
+    assertion (observed worst rel 2.1e-14). Before the correction the
+    analytic SE clustered the stage-2 residuals only and sat at a median
+    0.71 of the reference; that path is kept as ``vce='stage2'`` and pinned
+    below so the size of the old gap stays on record.
     """
     res = sp.gardner_did(
         roth_a,
@@ -573,6 +574,37 @@ def test_gardner_analytic_event_study_ses_are_smaller_than_did2s(roth_a):
         horizon=list(range(-16, 10)),
     )
     es = res.model_info["event_study"]
+    for label in es["horizon"]:
+        k = int(label.replace("D_k", "").replace("+", ""))
+        assert float(es["se"][label]) == pytest.approx(_DID2S_SE[k], rel=1e-9)
+    # The cross-horizon covariance is exposed and consistent with the SEs.
+    vcov = es["vcov"]
+    assert list(vcov.index) == es["horizon"]
+    for label in es["horizon"]:
+        assert np.sqrt(vcov.loc[label, label]) == pytest.approx(
+            float(es["se"][label]), rel=1e-12
+        )
+
+
+def test_gardner_stage2_event_study_ses_are_smaller_than_did2s(roth_a):
+    """The legacy stage-2-only SE, priced against the reference.
+
+    ``vce='stage2'`` ignores the variance from estimating the stage-one
+    fixed effects. Its gap to did2s is kept as a number so the option's
+    documentation ("understates") stays honest.
+    """
+    with pytest.warns(UserWarning, match="stage2"):
+        res = sp.gardner_did(
+            roth_a,
+            y="y",
+            group="unit",
+            time="time",
+            first_treat="g",
+            event_study=True,
+            horizon=list(range(-16, 10)),
+            vce="stage2",
+        )
+    es = res.model_info["event_study"]
     ratios = np.array(
         [
             float(es["se"][label]) / _DID2S_SE[k]
@@ -582,9 +614,7 @@ def test_gardner_analytic_event_study_ses_are_smaller_than_did2s(roth_a):
     )
     # Predominantly, but not uniformly, too small: the median horizon is
     # about 0.71 of the reference, roughly seven horizons in ten are
-    # below it, and no horizon exceeds 1.6. The non-uniform direction is
-    # itself informative --- an omitted positive variance term would be
-    # uniformly downward, so something else is also moving.
+    # below it, and no horizon exceeds 1.6.
     assert np.median(ratios) < 0.80
     assert ratios.min() > 0.55
     assert ratios.max() < 1.60

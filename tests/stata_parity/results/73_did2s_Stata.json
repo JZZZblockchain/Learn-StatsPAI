@@ -16,7 +16,7 @@
   ],
   "extra": {
     "stata_command": "did2s lemp, first_stage(i.countyreal i.year) second_stage(treated) treatment(treated) cluster(countyreal)",
-    "se_convention": "did2s propagates stage-1 estimation error, matching did2s::did2s in R; sp.gardner_did vce='analytic' does not and is the documented gap",
+    "se_convention": "did2s corrected two-stage clustered variance (stage-1 estimation error propagated, no small-sample factor), matching did2s::did2s in R and sp.gardner_did vce='analytic'",
     "stata_bridge_status": "materialized 2026-08-06 with licensed Stata 18"
   },
   "provenance": {

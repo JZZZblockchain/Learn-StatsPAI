@@ -10,7 +10,7 @@ this document grades every loose entry, records the gap actually
 observed in the committed `results/*.json` artifacts, and lists —
 honestly — the entries we cannot yet justify.
 
-Audited 2026-06-10 at 64 materialized modules; re-audited 2026-09-05 at 87 modules after the JSS parity-closure pass (Sun–Abraham, GLMM, PPML-HDFE, panel SFA, VAR, TWFE event study) and the addition of modules 86 (fect) and 87 (interflex). The budget is enforced by
+Audited 2026-06-10 at 64 materialized modules; re-audited 2026-09-05 at 87 modules after the JSS parity-closure pass (Sun–Abraham, GLMM, PPML-HDFE, panel SFA, VAR, TWFE event study) and the addition of modules 86 (fect) and 87 (interflex). Re-audited 2026-09-22 at 89 modules (88 `rdbwselect` and 89 `rdms` joined the machine tier; 27 `glmm_aghq` moved to the iterative tier, see the loosening record below). The budget is enforced by
 `tests/test_parity_harness_contract.py::test_headline_passes_are_inside_registered_r_tolerance`
 (R side) and
 `test_stata_headline_over_budget_modules_are_explicitly_registered`
@@ -28,7 +28,7 @@ the regime explicitly:
    convention, closed form or tightly converged optimizer. The
    residual is floating-point noise (typically `1e-15` to `1e-9`;
    cross-BLAS reassociation in sandwich "meat" sums can reach `~1e-8`,
-   see `verify_reproduce.py::REPRO_TOL_OVERRIDE`). 78 of 87 modules
+   see `verify_reproduce.py::REPRO_TOL_OVERRIDE`). 79 of 89 modules
    register here on the point estimate.
 2. **Convention gap (`1e-4` to `5e-2`).** Both implementations are
    correct, but they compute a *documented* different quantity:
@@ -173,12 +173,12 @@ harness machine tier `1e-6`. **No value was loosened.**
 | `03_hdfe` | `rel_se` | 1e-2 | 1e-6 | 8.4e-15 | The "1-df convention gap" comment was stale: with `ssc='fixest'`, IID SEs match `fixest::feols`/`reghdfe` at machine level on both sides. |
 | `15_hdfe_cluster` | `rel_se` | 5e-2 | 1e-6 | 1.25e-11 | Stale "ssc convention": CR1 nested-FE cluster SEs now match on both sides. |
 | `30_oaxaca` | `rel_se` | 1.0 | 0.05 | 1.25e-2 | Grade-A delta-vs-bootstrap gap; 3× observed ≈ 0.0375, rounded to 0.05. |
-| `11_psm` | `rel_se` | 5.0 | 1e-6 | sentinel (no joined SE row) | `att_psm` carries `se=None` on all three sides *by design*; see "Sentinel entries". |
+| `11_psm` | `rel_se` | 5.0 | 1e-6 | sentinel (no joined `se` field) | `att_psm` carries `se=None` on all three sides *by design*; see "Sentinel entries". Since 2026-09-22 the point-valued `se_teffects_ai` row joins Stata under `rel_est` at 7e-8 (`se_method='abadie_imbens_2016'`, the Abadie-Imbens 2016 estimated-score variance `teffects psmatch` reports); the default `se_abadie_imbens` (psmatch2 `ai(1)`, 643.35 vs 621.79) is a documented convention -- sample- vs population-ATT target and no estimated-score term. |
 | `12_sdid` | `rel_se` | 5e-2 | 1e-6 | sentinel | Point-only ATT row (`arkhangelsky2021synthetic`); placebo SEs are backend-native diagnostics under distinct names. |
 | `16_bjs` | `rel_se` | 0.25 | 1e-6 | sentinel | BJS imputation (`borusyak2024revisiting`); SE rows are side-specific (`se_cluster_if` / `se_didimputation` / `se_stata_did_imputation`). |
 | `07_scm` | `rel_se` | 1.0 | 1e-6 | sentinel | All SCM rows are point-only. |
-| `18_augsynth` | `rel_se` | 1.0 | 1e-6 | sentinel | `augsynth` fixture (`benmichael2021augmented`) emits no joinable SE. |
-| `19_gsynth` | `rel_se` | 1.0 | 1e-6 | sentinel | `gsynth` fixture (`xu2017generalized`) emits no joinable SE. |
+| `18_augsynth` | `rel_se` | 1.0 | 1e-6 | sentinel | `augsynth` fixture (`benmichael2021augmented`) emits no joinable SE. The `rel_est` budget (2e-5) is now grade **A**: the 7.9e-6 R residual is `augsynth::synth_qp`'s OSQP stopping tolerance (eps 1e-8); with OSQP at 1e-13 augsynth agrees with StatsPAI's exact simplex QP and the audited Stata/Mata bridge (`18_augsynth.do`) to 1e-11. |
+| `19_gsynth` | `rel_se` | 1.0 | 1e-6 | sentinel | `gsynth` fixture (`xu2017generalized`) emits no joinable SE. An audited Stata/Mata bridge (`19_gsynth.do`, gsynth's control-only factor convention with r fixed at the R `r.cv`) joins the ATT at 2.2e-15; `fect_stata method(ife)` is a different estimator (IFEct) and is kept as an unjoined diagnostic. |
 | `20_bacon` | `rel_se` | 1.0 | 1e-6 | sentinel | The Goodman–Bacon decomposition (`goodmanbacon2021difference`, `goodmanbacon2019bacondecomp`) has no SEs on any side. |
 | `31_dfl` | `rel_se` | 1.0 | 1e-6 | sentinel | Point-only decomposition rows. |
 | `39_arima` | `rel_se` | 1e-2 | 1e-6 | sentinel | No SE row joins on this fixture. |
@@ -194,6 +194,58 @@ passes every tolerance-related contract. A row-level checker asserting
 the new values against *all* joined SE rows on both reference sides
 (not just headline rows) also passes for every tightened entry.
 
+## Closed 2026-09-22 (no tolerance change)
+
+- **`73_did2s` SE promoted to T2.** `sp.gardner_did`'s default
+  `vce='analytic'` now computes the did2s corrected two-stage clustered
+  variance (stage-1 estimation error propagated through
+  `γ = (X10'X10)^{-1} X1'X2`), matching R `did2s` at 2.7e-10 and Stata
+  `did2s` at 1.3e-14 on the static ATT and all 26 event-study horizons
+  at 2.1e-14. `rel_se` registered at the 1e-6 machine tier; the
+  pre-1.29 stage-2-only SE (25.9% low) is reachable as `vce='stage2'`
+  and kept as the unjoined `static_ATT_stage2_se` row.
+- **`04_csdid` Stata SE convention pinned as a row.**
+  `group_overall_fixedshare` = `sp.aggte(share_variance=False)` joins
+  `csdid`'s `estat group` GAverage at 6.2e-15; `STATA_SE_GAP_NOTES`
+  keeps the 0.27% note for the default row only.
+- **`18_augsynth` / `19_gsynth` Stata bridges materialised** (see the
+  sentinel table above); `STATA_SKIP_REASON` now lists four modules
+  (13, 77, 79, 80). Stata-side reproducibility: 85/85 modules, zero drift.
+
+## Loosening applied 2026-09-22: `27_glmm_aghq` point estimate 1e-6 → 5e-6 (grade B)
+
+The only budget ever loosened under the audit rule, registered here
+with the measurement that justifies it.
+
+- **The likelihood is shared.** The `logLik` row joins R `lme4::glmer`
+  (`nAGQ = 8`) at rel 1e-13, and `lme4`'s deviance function
+  (`devFunOnly = TRUE`) evaluated at StatsPAI's `(θ, β)` is within
+  4.7e-11 of its value at `lme4`'s own optimum. Both sides compute the
+  same 8-point adaptive Gauss–Hermite approximation.
+- **The objective is flat.** Along the (intercept, √var) direction a
+  5e-11 deviance step moves the intercept by 5e-7, i.e. the argmax is
+  numerically undetermined at the 1e-6 level for a 1500-observation
+  log-likelihood evaluated in double precision.
+- **The reference's own optimisers disagree at that level.** On the
+  committed fixture `lme4` with `bobyqa` (the script's setting, `rhoend
+  = 1e-12`), `nloptwrap` (`xtol_abs = ftol_abs = 1e-14`),
+  `optimx/nlminb` and `Nelder_Mead` return intercepts 1.1e-6, 1.5e-6 and
+  1.4e-5 apart from one another while all reproduce the deviance to
+  1e-10. Stata `melogit, intpoints(8)` (default `mvaghermite`, tight
+  `tolerance(1e-10) ltolerance(1e-13)`) lands 2e-8 from StatsPAI on the
+  intercept; its `logLik` differs by 5e-6 because Stata's mean–variance
+  adaptive grid is a different 8-point approximation, and all three
+  sides agree to 3e-8 at 30 points (`intmethod(mcaghermite)` gives the
+  same 30-point numbers to 1e-15).
+- **Budget.** 5e-6 ≈ 3× the widest `lme4`-vs-`lme4` spread that still
+  reproduces the deviance to 1e-10. The module therefore reports in the
+  *iterative* strictness tier (79 machine / 8 iterative / 1 moderate /
+  1 T4 as of this change), not the machine tier. The SE budget (2e-5)
+  is unchanged; observed 4.8e-7 (R) / 4.2e-6 (Stata).
+- **Guard.** `test_glmm_parity_uses_tight_optimizer_solution_with_se_convention_guard`
+  additionally asserts `logLik` rel < 1e-9, so a future drift in the
+  quadrature itself cannot hide behind the optimiser-noise budget.
+
 ## Sentinel entries
 
 Several modules are *point-only* by design: their SE estimators differ
@@ -205,13 +257,20 @@ the estimator Stata `psmatch2, ai(J)` reports; `MatchIt::matchit`
 documents no canonical analytic SE for nearest-neighbor matching with
 replacement, so the R fixture records a weighted-`lm`-on-matched-data
 diagnostic (`se_matchit_lm`); Stata `teffects psmatch` reports its own
-Abadie–Imbens variant (`abadie2006large`, `abadie2011bias`,
-`se_teffects_ai` = 621.79), 3.4% below ours. That last gap is between two
-Abadie–Imbens variances rather than between unrelated estimators, so it
-is a candidate for promotion to a joining row — but the diverging term
-has **not** been localised, so under the §5 adjudication rule it stays an
-open item and the rows stay side-specific rather than being joined under
-a 5% tolerance.
+Abadie–Imbens variant (`abadie2016matching`, `se_teffects_ai` = 621.79),
+3.4% below ours. That gap was localised on 2026-09-22 (previously an
+open item under the §5 rule): `teffects psmatch` reports the Abadie &
+Imbens (2016) variance for matching on the *estimated* propensity score,
+`σ²_δ − c'V_γ c + d'V_γ d`, whose two extra terms (−74 905 + 8 036 on
+NSW-DW) are negative here, and whose base term targets the population
+ATT (it includes the `(τ_i − τ)²` heterogeneity term) rather than the
+sample ATT of eq. 14. `sp.match(se_method='abadie_imbens_2016')` rebuilds
+the number from StatsPAI's own matched frame, within-arm conditional
+variances and logit information matrix to rel 6.4e-8 (the residual is
+Stata's ML stopping rule), so the point-valued `se_teffects_ai` row now
+*joins* Stata under the module's `rel_est` budget of 1e-6. The default
+`se_abadie_imbens` (psmatch2 `ai(1)`) is unchanged and documented as the
+sample-ATT, known-score convention.
 
 For such modules the `rel_se` budget is **vacuous** — no value, loose
 or tight, is ever exercised. The previous loose values (up to 5.0 for
@@ -333,6 +392,6 @@ items follow.
 
 ---
 
-*Last audited: 2026-09-05 (StatsPAI 1.24.0 source snapshot, 87 parity modules). Re-run
+*Last audited: 2026-09-22 (StatsPAI 1.29.0 source snapshot, 89 parity modules). Re-run
 the snippet above and refresh this document whenever a `TOLERANCES`
 entry changes.*

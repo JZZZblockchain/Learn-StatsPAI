@@ -294,7 +294,8 @@ class TestIVClusterSeriesGuard:
 
 
 # ----------------------------------------------------------------------
-# gardner_did: opt-in cluster bootstrap SE (default analytic understates)
+# gardner_did: opt-in cluster bootstrap SE (default analytic is the did2s
+# corrected two-stage variance; bootstrap agrees with it in scale)
 # ----------------------------------------------------------------------
 class TestGardnerBootstrapSE:
     def _panel(self, seed=1, nu=60, nt=6):
@@ -327,8 +328,9 @@ class TestGardnerBootstrapSE:
             )
         # Bootstrap changes inference only, not the point estimate.
         assert b.estimate == pytest.approx(a.estimate)
-        # ...and the analytic SE understates, so bootstrap is (weakly) larger.
-        assert b.se >= a.se - 1e-9
+        # ...and both target the same two-stage variance, so they agree in
+        # scale (199 cluster draws on 60 clusters: ~10% bootstrap noise).
+        assert 0.8 < b.se / a.se < 1.25, (a.se, b.se)
         assert b.model_info["vce"] == "bootstrap"
 
     def test_analytic_default_does_not_warn_about_anti_conservatism(self):

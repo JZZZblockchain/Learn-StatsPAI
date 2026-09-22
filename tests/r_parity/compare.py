@@ -80,24 +80,6 @@ STATA_SKIP_REASON: dict[str, str] = {
         "neither `triplediff` nor `ddd` resolves locally and `ssc describe "
         "triplediff` returns r(601)."
     ),
-    "19_gsynth": (
-        "bridge artifact not materialized: Xu's fect_stata is the candidate "
-        "generalized-SCM route and can be installed in a temporary Stata 18 "
-        "ado path, but the two-way IFE probe selects r=1 and reports ATT "
-        "0.679854 under fect's convention, while the R/Python gsynth headline "
-        "is -0.324171; an option grid over force(two-way/unit/time/none) "
-        "does not recover the R gsynth convention. No like-for-like Stata "
-        "bridge is materialized yet."
-    ),
-    "18_augsynth": (
-        "bridge artifact not materialized: local Stata allsynth v1.32 is a "
-        "candidate bias-corrected SCM reference, but its ridge de-biaser "
-        "rejects the Basque outcome-only fixture with 16 controls and 15 "
-        "pre-period predictors because it requires at least K + 2 control "
-        "units; a feasible California probe also follows a distinct "
-        "allsynth bias-correction convention rather than the R augsynth "
-        "estimand. No portable like-for-like Stata artifact is materialized yet."
-    ),
     "13_causal_forest": (
         "bridge artifact not materialized: Stata 19's official cate command "
         "is the candidate causal-forest/AIPW reference, but the verified local "
@@ -258,11 +240,12 @@ STATA_SE_GAP_NOTES: dict[str, str] = {
         "group_overall only (0.27%): csdid's `estat group` GAverage "
         "aggregates the per-cohort influence functions with the cohort "
         "shares held fixed, while did::aggte(type='group') and sp.aggte "
-        "add the share-estimation term (did:::wif). Rebuilding the "
-        "fixed-share aggregate from StatsPAI's joint cell influence "
-        "functions reproduces csdid's SE to 1e-8 "
-        "(test_csdid_group_overall_stata_se_is_the_fixed_share_aggregation); "
-        "the other 18 rows are three-way machine level."
+        "add the share-estimation term (did:::wif). The convention is "
+        "pinned, not just explained: the group_overall_fixedshare row "
+        "runs sp.aggte(share_variance=False) and joins csdid's GAverage "
+        "SE at rel 6e-15 (no R side by construction -- did has no "
+        "fixed-share option); the other 18 rows are three-way machine "
+        "level."
     ),
     "71_dml_family": (
         "theta_DML_PLIV only (5.0e-4): ddml's PLIV final stage runs "
@@ -463,13 +446,20 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # CIC: ATT and all nine QTEs match qte::CiC at machine precision
     # (worst 4.4e-15). No rel_se -- the R call runs se=FALSE.
     "74_cic": {"rel_est": 1e-6},
-    # Gardner two-stage: point estimate matches did2s at 4.8e-08. The SE
-    # is deliberately NOT given a rel_se tolerance -- did2s propagates
-    # stage-1 estimation error into the stage-2 variance and
-    # sp.gardner_did's vce='analytic' does not, so the ~26% gap is a
-    # documented convention (vce='bootstrap' closes it to ~6%), not a
-    # numerical failure to be papered over with a loose bound.
-    "73_did2s": {"rel_est": 1e-6},
+    # Gardner two-stage: point estimate matches did2s at 4.8e-08 and the
+    # SE at 2.7e-10 (Stata did2s: 2.4e-12 / 1.3e-14). sp.gardner_did's
+    # vce='analytic' is the did2s corrected clustered variance -- the
+    # stage-2 sandwich built from the two-stage influence function
+    # (X2'X2)^-1 [sum_g s_g s_g'] (X2'X2)^-1 with
+    # s_g = sum_{i in g} (x2_i e2_i - gamma' x10_i e1_i),
+    # gamma = (X10'X10)^-1 X1'X2, no small-sample factor -- so stage-1
+    # fixed-effect estimation error is propagated exactly as both
+    # references do. The residual against R is fixest's iterative
+    # demeaning tolerance in the first stage (the same source as the
+    # point-estimate gap); Stata solves the first stage exactly and lands
+    # at machine level. The pre-correction stage-2-only SE (~26% low) is
+    # still emitted as the unjoined `static_ATT_stage2_se` diagnostic row.
+    "73_did2s": {"rel_est": 1e-6, "rel_se": 1e-6},
     "02_iv": {"rel_est": 1e-6, "rel_se": 1e-6},
     # Tightened 2026-06-10 from 1e-2 ("1-df conv. gap" was stale): with
     # ssc='fixest' the IID SEs match fixest/reghdfe at machine level
@@ -572,8 +562,14 @@ TOLERANCES: dict[str, dict[str, float]] = {
     },  # point row; side-specific SE diagnostics
     "17_etwfe": {"rel_est": 1e-6, "rel_se": 1e-3},  # emfx + cluster SE
     # parity; B: observed worst 6.0e-4 on the Stata side (1.7x margin).
-    # B on est (iterative Ridge+SCM solver, observed 7.9e-6, 2.5x margin);
-    # rel_se sentinel (was 1.0): the R augsynth fixture emits no joinable SE.
+    # A on est: the 7.9e-6 R-side residual is augsynth's OSQP solver
+    # tolerance (synth_qp runs OSQP at eps=1e-8); with OSQP tightened to
+    # 1e-13 augsynth returns -0.36277067318038575, which agrees with the
+    # exact active-set simplex QP used by StatsPAI (1.7e-8) and by the
+    # audited Stata/Mata bridge (18_augsynth.do, same lambda path and
+    # 1-SE rule recomputed in Mata) to 1e-11. Budget kept at 2e-5
+    # (2.5x margin on the OSQP-limited R row); rel_se sentinel (was 1.0):
+    # the R augsynth fixture emits no joinable SE.
     "18_augsynth": {"rel_est": 2e-5, "rel_se": 1e-6},
     "19_gsynth": {
         "rel_est": 1e-6,
@@ -605,8 +601,22 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # 5e-2 with a 1.9% "information-matrix convention" gap that turned
     # out to be the missing variance-component uncertainty on the
     # StatsPAI side, not a convention.
+    # B (iterative): the three sides maximise the SAME 8-point adaptive
+    # Gauss-Hermite likelihood -- the logLik row joins R at 1e-13 and
+    # lme4's deviance function evaluated at StatsPAI's optimum is within
+    # 5e-11 of its value at lme4's own optimum -- but that objective is
+    # flat along the (intercept, sqrt(var)) direction: a 5e-11 deviance
+    # step moves the intercept by 5e-7. lme4's own optimisers scatter by
+    # 1.1e-6 (optimx/nlminb) to 1.5e-6 (nloptwrap) to 1.4e-5
+    # (Nelder-Mead) around bobyqa on this fixture, and Stata melogit's
+    # mvaghermite lands 2e-8 from StatsPAI while its logLik differs by
+    # 5e-6 (a different quadrature grid at 8 points; all sides agree to
+    # 3e-8 at 30 points). The budget is therefore optimiser noise on the
+    # reference side, measured, not a convention: 5e-6 = ~3x the widest
+    # lme4-vs-lme4 spread that still reproduces the deviance to 1e-10.
+    # SE budget unchanged (2e-5; observed 4.8e-7 R / 4.2e-6 Stata).
     "27_glmm_aghq": {
-        "rel_est": 1e-6,
+        "rel_est": 5e-6,
         "rel_se": 2e-5,
     },  # AGHQ tight optimiser, full OIM covariance
     "28_frontier": {
@@ -1264,9 +1274,10 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
         "gap_note": (
-            "point estimate rel < 1e-6; SE is a documented convention gap "
-            "(did2s propagates stage-1 estimation error, sp.gardner_did's "
-            "vce='analytic' does not -- vce='bootstrap' recovers it to ~6\\%)"
+            "estimate rel 4.8e-8 and SE rel 2.7e-10 against did2s "
+            "(Stata did2s: 2.4e-12 / 1.3e-14); vce='analytic' is the did2s "
+            "corrected two-stage clustered variance, so stage-1 estimation "
+            "error is propagated on all three sides"
         ),
     },
     "84_bjs_pretrends": {
@@ -1433,7 +1444,13 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "headline_filter": lambda d: d.statistic == "att_psm",
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "",
+        "gap_note": (
+            "se_teffects_ai joins Stata teffects psmatch's Abadie-Imbens "
+            "2016 estimated-score variance at rel 7e-8 via the "
+            "abadie_imbens_2016 SE option; the default psmatch2 ai(1) "
+            "SE is a documented convention (sample vs population ATT, no "
+            "score term)"
+        ),
     },
     "12_sdid": {
         "name": "Synthetic DID",
@@ -1589,7 +1606,10 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "headline_filter": lambda d: d.statistic.startswith("beta_"),
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "",
+        "gap_note": (
+            "same 8-point AGQ likelihood (logLik rel 1e-13); intercept "
+            "within reference optimiser scatter on a flat objective"
+        ),
     },
     "29_panel_sfa": {
         "name": "Panel SFA (Pitt--Lee)",

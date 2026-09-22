@@ -22,7 +22,7 @@ the exact audit artifacts under `Paper-JSS/replication/results/`.
 ## Software Scope
 
 StatsPAI exposes a unified Python interface for causal inference and applied
-econometrics. The live registry reports 1,182 registered public functions
+econometrics. The live registry reports 1,186 registered public functions
 across 87 submodules:
 
 ```bash
@@ -36,8 +36,8 @@ does not mean every registered helper is numerically validated.
 
 ## Validation Boundary
 
-Current JSS source-snapshot audit counts: 223 `certified`, 206 `validated`, 750 `api_stable`, and 3 `experimental` registry symbols. The certified/validated
-surface is therefore 429 symbols, while 642 stable auto-registered symbols
+Current JSS source-snapshot audit counts: 414 `certified`, 128 `validated`, 641 `api_stable`, and 3 `experimental` registry symbols. The certified/validated
+surface is therefore 542 symbols, while 555 stable auto-registered symbols
 remain API-stable but not parity-backed.
 
 The `validated` tier requires known-truth, reference-parity, external-parity,
@@ -46,11 +46,11 @@ API stability; they do not by themselves promote a function to `validated`.
 `certified` is reserved for entries in the main cross-language or published
 reference parity harness.
 
-The source-snapshot evidence audit checks that all 429 certified/validated symbols
+The source-snapshot evidence audit checks that all 542 certified/validated symbols
 have registry-attached evidence notes and that those notes resolve to source
-files included in the JSS package. The current archive includes 422
+files included in the JSS package. The current archive includes 473
 registry-evidence source files.
-The current source snapshot also tracks 426 registry-evidence source files
+The current source snapshot also tracks 473 registry-evidence source files
 in the live validation-note inventory.
 
 ## Reproducible Audit Artifacts

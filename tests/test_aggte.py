@@ -290,3 +290,77 @@ def test_aggte_simple_se_matches_cs_headline(cs_result):
     out = aggte(cs_result, type="simple", bstrap=False)
     assert out.estimate == pytest.approx(cs_result.estimate, rel=1e-10, abs=1e-10)
     assert out.se == pytest.approx(cs_result.se, rel=1e-8, abs=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# share_variance: the did:::wif cohort-share term is the default (Callaway &
+# Sant'Anna's own convention); share_variance=False reproduces Stata csdid's
+# `estat group` GAverage, which holds the shares fixed.  Both numbers are
+# pinned to the committed Track A goldens so neither convention can drift.
+# ---------------------------------------------------------------------------
+def _module04_fit():
+    from pathlib import Path
+
+    import pandas as pd
+
+    import statspai as sp
+
+    data = Path(__file__).resolve().parent / "r_parity" / "data" / "04_csdid.csv"
+    df = pd.read_csv(data)
+    return sp.callaway_santanna(
+        df,
+        y="lemp",
+        g="first_treat",
+        t="year",
+        i="countyreal",
+        estimator="reg",
+        control_group="nevertreated",
+        base_period="universal",
+    )
+
+
+def _golden_se(path, statistic):
+    import json
+
+    rows = json.loads(path.read_text(encoding="utf-8"))["rows"]
+    return next(r["se"] for r in rows if r["statistic"] == statistic)
+
+
+def test_aggte_group_overall_share_variance_matches_r_did():
+    from pathlib import Path
+
+    import statspai as sp
+
+    fit = _module04_fit()
+    agg = sp.aggte(fit, type="group", bstrap=False, cband=False)
+    golden = (
+        Path(__file__).resolve().parent / "r_parity" / "results" / "04_csdid_R.json"
+    )
+    r_se = _golden_se(golden, "group_overall")
+    # R did::aggte(type="group") includes did:::wif; same-byte parity budget 1e-9.
+    assert abs(float(agg.se) - r_se) / r_se < 1e-9
+    assert agg.model_info["share_variance"] is True
+
+
+def test_aggte_group_overall_fixed_share_matches_stata_csdid():
+    from pathlib import Path
+
+    import statspai as sp
+
+    fit = _module04_fit()
+    default = sp.aggte(fit, type="group", bstrap=False, cband=False)
+    fixed = sp.aggte(fit, type="group", bstrap=False, cband=False, share_variance=False)
+    golden = (
+        Path(__file__).resolve().parent
+        / "stata_parity"
+        / "results"
+        / "04_csdid_Stata.json"
+    )
+    stata_se = _golden_se(golden, "group_overall")
+    # Point estimate is identical; only the variance convention changes.
+    assert float(fixed.estimate) == float(default.estimate)
+    assert abs(float(fixed.se) - stata_se) / stata_se < 1e-9
+    assert float(fixed.se) < float(
+        default.se
+    )  # dropping the share term is anti-conservative
+    assert fixed.model_info["share_variance"] is False

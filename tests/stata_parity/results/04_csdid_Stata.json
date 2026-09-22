@@ -125,6 +125,18 @@
     {
       "module": "04_csdid",
       "side": "Stata",
+      "statistic": "group_overall_fixedshare",
+      "estimate": -0.029513654469371799,
+      "se": 0.0072333907925403,
+      "ci_lo": null,
+      "ci_hi": null,
+      "n": 2500,
+      "extra": {}
+    }
+,
+    {
+      "module": "04_csdid",
+      "side": "Stata",
       "statistic": "group_2004",
       "estimate": -0.0419087874472127,
       "se": 0.011738622905890299,
@@ -222,7 +234,8 @@
     "base_period": "universal (csdid long2)",
     "estimator": "reg",
     "control_group": "nevertreated",
-    "stata_command": "csdid ... method(reg) long2 | estat simple/event/group/calendar"
+    "stata_command": "csdid ... method(reg) long2 | estat simple/event/group/calendar",
+    "group_overall_convention": "estat group GAverage holds cohort shares fixed; joins sp.aggte(share_variance=False) as group_overall_fixedshare"
   },
   "provenance": {
     "stata_version": 18,

@@ -1,4 +1,5 @@
-"""sp.interflex: interaction effects with diagnostics (Hainmueller, Mummolo and Xu 2019).
+"""sp.interflex: interaction effects with diagnostics (Hainmueller, Mummolo and
+Xu 2019).
 
 Numerical parity with R interflex is pinned by Track A module 87; these
 tests cover the analytic identities and the API contract.
@@ -168,3 +169,78 @@ def test_interflex_plot_returns_a_figure():
     assert fig is not None and len(fig.axes) >= 1
     kern = sp.interflex(df, y="y", d="d", x="x", estimator="kernel", bw=0.8, neval=6)
     assert sp.interflex_plot(kern, show_hist=False) is not None
+
+
+# ----------------------------------------------------------------------
+# Cross-validated bandwidth (interflex bw = NULL); the statistical comparison
+# with R's fold stream is tests/reference_parity/test_fect_interflex_cv_parity.py
+# ----------------------------------------------------------------------
+
+
+def test_kernel_cv_selects_a_bandwidth_on_the_interflex_grid_and_refits():
+    df = _sample(seed=4, n=300)
+    res = sp.interflex(
+        df, y="y", d="d", x="x", estimator="kernel", cv=True, random_state=0
+    )
+    cvi = res.model_info["cv"]
+    grid = cvi["grid"]
+    rng_x = float(df["x"].max() - df["x"].min())
+    assert len(grid) == 30
+    assert grid[0] == pytest.approx(rng_x / 100) and grid[-1] == pytest.approx(rng_x)
+    assert res.model_info["bw_cv"] == res.model_info["bw"] == cvi["selected"]
+    tab = cvi["table"]
+    assert list(tab.columns) == ["bw", "num_eff_points", "mse", "mae"]
+    assert cvi["fold_losses"].shape == (30, 11)
+    assert sum(cvi["fold_sizes"]) == len(df)
+    # Folds are stratified on d: each fold has ~n_d/10 of each arm.
+    assert max(cvi["fold_sizes"]) - min(cvi["fold_sizes"]) <= 2
+    score = tab["mse"] / tab["num_eff_points"]
+    assert cvi["selected_index"] == int(score.idxmin())
+    direct = sp.interflex(
+        df, y="y", d="d", x="x", estimator="kernel", bw=res.model_info["bw_cv"]
+    )
+    assert res.estimate == direct.estimate
+    assert (res.detail["me"].to_numpy() == direct.detail["me"].to_numpy()).all()
+
+
+def test_kernel_cv_is_seeded_and_accepts_an_explicit_grid():
+    df = _sample(seed=9, n=250)
+    a = sp.interflex(
+        df, y="y", d="d", x="x", estimator="kernel", cv=True, random_state=7
+    )
+    b = sp.interflex(
+        df, y="y", d="d", x="x", estimator="kernel", cv=True, random_state=7
+    )
+    assert a.model_info["bw_cv"] == b.model_info["bw_cv"]
+    c = sp.interflex(
+        df,
+        y="y",
+        d="d",
+        x="x",
+        estimator="kernel",
+        cv=True,
+        bw_grid=[0.3, 0.6, 1.2],
+        kfold=5,
+        metric="mae",
+        random_state=7,
+    )
+    assert c.model_info["cv"]["grid"].tolist() == [0.3, 0.6, 1.2]
+    assert c.model_info["bw_cv"] in (0.3, 0.6, 1.2)
+    assert c.model_info["cv"]["fold_losses"].shape == (3, 6)
+
+
+def test_kernel_cv_argument_errors():
+    df = _sample(seed=0, n=120)
+    with pytest.raises(ValueError, match="cv=True"):
+        sp.interflex(df, y="y", d="d", x="x", estimator="binning", cv=True)
+    with pytest.raises(ValueError, match="do not pass bw"):
+        sp.interflex(df, y="y", d="d", x="x", estimator="kernel", cv=True, bw=0.5)
+    with pytest.raises(ValueError, match="metric"):
+        sp.interflex(
+            df, y="y", d="d", x="x", estimator="kernel", cv=True, metric="rmse"
+        )
+    with pytest.raises(ValueError, match="kfold"):
+        sp.interflex(df, y="y", d="d", x="x", estimator="kernel", cv=True, kfold=1)
+    # cv=False keeps the old contract: kernel needs bw
+    with pytest.raises(ValueError, match="bw="):
+        sp.interflex(df, y="y", d="d", x="x", estimator="kernel")

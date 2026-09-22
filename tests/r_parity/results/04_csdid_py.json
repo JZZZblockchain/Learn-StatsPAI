@@ -199,6 +199,17 @@
       "ci_hi": null,
       "n": null,
       "extra": {}
+    },
+    {
+      "module": "04_csdid",
+      "side": "py",
+      "statistic": "group_overall_fixedshare",
+      "estimate": -0.029513654469371816,
+      "se": 0.007233390792540255,
+      "ci_lo": null,
+      "ci_hi": null,
+      "n": null,
+      "extra": {}
     }
   ],
   "extra": {
@@ -206,7 +217,7 @@
     "control_group": "nevertreated",
     "base_period": "universal",
     "method": "Callaway and Sant'Anna (2021)",
-    "group_overall_stata_gap": "One row is not a three-way match. group_overall: StatsPAI and R did::aggte agree to 1.2e-16; Stata csdid's estat group GAverage standard error differs by 2.7e-3 (0.27%). The point estimate matches all three. Mechanism (reconstructed, 2026-09-05): csdid aggregates the per-cohort influence functions with the cohort shares held fixed, whereas did and StatsPAI add the share-estimation term (did:::wif). Rebuilding the fixed-share aggregate from StatsPAI's joint cell influence functions returns csdid's SE to 1e-8; an earlier independent-cell reconstruction overshot (0.00746) because it dropped the covariance between cells that share control units.",
+    "group_overall_stata_gap": "group_overall is a two-way (StatsPAI/R) match, not a three-way one: StatsPAI and R did::aggte agree to 1.2e-16; Stata csdid's estat group GAverage standard error differs by 2.7e-3 (0.27%). Point estimates match on all three sides. Mechanism: csdid aggregates the per-cohort influence functions with the cohort shares held fixed, whereas did and StatsPAI add the share-estimation term (did:::wif). The group_overall_fixedshare row runs sp.aggte(share_variance=False) and joins csdid's GAverage SE at machine precision (rel 6e-15), so the convention is pinned rather than asserted; R did has no fixed-share option, so that row has no R side by construction.",
     "base_period_note": "base_period is pinned explicitly on BOTH sides. StatsPAI defaults to 'universal' and R did defaults to 'varying'. The simple ATT cannot see the difference -- it averages post-treatment cells only -- so this module passed for years without the option being matched. The event-study path can see it, and would have reported a spurious disagreement on every pre-treatment cell.",
     "se_note": "The simple-ATT point estimate matches R did::aggte and Stata csdid at rel < 1e-15. The analytic SE now matches the R/Stata no-bootstrap reference at rel ~ 4e-16, once the outcome-regression IF carries the control-regression uncertainty AND sp.aggte carries the cohort-share weight-estimation term. The registered rel_se tolerance was 1% while that term was missing; it is now 1e-9."
   }

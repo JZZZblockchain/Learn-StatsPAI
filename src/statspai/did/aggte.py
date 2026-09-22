@@ -62,6 +62,7 @@ def aggte(
     cband: bool = True,
     alpha: float = 0.05,
     random_state: Optional[int] = None,
+    share_variance: bool = True,
 ) -> CausalResult:
     """
     Aggregate group-time ATT(g, t) estimates from ``callaway_santanna``.
@@ -98,6 +99,17 @@ def aggte(
         Otherwise pointwise intervals.
     alpha : float, default 0.05
         Nominal level for confidence intervals.
+    share_variance : bool, default True
+        Carry the sampling variability of the *estimated* cohort shares
+        into the aggregated variance (R ``did:::wif``; the Callaway &
+        Sant'Anna reference convention). ``False`` holds the cohort shares
+        fixed, which is the convention of Stata ``csdid``'s
+        ``estat group`` aggregate (``GAverage``); point estimates are
+        identical either way and only the ``'group'`` overall (and any
+        multi-cohort cell) standard error changes. Use ``False`` to
+        reproduce ``csdid`` digit for digit.
+
+        .. versionadded:: 1.29.0
     random_state : int, optional
         Seed for the multiplier bootstrap.
 
@@ -227,7 +239,11 @@ def aggte(
     unit_weights = model_info.get("_unit_weights")
     psi_cells: Optional[np.ndarray] = None
     if inf_matrix is not None:
-        if unit_cohorts is not None and len(unit_cohorts) == inf_matrix.shape[0]:
+        if (
+            share_variance
+            and unit_cohorts is not None
+            and len(unit_cohorts) == inf_matrix.shape[0]
+        ):
             pg_cells, ind_cells = _cohort_share_context(
                 detail["group"].values, unit_cohorts, unit_weights
             )
@@ -235,8 +251,12 @@ def aggte(
                 W, inf_matrix, att_vec, pg_cells, ind_cells
             )
         else:
-            # Result predates ``_unit_cohorts`` (or it is misaligned) —
-            # fall back to fixed weights rather than guessing.
+            # Either the caller asked for fixed cohort shares
+            # (``share_variance=False``, the Stata ``csdid`` convention) or
+            # the result predates ``_unit_cohorts`` / is misaligned — use
+            # fixed weights rather than guessing.  ``ind_cells`` stays
+            # ``None`` so the group-overall block below skips the share
+            # term as well.
             pg_cells = ind_cells = None
             psi_cells = inf_matrix @ W.T
 
@@ -388,6 +408,7 @@ def aggte(
         "n_units": n_units,
         "overall_influence_function": overall_inf,
         "source_method": result.method,
+        "share_variance": bool(share_variance),
     }
 
     _result = CausalResult(
@@ -424,6 +445,7 @@ def aggte(
                 "cband": cband,
                 "alpha": alpha,
                 "random_state": random_state,
+                "share_variance": share_variance,
                 "upstream_run_id": upstream.run_id if upstream else None,
                 "upstream_function": upstream.function if upstream else None,
             },

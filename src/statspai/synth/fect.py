@@ -49,7 +49,7 @@ from scipy import stats
 
 from .._aliases import accepts_aliases
 from ..core.results import CausalResult
-from ..exceptions import DataInsufficient
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 __all__ = ["fect"]
 
@@ -134,7 +134,8 @@ def _panel_fe_soft(E: np.ndarray, lam: float, hard: int = 0) -> np.ndarray:
 def _ife(
     E: np.ndarray, force: int, mc: int, r: int, hard: int, lam: float
 ) -> Dict[str, Any]:
-    """fect ``ife``: additive FE (+ interactive FE / soft-impute) of a complete matrix."""
+    """fect ``ife``: additive FE (+ interactive FE / soft-impute) of a complete
+    matrix."""
     T, N = E.shape
     EE, mu_E, alpha_E, xi_E = _y_demean(E, force)
     FE_add, mu, alpha, xi = _fe_add(alpha_E, xi_E, mu_E, T, N, force)
@@ -456,8 +457,17 @@ def _inter_fe_core(
     elif force == 3:
         np_ += (N - 1) + (T - 1) - 2 * r
     U = out["e"]
-    out["sigma2"] = float(np.sum(U * U) / max(obs - np_, 1.0))
+    sse = float(np.sum(U * U))
+    out["sigma2"] = sse / max(obs - np_, 1.0)
     out["IC"] = float(np.log(out["sigma2"]) + np_ * np.log(obs) / obs)
+    # PC criterion exactly as fect's inter_fe_ub (ife.cpp): the in-sample
+    # MSE plus a penalty in r that pads N and T up to 60.
+    m1 = max(0.0, 60.0 - N)
+    m2 = max(0.0, 60.0 - T)
+    C = (N + m1) * (T + m2) / obs
+    out["PC"] = float(
+        sse / obs + r * out["sigma2"] * C * (N + T) / (N * T) * np.log(N * T / (N + T))
+    )
     return out
 
 
@@ -613,6 +623,19 @@ def fect(
     n_boot: int = 200,
     seed: Optional[int] = None,
     alpha: float = 0.05,
+    cv: bool = False,
+    r_range: Optional[Sequence[int]] = None,
+    nlambda: int = 10,
+    lambda_grid: Optional[Sequence[float]] = None,
+    k: int = 20,
+    cv_prop: float = 0.1,
+    cv_method: str = "rolling",
+    cv_nobs: int = 3,
+    cv_donut: int = 1,
+    cv_buffer: int = 1,
+    criterion: str = "mspe",
+    cv_rule: str = "1se",
+    random_state: Optional[int] = None,
 ) -> CausalResult:
     """
     Counterfactual estimators for TSCS data (fect; Liu, Wang and Xu 2024).
@@ -638,11 +661,13 @@ def fect(
         with ``r`` factors, or nuclear-norm matrix completion with
         penalty ``lam``.
     r : int, default 0
-        Number of latent factors for ``method='ife'``.
+        Number of latent factors for ``method='ife'``. Ignored when
+        ``cv=True`` (the factor number is then chosen over ``r_range``).
     lam : float, optional
         Nuclear-norm penalty for ``method='mc'``, on fect's raw scale
         (singular values of ``E/(T*N)`` below ``lam`` are removed; the
         result records ``lambda_norm = lam / max singular value``).
+        Ignored when ``cv=True``.
     force : {'none', 'unit', 'time', 'two-way'}, default 'two-way'
         Additive fixed effects.
     min_t0 : int, optional
@@ -662,6 +687,62 @@ def fect(
         Random seed for the bootstrap.
     alpha : float, default 0.05
         Significance level.
+    cv : bool, default False
+        Choose ``r`` (``method='ife'``) or ``lam`` (``method='mc'``) by
+        fect's cross-validation (``fect(CV = TRUE)``) instead of taking
+        them from ``r`` / ``lam``. Each fold hides a ``cv_prop`` share of
+        the untreated cells, refits the model from a fresh two-way
+        initial fit and predicts the hidden cells; the score is pooled
+        over folds. The candidate with the smallest score is then
+        re-picked by ``cv_rule``. The final fit is refitted at ``tol``
+        with the selected value, so it equals a direct call with
+        ``r=`` / ``lam=`` set to the selection.
+    r_range : (int, int), optional
+        Factor-number grid ``(r_min, r_max)`` for ``cv=True``; default
+        ``(0, 5)``, fect's recommended ``r = c(0, 5)``. Capped like fect
+        when the panel has too few untreated periods or cells.
+    nlambda : int, default 10
+        Length of fect's default penalty grid for ``method='mc'``:
+        ``nlambda - 1`` values log-spaced over three decades below the
+        largest singular value of the initial residual, plus 0.
+    lambda_grid : sequence of float, optional
+        Explicit penalty grid (fect ``lambda = c(...)``); overrides
+        ``nlambda``.
+    k : int, default 20
+        Number of CV folds (fect ``k``).
+    cv_prop : float, default 0.1
+        fect ``cv.prop``: the share of eligible units sampled per fold
+        (``'rolling'``) or of untreated cells hidden per fold (``'block'``
+        / ``'treated_units'``).
+    cv_method : {'rolling', 'block', 'treated_units'}, default 'rolling'
+        Holdout design (fect ``cv.method``). ``'rolling'`` (fect's
+        default) samples a ``cv_prop`` share of the units with at least
+        ``min_t0 + cv_nobs`` untreated pre-onset periods, draws one
+        random anchor per unit after its first ``min_t0`` periods,
+        scores the ``cv_nobs`` periods from the anchor and hides them
+        together with the ``cv_buffer`` periods before and every period
+        after; ``'block'`` (fect ``"block"`` / ``"all_units"``) hides
+        ``cv_nobs``-period blocks drawn from every unit's untreated
+        cells, scoring the block interior after removing ``cv_donut``
+        cells at each end, redrawn until every period keeps a cell and
+        every unit keeps ``min_t0``; ``'treated_units'`` draws those
+        blocks from treated units' pre-treatment cells only.
+    cv_nobs, cv_donut, cv_buffer : int
+        fect ``cv.nobs`` (3), ``cv.donut`` (1) and ``cv.buffer`` (1).
+    criterion : {'mspe', 'gmspe', 'moment', 'pc'}, default 'mspe'
+        Score minimised (fect ``criterion``): mean squared prediction
+        error on the hidden cells, its geometric-mean version, the
+        count-weighted mean absolute residual by relative period, or --
+        ``method='ife'`` only -- fect's PC information criterion, which
+        uses no holdout.
+    cv_rule : {'1se', 'min', '1pct'}, default '1se'
+        fect ``cv.rule``: after the scan, take the smallest ``r`` (largest
+        ``lam``) whose score is within one fold-level standard error of
+        the minimum, within 1 %, or the minimum itself.
+    random_state : int, optional
+        Seed for the fold draws. fect draws its folds with R's stream,
+        so the selection is compared to R statistically (across seeds),
+        not byte for byte.
 
     Returns
     -------
@@ -672,16 +753,26 @@ def fect(
         period; ``relative_time = fect_time - 1`` is the StatsPAI
         coding); ``.model_info`` carries ``beta``, ``mu``, ``alpha``,
         ``xi``, factors/loadings, the counterfactual matrix, ``niter``,
-        ``att_avg_unit`` and the pre-treatment ``rmse``.
+        ``att_avg_unit`` and the pre-treatment ``rmse``. With ``cv=True``
+        it also carries ``r_cv`` / ``lambda_cv`` (the selection) and
+        ``cv``: the grid, the CV ``table`` (fect's ``CV.out.ife`` /
+        ``CV.out.mc``: pooled ``MSPE``, ``GMSPE``, ``Moment``, their
+        fold-level SEs and, for ``ife``, ``sigma2`` / ``IC`` / ``PC``),
+        the per-fold scores and the holdout sizes.
 
     Examples
     --------
     >>> import statspai as sp
     >>> panel = sp.datasets.mpdta()
-    >>> panel["treated"] = ((panel["first_treat"] > 0) & (panel["year"] >= panel["first_treat"])).astype(int)
+    >>> post = panel["year"] >= panel["first_treat"]
+    >>> panel["treated"] = ((panel["first_treat"] > 0) & post).astype(int)
     >>> res = sp.fect(panel, y="lemp", treat="treated", unit="countyreal", time="year")
     >>> round(float(res.estimate), 4)  # doctest: +SKIP
     -0.0329
+    >>> ife = sp.fect(panel, y="lemp", treat="treated", unit="countyreal",
+    ...               time="year", method="ife", cv=True)  # doctest: +SKIP
+    >>> ife.model_info["r_cv"]  # doctest: +SKIP
+    >>> ife.model_info["cv"]["table"][["r", "MSPE"]]  # doctest: +SKIP
 
     References
     ----------
@@ -690,10 +781,17 @@ def fect(
     method = str(method).lower()
     if method not in {"fe", "ife", "mc"}:
         raise ValueError("method must be 'fe', 'ife', or 'mc'")
-    if method == "ife" and int(r) <= 0:
-        raise ValueError("method='ife' needs r >= 1 factors")
-    if method == "mc" and (lam is None or float(lam) <= 0):
-        raise ValueError("method='mc' needs a positive nuclear-norm penalty lam=")
+    cv = bool(cv)
+    if cv and method not in {"ife", "mc"}:
+        raise MethodIncompatibility(
+            "cv=True selects r for method='ife' or lam for method='mc'"
+        )
+    if method == "ife" and not cv and int(r) <= 0:
+        raise ValueError("method='ife' needs r >= 1 factors (or cv=True)")
+    if method == "mc" and not cv and (lam is None or float(lam) <= 0):
+        raise ValueError(
+            "method='mc' needs a positive nuclear-norm penalty lam= (or cv=True)"
+        )
     force_key = str(force).lower()
     if force_key not in _FORCE:
         raise ValueError("force must be 'none', 'unit', 'time', or 'two-way'")
@@ -723,8 +821,8 @@ def fect(
     X: Optional[np.ndarray] = None
     if covs:
         X = np.zeros((T, N, len(covs)))
-        for k, c in enumerate(covs):
-            X[tidx, uidx, k] = df[c].to_numpy(dtype=float)
+        for kx, c in enumerate(covs):
+            X[tidx, uidx, kx] = df[c].to_numpy(dtype=float)
         X = np.nan_to_num(X)
 
     if min_t0 is None:
@@ -757,6 +855,38 @@ def fect(
         units = units[keep]
         N = len(units)
     Yz = np.where(I == 1, Y, 0.0)
+
+    cv_info: Optional[Dict[str, Any]] = None
+    if cv:
+        from ._fect_cv import run_fect_cv
+
+        cv_info = run_fect_cv(
+            Yz,
+            D,
+            I,
+            X,
+            method,
+            force_int,
+            float(tol),
+            int(max_iter),
+            r_range=r_range,
+            lambda_grid=lambda_grid,
+            nlambda=int(nlambda),
+            k=int(k),
+            cv_prop=float(cv_prop),
+            cv_method=str(cv_method).lower(),
+            cv_nobs=int(cv_nobs),
+            cv_donut=int(cv_donut),
+            cv_buffer=int(cv_buffer),
+            min_t0=int(min_t0),
+            criterion=str(criterion).lower(),
+            cv_rule=str(cv_rule).lower(),
+            rng=np.random.default_rng(random_state),
+        )
+        if method == "ife":
+            r = int(cv_info["selected"])
+        else:
+            lam = float(cv_info["selected"])
 
     main = _fect_fit(
         Yz, D, I, X, method, int(r), lam, force_int, float(tol), int(max_iter)
@@ -911,6 +1041,13 @@ def fect(
             "StatsPAI convention (0 = first treated period)."
         ),
     }
+    if cv_info is not None:
+        model_info["cv"] = cv_info
+        if method == "ife":
+            model_info["r_cv"] = int(r)
+        else:
+            model_info["lambda_cv"] = float(lam)
+            model_info["lambda_norm_cv"] = float(lam) / float(cv_info["lambda_max"])
 
     result = CausalResult(
         method=f"fect {method} (Liu, Wang and Xu 2024)",

@@ -43,6 +43,7 @@ from scipy.spatial.distance import cdist
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility, StatsPAIError
+from ._ai2016 import abadie_imbens_2016_se
 from ._matched_frame import (
     COL_WEIGHT,
     abadie_imbens_se,
@@ -265,19 +266,22 @@ def match(
         Kernel bandwidth on the propensity score for ``method='kernel'``
         (Stata's ``bwidth()`` default).  For ``method='radius'`` the
         bandwidth is taken from ``caliper`` instead.
-    se_method : {'auto', 'ai', 'psmatch2', 'abadie_imbens', 'bootstrap'}, default 'auto'
-        Standard-error estimator, measured over 36 designs x 1000
-        replications by ``benchmarks/matching_se_coverage.py`` (the ratios
-        below are reported SE / true sampling SD; 1.00 is correctly sized):
+    se_method : str, default 'auto'
+        Standard-error estimator: one of ``'auto'``, ``'ai'``,
+        ``'psmatch2'``, ``'abadie_imbens'``, ``'abadie_imbens_2016'``,
+        ``'bootstrap'``.  Measured over 36 designs x 1000 replications by
+        ``benchmarks/matching_se_coverage.py`` (the ratios below are
+        reported SE / true sampling SD; 1.00 is correctly sized):
 
-        ==================  ===========  ==================
-        option              SE ratio     coverage (nom. .95)
-        ==================  ===========  ==================
-        ``'ai'``            0.56 - 0.91  0.71 - 0.92
-        ``'psmatch2'``      1.50 - 1.69  0.994 - 1.000
-        ``'abadie_imbens'`` 0.95 - 1.04  0.905 - 0.956
-        ``'bootstrap'``     0.95 - 1.23  0.933 - 1.000
-        ==================  ===========  ==================
+        ========================  ===========  ==================
+        option                    SE ratio     coverage (nom. .95)
+        ========================  ===========  ==================
+        ``'ai'``                  0.56 - 0.91  0.71 - 0.92
+        ``'psmatch2'``            1.50 - 1.69  0.994 - 1.000
+        ``'abadie_imbens'``       0.95 - 1.04  0.905 - 0.956
+        ``'abadie_imbens_2016'``  not on the grid (see below)
+        ``'bootstrap'``           0.95 - 1.23  0.933 - 1.000
+        ========================  ===========  ==================
 
         ``'ai'`` is the simple matched-pair SE (the historical default for
         nearest-neighbour matching). **It is anti-conservative**: it treats
@@ -292,6 +296,25 @@ def match(
         It is the only option measured to be correctly sized across the
         grid and is the recommended choice for nearest-neighbour
         inference.
+        ``'abadie_imbens_2016'`` is the Abadie-Imbens (2016) variance for
+        matching on an *estimated* propensity score: the Abadie-Imbens
+        (2006) population-ATT variance corrected for the sampling
+        variability of the logit coefficients,
+        ``sigma^2 - c'V_gamma c + d'V_gamma d``.  It is what Stata
+        ``teffects psmatch (y) (t x, logit), atet vce(robust, nn(J+1))``
+        reports (StatsPAI's ``ai_matches=J`` same-arm neighbours *plus the
+        unit itself* is Stata's ``nn(J+1)``; the default ``J=1`` is Stata's
+        default ``nn(2)``) and reproduces it at rel 7e-8 on
+        ``sp.datasets.nsw_dw()``: 621.79 against 643.35 for
+        ``'abadie_imbens'``.  The two differ for two documented reasons --
+        this one targets the population rather than the sample ATT, and
+        only this one charges for the estimated score (on NSW-DW the score
+        term ``-c'Vc + d'Vd`` is *negative*, which is why the corrected SE
+        is the smaller one).  It requires ``distance='propensity'``,
+        ``estimand='ATT'``, nearest-neighbour matching and
+        ``bias_correction=False``; the formula's terms are returned in
+        ``model_info['ai2016_components']``.  Not on the coverage grid
+        above.
         ``'bootstrap'`` is an arm-stratified nonparametric bootstrap that
         re-estimates the propensity score in every replication, so unlike the
         analytic options it accounts for the sampling variability of the
@@ -313,7 +336,9 @@ def match(
     ai_matches : int, default 1
         Number of within-arm matches ``J`` used by the
         ``se_method='abadie_imbens'`` conditional-variance estimate
-        (Stata's ``ai(J)``).
+        (Stata's ``ai(J)``).  Under ``se_method='abadie_imbens_2016'`` the
+        same-arm set is the unit plus its ``J`` nearest same-arm units,
+        ties included -- Stata ``teffects ..., vce(robust, nn(J+1))``.
     bootstrap_reps : int, default 200
         Number of bootstrap replications for ``se_method='bootstrap'``.
     bootstrap_seed : int, optional
@@ -733,13 +758,41 @@ class MatchEstimator:
             "psmatch2",
             "abadie_imbens",
             "abadie_imbens_pop",
+            "abadie_imbens_2016",
             "bootstrap",
         ):
             raise MethodIncompatibility(
                 "match: se_method must be 'auto', 'ai', 'psmatch2', "
-                "'abadie_imbens', 'abadie_imbens_pop', or 'bootstrap', got "
-                f"'{self.se_method}'"
+                "'abadie_imbens', 'abadie_imbens_pop', 'abadie_imbens_2016', "
+                f"or 'bootstrap', got '{self.se_method}'"
             )
+        if self.se_method == "abadie_imbens_2016":
+            # The estimated-score correction is defined for the logit-score
+            # ATT matching estimator that Stata teffects psmatch implements;
+            # every other path has no estimated score to charge for.
+            problems = []
+            if self.distance != "propensity":
+                problems.append(f"distance={self.distance!r} (needs 'propensity')")
+            if self.method != "nearest":
+                problems.append(f"method={self.method!r} (needs 'nearest')")
+            if self.estimand != "ATT":
+                problems.append(f"estimand={self.estimand!r} (needs 'ATT')")
+            if self.bias_correction:
+                problems.append("bias_correction=True")
+            if problems:
+                raise MethodIncompatibility(
+                    "match: se_method='abadie_imbens_2016' is the Abadie-"
+                    "Imbens (2016) variance for nearest-neighbour ATT "
+                    "matching on an estimated logit propensity score "
+                    "(Stata teffects psmatch, atet); incompatible with "
+                    + ", ".join(problems)
+                    + ".",
+                    recovery_hint=(
+                        "Use distance='propensity', method='nearest', "
+                        "estimand='ATT' and bias_correction=False, or pick "
+                        "se_method='abadie_imbens'."
+                    ),
+                )
         if self.llr_stata_compat and self.method != "llr":
             raise MethodIncompatibility(
                 "match: llr_stata_compat=True only applies to method='llr'; "
@@ -922,6 +975,37 @@ class MatchEstimator:
                 )
                 if np.isfinite(se_pop):
                     se = se_pop
+            elif se_method == "abadie_imbens_2016":
+                model_info["ai_matches"] = self.ai_matches
+                ps_fit = a["ps_fit"]
+                se_2016, comps = abadie_imbens_2016_se(
+                    a["outcome"],
+                    a["treated"],
+                    ps_fit["p_raw"],
+                    ps_fit["design"],
+                    ps_fit["vcov"],
+                    ps_fit["covariates"],
+                    a["idx_t"],
+                    a["idx_c"],
+                    a["matches"],
+                    a["weights"],
+                    n_matches=self.n_matches,
+                    h=self.ai_matches + 1,
+                )
+                model_info["ai2016_components"] = comps
+                if np.isfinite(se_2016):
+                    se = se_2016
+                else:
+                    warnings.warn(
+                        "sp.match: the Abadie-Imbens (2016) variance is "
+                        f"undefined here (var = {comps['var']!r}); the "
+                        "estimated-score correction can exceed the base "
+                        "variance in small or poorly overlapping samples. "
+                        "Reporting se=nan; use se_method='abadie_imbens'.",
+                        UserWarning,
+                        stacklevel=3,
+                    )
+                    se = float("nan")
             elif se_method == "bootstrap":
                 se_bs, bs_info = self._bootstrap_se(clean)
                 model_info.update(bs_info)
@@ -1058,16 +1142,12 @@ class MatchEstimator:
         if row_order is None:
             row_order = np.arange(len(T), dtype=float)
 
-        # For propensity distance, estimate PS once with actual treatment
-        pscore = (
-            self._logit_propensity(X, T, poly=self.ps_poly)
-            if self.distance == "propensity"
-            else None
-        )
-        # PS is always needed downstream (balance table + matched frame +
-        # common-support flag), even when the distance metric is not PS.
-        if pscore is None:
-            pscore = self._logit_propensity(X, T, poly=self.ps_poly)
+        # Estimate the PS once with the actual treatment.  It is always
+        # needed downstream (balance table + matched frame + common-support
+        # flag), even when the distance metric is not PS; the full fit is
+        # kept because the Abadie-Imbens (2016) SE charges for it.
+        ps_fit = self._logit_propensity_fit(X, T, poly=self.ps_poly)
+        pscore = ps_fit["pscore"]
 
         # Common-support flag over the full estimation sample.  With
         # common_support='none' every unit is on support and the matching
@@ -1182,6 +1262,9 @@ class MatchEstimator:
             # which under llr-compat is the smoothed value.
             "outcome_frame": Y_eff,
             "neighbors": True,
+            # Treatment-model fit (unclipped score, design, OIM covariance)
+            # for the estimated-score variance correction.
+            "ps_fit": ps_fit,
         }
 
         return att, se, balance
@@ -1965,6 +2048,29 @@ class MatchEstimator:
             following the standard specification in Cunningham (2021, Ch. 5)
             and Dehejia & Wahba (1999).
         """
+        return MatchEstimator._logit_propensity_fit(X, T, poly=poly)["pscore"]
+
+    @staticmethod
+    def _logit_propensity_fit(
+        X: np.ndarray,
+        T: np.ndarray,
+        poly: int = 1,
+    ) -> dict[str, np.ndarray]:
+        """Logit propensity fit with the pieces the variance corrections need.
+
+        Same Newton-Raphson (IRLS) as :meth:`_logit_propensity`; that
+        method is this one's ``"pscore"`` entry, byte for byte.
+
+        Returns
+        -------
+        dict
+            ``pscore`` -- fitted score clipped to ``[1e-6, 1 - 1e-6]`` (what
+            the matching runs on); ``p_raw`` -- the unclipped score;
+            ``beta`` -- coefficients, constant first; ``design`` -- the
+            design matrix ``[1, X_poly]``; ``covariates`` -- ``X_poly``
+            without the constant; ``vcov`` -- the observed-information
+            covariance ``inv(design' diag(p(1-p)) design)`` at ``beta``.
+        """
         X_poly = MatchEstimator._expand_poly(X, poly)
         n = X_poly.shape[0]
         X_aug = np.column_stack([np.ones(n), X_poly])
@@ -1988,8 +2094,20 @@ class MatchEstimator:
                 break
 
         linear = np.clip(X_aug @ beta, -500, 500)
-        pscore = 1 / (1 + np.exp(-linear))
-        return np.asarray(np.clip(pscore, 1e-6, 1 - 1e-6), dtype=float)
+        p_raw = 1 / (1 + np.exp(-linear))
+        H = (X_aug * (p_raw * (1 - p_raw))[:, None]).T @ X_aug
+        try:
+            vcov = np.linalg.inv(H)
+        except np.linalg.LinAlgError:
+            vcov = np.linalg.pinv(H)
+        return {
+            "pscore": np.asarray(np.clip(p_raw, 1e-6, 1 - 1e-6), dtype=float),
+            "p_raw": np.asarray(p_raw, dtype=float),
+            "beta": beta,
+            "design": X_aug,
+            "covariates": X_poly,
+            "vcov": vcov,
+        }
 
     # ==================================================================
     # NN matching helpers

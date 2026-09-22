@@ -131,3 +131,203 @@ def test_citation_and_registry():
     assert "liu2024practical" in res.cite()
     spec = sp.describe_function("fect")
     assert spec["name"] == "fect"
+
+
+# ----------------------------------------------------------------------
+# Cross-validated r / lambda (fect CV = TRUE); the statistical comparison
+# with R's fold stream is tests/reference_parity/test_fect_interflex_cv_parity.py
+# ----------------------------------------------------------------------
+
+
+def test_cv_selects_the_true_factor_number_and_refits_at_the_selection():
+    df = _staggered_panel(factors=True, seed=11, N=40, T=14)
+    # The earliest cohort has 5 untreated periods, so fect caps the grid at
+    # r.end = T0.min - 1 = 4 (and says so).
+    with pytest.warns(UserWarning, match="capped at r=4"):
+        res = sp.fect(
+            df,
+            y="y",
+            treat="d",
+            unit="id",
+            time="time",
+            method="ife",
+            cv=True,
+            random_state=0,
+        )
+    cvi = res.model_info["cv"]
+    assert res.model_info["r_cv"] == cvi["selected"] == res.model_info["r"]
+    assert cvi["cv_method"] == "rolling" and cvi["k"] == 20 and cvi["cv_rule"] == "1se"
+    tab = cvi["table"]
+    assert list(tab["r"]) == [0, 1, 2, 3, 4]
+    assert {"MSPE", "MSPE_se", "GMSPE", "Moment", "sigma2", "IC", "PC"} <= set(
+        tab.columns
+    )
+    assert cvi["fold_scores"].shape == (5, 21)  # r + 20 folds
+    assert np.isfinite(tab["MSPE"]).all() and (tab["MSPE"] > 0).all()
+    # The final fit is a plain refit at the selection.
+    direct = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="ife",
+        r=res.model_info["r_cv"],
+    )
+    assert res.estimate == direct.estimate
+    # Two factors generated the panel; the 1-SE rule must not overshoot.
+    assert res.model_info["r_cv"] == 2
+
+
+def test_cv_is_seeded_and_lambda_grid_follows_fect():
+    df = _staggered_panel(factors=True, seed=5, N=40, T=14)
+    a = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="mc",
+        cv=True,
+        random_state=3,
+    )
+    b = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="mc",
+        cv=True,
+        random_state=3,
+    )
+    assert a.estimate == b.estimate
+    assert (
+        a.model_info["cv"]["table"]["MSPE"].tolist()
+        == b.model_info["cv"]["table"]["MSPE"].tolist()
+    )
+    grid = a.model_info["cv"]["grid"]
+    assert len(grid) == 10 and grid[-1] == 0.0
+    # nine values log-spaced over three decades below the largest singular value
+    assert grid[0] == pytest.approx(a.model_info["cv"]["lambda_max"])
+    assert grid[8] / grid[0] == pytest.approx(1e-3)
+    assert a.model_info["lambda_cv"] in grid
+    assert a.model_info["lambda_norm_cv"] == pytest.approx(
+        a.model_info["lambda_cv"] / a.model_info["cv"]["lambda_max"]
+    )
+    direct = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="mc",
+        lam=a.model_info["lambda_cv"],
+    )
+    assert a.estimate == direct.estimate
+
+
+def test_cv_block_holdout_and_other_criteria_run():
+    df = _staggered_panel(factors=True, seed=2, N=40, T=14)
+    blk = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="ife",
+        cv=True,
+        cv_method="block",
+        random_state=0,
+        r_range=(0, 3),
+    )
+    assert blk.model_info["cv"]["table"]["r"].tolist() == [0, 1, 2, 3]
+    # block: floor(10% of untreated cells) hidden per fold, donut interior scored
+    n_untreated = int(((df["d"] == 0)).sum())
+    assert all(
+        h == n_untreated // 10 for h in blk.model_info["cv"]["n_holdout_per_fold"]
+    )
+    assert all(
+        0 < s < n_untreated // 10 for s in blk.model_info["cv"]["n_scored_per_fold"]
+    )
+    pc = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="ife",
+        cv=True,
+        criterion="pc",
+        r_range=(0, 3),
+    )
+    assert pc.model_info["cv"]["n_holdout_per_fold"] == []  # PC uses no holdout
+    assert pc.model_info["r_cv"] == int(pc.model_info["cv"]["table"]["PC"].idxmin())
+    mom = sp.fect(
+        df,
+        y="y",
+        treat="d",
+        unit="id",
+        time="time",
+        method="ife",
+        cv=True,
+        criterion="moment",
+        cv_rule="min",
+        r_range=(0, 3),
+        random_state=1,
+    )
+    tab = mom.model_info["cv"]["table"]
+    assert mom.model_info["r_cv"] == int(tab.loc[tab["Moment"].idxmin(), "r"])
+
+
+def test_cv_argument_errors():
+    df = _staggered_panel()
+    with pytest.raises(ValueError, match="cv=True"):
+        sp.fect(df, y="y", treat="d", unit="id", time="time", method="fe", cv=True)
+    with pytest.raises(ValueError, match="criterion"):
+        sp.fect(
+            df,
+            y="y",
+            treat="d",
+            unit="id",
+            time="time",
+            method="ife",
+            cv=True,
+            criterion="aic",
+        )
+    with pytest.raises(ValueError, match="cv_method"):
+        sp.fect(
+            df,
+            y="y",
+            treat="d",
+            unit="id",
+            time="time",
+            method="ife",
+            cv=True,
+            cv_method="loo",
+        )
+    with pytest.raises(ValueError, match="pc"):
+        sp.fect(
+            df,
+            y="y",
+            treat="d",
+            unit="id",
+            time="time",
+            method="mc",
+            cv=True,
+            criterion="pc",
+        )
+    with pytest.raises(ValueError, match="nlambda"):
+        sp.fect(
+            df,
+            y="y",
+            treat="d",
+            unit="id",
+            time="time",
+            method="mc",
+            cv=True,
+            nlambda=2,
+        )
+    # cv=False keeps the old contract: ife needs r, mc needs lam
+    with pytest.raises(ValueError, match="r >= 1"):
+        sp.fect(df, y="y", treat="d", unit="id", time="time", method="ife")

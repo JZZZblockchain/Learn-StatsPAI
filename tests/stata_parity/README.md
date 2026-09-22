@@ -33,7 +33,7 @@ bytes the R side reads), runs the canonical Stata reference, and
 writes one row per parity statistic to
 `results/NN_<name>_Stata.json` via the helpers in `_common.do`.
 
-## Materialized Stata golden modules (81 of 87 Python modules)
+## Materialized Stata golden modules (85 of 89 Python modules)
 
 | # | Method                       | StatsPAI                       | Stata reference                                              |
 | --- | --- | --- | --- |
@@ -53,6 +53,8 @@ writes one row per parity statistic to
 | 15 | HDFE + cluster                | `sp.fast.feols(vcov="cluster")`| `reghdfe, absorb(...) vce(cluster ...)`                      |
 | 16 | BJS imputation                | `sp.bjs_pretrend_joint`        | `did_imputation, autosample`                                 |
 | 17 | Wooldridge ETWFE              | `sp.etwfe` + `sp.wooldridge_did` | `jwdid + estat simple/group`                               |
+| 18 | Augmented SCM (Ridge ASCM)    | `sp.augsynth`                  | audited Stata/Mata bridge of `augsynth` 0.2.0: simplex-QP SCM weights on donor-mean-centred pre-period outcomes, augsynth's lambda path (21-point grid, leave-one-period-out, 1-SE rule) recomputed in Mata, ridge correction; `allsynth` refuses the fixture (needs K+2 donors) |
+| 19 | Generalized SCM (gsynth)      | `sp.gsynth`                    | audited Stata/Mata bridge of `gsynth`'s convention (two-way demeaned control panel, rank-r SVD factors, treated-unit pre-period projection on `[1, F]`), r fixed at the R golden's `r.cv`; `fect_stata method(ife)` emitted as an unjoined diagnostic (a different estimator, IFEct) |
 | 20 | Goodman-Bacon decomposition   | `sp.bacon_decomposition`       | `bacondecomp, ddetail`                                       |
 | 21 | Honest-DiD relative-mags      | `sp.honest_did(restriction="relative_magnitudes")` | `honestdid, ... delta(rm) method(Conditional) gridPoints(1000) grid_lb(-2) grid_ub(2)` |
 | 22 | sensemakr robustness          | `sp.sensemakr`                 | `sensemakr depvar regs, treat(...) benchmark(...) kd(1) ky(1)` |
@@ -123,11 +125,11 @@ writes one row per parity statistic to
 
 ### Modules **without** a materialized Stata JSON
 
-Thirteen of the 81 Python modules have no Stata artifact.
+Four of the 89 Python modules have no Stata artifact.
 `compare.py::STATA_SKIP_REASON` records the exact reason and the 3-way table
-prints it explicitly. Every reason was re-measured on 2026-08-06 against a
-licensed Stata 18 runtime with SSC reachable, so none of them rests on a
-stale "not installed here" claim.
+prints it explicitly. Every reason was re-measured against a licensed Stata 18
+runtime with SSC reachable (2026-08-06, re-checked 2026-09-22), so none of
+them rests on a stale "not installed here" claim.
 
 **No Stata implementation exists** (verified 2026-08-06 --
 `ssc describe` returns `r(601)` and the command does not resolve locally):
@@ -138,49 +140,20 @@ stale "not installed here" claim.
   package `didFF` (GitHub, not CRAN).
 - **80 contdid** — the CGS continuous-treatment estimator ships only as the R
   package `contdid` (GitHub, not CRAN).
-- **70 policy_tree** — no Stata command, official or user-written, solves the
-  Athey-Wager welfare objective over a supplied doubly-robust score matrix.
-- **72 tmle** — `eltmle` wraps the same R package rather than providing an
-  independent implementation, so a Stata row would re-measure the R reference
-  through a shell rather than cross-validate it.
-
-**Not an external estimator** — these two modules check exact identities
-against a base-R recomputation, so there is nothing for a third language to
-disagree about:
-
-- **68 demean_within** — the within (mean-deviation) transformation.
-- **69 balance_panel** — the `counts == n_periods` row filter.
-
-**Estimator agrees, convention does not** — a Stata command exists and was
-run, but its estimand or variance convention is not like-for-like:
-
-- **67 panel_glm** — `logit y x1 x2 i.id` and `ppmlhdfe y x1 x2, absorb(id)`
-  reproduce the `fixest::feglm` / `fepois` point estimates to rel `1.8e-9`
-  and `1e-16`, but no `vce()` setting reproduces fixest's standard errors:
-  `vce(robust)`, `vce(cluster id)` and `vce(unadjusted)` land 0.6%, 21% and
-  4% away on the logit slopes and 24-42% away on the Poisson ones. The
-  module's registered `rel_se` budget is `1e-6`, so a Stata SE column here
-  would record a variance-convention argument rather than an estimator check.
-  Module 37 already carries the clean `ppmlhdfe` bridge.
-- **65 spatial** / **66 spatial_gmm** — `spregress` and `spregress, gs2sls`
-  are the natural analogs of `spatialreg::lagsarlm`/`errorsarlm` and
-  `stsls`/`GMerrorsar`, but they follow distinct ML and instrument/moment
-  conventions.
-- **18 augsynth** — local `allsynth` is a candidate bias-corrected SCM
-  reference, but its ridge de-biaser rejects the Basque outcome-only fixture
-  with 16 controls and 15 pre-period predictors because it requires at least
-  `K + 2` control units. A feasible California probe also follows a distinct
-  `allsynth` bias-correction convention rather than the R `augsynth` estimand.
-- **19 gsynth** — Xu's `fect_stata` selects `r=1` and reports ATT `0.679854`
-  under `fect`'s convention while the R/Python `gsynth` headline is
-  `-0.324171`; an option grid over `force(two-way/unit/time/none)` does not
-  recover the R convention.
 
 **Runtime version** — the candidate reference exists but not in this runtime:
 
 - **13 causal_forest** — Stata 19's official `cate` is the candidate
   causal-forest/AIPW reference; the verified runtime here is Stata 18 and
   `which cate` fails.
+
+### Modules closed in the 2026-09-22 pass
+
+| Module | Stata reference | Worst py-Stata rel | Note |
+| --- | --- | ---: | --- |
+| 18 augsynth | audited Mata bridge of `augsynth` 0.2.0 | 1.7e-8 (est), 6.5e-9 (pre-RMSPE) | `allsynth` refuses the fixture (`K + 2` donors) and, where it runs, uses `synth` V-weights plus per-period ridge -- a different estimand. The R golden sits 7.9e-6 from both exact solvers because `augsynth::synth_qp` runs OSQP at eps 1e-8; tightened to 1e-13 augsynth agrees with Mata/numpy to 1e-11 |
+| 19 gsynth | audited Mata bridge of `gsynth`'s convention | 2.2e-15 (est), 1.7e-14 (pre-RMSE) | `fect_stata` has no `method(gsynth)`; its `ife` is the IFEct EM on all untreated cells (converged R `fect(method="ife")` = -0.33206, Stata -0.33206, 3.8e-7 apart) and is kept as the unjoined `ife_att_avg_fect_stata` diagnostic. The old skip reason's `0.679854` was not reproducible |
+| 04 csdid | `csdid` + `estat group` | 6.2e-15 (fixed-share SE) | `group_overall_fixedshare` joins `sp.aggte(share_variance=False)` to `estat group`'s `GAverage`, pinning the 0.27% fixed-vs-estimated cohort-share SE convention as a row rather than a note |
 
 ### Modules closed in the second 2026-08-06 pass
 
@@ -213,7 +186,7 @@ checked; two more were skipped as "no Stata implementation" when in fact
 | 82 staggered | `staggered` (SSC) | 3.7e-15 | all 33 rows join, including both the Neyman and adjusted SEs |
 | 85 twfe_event_study | `reghdfe` | 5.7e-14 | estimates and SEs three-way machine level since 1.24.0 (sp.event_study applies the same nested-K rule) |
 | 86 fect | `fect` (fect_stata, GitHub) | 1e-9 (fe / mc headline), 1.5e-7 (ife headline) | all three outcome models on one staggered panel; fect_stata's own EM stopping rule leaves the ife fixed point at ~1e-7 while R/Python run the same iteration path to 1e-10 |
-| 73 did2s | `did2s` | 2.4e-12 | Stata SE lands on R's, localising the SE gap to a StatsPAI default |
+| 73 did2s | `did2s` | 1.3e-14 (SE), 2.4e-12 (estimate) | estimate and corrected two-stage SE three-way: sp.gardner_did's default `vce='analytic'` builds the same two-stage influence function as R/Stata `did2s`; the pre-correction stage-2-only SE is kept as the unjoined `static_ATT_stage2_se` row |
 | 71 dml_family | `ddml` | 6.9e-7 | shared fold partition via `foldvar()`; PLIV gap is ddml's second-stage intercept |
 | 75 stacked | hand-built stack + `reghdfe` | 7.1e-13 | three independent stack constructions agree; SEs differ by a constant dof factor |
 | 76 pretrends | `pretrends` | 5.1e-4 | inside the registered 1e-3 budget; the closed-form LR row agrees to 1e-15 |
