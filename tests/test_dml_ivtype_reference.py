@@ -33,9 +33,22 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import sklearn
 from sklearn.linear_model import LassoCV, LinearRegression
 
 import statspai as sp
+
+
+def _lasso_cv() -> LassoCV:
+    """LassoCV on a 50-point alpha path under every supported scikit-learn.
+
+    scikit-learn 1.7 folded ``n_alphas`` into ``alphas=<int>`` and later
+    releases removed ``n_alphas``; earlier releases accept only ``n_alphas``.
+    """
+    if tuple(int(p) for p in sklearn.__version__.split(".")[:2]) >= (1, 7):
+        return LassoCV(cv=5, random_state=0, alphas=50, max_iter=10000)
+    return LassoCV(cv=5, random_state=0, n_alphas=50, max_iter=10000)
+
 
 doubleml = pytest.importorskip("doubleml")
 
@@ -225,7 +238,7 @@ def test_irm_matches_doubleml_bitwise_on_shared_folds(score):
 
 def test_ivtype_matches_doubleml_with_lasso_on_shared_folds(data):
     df, X, folds = data
-    learner = LassoCV(cv=5, random_state=0, n_alphas=50, max_iter=10000)
+    learner = _lasso_cv()
     res = sp.dml(
         df,
         y="y",
@@ -233,7 +246,7 @@ def test_ivtype_matches_doubleml_with_lasso_on_shared_folds(data):
         covariates=X,
         model="plr",
         ml_g=learner,
-        ml_m=LassoCV(cv=5, random_state=0, n_alphas=50, max_iter=10000),
+        ml_m=_lasso_cv(),
         n_folds=5,
         fold_indices=folds,
         score="IV-type",
@@ -248,8 +261,8 @@ def test_ivtype_matches_doubleml_with_lasso_on_shared_folds(data):
         treat="d",
         covariates=X,
         model="plr",
-        ml_g=LassoCV(cv=5, random_state=0, n_alphas=50, max_iter=10000),
-        ml_m=LassoCV(cv=5, random_state=0, n_alphas=50, max_iter=10000),
+        ml_g=_lasso_cv(),
+        ml_m=_lasso_cv(),
         n_folds=5,
         fold_indices=folds,
     )

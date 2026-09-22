@@ -397,7 +397,11 @@ def test_internal_irm_prechange_literal_goldens(kind, estimate, se, y_residual_b
         )
     else:
         # Current upstream uses 2 * norm.sf, avoiding 1 - cdf cancellation.
-        assert result.pvalue == float.fromhex("0x1.9e25950c577f9p-24")
+        # 2 * norm.sf differs by one ulp across SciPy releases; the estimate
+        # and SE above stay bit-exact.
+        assert result.pvalue == pytest.approx(
+            float.fromhex("0x1.9e25950c577f9p-24"), rel=1e-15, abs=0
+        )
         assert result.ci == tuple(
             map(float.fromhex, ["0x1.43d7ecd46602ep+1", "0x1.5e140995ccfe9p+2"])
         )
