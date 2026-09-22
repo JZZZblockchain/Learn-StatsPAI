@@ -464,7 +464,6 @@ def did_forest(
             ),
         )
     unit_ids = np.array(sorted(df[id].unique()), dtype=object)
-    unit_index = {u: k for k, u in enumerate(unit_ids)}
     n_units = unit_ids.size
     first = units.first()
     unit_cohort = first["_cohort"].reindex(unit_ids).to_numpy(dtype=float)
@@ -591,7 +590,10 @@ def did_forest(
                     {
                         "group": g_label,
                         "time": t,
-                        "reason": "rows without out-of-bag prediction; increase n_estimators",
+                        "reason": (
+                            "rows without out-of-bag prediction; "
+                            "increase n_estimators"
+                        ),
                     }
                 )
                 continue

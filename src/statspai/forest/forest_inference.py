@@ -176,7 +176,7 @@ def calibration_test(
     T: Optional[np.ndarray] = None,
     alpha: float = 0.05,
 ) -> pd.DataFrame:
-    """Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic].
+    """Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic].
 
     For forests fitted with the GRF engine (the default) the test is run on
     **out-of-bag** predictions, in the form of ``grf::test_calibration``:

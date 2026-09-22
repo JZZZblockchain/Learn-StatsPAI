@@ -304,10 +304,10 @@ def calibration_blp(
         t0 = beta / se
     out["t_vs_zero"] = t0
     out["p_one_sided"] = stats.norm.sf(t0)
+    clustered = getattr(forest, "_clusters", None) is not None
     out.attrs["method"] = (
         "BLP calibration on out-of-bag predictions, "
-        f"{vcov_type} {'cluster-' if getattr(forest, '_clusters', None) is not None else ''}"
-        "robust SE"
+        f"{vcov_type} {'cluster-' if clustered else ''}robust SE"
     )
     return out
 

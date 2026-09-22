@@ -2199,14 +2199,20 @@ def _build_registry() -> None:
                     "array",
                     False,
                     None,
-                    "Precomputed out-of-sample E[Y | X, W] (skips the outcome nuisance forest).",
+                    (
+                        "Precomputed out-of-sample E[Y | X, W] (skips the outcome "
+                        "nuisance forest)."
+                    ),
                 ),
                 ParamSpec(
                     "W_hat",
                     "array",
                     False,
                     None,
-                    "Precomputed out-of-sample E[T | X, W] (skips the treatment nuisance forest).",
+                    (
+                        "Precomputed out-of-sample E[T | X, W] (skips the treatment "
+                        "nuisance forest)."
+                    ),
                 ),
                 ParamSpec("min_samples_leaf", "int", False, 5, "GRF min.node.size."),
                 ParamSpec(
@@ -2241,9 +2247,15 @@ def _build_registry() -> None:
                 "panel",
                 "fixed-effects",
             ],
-            reference="[@athey2019generalized], [@wager2018estimation], [@kattenberg2023causal]",
+            reference=(
+                "[@athey2019generalized], [@wager2018estimation], "
+                "[@kattenberg2023causal]"
+            ),
             pre_conditions=[
-                "treatment is binary 0/1 (continuous allowed with discrete_treatment=False)",
+                (
+                    "treatment is binary 0/1 (continuous allowed with "
+                    "discrete_treatment=False)"
+                ),
                 "covariates are numeric and finite; encode categoricals beforehand",
                 "n >= ~1000 for stable CATE -- forests are data-hungry",
                 "repeated observations of a unit: pass clusters= (or fe= with unit=)",
@@ -2251,32 +2263,55 @@ def _build_registry() -> None:
             assumptions=[
                 "Unconfoundedness: Y(d) independent of D given X (pooled forest)",
                 "Overlap: 0 < P(D=1 | X) < 1 for the estimand support",
-                "fe=: conditional parallel trends and no anticipation; treatment varies within units",
+                (
+                    "fe=: conditional parallel trends and no anticipation; treatment "
+                    "varies within units"
+                ),
                 "Honest splitting: splits and estimates use disjoint samples (enforced by default)",
             ],
             failure_modes=[
                 FailureMode(
-                    symptom="sp.calibration_test differential_forest_prediction p_one_sided > 0.05",
+                    symptom=(
+                        "sp.calibration_test differential_forest_prediction p_one_sided "
+                        "> 0.05"
+                    ),
                     exception="statspai.AssumptionWarning",
-                    remedy="No detectable heterogeneity: report the average effect, not the CATE ranking.",
+                    remedy=(
+                        "No detectable heterogeneity: report the average effect, not "
+                        "the CATE ranking."
+                    ),
                     alternative="sp.calibrate_cate",
                 ),
                 FailureMode(
-                    symptom="average_treatment_effect raises MethodIncompatibility on an fe= forest",
+                    symptom=(
+                        "average_treatment_effect raises MethodIncompatibility on an "
+                        "fe= forest"
+                    ),
                     exception="statspai.MethodIncompatibility",
-                    remedy="Doubly-robust averages need a propensity; use group-time averages instead.",
+                    remedy=(
+                        "Doubly-robust averages need a propensity; use group-time "
+                        "averages instead."
+                    ),
                     alternative="sp.did_forest",
                 ),
                 FailureMode(
-                    symptom="Panel data fitted without clusters= (units repeat across rows)",
+                    symptom=(
+                        "Panel data fitted without clusters= (units repeat across rows)"
+                    ),
                     exception="statspai.AssumptionViolation",
-                    remedy="Refit with clusters=unit; i.i.d. honesty and SEs are invalid with repeated units.",
+                    remedy=(
+                        "Refit with clusters=unit; i.i.d. honesty and SEs are invalid "
+                        "with repeated units."
+                    ),
                     alternative="sp.causal_forest",
                 ),
                 FailureMode(
                     symptom="Extreme propensity scores in part of the covariate space",
                     exception="statspai.AssumptionViolation",
-                    remedy="Use average_treatment_effect(target_sample='overlap') or trim to overlap.",
+                    remedy=(
+                        "Use average_treatment_effect(target_sample='overlap') or trim "
+                        "to overlap."
+                    ),
                     alternative="sp.trimming",
                 ),
             ],
@@ -2357,14 +2392,20 @@ def _build_registry() -> None:
                     "float",
                     False,
                     0.001,
-                    "Upper clip for the cohort-membership probability in the control weights e/(1-e).",
+                    (
+                        "Upper clip for the cohort-membership probability in the "
+                        "control weights e/(1-e)."
+                    ),
                 ),
                 ParamSpec(
                     "forest_kwargs",
                     "dict",
                     False,
                     None,
-                    "Extra sp.CausalForest arguments (min_samples_leaf, mtry, honesty_fraction, ...).",
+                    (
+                        "Extra sp.CausalForest arguments (min_samples_leaf, mtry, "
+                        "honesty_fraction, ...)."
+                    ),
                 ),
             ],
             returns=(
@@ -2385,11 +2426,17 @@ def _build_registry() -> None:
                 "panel",
                 "event-study",
             ],
-            reference="[@gavrilova2025difference], [@callaway2021difference], [@athey2019generalized]",
+            reference=(
+                "[@gavrilova2025difference], [@callaway2021difference], "
+                "[@athey2019generalized]"
+            ),
             pre_conditions=[
                 "absorbing (staggered) treatment coded by first treatment period",
                 "covariates are fixed per unit (baseline values)",
-                "enough treated and comparison units per group-time cell (min_group_size)",
+                (
+                    "enough treated and comparison units per group-time cell "
+                    "(min_group_size)"
+                ),
             ],
             assumptions=[
                 "Conditional parallel trends given x for the chosen comparison group",
@@ -2400,13 +2447,19 @@ def _build_registry() -> None:
                 FailureMode(
                     symptom="pretrend_test p-value small",
                     exception="statspai.AssumptionWarning",
-                    remedy="Pre-period placebos reject parallel trends; add covariates or bound the violation.",
+                    remedy=(
+                        "Pre-period placebos reject parallel trends; add covariates or "
+                        "bound the violation."
+                    ),
                     alternative="sp.honest_did",
                 ),
                 FailureMode(
                     symptom="AssumptionWarning: group-time cells were dropped",
                     exception="statspai.AssumptionWarning",
-                    remedy="Inspect result.dropped_cells; lower min_group_size or restrict event_window.",
+                    remedy=(
+                        "Inspect result.dropped_cells; lower min_group_size or restrict "
+                        "event_window."
+                    ),
                     alternative="sp.callaway_santanna",
                 ),
             ],
@@ -12802,7 +12855,10 @@ def _build_registry() -> None:
                     "int",
                     False,
                     100,
-                    "Bootstrap replications of the BCF fit per cohort (covariate path).",
+                    (
+                        "Bootstrap replications of the BCF fit per cohort (covariate "
+                        "path)."
+                    ),
                 ),
             ],
             returns=(

@@ -391,7 +391,9 @@ def _samples_from_clusters(
 
 
 @njit(cache=_CACHE, nogil=True)
-def _members_of_clusters(cluster_list, cl_offsets, cl_members):  # type: ignore[no-untyped-def]
+def _members_of_clusters(  # type: ignore[no-untyped-def]
+    cluster_list, cl_offsets, cl_members
+):
     total = 0
     for c in cluster_list:
         total += cl_offsets[c + 1] - cl_offsets[c]
@@ -548,7 +550,9 @@ def _grow_tree(
 
 
 @njit(cache=_CACHE, nogil=True)
-def _find_leaf(X, row, root, split_var, split_val, left, right):  # type: ignore[no-untyped-def]
+def _find_leaf(  # type: ignore[no-untyped-def]
+    X, row, root, split_var, split_val, left, right
+):
     node = root
     while left[node] != -1:
         if X[row, split_var[node]] <= split_val[node]:
@@ -559,7 +563,9 @@ def _find_leaf(X, row, root, split_var, split_val, left, right):  # type: ignore
 
 
 @njit(cache=_CACHE, nogil=True)
-def _assign_leaves(X, samples, split_var, split_val, left, right):  # type: ignore[no-untyped-def]
+def _assign_leaves(  # type: ignore[no-untyped-def]
+    X, samples, split_var, split_val, left, right
+):
     """CSR of samples per node (only leaves are populated)."""
     n_nodes = left.size
     leaf_of = np.empty(samples.size, dtype=np.int64)
@@ -911,7 +917,9 @@ def _train_group(
 
 
 @njit(cache=_CACHE, nogil=True)
-def _debias_variance(var_between, group_noise, num_good_groups):  # type: ignore[no-untyped-def]
+def _debias_variance(  # type: ignore[no-untyped-def]
+    var_between, group_noise, num_good_groups
+):
     """Objective-Bayes correction of a little-bag variance estimate."""
     initial_estimate = var_between - group_noise
     initial_se = max(var_between, group_noise) * math.sqrt(2.0 / num_good_groups)

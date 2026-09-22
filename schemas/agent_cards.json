@@ -29709,7 +29709,7 @@
     ],
     "category": "causal",
     "cost_profile": "",
-    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -29728,7 +29728,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+      "description": "Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "calibration_test",
       "parameters": {
         "properties": {
@@ -29781,7 +29781,7 @@
     ],
     "category": "causal",
     "cost_profile": "",
-    "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "description": "Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "",
     "failure_modes": [
       {
@@ -29800,7 +29800,7 @@
     ],
     "reference": "",
     "signature": {
-      "description": "Best-linear-predictor calibration test of CATE predictions [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+      "description": "Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic]. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "test_calibration",
       "parameters": {
         "properties": {
