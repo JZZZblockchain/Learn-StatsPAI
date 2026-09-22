@@ -12,8 +12,8 @@
 
 | Ecosystem / Project                  | Method     |  Files | Lines of code | Primary focus                      |
 | ------------------------------------ | ---------- | -----: | ------------: | ---------------------------------- |
-| **StatsPAI** `src/statspai/`         | measured   |    758 |   **396,985** | validation-tiered causal inference |
-| StatsPAI tests (`tests/`)            | measured   |  1,248 |       252,201 | —                                  |
+| **StatsPAI** `src/statspai/`         | measured   |    773 |   **404,864** | validation-tiered causal inference |
+| StatsPAI tests (`tests/`)            | measured   |  1,277 |       259,615 | —                                  |
 | statsmodels 0.14.x                   | measured   |    948 |   **381,981** | GLM / time series / general        |
 | linearmodels                         | measured   |    131 |        36,607 | panel / IV                         |
 | **Python causal-inference subtotal** |            |  1,079 |   **418,588** |                                    |
@@ -39,26 +39,26 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 
 | Module              | LOC    | Files | Registered functions (`sp.*`) |
 | ------------------- | -----: | ----: | ----------------------------: |
-| `did` | 38,687 | 52 | 85 |
+| `did` | 38,690 | 52 | 85 |
 | `synth` | 23,757 | 32 | 55 |
+| `regression` | 18,038 | 22 | 39 |
 | `rd` | 18,000 | 27 | 53 |
-| `regression` | 17,944 | 22 | 39 |
 | `smart` | 15,695 | 20 | 31 |
-| `output` | 12,711 | 21 | 40 |
-| `agent` | 12,481 | 32 | 4 |
+| `output` | 12,784 | 21 | 40 |
+| `agent` | 12,537 | 32 | 4 |
 | `matching` | 9,789 | 14 | 25 |
-| `core` | 9,593 | 15 | 5 |
+| `core` | 9,756 | 15 | 5 |
 | `decomposition` | 9,547 | 19 | 32 |
-| `iv` | 8,243 | 17 | 10 |
+| `iv` | 8,267 | 17 | 10 |
 | `inference` | 8,068 | 19 | 26 |
-| `panel` | 7,848 | 12 | 18 |
+| `panel` | 7,851 | 12 | 18 |
+| `dml` | 7,737 | 22 | 14 |
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,668 | 13 | 25 |
 | `spatial` | 6,968 | 30 | 38 |
-| `forest` | 6,722 | 9 | 9 |
+| `forest` | 6,768 | 9 | 9 |
 | `plots` | 6,002 | 7 | 8 |
 | `bayes` | 5,170 | 12 | 19 |
-| `dml` | 5,090 | 12 | 14 |
 | `mendelian` | 4,916 | 13 | 38 |
 | `frontier` | 4,800 | 8 | 12 |
 | `multilevel` | 4,501 | 8 | 11 |
@@ -66,17 +66,17 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `qte` | 4,178 | 9 | 13 |
 | `gmm` | 4,126 | 12 | 4 |
 | `causal_discovery` | 4,077 | 11 | 20 |
-| `metalearners` | 3,959 | 8 | 23 |
+| `metalearners` | 3,982 | 8 | 23 |
 | `structural` | 3,539 | 9 | 12 |
 | `network` | 3,514 | 9 | 33 |
 | `dag` | 3,500 | 9 | 23 |
 | `tmle` | 3,403 | 6 | 11 |
 | `timeseries` | 3,389 | 9 | 20 |
 | `survival` | 3,304 | 6 | 12 |
-| `neural_causal` | 3,275 | 6 | 16 |
+| `neural_causal` | 3,297 | 6 | 16 |
 | `robustness` | 2,986 | 6 | 11 |
 | `causal_llm` | 2,960 | 10 | 14 |
-| `crossval` | 2,646 | 7 | 2 |
+| `crossval` | 2,755 | 7 | 2 |
 | `bounds` | 2,578 | 5 | 9 |
 | `conformal_causal` | 2,500 | 9 | 19 |
 | `rlasso` | 2,452 | 7 | 10 |
@@ -84,8 +84,8 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `epi` | 2,339 | 6 | 20 |
 | `utils` | 2,267 | 9 | 32 |
 | `bartik` | 2,211 | 4 | 8 |
-| `datasets` | 2,196 | 3 | 3 |
-| `postestimation` | 2,162 | 5 | 12 |
+| `datasets` | 2,204 | 3 | 3 |
+| `postestimation` | 2,176 | 5 | 12 |
 | `question` | 2,079 | 3 | 6 |
 | `proximal` | 2,030 | 8 | 13 |
 | `policy_learning` | 1,961 | 5 | 8 |
@@ -126,7 +126,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `checks` | 152 | 2 | 0 |
 | `causal` | 111 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **401,524** | **763** | **1186** |
+| **Total** | **404,864** | **773** | **1186** |
 ## 3 · Causal-inference coverage matrix (full)
 
 Legend: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.

@@ -97,7 +97,7 @@ to a published design (`source == "simulated"`), including the
 Callaway–Sant'Anna `mpdta` panel used below; their numbers are not the numbers
 from the original data.
 
-At a glance: 1,186 registered functions across 87 submodules; 397k LOC (core) + 252k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
+At a glance: 1,186 registered functions across 87 submodules; 405k LOC (core) + 260k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
 
 ---
 
@@ -722,8 +722,8 @@ Every registered function carries one of these tiers (counts on the current
 | `validation_status` | Meaning | Functions |
 | --- | --- | ---: |
 | `certified` | compared with a named external reference implementation (R, Stata, or the method authors' Python package) on identical inputs, within a pre-registered tolerance | 223 |
-| `validated` | known-truth simulation, published-number, coverage, or documented-convention evidence, but not in the main R/Stata harness | 206 |
-| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 751 |
+| `validated` | known-truth simulation, published-number, coverage, or documented-convention evidence, but not in the main R/Stata harness | 208 |
+| `api_stable` | stable public interface; unit tests exist, but **no numerical-validation claim** | 752 |
 | `experimental` | method or API may still change | 3 |
 
 In other words, roughly a third of the registered surface carries numerical

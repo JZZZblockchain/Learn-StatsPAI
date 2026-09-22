@@ -5113,6 +5113,7 @@
       "additional_tests": [
         "tests/external_parity/test_causalml_book.py",
         "tests/external_parity/test_published_replications.py",
+        "tests/reference_parity/test_iv_first_stage_f_stata_parity.py",
         "tests/reference_parity/test_iv_parity.py",
         "tests/reference_parity/test_iv_se_parity.py",
         "tests/reference_parity/test_iv_wild_boottest_parity.py",
