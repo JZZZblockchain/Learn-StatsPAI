@@ -38,11 +38,6 @@ class OOFPredictions:
     structural consistency, not training behavior StatsPAI observed. Public
     array access returns a fresh read-only NumPy header over immutable bytes.
 
-    Parameters
-    ----------
-    None
-        Construct with :meth:`from_arrays`, not the class constructor.
-
     Returns
     -------
     OOFPredictions
@@ -53,6 +48,10 @@ class OOFPredictions:
     >>> import statspai as sp
     >>> sp.OOFPredictions.__name__
     'OOFPredictions'
+
+    Notes
+    -----
+    Construct with :meth:`from_arrays`, not the class constructor.
 
     References
     ----------
@@ -323,11 +322,6 @@ class OOFPredictions:
 class OOFBundle:
     """Validated StatsPAI binary-ATE score output with bounded ULP slack.
 
-    Parameters
-    ----------
-    None
-        Obtain from a retained result or construct with :meth:`from_arrays`.
-
     Returns
     -------
     OOFBundle
@@ -338,6 +332,10 @@ class OOFBundle:
     >>> import statspai as sp
     >>> sp.OOFBundle.__name__
     'OOFBundle'
+
+    Notes
+    -----
+    Obtain from a retained result or construct with :meth:`from_arrays`.
 
     References
     ----------
