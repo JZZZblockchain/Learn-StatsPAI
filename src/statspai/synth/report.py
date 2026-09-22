@@ -65,7 +65,7 @@ _METHOD_LABELS: Dict[str, str] = {
     "kernel_ridge": "Kernel-ridge SCM",
     "multi_outcome": "Multi-outcome SCM (Sun, Ben-Michael & Feller, 2023)",
     "sequential_sdid": "Sequential SDID for staggered adoption",
-    "synth_survival": "Synthetic Survival Control (Han & Shah, 2025)",
+    "synth_survival": "Synthetic control on survival curves (cloglog scale)",
 }
 
 # Method-specific citations. Each entry is the human-readable string used

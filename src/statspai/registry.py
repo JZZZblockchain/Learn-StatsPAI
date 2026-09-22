@@ -1029,9 +1029,10 @@ def _build_registry() -> None:
             name="xtnbreg",
             category="panel",
             description=(
-                "Panel negative-binomial regression. model='fe' uses explicit "
-                "entity fixed effects through nbreg; model='re' dispatches to "
-                "the random-intercept NB-2 GLMM menbreg."
+                "Panel negative-binomial regression (Stata xtnbreg): model='fe' is "
+                "the Hausman-Hall-Griliches conditional fixed-effects NB, model='re' "
+                "the beta-dispersion random-effects NB; 'ufe' (dummy-variable NB-2) "
+                "and 'normal_re' (menbreg) are the other panel NB estimators."
             ),
             params=[
                 ParamSpec(
@@ -1044,7 +1045,12 @@ def _build_registry() -> None:
                 ParamSpec("entity", "str", True, description="Panel/unit identifier"),
                 ParamSpec("time", "str", False, description="Optional time column"),
                 ParamSpec(
-                    "model", "str", False, "fe", "Panel model", ["fe", "re", "pooled"]
+                    "model",
+                    "str",
+                    False,
+                    "fe",
+                    "Panel model",
+                    ["fe", "re", "pooled", "ufe", "normal_re"],
                 ),
                 ParamSpec(
                     "time_effects",
@@ -1527,7 +1533,12 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("deriv", "int", False, 0, "Derivative order (0=RD, 1=RKD)"),
                 ParamSpec(
-                    "p", "int", False, 1, "Polynomial order for point estimation"
+                    "p",
+                    "int",
+                    False,
+                    None,
+                    "Polynomial order for point estimation. None -> 1 (local "
+                    "linear) when deriv=0, deriv + 1 otherwise (R rdrobust rule).",
                 ),
                 ParamSpec(
                     "q", "int", False, None, "Polynomial order for bias correction"
@@ -2921,6 +2932,18 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("covariates", "list", True),
                 ParamSpec("estimand", "str", False, "ATE", "Target estimand"),
+                ParamSpec(
+                    "q_bound",
+                    "float",
+                    False,
+                    1e-05,
+                    "The initial outcome predictions, on the [0, 1] scale the "
+                    "logistic fluctuation works on (continuous outcomes are "
+                    "min-max rescaled), are truncated to ``[q_bound, 1 - "
+                    "q_bound]`` before targeting. ``tmle::tmle`` truncates at ``1 "
+                    "- alpha = 5e-4`` (its default ``alpha = 0.9995``); pass "
+                    "``q_bound=5e-4`` to reproduce it.",
+                ),
             ],
             returns="TMLE result",
             example='sp.tmle(df, y="outcome", treat="treat", covariates=["x1","x2","x3"])',
@@ -3224,7 +3247,13 @@ def _build_registry() -> None:
         FunctionSpec(
             name="causal_impact",
             category="panel",
-            description="Bayesian structural time series for causal impact analysis.",
+            description=(
+                "Causal impact of an intervention on a time series: pre-period OLS on "
+                "the covariate series with an AR(1) latent state (Kalman filter), "
+                "post-period counterfactual forecasts and frequentist prediction "
+                "intervals for pointwise, average and cumulative effects. Not the "
+                "Bayesian structural time-series model of R CausalImpact."
+            ),
             params=[
                 ParamSpec("data", "DataFrame", True),
                 ParamSpec("y", "str", True, description="Outcome time-series column"),
@@ -3263,6 +3292,19 @@ def _build_registry() -> None:
                     "str",
                     False,
                     description="Finite population correction column",
+                ),
+                ParamSpec(
+                    "lonely_psu",
+                    "str",
+                    False,
+                    None,
+                    "How a stratum with a single sampled PSU enters the variance "
+                    '(R options(survey.lonely.psu=)): "remove"/"certainty" '
+                    'contribute zero, "adjust" centres at the grand mean of PSU '
+                    'totals, "average" rescales by #strata / #strata-with->1-PSU, '
+                    '"fail" raises (R default). None behaves as "remove" and warns '
+                    "when a lonely stratum is present.",
+                    enum=["remove", "certainty", "adjust", "average", "fail"],
                 ),
             ],
             returns="SurveyDesign",
@@ -4258,6 +4300,15 @@ def _build_registry() -> None:
                     ["gaussian", "binomial"],
                 ),
                 ParamSpec("trim", "float", False, 0.01, "Weight truncation quantile"),
+                ParamSpec(
+                    "density_sd",
+                    "str",
+                    False,
+                    "unbiased",
+                    "Residual-SD convention for continuous-treatment density "
+                    "weights; see :func:`stabilized_weights`.",
+                    enum=["unbiased", "ml"],
+                ),
             ],
             returns="CausalResult",
             example=(
@@ -4448,6 +4499,16 @@ def _build_registry() -> None:
                     False,
                     None,
                     "Random seed for reproducible bootstrap draws",
+                ),
+                ParamSpec(
+                    "trimming",
+                    "str",
+                    False,
+                    "quantile",
+                    "Trimming rule for the Zhang-Rubin SACE bounds (monotonicity "
+                    "method); same meaning as in :func:`sp.lee_bounds`, with which "
+                    "the bounds coincide.",
+                    enum=["quantile", "exact"],
                 ),
             ],
             returns="PrincipalStratResult",
@@ -5317,6 +5378,26 @@ def _build_registry() -> None:
                 ParamSpec("population", "list | ndarray", True),
                 ParamSpec("standard_weights", "list | ndarray", True),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "ci_method",
+                    "str",
+                    False,
+                    "gamma",
+                    '``"lognormal"``: ``exp(log r +/- z se / r)``. ``"gamma"``: '
+                    "the Fay-Feuer gamma interval, as R "
+                    "``epitools::ageadjust.direct``.",
+                    enum=["lognormal", "gamma", "normal"],
+                ),
+                ParamSpec(
+                    "variance",
+                    "str",
+                    False,
+                    "poisson",
+                    '``"poisson"``: ``sum w_k^2 events_k / population_k^2`` '
+                    '(epitools). ``"binomial"``: ``sum w_k^2 r_k (1 - r_k) / '
+                    "population_k`` (Stata ``dstdize``).",
+                    enum=["poisson", "binomial"],
+                ),
             ],
             returns="StandardizedRateResult",
             tags=["epidemiology", "standardization", "age_adjustment"],
@@ -5337,6 +5418,17 @@ def _build_registry() -> None:
                 ParamSpec("population_reference", "list | ndarray", True),
                 ParamSpec("population_study", "list | ndarray", True),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "ci_method",
+                    "str",
+                    False,
+                    "exact",
+                    '"exact": exact Poisson (Garwood) interval for the observed '
+                    "count divided by the expected count, as Stata istdize. "
+                    '"lognormal": SMR exp(+/- z / sqrt(O)), as R '
+                    "epitools::ageadjust.indirect.",
+                    enum=["exact", "lognormal"],
+                ),
             ],
             returns="SMRResult",
             tags=["epidemiology", "SMR", "standardization"],
@@ -5804,6 +5896,16 @@ def _build_registry() -> None:
                 ParamSpec("fp", "int", False),
                 ParamSpec("tn", "int", False),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "ci_method",
+                    "str",
+                    False,
+                    "wilson",
+                    "Interval for sensitivity and specificity: Wilson score (R "
+                    '``epiR::epi.tests(method="wilson")``) or Clopper-Pearson '
+                    "exact (``epi.tests`` default, Stata ``diagt``).",
+                    enum=["wilson", "exact"],
+                ),
             ],
             returns="DiagnosticTestResult",
             tags=[
@@ -5828,6 +5930,18 @@ def _build_registry() -> None:
                 ParamSpec("y_true", "array", True),
                 ParamSpec("scores", "array", True),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "se_method",
+                    "str",
+                    False,
+                    "delong",
+                    '``"hanley"``: the Hanley-McNeil (1982) variance with the '
+                    "exponential approximations ``Q1 = A/(2-A)``, ``Q2 = "
+                    '2A^2/(1+A)``. ``"hanley-empirical"``: the same variance with '
+                    "``Q1`` and ``Q2`` estimated from the data (ties weighted "
+                    "1/3), which is what Stata ``roctab, hanley`` reports.",
+                    enum=["hanley", "hanley-empirical", "delong"],
+                ),
             ],
             returns="ROCResult",
             tags=["epidemiology", "ROC", "AUC", "binary_classification"],
@@ -6078,7 +6192,14 @@ def _build_registry() -> None:
                 ParamSpec("r2_treated", "float", False),
                 ParamSpec("r2_controlled", "float", False),
                 ParamSpec("beta_uncontrolled", "float", False),
-                ParamSpec("rho_max", "float", False, 1.0),
+                ParamSpec(
+                    "rho_max",
+                    "float",
+                    False,
+                    None,
+                    "Oster R_max; None -> min(1, 1.3 R^2_long), the sp.oster_delta "
+                    "default.",
+                ),
                 ParamSpec("data", "pd.DataFrame", False),
                 ParamSpec("y", "str", False),
                 ParamSpec("treat", "str", False),
@@ -6790,10 +6911,35 @@ def _build_registry() -> None:
                 ParamSpec("outcome_se", "str", False, "se_y"),
                 ParamSpec("exposures", "list", False),
                 ParamSpec("max_model_size", "int", False, None),
+                ParamSpec(
+                    "method",
+                    "str",
+                    False,
+                    "bf",
+                    "``'bf'`` is MR-BMA as Zuber, Colijn, Klaver & Burgess (2020) "
+                    "define and implement it (their ``summary_mvMR_BF``): the "
+                    "IVW-scaled regression ``beta_Y / se_Y ~ beta_X / se_Y`` "
+                    "without intercept, a closed-form Bayes factor under the "
+                    "normal prior, posterior-mean effects averaged over models. "
+                    "``'bic'`` is the pre-1.30 behaviour: posterior weights "
+                    "``exp(-BIC/2)`` from weighted least squares.",
+                    enum=["bf", "bic"],
+                ),
+                ParamSpec(
+                    "prior_sd",
+                    "float",
+                    False,
+                    0.5,
+                    "Standard deviation ``sigma`` of the independent normal prior "
+                    "on each causal effect (Zuber et al.'s ``sigma``).",
+                ),
             ],
             returns="MRBMAResult",
             tags=["mr", "bma", "bayesian", "model_averaging"],
-            reference="Zuber, Colijn, Staley, Burgess (Nat Comm 2020).",
+            reference=(
+                "Zuber, Colijn, Klaver & Burgess (Nat Commun 11:29, 2020; "
+                "doi:10.1038/s41467-019-13870-3)."
+            ),
         )
     )
 
@@ -6881,6 +7027,41 @@ def _build_registry() -> None:
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("beta_init", "float", False),
                 ParamSpec("tau2_init", "float", False, 1e-4),
+                ParamSpec(
+                    "k",
+                    "str",
+                    False,
+                    None,
+                    "Loss tuning constant; GRAPPLE's defaults 4.685 (Tukey), 1.345 "
+                    "(Huber).",
+                ),
+                ParamSpec(
+                    "loss",
+                    "str",
+                    False,
+                    "tukey",
+                    "GRAPPLE's ``loss.function`` (its default is Tukey).",
+                    enum=["tukey", "huber", "l2"],
+                ),
+                ParamSpec(
+                    "max_iter",
+                    "int",
+                    False,
+                    200,
+                    "Maximum number of (tau2, beta) alternation rounds; the result "
+                    "records whether tol was met.",
+                ),
+                ParamSpec(
+                    "tol",
+                    "float",
+                    False,
+                    1e-13,
+                    "Relative convergence tolerance of the alternation. GRAPPLE "
+                    "stops its ``tau2`` root at ``bound * eps^0.25`` (absolute) "
+                    "and its ``beta`` search at ``optim``'s default, so its "
+                    "reported numbers are a few significant digits short of the "
+                    "solution computed here.",
+                ),
             ],
             returns="GrappleResult",
             tags=[
@@ -7091,16 +7272,17 @@ def _build_registry() -> None:
         )
     )
 
-    # -- Sequential SDID (Arkhangelsky-Samkov 2024) ------------------ #
+    # -- Cohort-by-cohort SDID for staggered adoption ----------------- #
     register(
         FunctionSpec(
             name="sequential_sdid",
             category="causal",
             description=(
-                "Sequential Synthetic DID for staggered-adoption panels "
-                "(Arkhangelsky & Samkov 2024): processes cohorts in adoption "
-                "order using not-yet-treated donors, avoiding TWFE negative "
-                "weights and SDID overlap failures."
+                "Cohort-by-cohort synthetic DID for staggered-adoption panels: "
+                "runs sp.sdid on each adoption cohort's sub-panel with "
+                "not-yet-treated donors (each ATT(g) equals "
+                "synthdid::synthdid_estimate) and aggregates across cohorts. "
+                "Not the Arkhangelsky-Samkov sequential SDID estimator."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -7132,7 +7314,9 @@ def _build_registry() -> None:
                 "cohort='first_treat')"
             ),
             tags=["sdid", "synth", "staggered", "sequential"],
-            reference="Arkhangelsky & Samkov (arXiv:2404.00164, 2024).",
+            reference=(
+                "Per-cohort SDID of Arkhangelsky et al. (2021); not arXiv:2404.00164."
+            ),
         )
     )
 
@@ -7375,6 +7559,15 @@ def _build_registry() -> None:
                     ["short_stacking", "single_best", "inverse_risk", "equal"],
                 ),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "fold_indices",
+                    "str",
+                    False,
+                    None,
+                    "Explicit cross-fitting fold per row (column name or array of "
+                    "length ``len(data)``). Overrides ``n_folds`` / ``seed``; "
+                    "every candidate uses the same partition.",
+                ),
             ],
             returns="DMLAveragingResult",
             example=(
@@ -7433,6 +7626,16 @@ def _build_registry() -> None:
                 ParamSpec("binary_treatment", "bool", False, False),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("seed", "int", False, 0),
+                ParamSpec(
+                    "fold_indices",
+                    "str",
+                    False,
+                    None,
+                    "Explicit cross-fitting fold per row (a column name or a "
+                    "length- ``len(data)`` array), constant within unit. Overrides "
+                    "``n_folds`` and ``seed``; with a shared partition the "
+                    "estimate is reproducible across implementations (e.g.",
+                ),
             ],
             returns="DMLPanelResult",
             example=(
@@ -7919,7 +8122,8 @@ def _build_registry() -> None:
             name="synth_survival",
             category="causal",
             description=(
-                "Synthetic Survival Control (Han & Shah 2025, arXiv:2511.14133). Fits a convex "
+                "Synthetic control on survival curves (not the Han & Shah 2025 SSC "
+                "estimator). Fits a convex "
                 "combination of donor Kaplan-Meier curves on the complementary "
                 "log-log scale to match the treated arm's pre-treatment survival, "
                 "then reports the post-treatment survival gap with placebo UCBs."
@@ -7956,7 +8160,10 @@ def _build_registry() -> None:
                 'survival="km", treated="tr", treat_time=6)'
             ),
             tags=["synth", "scm", "survival", "causal", "kaplan-meier"],
-            reference="Han & Shah (2025). arXiv:2511.14133.",
+            reference=(
+                "Contrast Han & Shah (2025), arXiv:2511.14133 [han2025synthetic], a "
+                "different estimator."
+            ),
         )
     )
 
@@ -8190,7 +8397,7 @@ def _build_registry() -> None:
     )
 
     # ------------------------------------------------------------------
-    # v1.1 frontier sprint (v3-doc Sprint 1): Abadie-Zhao, rbc bootstrap,
+    # v1.1 frontier sprint (v3-doc Sprint 1): SC experimental design, rbc bootstrap,
     # evidence-without-injustice, JAMA TARGET, harvest DID, BCF ordinal
     # + factor exposure, causal MAS, shift-share political, assimilation.
     # ------------------------------------------------------------------
@@ -8200,9 +8407,10 @@ def _build_registry() -> None:
             name="synth_experimental_design",
             category="synth",
             description=(
-                "Abadie-Zhao (2025/2026) experimental-design synthetic controls: "
-                "picks the best k candidate units to treat by minimising the "
-                "sum of per-unit pre-period synthetic-control MSPEs."
+                "Synthetic-control experimental design heuristic: picks the k "
+                "candidate units whose leave-one-out synthetic-control pre-period "
+                "fit is best (method='loo_sc_fit_ranking'). Not the Abadie-Zhao "
+                "(arXiv:2108.02196) design, which solves a joint weighting MIQP."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True, description="Long-format panel"),
@@ -8220,7 +8428,7 @@ def _build_registry() -> None:
             returns="SynthExperimentalDesignResult",
             example="sp.synth_experimental_design(df, unit='u', time='t', outcome='y', k=5)",
             tags=["synth", "experimental_design", "selection", "abadie"],
-            reference="Abadie & Zhao (2025/2026), MIT / Cambridge UP.",
+            reference="Heuristic; contrast Abadie & Zhao, arXiv:2108.02196.",
         )
     )
 
@@ -8261,10 +8469,16 @@ def _build_registry() -> None:
             name="harvest_did",
             category="did",
             description=(
-                "Harvesting DID / Event Study (Borusyak et al. MIT/NBER 34550, "
-                "2025).  Extracts every valid 2x2 DID comparison from a staggered "
-                "panel, combines them with inverse-variance weights, and reports "
-                "event-study + pretrend Wald tests."
+                "Harvesting DID / event study: every Callaway-Sant'Anna ATT(g, g+e) "
+                "cell with not-yet-treated controls and a universal base period "
+                "(did::att_gt(control_group='notyettreated', "
+                "base_period='universal')), "
+                "aggregated per horizon and then across horizons by inverse variance "
+                "with the joint influence-function covariance; reports the event study "
+                "and pretrend Wald tests. The name follows the title of Abadie, "
+                "Angrist, "
+                "Frandsen & Pischke (NBER WP 34550, 2025), which does not define this "
+                "estimator."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -8965,9 +9179,10 @@ def _build_registry() -> None:
             name="shift_share_political",
             category="bartik",
             description=(
-                "Park-Xu (2026) political-science shift-share IV: long-difference "
-                "Bartik IV with AKM shock-cluster SE, Rotemberg top-K, and "
-                "share-balance diagnostics."
+                "Long-difference shift-share (Bartik) IV for political science "
+                "(Park 2026): HC1 SE as `se`, with AKM / AKM0 shock-level SE, CI and "
+                "p (ShiftShareSE::ivreg_ss) in diagnostics, Rotemberg top-K "
+                "weights and share-balance F-tests."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -8987,7 +9202,7 @@ def _build_registry() -> None:
                 "outcome='vote', endog='expo', shares=S, shocks=g)"
             ),
             tags=["bartik", "shift_share", "iv", "political_science"],
-            reference="Park & Xu (arXiv:2603.00135, 2026).",
+            reference="Park (2026), arXiv:2603.00135 [park2026shift].",
         )
     )
 
@@ -9061,7 +9276,7 @@ def _build_registry() -> None:
             name="shift_share_political_panel",
             category="bartik",
             description=(
-                "Multi-period panel shift-share IV (Park-Xu 2026 §4.2): "
+                "Multi-period panel shift-share IV: "
                 "pooled 2SLS with unit/time/two-way FEs over a time-varying "
                 "Bartik instrument.  Reports per-period event-study, "
                 "aggregate Rotemberg top-K, and share-balance F-tests."
@@ -9093,7 +9308,7 @@ def _build_registry() -> None:
                 "outcome='vote', endog='exp', shares=S, shocks=G)"
             ),
             tags=["bartik", "shift_share", "iv", "panel", "political_science"],
-            reference="Park & Xu (arXiv:2603.00135, 2026) §4.2.",
+            reference="Park (2026), arXiv:2603.00135 [park2026shift].",
         )
     )
 
@@ -10089,6 +10304,29 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("n_bootstrap", "int", False, 500),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "outcome_model",
+                    "str",
+                    False,
+                    "gbm",
+                    "Per-arm outcome regression ``mu_k(X)``. ``'gbm'`` is a "
+                    "gradient boosting regressor (100 trees, depth 3); "
+                    "``'linear'`` is OLS with an intercept fitted separately in "
+                    "each arm, which is the outcome model of Stata's ``teffects "
+                    "aipw`` (``linear by ML``).",
+                    enum=["gbm", "linear"],
+                ),
+                ParamSpec(
+                    "se_method",
+                    "str",
+                    False,
+                    "bootstrap",
+                    "``'bootstrap'`` re-fits the whole estimator (same outcome "
+                    "model) on ``n_bootstrap`` resamples. ``'influence'`` reports "
+                    "``sd(phi_k - phi_ref) / sqrt(n)`` from the AIPW influence "
+                    "function with the nuisance fits treated as known.",
+                    enum=["bootstrap", "influence", "sandwich"],
+                ),
             ],
             returns="CausalResult with pairwise contrasts",
             example='sp.multi_treatment(df, y="wage", treat="program", covariates=["age","edu"])',
@@ -12456,12 +12694,14 @@ def _build_registry() -> None:
             category="causal",
             description=(
                 "DiD with time-varying covariates frozen at baseline (Caetano, "
-                "Callaway, Payne & Rodrigues 2022 [待核验]). Avoids the "
+                "Callaway, Payne & Rodrigues 2022, arXiv:2202.02903). Avoids the "
                 "bad-controls bias that arises when treatment affects the "
                 "covariates: freezes X at period g + baseline_offset (default "
                 "g-1) per cohort and uses the frozen values as controls in a "
-                "per-(g, t) outcome-regression DiD. Aggregates via cohort-size "
-                "weights."
+                "per-(g, t) outcome-regression DiD fitted on never-treated units "
+                "(ptetools X_{g-1} estimator). aggregation='group' averages each "
+                "cohort's post-period cells then weights cohorts by size; 'simple' "
+                "weights every cell by its treated count."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -12491,6 +12731,19 @@ def _build_registry() -> None:
                 ParamSpec("n_boot", "int", False, 500),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("seed", "int", False, None),
+                ParamSpec(
+                    "aggregation",
+                    "str",
+                    False,
+                    "group",
+                    '``"group"``: average ATT(g, t) over each cohort\'s post '
+                    "periods, then across cohorts weighted by cohort size -- the "
+                    "overall ATT reported by ``ptetools`` and ``did::aggte(type = "
+                    '"group")``. ``"simple"``: weight every post cell by its '
+                    'number of treated units, as ``did::aggte(type = "simple")`` '
+                    "does on a balanced panel.",
+                    enum=["group", "simple"],
+                ),
             ],
             returns="CausalResult with per-(g, t) decomposition in detail",
             example=(
@@ -13361,6 +13614,29 @@ def _build_registry() -> None:
                 ParamSpec("n_folds", "int", False, 5, "Cross-fitting folds (>= 2)"),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("seed", "int", False, None),
+                ParamSpec(
+                    "cross_fit",
+                    "bool",
+                    False,
+                    True,
+                    "Cross-fit the nuisance models over ``n_folds`` random folds "
+                    "(Chernozhukov et al. 2018).",
+                ),
+                ParamSpec(
+                    "se_method",
+                    "str",
+                    False,
+                    "influence",
+                    "``'influence'`` reports ``sd(psi) / sqrt(n)`` from the "
+                    "estimated efficient influence function, treating the nuisance "
+                    "fits as known (the cross-fitting / DML convention; R ``AIPW`` "
+                    "reports the same quantity). ``'sandwich'`` stacks the logit "
+                    "score, the two OLS normal equations and the AIPW moment and "
+                    "reports the M-estimation sandwich (divisor ``n``), which "
+                    "accounts for the estimated nuisance parameters at finite "
+                    "``n``.",
+                    enum=["influence", "sandwich"],
+                ),
             ],
             returns="CausalResult",
             example='sp.aipw(df, y="wage", treat="trained", covariates=["age", "edu"])',
@@ -14798,6 +15074,14 @@ def _build_registry() -> None:
                 ParamSpec("bw", "float", False, None, "Bandwidth; auto if None"),
                 ParamSpec("n_bins", "int", False, None, "Histogram bins; auto if None"),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "bin_width",
+                    "str",
+                    False,
+                    None,
+                    "Histogram bin width (``DCdensity``'s ``bin``). Default: ``2 "
+                    "sd(x) n^(-1/2)``.",
+                ),
             ],
             returns="CausalResult with density_jump, se, pvalue",
             example='sp.mccrary_test(df, x="income", c=10000)',
@@ -15212,6 +15496,30 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("h", "float", False, None),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "kernel",
+                    "str",
+                    False,
+                    "triangular",
+                    "``'bsd'`` kernel.",
+                    enum=["triangular", "uniform", "epanechnikov"],
+                ),
+                ParamSpec(
+                    "opt_criterion",
+                    "str",
+                    False,
+                    "MSE",
+                    "``'bsd'`` bandwidth criterion when ``h`` is None.",
+                    enum=["MSE", "FLCI", "OCI"],
+                ),
+                ParamSpec(
+                    "order",
+                    "int",
+                    False,
+                    0,
+                    "``'bme'``: order of the polynomial on each side "
+                    "(RDHonestBME's ``order``; 0 compares side means).",
+                ),
             ],
             returns="CausalResult with honest CI for discrete RV",
             example='sp.rd_discrete(df, y="earnings", x="age_in_years", c=18)',
@@ -17460,7 +17768,8 @@ _NEGATIVE_GUIDANCE_SEEDS: Dict[str, Dict[str, Any]] = {
         "cost_profile": (
             "Prediction intervals come from a simulation step on top of the "
             "point fit, so runtime is dominated by the number of "
-            "simulations rather than n. cores= parallelises it."
+            "simulations rather than n. cores= is accepted for API "
+            "compatibility with R scpi but the simulation currently runs serially."
         ),
     },
     "sdid": {

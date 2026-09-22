@@ -199,8 +199,16 @@ def test_ridge_default_l2(panel):
 
 
 def test_inference_conformal_override(panel):
+    # alpha = 0.1: with T0 + T1 = 16 periods the smallest joint conformal
+    # p-value is 1/16, so at the default alpha = 0.05 nothing can be rejected
+    # and the confidence set is the whole real line (by design).
     res = sp.synth(
-        panel, **COMMON, method="classic", inference="conformal", grid_size=15
+        panel,
+        **COMMON,
+        method="classic",
+        inference="conformal",
+        grid_size=15,
+        alpha=0.1,
     )
     _assert_recovers_effect(res)
     # Conformal inference must produce a proper interval bracketing the estimate.

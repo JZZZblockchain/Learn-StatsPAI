@@ -217,12 +217,10 @@ class DTEResult(ResultProtocolMixin):
 
 
 def _propensity_score(X: np.ndarray, D: np.ndarray) -> np.ndarray:
-    """Logistic propensity score (near-unpenalised)."""
-    from sklearn.linear_model import LogisticRegression
+    """Logistic propensity score (unpenalised MLE)."""
+    from ._core import logit_propensity
 
-    clf = LogisticRegression(max_iter=2000, solver="lbfgs", C=1e6)
-    clf.fit(X, D)
-    return np.asarray(clf.predict_proba(X)[:, 1])
+    return logit_propensity(X, D)
 
 
 def _weighted_ecdf(
@@ -282,19 +280,23 @@ def _fit_cond_cdf_ctrl(
     ----------
     chernozhukov2013inference, chernozhukov2010quantile
     """
-    from sklearn.linear_model import LogisticRegression
+    from ..decomposition._common import add_constant, logit_fit
 
     n, ng = X_all.shape[0], len(grid)
     out = np.empty((n, ng))
+    Xc_ctrl = add_constant(np.asarray(X_ctrl, dtype=float))
+    Xc_all = add_constant(np.asarray(X_all, dtype=float))
     for j, yv in enumerate(grid):
         ind = (Y_ctrl <= yv).astype(int)
         if ind.min() == ind.max():
             # Degenerate: every control is on one side of this grid point.
             out[:, j] = float(ind[0])
             continue
-        clf = LogisticRegression(max_iter=2000, solver="lbfgs", C=1e6)
-        clf.fit(X_ctrl, ind)
-        out[:, j] = clf.predict_proba(X_all)[:, 1]
+        # Unpenalised logit MLE (near-separated tail thresholds clip the
+        # index at +-30 rather than diverge; that is a boundary fit, not an
+        # error, so the non-convergence warning is suppressed here).
+        beta, _ = logit_fit(ind.astype(float), Xc_ctrl, warn_on_nonconvergence=False)
+        out[:, j] = 1.0 / (1.0 + np.exp(-np.clip(Xc_all @ beta, -30, 30)))
     # Enforce monotonicity in y for every observation (CFG 2010 rearrangement).
     out = np.sort(out, axis=1)
     return np.clip(out, 0.0, 1.0)

@@ -5,11 +5,10 @@ callables, multiple evaluation points, kernels, manual bandwidth, the
 rd2d_bw selector, and error paths. Real synthetic boundary RD data.
 """
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
-
-import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -97,9 +96,10 @@ def test_rd2d_manual_bandwidth():
 def test_rd2d_bw_selector():
     df = _make_2d()
     h = sp.rd2d_bw(df, y="y", x1="x1", x2="x2", treatment="d", approach="distance")
-    assert isinstance(h, float)
-    assert h > 0
-    np.testing.assert_allclose(h, 0.21015049861820304, atol=1e-12)
+    # 1.29.0: one row per evaluation point (R rdbw2d.distance $bws); values
+    # are pinned against R in tests/reference_parity/test_rd_open_R_parity.py
+    assert list(h.columns) == ["b1", "b2", "h0", "h1"]
+    assert len(h) == 1 and float(h["h0"].iloc[0]) > 0
 
 
 def test_rd2d_invalid_approach():
@@ -198,9 +198,9 @@ def test_rd2d_plot_invalid_type():
         sp.rd2d_plot(df, y="y", x1="x1", x2="x2", treatment="d", plot_type="bad")
 
 
-def test_rd2d_plot_boundary_effects_requires_location_detail():
+def test_rd2d_plot_boundary_effects_requires_rd2d_detail():
     df = _make_2d()
-    res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="d")
+    res = sp.rdrobust(df, y="y", x="x1", manipulation_test=False)
     with pytest.raises(MethodIncompatibility, match="boundary eval points"):
         sp.rd2d_plot(
             df,

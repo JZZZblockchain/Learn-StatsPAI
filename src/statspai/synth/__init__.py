@@ -67,7 +67,7 @@ from .demeaned import demeaned_synth
 # Distributional Synthetic Controls
 from .discos import discos, discos_plot, discos_test, qqsynth, stochastic_dominance
 
-# Experimental design via synthetic controls (Abadie & Zhao 2025/2026)
+# Unit selection by leave-one-out SC fit (not the Abadie-Zhao design)
 from .experimental_design import (
     SynthExperimentalDesignResult,
     synth_experimental_design,
@@ -133,7 +133,7 @@ from .sequential_sdid import SequentialSDIDResult, sequential_sdid
 from .sparse import sparse_synth
 from .staggered import staggered_synth
 
-# Synthetic Survival Control (Han & Shah 2025, arXiv:2511.14133)
+# Synthetic control on survival curves (cloglog scale; not the Han & Shah SSC estimator)
 from .survival import SyntheticSurvivalResult, synth_survival
 
 __all__ = [
@@ -175,7 +175,7 @@ __all__ = [
     "SequentialSDIDResult",
     "synth_survival",
     "SyntheticSurvivalResult",
-    # Experimental design (Abadie-Zhao 2025/2026)
+    # Unit selection by leave-one-out SC fit (not the Abadie-Zhao design)
     "synth_experimental_design",
     "SynthExperimentalDesignResult",
     # SDID framework

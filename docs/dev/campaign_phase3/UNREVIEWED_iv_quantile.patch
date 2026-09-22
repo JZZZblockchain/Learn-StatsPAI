@@ -1,0 +1,369 @@
+diff --git a/src/statspai/regression/iv_quantile.py b/src/statspai/regression/iv_quantile.py
+index 7bfc6d85..de2af488 100644
+--- a/src/statspai/regression/iv_quantile.py
++++ b/src/statspai/regression/iv_quantile.py
+@@ -18,26 +18,46 @@ which identifies α via the orthogonality of Z.
+ Capabilities
+ ------------
+ - Scalar or multi-dimensional endogenous treatment
+-- Multiple instruments (over-identified models handled via GMM-style
+-  quadratic form in ``b``)
++- Multiple instruments. By default (``instrument_form='projection'``) they
++  are collapsed to the least-squares projection of ``D`` on ``[X, Z]``, the
++  "simple procedure" of Chernozhukov & Hansen (Section 3.1) and what the R
++  package ``IVQR`` does; ``instrument_form='raw'`` keeps every instrument
++  and minimises the identity-weighted ``||b(alpha)||^2``.
+ - Grid-search + local refinement over α (scalar) or BFGS over α
+   (multi-dim)
+-- Bootstrap standard errors for α̂(τ) (pairs bootstrap)
++- Analytic (kernel sandwich) standard errors for ``(alpha, beta)`` when the
++  auxiliary regression is exactly identified; pairs-bootstrap SEs on request
+ - Multiple quantiles in one call
+
+ Reference behaviour
+ -------------------
+-With one endogenous regressor and one instrument the estimate is the root
+-of the instrument's coefficient in the auxiliary quantile regression; it
+-reproduces that root computed with R ``quantreg::rq``
+-(tests/reference_parity/test_rd_iv_R_parity.py). With more instruments
+-than endogenous regressors the criterion here weights ``b(alpha)`` by the
+-identity, whereas Chernozhukov & Hansen weight it by the inverse of its
+-estimated covariance, so the over-identified estimates are a different
+-(consistent) member of the family. (An earlier version of this docstring
+-claimed agreement with Stata ``ivqreg2`` and "R's ``quantreg::ivqreg``";
+-``ivqreg2`` implements the Machado-Santos Silva moments estimator and
+-``quantreg`` has no ``ivqreg``.)
++The point estimate is the root of the instrument coefficient ``b(alpha)``
++in the auxiliary quantile regression of ``Y - D alpha`` on ``[X, D_hat]``
++(``D_hat`` the first-stage projection). It is held against R ``IVQR`` 0.1.0
++(``ivqr``, Yu-Chang Chen, GitHub ``yuchang0321/IVQR``) and Stata 18's
++official ``ivqregress iqr`` on a just- and an over-identified design,
++estimate and every SE, in ``tests/reference_parity/test_r2_rdiv_parity.py``.
++Both references return the minimiser of a Wald criterion over a grid; with
++``dim(b) = dim(alpha)`` that criterion is zero exactly at the root, so the
++fixtures pin the root (IVQR: one-point grid at the root; Stata: a symmetric
++odd grid centred on it). The analytic SE is the Chernozhukov-Hansen
++sandwich ``V = J^{-1} S J^{-T} / n``, ``S = tau (1 - tau) Psi'Psi / n``,
++``J = (n h)^{-1} sum K(e/h) Psi (D, X)'``, ``Psi = [D_hat, X]`` (invariant
++to replacing ``D_hat`` by ``Z`` in the just-identified case). Defaults
++follow Stata ``ivqregress`` (Epanechnikov kernel, Silverman bandwidth with
++Stata's quartiles); ``vce_kernel='uniform', vce_bwidth='ivqr'`` gives R
++``IVQR::ivqr.vc`` (``h = 1.364 (2 sqrt(pi))^(-1/5) sd(e) n^(-1/5)``).
++Stata's default *point estimate* is the best of 30 adaptive grid points, so
++it differs from the root by up to half a grid step.
++
++Through StatsPAI 1.28.0 every instrument entered the criterion with
++identity weight. Chernozhukov & Hansen allow any positive-definite weight,
++but that choice is not invariant to the units of the instruments (rescaling
++one instrument by 50 moved the median estimate by 1%) and matches no
++reference implementation; it remains available as ``instrument_form='raw'``
++(with bootstrap SEs only). An earlier docstring also claimed agreement with
++Stata ``ivqreg2`` (the Machado-Santos Silva moments estimator, a different
++estimator) and "R's ``quantreg::ivqreg``" (which does not exist).
+
+ References
+ ----------
+@@ -80,6 +100,9 @@ def ivqreg(
+     add_constant: bool = True,
+     verbose: bool = False,
+     random_state: int = 1234,
++    instrument_form: str = "projection",
++    vce_kernel: str = "epanechnikov",
++    vce_bwidth: Union[str, float] = "silverman",
+ ) -> Union[EconometricResults, pd.DataFrame]:
+     """
+     Instrumental-variable quantile regression (Chernozhukov-Hansen).
+@@ -103,13 +126,31 @@ def ivqreg(
+     refine : bool, default True
+         After the grid search, refine ``α̂`` with a local optimizer.
+     bootstrap : int, default 0
+-        Number of pairs-bootstrap replications for standard errors.
+-        ``0`` disables bootstrap; asymptotic rank-test inversion is not
+-        implemented in this MVP.
++        Number of pairs-bootstrap replications for the SE of ``alpha``.
++        ``0`` (default) reports the analytic kernel SEs of
++        ``(alpha, beta)`` (see ``vce_kernel``) when the auxiliary
++        regression is exactly identified, and NaN (with a warning) for
++        ``instrument_form='raw'`` with more instruments than endogenous
++        regressors.
+     alpha : float, default 0.05
+         Significance level for confidence intervals.
+     add_constant : bool, default True
+     random_state : int, default 1234
++    instrument_form : {'projection', 'raw'}, default 'projection'
++        ``'projection'``: replace the instruments by the least-squares
++        projection of each endogenous regressor on ``[X, Z]`` (exactly
++        identified auxiliary regression; R ``IVQR``). ``'raw'``: use every
++        instrument, criterion ``||b(alpha)||^2`` (identity weight; the
++        behaviour through 1.28.0). The two coincide when there are as many
++        instruments as endogenous regressors.
++    vce_kernel : {'epanechnikov', 'uniform'}, default 'epanechnikov'
++        Kernel for the density-weighted Jacobian of the analytic SE
++        (``'rectangle'`` is a synonym of ``'uniform'``). The default is
++        Stata ``ivqregress``'; ``'uniform'`` with ``vce_bwidth='ivqr'`` is
++        R ``IVQR``'s Powell estimator.
++    vce_bwidth : {'silverman', 'ivqr'} or float, default 'silverman'
++        Bandwidth rule for that kernel: ``'silverman'`` (Stata
++        ``ivqregress`` default), ``'ivqr'`` (R ``IVQR``), or a number.
+
+     Returns
+     -------
+@@ -159,12 +200,25 @@ def ivqreg(
+             f"need at least {len(endog_list)} instruments for "
+             f"{len(endog_list)} endogenous regressor(s), got {len(inst_list)}"
+         )
+-    # Multi-dim endogenous + no bootstrap = no inference. Warn loudly.
+-    if len(endog_list) > 1 and (bootstrap is None or bootstrap <= 0):
++    if instrument_form not in ("projection", "raw"):
++        raise ValueError(
++            "instrument_form must be 'projection' or 'raw', "
++            f"got {instrument_form!r}"
++        )
++    if vce_kernel not in _VCE_KERNELS:
++        raise ValueError(
++            f"vce_kernel must be one of {_VCE_KERNELS}, got {vce_kernel!r}"
++        )
++    exactly_identified = (
++        instrument_form == "projection" or len(inst_list) == len(endog_list)
++    )
++    # No analytic SE for the identity-weighted over-identified criterion.
++    if not exactly_identified and (bootstrap is None or bootstrap <= 0):
+         warnings.warn(
+-            f"ivqreg: endog has {len(endog_list)} dims but bootstrap=0 — "
+-            f"standard errors will be NaN. Set bootstrap>=200 (or use a "
+-            f"single endogenous variable) for inference.",
++            f"ivqreg: instrument_form='raw' with {len(inst_list)} instruments "
++            f"for {len(endog_list)} endogenous regressor(s) and bootstrap=0 — "
++            "standard errors will be NaN. Set bootstrap>=200 or use "
++            "instrument_form='projection' for analytic SEs.",
+             UserWarning,
+             stacklevel=2,
+         )
+@@ -184,6 +238,10 @@ def ivqreg(
+     else:
+         exog_names_with_const = list(exog_list)
+
++    Z_raw = Z
++    if instrument_form == "projection":
++        Z = _project(D, np.column_stack([X, Z]))
++
+     # Aux regressor matrix  W = [X | Z]
+     W = np.column_stack([X, Z])
+
+@@ -211,12 +269,17 @@ def ivqreg(
+             for b in range(bootstrap):
+                 idx = rng.integers(0, n, size=n)
+                 try:
++                    Zb = (
++                        _project(D[idx], np.column_stack([X[idx], Z_raw[idx]]))
++                        if instrument_form == "projection"
++                        else Z[idx]
++                    )
+                     alpha_b, *_ = _fit_ivqreg_one(
+                         Y[idx],
+                         D[idx],
+                         X[idx],
+-                        Z[idx],
+-                        np.column_stack([X[idx], Z[idx]]),
++                        Zb,
++                        np.column_stack([X[idx], Zb]),
+                         tq,
+                         n_grid=max(21, n_grid // 2),
+                         refine=refine,
+@@ -234,8 +297,22 @@ def ivqreg(
+                     stacklevel=2,
+                 )
+             se_alpha = np.nanstd(boot, axis=0, ddof=1)
++            se_beta = np.full(X.shape[1], np.nan)
++            se_method = "bootstrap"
++            bw = np.nan
++        elif exactly_identified:
++            se_all, bw = _kernel_se(
++                Y, D, X, Z, alpha_hat, beta_final, tq,
++                kernel=vce_kernel, bwidth=vce_bwidth,
++            )
++            se_alpha = se_all[: D.shape[1]]
++            se_beta = se_all[D.shape[1]:]
++            se_method = "kernel"
+         else:
+             se_alpha = np.full(D.shape[1], np.nan)
++            se_beta = np.full(X.shape[1], np.nan)
++            se_method = "none"
++            bw = np.nan
+
+         # Assemble per-τ output
+         zcrit = stats.norm.ppf(1 - alpha / 2)
+@@ -255,6 +332,9 @@ def ivqreg(
+         record["_alpha_hat"] = alpha_hat
+         record["_beta_hat"] = beta_final
+         record["_b_hat"] = b_final
++        record["_se_beta"] = se_beta
++        record["_se_method"] = se_method
++        record["_bandwidth"] = bw
+         rows_out.append(record)
+
+     if len(taus) == 1:
+@@ -269,7 +349,7 @@ def ivqreg(
+         ses = np.concatenate(
+             [
+                 [r[f"{nm}_se"] for nm in endog_list],
+-                np.full(len(beta_hat), np.nan),  # QR SEs for β not computed
++                r["_se_beta"],
+             ]
+         )
+         zstat = params / np.where(ses > 0, ses, np.nan)
+@@ -289,6 +369,10 @@ def ivqreg(
+             "n_grid": n_grid,
+             "refine": refine,
+             "bootstrap_reps": int(bootstrap),
++            "instrument_form": instrument_form,
++            "se_method": r["_se_method"],
++            "vce_kernel": vce_kernel if r["_se_method"] == "kernel" else None,
++            "kernel_bandwidth": float(r["_bandwidth"]),
+             "_citation_key": "ivqreg",
+         }
+         data_info = {
+@@ -322,9 +406,129 @@ def ivqreg(
+         r.pop("_alpha_hat", None)
+         r.pop("_beta_hat", None)
+         r.pop("_b_hat", None)
++        r.pop("_se_beta", None)
++        r["se_method"] = r.pop("_se_method", None)
++        r.pop("_bandwidth", None)
+     return pd.DataFrame(rows_out)
+
+
++# ---------------------------------------------------------------------------
++# Instrument projection and analytic covariance
++# ---------------------------------------------------------------------------
++
++
++def _project(D: np.ndarray, XZ: np.ndarray) -> np.ndarray:
++    """Least-squares projection of each column of ``D`` on ``XZ``.
++
++    ``XZ (XZ'XZ)^{-1} XZ'D``, the instrument R ``IVQR::ivqr`` builds.
++    """
++    coef = np.linalg.solve(XZ.T @ XZ, XZ.T @ D)
++    return XZ @ coef
++
++
++_VCE_KERNELS = ("epanechnikov", "uniform", "rectangle")
++
++
++def _vce_kernel(u: np.ndarray, kernel: str) -> np.ndarray:
++    """Kernel ``K(u)`` for the Jacobian (Stata ``kdensity`` conventions)."""
++    if kernel == "epanechnikov":
++        # Stata's "epanechnikov": 3/4 (1 - u^2/5) / sqrt(5) on |u| < sqrt(5)
++        return np.where(
++            np.abs(u) < np.sqrt(5.0), 0.75 * (1.0 - u * u / 5.0) / np.sqrt(5.0), 0.0
++        )
++    # "uniform" / "rectangle": 1/2 on |u| < 1 (Powell's estimator; R IVQR)
++    return np.where(np.abs(u) < 1.0, 0.5, 0.0)
++
++
++def _stata_pctile(x: np.ndarray, p: float) -> float:
++    """Stata ``_pctile`` (default definition): with ``k = n p / 100``, the
++    ``ceil(k)``-th order statistic, or the mean of the ``k``-th and
++    ``(k+1)``-th when ``k`` is an integer."""
++    xs = np.sort(np.asarray(x, dtype=float))
++    k = len(xs) * p / 100.0
++    i = int(np.floor(k))
++    if k == i:
++        return float(0.5 * (xs[i - 1] + xs[i]))
++    return float(xs[i])
++
++
++def _vce_bandwidth(e: np.ndarray, rule: Union[str, float]) -> float:
++    """Bandwidth for the Jacobian kernel.
++
++    ``'silverman'``: ``0.9 min(sd(e), IQR(e)/1.349) n^(-1/5)`` with Stata's
++    ``_pctile`` quartiles (average of the two order statistics when ``n p``
++    is an integer) -- Stata ``ivqregress``' default. ``'ivqr'``:
++    ``1.364 (2 sqrt(pi))^(-1/5) sd(e) n^(-1/5)`` -- R ``IVQR::ivqr.vc``.
++    A positive number is used as is.
++    """
++    n = len(e)
++    if isinstance(rule, (int, float)) and not isinstance(rule, bool):
++        if not rule > 0:
++            raise ValueError(f"vce_bwidth must be positive, got {rule}")
++        return float(rule)
++    sd = float(np.std(e, ddof=1))
++    if rule == "ivqr":
++        return 1.364 * (2.0 * np.sqrt(np.pi)) ** (-0.2) * sd * n ** (-0.2)
++    if rule == "silverman":
++        iqr = _stata_pctile(e, 75.0) - _stata_pctile(e, 25.0)
++        return 0.9 * min(sd, iqr / 1.349) * n ** (-0.2)
++    raise ValueError(
++        f"vce_bwidth must be 'silverman', 'ivqr' or a positive number, got {rule!r}"
++    )
++
++
++def _kernel_se(
++    Y: np.ndarray,
++    D: np.ndarray,
++    X: np.ndarray,
++    Phi: np.ndarray,
++    alpha_hat: np.ndarray,
++    beta_hat: np.ndarray,
++    tau: float,
++    kernel: str = "epanechnikov",
++    bwidth: Union[str, float] = "silverman",
++) -> Tuple[np.ndarray, float]:
++    """Sandwich SEs of ``(alpha, beta)`` (Chernozhukov-Hansen 2006).
++
++    ``V = J^{-1} S J^{-T} / n`` with ``S = tau(1-tau) Psi'Psi / n``,
++    ``J = (n h)^{-1} sum K(e_i/h) Psi_i (D_i, X_i)'``, ``Psi = [Phi, X]``
++    and ``e = Y - D alpha - X beta`` (instrument term dropped). Stata
++    ``ivqregress`` defaults: Epanechnikov kernel, Silverman bandwidth;
++    ``kernel='uniform', bwidth='ivqr'`` is R ``IVQR::ivqr.vc``. Like IVQR,
++    ``h`` is enlarged by 10% (with a warning) until ``J`` is invertible.
++    """
++    n = len(Y)
++    e = Y - D @ alpha_hat - X @ beta_hat
++    Psi = np.column_stack([Phi, X])
++    DX = np.column_stack([D, X])
++    h = _vce_bandwidth(e, bwidth)
++    S = tau * (1.0 - tau) * (Psi.T @ Psi) / n
++    warned = False
++    for _ in range(200):
++        k = _vce_kernel(e / h, kernel)
++        J = (Psi * k[:, None]).T @ DX / (n * h)
++        try:
++            invJ = np.linalg.inv(J)
++            if np.all(np.isfinite(invJ)):
++                break
++        except np.linalg.LinAlgError:
++            pass
++        if not warned:
++            warnings.warn(
++                "ivqreg: the kernel Jacobian is singular at the chosen "
++                "bandwidth; enlarging it by 10% until invertible "
++                "(as R IVQR does).",
++                RuntimeWarning,
++                stacklevel=3,
++            )
++            warned = True
++        h *= 1.1
++    else:  # pragma: no cover - pathological design
++        raise RuntimeError("ivqreg: kernel Jacobian never became invertible")
++    V = invJ @ S @ invJ.T / n
++    return np.sqrt(np.diag(V)), float(h)
++
++
+ # ---------------------------------------------------------------------------
+ # Core profile fit
+ # ---------------------------------------------------------------------------
+@@ -355,9 +559,11 @@ def _fit_ivqreg_one(
+         Y_tilde = Y - D @ alpha_vec
+         coef = _qreg_fit(Y_tilde, W, tau)  # (kx + kz,)
+         b_hat = coef[kx:]
+-        # Identity weighting. Chernozhukov-Hansen weight by the inverse of
+-        # b_hat's covariance; the two coincide only when the model is
+-        # just identified (see the module docstring).
++        # Identity weighting. With an exactly identified auxiliary
++        # regression (instrument_form='projection', the default) any
++        # positive-definite weight has the same minimiser, b(alpha) = 0;
++        # with instrument_form='raw' and extra instruments the identity
++        # weight is a choice (see the module docstring).
+         crit = float(b_hat @ b_hat)
+         return crit, coef, b_hat

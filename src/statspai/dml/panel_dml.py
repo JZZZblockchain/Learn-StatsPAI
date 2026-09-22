@@ -226,51 +226,54 @@ def _default_treatment_learner() -> Any:
     )
 
 
+def _group_mean(v: np.ndarray, idx: np.ndarray, w: Optional[np.ndarray]) -> np.ndarray:
+    if w is None:
+        return pd.Series(v).groupby(idx).transform("mean").to_numpy()
+    num = pd.Series(v * w).groupby(idx).transform("sum").to_numpy()
+    den = pd.Series(w).groupby(idx).transform("sum").to_numpy()
+    return num / den
+
+
 def _within_transform(
     values: np.ndarray,
     unit_idx: np.ndarray,
     time_idx: Optional[np.ndarray] = None,
     sample_weight: Optional[np.ndarray] = None,
+    tol: float = 1e-13,
+    max_iter: int = 10_000,
 ) -> np.ndarray:
-    """Subtract unit (and optionally time) means from a vector.
+    """Residual of ``values`` after absorbing unit (and time) effects.
 
-    When ``sample_weight`` is supplied the unit and time means are the
-    *weighted* means under those weights — this is the natural FE
-    absorption for survey-weighted estimation: minimising
-    :math:`\\sum_{i,t} w_{it} (y_{it} - \\alpha_i - \\beta D_{it} -
-    g(X_{it}))^2` w.r.t. :math:`\\alpha_i` yields
-    :math:`\\hat\\alpha_i = (\\sum_t w_{it} \\cdot \\text{rest}_{it}) /
-    \\sum_t w_{it}`.
+    One-way: subtract the (weighted) unit mean. Two-way: the residual of
+    the (weighted) least-squares projection on unit and time dummies,
+    computed by alternating unit / time demeaning until the largest
+    update is below ``tol`` times the scale of ``values`` (the method of
+    alternating projections, as in ``fixest::demean``). On a balanced,
+    unweighted panel one sweep is exact (``y - y_i. - y_.t + y_..``); on
+    an unbalanced or weighted panel it is not.
 
-    When ``time_idx`` is supplied this is the two-way within transform
-    (``y - y_i. - y_.t + y_..``).  Otherwise it is the one-way within
-    transform (``y - y_i.``).
+    .. versionchanged:: 1.30.0
+       The two-way transform previously stopped after one sweep, which
+       leaves unit and time means in the residual on unbalanced panels.
     """
     v = values.astype(float).copy()
-    if sample_weight is not None:
-        w = np.asarray(sample_weight, dtype=float)
-        s_v = pd.Series(v * w)
-        s_w = pd.Series(w)
-        unit_means = (
-            s_v.groupby(unit_idx).transform("sum").to_numpy()
-            / s_w.groupby(unit_idx).transform("sum").to_numpy()
-        )
-    else:
-        unit_means = pd.Series(v).groupby(unit_idx).transform("mean").to_numpy()
-    v = v - unit_means
-    if time_idx is not None:
-        if sample_weight is not None:
-            w = np.asarray(sample_weight, dtype=float)
-            s_v = pd.Series(v * w)
-            s_w = pd.Series(w)
-            time_means = (
-                s_v.groupby(time_idx).transform("sum").to_numpy()
-                / s_w.groupby(time_idx).transform("sum").to_numpy()
-            )
-        else:
-            time_means = pd.Series(v).groupby(time_idx).transform("mean").to_numpy()
-        v = v - time_means
-    return np.asarray(v)
+    w = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
+    v = v - _group_mean(v, unit_idx, w)
+    if time_idx is None:
+        return np.asarray(v)
+    scale = max(float(np.max(np.abs(values))), 1.0)
+    for _ in range(max_iter):
+        step_t = _group_mean(v, time_idx, w)
+        v = v - step_t
+        step_u = _group_mean(v, unit_idx, w)
+        v = v - step_u
+        if max(np.max(np.abs(step_t)), np.max(np.abs(step_u))) < tol * scale:
+            return np.asarray(v)
+    raise NumericalInstability(
+        "dml_panel: the two-way within transform did not converge.",
+        recovery_hint="Check for units or periods with a single observation.",
+        diagnostics={"max_iter": max_iter},
+    )
 
 
 def _cluster_se_from_psi(
@@ -325,6 +328,7 @@ def dml_panel(
     binary_treatment: bool = False,
     seed: int = 0,
     sample_weight: Optional[Any] = None,
+    fold_indices: Optional[Any] = None,
 ) -> DMLPanelResult:
     """Long-panel Double/Debiased ML with unit FE and cluster-robust SE.
 
@@ -386,6 +390,11 @@ def dml_panel(
         transform (subtract weighted unit / time means), and the PLR
         moment + cluster-robust SE use weighted sums. Required if your
         survey design carries informative sampling probabilities.
+    fold_indices : array-like or str, optional
+        Explicit cross-fitting fold per row (a column name or a length-
+        ``len(data)`` array), constant within unit. Overrides ``n_folds``
+        and ``seed``; with a shared partition the estimate is reproducible
+        across implementations (e.g. ``DoubleMLPLR`` with cluster splits).
 
     Returns
     -------
@@ -532,6 +541,22 @@ def dml_panel(
                     },
                 )
             work["__sw__"] = arr
+    if fold_indices is not None:
+        if isinstance(fold_indices, str):
+            if fold_indices not in data.columns:
+                raise MethodIncompatibility(
+                    f"fold_indices column '{fold_indices}' not in data",
+                    recovery_hint="Pass an existing column or an array.",
+                )
+            work["__fold__"] = data[fold_indices].to_numpy()
+        else:
+            fi_arr = np.asarray(fold_indices)
+            if fi_arr.ndim != 1 or len(fi_arr) != len(data):
+                raise MethodIncompatibility(
+                    f"fold_indices must be 1-D of length {len(data)}",
+                    recovery_hint="Pass one fold label per row of data.",
+                )
+            work["__fold__"] = fi_arr
     df = work.dropna().reset_index(drop=True)
     n = len(df)
     if n == 0:
@@ -643,14 +668,30 @@ def dml_panel(
             role="ml_m",
         )
 
-    rng = np.random.default_rng(seed)
-    unit_perm = rng.permutation(unique_units)
-    unit_folds = np.array_split(unit_perm, n_folds)
-    # Map each observation to its fold via its unit
-    obs_fold = np.empty(n, dtype=int)
-    for k, fold_units in enumerate(unit_folds):
-        mask = np.isin(unit_ids, fold_units)
-        obs_fold[mask] = k
+    if fold_indices is None:
+        rng = np.random.default_rng(seed)
+        unit_perm = rng.permutation(unique_units)
+        unit_folds = np.array_split(unit_perm, n_folds)
+        # Map each observation to its fold via its unit
+        obs_fold = np.empty(n, dtype=int)
+        for k, fold_units in enumerate(unit_folds):
+            mask = np.isin(unit_ids, fold_units)
+            obs_fold[mask] = k
+    else:
+        fi = df["__fold__"].to_numpy()
+        codes, obs_fold = np.unique(fi, return_inverse=True)
+        n_folds = len(codes)
+        if n_folds < 2:
+            raise MethodIncompatibility(
+                "fold_indices must define at least two folds.",
+                recovery_hint="Pass a fold label per row with >= 2 distinct values.",
+            )
+        if pd.Series(obs_fold).groupby(unit_ids).nunique().max() > 1:
+            raise MethodIncompatibility(
+                "fold_indices must be constant within unit: cross-fitting "
+                "splits units, not observations.",
+                recovery_hint="Assign folds at the unit level.",
+            )
 
     y_resid = np.zeros(n)
     d_resid = np.zeros(n)

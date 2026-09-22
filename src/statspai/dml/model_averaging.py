@@ -319,6 +319,7 @@ def _fit_candidate_plr(
     n_folds: int,
     seed: int,
     sample_weight: Optional[np.ndarray] = None,
+    splits: Optional[List[Tuple[np.ndarray, np.ndarray]]] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
     """Fit one PLR candidate; return (yhat, dhat, y_resid, d_resid, mse_g, mse_m).
 
@@ -334,7 +335,8 @@ def _fit_candidate_plr(
     from sklearn.base import clone
     from sklearn.model_selection import KFold
 
-    kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    if splits is None:
+        splits = list(KFold(n_splits=n_folds, shuffle=True, random_state=seed).split(X))
     n = len(Y)
     yhat = np.zeros(n)
     dhat = np.zeros(n)
@@ -363,7 +365,7 @@ def _fit_candidate_plr(
             clf.fit(Xfit, yfit)
         return clf
 
-    for tr, te in kf.split(X):
+    for tr, te in splits:
         wtr = sample_weight[tr] if sample_weight is not None else None
         g = _fit(ml_g, X[tr], Y[tr], wtr)
         yhat[te] = g.predict(X[te])
@@ -393,11 +395,9 @@ def _solve_cls_weights(
     minimise ``Σ w_obs · (target - predictions @ w)²`` s.t. ``w_j ≥ 0,
     Σ w_j = 1`` — where ``w_obs`` defaults to 1 (unweighted CLS).
 
-    Implementation: scipy.optimize.minimize with SLSQP. The CLS problem
-    is convex with linear constraints, so SLSQP converges in O(K)
-    iterations for the small K (~4-15 candidates) of the model-averaging
-    use case. Falls back to ``np.argmin(per-candidate MSE)`` if the
-    optimiser fails to converge.
+    Exact for ``K <= 12`` candidates (support enumeration, see
+    :func:`_cls_exact`); otherwise SLSQP, falling back -- with a warning --
+    to the single best candidate if it fails to converge.
     """
     from scipy.optimize import minimize
 
@@ -442,6 +442,10 @@ def _solve_cls_weights(
             },
         )
 
+    exact = _cls_exact(target, predictions, sw)
+    if exact is not None:
+        return exact
+
     def loss(w: np.ndarray) -> float:
         r = target - predictions @ w
         return float(np.sum(sw * r * r))
@@ -469,7 +473,14 @@ def _solve_cls_weights(
         options={"maxiter": 200, "ftol": 1e-10},
     )
     if not res.success:
-        # Fallback: pick the column with lowest weighted MSE.
+        import warnings
+
+        warnings.warn(
+            "short_stacking: the constrained least-squares solver did not "
+            f"converge ({res.message}); using the single best candidate.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
         weighted_sse = np.sum(
             sw[:, None] * (target[:, None] - predictions) ** 2,
             axis=0,
@@ -480,6 +491,49 @@ def _solve_cls_weights(
     w = np.clip(res.x, 0.0, None)
     s = w.sum()
     return w / s if s > 0 else np.full(K, 1.0 / K)
+
+
+_CLS_EXACT_MAX_K = 12
+
+
+def _cls_exact(
+    target: np.ndarray, predictions: np.ndarray, sw: np.ndarray
+) -> Optional[np.ndarray]:
+    """Exact solution of ``min ||y - F w||_W^2`` s.t. ``w >= 0, sum w = 1``.
+
+    The problem is a convex QP; its optimum is the equality-constrained
+    least-squares solution on its own support. For ``K <= 12`` candidates
+    every support is enumerated (at most 4095 tiny KKT solves) and the
+    best non-negative solution is returned, so the weights are exact rather
+    than an optimiser's approximation (``ddml``'s ``nnls1`` solves the same
+    QP with ``quadprog``). Returns None for larger ``K`` or a singular
+    Gram matrix.
+    """
+    from itertools import combinations
+
+    n, K = predictions.shape
+    if K > _CLS_EXACT_MAX_K:
+        return None
+    sq = np.sqrt(sw)
+    E = (target[:, None] - predictions) * sq[:, None]  # residual of each candidate
+    G = E.T @ E  # ||y - F w||^2 = w' G w when sum w = 1
+    if np.linalg.matrix_rank(G) < K:
+        return None
+    best, best_val = None, np.inf
+    for size in range(1, K + 1):
+        for S in combinations(range(K), size):
+            idx = list(S)
+            GS = G[np.ix_(idx, idx)]
+            u = np.linalg.solve(GS, np.ones(size))
+            wS = u / u.sum()
+            if np.any(wS < -1e-14):
+                continue
+            w = np.zeros(K)
+            w[idx] = np.clip(wS, 0.0, None)
+            val = float(w @ G @ w)
+            if val < best_val - 1e-15 * max(abs(val), 1.0):
+                best, best_val = w, val
+    return best
 
 
 def dml_model_averaging(
@@ -493,6 +547,7 @@ def dml_model_averaging(
     weight_rule: str = "short_stacking",
     alpha: float = 0.05,
     sample_weight: Optional[Any] = None,
+    fold_indices: Optional[Any] = None,
 ) -> DMLAveragingResult:
     """Model-averaging / stacking DML-PLR estimator.
 
@@ -541,6 +596,10 @@ def dml_model_averaging(
         weighted least squares, and the PLR moment + sandwich variance
         use weighted sums. The MSE used for ``inverse_risk`` /
         ``single_best`` weighting is also the weighted MSE.
+    fold_indices : array-like or str, optional
+        Explicit cross-fitting fold per row (column name or array of length
+        ``len(data)``). Overrides ``n_folds`` / ``seed``; every candidate
+        uses the same partition.
 
     Returns
     -------
@@ -607,6 +666,18 @@ def dml_model_averaging(
     # ``denom < 1e-12`` cannot detect the problem).
     cols = [y, treat] + list(covariates)
     work = data[cols].copy()
+    if fold_indices is not None:
+        if isinstance(fold_indices, str):
+            _require_columns(data, [fold_indices], context)
+            work["__fold__"] = data[fold_indices].to_numpy()
+        else:
+            fi_arr = np.asarray(fold_indices)
+            if fi_arr.ndim != 1 or len(fi_arr) != len(data):
+                raise MethodIncompatibility(
+                    f"fold_indices must be 1-D of length {len(data)}.",
+                    diagnostics={"context": context},
+                )
+            work["__fold__"] = fi_arr
     if sample_weight is not None:
         if isinstance(sample_weight, str):
             if sample_weight not in data.columns:
@@ -689,6 +760,21 @@ def dml_model_averaging(
             },
         )
 
+    splits: Optional[List[Tuple[np.ndarray, np.ndarray]]] = None
+    if "__fold__" in clean.columns:
+        fold_codes = clean["__fold__"].to_numpy()
+        labels_f = np.unique(fold_codes)
+        if len(labels_f) < 2:
+            raise MethodIncompatibility(
+                "fold_indices must define at least two folds.",
+                diagnostics={"context": context},
+            )
+        idx_all = np.arange(len(clean))
+        splits = [
+            (idx_all[fold_codes != k], idx_all[fold_codes == k]) for k in labels_f
+        ]
+        n_folds = len(splits)
+
     # --- Stage 1: fit every candidate, collect cross-fitted predictions and
     # per-candidate diagnostics. We need both predictions (for stacking)
     # and residuals (for per-candidate θ̂_k under non-stacking rules).
@@ -710,6 +796,7 @@ def dml_model_averaging(
             n_folds,
             seed,
             sample_weight=sw,
+            splits=splits,
         )
         if sw is None:
             denom = float(np.sum(d_r**2))
@@ -866,6 +953,11 @@ def dml_model_averaging(
     if weights_g is not None and weights_m is not None:
         model_info["weights_g"] = dict(zip(labels, weights_g.tolist()))
         model_info["weights_m"] = dict(zip(labels, weights_m.tolist()))
+        # Stacked cross-fitted residuals, so conventions that differ only in
+        # the final regression (e.g. ddml's OLS of y_r on d_r with an
+        # intercept) can be reproduced from the same nuisances.
+        model_info["_y_resid"] = y_resid_stack
+        model_info["_d_resid"] = d_resid_stack
 
     return DMLAveragingResult(
         method="DML (PLR) with model averaging",

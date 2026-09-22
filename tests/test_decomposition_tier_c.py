@@ -848,13 +848,19 @@ def test_mm_melly_cfm_aligned_reference(cps):
 
 
 def test_qreg_irls_recovers_true_beta():
-    """_qreg_irls should recover QR coefficients on a known location DGP.
+    """The QR solver behind Melly / Machado-Mata recovers a known location DGP.
+
+    (Since 1.29 this is the exact LP solver ``_qreg_grid``; the IRLS
+    approximation it replaced was removed.)
 
     For y = X'β + ε with ε symmetric and zero-median, the median QR
     should give β̂ ≈ β. Estimation also tested at τ=0.25 and τ=0.75
     where the true intercept shifts by the corresponding quantile of ε.
     """
-    from statspai.decomposition.machado_mata import _qreg_irls
+    from statspai.decomposition.machado_mata import _qreg_grid
+
+    def _qreg_irls(y, X, tau):
+        return _qreg_grid(y, X, np.array([tau]))[0]
 
     rng = np.random.default_rng(7)
     n = 3000

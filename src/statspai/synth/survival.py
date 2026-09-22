@@ -1,35 +1,33 @@
-r"""Synthetic Survival Control (Han & Shah 2025, arXiv:2511.14133). [@han2025synthetic]
+r"""Synthetic control on Kaplan-Meier survival curves (cloglog scale).
 
-Estimates the **survival difference** caused by treatment for a single treated
-unit (or a small set thereof) by constructing a synthetic control on the
-log-cumulative-hazard scale.  This is the survival-data analogue of the
-classical Abadie-Diamond-Hainmueller SCM:
+Estimates the survival difference caused by treatment for a single treated
+unit by building an Abadie-Diamond-Hainmueller-style synthetic control on
+the complementary log-log (log-cumulative-hazard) scale:
 
-1. Transform each control unit's Kaplan-Meier survival curve :math:`S_i(t)` to
-   :math:`L_i(t) = \log(-\log S_i(t))` (the "complementary log-log" or
-   "log-cumulative-hazard" scale) so that time-varying covariate adjustments
-   act linearly.
-2. Solve a nonnegative-weight, unit-simplex least-squares fit that matches the
-   treated unit's pre-treatment :math:`L_1(t)` by a convex combination of the
-   donor :math:`L_j(t)`.
-3. Project the weighted donor hazard to the post-treatment window and invert
+1. Transform each unit's survival curve :math:`S_i(t)` to
+   :math:`L_i(t) = \log(-\log S_i(t))` (values clipped to
+   ``[1e-6, 1 - 1e-6]`` first).
+2. Solve a nonnegative-weight, unit-simplex least-squares fit (exactly,
+   by the shared active-set solver) that matches the treated unit's
+   pre-treatment :math:`L_1(t)` by a convex combination of the donor
+   :math:`L_j(t)`.
+3. Apply the weights to the donors' post-treatment :math:`L_j(t)` and invert
    the link to obtain the counterfactual survival curve
    :math:`\hat S_1^{(0)}(t)`.
-4. Report the gap :math:`S_1(t) - \hat S_1^{(0)}(t)` with a placebo-test
-   uniform band constructed by permuting the treated-vs-donor label.
+4. Report the gap :math:`S_1(t) - \hat S_1^{(0)}(t)` with a pointwise
+   placebo band.
 
-This operates on panel data where each row describes one unit's survival at a
-time point — typically derived from Kaplan-Meier estimates per unit using
-:func:`sp.km_estimate` or from clinical trial data aggregated at the group
-level.
+.. note::
+   This is **not** the Synthetic Survival Control estimator of Han & Shah
+   (arXiv:2511.14133, ``han2025synthetic``), which forms the counterfactual
+   survival curve directly on the survival scale with unconstrained
+   principal-component-regression weights. No public implementation of
+   either estimator was found to compare against; the numbers here are
+   checked by reference-free identities only.
 
 References
 ----------
-Han, J. X. and Shah, D. (2025).  "Synthetic Survival Control: Extending
-    Synthetic Controls for 'When-If' Decision-Making."  arXiv:2511.14133.
-Abadie, A., Diamond, A. and Hainmueller, J. (2010).  "Synthetic Control
-    Methods for Comparative Case Studies: Estimating the Effect of
-    California's Tobacco Control Program."  *JASA*, 105(490), 493-505.
+[@abadie2010synthetic]
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ class SyntheticSurvivalResult(ResultProtocolMixin):
 
     Exposes the fitted counterfactual survival curve (``s_synth``), the
     observed treated curve (``s_treated``), their gap trajectory (``gap``),
-    the donor ``weights``, and a placebo-based uniform band.
+    the donor ``weights``, and a pointwise placebo band.
 
     Examples
     --------
@@ -80,7 +78,7 @@ class SyntheticSurvivalResult(ResultProtocolMixin):
     13
     """
 
-    _citation_keys = ("han2025synthetic",)
+    _citation_keys = ("abadie2010synthetic",)
     treated_unit: str
     time_grid: np.ndarray
     s_treated: np.ndarray
@@ -98,7 +96,7 @@ class SyntheticSurvivalResult(ResultProtocolMixin):
         post_mask = self.time_grid >= self.treat_time
         avg_gap = float(np.mean(self.gap[post_mask]))
         rows = [
-            "Synthetic Survival Control",
+            "Synthetic control on survival curves (cloglog scale)",
             "=" * 42,
             f"  Treated unit      : {self.treated_unit}",
             f"  Treatment time    : {self.treat_time}",
@@ -128,23 +126,16 @@ def _inv_cloglog(L: np.ndarray) -> np.ndarray:
     return np.asarray(np.exp(-np.exp(np.clip(L, -50, 50))))
 
 
-def _simplex_ls(Y: np.ndarray, X: np.ndarray, n_iter: int = 2000) -> np.ndarray:
-    """Minimise ||Y - X w||^2 over w in the unit simplex (w_j >= 0, sum w_j = 1).
+def _simplex_ls(Y: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """Minimise ||Y - X w||^2 over the unit simplex (exact).
 
-    Projected-gradient with an exponentiated-gradient-style step — robust
-    enough for small donor pools without pulling in ``cvxpy``.
+    Delegates to the shared SCM solver. The former exponentiated-gradient
+    loop (2000 steps, decaying rate) stopped short of the optimum, e.g.
+    weights off by 0.03 and a 7% larger SSR on a 12-period, 8-donor panel.
     """
-    n_donors = X.shape[1]
-    w = np.ones(n_donors) / n_donors
-    lr = 0.3
-    for _ in range(n_iter):
-        grad = X.T @ (X @ w - Y)
-        # Multiplicative EG step
-        w = w * np.exp(-lr * grad)
-        w = np.clip(w, 1e-12, None)
-        w /= w.sum()
-        lr *= 0.9995
-    return np.asarray(w)
+    from ._core import solve_simplex_weights
+
+    return np.asarray(solve_simplex_weights(Y, X))
 
 
 def synth_survival(
@@ -181,16 +172,20 @@ def synth_survival(
         Time at which treatment starts (times >= ``treat_time`` are the
         post-treatment window).
     alpha : float, default 0.05
-        Uniform placebo CI level.
+        Level of the pointwise placebo band.
     n_placebos : int, default 100
-        Number of placebo permutations used to bootstrap the uniform band.
+        Number of donors used as in-space placebos (a random subset when
+        smaller than the donor pool; all donors otherwise). The band is
+        *pointwise*: at each time the effect interval is
+        ``[gap - q_{1-alpha/2}, gap - q_{alpha/2}]`` with ``q`` the placebo
+        gaps' quantiles. It is not a uniform band.
     seed : int, default 0
 
     Returns
     -------
     SyntheticSurvivalResult
         Fitted counterfactual survival curve, gap trajectory, donor
-        weights, and a placebo-based uniform confidence band.
+        weights, and a pointwise placebo band.
 
     Examples
     --------
@@ -206,7 +201,7 @@ def synth_survival(
     ...     df, unit="trial_arm", time="month",
     ...     survival="km_est", treated="treated_arm", treat_time=6,
     ... )
-    >>> r.summary()
+    >>> _ = r.summary()
     """
     for col in [unit, time, survival]:
         if col not in data.columns:
@@ -270,7 +265,7 @@ def synth_survival(
     gap = s_treated - s_synth
     pre_rmse = float(np.sqrt(np.mean((Y_pre - X_pre @ weights) ** 2)))
 
-    # --- Placebo test: uniform CI via in-space permutation -------- #
+    # --- Pointwise placebo band via in-space placebos ------------- #
     rng = np.random.default_rng(seed)
     placebo_gaps = []
     candidate_donors = donors.copy()
@@ -281,10 +276,7 @@ def synth_survival(
             others = [d for d in candidate_donors if d != placebo]
             Y_pre_p = L_wide[placebo].to_numpy()[pre_mask]
             X_pre_p = L_wide[others].to_numpy()[pre_mask]
-            try:
-                w_p = _simplex_ls(Y_pre_p, X_pre_p)
-            except Exception:  # pragma: no cover
-                continue  # pragma: no cover
+            w_p = _simplex_ls(Y_pre_p, X_pre_p)
             L_synth_p = L_wide[others].to_numpy() @ w_p
             s_synth_p = _inv_cloglog(L_synth_p)
             placebo_gaps.append(wide[placebo].to_numpy() - s_synth_p)
@@ -293,8 +285,11 @@ def synth_survival(
     if placebo_gaps_arr is not None and len(placebo_gaps_arr) >= 2:
         q_low = np.quantile(placebo_gaps_arr, alpha / 2, axis=0)
         q_high = np.quantile(placebo_gaps_arr, 1 - alpha / 2, axis=0)
-        ci_low = gap + q_low  # re-centred
-        ci_high = gap + q_high
+        # Invert "gap - effect ~ placebo-gap distribution": the effect lies
+        # in [gap - q_high, gap - q_low]. (The old gap + q_low / gap + q_high
+        # was only right for a placebo distribution symmetric about 0.)
+        ci_low = gap - q_high
+        ci_high = gap - q_low
     else:
         ci_low = ci_high = None
 

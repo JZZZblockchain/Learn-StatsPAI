@@ -15,9 +15,9 @@ import numpy as np
 import pandas as pd
 
 from statspai.timeseries.structural_break import (
-    structural_break,
     _supf_null_distribution,
     _supf_pvalue,
+    structural_break,
 )
 
 
@@ -80,7 +80,11 @@ def test_supf_pvalue_is_deterministic():
 
 
 def test_bai_perron_exposes_aligned_stats():
-    """Bai-Perron now returns per-break sup-F stats / p-values, sorted."""
+    """Bai-Perron returns per-break sup F(l+1|l) statistics with their
+    Bai-Perron critical values, in chronological order. (Round 2: the
+    sequential procedure is mbreaks::dosequa; sup F(l+1|l) has no p-value
+    approximation, so ``p_values`` is None and ``critical_values`` holds the
+    tabulated values the statistics exceeded.)"""
     rng = np.random.default_rng(3)
     y = np.concatenate(
         [rng.normal(0, 1, 80), rng.normal(4, 1, 80), rng.normal(0, 1, 80)]
@@ -88,10 +92,10 @@ def test_bai_perron_exposes_aligned_stats():
     df = pd.DataFrame({"y": y})
     res = structural_break(data=df, y="y", method="bai-perron", max_breaks=5)
     assert res.n_breaks >= 1
-    assert res.f_stats is not None and res.p_values is not None
-    assert len(res.f_stats) == len(res.break_dates) == len(res.p_values)
+    assert res.f_stats is not None and res.p_values is None
+    assert len(res.f_stats) == len(res.break_dates) == len(res.critical_values)
     assert res.break_dates == sorted(res.break_dates)
-    assert all(p < 0.05 for p in res.p_values)
+    assert all(f >= c for f, c in zip(res.f_stats, res.critical_values))
 
 
 def test_bai_perron_no_false_breaks_on_white_noise():

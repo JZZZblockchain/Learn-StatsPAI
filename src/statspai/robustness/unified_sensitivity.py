@@ -349,7 +349,7 @@ def unified_sensitivity(
     r2_treated: Optional[float] = None,
     r2_controlled: Optional[float] = None,
     beta_uncontrolled: Optional[float] = None,
-    rho_max: float = 1.0,
+    rho_max: Optional[float] = None,
     data: Any = None,
     y: Optional[str] = None,
     treat: Optional[str] = None,
@@ -379,10 +379,15 @@ def unified_sensitivity(
     beta_uncontrolled : float, optional
         Short-regression (no controls) treatment estimate; required for
         Oster's delta together with the two R^2 values.
-    rho_max : float, default 1.0
+    rho_max : float, optional
         Oster's ``R_max`` — the R^2 of the hypothetical long regression
-        that additionally includes all unobservables. The default 1.0 is
-        the most conservative bound.
+        that additionally includes all unobservables. Default: Oster's
+        recommendation ``min(1, 1.3 R^2_long)``, the default of
+        ``sp.oster_delta`` / ``sp.oster_bounds``. Before 1.30 the documented
+        default was 1.0, but the data path (``data=``, ``y=``, ``treat=``,
+        ``controls=``) ignored ``rho_max`` altogether and always used the
+        1.3 rule; both paths now honour an explicit value and share the
+        default.
     term : str, optional
         Which coefficient to analyse, when ``result`` carries a vector of
         them (e.g. an OLS fit). Required whenever there is more than one
@@ -519,10 +524,19 @@ def unified_sensitivity(
             # Report the RR the E-value was actually computed from, not the
             # raw coefficient — otherwise the summary line and the E-value
             # below it describe different quantities.
+            # The interval is the one sp.evalue (and R EValue::evalues.OLS)
+            # builds from the SE: exp(0.91 d -/+ 1.78 se/sd). Before 1.30
+            # this reported the fit's own (t-based) CI rescaled, which is not
+            # the interval the E-value for the CI was computed from.
+            from ..diagnostics.evalue import _MD_CI_FACTOR, _MD_SLOPE
+
             _d = float(estimate) / sd
-            _d_lo, _d_hi = float(ci[0]) / sd, float(ci[1]) / sd
-            rr = float(np.exp(0.91 * _d))
-            rr_ci = (float(np.exp(0.91 * _d_lo)), float(np.exp(0.91 * _d_hi)))
+            _hw = _MD_CI_FACTOR * float(se) / sd
+            rr = float(np.exp(_MD_SLOPE * _d))
+            rr_ci = (
+                float(np.exp(_MD_SLOPE * _d - _hw)),
+                float(np.exp(_MD_SLOPE * _d + _hw)),
+            )
             ev_kwargs = {
                 "estimate": float(estimate),
                 "se": float(se),
@@ -590,7 +604,8 @@ def unified_sensitivity(
                 y=y,
                 x_base=[treat],
                 x_controls=list(controls),
-                r_max=0,
+                # r_max <= 0 selects Oster's min(1, 1.3 R_full) rule.
+                r_max=0 if rho_max is None else float(rho_max),
                 n_boot=0,
             )
             _info = getattr(_od, "model_info", {}) or {}
@@ -629,7 +644,7 @@ def unified_sensitivity(
                 beta_long=float(estimate),
                 r2_short=float(r2_short),
                 r2_long=float(r2_long),
-                r_max=float(rho_max),
+                r_max=None if rho_max is None else float(rho_max),
                 delta=1.0,
             )
             if isinstance(od, dict):

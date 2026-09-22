@@ -143,9 +143,10 @@ same seed. Citation: arXiv:2506.17214.
 
 ## Synthetic control
 
-### `sp.synth_survival` — Agarwal & Shah (2025)
+### `sp.synth_survival` — synthetic control on survival curves
 
-Synthetic Survival Control: donor convex combination on the
+Not the Han & Shah (2025, arXiv:2511.14133) Synthetic Survival Control
+estimator, which uses a different scale and PCR weights. Donor convex combination on the
 complementary log-log (`cloglog`) scale matches the treated arm's
 pre-treatment Kaplan-Meier curve, then projects forward and reports the
 survival gap with a placebo-permutation uniform band.
@@ -184,9 +185,9 @@ We now ship both:
 
 These arrived in the same release and are already wired into `sp.*`:
 
-- `sp.shift_share_political` — Park & Xu (arXiv:2603.00135, 2026) Bartik
-  IV specialised for political-science panel data with Rotemberg top-K
-  + share-balance diagnostics.
+- `sp.shift_share_political` — long-difference Bartik IV (background:
+  Park, arXiv:2603.00135, 2026) with AKM SE, Rotemberg weights and
+  share-balance diagnostics.
 - `sp.bcf_ordinal` — BCF for ordered (multi-level) treatments like
   dose. Extends Hahn-Murray-Carvalho (2020) to `T ∈ {0, 1, ..., K}`.
 - `sp.bcf_factor_exposure` — BCF with factor-based exposure mapping for

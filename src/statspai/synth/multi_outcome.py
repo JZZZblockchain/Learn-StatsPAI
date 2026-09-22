@@ -51,7 +51,17 @@ def multi_outcome_synth(
     alpha: float = 0.05,
 ) -> CausalResult:
     """
-    Multiple Outcomes Synthetic Control Method (Sun 2023).
+    Multiple Outcomes Synthetic Control Method (Sun, Ben-Michael & Feller).
+
+    The shared weights reproduce R ``augsynth::augsynth_multiout(progfunc =
+    "None", scm = TRUE, fixedeff = FALSE)`` with ``combine_method =
+    "concat"`` (``method='concatenated'``) or ``"avg"``
+    (``method='averaged'``) when ``standardize=True``: each outcome's
+    pre-period panel is scaled by its standard deviation over the donors'
+    pre-period cells (the centring cancels under the adding-up
+    constraint). The placebo SE / p-values and the Fisher joint p-value are
+    StatsPAI's own; augsynth offers only conformal inference for multiple
+    outcomes.
 
     Finds a *single* set of donor weights that simultaneously matches
     the treated unit across all K outcomes in the pre-treatment period.
@@ -96,8 +106,10 @@ def multi_outcome_synth(
     CausalResult
         Unified result object with:
 
-        - ``estimate`` : average treatment effect across outcomes
-          (mean of per-outcome ATTs).
+        - ``estimate`` : unweighted mean of the per-outcome ATTs, each in
+          its own raw units (only meaningful when the outcomes share a
+          scale; augsynth's "Average" row instead averages effects divided
+          by each outcome's pre-period SD).
         - ``model_info['per_outcome_effects']`` : DataFrame with
           columns ``outcome``, ``att``, ``se``, ``pvalue``.
         - ``model_info['weights']`` : dict mapping donor names to
@@ -143,7 +155,7 @@ def multi_outcome_synth(
 
     Notes
     -----
-    Sun (2023) shows that under a low-rank factor model the bias of
+    Sun, Ben-Michael & Feller show that under a low-rank factor model the bias of
     the concatenated estimator shrinks as O(1/sqrt(K)), where K is
     the number of outcomes.  The key requirement is that the outcomes
     share a *common* latent-factor structure.
@@ -284,6 +296,7 @@ def multi_outcome_synth(
     placebo_atts_per_outcome: Dict[str, List[float]] = {oc: [] for oc in outcomes}
     placebo_atts_overall: List[float] = []
 
+    placebo_failures: List[Dict[str, Any]] = []
     if placebo and J >= 2:
         for j_idx in range(J):
             donor_j = donors[j_idx]
@@ -342,8 +355,18 @@ def multi_outcome_synth(
 
                 placebo_atts_overall.append(float(np.mean(plac_atts_k)))
 
-            except Exception:  # pragma: no cover
-                continue  # pragma: no cover
+            except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+                placebo_failures.append({"unit": donor_j, "error": repr(exc)})
+
+    if placebo_failures:
+        import warnings
+
+        warnings.warn(
+            f"{len(placebo_failures)} of {J} placebo fits failed and were "
+            "dropped; see model_info['placebo_failures'].",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
     # ------------------------------------------------------------------
     #  Per-outcome SE, p-value from placebos
@@ -424,6 +447,7 @@ def multi_outcome_synth(
         "times": all_times,
         "standardize": standardize,
         "penalization": penalization,
+        "placebo_failures": placebo_failures,
     }
 
     if placebo_atts_overall:
@@ -434,7 +458,7 @@ def multi_outcome_synth(
         model_info["n_placebos"] = len(placebo_atts_overall)
 
     return CausalResult(
-        method="Multiple Outcomes SCM (Sun 2023)",
+        method="Multiple Outcomes SCM (Sun, Ben-Michael & Feller 2025)",
         estimand="ATT (multi-outcome)",
         estimate=overall_att,
         se=overall_se,
@@ -537,9 +561,10 @@ CausalResult._CITATIONS["multi_outcome_synth"] = (
     "@article{sun2023multiple,\n"
     "  title={Using Multiple Outcomes to Improve the Synthetic "
     "Control Method},\n"
-    "  author={Sun, Liyang},\n"
+    "  author={Sun, Liyang and Ben-Michael, Eli and Feller, Avi},\n"
     "  journal={Review of Economics and Statistics},\n"
-    "  year={2023},\n"
-    "  publisher={MIT Press}\n"
+    "  pages={1-29},\n"
+    "  year={2025},\n"
+    "  doi={10.1162/rest_a_01592}\n"
     "}"
 )

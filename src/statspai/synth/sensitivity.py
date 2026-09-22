@@ -28,11 +28,14 @@ Ferman, B. and Pinto, C. (2021).
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+from ..exceptions import MethodIncompatibility
 
 # ======================================================================
 # Internal helpers
@@ -110,7 +113,13 @@ def _fit_scm_core(
 
     pre_rmse = float(np.sqrt(np.mean(gap_pre**2)))
     att = float(np.mean(gap_post))
-    se = float(np.std(gap_post)) / max(np.sqrt(len(gap_post)), 1)
+    # Naive standard error of the mean post-period gap, treating the T1
+    # post-period gaps as i.i.d. (population SD, ddof=0).  Undefined with a
+    # single post-period: np.std of one number is 0, which used to turn
+    # into se = 0, z = inf and p = 0 -- a "significant" placebo by
+    # construction.
+    n_post = len(gap_post)
+    se = float(np.std(gap_post)) / np.sqrt(n_post) if n_post >= 2 else float("nan")
 
     return {
         "att": att,
@@ -125,6 +134,28 @@ def _fit_scm_core(
         "pre_mask": model.pre_mask,
         "post_mask": model.post_mask,
     }
+
+
+def _naive_z_pvalue(att: float, se: float) -> float:
+    """Two-sided normal p-value of ``att / se``; NaN when ``se`` is not > 0.
+
+    ``se`` is the i.i.d. post-gap standard error of :func:`_fit_scm_core`.
+    A zero or undefined SE carries no information, so the p-value is NaN
+    rather than 0 (the old code returned 0, even for ``att == 0``).
+    """
+    if not np.isfinite(se) or se <= 0.0:
+        return float("nan")
+    return float(2 * stats.norm.sf(abs(att) / se))
+
+
+def _warn_dropped(kind: str, failed: List[Dict[str, Any]], n_total: int) -> None:
+    if failed:
+        warnings.warn(
+            f"{len(failed)} of {n_total} {kind} fits failed and were dropped: "
+            + "; ".join(f"{f['what']}: {f['error']}" for f in failed[:5]),
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
 
 # ======================================================================
@@ -165,13 +196,19 @@ def synth_loo(
     penalization : float, default 0.0
         Ridge penalty forwarded to SCM.
     alpha : float, default 0.05
-        Significance level for z-based p-values.
+        Accepted for API symmetry with :func:`synth_sensitivity`; it does
+        not affect any returned column.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``dropped_unit``, ``att``, ``se``, ``pvalue``,
-        ``pre_rmse``.
+        Columns: ``dropped_unit``, ``att`` (mean post-period gap),
+        ``se``, ``pvalue``, ``pre_rmse`` (pre-period RMSPE). ``se`` is the
+        naive i.i.d. standard error of the mean post-period gap
+        (``np.std(gap_post) / sqrt(T1)``, ddof 0) and ``pvalue`` its
+        two-sided normal p-value. They ignore serial correlation and the
+        estimation error of the weights, so they are descriptive, not a
+        valid test; both are NaN when ``T1 < 2`` or the SE is zero.
 
     Examples
     --------
@@ -186,6 +223,7 @@ def synth_loo(
     donors = [u for u in all_units if u != treated_unit]
 
     records: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
     for drop in donors:
         subset = [d for d in donors if d != drop]
         if len(subset) < 1:
@@ -201,8 +239,7 @@ def synth_loo(
                 donor_subset=subset,
                 penalization=penalization,
             )
-            z = res["att"] / res["se"] if res["se"] > 1e-10 else np.inf
-            pval = float(2 * stats.norm.sf(abs(z)))
+            pval = _naive_z_pvalue(res["att"], res["se"])
             records.append(
                 {
                     "dropped_unit": drop,
@@ -212,9 +249,10 @@ def synth_loo(
                     "pre_rmse": res["pre_rmse"],
                 }
             )
-        except (ValueError, np.linalg.LinAlgError):  # pragma: no cover
-            continue  # pragma: no cover
+        except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+            failed.append({"what": f"drop {drop!r}", "error": repr(exc)})
 
+    _warn_dropped("leave-one-out", failed, len(donors))
     return pd.DataFrame(records)
 
 
@@ -258,16 +296,23 @@ def synth_time_placebo(
     penalization : float, default 0.0
         Ridge penalty forwarded to SCM.
     n_placebo_times : int, optional
-        Max number of placebo treatment times to try.
-        Default is all feasible pre-treatment times (leaving >= 2
-        pre-periods for each placebo fit).
+        Max number of placebo treatment times to try (a subset drawn with
+        a fixed seed). Default is all feasible pre-treatment times: every
+        pre-period from the third on, so each placebo fit keeps >= 2
+        pre-periods. Real post-treatment periods are discarded before the
+        placebo fits.
     alpha : float, default 0.05
-        Significance level.
+        Accepted for API symmetry with :func:`synth_sensitivity`; it does
+        not affect any returned column.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``placebo_time``, ``att``, ``se``, ``pvalue``.
+        Columns: ``placebo_time``, ``att`` (mean placebo post-period gap
+        up to the real treatment time), ``se``, ``pvalue``. ``se`` /
+        ``pvalue`` are the naive i.i.d.-gap quantities described in
+        :func:`synth_loo` (NaN for the last placebo time, which has a
+        single placebo post-period).
 
     Examples
     --------
@@ -295,6 +340,7 @@ def synth_time_placebo(
         candidate_times = np.sort(candidate_times)
 
     records: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
     for pt in candidate_times:
         try:
             res = _fit_scm_core(
@@ -306,8 +352,7 @@ def synth_time_placebo(
                 pt,
                 penalization=penalization,
             )
-            z = res["att"] / res["se"] if res["se"] > 1e-10 else np.inf
-            pval = float(2 * stats.norm.sf(abs(z)))
+            pval = _naive_z_pvalue(res["att"], res["se"])
             records.append(
                 {
                     "placebo_time": pt,
@@ -316,9 +361,10 @@ def synth_time_placebo(
                     "pvalue": pval,
                 }
             )
-        except (ValueError, np.linalg.LinAlgError):  # pragma: no cover
-            continue  # pragma: no cover
+        except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+            failed.append({"what": f"placebo time {pt!r}", "error": repr(exc)})
 
+    _warn_dropped("time-placebo", failed, len(candidate_times))
     return pd.DataFrame(records)
 
 
@@ -395,6 +441,7 @@ def synth_donor_sensitivity(
     k = min(k, J)
 
     records: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
     for i in range(n_samples):
         subset = list(rng.choice(donors, size=k, replace=False))
         try:
@@ -416,9 +463,10 @@ def synth_donor_sensitivity(
                     "pre_rmse": res["pre_rmse"],
                 }
             )
-        except (ValueError, np.linalg.LinAlgError):  # pragma: no cover
-            continue  # pragma: no cover
+        except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+            failed.append({"what": f"iteration {i}", "error": repr(exc)})
 
+    _warn_dropped("donor-subset", failed, n_samples)
     return pd.DataFrame(records)
 
 
@@ -436,14 +484,16 @@ def synth_rmspe_filter(
     treatment_time: Any,
     thresholds: Optional[List[float]] = None,
     penalization: float = 0.0,
+    *,
+    metric: str = "rmspe",
+    placebo_pool: str = "include_treated",
 ) -> pd.DataFrame:
     """
-    Pre-RMSPE-filtered p-value robustness (Abadie et al. 2010).
+    Pre-fit-filtered placebo p-values (Abadie et al. 2010).
 
-    Runs placebo SCM on every donor unit, computes each unit's
-    pre-treatment RMSPE, then re-calculates the rank-based p-value
-    after dropping placebos whose pre-RMSPE exceeds a multiple of
-    the treated unit's pre-RMSPE.
+    Runs the in-space placebo SCM on every donor unit, then recomputes the
+    rank p-value of the post/pre RMSPE ratio after discarding placebos
+    whose pre-treatment fit is worse than a multiple of the treated unit's.
 
     Parameters
     ----------
@@ -460,16 +510,39 @@ def synth_rmspe_filter(
     treatment_time : any
         First treatment period.
     thresholds : list of float, optional
-        Multiples of treated-unit pre-RMSPE used as cut-offs.
+        Cut-off multiples of the treated unit's pre-treatment fit; a placebo
+        is kept when its fit is ``<= threshold x`` the treated unit's.
         Default ``[1, 2, 5, 10, 20, np.inf]``.
     penalization : float, default 0.0
         Ridge penalty.
+    metric : {'rmspe', 'mspe'}, default 'rmspe'
+        Scale on which ``thresholds`` act. ``'rmspe'`` (default) compares
+        pre-period RMSPEs, the convention of Stata ``synth_runner``'s
+        ``pre_limit_mult()``. ``'mspe'`` compares pre-period MSPEs, the
+        convention of Abadie et al. (2010), who drop placebos with a pre-period
+        MSPE above 20 / 5 / 2 times California's, and of R
+        ``SCtools::mspe.test(discard.extreme = TRUE, mspe.limit = ...)``.
+        A threshold ``c`` on the MSPE scale equals ``sqrt(c)`` on the RMSPE
+        scale.
+    placebo_pool : {'include_treated', 'exclude_treated'}, default 'include_treated'
+        Donor pool of each placebo fit. ``'include_treated'`` (default)
+        uses every other unit, including the actually-treated one, which is
+        the exact permutation design under the sharp null of no effect and
+        matches ``sp.synth``'s own placebo loop. ``'exclude_treated'`` drops
+        the treated unit from every placebo's donor pool, as R
+        ``SCtools::generate.placebos`` and Stata ``synth_runner`` do.
 
     Returns
     -------
     pd.DataFrame
         Columns: ``threshold``, ``n_placebos``, ``pvalue``,
-        ``treated_pre_rmspe``.
+        ``treated_pre_rmspe``. The p-value is
+        ``(1 + #{kept placebos with ratio >= treated ratio}) / (n_kept + 1)``
+        (treated unit ranked with its placebos, as ``SCtools::mspe.test``;
+        Stata ``synth_runner`` instead reports ``#{...} / n_kept``).
+        ``df.attrs['placebos']`` holds each placebo's ``unit``,
+        ``pre_rmspe`` and post/pre RMSPE ``ratio``; ``df.attrs['treated_ratio']``
+        the treated unit's ratio.
 
     Examples
     --------
@@ -482,6 +555,13 @@ def synth_rmspe_filter(
     """
     if thresholds is None:
         thresholds = [1.0, 2.0, 5.0, 10.0, 20.0, np.inf]
+    if metric not in ("rmspe", "mspe"):
+        raise MethodIncompatibility(f"metric must be 'rmspe' or 'mspe', got {metric!r}")
+    if placebo_pool not in ("include_treated", "exclude_treated"):
+        raise MethodIncompatibility(
+            "placebo_pool must be 'include_treated' or 'exclude_treated', "
+            f"got {placebo_pool!r}"
+        )
 
     all_units = data[unit].unique()
     donors = [u for u in all_units if u != treated_unit]
@@ -506,43 +586,48 @@ def synth_rmspe_filter(
     )
 
     # --- Placebo units ---
-    placebo_info: List[Dict[str, float]] = []
+    placebo_info: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
     for d in donors:
         other_donors = [u for u in donors if u != d]
-        if len(other_donors) < 1:
+        pool = (
+            other_donors + [treated_unit]
+            if placebo_pool == "include_treated"
+            else other_donors
+        )
+        if len(pool) < 1:
             continue  # pragma: no cover
         try:
             pres = _fit_scm_core(
-                data,
+                data[data[unit].isin(pool + [d])],
                 outcome,
                 unit,
                 time,
                 d,
                 treatment_time,
-                donor_subset=other_donors + [treated_unit],
                 penalization=penalization,
             )
-            gap_post_p = pres["gap"][pres["post_mask"]]
-            post_mspe_p = float(np.mean(gap_post_p**2))
-            pre_rmspe_p = pres["pre_rmse"]
-            ratio_p = (
-                np.sqrt(post_mspe_p) / pre_rmspe_p if pre_rmspe_p > 1e-10 else np.inf
-            )
-            placebo_info.append(
-                {
-                    "unit": d,
-                    "pre_rmspe": pre_rmspe_p,
-                    "ratio": ratio_p,
-                }
-            )
-        except (ValueError, np.linalg.LinAlgError):  # pragma: no cover
-            continue  # pragma: no cover
+        except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+            failed.append({"what": f"placebo {d!r}", "error": repr(exc)})
+            continue
+        gap_post_p = pres["gap"][pres["post_mask"]]
+        post_mspe_p = float(np.mean(gap_post_p**2))
+        pre_rmspe_p = pres["pre_rmse"]
+        ratio_p = np.sqrt(post_mspe_p) / pre_rmspe_p if pre_rmspe_p > 1e-10 else np.inf
+        placebo_info.append({"unit": d, "pre_rmspe": pre_rmspe_p, "ratio": ratio_p})
+    _warn_dropped("in-space placebo", failed, len(donors))
 
     # --- Filter at each threshold ---
     records: List[Dict[str, Any]] = []
     for thr in thresholds:
-        cutoff = thr * treated_pre_rmspe
-        kept = [p for p in placebo_info if p["pre_rmspe"] <= cutoff]
+        if not np.isfinite(thr):
+            kept = list(placebo_info)
+        elif metric == "mspe":
+            cutoff = thr * treated_pre_rmspe**2
+            kept = [p for p in placebo_info if p["pre_rmspe"] ** 2 <= cutoff]
+        else:
+            cutoff = thr * treated_pre_rmspe
+            kept = [p for p in placebo_info if p["pre_rmspe"] <= cutoff]
         n_kept = len(kept)
         if n_kept == 0:
             pval = np.nan
@@ -559,7 +644,12 @@ def synth_rmspe_filter(
             }
         )
 
-    return pd.DataFrame(records)
+    out = pd.DataFrame(records)
+    out.attrs["placebos"] = pd.DataFrame(placebo_info)
+    out.attrs["treated_ratio"] = float(ratio_treated)
+    out.attrs["metric"] = metric
+    out.attrs["placebo_pool"] = placebo_pool
+    return out
 
 
 # ======================================================================
@@ -717,9 +807,13 @@ def synth_sensitivity(
     # Time placebo
     if len(tp_df) > 0:
         n_sig = (tp_df["pvalue"] < alpha).sum()
+        n_def = int(tp_df["pvalue"].notna().sum())
         lines.append("--- Time Placebos ---")
         lines.append(f"  Placebo times tested: {len(tp_df)}")
-        lines.append(f"  Significant at {alpha:.0%}: {n_sig} / {len(tp_df)}")
+        lines.append(
+            f"  Naive iid-gap z p < {alpha:.0%}: {n_sig} / {n_def} "
+            "(descriptive; ignores serial correlation)"
+        )
         lines.append(f"  Max |placebo ATT|: {tp_df['att'].abs().max():.4f}")
         lines.append("")
 

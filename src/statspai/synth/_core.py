@@ -47,11 +47,94 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 from scipy import optimize
 
-from ..exceptions import MethodIncompatibility
+from ..exceptions import ConvergenceFailure, MethodIncompatibility
 
 # ---------------------------------------------------------------------------
 # Basic simplex solver (inner W problem, reused across module)
 # ---------------------------------------------------------------------------
+
+
+def _eq_bounded_lsq(C: np.ndarray, t: np.ndarray, lb: float, ub: float) -> np.ndarray:
+    """``min ||C w - t||^2  s.t.  sum(w) = 1, lb <= w <= ub`` (exact).
+
+    The problem R ``pracma::lsqlincon`` hands to ``quadprog::solve.QP``
+    inside ``DiSCos:::DiSCo_weights_reg`` (``lb = 0, ub = 1`` is the SCM
+    simplex); ``lb`` may be ``-inf``. Shared by ``discos`` and
+    :func:`solve_simplex_weights`. Primal
+    active-set method: on each working set the equality-constrained least
+    squares problem is solved in the null space of the adding-up
+    constraint by ``lstsq`` on ``C`` itself (``C'C`` is never formed, so the
+    conditioning is not squared); a blocking bound is added on a step that
+    leaves the box, and the bound with the most negative multiplier is
+    released at a stationary point.
+    """
+    n, J = C.shape
+    # quadprog needs C'C positive definite (R errors otherwise). A rank-
+    # deficient problem has a non-unique minimiser; a ridge of 1e-10 of the
+    # mean squared column norm then selects one deterministically (the
+    # aggregate-panel fallback, where J donors can exceed the number of
+    # distinct quantile values).
+    if np.linalg.matrix_rank(C) < J:
+        delta = 1e-10 * float(np.mean(np.sum(C**2, axis=0)))
+        C = np.vstack([C, np.sqrt(delta) * np.eye(J)])
+        t = np.concatenate([t, np.zeros(J)])
+    scale = max(1.0, float(np.abs(C.T @ t).max()), float(np.sum(C**2, axis=0).max()))
+    tol = 1e-12 * scale
+    feas = 1e-13
+    w = np.full(J, 1.0 / J)
+    at_lb = np.zeros(J, dtype=bool)
+    at_ub = np.zeros(J, dtype=bool)
+    last_released = -1
+    for _ in range(50 * J + 50):
+        free = ~(at_lb | at_ub)
+        F = np.flatnonzero(free)
+        fixed = np.flatnonzero(~free)
+        fixed_val = np.where(at_lb, lb, ub)[fixed]
+        nF = F.size
+        r = t - C[:, fixed] @ fixed_val
+        s_F = 1.0 - float(fixed_val.sum())
+        base = np.full(nF, s_F / nF)
+        if nF > 1:
+            Q = np.linalg.qr(np.column_stack([np.ones(nF), np.eye(nF)[:, : nF - 1]]))[0]
+            Z = Q[:, 1:]
+            CF = C[:, F]
+            v = np.linalg.lstsq(CF @ Z, r - CF @ base, rcond=None)[0]
+            wF = base + Z @ v
+        else:
+            wF = base
+        cur = w[F]
+        lo_v = wF < lb - feas
+        hi_v = wF > ub + feas
+        if lo_v.any() or hi_v.any():
+            step_dir = wF - cur
+            ratios = np.full(nF, np.inf)
+            ratios[lo_v] = (lb - cur[lo_v]) / step_dir[lo_v]
+            ratios[hi_v] = (ub - cur[hi_v]) / step_dir[hi_v]
+            k = int(np.argmin(ratios))
+            if F[k] == last_released and ratios[k] <= 0.0:
+                # releasing that bound gives no descent: it is optimal
+                return np.clip(w, lb, ub)
+            w[F] = cur + max(ratios[k], 0.0) * step_dir
+            if lo_v[k]:
+                w[F[k]] = lb
+                at_lb[F[k]] = True
+            else:
+                w[F[k]] = ub
+                at_ub[F[k]] = True
+            last_released = -1
+            continue
+        w[F] = np.clip(wF, lb, ub)
+        grad = C.T @ (C @ w - t)
+        mu = -float(np.mean(grad[F]))
+        red = grad + mu  # >= 0 at a lower bound, <= 0 at an upper bound
+        bad = np.flatnonzero((at_lb & (red < -tol)) | (at_ub & (red > tol)))
+        if bad.size == 0:
+            return w
+        k = int(bad[np.argmax(np.abs(red[bad]))])
+        at_lb[k] = False
+        at_ub[k] = False
+        last_released = k
+    raise ConvergenceFailure("bounded least squares (active set) did not converge")
 
 
 def solve_simplex_weights(
@@ -103,6 +186,31 @@ def solve_simplex_weights(
         if penalization > 0:
             g = g + 2.0 * penalization * w
         return np.asarray(g)
+
+    # Strictly convex problem (donor matrix of full column rank, or a
+    # ridge penalty): the minimiser is unique, so solve it exactly with the
+    # primal active-set method instead of stopping at SLSQP's tolerance
+    # (which left weights ~1e-7 and gaps ~1e-6 away from the optimum).
+    # Rank-deficient problems (fewer pre-periods than donors, the usual
+    # Prop. 99 shape) have a set of minimisers; there SLSQP's choice is
+    # kept so that the selected point does not change.
+    y_arr = np.asarray(y, dtype=np.float64).ravel()
+    X_arr = np.asarray(X, dtype=np.float64)
+    if penalization > 0:
+        X_aug = np.vstack([X_arr, np.sqrt(penalization) * np.eye(J)])
+        y_aug = np.concatenate([y_arr, np.zeros(J)])
+    else:
+        X_aug, y_aug = X_arr, y_arr
+    if np.all(np.isfinite(X_aug)) and np.all(np.isfinite(y_aug)):
+        if np.linalg.matrix_rank(X_aug) == J:
+            try:
+                return _eq_bounded_lsq(X_aug, y_aug, 0.0, 1.0)
+            except RuntimeError as exc:  # pragma: no cover - fall back
+                warnings.warn(
+                    f"Exact simplex least squares failed ({exc}); using SLSQP.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
     if w0 is None:
         w0 = np.ones(J) / J

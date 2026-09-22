@@ -18,13 +18,14 @@ import types
 import matplotlib
 
 matplotlib.use("Agg")
+import importlib
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 
 import statspai as sp
-import importlib
 
 # These submodule names are also re-exported as *functions* on the
 # ``statspai.decomposition`` package, so ``import x.y.z as m`` binds to the
@@ -233,25 +234,17 @@ def test_machado_mata_bootstrap_skips_tiny_strata():
     assert res.se is None
 
 
-def test_qreg_irls_singular_fallback():
-    """mm.py 70-71: singular weighted normal matrix → lstsq fallback.
-
-    A perfectly collinear design makes ``X.T @ WX`` singular, forcing the
-    ``np.linalg.LinAlgError`` branch.  The estimate must still be finite.
-    """
+def test_qreg_grid_collinear_design_is_finite():
+    """A perfectly collinear design still yields a finite exact QR fit whose
+    identified combination (effective slope on x) recovers the median line."""
     rng = np.random.default_rng(0)
     n = 50
     x = rng.normal(size=n)
     X = np.column_stack([np.ones(n), x, 2.0 * x])  # col 3 = 2*col 2 → singular
     y = 1.0 + x + rng.normal(scale=0.1, size=n)
-    beta = mm_mod._qreg_irls(y, X, tau=0.5, max_iter=5)
+    beta = mm_mod._qreg_grid(y, X, np.array([0.5]))[0]
     assert beta.shape == (3,)
     assert np.all(np.isfinite(beta))
-    # The lstsq fallback still recovers the planted median fit.  The design
-    # has col3 == 2*col2, so the slopes are individually unidentified but the
-    # *effective* slope on x is beta[1] + 2*beta[2]; with the true model
-    # y = 1 + x + N(0, 0.1) the median fit recovers intercept ~ 1 and
-    # effective slope ~ 1 (generous band well outside the 0.1 noise scale).
     assert beta[0] == pytest.approx(1.0, abs=0.1)
     assert (beta[1] + 2.0 * beta[2]) == pytest.approx(1.0, abs=0.1)
 

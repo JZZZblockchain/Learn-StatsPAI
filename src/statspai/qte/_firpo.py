@@ -227,8 +227,6 @@ def logit_pscore(
     D = np.asarray(D, dtype=float)
     if X is None:
         return np.full(len(D), float(np.mean(D)))
-    from sklearn.linear_model import LogisticRegression
+    from ._core import logit_propensity
 
-    clf = LogisticRegression(max_iter=2000, solver="lbfgs", C=1e6)
-    clf.fit(X, D.astype(int))
-    return np.clip(np.asarray(clf.predict_proba(X)[:, 1]), trim, 1.0 - trim)
+    return np.clip(logit_propensity(X, D), trim, 1.0 - trim)

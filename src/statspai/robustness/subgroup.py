@@ -450,8 +450,19 @@ def _interaction_het_test(
     chi2 = float(beta_int @ V_int_inv @ beta_int)
     df_test = n_int
     p_val = stats.chi2.sf(chi2, df_test)
+    # Small-sample version, as Stata `testparm` after `regress` and R
+    # car::linearHypothesis(test = "F") report it: F = W / q on (q, n - k).
+    f_stat = chi2 / df_test
+    df_resid = n - k
 
-    return {"chi2": chi2, "pvalue": p_val, "df": float(df_test)}
+    return {
+        "chi2": chi2,
+        "pvalue": p_val,
+        "df": float(df_test),
+        "F": f_stat,
+        "pvalue_F": float(stats.f.sf(f_stat, df_test, df_resid)),
+        "df_resid": float(df_resid),
+    }
 
 
 # ---------------------------------------------------------------------------

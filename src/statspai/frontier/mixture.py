@@ -36,9 +36,9 @@ import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
 
+from ..exceptions import ConvergenceFailure
 from . import _core as _fc
 from .sfa import FrontierResult
-from ..exceptions import ConvergenceFailure
 
 # ---------------------------------------------------------------------------
 # Zero-Inefficiency SFA
@@ -193,7 +193,7 @@ def zisf(
         bounds=bounds,
         options={"maxiter": maxiter, "ftol": tol, "gtol": tol},
     )
-    theta_hat = result.x
+    theta_hat = _fc.newton_polish(neg_loglik, result.x, bounds)
     ll_val = -neg_loglik(theta_hat)
 
     beta_hat = theta_hat[:k_beta]
@@ -202,7 +202,7 @@ def zisf(
     sigma_u = float(np.exp(theta_hat[k_beta + k_theta + 1]))
     p_i = 1.0 / (1.0 + np.exp(-(Z_mat @ theta_p)))
 
-    H = _fc.numerical_hessian(neg_loglik, theta_hat)
+    H = _fc.richardson_hessian(neg_loglik, theta_hat)
     vcov_oim = _fc.safe_invert_hessian(H)
     if vce_l == "oim":
         vcov = vcov_oim
@@ -236,9 +236,13 @@ def zisf(
     )
     TE_zisf = p_eff_post * 1.0 + (1.0 - p_eff_post) * TE_HN
     TE_zisf = np.clip(TE_zisf, 0.0, 1.0)
+    # Posterior mean of u: 0 in the efficient regime, the half-normal JLMS
+    # mean in the inefficient one.  JLMS efficiency is exp(-E[u|eps]) -- not
+    # the Battese-Coelli mixture above (the two used to be stored as one).
     E_u = (1.0 - p_eff_post) * _fc.jondrow_halfnormal(
         eps_hat, np.full(n, sigma_v), np.full(n, sigma_u), sign
     )[0]
+    TE_zisf_jlms = np.exp(-E_u)
 
     param_names = list(beta_names) + list(zprob_names) + ["ln_sigma_v", "ln_sigma_u"]
     params_s = pd.Series(theta_hat, index=param_names)
@@ -269,7 +273,7 @@ def zisf(
             "gamma": sigma_u**2 / (sigma_u**2 + sigma_v**2),
             "mean_p_efficient": float(np.mean(p_i)),
             "mean_efficiency_bc": float(np.mean(TE_zisf)),
-            "mean_efficiency_jlms": float(np.mean(TE_zisf)),
+            "mean_efficiency_jlms": float(np.mean(TE_zisf_jlms)),
             "converged": bool(result.success),
         },
         data_info={
@@ -291,7 +295,7 @@ def zisf(
             "mu_i": np.zeros(n),
             "eps": eps_hat,
             "efficiency_bc": TE_zisf,
-            "efficiency_jlms": TE_zisf,
+            "efficiency_jlms": TE_zisf_jlms,
             "inefficiency_jlms": E_u,
             "p_efficient_prior": p_i,
             "p_efficient_posterior": p_eff_post,
@@ -489,7 +493,7 @@ def lcsf(
     if best_result is None:
         raise ConvergenceFailure("lcsf: all starts failed to converge.")
     result = best_result
-    theta_hat = result.x.copy()
+    theta_hat = _fc.newton_polish(neg_loglik, result.x, bounds)
 
     # Canonical labeling: enforce sigma_u_class1 <= sigma_u_class2 so that
     # downstream posterior class probs and param blocks are comparable
@@ -539,7 +543,7 @@ def lcsf(
     _, TE2 = _fc.jondrow_halfnormal(eps2, np.full(n, sv2), np.full(n, su2), sign)
     TE_lcsf = p1_post * TE1 + (1.0 - p1_post) * TE2
 
-    H = _fc.numerical_hessian(neg_loglik, theta_hat)
+    H = _fc.richardson_hessian(neg_loglik, theta_hat)
     vcov_oim = _fc.safe_invert_hessian(H)
     if vce_l == "oim":
         vcov = vcov_oim

@@ -177,22 +177,15 @@ def test_conformal_synth_basic(panel):
     assert np.isfinite(res.estimate)
     mi = res.model_info or {}
     assert "period_results" in mi and mi["inference_method"].startswith("conformal")
-    # pvalue is the moving-block average-effect p-value (CWZ 2021). It moved
-    # 1/12 -> 1/18 when the avg-effect test was corrected from comparing a
-    # T1-averaged statistic against single pre-period residuals (a scale
-    # mismatch that pinned p at the old 1/(T0+1) floor) to proper length-T1
-    # cyclic blocks over the full residual series. estimate/se/CI unchanged.
+    # pvalue is scinference's moving-block p-value (Chernozhukov, Wuthrich &
+    # Zhu): SC refit on all periods under the null, statistic sum |u_t| over
+    # length-T1 blocks (see tests/reference_parity/test_synth_rest_R_parity.py
+    # for the exact R parity). With T0 + T1 = 18 the smallest p is 1/18 >
+    # alpha = 0.05, so the confidence set is the real line.
     np.testing.assert_allclose(
-        [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
-        [
-            2.8031848526798764,
-            1.7123081037547074,
-            -0.5528773611154243,
-            6.159247066475177,
-            0.05555555555555555,
-        ],
-        atol=1e-12,
+        [res.estimate, res.pvalue], [2.8031848526799386, 0.4444444444444444], atol=1e-9
     )
+    assert res.ci == (-np.inf, np.inf) and res.se == np.inf
     np.testing.assert_allclose(
         mi["period_results"]["effect"].head(3).to_numpy(),
         [3.020643, 2.875103, 2.702355],
@@ -210,13 +203,11 @@ def test_conformal_synth_grid_range(panel):
         penalization=0.1,
     )
     assert np.isfinite(res.estimate)
-    # pvalue corrected to the moving-block average-effect p-value (CWZ 2021):
-    # 1/12 -> 1/18 (see test_conformal_synth_basic). estimate/se/CI unchanged.
+    # see test_conformal_synth_basic: alpha = 0.05 < 1/18, real-line set
     np.testing.assert_allclose(
-        [res.estimate, res.se, res.ci[0], res.ci[1], res.pvalue],
-        [2.7956817105608613, 5.102134569246539, -10.0, 10.0, 0.05555555555555555],
-        atol=1e-12,
+        [res.estimate, res.pvalue], [2.795681710560981, 0.4444444444444444], atol=1e-9
     )
+    assert res.ci == (-np.inf, np.inf)
 
 
 # --- multi_outcome ---
@@ -525,7 +516,10 @@ def test_synth_mde(panel):
     mde = power_mod.synth_mde(
         panel, **COMMON, power_target=0.8, n_simulations=30, seed=0
     )
-    assert np.isfinite(mde)
+    # 8 placebos: rank p >= 1/9 > alpha = 0.05, so no effect is detectable
+    # and the MDE is inf (it used to be finite only because the power
+    # simulation compared against an interpolated quantile).
+    assert mde == np.inf
 
 
 # --- sequential sdid ---

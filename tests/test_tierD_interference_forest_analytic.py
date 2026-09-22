@@ -11,7 +11,7 @@ Part of the P1 "Tier D analytic special-cases" campaign (see
 - ``model_averaging_dml`` stacking DML-PLR recovers the partially-linear theta
 - ``test_calibration``  the BLP-of-CATE calibration table is well formed,
                         detects simulated heterogeneity, and reports the
-                        null hypotheses as (1, 0)
+                        t and one-sided p as grf reports them
 
 Purely additive — no estimator numerics changed (campaign red line).
 """
@@ -179,9 +179,17 @@ class TestCalibrationAnalytic:
         assert row["coef"] > 0
         assert row["ci_low"] > 0
 
-    def test_null_hypotheses_are_one_and_zero(self):
-        # The two CDDF rows test beta1 = 1 (calibration) and beta2 = 0
-        # (no differential prediction) — pinned in the 'null' column.
+    def test_t_and_one_sided_p_follow_grf(self):
+        # grf::test_calibration reports lmtest::coeftest (each coefficient
+        # against 0) and halves the p-value for the alternative beta > 0 --
+        # there is no separate null column. Pinned to grf in
+        # tests/reference_parity/test_ml_causal_R_parity.py.
+        from scipy import stats
+
         cal = sp.test_calibration(self._forest())
-        assert cal.loc["mean_forest_prediction", "null"] == 1.0
-        assert cal.loc["differential_forest_prediction", "null"] == 0.0
+        assert "null" not in cal.columns
+        n = 2500
+        for row in ("mean_forest_prediction", "differential_forest_prediction"):
+            r = cal.loc[row]
+            assert r["t"] == pytest.approx(r["coef"] / r["se"], rel=1e-12)
+            assert r["p"] == pytest.approx(stats.t.sf(r["t"], n - 2), rel=1e-10)

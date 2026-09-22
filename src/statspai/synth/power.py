@@ -18,7 +18,8 @@ Algorithm
 1. Fit SCM on actual data to obtain baseline weights and the null
    (placebo) distribution of RMSPE ratios.
 2. For each hypothetical effect size *delta*:
-   a. Inject *delta* into the treated unit's post-treatment outcomes.
+   a. Centre the treated unit's post-treatment gaps at zero (removing the
+      estimated effect) and inject *delta*.
    b. Re-compute the treated RMSPE ratio under the augmented data.
    c. Compare against the pre-computed null distribution.
    d. Record whether H0 is rejected at level *alpha*.
@@ -122,8 +123,15 @@ def _build_null_distribution(
 
             if pre_mspe > 1e-10:
                 ratios.append(np.sqrt(post_mspe) / np.sqrt(pre_mspe))
-        except Exception:  # pragma: no cover
-            continue  # pragma: no cover
+        except (ValueError, np.linalg.LinAlgError) as exc:  # pragma: no cover
+            import warnings
+
+            warnings.warn(
+                f"placebo fit for donor {model.donor_units[i]!r} failed and "
+                f"was dropped from the null distribution: {exc!r}",
+                RuntimeWarning,
+                stacklevel=3,
+            )
 
     return np.asarray(ratios, dtype=float)
 
@@ -138,10 +146,11 @@ def _treated_ratio_with_effect(
     """
     Compute the treated RMSPE ratio after injecting an effect *delta*.
 
-    The simulation adds *delta* to the **actual** post-treatment outcomes
-    (capturing real noise), plus a small Gaussian perturbation scaled to
-    the pre-treatment residual standard deviation so that repeated
-    simulations are not identical.
+    The simulation takes the **actual** post-treatment gaps, removes their
+    mean (the estimated effect) so the baseline is a null gap path with
+    the real post-period fluctuations, adds *delta*, plus a small Gaussian
+    perturbation scaled to the pre-treatment residual standard deviation
+    so that repeated simulations are not identical.
 
     Parameters
     ----------
@@ -165,9 +174,14 @@ def _treated_ratio_with_effect(
     Y_synth = model.Y_donors @ weights
     gap = model.Y_treated.copy() - Y_synth
 
-    # Inject effect into post-treatment gap
+    # Null baseline: the observed post-period gaps already contain the
+    # treatment effect, so remove their mean before injecting *delta* (the
+    # post-period fluctuations around it are kept). Without this the
+    # "power" at delta = 0 was the rejection rate of the actual estimate
+    # (1.0 for Prop. 99) and fell as delta cancelled the real effect.
     gap_sim = gap.copy()
     n_post = int(model.post_mask.sum())
+    gap_sim[model.post_mask] -= float(np.mean(gap[model.post_mask]))
     gap_sim[model.post_mask] += delta
 
     # Add small noise so repeated simulations are not deterministic
@@ -246,7 +260,10 @@ def synth_power(
     The null distribution is the set of RMSPE ratios from in-space
     placebos (computed once on the original data).  For each effect
     size, the simulation adds *delta* to the treated unit's
-    post-treatment outcomes and re-computes the RMSPE ratio.  A small
+    post-treatment outcomes and re-computes the RMSPE ratio; H0 is
+    rejected when the rank p-value
+    ``(1 + #{placebo ratio >= treated ratio}) / (J + 1)`` is ``<= alpha``.
+    With ``J`` placebos no effect can be detected when ``alpha < 1/(J+1)``.  A small
     noise perturbation (10 % of pre-treatment residual SD) is added so
     that each simulation draw is unique.
 
@@ -308,8 +325,15 @@ def synth_power(
             "distribution.  Consider adding more donors."
         )
 
-    # Critical value: (1 - alpha) quantile of null distribution
-    critical_value = float(np.quantile(null_ratios, 1 - alpha))
+    # Rejection rule of the placebo test the power refers to: the treated
+    # ratio is ranked together with the J placebo ratios and H0 is rejected
+    # when p = (1 + #{placebo >= treated}) / (J + 1) <= alpha (the rank
+    # p-value of sp.synth). The former rule, ratio >= the interpolated
+    # (1 - alpha) quantile of the placebo ratios, is a different, larger-
+    # than-alpha test (e.g. with J = 38 and alpha = 0.05 it rejected when the
+    # treated ratio beat all but ~1 placebo, while p <= 0.05 needs it to beat
+    # all of them), so the reported power was too high.
+    from ._core import placebo_rank_pvalue
 
     # --- Step 3: auto-generate effect grid if needed ---
     if effect_sizes is None:
@@ -333,7 +357,7 @@ def synth_power(
                 rng,
                 residual_sd,
             )
-            if ratio >= critical_value:
+            if placebo_rank_pvalue(ratio, null_ratios) <= alpha:
                 n_reject += 1
 
         power = n_reject / n_simulations

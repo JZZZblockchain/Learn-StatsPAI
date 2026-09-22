@@ -1,6 +1,7 @@
-"""Tests for Synthetic Survival Control (Agarwal-Shah 2025)."""
+"""Tests for sp.synth_survival (synthetic control on cloglog-scale survival curves; not the Han-Shah SSC estimator)."""
 
 import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -85,7 +86,7 @@ def test_synth_survival_summary():
         n_placebos=5,
     )
     s = r.summary()
-    assert "Synthetic Survival Control" in s
+    assert "Synthetic control on survival curves" in s
     assert "treated" in s
 
 

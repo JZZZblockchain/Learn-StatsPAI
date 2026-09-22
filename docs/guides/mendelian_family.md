@@ -348,7 +348,7 @@ print(res.best_models.head(10))
 Uses WLS-BIC as the model score. Exhaustive up to `k ≤ 14`; for
 larger `k` use `max_model_size` to restrict subset size.
 
-Reference: Zuber, Colijn, Staley & Burgess (2020), *Nature Comms* 11, 29.
+Reference: Zuber, Colijn, Klaver & Burgess (2020), *Nature Communications* 11, 29. doi:10.1038/s41467-019-13870-3
 
 ---
 

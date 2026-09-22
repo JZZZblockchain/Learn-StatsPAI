@@ -508,20 +508,32 @@ def policy_value(
     policy: np.ndarray,
 ) -> float:
     """
-    Evaluate the expected value of a treatment policy.
+    Evaluate the value of a treatment policy relative to treating no one.
+
+    Returns ``mean(scores * policy)``. With ``scores`` the doubly robust
+    treatment-effect scores ``Gamma_1 - Gamma_0`` (grf ``get_scores``;
+    policytree's reward matrix is ``[Gamma_0, Gamma_1]``), this is
+    ``mean(Gamma[i, pi_i]) - mean(Gamma[i, 0])``: the AIPW estimate of
+    ``E[Y(pi)] - E[Y(0)]``. It equals ``mean(policy)`` times the AIPW ATE
+    of the units the policy treats (grf
+    ``average_treatment_effect(subset = policy == 1)``). No standard
+    error is returned; :func:`policy_tree` reports one.
 
     Parameters
     ----------
     scores : np.ndarray (n,)
         Doubly robust scores (AIPW pseudo-outcomes for treatment).
         Positive scores indicate the individual benefits from treatment.
+        Must be one-dimensional.
     policy : np.ndarray (n,)
-        Binary policy recommendations (0 or 1).
+        Policy recommendations (0 or 1; a probability of treatment
+        gives the value of the stochastic policy). Same length as
+        ``scores``, or a scalar for a constant policy.
 
     Returns
     -------
     float
-        Estimated expected value of the policy.
+        Estimated value gain of the policy over treating no one.
 
     Examples
     --------
@@ -540,11 +552,20 @@ def policy_value(
     >>> round(float(sp.policy_value(scores, policy_oracle)), 2)
     0.54
     """
-    scores = np.asarray(scores)
-    policy = np.asarray(policy)
-    # Value = E[Gamma * pi + (baseline)]
-    # Since scores represent the *gain* from treatment,
-    # policy value = mean(scores * policy)
+    scores = np.asarray(scores, dtype=float)
+    policy = np.asarray(policy, dtype=float)
+    if policy.ndim == 0:  # a constant policy (0 = treat no one, 1 = treat all)
+        policy = np.full(scores.shape, float(policy))
+    # A column vector (n, 1) against an (n,) policy used to broadcast to an
+    # (n, n) outer product and return mean(scores) * mean(policy) silently.
+    if scores.ndim != 1 or policy.ndim != 1 or scores.shape != policy.shape:
+        raise MethodIncompatibility(
+            "policy_value: scores and policy must be one-dimensional arrays of "
+            f"the same length; got shapes {scores.shape} and {policy.shape}.",
+            recovery_hint="Flatten scores and policy to 1-D arrays of equal length.",
+        )
+    # Scores are the gain from treatment, so the value relative to treating
+    # no one is mean(scores * policy).
     return float(np.mean(scores * policy))
 
 

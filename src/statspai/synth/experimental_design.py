@@ -1,30 +1,24 @@
 """
-Synthetic Controls for Experimental Design — Abadie & Zhao (2025/2026).
-
-Flips the classic synthetic-control workflow: instead of using SC to build
-a *post*-treatment counterfactual, use it *before* treatment begins to
-decide **which units to treat**.
+Pre-treatment unit selection by leave-one-out synthetic-control fit.
 
 Given a panel of pre-treatment outcomes for N candidate units and a budget
-``k`` (number of units to treat), rank candidates by the quality of the
-synthetic control that can be constructed for each one from the remaining
-donors.  The theory (Abadie & Zhao 2025/2026, MIT working paper) shows that
+``k`` (number of units to treat), rank candidates by the pre-period mean
+squared prediction error (MSPE) of the synthetic control that can be built
+for each one from the remaining donors, optionally penalising
+concentrated donor weights, and pick the ``k`` best-fitted candidates.
 
-    Var[ATT_hat | assignment D] ≈ sum_{i in D} sigma^2_i
-
-where ``sigma^2_i`` is the (feasible) pre-period MSPE of the SC fit for
-unit ``i``.  Minimizing this over a budget-``k`` assignment reduces to
-
-    D* = argmin_{|D|=k} sum_{i in D} sigma^2_i
-
-which, under the exchangeability-of-donors assumption, is solved by picking
-the ``k`` candidates with the smallest leave-one-out pre-period MSPE.
-
-References
-----------
-Abadie, A. & Zhao, J. (2025/2026). Synthetic Controls for Experimental
-Design. MIT working paper.  *Advances in Economics and Econometrics*
-(Cambridge UP, 2025).
+.. warning::
+   This is a heuristic, **not** the synthetic control design of Abadie &
+   Zhao ("Synthetic Controls for Experimental Design", arXiv:2108.02196).
+   Their design jointly chooses treated weights ``w`` and control weights
+   ``v`` (disjoint supports, a cardinality constraint on the treated set)
+   so that both weighted averages reproduce the population average of the
+   pre-treatment predictors; it is a mixed-integer quadratic programme
+   (the authors' replication code, github.com/jinglongzhao2/SCDesign,
+   solves it with Gurobi). Earlier versions of this module attributed a
+   variance formula ``Var[ATT | D] ~ sum_{i in D} sigma_i^2`` to that paper;
+   no such formula appears there, and the ``expected_variance`` below is a
+   heuristic sum of pre-period MSPEs, not a variance.
 """
 
 from __future__ import annotations
@@ -35,10 +29,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-from ..exceptions import DataInsufficient
 from .._input_validation import require_columns
-from ._core import solve_simplex_weights
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import DataInsufficient
+from ._core import solve_simplex_weights
 
 __all__ = [
     "synth_experimental_design",
@@ -70,14 +64,15 @@ class SynthExperimentalDesignResult(ResultProtocolMixin):
         The donor pool that each candidate was matched against
         (candidates excluded from each other's donor pool by default).
     expected_variance : float
-        Sum of pre-period MSPEs over ``selected`` — proxy for the
-        post-experiment ATT-variance under Abadie-Zhao 2025/2026 Eq. (3).
+        Sum of pre-period MSPEs over ``selected`` (a heuristic fit score,
+        not a variance).
     baseline_variance : float
         Same quantity for a random-``k`` assignment (average over
         ``n_random`` draws); the gain is
         ``baseline_variance - expected_variance``.
     method : str
-        Always ``'abadie_zhao_2025'``.
+        Always ``'loo_sc_fit_ranking'`` (was ``'abadie_zhao_2025'``, a
+        misattribution; see the module docstring).
     diagnostics : dict
         Extra metadata (n_units, pre_periods, solver, etc.).
 
@@ -100,7 +95,7 @@ class SynthExperimentalDesignResult(ResultProtocolMixin):
     donor_units: List[Any]
     expected_variance: float
     baseline_variance: float
-    method: str = "abadie_zhao_2025"
+    method: str = "loo_sc_fit_ranking"
     diagnostics: Dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
@@ -114,7 +109,7 @@ class SynthExperimentalDesignResult(ResultProtocolMixin):
             100 * gain / self.baseline_variance if self.baseline_variance > 0 else 0.0
         )
         lines = [
-            "Synthetic Controls for Experimental Design (Abadie-Zhao 2025/2026)",
+            "Unit selection by leave-one-out SC fit (not the Abadie-Zhao design)",
             "-" * 66,
             f"  Candidates evaluated   : {n}",
             f"  Donor pool size        : {len(self.donor_units)}",
@@ -208,7 +203,7 @@ def synth_experimental_design(
     n_random: int = 500,
     random_state: Optional[int] = None,
 ) -> SynthExperimentalDesignResult:
-    """Pick ``k`` treated units to minimize the expected SC post-ATT variance.
+    """Pick the ``k`` candidates with the best leave-one-out SC pre-fit.
 
     Parameters
     ----------
@@ -234,9 +229,7 @@ def synth_experimental_design(
     concentration_weight : float, default 0.0
         Penalty on donor-weight concentration (Herfindahl):
         ``risk_score = loss + lambda * H(w)`` where
-        ``H(w) = sum(w_j^2)``.  Abadie-Zhao show that for a fixed
-        pre-MSPE, less-concentrated donors give tighter post-period
-        confidence intervals.
+        ``H(w) = sum(w_j^2)`` (a heuristic).
     penalization : float, default 0.0
         Ridge penalty passed to the simplex solver (Doudchenko &
         Imbens 2016 style).
@@ -251,7 +244,7 @@ def synth_experimental_design(
 
     Notes
     -----
-    The practical recipe (Abadie-Zhao 2025/2026, Section 4) is:
+    The recipe (a heuristic; see the module docstring) is:
 
     1. For each candidate unit ``i``, solve the simplex SC problem against
        the donor pool restricted to **non-candidates** (to avoid coupling
@@ -401,7 +394,7 @@ def synth_experimental_design(
         donor_units=donor_union,
         expected_variance=expected_var,
         baseline_variance=baseline,
-        method="abadie_zhao_2025",
+        method="loo_sc_fit_ranking",
         diagnostics={
             "n_units": int(len(all_units)),
             "n_candidates": int(len(cand)),

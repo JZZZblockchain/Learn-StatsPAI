@@ -23,8 +23,17 @@ same publication-quality summary the ``grf`` package produces for its
 own forest output. It cross-fits :math:`\\hat m, \\hat e` internally
 unless you pass them in.
 
-Closed-form influence-function SE follows the rank-kernel derivation in
-``statspai.forest.forest_inference.rate``.
+The point estimate and TOC curve are ``grf``'s
+(``rank_average_treatment_effect.fit``), shared with :func:`sp.rate`;
+given the same doubly-robust scores and priorities they agree exactly.
+The standard error is the rank-corrected influence-function SE of
+:func:`sp.rate`, which matches ``grf``'s half-sample bootstrap to Monte
+Carlo error.
+
+.. versionchanged:: 1.30.0
+   Tied priorities are averaged and QINI uses ``grf``'s ``k/n`` weights
+   (a flat TOC now gives exactly 0); the SE includes the rank term
+   (previously ~30% too large).
 """
 
 from __future__ import annotations
@@ -177,7 +186,7 @@ def _crossfit_nuisances(
     random_state: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Cross-fit m̂, ê, μ̂_1, μ̂_0 with sklearn GBM defaults."""
-    from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+    from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
     from sklearn.model_selection import KFold
 
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_state)
@@ -298,39 +307,22 @@ def cate_eval(
     mu0_hat = np.asarray(mu0_hat, dtype=float).ravel()
 
     psi = _aipw_pseudo_outcome(Y, T, e_hat, mu1_hat, mu0_hat, m_hat)
-    psi_bar = float(psi.mean())
 
-    desc_order = np.argsort(-cate, kind="mergesort")
-    rank = np.empty(n, dtype=np.float64)
-    rank[desc_order] = np.arange(1, n + 1)
-    u = rank / n
+    # One RATE operator for the package: grf's estimator (tie-averaged
+    # scores, k/n QINI weights) and the rank-corrected IF standard error,
+    # shared with sp.rate.
+    from ..forest.forest_inference import _rate_influence_se, rate_from_scores
 
-    H = np.concatenate([[0.0], np.cumsum(1.0 / np.arange(1, n + 1))])
-    R_int = rank.astype(np.int64)
-    w_autoc = H[n] - H[R_int - 1]
-    w_qini = 1.0 - u
-
-    phi_autoc = psi * (w_autoc - 1.0)
-    phi_qini = psi * (w_qini - 0.5)
-
-    autoc = float(phi_autoc.mean())
-    qini = float(phi_qini.mean())
-
-    def _se(phi: np.ndarray) -> float:
-        c = phi - phi.mean()
-        var = float(c @ c) / (n * (n - 1)) if n > 1 else float("nan")
-        return float(np.sqrt(max(var, 0.0)))
-
-    se_autoc = _se(phi_autoc)
-    se_qini = _se(phi_qini)
-    z = float(stats.norm.ppf(1 - alpha / 2))
-
-    psi_sorted = psi[desc_order]
-    cum = np.cumsum(psi_sorted) / np.arange(1, n + 1)
-    toc_all = cum - psi_bar
     q_targets = np.linspace(1.0 / q_grid, 1.0, q_grid)
-    idx_sel = np.clip((q_targets * n).astype(np.int64) - 1, 0, n - 1)
-    toc_df = pd.DataFrame({"q": q_targets, "toc": toc_all[idx_sel]})
+    q_targets[-1] = 1.0
+    core_a = rate_from_scores(psi, cate, "AUTOC", q_targets)
+    core_q = rate_from_scores(psi, cate, "QINI", q_targets)
+    autoc = float(core_a["estimate"])
+    qini = float(core_q["estimate"])
+    se_autoc = _rate_influence_se(psi, cate, "AUTOC")
+    se_qini = _rate_influence_se(psi, cate, "QINI")
+    z = float(stats.norm.ppf(1 - alpha / 2))
+    toc_df = pd.DataFrame({"q": core_a["toc_q"], "toc": core_a["toc"]})
 
     return CATEEvalResult(
         autoc=autoc,

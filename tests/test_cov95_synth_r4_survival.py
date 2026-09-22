@@ -72,7 +72,7 @@ def test_synth_survival_int_flag_and_summary():
         n_placebos=4,
     )
     s = res.summary()
-    assert "Synthetic Survival Control" in s
+    assert "Synthetic control on survival curves" in s
     assert "treated_arm" in s
 
 

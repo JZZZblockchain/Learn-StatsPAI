@@ -33,6 +33,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import MethodIncompatibility
 
 __all__ = [
     "copula_sensitivity",
@@ -198,9 +199,11 @@ def survival_sensitivity(
     into shifted survival differences at a chosen time ``t``.
 
     Given an observed log hazard ratio ``log_hr`` with SE ``se_log_hr``,
-    bound the worst-case log-HR at sensitivity parameter ``Γ``:
+    bound the log-HR at sensitivity parameter ``Γ``; the worst case moves
+    it toward the null (no effect), the best case away from it:
 
-        log_hr_worst(Γ) = log_hr − log(Γ),  log_hr_best(Γ) = log_hr + log(Γ)
+        log_hr_worst(Γ) = log_hr − sign(log_hr) log(Γ)
+        log_hr_best(Γ)  = log_hr + sign(log_hr) log(Γ)
 
     and translate the worst case into a survival shift at time ``t``
     using the proportional-hazards identity
@@ -214,6 +217,20 @@ def survival_sensitivity(
     baseline_survival_t : float, default 0.5
         Baseline S_0(t) used to report Δ survival at time t.
     alpha : float, default 0.05
+
+    Notes
+    -----
+    ``breakpoint`` is the smallest grid ``Γ`` whose worst-case confidence
+    interval contains 0. The continuous crossing is the confidence limit
+    nearest the null on the hazard-ratio scale,
+    ``Γ* = exp(|log_hr| - z se)`` (when it exceeds 1) -- the bias factor
+    whose E-value ``Γ* + sqrt(Γ*(Γ* - 1))`` R ``EValue::evalues.HR(rare =
+    TRUE)`` reports for the confidence limit.
+
+    Before 1.30 the worst case was always ``log_hr - log(Γ)``: for a
+    protective effect (``log_hr < 0``) it moved *away* from the null, so no
+    ``Γ`` ever overturned the effect and every protective hazard ratio was
+    reported as robust.
 
     Examples
     --------
@@ -236,9 +253,12 @@ def survival_sensitivity(
         grid2: np.ndarray = np.linspace(1.0, 3.0, 21)
     else:
         grid2 = np.array(gamma_grid, dtype=float)
+    if np.any(grid2 < 1):
+        raise MethodIncompatibility("`gamma_grid` values must be >= 1.")
     log_gamma = np.log(grid2)
-    log_hr_worst = log_hr - log_gamma
-    log_hr_best = log_hr + log_gamma
+    direction = float(np.sign(log_hr))
+    log_hr_worst = log_hr - direction * log_gamma
+    log_hr_best = log_hr + direction * log_gamma
     z = stats.norm.ppf(1 - alpha / 2)
     ci_low_worst = log_hr_worst - z * se_log_hr
     ci_high_worst = log_hr_worst + z * se_log_hr
@@ -287,33 +307,65 @@ def calibrate_confounding_strength(
     *,
     observed_r2_outcome: float,
     observed_r2_treatment: float,
+    dof: Optional[float] = None,
     alpha: float = 0.05,
     target_estimate: float = 0.0,
+    multipliers: Optional[Sequence[float]] = None,
 ) -> FrontierSensitivityResult:
     """Calibrate the strength of an unobserved confounder required to
     explain the observed effect to a target value.
 
-    Follows the Cinelli-Hazlett (2020) and Zhang et al. (2025)
-    "ml-calibrated E-value" generalisation: given observed-covariate
-    partial-R² with the outcome and treatment, the amount of residual
-    variation an unobserved ``U`` would need to share with ``Y`` and
-    ``D`` to shift the effect to ``target_estimate``.
+    Cinelli & Hazlett's (2020) benchmark bounds: a confounder ``Z`` that
+    is ``k`` times as strong as an observed benchmark covariate ``X_j``
+    (``k`` times its partial R² with the treatment and with the outcome)
+    has at most
+
+    * ``R²_{D~Z|X} = k R²_{D~Xj|X-j} / (1 - R²_{D~Xj|X-j})``,
+    * ``R²_{Y~Z|D,X} = ((√k + √r) / √(1 - r))² R²_{Y~Xj|D,X-j} / (1 - R²_{Y~Xj|D,X-j})``
+      with ``r = k R²_{D~Xj}² / ((1 - k R²_{D~Xj})(1 - R²_{D~Xj}))``,
+
+    and biases the OLS coefficient by at most
+    ``se · √dof · √(R²_{Y~Z|D,X} R²_{D~Z|X} / (1 - R²_{D~Z|X}))``. This is
+    R ``sensemakr::ovb_bounds`` / ``ovb_partial_r2_bound`` /
+    ``adjusted_estimate`` with ``kd = ky = k``, generalised to an arbitrary
+    ``target_estimate`` (the estimate is moved toward the target).
 
     Parameters
     ----------
     estimate, se : float
-    observed_r2_outcome, observed_r2_treatment : float in (0, 1)
-        Partial-R² of the observed covariate(s) with Y (resp. D). Used
-        to benchmark "1x as confounding as observed" / "2x" etc.
+        OLS coefficient of the treatment and its (classical) standard error.
+    observed_r2_outcome : float in (0, 1)
+        Partial R² of the benchmark covariate with the outcome, given the
+        treatment and the other covariates (sensemakr ``r2yxj.dx``).
+    observed_r2_treatment : float in (0, 1)
+        Partial R² of the benchmark covariate with the treatment, given the
+        other covariates (sensemakr ``r2dxj.x``).
+    dof : float
+        Residual degrees of freedom of the regression. Required: the bias
+        bound scales with ``√dof``.
     alpha : float, default 0.05
+        Level of the adjusted confidence interval.
     target_estimate : float, default 0.0
         Effect value to explain away.
+    multipliers : sequence of float, optional
+        Values of ``k``; default ``np.linspace(0.5, 5.0, 19)``. A ``k`` that
+        implies ``R²_{D~Z|X} >= 1`` is impossible and its row is NaN with
+        ``feasible = False`` (sensemakr stops with an error instead).
+
+    Notes
+    -----
+    Before 1.30 the bias bound omitted the ``√dof`` factor and scaled both
+    partial R² linearly (``k R²``), so it was smaller than Cinelli and
+    Hazlett's by roughly ``√dof`` -- a factor of ~20 at 400 observations --
+    and the function reported effects as robust that a confounder as strong
+    as the benchmark explains away.
 
     Examples
     --------
     >>> import statspai as sp
     >>> res = sp.calibrate_confounding_strength(
-    ...     0.3, 0.1, observed_r2_outcome=0.1, observed_r2_treatment=0.1)
+    ...     0.3, 0.1, observed_r2_outcome=0.1, observed_r2_treatment=0.1,
+    ...     dof=500)
     >>> res.method
     'calibrate_confounding_strength'
     >>> list(res.curve.columns)[:3]
@@ -322,37 +374,71 @@ def calibrate_confounding_strength(
     References
     ----------
     Baitairian et al. (arXiv:2510.16560, 2025). [@baitairian2025calibrating]
-    Cinelli & Hazlett (JRSS-B 2020).
+    Cinelli & Hazlett (JRSS-B 2020). [@cinelli2020making]
     """
     if not (0 < observed_r2_outcome < 1):
         raise ValueError("`observed_r2_outcome` must be in (0,1).")
     if not (0 < observed_r2_treatment < 1):
         raise ValueError("`observed_r2_treatment` must be in (0,1).")
+    if dof is None:
+        raise MethodIncompatibility(
+            "`dof` (the regression's residual degrees of freedom) is required: "
+            "Cinelli-Hazlett's bias bound is se * sqrt(dof) * sqrt(R2yz R2dz / "
+            "(1 - R2dz)). Before 1.30 it was silently computed without "
+            "sqrt(dof), understating the bias by that factor.",
+            recovery_hint="Pass dof= (the regression's residual degrees of freedom).",
+        )
+    if not dof > 1:
+        raise MethodIncompatibility(f"`dof` must exceed 1; got {dof}.")
+    if not se > 0:
+        raise MethodIncompatibility(f"`se` must be positive; got {se}.")
     delta = estimate - target_estimate
     if delta == 0:
         raise ValueError(
             "`estimate` already equals `target_estimate`; nothing to calibrate."
         )
-    # Maximum bias from a hidden U with partial-R² (r_y, r_d):
-    # |bias| ≤ sqrt( r_y * r_d / (1 - r_d) ) * se  (approx, from Cinelli-Hazlett)
-    multipliers = np.linspace(0.5, 5.0, 19)
+    grid = (
+        np.linspace(0.5, 5.0, 19)
+        if multipliers is None
+        else np.asarray(multipliers, dtype=float)
+    )
+    r2d, r2y = float(observed_r2_treatment), float(observed_r2_outcome)
+    z = stats.t.ppf(1 - alpha / 2, dof)
     rows = []
-    for k in multipliers:
-        ry = min(k * observed_r2_outcome, 0.99)
-        rd = min(k * observed_r2_treatment, 0.99)
-        max_bias = np.sqrt(ry * rd / max(1.0 - rd, 1e-6)) * se
-        adjusted = estimate - np.sign(delta) * max_bias
+    for k in grid:
+        r2dz = k * r2d / (1.0 - r2d)
+        r2zxj = k * r2d**2 / ((1.0 - k * r2d) * (1.0 - r2d))
+        feasible = bool(r2dz < 1 and 0 <= r2zxj < 1 and k * r2d < 1)
+        if feasible:
+            r2yz = min(
+                ((np.sqrt(k) + np.sqrt(r2zxj)) / np.sqrt(1 - r2zxj)) ** 2
+                * (r2y / (1 - r2y)),
+                1.0,
+            )
+            max_bias = float(se * np.sqrt(dof) * np.sqrt(r2yz * r2dz / (1 - r2dz)))
+            adjusted = float(estimate - np.sign(delta) * max_bias)
+            adj_se = float(
+                se * np.sqrt((1 - r2yz) / (1 - r2dz)) * np.sqrt(dof / (dof - 1))
+            )
+            explains = bool(
+                (delta > 0 and adjusted <= target_estimate)
+                or (delta < 0 and adjusted >= target_estimate)
+            )
+        else:
+            r2dz = r2yz = max_bias = adjusted = adj_se = float("nan")
+            explains = False
         rows.append(
             {
-                "multiplier": k,
-                "r2_outcome": ry,
-                "r2_treatment": rd,
+                "multiplier": float(k),
+                "r2_outcome": r2yz,
+                "r2_treatment": r2dz,
                 "max_bias": max_bias,
                 "adjusted_estimate": adjusted,
-                "explains_away": bool(
-                    (delta > 0 and adjusted <= target_estimate)
-                    or (delta < 0 and adjusted >= target_estimate)
-                ),
+                "adjusted_se": adj_se,
+                "adjusted_ci_low": adjusted - z * adj_se,
+                "adjusted_ci_high": adjusted + z * adj_se,
+                "explains_away": explains,
+                "feasible": feasible,
             }
         )
     curve = pd.DataFrame(rows)
@@ -360,14 +446,14 @@ def calibrate_confounding_strength(
     bp = float(survivors["multiplier"].min()) if not survivors.empty else None
     if bp is None:
         interpretation = (
-            "Even 5x as strong as the observed covariate bundle cannot "
-            "explain the effect away — robust."
+            f"Even {grid.max():g}x as strong as the benchmark covariate cannot "
+            "explain the effect away -- robust on this grid."
         )
     else:
         interpretation = (
-            f"An unobserved U roughly {bp:.1f}x as strong as the observed "
-            "covariate bundle (on both Y and D) is required to explain "
-            f"the effect down to {target_estimate:g}."
+            f"An unobserved confounder {bp:g}x as strong as the benchmark "
+            "covariate (on both Y and D) is enough to move the estimate to "
+            f"{target_estimate:g}."
         )
     return FrontierSensitivityResult(
         method="calibrate_confounding_strength",

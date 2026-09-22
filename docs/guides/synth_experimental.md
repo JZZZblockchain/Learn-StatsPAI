@@ -1,6 +1,9 @@
 # Synthetic Controls for Experimental Design
 
-> Abadie & Zhao (2025/2026), *MIT working paper* / Cambridge UP 2025.
+> A planning heuristic in the spirit of synthetic-control experimental
+> design. It is **not** the Abadie & Zhao design [@abadie2025synthetic],
+> which chooses treated units and weights jointly by mixed-integer
+> programming; see the note at the end of section 1.
 
 ## 1. The flipped workflow
 
@@ -9,20 +12,23 @@ build a reweighted average of donors that approximates *A* in the
 pre-period, then impute *A*'s post-period counterfactual."
 
 **Experimental design** flips this: you have a pool of candidates and a
-budget `k`.  You want to decide *which* `k` units to treat so that the
-post-period synthetic-control ATT has the tightest confidence interval.
+budget `k`, and you want to decide *which* `k` units to treat before the
+experiment starts.
 
-Under the Abadie-Zhao framework,
+`sp.synth_experimental_design` (`method="loo_sc_fit_ranking"`) ranks the
+candidates by how well each can be reproduced by a synthetic control
+built from the other units in the pre-period, and selects the `k` with
+the smallest pre-period MSPE (or RMSE). Units that are easy to
+reproduce give counterfactuals that rely less on extrapolation.
+`expected_variance` is the **sum of the selected units' pre-period
+MSPEs**, a heuristic score for comparing assignments. It is not the
+variance of an ATT estimator and does not translate into a confidence
+interval width.
 
-$$
-\operatorname{Var}\bigl[\widehat{\mathrm{ATT}} \mid D\bigr]
-\;\approx\;
-\sum_{i \in D} \sigma_i^2
-$$
-
-where $\sigma_i^2$ is the *feasible* pre-period MSPE of the synthetic
-control fit for unit `i`.  Picking the best `k` candidates by smallest
-pre-period MSPE minimises this variance.
+The design in Abadie & Zhao [@abadie2025synthetic] solves a different
+problem: it targets population-level predictor means with jointly chosen
+treated and control weights (the authors' code solves a mixed-integer
+program). Use their code when that design is what you need.
 
 ## 2. API
 
@@ -78,9 +84,9 @@ res = sp.synth_experimental_design(
 print(res.summary())
 ```
 
-On this panel the expected variance falls **96% below random assignment**
-— a three-fold tighter post-period CI, for free, just by choosing
-well-behaved units *before* you run the experiment.
+On this panel the summed pre-period MSPE of the selected units is 96%
+lower than that of a random choice of `k` units (0.017 vs 0.480): the
+selected units are the ones a synthetic control reproduces best.
 
 ## 4. When to use this vs `sp.synth`
 
@@ -103,16 +109,16 @@ regular `sp.synth` pipeline.
   fallback — each candidate's donor pool becomes the other `n - 1`
   units.  This is fine but inflates computation.
 - **`concentration_weight > 0`** adds a Herfindahl penalty to avoid
-  selecting units whose SC fit depends on a single donor — the Abadie-
-  Zhao (2025/2026) paper recommends `concentration_weight ≈ 0.5`
-  when the donor pool is small.
+  selecting units whose SC fit depends on a single donor. There is no
+  published default for it; choose it by checking how the selection
+  changes over a small grid.
 
 ## 6. References
 
-- Abadie, A. & Zhao, J. (2025/2026).
-  *Synthetic Controls for Experimental Design.*  MIT / Cambridge UP.
-- Abadie, A. (2021).  "Using synthetic controls: feasibility, data
-  requirements, and methodological aspects."  *JEL* 59(2).
+- [@abadie2025synthetic] — the Abadie & Zhao experimental-design paper
+  (a different design; see section 1).
+- [@abadie2021synthetic] — Abadie (2021), synthetic controls: feasibility,
+  data requirements and methodological aspects.
 
 <!-- AGENT-BLOCK-START: synth -->
 

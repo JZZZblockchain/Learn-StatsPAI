@@ -273,37 +273,24 @@ def calibration_blp(
     else:
         target = np.asarray(forest._Y_original, dtype=float) - forest._m_insample
         w_res = np.asarray(forest._T_original, dtype=float) - forest._e_insample
-    tau_bar = float(np.sum(w * tau) / np.sum(w))
-    D = np.column_stack([w_res * tau_bar, w_res * (tau - tau_bar)])
-    DtWD = D.T @ (D * w[:, None])
-    if np.linalg.matrix_rank(DtWD) < 2:
-        raise DataInsufficient(
-            "calibration_test(): the OOB CATE predictions are constant, so the "
-            "differential prediction is not identified.",
-            recovery_hint="The forest found no heterogeneity to test.",
-        )
-    beta = np.linalg.solve(DtWD, D.T @ (w * target))
-    resid = target - D @ beta
-    V = cluster_robust_vcov(
-        D,
-        resid,
+    # The regression, covariance and grf's reporting rule (t against 0,
+    # one-sided p from Student t with n - 2 df) are the pure operator
+    # ``forest_inference.grf_calibration``; this function only chooses the
+    # GRF-engine inputs (OOB predictions, weights, clusters, FE residuals).
+    from .forest_inference import grf_calibration
+
+    zeros = np.zeros(n)
+    out = grf_calibration(
+        Y=target,
+        W=w_res,
+        Y_hat=zeros,
+        W_hat=zeros,
+        tau_hat=tau,
+        vcov_type=vcov_type,
+        alpha=alpha,
         weights=w,
         clusters=clusters if getattr(forest, "_clusters", None) is not None else None,
-        vcov_type=vcov_type,
     )
-    out = _coef_table(
-        beta,
-        V,
-        ["mean_forest_prediction", "differential_forest_prediction"],
-        alpha,
-        null=np.array([1.0, 0.0]),
-    )
-    # grf reports one-sided p-values against zero for both rows.
-    se = out["se"].to_numpy()
-    with np.errstate(divide="ignore", invalid="ignore"):
-        t0 = beta / se
-    out["t_vs_zero"] = t0
-    out["p_one_sided"] = stats.norm.sf(t0)
     clustered = getattr(forest, "_clusters", None) is not None
     out.attrs["method"] = (
         "BLP calibration on out-of-bag predictions, "

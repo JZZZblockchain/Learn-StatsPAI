@@ -242,10 +242,16 @@ def test_limited_certified_agent_cards_use_scoped_wording():
 
 
 def test_validated_schema_wording_is_evidence_tier_not_blanket_claim():
-    """Validated functions should read as scoped evidence, not marketing."""
+    """Validated functions should read as scoped evidence, not marketing.
+
+    ``aipw`` served as the example until the phase-3 campaign certified it
+    against Stata ``teffects aipw``; ``proximal`` has no R/Stata reference, so
+    it stays at the validated tier.
+    """
     import statspai as sp
 
-    desc = sp.function_schema("aipw")["description"]
+    assert sp.describe_function("proximal")["validation_status"] == "validated"
+    desc = sp.function_schema("proximal")["description"]
 
     assert "Validation: validated evidence tier" in desc
     assert "Validation: validated" "." not in desc

@@ -4,9 +4,9 @@ Tests for new RD modules: bandwidth, locrand, hte, rd2d, extrapolate, rdml.
 All tests use simulated data with known true effects.
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from statspai.core.results import CausalResult
 
@@ -232,8 +232,8 @@ class TestRD2D:
         h = rd2d_bw(
             data_2d, y="y", x1="x1", x2="x2", treatment="d", approach="distance"
         )
-        assert isinstance(h, float)
-        assert h > 0
+        assert isinstance(h, pd.DataFrame)
+        assert (h[["h0", "h1"]].to_numpy() > 0).all()
 
 
 # ======================================================================

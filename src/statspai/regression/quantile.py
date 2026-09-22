@@ -236,8 +236,13 @@ def _qreg_fit(Y: np.ndarray, X: np.ndarray, tau: float) -> np.ndarray:
 
     c = np.concatenate([np.zeros(k), tau * np.ones(n), (1 - tau) * np.ones(n)])
 
-    # Equality: X β + I u - I v = Y
-    A_eq = np.hstack([X, np.eye(n), -np.eye(n)])
+    # Equality: X β + I u - I v = Y. Stored sparse: the two identity blocks
+    # are 2n nonzeros, not 2n^2 dense entries (n = 5,000 would otherwise
+    # allocate 400 MB per solve). The LP is unchanged.
+    from scipy import sparse
+
+    eye = sparse.identity(n, format="csc")
+    A_eq = sparse.hstack([sparse.csc_matrix(X), eye, -eye], format="csc")
     b_eq = Y
 
     # Bounds: β unbounded, u >= 0, v >= 0

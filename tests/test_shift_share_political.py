@@ -1,6 +1,7 @@
-"""Tests for shift_share_political (Park & Xu, arXiv:2603.00135, 2026)."""
+"""Tests for shift_share_political (background: Park, arXiv:2603.00135, 2026)."""
 
 import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -85,7 +86,7 @@ def test_shift_share_political_registered():
 
 
 def test_shift_share_political_exposes_rotemberg_diagnostics():
-    """Park-Xu recommend Rotemberg top-K as a default diagnostic."""
+    """Rotemberg top-K diagnostic is reported."""
     df, shares, shocks, _ = _political_panel(seed=1)
     r = sp.shift_share_political(
         df,

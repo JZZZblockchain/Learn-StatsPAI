@@ -97,7 +97,14 @@ class TestMIEstimateAnalytic:
         comb = sp.mi_estimate(mres, sp.regress, formula="y ~ x")
         xi = comb["var_names"].index("x")
         assert comb["params"][xi] == pytest.approx(float(ols.params["x"]), rel=1e-6)
-        assert comb["fmi"][xi] == pytest.approx(0.0, abs=1e-9)
+        # No between-imputation variance: riv = lambda = 0, and the
+        # Barnard-Rubin df collapses to nu_obs = dfcom (dfcom+1)/(dfcom+3),
+        # so mice's fmi = (riv + 2/(df+3))/(riv+1) is 2/(df+3), not 0.
+        assert comb["riv"][xi] == pytest.approx(0.0, abs=1e-12)
+        dfcom = len(df) - 2
+        nu_obs = dfcom * (dfcom + 1) / (dfcom + 3)
+        assert comb["df"][xi] == pytest.approx(nu_obs, rel=1e-9)
+        assert comb["fmi"][xi] == pytest.approx(2 / (nu_obs + 3), rel=1e-9)
 
     def test_fmi_in_unit_interval_under_missingness(self):
         rng = np.random.default_rng(7)

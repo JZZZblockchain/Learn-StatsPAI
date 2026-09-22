@@ -1,20 +1,25 @@
 """
-Sequential Synthetic Difference-in-Differences.
+Cohort-by-cohort synthetic difference-in-differences for staggered adoption.
 
-Arkhangelsky & Samkov (arXiv:2404.00164, 2024) extend the Arkhangelsky,
-Athey, Hirshberg, Imbens & Wager (2021) SDID estimator to **staggered
-adoption** designs in which parallel trends can fail *across* cohorts.
-The idea: process cohorts in the order they are treated. For each cohort
-``g``, use donors drawn from the *not-yet-treated* units (including
-later-treated units in their pre-period) and the already-estimated
-counterfactuals for *earlier* cohorts. This sequentially peels off the
-treatment from first-adopter to last, avoiding the negative-weights
-pathology of TWFE and the overlap failures that break SDID in
-staggered panels.
+.. warning::
+   Despite its name, :func:`sequential_sdid` is **not** the Sequential SDiD
+   estimator of Arkhangelsky & Samkov (arXiv:2404.00164). Their Algorithm 1
+   works on cohort-aggregated outcomes, loops over event horizons ``k`` and
+   cohorts, uses later cohorts as donors, and *imputes* each estimated
+   effect back into the treated cohort's outcome (``Y_{a,a+k} -= tau_{a,k}``)
+   so that it serves as pre-period history for later horizons; it uses a
+   penalty ``eta^2 sum omega_j^2 / pi_j`` and a Bayesian bootstrap. None of
+   that is implemented here, and no public code of that estimator was found
+   to compare against.
 
-This module delivers :func:`sequential_sdid`, the main public entry
-point, and :class:`SequentialSDIDResult` with per-cohort ATT(g) and an
-aggregated ATT.
+What this module computes: for each adoption cohort ``g`` (in adoption
+order) it runs the classic single-block SDID of Arkhangelsky, Athey,
+Hirshberg, Imbens & Wager (``sp.sdid``, which matches R ``synthdid``) on
+the sub-panel of cohort-``g`` units plus never-treated and not-yet-treated
+units, truncated at the period before the next cohort adopts, and then
+averages the cohort ATTs. Each cohort-level ATT(g) therefore only covers
+the window before the next cohort's adoption (the last cohort's window runs
+to the end of the panel).
 """
 
 from __future__ import annotations
@@ -66,7 +71,7 @@ class SequentialSDIDResult(ResultProtocolMixin):
     def summary(self) -> str:
         lo, hi = self.aggregate_ci
         lines = [
-            "Sequential Synthetic DID (Arkhangelsky & Samkov 2024)",
+            "Cohort-by-cohort SDID (sequential_sdid; not Arkhangelsky-Samkov)",
             "=" * 60,
             f"  Aggregate ATT    : {self.aggregate_att:.6f}",
             f"  Aggregate SE     : {self.aggregate_se:.6f}",
@@ -99,7 +104,7 @@ def sequential_sdid(
     alpha: float = 0.05,
     seed: Optional[int] = None,
 ) -> CausalResult:
-    """Sequential Synthetic DID for staggered-adoption panels.
+    """Cohort-by-cohort SDID for staggered adoption (see module warning).
 
     Parameters
     ----------
@@ -120,8 +125,8 @@ def sequential_sdid(
         Forwarded to the inner SDID call.
     n_reps : int, default 200
     cohort_weights : {'size', 'equal'}, default 'size'
-        Aggregation weights across cohorts. ``'size'`` weights by the
-        number of treated units × post-periods in each cohort (CS-style).
+        Aggregation weights across cohorts. ``'size'`` weights each cohort
+        by its number of treated units (not by units x post-periods).
     alpha : float, default 0.05
     seed : int, optional
 
@@ -134,27 +139,19 @@ def sequential_sdid(
 
     Notes
     -----
-    The sequential algorithm (Arkhangelsky & Samkov 2024, Section 3):
+    Algorithm (see the module docstring -- this is not Arkhangelsky &
+    Samkov's Algorithm 1):
 
     1. Sort cohorts by treatment time ``g_1 < g_2 < ... < g_K``.
-    2. For each cohort ``g_k``:
+    2. For each cohort ``g_k``: keep units in cohort ``g_k``, never-treated
+       units and units with ``cohort > g_k``, and periods
+       ``t <= g_{k+1} - 1`` (all periods for the last cohort); run
+       single-block SDID on that sub-panel. ATT(g_k) equals
+       ``synthdid::synthdid_estimate`` on the same sub-panel.
+    3. Aggregate ATT(g) with ``cohort_weights``; the aggregate SE treats the
+       cohort estimates as independent (``sqrt(sum w_g^2 se_g^2)``).
 
-       a. Subset to units in cohort ``g_k`` ∪ never-treated ∪ units with
-          ``cohort[i] > g_k`` (not yet treated at time ``g_k``).
-       b. Restrict to times ``t ≤ current_end`` where ``current_end`` is
-          the last period before the *next* cohort's treatment.
-       c. Run single-cohort SDID on this subpanel.
-
-    3. Aggregate ATT(g) into an overall ATT using ``cohort_weights``.
-
-    When there is only one cohort this function reduces exactly to the
-    classical SDID.
-
-    References
-    ----------
-    Arkhangelsky, D. & Samkov, A. (arXiv:2404.00164, 2024).
-    Arkhangelsky, Athey, Hirshberg, Imbens & Wager (2021).
-    AER 111(12). [@arkhangelsky2024sequential]
+    With a single cohort this is exactly ``sp.sdid``.
 
     Examples
     --------
@@ -296,6 +293,18 @@ def sequential_sdid(
             )
 
     per_cohort = pd.DataFrame(per_cohort_rows)
+    failed_notes = [
+        f"cohort {r['cohort']}: {r['note']}" for r in per_cohort_rows if r.get("note")
+    ]
+    if failed_notes:
+        import warnings
+
+        warnings.warn(
+            "sequential_sdid dropped cohort(s) from the aggregate: "
+            + "; ".join(failed_notes),
+            RuntimeWarning,
+            stacklevel=2,
+        )
     valid = per_cohort.dropna(subset=["att", "se"]).copy()
     if valid.empty:
         raise RuntimeError(  # pragma: no cover
@@ -335,6 +344,11 @@ def sequential_sdid(
             "cohort_weights": cohort_weights,
             "se_method": se_method,
             "n_reps": int(n_reps),
-            "reference": "Arkhangelsky & Samkov (arXiv:2404.00164, 2024)",
+            "estimator": "cohort_by_cohort_sdid",
+            "reference": (
+                "cohort-wise SDID (Arkhangelsky et al. 2021 per cohort); not "
+                "the Arkhangelsky & Samkov (arXiv:2404.00164) sequential "
+                "imputation algorithm"
+            ),
         },
     )

@@ -34,6 +34,7 @@ from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from ._common import (
     add_constant,
     bootstrap_ci,
@@ -453,7 +454,13 @@ def mediation_decompose(
     treatment : str — binary exposure
     mediator : str — mediator
     covariates : list of str or None
-    inference : {'analytical', 'bootstrap'}
+    inference : {'analytical', 'bootstrap', 'none'}
+        ``'none'``: point estimates only. ``'analytical'`` (default):
+        delta-method standard errors from the two regressions' classical
+        OLS covariances (``s^2 (X'X)^{-1}``,
+        ``s^2`` on ``n - p``), block-diagonal across the two models --
+        Stata ``paramed`` / R ``CMAverse`` ``inference = "delta"``. Up to
+        1.28.0 this option computed nothing and ``se`` was ``None``.
 
     Returns
     -------
@@ -461,14 +468,20 @@ def mediation_decompose(
 
     Notes
     -----
-    Under the purely linear model used here, the **controlled direct
-    effect** CDE(m*) evaluated at the reference level ``m* = E[M | A=0]``
-    coincides numerically with the natural direct effect (NDE). The
-    ``cde`` field is therefore redundant in this implementation — it is
-    retained for API compatibility with VanderWeele's four-way
-    decomposition, but users should not treat it as independent
-    information from ``nde`` unless a nonlinear or
-    interaction-heterogeneous extension is added.
+    Mediator model ``M ~ A + C``, outcome model ``Y ~ A + M + A*M + C``.
+    With ``a* = 0``, ``a = 1`` and covariates held at their sample means
+    ``c̄`` (Valeri & VanderWeele's conditional effects at the mean, as in
+    ``paramed`` and ``CMAverse``):
+
+    * ``nde`` (pure NDE) ``= θ1 + θ3 (β0 + β_c'c̄)``
+    * ``nie`` (total NIE) ``= β1 (θ2 + θ3)``
+    * ``cde`` ``= θ1 + θ3 m*`` at ``m* = E[M | A = 0]`` (the sample mean)
+
+    Up to 1.28.0 ``nde`` used ``E[M | A = 0] = β0 + β_c'c̄_{A=0}``, the
+    covariate mean of the *unexposed*, so with confounded exposure it was
+    the direct effect at a covariate profile nobody asked for (and it
+    disagreed with ``sp.four_way_decomposition`` on the same data).
+    Without covariates the two coincide, and ``cde == nde``.
 
     Examples
     --------
@@ -510,30 +523,73 @@ def mediation_decompose(
 
     # Mediator model: M ~ A + C
     Xm = add_constant(np.column_stack([A] + ([C] if cov else [])))
-    beta_m, _, _ = wls(M, Xm)
+    beta_m, _, resid_m = wls(M, Xm)
     alpha_a = beta_m[1]
 
     # Outcome model: Y ~ A + M + A*M + C
     AM = A * M
     Xy = add_constant(np.column_stack([A, M, AM] + ([C] if cov else [])))
-    beta_y, vcov_y, _ = wls(Y, Xy)
+    beta_y, _, resid_y = wls(Y, Xy)
     theta1 = beta_y[1]  # A
     theta2 = beta_y[2]  # M
     theta3 = beta_y[3]  # AM
 
-    # Mean mediator at A=0
-    m_bar_0 = float(M[A == 0].mean()) if (A == 0).any() else float(M.mean())
+    if inference not in ("analytical", "bootstrap", "none"):
+        raise MethodIncompatibility(
+            "inference must be 'analytical', 'bootstrap' or 'none', "
+            f"got {inference!r}"
+        )
 
-    # Natural effects (under linearity, VanderWeele 2014)
-    nde = theta1 + theta3 * m_bar_0
-    nie = alpha_a * (theta2 + theta3)  # using A=1 for CDE mode
+    # Mediator reference level for the CDE: sample mean of M among A = 0.
+    m_bar_0 = float(M[A == 0].mean()) if (A == 0).any() else float(M.mean())
+    # E[M | A = 0, C = c̄]: the mediator model at the covariate means.
+    c_bar = C.mean(axis=0) if cov else np.zeros(0)
+    em0 = float(beta_m[0] + (beta_m[2:] @ c_bar if cov else 0.0))
+
+    # Natural effects (under linearity, Valeri & VanderWeele), a* = 0, a = 1
+    nde = theta1 + theta3 * em0
+    nie = alpha_a * (theta2 + theta3)
     total = nde + nie
-    cde = theta1 + theta3 * m_bar_0  # CDE at M = m*  (same as NDE here if m*=m_bar_0)
+    cde = theta1 + theta3 * m_bar_0  # CDE at M = m* = E[M | A = 0]
     pm = nie / total if abs(total) > 1e-12 else float("nan")
 
     se = None
     ci = None
-    if inference == "bootstrap":
+    if inference == "analytical":
+        from scipy import stats as _st
+
+        def _ols_vcov(X: np.ndarray, r: np.ndarray) -> np.ndarray:
+            s2 = float(r @ r) / (X.shape[0] - X.shape[1])
+            return s2 * np.linalg.inv(X.T @ X)
+
+        V_y = _ols_vcov(Xy, resid_y)
+        V_m = _ols_vcov(Xm, resid_m)
+        g_nde_y = np.zeros(Xy.shape[1])
+        g_nde_y[1], g_nde_y[3] = 1.0, em0
+        g_nde_m = np.zeros(Xm.shape[1])
+        g_nde_m[0] = theta3
+        if cov:
+            g_nde_m[2:] = theta3 * c_bar
+        g_nie_y = np.zeros(Xy.shape[1])
+        g_nie_y[2] = g_nie_y[3] = alpha_a
+        g_nie_m = np.zeros(Xm.shape[1])
+        g_nie_m[1] = theta2 + theta3
+        g_cde_y = np.zeros(Xy.shape[1])
+        g_cde_y[1], g_cde_y[3] = 1.0, m_bar_0
+
+        def _se(gy: np.ndarray, gm: np.ndarray) -> float:
+            return float(np.sqrt(gy @ V_y @ gy + gm @ V_m @ gm))
+
+        se = {
+            "total": _se(g_nde_y + g_nie_y, g_nde_m + g_nie_m),
+            "nde": _se(g_nde_y, g_nde_m),
+            "nie": _se(g_nie_y, g_nie_m),
+            "cde": _se(g_cde_y, np.zeros(Xm.shape[1])),
+        }
+        z = float(_st.norm.ppf(1 - alpha / 2))
+        pt = {"total": total, "nde": nde, "nie": nie}
+        ci = {k: (float(pt[k] - z * se[k]), float(pt[k] + z * se[k])) for k in pt}
+    elif inference == "bootstrap":
         rng = np.random.default_rng(seed)
 
         def stat_fn(idx: np.ndarray) -> np.ndarray:
@@ -548,18 +604,32 @@ def mediation_decompose(
                     np.column_stack([Ai, Mi, Ai * Mi] + ([Ci] if cov else []))
                 )
                 byi, _, _ = wls(Yi, Xyi)
-                m0_i = (
-                    float(Mi[Ai == 0].mean()) if (Ai == 0).any() else float(Mi.mean())
-                )
-                nde_i = byi[1] + byi[3] * m0_i
+                em0_i = float(bmi[0] + (bmi[2:] @ Ci.mean(axis=0) if cov else 0.0))
+                nde_i = byi[1] + byi[3] * em0_i
                 nie_i = bmi[1] * (byi[2] + byi[3])
                 return np.array([nde_i + nie_i, nde_i, nie_i])
-            except Exception:  # noqa: BLE001  # pragma: no cover
+            except np.linalg.LinAlgError:  # singular resample design
                 return np.array([np.nan, np.nan, np.nan])
 
         boot = bootstrap_stat(stat_fn, n, n_boot=n_boot, rng=rng)
+        n_bad = int(np.isnan(boot).any(axis=1).sum())
         boot = boot[~np.isnan(boot).any(axis=1)]
-        if len(boot) > 10:
+        if n_bad:
+            import warnings
+
+            warnings.warn(
+                f"mediation_decompose: {n_bad}/{n_boot} bootstrap resamples "
+                "had a singular design and were dropped.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        if len(boot) <= 10:
+            raise DataInsufficient(
+                f"mediation_decompose: only {len(boot)} usable bootstrap "
+                "replications; cannot estimate standard errors.",
+                recovery_hint="Increase n_boot or use inference='analytical'.",
+            )
+        else:
             pt = np.array([total, nde, nie])
             sev, lo, hi = bootstrap_ci(boot, pt, alpha=alpha)
             se = {

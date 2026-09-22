@@ -1,7 +1,9 @@
 # Panel Shift-Share IV for Political Science
 
-> Park & Xu (arXiv:2603.00135, 2026) §4.2, with
-> Adão-Kolesár-Morales (QJE 2019) variance.
+> Background: Park (arXiv:2603.00135, 2026); inference: Adão-Kolesár-Morales
+> (QJE 2019) shock-level variance. Numbers are checked against R `fixest`,
+> `ShiftShareSE::ivreg_ss` and `bartik.weight` in
+> `tests/reference_parity/test_synth_rest_R_parity.py`.
 
 ## 1. When to use this
 
@@ -14,8 +16,7 @@ Use `sp.shift_share_political_panel` when **all** of the following hold:
   shift-share setup.
 - Either the shares **or** the shocks (or both) vary over time.
 - You want pooled 2SLS with fixed effects plus the AKM
-  shock-clustered SE that Park-Xu (2026) §4.2 identifies as the
-  default for political-science panels.
+  shock-level SE.
 
 For single-period (cross-section / long-difference) designs use
 `sp.shift_share_political` or `sp.bartik` instead.
@@ -66,37 +67,32 @@ shift-share designs: they ignore the fact that observations sharing a
 shock are correlated through the common shifter, not through a geographic
 cluster.  Adão-Kolesár-Morales (2019) derive the correct variance
 estimator by clustering at the **shock** level with share-weighted
-scores.  Park-Xu (2026) §4.2 extend it to the panel:
-
-$$
-u_k \;=\; \sum_{i, t}\, s_{ikt}\, \tilde Z_{it}\, \hat\varepsilon_{it},
-\qquad
-\widehat{\mathrm{Var}}(\hat\beta) \;=\;
-\frac{\sum_k u_k^2}{\bigl(\hat D'_{\mathrm{fit}}\,\tilde D\bigr)^2}
-$$
-
-where $\tilde{\cdot}$ denotes FE-demeaning.  Pass `cluster='shock'` to
+scores. The panel version used here is exactly `ShiftShareSE::ivreg_ss`
+with the fixed effects as controls: the shock-level score is
+$\hat X_k\, s_k'\hat\varepsilon$ with $\hat X_k$ the coefficients of the
+control-residualised instrument on the share matrix. Shock clusters are
+industries when the shocks are constant over time and industry × period
+otherwise. (Before the 2026-09 fix this function used
+$\sum_{i,t} s_{ikt}\tilde Z_{it}\hat\varepsilon_{it}$, which is not the AKM
+formula.)  Pass `cluster='shock'` to
 get this variance; the `diagnostics['akm_se']` field is also populated
 so you can report both numbers side-by-side.
 
-In clean Park-Xu-style DGPs with 10–100 industries the shock-clustered
-SE is typically **3× tighter** than the unit-clustered SE, because it
-correctly recognises that cross-unit correlation within a period is
-driven by a few common shocks rather than by unit-level idiosyncrasies.
+`cluster='unit'` / `'time'` are CR0 cluster-robust SEs (fixest with
+`ssc(adj=FALSE, cluster.adj=FALSE)`); `'twoway'` is Cameron-Gelbach-Miller
+two-way clustering by unit and time.
 
 ## 4. Fixed-effects choices
 
 | `fe`         | What's absorbed           | When to pick                   |
 |--------------|---------------------------|--------------------------------|
-| `'two-way'`  | Unit + time FEs (default) | Almost always — Park-Xu default |
+| `'two-way'`  | Unit + time FEs (default) | Almost always |
 | `'unit'`     | Unit FEs only             | Time-invariant shares + strong time trend |
 | `'time'`     | Time FEs only             | Balanced panel with few units  |
 | `'none'`     | No FEs                    | You want pure cross-period pool |
 
-FE demeaning is performed inside the function via mean-subtraction —
-for >500 units × 20 periods consider pre-absorbing using
-`sp.fixest.feols` then passing the residuals to this function with
-`fe='none'`.
+Two-way FE are removed by alternating projections to convergence, so the
+within transformation is exact on unbalanced panels too.
 
 ## 5. End-to-end recipe
 
@@ -166,8 +162,8 @@ print(f'Joint pretrend p-value: {p:.3f}')
 
 ## 8. References
 
-- Park, P. K. & Xu, Y. (2026).
-  *Shift-Share Designs in Political Science.*  arXiv:2603.00135.
+- `park2026shift` — Park, P. K. (2026).
+  *Shift-Share Designs in Political Science.*  arXiv preprint, arXiv:2603.00135.
 - Adão, R., Kolesár, M. & Morales, E. (2019).
   *Shift-Share Designs: Theory and Inference.*  QJE 134(4).
 - Borusyak, K., Hull, P. & Jaravel, X. (2022).

@@ -16,6 +16,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import MethodIncompatibility
 
 
 def cate_summary(result: CausalResult) -> pd.DataFrame:
@@ -331,6 +332,73 @@ def cate_group_plot(
     return fig, ax
 
 
+def _cddf_inputs(
+    result: Any,
+    data: pd.DataFrame,
+    y: str,
+    treat: str,
+    covariates: List[str],
+    n_folds: int,
+    propensity: Any,
+    baseline: Any,
+    proxy: Any,
+    seed: int,
+    context: str,
+) -> Tuple[
+    np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray], np.ndarray, str, str
+]:
+    """Outcome, treatment, propensity, baseline, proxy and their provenance."""
+    from sklearn.base import clone
+    from sklearn.model_selection import KFold
+
+    from . import _cddf
+
+    in_sample = _extract_cate(result)
+    n = len(in_sample)
+    for col in [y, treat] + list(covariates):
+        if col not in data.columns:
+            raise MethodIncompatibility(
+                f"Column '{col}' not found in data",
+                recovery_hint="Pass the same data frame used to fit the CATE model.",
+            )
+    Y = data[y].to_numpy(dtype=float)[:n]
+    D = data[treat].to_numpy(dtype=float)[:n]
+    X = data[list(covariates)].to_numpy(dtype=float)[:n]
+    if not np.all(np.isin(D, (0.0, 1.0))):
+        raise MethodIncompatibility(
+            f"{context} requires a binary 0/1 treatment.",
+            recovery_hint="Recode the treatment as 0/1.",
+        )
+
+    if propensity is None:
+        from sklearn.ensemble import GradientBoostingClassifier
+
+        prop_model = GradientBoostingClassifier(
+            n_estimators=100, max_depth=3, random_state=42
+        )
+        kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+        p: np.ndarray = np.zeros(n, dtype=float)
+        for train_idx, test_idx in kf.split(X):
+            m = clone(prop_model)
+            m.fit(X[train_idx], D[train_idx])
+            p[test_idx] = m.predict_proba(X[test_idx])[:, 1]
+        p = np.clip(p, 0.01, 0.99)
+        p_source = "cross_fit_gbm"
+    else:
+        p = _cddf.resolve_vector(propensity, data, n, "propensity")
+        p_source = "supplied"
+    _cddf.check_propensity(p)
+    B = (
+        None
+        if baseline is None
+        else _cddf.resolve_vector(baseline, data, n, "baseline")
+    )
+    S, s_source = _cddf.resolve_proxy(
+        result, proxy, data, X, Y, D, n_folds, seed, in_sample, context
+    )
+    return Y, D, p, B, S, p_source, s_source
+
+
 def blp_test(
     result: CausalResult,
     data: pd.DataFrame,
@@ -339,54 +407,81 @@ def blp_test(
     covariates: List[str],
     n_folds: int = 5,
     alpha: float = 0.05,
+    *,
+    propensity: Any = None,
+    baseline: Any = None,
+    proxy: Any = "cross_fit",
+    vce: str = "HC1",
+    seed: int = 42,
 ) -> Dict[str, Any]:
-    """
-    Best Linear Predictor (BLP) test for CATE heterogeneity.
+    """Best Linear Predictor (BLP) of the CATE, Chernozhukov-Demirer-Duflo-Fernandez-Val.
 
-    Implements the calibration test from Chernozhukov et al. (2018,
-    *Econometrica*) "Generic Machine Learning Inference on Heterogeneous
-    Treatment Effects." Equivalent to ``grf::test_calibration()`` in R.
+    Weighted least squares with weights ``w = 1 / (p(Z)(1 - p(Z)))``::
 
-    Fits via OLS:
-        Y_i = alpha + beta_1 * (D_i - e(X_i))
-              + beta_2 * (D_i - e(X_i)) * (S(X_i) - mean(S)) + eps
+        Y = a0 + a1 B(Z) + beta_1 (D - p(Z))
+            + beta_2 (D - p(Z)) (S(Z) - mean(S)) + e
 
-    where S(X) is the CATE proxy from the meta-learner and e(X) the
-    propensity score (estimated via cross-fitting).
+    where ``S(Z)`` is the CATE proxy, ``p(Z)`` the propensity score and
+    ``B(Z)`` an optional baseline proxy (e.g. a prediction of ``E[Y | Z,
+    D = 0]``). ``beta_1`` is the ATE; ``beta_2`` is the slope of the true
+    CATE on the proxy -- ``beta_2 = 0`` means the proxy carries no
+    heterogeneity signal, ``beta_2 = 1`` a perfectly calibrated one. This
+    is ``GenericML::BLP`` and, fed the same ``Y, D, p, B, S``, reproduces
+    it to the floating-point floor.
 
-    - **beta_1**: tests whether ATE != 0 (mean forest prediction)
-    - **beta_2**: tests whether CATE heterogeneity is real
-      (if beta_2 > 0 and significant, the learner has found genuine
-      heterogeneity rather than noise)
+    The proxy must not be fit on the outcomes it is evaluated against:
+    in-sample predictions of a flexible learner correlate with the noise in
+    ``Y`` and push ``beta_2`` up even when the effect is constant. By
+    default (``proxy='cross_fit'``) the metalearner behind ``result`` is
+    refit out of fold (``n_folds``, ``seed``) to produce ``S``.
+
+    .. versionchanged:: 1.30.0
+       Now the CDDF weighted regression with an out-of-fold proxy.
+       Earlier releases ran unweighted OLS on the in-sample CATE
+       predictions: with no true heterogeneity the default T-learner then
+       reported ``beta_2`` near 1.4 with ``p < 1e-50``. The docstring's
+       claim of equivalence to ``grf::test_calibration`` was also wrong;
+       that test is :func:`sp.calibration_test`.
 
     Parameters
     ----------
-    result : CausalResult
-        Result from ``metalearner()``.
+    result : CausalResult, fitted CATE model, or array
+        A ``metalearner()`` result (its learner is refit out of fold), or
+        per-unit CATE predictions used as supplied.
     data : pd.DataFrame
-        Original data.
     y, treat : str
-        Outcome and treatment column names.
+        Outcome and binary treatment columns.
     covariates : list of str
-        Covariate column names.
+        Covariates ``Z`` (for the propensity and the proxy refit).
     n_folds : int, default 5
-        Folds for propensity cross-fitting.
+        Folds for the propensity and proxy cross-fits.
     alpha : float, default 0.05
-        Significance level.
+    propensity : array or column name, optional
+        Known or estimated ``p(Z)``. Default: 5-fold gradient-boosting
+        classifier, clipped to [0.01, 0.99]. In a randomized experiment
+        pass the design probabilities.
+    baseline : array or column name, optional
+        Baseline proxy ``B(Z)`` added as a control.
+    proxy : {'cross_fit', 'in_sample'} or array
+        Source of ``S(Z)``.
+    vce : {'HC1', 'const', 'HC0', 'HC2', 'HC3'}
+        Covariance of the WLS fit (``sandwich::vcovHC`` types; GenericML's
+        default is ``'const'``).
+    seed : int, default 42
+        Fold seed for the proxy refit.
 
     Returns
     -------
     dict
-        Keys: 'beta1' (ATE signal), 'beta1_se', 'beta1_pvalue',
-        'beta2' (heterogeneity signal), 'beta2_se', 'beta2_pvalue',
-        'heterogeneity_significant' (bool).
+        ``beta1`` / ``beta2`` with ``_se``, ``_pvalue`` (two-sided),
+        ``_pvalue_right`` (one-sided, H1: beta > 0) and ``_ci``;
+        ``heterogeneity_significant`` (two-sided test of ``beta2 = 0`` at
+        ``alpha``); ``proxy_source``, ``propensity_source``, ``vcov_type``.
 
     References
     ----------
-    Chernozhukov, V., Demirer, M., Duflo, E., & Fernandez-Val, I. (2018).
-    Generic Machine Learning Inference on Heterogeneous Treatment Effects
-    in Randomized Experiments. *Econometrica* (forthcoming as of 2018 NBER
-    WP). [@chernozhukov2018double]
+    Chernozhukov, Demirer, Duflo and Fernandez-Val (2025), Econometrica
+    93(4), 1121-1164. [@chernozhukov2025generic]
 
     Examples
     --------
@@ -394,80 +489,62 @@ def blp_test(
     >>> import pandas as pd
     >>> import statspai as sp
     >>> rng = np.random.default_rng(42)
-    >>> n = 400
+    >>> n = 800
     >>> x1 = rng.normal(size=n)
     >>> x2 = rng.normal(size=n)
     >>> d = rng.integers(0, 2, size=n)
     >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
-    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2,
+    ...                    "p": np.full(n, 0.5)})
     >>> res = sp.metalearner(df, y="y", treat="d",
     ...                      covariates=["x1", "x2"], learner="t")
     >>> blp = sp.blp_test(res, df, y="y", treat="d",
-    ...                   covariates=["x1", "x2"])
+    ...                   covariates=["x1", "x2"], propensity="p")
     >>> blp["heterogeneity_significant"]
     True
-    >>> blp["beta2"] > 0
-    True
+    >>> blp["proxy_source"]
+    'cross_fit'
     """
-    import statsmodels.api as sm
-    from sklearn.base import clone
-    from sklearn.model_selection import KFold
+    from scipy import stats as _st
 
-    cate = _extract_cate(result)
-    n = len(cate)
+    from . import _cddf
 
-    # Extract arrays
-    Y = data[y].values[:n].astype(float)
-    D = data[treat].values[:n].astype(float)
-    X = data[covariates].values[:n].astype(float)
-
-    # Cross-fit propensity score
-    from sklearn.ensemble import GradientBoostingClassifier
-
-    prop_model = GradientBoostingClassifier(
-        n_estimators=100,
-        max_depth=3,
-        random_state=42,
+    Y, D, p, B, S, p_source, s_source = _cddf_inputs(
+        result,
+        data,
+        y,
+        treat,
+        covariates,
+        n_folds,
+        propensity,
+        baseline,
+        proxy,
+        seed,
+        "blp_test()",
     )
-    kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-    e_hat: np.ndarray = np.zeros(n, dtype=float)
-    for train_idx, test_idx in kf.split(X):
-        m = clone(prop_model)
-        m.fit(X[train_idx], D[train_idx])
-        e_hat[test_idx] = m.predict_proba(X[test_idx])[:, 1]
-    e_hat = np.asarray(np.clip(e_hat, 0.01, 0.99), dtype=float)
-
-    # BLP regression
-    D_centered = D - e_hat
-    S_centered = cate - np.mean(cate)
-
-    # Y = alpha + beta1 * (D - e(X)) + beta2 * (D - e(X)) * (S(X) - S_bar) + eps
-    Z = np.column_stack(
-        [
-            np.ones(n),
-            D_centered,
-            D_centered * S_centered,
-        ]
-    )
-
-    ols = sm.OLS(Y, Z).fit(cov_type="HC1")
-
-    beta1 = float(ols.params[1])
-    beta1_se = float(ols.bse[1])
-    beta1_pv = float(ols.pvalues[1])
-    beta2 = float(ols.params[2])
-    beta2_se = float(ols.bse[2])
-    beta2_pv = float(ols.pvalues[2])
-
-    return {
-        "beta1": beta1,
-        "beta1_se": beta1_se,
-        "beta1_pvalue": beta1_pv,
-        "beta2": beta2,
-        "beta2_se": beta2_se,
-        "beta2_pvalue": beta2_pv,
-        "heterogeneity_significant": beta2_pv < alpha,
-    }
+    n = len(Y)
+    cols = [np.ones(n)]
+    if B is not None:
+        cols.append(B)
+    k0 = len(cols)
+    cols += [D - p, (D - p) * (S - S.mean())]
+    beta, V = _cddf.wls_fit(Y, np.column_stack(cols), 1.0 / (p * (1.0 - p)), vce)
+    se = np.sqrt(np.diag(V))
+    z = float(_st.norm.ppf(1 - alpha / 2))
+    out: Dict[str, Any] = {}
+    for j, name in ((k0, "beta1"), (k0 + 1, "beta2")):
+        stat = beta[j] / se[j]
+        out[name] = float(beta[j])
+        out[f"{name}_se"] = float(se[j])
+        out[f"{name}_pvalue"] = float(2 * _st.norm.sf(abs(stat)))
+        out[f"{name}_pvalue_right"] = float(_st.norm.sf(stat))
+        out[f"{name}_ci"] = (float(beta[j] - z * se[j]), float(beta[j] + z * se[j]))
+    out["heterogeneity_significant"] = bool(out["beta2_pvalue"] < alpha)
+    out["proxy_source"] = s_source
+    out["propensity_source"] = p_source
+    out["vcov_type"] = vce
+    out["n"] = n
+    return out
 
 
 def gate_test(
@@ -476,33 +553,64 @@ def gate_test(
     by: str,
     n_groups: int = 4,
     alpha: float = 0.05,
+    *,
+    y: Optional[str] = None,
+    treat: Optional[str] = None,
+    covariates: Optional[List[str]] = None,
+    propensity: Any = None,
+    baseline: Any = None,
+    proxy: Any = "cross_fit",
+    vce: str = "HC1",
+    n_folds: int = 5,
+    seed: int = 42,
 ) -> Dict[str, Any]:
-    """
-    Test for significant heterogeneity across GATE (Group ATE) groups.
+    """Sorted group average treatment effects (GATES) and heterogeneity tests.
 
-    Performs two tests:
-    1. **Omnibus F-test**: are all group CATEs equal? (ANOVA)
-    2. **Top-vs-bottom**: is the highest-CATE group significantly
-       different from the lowest?
+    **With** ``y``, ``treat`` and ``covariates`` this is the
+    Chernozhukov-Demirer-Duflo-Fernandez-Val GATES regression
+    (``GenericML::GATES`` with ``monotonize = FALSE``): weighted least
+    squares with weights ``1 / (p(1 - p))`` of ``Y`` on an intercept, the
+    optional baseline proxy ``B(Z)`` and ``(D - p) 1{G_k}`` for groups
+    ``G_1..G_K``. Groups are quantile groups of the CATE proxy when
+    ``by='cate'`` (``GenericML::quantile_group``: type-7 cut points,
+    left-closed) and of the column ``by`` otherwise (its values are used
+    directly when it has at most ``n_groups`` levels). Each ``gamma_k``
+    is the ATE in group ``k``, estimated from outcomes;
+    ``top_vs_bottom`` is ``gamma_K - gamma_1`` with the covariance term;
+    the omnibus test is the Wald test that all ``gamma_k`` are equal
+    (chi-square, ``K - 1`` df). The proxy defaults to an out-of-fold refit
+    of the result's learner, as in :func:`blp_test`.
+
+    **Without** them the function falls back to the pre-1.30 descriptive
+    summary: group means of the predicted CATEs with ``sd / sqrt(n)``
+    SEs. Those p-values treat the model's own predictions as data -- with
+    ``by='cate'`` the groups are formed from the same predictions -- so
+    they are not a test of heterogeneity; a warning says so.
+
+    .. versionchanged:: 1.30.0
+       Added the GATES regression (``y`` / ``treat`` / ``covariates``).
 
     Parameters
     ----------
-    result : CausalResult
-        Result from ``metalearner()``.
+    result : CausalResult, fitted CATE model, or array
     data : pd.DataFrame
-        Original data (same rows as estimation).
     by : str
-        Column name to group by, or 'cate' for CATE quartiles.
+        ``'cate'`` or a column name.
     n_groups : int, default 4
-        Number of groups.
     alpha : float, default 0.05
-        Significance level.
+    y, treat, covariates : optional
+        Outcome, binary treatment and covariates; required for GATES.
+    propensity, baseline, proxy, vce, n_folds, seed
+        As in :func:`blp_test`.
 
     Returns
     -------
     dict
-        Keys: 'gate_table' (DataFrame), 'omnibus_F', 'omnibus_pvalue',
-        'top_vs_bottom_diff', 'top_vs_bottom_se', 'top_vs_bottom_pvalue'.
+        ``gate_table`` (group, n, gate, se, ci_lower, ci_upper for GATES;
+        group, n, mean_cate, se, ci_lower, ci_upper for the descriptive
+        path), ``omnibus_stat`` / ``omnibus_pvalue`` (``omnibus_F`` on the
+        descriptive path), ``top_vs_bottom_diff`` / ``_se`` / ``_pvalue``,
+        and ``method``.
 
     Examples
     --------
@@ -510,24 +618,121 @@ def gate_test(
     >>> import pandas as pd
     >>> import statspai as sp
     >>> rng = np.random.default_rng(42)
-    >>> n = 400
+    >>> n = 800
     >>> x1 = rng.normal(size=n)
     >>> x2 = rng.normal(size=n)
     >>> d = rng.integers(0, 2, size=n)
     >>> y = 0.5 * x1 + 0.3 * x2 + (1.0 + x1) * d + rng.normal(size=n)
-    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+    >>> df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2,
+    ...                    "p": np.full(n, 0.5)})
     >>> res = sp.metalearner(df, y="y", treat="d",
     ...                      covariates=["x1", "x2"], learner="t")
-    >>> gt = sp.gate_test(res, df, by="cate", n_groups=4)
-    >>> bool(gt["omnibus_pvalue"] < 0.05)
+    >>> gt = sp.gate_test(res, df, by="cate", y="y", treat="d",
+    ...                   covariates=["x1", "x2"], propensity="p")
+    >>> gt["method"]
+    'gates'
+    >>> bool(gt["top_vs_bottom_pvalue"] < 0.05)
     True
-    >>> round(float(gt["top_vs_bottom_diff"]), 2)
-    3.53
     """
+    if y is None or treat is None or covariates is None:
+        return _gate_descriptive(result, data, by, n_groups, alpha)
+
+    from scipy import stats as _st
+
+    from . import _cddf
+
+    Y, D, p, B, S, p_source, s_source = _cddf_inputs(
+        result,
+        data,
+        y,
+        treat,
+        list(covariates),
+        n_folds,
+        propensity,
+        baseline,
+        proxy,
+        seed,
+        "gate_test()",
+    )
+    n = len(Y)
+    if by == "cate":
+        labels = _cddf.quantile_groups(S, n_groups)
+        levels = list(range(n_groups))
+        group_name = "CATE group"
+    else:
+        if by not in data.columns:
+            raise MethodIncompatibility(
+                f"Column '{by}' not found in data",
+                recovery_hint="Pass by='cate' or an existing column name.",
+            )
+        col = data[by].to_numpy()[:n]
+        if pd.api.types.is_numeric_dtype(col) and len(np.unique(col)) > n_groups:
+            labels = _cddf.quantile_groups(col.astype(float), n_groups)
+            levels = list(range(n_groups))
+        else:
+            levels = sorted(np.unique(col).tolist())
+            labels = np.searchsorted(np.asarray(levels), col)
+        group_name = by
+    K = len(levels)
+    G = (labels[:, None] == np.arange(K)[None, :]).astype(float)
+    cols = [np.ones(n)]
+    if B is not None:
+        cols.append(B)
+    k0 = len(cols)
+    X = np.column_stack(cols + [(D - p)[:, None] * G])
+    beta, V = _cddf.wls_fit(Y, X, 1.0 / (p * (1.0 - p)), vce)
+    g = beta[k0:]
+    Vg = V[k0:, k0:]
+    se = np.sqrt(np.diag(Vg))
+    z = float(_st.norm.ppf(1 - alpha / 2))
+    table = pd.DataFrame(
+        {
+            "group": levels,
+            "n": G.sum(axis=0).astype(int),
+            "gate": g,
+            "se": se,
+            "ci_lower": g - z * se,
+            "ci_upper": g + z * se,
+        }
+    )
+    table.index.name = group_name
+    diff = float(g[-1] - g[0])
+    se_diff = float(np.sqrt(Vg[-1, -1] + Vg[0, 0] - 2 * Vg[-1, 0]))
+    C = np.column_stack([np.ones(K - 1), -np.eye(K - 1)])  # gamma_1 - gamma_k
+    cg = C @ g
+    wald = float(cg @ np.linalg.solve(C @ Vg @ C.T, cg))
+    return {
+        "gate_table": table,
+        "omnibus_stat": wald,
+        "omnibus_df": K - 1,
+        "omnibus_pvalue": float(_st.chi2.sf(wald, K - 1)),
+        "top_vs_bottom_diff": diff,
+        "top_vs_bottom_se": se_diff,
+        "top_vs_bottom_pvalue": float(2 * _st.norm.sf(abs(diff / se_diff))),
+        "method": "gates",
+        "proxy_source": s_source,
+        "propensity_source": p_source,
+        "vcov_type": vce,
+    }
+
+
+def _gate_descriptive(
+    result: Any, data: pd.DataFrame, by: str, n_groups: int, alpha: float
+) -> Dict[str, Any]:
+    """Pre-1.30 behaviour: summaries of the predicted CATEs by group."""
+    import warnings
+
+    warnings.warn(
+        "gate_test() without y / treat / covariates summarises the model's "
+        "own CATE predictions; its p-values treat those predictions as data "
+        "and are not a test of treatment-effect heterogeneity. Pass y=, "
+        "treat= and covariates= for the GATES regression.",
+        UserWarning,
+        stacklevel=3,
+    )
     cate = _extract_cate(result)
     gate_df = cate_by_group(result, data, by=by, n_groups=n_groups, alpha=alpha)
 
-    # Omnibus: one-way ANOVA across groups
     if by == "cate":
         labels = pd.qcut(cate, q=n_groups, labels=False, duplicates="drop")
     else:
@@ -543,15 +748,13 @@ def gate_test(
     else:
         f_stat, f_pvalue = np.nan, np.nan
 
-    # Top vs bottom group
     sorted_gate = gate_df.sort_values("mean_cate")
     bottom = sorted_gate.iloc[0]
     top = sorted_gate.iloc[-1]
     diff = top["mean_cate"] - bottom["mean_cate"]
     se_diff = np.sqrt(top["se"] ** 2 + bottom["se"] ** 2)
     if se_diff > 0:
-        z = diff / se_diff
-        tvb_pvalue = float(2 * stats.norm.sf(abs(z)))
+        tvb_pvalue = float(2 * stats.norm.sf(abs(diff / se_diff)))
     else:
         tvb_pvalue = np.nan
 
@@ -562,6 +765,7 @@ def gate_test(
         "top_vs_bottom_diff": float(diff),
         "top_vs_bottom_se": float(se_diff),
         "top_vs_bottom_pvalue": float(tvb_pvalue),
+        "method": "descriptive_predictions",
     }
 
 

@@ -1,37 +1,45 @@
 """
 Malmquist productivity index for parametric stochastic frontiers.
 
-Given panel data, fit a separate frontier ``F^t`` for each period ``t``
-and compute the Fare-Grosskopf-Lindgren-Roos (1994) Malmquist index
-between adjacent periods::
+Given panel data, fit a separate stochastic frontier ``F^s`` for each
+period ``s`` and decompose productivity change between adjacent periods
+``t -> t+1`` into efficiency change (EC) and technical change (TC),
+``M = EC x TC`` (output orientation, the Fare-Grosskopf-Lindgren-Roos
+geometric-mean Malmquist index; ``M > 1`` = productivity growth).
 
-    M_O^{t -> t+1}
-        = [ D^t(x^{t+1}, y^{t+1}) / D^t(x^t, y^t) ]
-        x [ D^{t+1}(x^{t+1}, y^{t+1}) / D^{t+1}(x^t, y^t) ]^{1/2}
+* **TC** (technical change) is the geometric mean of the frontier shift
+  evaluated at the period-``t`` and period-``t+1`` input bundles::
 
-The canonical output-oriented decomposition is ``M = EC x TC``:
+      log TC = 0.5 * [ (x_{t+1} + x_t)' (beta_{t+1} - beta_t) ]
 
-* **EC** (efficiency change) = ``D^{t+1}(x^{t+1}, y^{t+1}) / D^t(x^t, y^t)``
-* **TC** (technical change) = ``[ D^t(x^{t+1}, y^{t+1}) / D^{t+1}(x^{t+1}, y^{t+1})
-        x D^t(x^t, y^t) / D^{t+1}(x^t, y^t) ]^{1/2}``
+  (for a cost frontier the sign flips: a downward shift of the cost
+  frontier is progress).  The observed output and the noise cancel.
 
-We use the frontier-distance definition ``D^s(x, y) = y / exp(x' beta_s)``
-(deterministic approximation standard in parametric Malmquist work;
-Coelli-Rao 2005, "Total Factor Productivity Growth in Agriculture").
+* **EC** (efficiency change) depends on ``efficiency=``:
 
-``M > 1`` = productivity growth, ``EC > 1`` = catch-up to own-period
-frontier, ``TC > 1`` = outward frontier shift.
+  - ``"bc"`` (default): ``TE_{t+1} / TE_t`` with the Battese-Coelli
+    (1988) predictor ``TE = E[exp(-u) | eps]`` from each period's own
+    frontier.  Under a stochastic frontier the cross-period distance
+    ``D^t(x^{t+1}, y^{t+1})`` has no conditional-expectation predictor,
+    so the SFA index is built from its components: EC from the predicted
+    efficiencies, TC from the estimated frontiers (Fuentes, Grifell-Tatje
+    & Perelman 2001).
+  - ``"jlms"``: the same with ``TE = exp(-E[u | eps])``.
+  - ``"residual"``: the deterministic-frontier treatment
+    ``D^s(x, y) = exp(y - x' beta_s)``, i.e. the composed residual
+    ``v - u``.  EC then contains the change in statistical noise, and
+    ``M`` equals the observed-output TFP residual
+    ``Delta y - 0.5 (beta_t + beta_{t+1})' Delta x``.  This was the only
+    behaviour before StatsPAI 1.29.0.
 
 References
 ----------
-Fare, R., Grosskopf, S., Lindgren, B. & Roos, P. (1994).  "Productivity
-    changes in Swedish pharmacies 1980-1989: A non-parametric Malmquist
-    approach."  J. Productivity Analysis 3, 85-101.
-Coelli, T.J. & Rao, D.S.P. (2005).  "Total factor productivity growth in
-    agriculture: a Malmquist index analysis of 93 countries, 1980-2000."
-    Agricultural Economics 32, 115-134.
-Kumbhakar, S.C., Wang, H.J. & Horncastle, A.P. (2015).  A Practitioner's
-    Guide to Stochastic Frontier Analysis, Cambridge U.P., Chapter 14.
+fare1992productivity, battese1988prediction.
+
+Fuentes, H. J., Grifell-Tatje, E. & Perelman, S. (2001).  A parametric
+    distance function approach for Malmquist productivity index
+    estimation.  Journal of Productivity Analysis 15(2), 79-94.
+    doi:10.1023/A:1007852020847 [@fuentes2001parametric]
 """
 
 from __future__ import annotations
@@ -42,8 +50,10 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
-from .sfa import FrontierResult, frontier as _frontier
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import MethodIncompatibility
+from .sfa import FrontierResult
+from .sfa import frontier as _frontier
 
 
 @dataclass
@@ -87,7 +97,8 @@ class MalmquistResult(ResultProtocolMixin):
     def summary(self) -> str:
         lines = [
             "=" * 80,
-            "Malmquist Productivity Index (Fare-Grosskopf-Lindgren-Roos 1994)",
+            "Malmquist Productivity Index (SFA, EC from "
+            f"{self.data_info.get('efficiency', 'bc')!r})",
             "=" * 80,
             f"Periods : {self.data_info['periods']}",
             f"N units : {self.data_info['n_units']}",
@@ -111,16 +122,32 @@ def malmquist(
     *,
     dist: str = "half-normal",
     cost: bool = False,
+    efficiency: str = "bc",
     overflow_threshold: float = 1e6,
     **frontier_kwargs: Any,
 ) -> MalmquistResult:
     """Compute the Malmquist productivity index via period-by-period SFA.
+
+    .. versionchanged:: 1.29.0
+       The default efficiency change is now the ratio of predicted
+       technical efficiencies (``efficiency='bc'``); the previous
+       composed-residual EC, which included the change in noise, is
+       ``efficiency='residual'``.  TC is unchanged; EC and M change.
 
     Parameters
     ----------
     data : pandas.DataFrame
     y, x, id, time : str / list of str
     dist, cost : forwarded to :func:`frontier`
+    efficiency : {'bc', 'jlms', 'residual'}, default 'bc'
+        How the efficiency-change component is measured.  ``'bc'`` /
+        ``'jlms'`` use the ratio of each period's predicted technical
+        efficiencies (Battese-Coelli ``E[exp(-u)|eps]`` / JLMS
+        ``exp(-E[u|eps])``), which filters out the noise ``v``.
+        ``'residual'`` uses the composed residual ``exp(y - x'beta_s)`` as
+        the distance, so EC and M include the change in noise (the
+        deterministic-frontier convention; the pre-1.29.0 default).  TC is
+        the same under all three.
     overflow_threshold : float, default 1e6
         Any firm-level ``m_index`` / ``ec`` / ``tc`` whose absolute value
         exceeds this is replaced with NaN and a UserWarning is emitted.
@@ -160,10 +187,11 @@ def malmquist(
     Notes
     -----
     Assumes the dependent variable ``y`` is already in log form for a
-    log-linear / Cobb-Douglas / translog frontier.  The distance
-    function used is ``D^s(x, y) = y / exp(x' beta_s)``, so for the
-    fitted period ``D < 1`` corresponds to technically inefficient
-    firms and ``D = 1`` on the frontier.
+    log-linear / Cobb-Douglas / translog frontier.  With
+    ``efficiency='residual'`` the "distance" ``exp(y - x'beta_s)`` is the
+    composed error ``exp(v - u)``: it exceeds 1 whenever ``v > u``, so it
+    is not a technical-efficiency score under the fitted stochastic
+    frontier.  The default ``'bc'`` uses the model's efficiency predictor.
     """
     _reserved = {"data", "y", "x", "id", "time", "dist", "cost"}
     _bad = _reserved & set(frontier_kwargs.keys())
@@ -174,7 +202,23 @@ def malmquist(
             f"arguments instead."
         )
 
+    efficiency = str(efficiency).lower()
+    if efficiency not in {"bc", "jlms", "residual"}:
+        raise MethodIncompatibility(
+            f"efficiency must be 'bc', 'jlms' or 'residual'; got {efficiency!r}."
+        )
+
     required = [y] + list(x) + [id, time]
+    # Columns referenced by forwarded frontier options must survive the
+    # column subset below (otherwise frontier() cannot find them).
+    for _opt in ("usigma", "vsigma", "emean"):
+        _cols = frontier_kwargs.get(_opt)
+        if _cols:
+            _cols = [_cols] if isinstance(_cols, str) else list(_cols)
+            required += [c for c in _cols if c not in required]
+    _cl = frontier_kwargs.get("cluster")
+    if isinstance(_cl, str) and _cl not in required:
+        required.append(_cl)
     df = data[required].dropna().copy()
     df = df.sort_values([id, time]).reset_index(drop=True)
 
@@ -185,6 +229,9 @@ def malmquist(
     # Fit a frontier per period.
     period_frontiers: Dict[Any, FrontierResult] = {}
     period_betas: Dict[Any, np.ndarray] = {}
+    # Predicted technical efficiency of every row under its own period's
+    # frontier, keyed by the row label of ``df`` (frontier() keeps it).
+    te_by_row = pd.Series(np.nan, index=df.index, dtype=float)
     for t in periods:
         sub = df[df[time] == t].copy()
         if len(sub) < len(x) + 3:
@@ -195,6 +242,9 @@ def malmquist(
         res = _frontier(sub, y=y, x=x, dist=dist, cost=cost, **frontier_kwargs)
         period_frontiers[t] = res
         period_betas[t] = res.params.loc[["_cons"] + list(x)].to_numpy()
+        if efficiency != "residual":
+            te = res.efficiency(method=efficiency)
+            te_by_row.loc[te.index] = te.to_numpy(dtype=float)
 
     def _log_distance(
         xmat: np.ndarray,
@@ -209,6 +259,7 @@ def malmquist(
     for unit_id, grp in df.groupby(id, sort=False):
         grp = grp.sort_values(time)
         times_seen = grp[time].to_numpy()
+        rows_seen = grp.index.to_numpy()
         X_seen = np.column_stack([np.ones(len(grp)), grp[x].to_numpy()])
         y_seen = grp[y].to_numpy()
 
@@ -255,8 +306,17 @@ def malmquist(
             log_M = 0.5 * (
                 (log_D_t_xtp_ytp - log_D_t_xt_yt) + (log_D_tp_xtp_ytp - log_D_tp_xt_yt)
             )
-            log_EC = log_D_tp_xtp_ytp - log_D_t_xt_yt
-            log_TC = log_M - log_EC
+            # TC: geometric mean of the frontier shift at x_t and x_{t+1}
+            # (y and the noise cancel between the two distances).
+            log_TC = log_M - (log_D_tp_xtp_ytp - log_D_t_xt_yt)
+            if efficiency == "residual":
+                log_EC = log_D_tp_xtp_ytp - log_D_t_xt_yt
+            else:
+                log_EC = float(
+                    np.log(te_by_row.loc[rows_seen[t_idx + 1]])
+                    - np.log(te_by_row.loc[rows_seen[t_idx]])
+                )
+            log_M = log_EC + log_TC
 
             rows.append(
                 {
@@ -319,6 +379,7 @@ def malmquist(
             "id_col": id,
             "time_col": time,
             "orientation": "cost" if cost else "output",
+            "efficiency": efficiency,
         },
     )
 

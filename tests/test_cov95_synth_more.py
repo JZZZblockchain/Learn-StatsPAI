@@ -151,13 +151,24 @@ def test_synth_power_plot(panel):
     )
     out = power_mod.synth_power_plot(df)
     assert out is not None
+    # 8 placebos: the smallest rank p-value is 1/9 > 0.05, so no effect is
+    # detectable at alpha = 0.05. (The old pin, power 1.0 even at effect 0,
+    # came from comparing against an interpolated quantile and from keeping
+    # the real effect in the "null" baseline -- both fixed.)
     np.testing.assert_allclose(
         df[["effect_size", "power", "n_rejections", "n_simulations"]].to_numpy(),
-        np.array(
-            [[0.0, 1.0, 20.0, 20.0], [2.0, 1.0, 20.0, 20.0], [5.0, 1.0, 20.0, 20.0]]
-        ),
+        np.array([[0.0, 0.0, 0.0, 20.0], [2.0, 0.0, 0.0, 20.0], [5.0, 0.0, 0.0, 20.0]]),
         atol=1e-12,
     )
+    df2 = power_mod.synth_power(
+        panel,
+        **COMMON,
+        effect_sizes=[0.0, 2.0, 5.0],
+        n_simulations=20,
+        seed=0,
+        alpha=0.2,
+    )
+    np.testing.assert_allclose(df2["power"].to_numpy(), [0.0, 1.0, 1.0], atol=1e-12)
 
 
 # ---------------- report sensitivity sections (markdown + latex) ----------------

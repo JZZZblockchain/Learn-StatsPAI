@@ -150,11 +150,14 @@ def test_rmspe_filter_pvalues_are_probabilities(base_kwargs):
         .to_numpy(),
         np.array(
             [
-                [1.0, 1.0, 0.5, 0.17714],
-                [2.0, 10.0, 0.09090909, 0.17714],
-                [5.0, 14.0, 0.06666667, 0.17714],
+                [1.0, 1.0, 0.5, 0.17713990926327838],
+                [2.0, 10.0, 0.09090909, 0.17713990926327838],
+                [5.0, 14.0, 0.06666667, 0.17713990926327838],
             ]
         ),
+        # Pre-RMSPE moved 9e-8 (0.17714 -> 0.1771399093) when the simplex
+        # weights of identified SCM fits became exact (active set) instead
+        # of SLSQP-tolerance; p-values unchanged.
         atol=5e-8,
     )
 

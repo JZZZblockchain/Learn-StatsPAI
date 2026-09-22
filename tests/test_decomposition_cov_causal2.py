@@ -183,8 +183,18 @@ def test_mediation_decompose_total_identity():
 
     res = sp.mediation_decompose(df, "y", "a", "m", covariates=["c"], inference="none")
     assert res.total == pytest.approx(res.nde + res.nie, abs=1e-9)
-    assert res.cde == pytest.approx(res.nde, abs=1e-9)
     assert res.propn_mediated == pytest.approx(res.nie / res.total, abs=1e-9)
+    # With covariates the NDE holds them at their overall mean (1.29), so it
+    # equals the four-way CDE + INT_ref at the same m*, not the CDE itself.
+    m_star = float(df.m[df.a == 0].mean())
+    fw = sp.four_way_decomposition(
+        df, y="y", treat="a", mediator="m", covariates=["c"], m0=m_star
+    )
+    assert res.cde == pytest.approx(fw.cde, abs=1e-9)
+    assert res.nde == pytest.approx(fw.cde + fw.int_ref, abs=1e-9)
+    # Without covariates CDE(m*) and NDE coincide under linear nesting.
+    res0 = sp.mediation_decompose(df, "y", "a", "m", inference="none")
+    assert res0.cde == pytest.approx(res0.nde, abs=1e-9)
 
 
 # ════════════════════════════════════════════════════════════════════════

@@ -1,146 +1,356 @@
 """
-Boundary Discontinuity Designs with bivariate running variables.
+Boundary discontinuity designs with a bivariate score (R ``rd2d``).
 
-Implements the methodology of Cattaneo, Titiunik, and Yu (2025) for
-regression discontinuity designs where treatment assignment is
-determined by position relative to a known boundary curve in 2D space.
+Treatment is assigned by position relative to a boundary in the plane of
+two running variables ``(x1, x2)``.  The parameter of interest is the
+*pointwise* boundary effect ``tau(b) = E[Y(1) - Y(0) | X = b]`` at chosen
+points ``b`` on the boundary.  Two estimators are provided, both ports of
+the R package ``rd2d`` 1.0.0 by Cattaneo, Titiunik and Yu
+[@cattaneo2025boundary] and reproduced to machine precision on the same
+data bytes (``tests/reference_parity/test_rd_open_R_parity.py``):
 
-Two estimation approaches:
-  - **distance-based**: project observations onto signed distance to
-    boundary, then apply standard univariate local polynomial RD.
-  - **location-based**: fit bivariate local polynomial on each side
-    of the boundary at evaluation points along the curve.
+- ``approach="location"`` (R ``rd2d``): a bivariate local polynomial in
+  ``(x1, x2)`` fitted on each side at every boundary point, with the
+  ``rdbw2d`` MSE/CER-optimal bandwidths and robust bias-corrected
+  inference (the q = p + 1 fit supplies the bias-corrected estimate and
+  its standard error).
+- ``approach="distance"`` (R ``rd2d.distance``): a univariate local
+  polynomial in the Euclidean distance to each boundary point, signed by
+  assignment, with the ``rdbw2d.distance`` bandwidths.
 
-References
-----------
-Cattaneo, M.D., Titiunik, R. and Yu, R. (2025).
-"Boundary Discontinuity Designs." Working Paper. [@cattaneo2025boundary]
+A third, ``approach="pooled"``, is the older one-score design of Keele and
+Titiunik [@keele2015geographic]: it collapses the plane onto the signed
+perpendicular distance to the whole boundary and runs :func:`sp.rdrobust`
+on it, so it reports a single pooled effect rather than pointwise effects.
 
-Keele, L. and Titiunik, R. (2015).
-"Geographic Boundaries as Regression Discontinuities."
-*Political Analysis*, 23(1), 127-155. [@keele2015geographic]
+.. versionchanged:: 1.29.0
+   ⚠️ Rebuilt on R ``rd2d``.  Through 1.28.0 ``approach="distance"`` (then
+   the default) ran a home-grown local linear fit on the signed distance to
+   the boundary *line* with a Silverman-type bandwidth and reported one
+   pooled number, and ``approach="location"`` pooled pointwise fits by
+   inverse-variance weights with a rule-of-thumb bandwidth; neither is the
+   estimator of the reference.  See MIGRATION.md.
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from __future__ import annotations
+
+import math
+import warnings
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from scipy import optimize, stats
+from scipy import stats
 
 from ..core.results import CausalResult
 from ..exceptions import DataInsufficient, MethodIncompatibility
+from ._rd2d_distance import rd2d_distance_bw, rd2d_distance_estimate
+from ._rd2d_location import _KERNEL_CANON, Rd2dData, rd2d_location_bw, rd2d_location_fit
+from ._rd2d_plot import rd2d_plot
 
-_APPROACHES = {"distance", "location"}
-_KERNELS = {"triangular", "uniform", "epanechnikov"}
-_PLOT_TYPES = {"scatter", "heatmap", "boundary_effects"}
+__all__ = ["rd2d", "rd2d_bw", "rd2d_plot"]
 
-
-def _require_dataframe(data: Any) -> None:
-    if not isinstance(data, pd.DataFrame):
-        raise MethodIncompatibility(
-            "`data` must be a pandas DataFrame.",
-            recovery_hint="Pass a DataFrame containing y, x1, x2, and treatment.",
-            diagnostics={"type": type(data).__name__},
-        )
-
-
-def _require_column_name(name: Any, label: str) -> None:
-    if not isinstance(name, str) or not name:
-        raise MethodIncompatibility(
-            f"`{label}` must be a non-empty column-name string.",
-            recovery_hint=f"Pass an existing DataFrame column name for `{label}`.",
-            diagnostics={"argument": label, "value": repr(name)},
-        )
-
-
-def _require_columns(data: pd.DataFrame, columns: list[str]) -> None:
-    for label, col in zip(("y", "x1", "x2", "treatment"), columns):
-        _require_column_name(col, label)
-    missing = [col for col in columns if col not in data.columns]
-    if missing:
-        raise MethodIncompatibility(
-            f"Column '{missing[0]}' not found in data",
-            recovery_hint="Check y/x1/x2/treatment names against data.columns.",
-            diagnostics={
-                "missing_columns": missing,
-                "available_columns": list(data.columns),
-            },
-        )
-
-
-def _require_options(
-    *,
-    approach: str,
-    kernel: str,
-    p: int,
-    h: Optional[float],
-    alpha: Optional[float] = None,
-) -> None:
-    if approach not in _APPROACHES:
-        raise MethodIncompatibility(
-            f"approach must be 'distance' or 'location', got '{approach}'",
-            recovery_hint="Use approach='distance' or approach='location'.",
-            diagnostics={"approach": approach},
-        )
-    if kernel not in _KERNELS:
-        raise MethodIncompatibility(
-            f"kernel must be 'triangular', 'uniform', or 'epanechnikov', got '{kernel}'",
-            recovery_hint="Use one of {'triangular', 'uniform', 'epanechnikov'}.",
-            diagnostics={"kernel": kernel},
-        )
-    if not isinstance(p, int) or isinstance(p, bool) or p < 0:
-        raise MethodIncompatibility(
-            "p must be a non-negative integer",
-            recovery_hint="Use p=0, p=1, or p=2 for local polynomial order.",
-            diagnostics={"p": p},
-        )
-    if h is not None and (not np.isfinite(h) or h <= 0):
-        raise MethodIncompatibility(
-            "h must be positive and finite",
-            recovery_hint="Pass a positive bandwidth or leave h=None.",
-            diagnostics={"h": h},
-        )
-    if alpha is not None and (not np.isfinite(alpha) or not 0 < alpha < 1):
-        raise MethodIncompatibility(
-            "alpha must be between 0 and 1",
-            recovery_hint="Pass a significance level such as alpha=0.05.",
-            diagnostics={"alpha": alpha},
-        )
-
-
-def _numeric_arrays(
-    data: pd.DataFrame,
-    y: str,
-    x1: str,
-    x2: str,
-    treatment: str,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    try:
-        Y = data[y].values.astype(float)
-        X1 = data[x1].values.astype(float)
-        X2 = data[x2].values.astype(float)
-        T = data[treatment].values.astype(float)
-    except (TypeError, ValueError) as exc:
-        raise DataInsufficient(
-            "rd2d columns must be numeric",
-            recovery_hint="Convert y, x1, x2, and treatment to numeric values.",
-            diagnostics={"columns": [y, x1, x2, treatment]},
-        ) from exc
-    return Y, X1, X2, T
-
-
-# ======================================================================
-# Citation
-# ======================================================================
+_APPROACHES = ("location", "distance", "pooled")
+_KERNEL_TYPES = ("prod", "rad")
+_VCES = ("hc0", "hc1", "hc2", "hc3")
+_BWSELECTS = (
+    "mserd",
+    "cerrd",
+    "imserd",
+    "icerrd",
+    "msetwo",
+    "certwo",
+    "imsetwo",
+    "icertwo",
+)
+_MASSPOINTS = ("check", "adjust", "off")
+_FITMETHODS = ("joint", "separate")
 
 CausalResult._CITATIONS["rd2d"] = (
     "@article{cattaneo2025boundary,\n"
-    "  title={Boundary Discontinuity Designs},\n"
-    "  author={Cattaneo, Matias D and Titiunik, Roc{\\'\\i}o and Yu, Ruoqi},\n"
+    "  title={rd2d: Boundary Regression Discontinuity Designs},\n"
+    "  author={Cattaneo, Matias D. and Titiunik, Rocio and Yu, Ruiqi Rae},\n"
+    "  journal={CRAN: Contributed Packages},\n"
     "  year={2025},\n"
-    "  journal={Working Paper}\n"
+    "  doi={10.32614/cran.package.rd2d}\n"
     "}"
 )
+
+
+# ======================================================================
+# Validation
+# ======================================================================
+
+
+def _bad(msg: str, hint: str, **diag: Any) -> MethodIncompatibility:
+    return MethodIncompatibility(msg, recovery_hint=hint, diagnostics=diag)
+
+
+def _require_frame(data: Any, cols: Sequence[Tuple[str, Any]]) -> None:
+    if not isinstance(data, pd.DataFrame):
+        raise _bad(
+            "`data` must be a pandas DataFrame.",
+            "Pass a DataFrame containing y, x1, x2, and treatment.",
+            type=type(data).__name__,
+        )
+    for label, name in cols:
+        if not isinstance(name, str) or not name:
+            raise _bad(
+                f"`{label}` must be a non-empty column-name string.",
+                f"Pass an existing DataFrame column name for `{label}`.",
+                argument=label,
+                value=repr(name),
+            )
+    missing = [name for _, name in cols if name not in data.columns]
+    if missing:
+        raise _bad(
+            f"Column '{missing[0]}' not found in data",
+            "Check y/x1/x2/treatment names against data.columns.",
+            missing_columns=missing,
+            available_columns=list(data.columns),
+        )
+
+
+def _choice(value: Any, allowed: Sequence[str], name: str) -> str:
+    if value not in allowed:
+        raise _bad(
+            f"{name} must be one of {', '.join(repr(a) for a in allowed)}; got "
+            f"{value!r}",
+            f"Use {name}=" + " or ".join(repr(a) for a in allowed) + ".",
+            **{name: value},
+        )
+    return value
+
+
+def _kernel(kernel: Any) -> str:
+    if kernel not in _KERNEL_CANON:
+        raise _bad(
+            "kernel must be 'triangular', 'epanechnikov', 'uniform' or 'gaussian' "
+            f"(or tri/epa/uni/gau); got {kernel!r}",
+            "Use kernel='triangular' (default).",
+            kernel=kernel,
+        )
+    return _KERNEL_CANON[kernel]
+
+
+def _nonneg_int(v: Any, name: str) -> int:
+    if not isinstance(v, (int, np.integer)) or isinstance(v, bool) or v < 0:
+        raise _bad(
+            f"{name} must be a non-negative integer",
+            f"Use {name}=1 (local linear) or another non-negative integer.",
+            **{name: v},
+        )
+    return int(v)
+
+
+def _numeric(
+    data: pd.DataFrame, cols: Dict[str, Optional[str]]
+) -> Dict[str, np.ndarray]:
+    out = {}
+    for k, c in cols.items():
+        if c is None:
+            continue
+        try:
+            out[k] = data[c].to_numpy(dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise DataInsufficient(
+                "rd2d columns must be numeric",
+                recovery_hint=(
+                    "Convert y, x1, x2, treatment (and fuzzy) to numeric values."
+                ),
+                diagnostics={"column": c},
+            ) from exc
+    return out
+
+
+def _eval_points(eval_points, X1, X2, boundary, n_eval) -> np.ndarray:
+    if eval_points is not None:
+        b = np.asarray(eval_points, dtype=float)
+        if b.ndim == 1 and b.size == 2:
+            b = b.reshape(1, 2)
+        if b.ndim != 2 or b.shape[1] != 2 or not np.isfinite(b).all():
+            raise _bad(
+                "eval_points must be a finite array with shape (k, 2)",
+                "Pass boundary points as [[x1, x2], ...] (R's `b`).",
+                shape=tuple(np.shape(b)),
+            )
+        return b
+    if boundary is None:
+        if n_eval == 1:
+            return np.array([[0.0, float(np.median(X2))]])
+        grid = np.linspace(np.percentile(X2, 10), np.percentile(X2, 90), n_eval)
+        return np.column_stack([np.zeros(n_eval), grid])
+    lo, hi = np.percentile(X1, 10), np.percentile(X1, 90)
+    grid = np.array([(lo + hi) / 2]) if n_eval == 1 else np.linspace(lo, hi, n_eval)
+    return np.column_stack([grid, [float(boundary(v)) for v in grid]])
+
+
+def _bwcheck_value(bwcheck: Any, default: int) -> Optional[int]:
+    if isinstance(bwcheck, str):
+        if bwcheck != "auto":
+            raise _bad(
+                "bwcheck must be 'auto', None or a positive integer",
+                "Use bwcheck='auto' (R's default).",
+                bwcheck=bwcheck,
+            )
+        return default
+    if bwcheck is None:
+        return None
+    if (
+        not isinstance(bwcheck, (int, np.integer))
+        or isinstance(bwcheck, bool)
+        or bwcheck < 1
+    ):
+        raise _bad(
+            "bwcheck must be 'auto', None or a positive integer",
+            "Use bwcheck='auto' (R's default).",
+            bwcheck=bwcheck,
+        )
+    return int(bwcheck)
+
+
+def _kink_position(kink_position, neval: int) -> np.ndarray:
+    if kink_position is None:
+        return np.zeros(neval, dtype=bool)
+    k = np.asarray(kink_position)
+    if k.dtype == bool:
+        if k.size != neval:
+            raise _bad(
+                "kink_position must have one True/False value per boundary point.",
+                "Pass a boolean vector of length len(eval_points).",
+            )
+        return k.astype(bool)
+    out = np.zeros(neval, dtype=bool)
+    idx = k.astype(int)
+    if np.any(idx < 0) or np.any(idx >= neval):
+        raise _bad(
+            "kink_position indices must index eval_points (0-based).",
+            "Pass 0-based integer indices into eval_points.",
+        )
+    out[idx] = True
+    return out
+
+
+def _kink_unknown(kink_unknown) -> Tuple[bool, bool]:
+    if isinstance(kink_unknown, (bool, np.bool_)):
+        return bool(kink_unknown), bool(kink_unknown)
+    k = tuple(bool(v) for v in kink_unknown)
+    if len(k) != 2:
+        raise _bad(
+            "kink_unknown must be a bool or a pair of bools.",
+            "Use kink_unknown=True or (True, False).",
+        )
+    if not k[0] and k[1]:
+        raise _bad(
+            "kink_unknown[1] can be True only when kink_unknown[0] is True.",
+            "Use kink_unknown=(True, True) or (True, False).",
+        )
+    return k
+
+
+def _distance_matrix(X1, X2, T, b, distance, data, valid) -> np.ndarray:
+    """Signed distances: user-supplied, or Euclidean to each boundary point."""
+    if distance is not None:
+        if isinstance(distance, (list, tuple)) and all(
+            isinstance(c, str) for c in distance
+        ):
+            D = data[list(distance)].to_numpy(dtype=float)[valid]
+        else:
+            D = np.asarray(distance, dtype=float)
+            if D.ndim == 1:
+                D = D[:, None]
+            D = D[valid]
+        if D.shape[1] != len(b):
+            raise _bad(
+                "distance must have one column per evaluation point.",
+                "Pass an (n, len(eval_points)) matrix of signed distances.",
+                shape=D.shape,
+                neval=len(b),
+            )
+        return D
+    sign = 2.0 * T - 1.0
+    return np.column_stack(
+        [
+            np.sqrt((X1 - b[j, 0]) ** 2 + (X2 - b[j, 1]) ** 2) * sign
+            for j in range(len(b))
+        ]
+    )
+
+
+# ======================================================================
+# Pooled (one-score) approach
+# ======================================================================
+
+
+def _signed_boundary_distance(X1, X2, T, boundary) -> np.ndarray:
+    """Distance to the boundary curve, positive for treated units."""
+    if boundary is None:
+        dist = np.abs(X1)
+    else:
+        lo, hi = float(X1.min()), float(X1.max())
+        pad = 0.1 * (hi - lo)
+        grid = np.linspace(lo - pad, hi + pad, 4001)
+        by = np.array([float(boundary(v)) for v in grid])
+        if not np.all(np.isfinite(by)):
+            raise _bad(
+                "boundary(x1) returned non-finite values on the data range.",
+                "Pass a boundary function defined on the range of x1.",
+            )
+        dist = np.empty(len(X1))
+        step = grid[1] - grid[0]
+        for i in range(len(X1)):
+            d2 = (grid - X1[i]) ** 2 + (by - X2[i]) ** 2
+            j = int(np.argmin(d2))
+            # refine on the bracketing segment by golden-section search
+            a, c = grid[max(j - 1, 0)], grid[min(j + 1, len(grid) - 1)]
+            f = (
+                lambda t: (t - X1[i]) ** 2 + (float(boundary(t)) - X2[i]) ** 2
+            )  # noqa: E731
+            gr = (math.sqrt(5) - 1) / 2
+            for _ in range(60):
+                x1_, x2_ = c - gr * (c - a), a + gr * (c - a)
+                if f(x1_) < f(x2_):
+                    c = x2_
+                else:
+                    a = x1_
+                if c - a < 1e-12 * max(1.0, step):
+                    break
+            dist[i] = math.sqrt(min(d2[j], f((a + c) / 2)))
+    return dist * np.where(T == 1, 1.0, -1.0)
+
+
+def _rd2d_pooled(
+    data, arrs, valid, boundary, p, kernel, h, bwselect, alpha, fuzzy, cluster
+):
+    from .rdrobust import rdrobust
+
+    X1, X2, T, Y = arrs["x1"], arrs["x2"], arrs["t"], arrs["y"]
+    dist = _signed_boundary_distance(X1, X2, T, boundary)
+    frame = pd.DataFrame({"y": Y, "dist": dist})
+    if fuzzy is not None:
+        frame["fz"] = arrs["fuzzy"]
+    if cluster is not None:
+        frame["cl"] = data[cluster].to_numpy()[valid]
+    res = rdrobust(
+        frame,
+        y="y",
+        x="dist",
+        c=0.0,
+        fuzzy="fz" if fuzzy is not None else None,
+        p=p,
+        kernel=kernel,
+        bwselect=bwselect,
+        h=h,
+        alpha=alpha,
+        cluster="cl" if cluster is not None else None,
+        manipulation_test=False,
+    )
+    res.method = "2D Boundary RD (pooled distance to boundary, rdrobust)"
+    res.model_info = dict(res.model_info or {})
+    res.model_info.update(
+        {"approach": "pooled", "boundary": "x1=0" if boundary is None else "custom"}
+    )
+    return res
 
 
 # ======================================================================
@@ -155,65 +365,155 @@ def rd2d(
     x2: str,
     treatment: str,
     boundary: Optional[Callable] = None,
-    approach: str = "distance",
+    approach: str = "location",
     p: int = 1,
     kernel: str = "triangular",
-    h: Optional[float] = None,
+    h: Optional[Union[float, np.ndarray]] = None,
     bwselect: str = "mserd",
     eval_points: Optional[np.ndarray] = None,
     n_eval: int = 1,
     alpha: float = 0.05,
+    *,
+    q: Optional[int] = None,
+    deriv: Tuple[int, int] = (0, 0),
+    tangvec: Optional[np.ndarray] = None,
+    kernel_type: str = "prod",
+    vce: str = "hc1",
+    cluster: Optional[str] = None,
+    fuzzy: Optional[str] = None,
+    fitmethod: str = "joint",
+    bwparam: str = "main",
+    method: str = "dpi",
+    masspoints: str = "check",
+    bwcheck: Union[int, str, None] = "auto",
+    scaleregul: Optional[float] = None,
+    scalebiascrct: float = 1.0,
+    stdvars: bool = True,
+    kink_unknown: Union[bool, Tuple[bool, bool]] = False,
+    kink_position: Optional[Sequence] = None,
+    cqt: float = 0.5,
+    distance: Optional[Union[np.ndarray, List[str]]] = None,
+    side: str = "two",
+    weights: Optional[Sequence[float]] = None,
 ) -> CausalResult:
     """
-    2D boundary regression discontinuity estimation.
+    Boundary discontinuity design: pointwise effects along a 2-D boundary.
 
-    Estimates treatment effects in designs where units are assigned to
-    treatment based on their position relative to a boundary curve in
-    the (x1, x2) plane.
+    Ports R ``rd2d::rd2d`` (``approach="location"``) and
+    ``rd2d::rd2d.distance`` (``approach="distance"``) [@cattaneo2025boundary].
+    Estimates ``tau(b)`` at every row ``b`` of ``eval_points``.  Following
+    the reference, inference is robust bias-corrected: the point estimate
+    ``estimate_q`` and standard error ``std_err_q`` come from the order
+    ``q = p + 1`` fit, and the interval and p-value are built from them;
+    the order-``p`` estimate is reported as ``estimate_p``.
+
+    The headline ``estimate`` is ``estimate_q`` at the single evaluation
+    point, or -- when several are given -- R's weighted boundary average
+    treatment effect (``summary(fit, WBATE = weights)``): the weighted
+    average of the pointwise ``estimate_q`` with the standard error implied
+    by their full covariance matrix (R's ``params.cov = "main"``).  Equal
+    weights by default; the conventional ``sum(w * estimate_p)`` and the
+    full WBATE row are in ``model_info["wbate"]``, the per-point table in
+    ``result.detail``.
 
     Parameters
     ----------
     data : pd.DataFrame
-        Input dataset.
     y : str
-        Outcome variable name.
-    x1 : str
-        First running variable (score dimension 1).
-    x2 : str
-        Second running variable (score dimension 2).
+        Outcome.
+    x1, x2 : str
+        The two running variables.
     treatment : str
-        Binary treatment indicator (1 = treated, 0 = control).
+        0/1 assignment (R's ``assignment``); defines the two sides of the
+        boundary.
     boundary : callable, optional
-        Function ``f(x1) -> x2`` defining the boundary curve.  If None,
-        the boundary is the vertical line ``x1 = 0``.
-    approach : str, default 'distance'
-        ``'distance'``: project onto signed distance to boundary, then
-        apply univariate local polynomial RD.
-        ``'location'``: fit bivariate local polynomial on each side of
-        the boundary at evaluation points.
+        ``f(x1) -> x2`` describing the boundary; used only to place default
+        evaluation points (``n_eval`` of them) and by ``approach="pooled"``.
+        ``None`` means the line ``x1 = 0``.
+    approach : {'location', 'distance', 'pooled'}, default 'location'
+        See the module docstring.
     p : int, default 1
-        Polynomial order for point estimation (1 = local linear).
-    kernel : str, default 'triangular'
-        Kernel function: 'triangular', 'uniform', or 'epanechnikov'.
-    h : float, optional
-        Manual bandwidth. If None, MSE-optimal bandwidth is selected.
+        Polynomial order of the point estimator.
+    kernel : {'triangular', 'epanechnikov', 'uniform', 'gaussian'}
+    h : float or array, optional
+        Bandwidth. ``location``: scalar or ``(k, 4)`` array
+        ``(h01, h02, h11, h12)``; ``distance``: scalar or ``(k, 2)`` array
+        ``(h0, h1)``.  ``None`` selects it (R ``rdbw2d`` /
+        ``rdbw2d.distance``).
     bwselect : str, default 'mserd'
-        Bandwidth selection method (used when ``h`` is None).
-    eval_points : np.ndarray, optional
-        Shape ``(k, 2)`` array of boundary evaluation points.  If None,
-        points are automatically selected along the boundary.
+        ``mserd``, ``cerrd``, ``imserd``, ``icerrd``, ``msetwo``,
+        ``certwo``, ``imsetwo`` or ``icertwo``.
+    eval_points : array (k, 2), optional
+        Boundary points (R's ``b``).  Default: ``n_eval`` points along
+        ``boundary`` between the 10th and 90th percentiles of the data.
     n_eval : int, default 1
-        Number of evaluation points when ``eval_points`` is None.
-        Use 1 for a single pooled effect.
     alpha : float, default 0.05
-        Significance level for confidence intervals.
+        ``1 - alpha`` is R's ``level / 100``.
+    q : int, optional
+        Order of the bias-correction fit; default ``p + 1`` (``p`` for the
+        distance approach with ``kink_unknown``).
+    deriv : (int, int), default (0, 0)
+        Location approach: partial derivative of the effect to estimate.
+    tangvec : array (k, 2), optional
+        Location approach: tangential direction for a directional
+        derivative (overrides ``deriv``).
+    kernel_type : {'prod', 'rad'}, default 'prod'
+        Location approach: product or radial kernel.
+    vce : {'hc1', 'hc0', 'hc2', 'hc3'}, default 'hc1'
+    cluster : str, optional
+        Cluster identifier (vce must then be hc0 or hc1).
+    fuzzy : str, optional
+        Treatment take-up for a fuzzy design; the effect is the ratio of
+        the outcome and take-up jumps.
+    fitmethod : {'joint', 'separate'}, default 'joint'
+        ``joint`` applies the degrees-of-freedom correction to both sides
+        together (R's default).
+    bwparam : {'main', 'itt'}, default 'main'
+        Fuzzy designs: select the bandwidth for the ratio or the ITT.
+    method : {'dpi', 'rot'}, default 'dpi'
+        Location approach: pilot bandwidth rule for the bias constants.
+    masspoints : {'check', 'adjust', 'off'}, default 'check'
+    bwcheck : int, None or 'auto'
+        Minimum number of observations (or mass points) inside every
+        bandwidth; ``'auto'`` is R's default ``50 + p + 1``.
+    scaleregul : float, optional
+        Regularisation weight of the bandwidth selector; default is R's
+        (3 for location, 1 for distance).
+    scalebiascrct : float, default 1
+        Location approach: weight of the higher-order bias correction in
+        the bandwidth selector.
+    stdvars : bool, default True
+        Location approach: standardise x1, x2 before selecting bandwidths.
+    kink_unknown : bool or (bool, bool), default False
+        Distance approach: boundary may have kinks at unknown places;
+        undersmooth the bandwidth (first) and the bias-correction bandwidth
+        (second).
+    kink_position : sequence, optional
+        Distance approach: 0-based indices (or a boolean mask) of
+        evaluation points that are known kinks of the boundary.
+    cqt : float, default 0.5
+        Distance approach: quantile of the distance below which the pilot
+        polynomial for the bias constant is fitted.
+    distance : array (n, k) or list of column names, optional
+        Distance approach: signed distances (non-negative on the treated
+        side) to each evaluation point.  Default: Euclidean distance to
+        ``eval_points`` signed by ``treatment``.
+    side : {'two', 'left', 'right'}, default 'two'
+        Two-sided or one-sided intervals.
+    weights : sequence of float, optional
+        WBATE weights over the evaluation points (R ``summary(..., WBATE=)``);
+        normalised to sum to one.  Default: equal weights.
 
     Returns
     -------
     CausalResult
-        Treatment effect estimate with standard errors, confidence
-        intervals, and optional detail table with point-by-point
-        estimates along the boundary.
+        ``detail`` holds one row per evaluation point with R's ``main``
+        columns (``b1, b2, estimate_p, std_err_p, estimate_q, std_err_q,
+        t_value, p_value, ci_lower, ci_upper``, bandwidths, effective
+        sample sizes).  ``model_info`` holds the covariance matrices of the
+        ``p`` and ``q`` estimates across points (``cov_p``, ``cov_q``), the
+        side-specific intercepts and, for fuzzy designs, the ITT and first
+        stage.
 
     Examples
     --------
@@ -221,103 +521,393 @@ def rd2d(
     >>> import pandas as pd
     >>> import statspai as sp
     >>> rng = np.random.default_rng(42)
-    >>> n = 800
+    >>> n = 3000
     >>> x1 = rng.uniform(-1, 1, n)
     >>> x2 = rng.uniform(-1, 1, n)
     >>> treat = (x1 >= 0).astype(int)
     >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
-    >>> res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="treat")
-    >>> round(float(res.estimate), 2)
-    1.45
+    >>> b = [[0.0, -0.5], [0.0, 0.0], [0.0, 0.5]]
+    >>> res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="treat",
+    ...               eval_points=b)
+    >>> res.detail[["b2", "estimate_q", "std_err_q"]].shape
+    (3, 3)
+
+    References
+    ----------
+    [@cattaneo2025boundary] (R package ``rd2d``); [@keele2015geographic]
+    for ``approach="pooled"``.
     """
-    _require_dataframe(data)
-    _require_columns(data, [y, x1, x2, treatment])
-    _require_options(approach=approach, kernel=kernel, p=p, h=h, alpha=alpha)
-    if boundary is not None and not callable(boundary):
-        raise MethodIncompatibility(
-            "boundary must be callable or None",
-            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
-            diagnostics={"boundary_type": type(boundary).__name__},
-        )
-    if not isinstance(n_eval, int) or isinstance(n_eval, bool) or n_eval < 1:
-        raise MethodIncompatibility(
-            "n_eval must be a positive integer",
-            recovery_hint="Pass n_eval=1 for a pooled effect or a larger integer.",
-            diagnostics={"n_eval": n_eval},
-        )
-    if eval_points is not None:
-        eval_points = np.asarray(eval_points, dtype=float)
-        if (
-            eval_points.ndim != 2
-            or eval_points.shape[1] != 2
-            or not np.isfinite(eval_points).all()
-        ):
-            raise MethodIncompatibility(
-                "eval_points must be a finite array with shape (k, 2)",
-                recovery_hint="Pass boundary points as [[x1, x2], ...].",
-                diagnostics={"shape": tuple(eval_points.shape)},
+    approach = _choice(approach, _APPROACHES, "approach")
+    cols = [("y", y), ("x1", x1), ("x2", x2), ("treatment", treatment)]
+    if fuzzy is not None:
+        cols.append(("fuzzy", fuzzy))
+    if cluster is not None:
+        cols.append(("cluster", cluster))
+    _require_frame(data, cols)
+    kernel = _kernel(kernel)
+    p = _nonneg_int(p, "p")
+    if q is not None:
+        q = _nonneg_int(q, "q")
+        if q < p:
+            raise _bad(
+                "q must be no smaller than p", "Use q=None (p + 1) or q >= p.", p=p, q=q
             )
+    if h is not None:
+        harr = np.asarray(h, dtype=float)
+        if not np.all(np.isfinite(harr)) or np.any(harr <= 0):
+            raise _bad(
+                "h must be positive and finite",
+                "Pass a positive bandwidth or h=None.",
+                h=repr(h),
+            )
+    if not (isinstance(alpha, (float, int)) and 0 < alpha < 1):
+        raise _bad(
+            "alpha must be between 0 and 1",
+            "Pass a significance level such as alpha=0.05.",
+            alpha=alpha,
+        )
+    if boundary is not None and not callable(boundary):
+        raise _bad(
+            "boundary must be callable or None",
+            "Pass boundary=lambda x1: f(x1), or leave boundary=None.",
+            boundary_type=type(boundary).__name__,
+        )
+    if (
+        not isinstance(n_eval, (int, np.integer))
+        or isinstance(n_eval, bool)
+        or n_eval < 1
+    ):
+        raise _bad(
+            "n_eval must be a positive integer",
+            "Pass n_eval=1 or a larger integer.",
+            n_eval=n_eval,
+        )
+    kernel_type = _choice(kernel_type, _KERNEL_TYPES, "kernel_type")
+    vce = _choice(vce, _VCES, "vce")
+    bwselect = _choice(bwselect, _BWSELECTS, "bwselect")
+    masspoints = _choice(masspoints, _MASSPOINTS, "masspoints")
+    fitmethod = _choice(fitmethod, _FITMETHODS, "fitmethod")
+    method = _choice(method, ("dpi", "rot"), "method")
+    bwparam = _choice(bwparam, ("main", "itt"), "bwparam")
+    side = _choice(side, ("two", "left", "right"), "side")
+    if cluster is not None and vce not in ("hc0", "hc1"):
+        warnings.warn(
+            "When cluster is specified, vce must be 'hc0' or 'hc1'. Resetting vce "
+            "to 'hc1'.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        vce = "hc1"
 
-    # --- Extract and clean data ---
-    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
-
-    valid = np.isfinite(Y) & np.isfinite(X1) & np.isfinite(X2) & np.isfinite(T)
-    Y, X1, X2, T = Y[valid], X1[valid], X2[valid], T[valid]
-    n = len(Y)
-
+    arrs = _numeric(data, {"y": y, "x1": x1, "x2": x2, "t": treatment, "fuzzy": fuzzy})
+    valid = (
+        np.isfinite(arrs["y"])
+        & np.isfinite(arrs["x1"])
+        & np.isfinite(arrs["x2"])
+        & np.isfinite(arrs["t"])
+    )
+    if fuzzy is not None:
+        valid &= np.isfinite(arrs["fuzzy"])
+    if cluster is not None:
+        valid &= data[cluster].notna().to_numpy()
+    arrs = {k: v[valid] for k, v in arrs.items()}
+    n = int(valid.sum())
     if n < 20:
-        raise DataInsufficient(  # pragma: no cover
+        raise DataInsufficient(
             f"Too few valid observations ({n}). Need at least 20.",
             recovery_hint="Provide at least 20 complete finite rows.",
-            diagnostics={"n_valid": int(n), "min_required": 20},
+            diagnostics={"n_valid": n, "min_required": 20},
         )
-
-    treated = T == 1
-    control = T == 0
-    n_treated = int(treated.sum())
-    n_control = int(control.sum())
-    if n_treated < 5 or n_control < 5:
-        raise DataInsufficient(  # pragma: no cover
-            f"Too few treated ({n_treated}) or control ({n_control}) units.",
+    T = arrs["t"]
+    if not np.all(np.isin(T, (0.0, 1.0))):
+        raise _bad("treatment must be a 0/1 indicator", "Recode the assignment as 0/1.")
+    n1, n0 = int((T == 1).sum()), int((T == 0).sum())
+    if n1 < 5 or n0 < 5:
+        raise DataInsufficient(
+            f"Too few treated ({n1}) or control ({n0}) units.",
             recovery_hint="Provide at least 5 treated and 5 control units.",
-            diagnostics={"n_treated": n_treated, "n_control": n_control},
+            diagnostics={"n_treated": n1, "n_control": n0},
+        )
+    cl = data[cluster].to_numpy()[valid] if cluster is not None else None
+
+    if approach == "pooled":
+        return _rd2d_pooled(
+            data, arrs, valid, boundary, p, kernel, h, bwselect, alpha, fuzzy, cluster
         )
 
-    if approach == "distance":
-        return _rd2d_distance(
-            Y,
-            X1,
-            X2,
-            T,
-            treated,
-            control,
-            boundary,
-            p,
-            kernel,
-            h,
-            bwselect,
-            alpha,
-            n,
-        )
-    else:  # location
-        return _rd2d_location(
-            Y,
-            X1,
-            X2,
-            T,
-            treated,
-            control,
-            boundary,
-            p,
-            kernel,
-            h,
-            bwselect,
-            eval_points,
-            n_eval,
-            alpha,
-            n,
-        )
+    b = _eval_points(eval_points, arrs["x1"], arrs["x2"], boundary, n_eval)
+    neval = len(b)
+    level_z = alpha
+    if weights is not None:
+        wv = np.asarray(weights, dtype=float)
+        if wv.shape != (neval,) or not np.all(np.isfinite(wv)) or wv.sum() == 0:
+            raise _bad(
+                "weights must be finite, one per evaluation point, with a nonzero sum",
+                "Pass weights of length len(eval_points), or None for equal weights.",
+                n_weights=int(wv.size),
+                neval=neval,
+            )
+    bwcheck_v = _bwcheck_value(bwcheck, 50 + p + 1)
+    try:
+        if approach == "location":
+            if tangvec is not None:
+                tangvec = np.asarray(tangvec, dtype=float).reshape(neval, 2)
+                if p < 1:
+                    raise _bad("tangvec requires p >= 1", "Use p=1 or larger.")
+            dv = tuple(int(v) for v in deriv)
+            if len(dv) != 2 or min(dv) < 0 or sum(dv) > p:
+                raise _bad(
+                    "deriv must be two non-negative integers summing to at most p",
+                    "Use deriv=(0, 0) for the effect itself.",
+                    deriv=deriv,
+                )
+            if h is not None:
+                harr = np.asarray(h, dtype=float)
+                if harr.size != 1 and harr.shape != (neval, 4):
+                    raise _bad(
+                        "h must be a scalar or an array of shape (k, 4)",
+                        "Pass h=(h01, h02, h11, h12) per evaluation point.",
+                        shape=harr.shape,
+                    )
+            Y = (
+                arrs["y"]
+                if fuzzy is None
+                else np.column_stack([arrs["y"], arrs["fuzzy"]])
+            )
+            D = Rd2dData(arrs["x1"], arrs["x2"], T, Y, cl)
+            res = rd2d_location_fit(
+                D,
+                b,
+                h,
+                p,
+                p + 1 if q is None else q,
+                dv,
+                tangvec,
+                kernel,
+                kernel_type,
+                vce,
+                masspoints,
+                bwcheck_v,
+                fitmethod,
+                bwselect,
+                method,
+                3.0 if scaleregul is None else float(scaleregul),
+                float(scalebiascrct),
+                bool(stdvars),
+                bwparam,
+            )
+        else:
+            Dm = _distance_matrix(arrs["x1"], arrs["x2"], T, b, distance, data, valid)
+            if h is not None:
+                harr = np.asarray(h, dtype=float)
+                if harr.size != 1 and harr.shape != (neval, 2):
+                    raise _bad(
+                        "h must be a scalar or an array of shape (k, 2)",
+                        "Pass h=(h0, h1) per evaluation point.",
+                        shape=harr.shape,
+                    )
+            ku = _kink_unknown(kink_unknown)
+            kp = _kink_position(kink_position, neval)
+            if kp.any() and ku[0]:
+                raise _bad(
+                    "Use either kink_position or kink_unknown, not both.",
+                    "Drop one of the two kink options.",
+                )
+            if h is not None and (kp.any() or ku[0]):
+                raise _bad(
+                    "kink options apply only to automatic bandwidth selection.",
+                    "Omit h to use kink_position / kink_unknown.",
+                )
+            res = rd2d_distance_estimate(
+                arrs["y"],
+                Dm,
+                b,
+                h,
+                p,
+                q,
+                ku,
+                kp,
+                kernel,
+                bwselect,
+                vce,
+                bwcheck_v,
+                masspoints,
+                cl,
+                fitmethod,
+                1.0 if scaleregul is None else float(scaleregul),
+                float(cqt),
+                None if fuzzy is None else arrs["fuzzy"],
+                bwparam,
+            )
+    except ValueError as exc:
+        if "bwcheck" in str(exc):
+            raise DataInsufficient(
+                str(exc),
+                recovery_hint="Decrease bwcheck or set bwcheck=None.",
+                diagnostics={"bwcheck": bwcheck_v},
+            ) from exc
+        raise
+    return _build_result(
+        res,
+        b,
+        approach,
+        p,
+        kernel,
+        kernel_type,
+        vce,
+        fitmethod,
+        level_z,
+        side,
+        n,
+        fuzzy is not None,
+        cluster,
+        masspoints,
+        weights,
+    )
+
+
+def _inference(est: np.ndarray, se: np.ndarray, alpha: float, side: str):
+    t = est / se
+    pv = 2 * stats.norm.sf(np.abs(t))
+    if side == "two":
+        z = stats.norm.ppf(1 - alpha / 2)
+        return t, pv, est - z * se, est + z * se
+    z = stats.norm.ppf(1 - alpha)
+    if side == "left":
+        return t, pv, np.full_like(est, -np.inf), est + z * se
+    return t, pv, est - z * se, np.full_like(est, np.inf)
+
+
+def _build_result(
+    res,
+    b,
+    approach,
+    p,
+    kernel,
+    kernel_type,
+    vce,
+    fitmethod,
+    alpha,
+    side,
+    n,
+    is_fuzzy,
+    cluster,
+    masspoints,
+    weights=None,
+) -> CausalResult:
+    est_p, se_p = res["tau_p"], res["se_p"]
+    est_q, se_q = res["tau_q"], res["se_q"]
+    t, pv, lo, hi = _inference(est_q, se_q, alpha, side)
+    detail = pd.DataFrame(
+        {
+            "b1": b[:, 0],
+            "b2": b[:, 1],
+            "estimate_p": est_p,
+            "std_err_p": se_p,
+            "estimate_q": est_q,
+            "std_err_q": se_q,
+            "t_value": t,
+            "p_value": pv,
+            "ci_lower": lo,
+            "ci_upper": hi,
+        }
+    )
+    if approach == "location":
+        fp = res["fit_p"]
+        detail["h01"], detail["h02"] = res["hgrid0"][:, 0], res["hgrid0"][:, 1]
+        detail["h11"], detail["h12"] = res["hgrid1"][:, 0], res["hgrid1"][:, 1]
+        detail["n_co"], detail["n_tr"] = fp["eN0"].astype(int), fp["eN1"].astype(int)
+        if kernel_type == "rad":
+            # radius of the radial kernel actually used: sqrt(hx^2 + hy^2)
+            detail["radius_co"] = np.hypot(fp["h0x"], fp["h0y"])
+            detail["radius_tr"] = np.hypot(fp["h1x"], fp["h1y"])
+    else:
+        f = res["fit_p"][0]
+        detail["h0"], detail["h1"] = res["hfull"][:, 0], res["hfull"][:, 1]
+        detail["h0_rbc"], detail["h1_rbc"] = res["hrbc"][:, 0], res["hrbc"][:, 1]
+        detail["n_co"], detail["n_tr"] = f["N0"].astype(int), f["N1"].astype(int)
+    k = len(b)
+    if weights is None:
+        w = np.full(k, 1.0 / k)
+    else:
+        w = np.asarray(weights, dtype=float) / float(np.sum(weights))
+    # R summary.rd2d(WBATE = w): conventional sum(w * estimate.p); inference
+    # centred at sum(w * estimate.q) with se sqrt(w' V_q w).
+    est = float(w @ est_q)
+    se = float(math.sqrt(max(float(w @ res["cov_q"] @ w), 0.0)))
+    tt, pp, l0, h0 = _inference(np.array([est]), np.array([se]), alpha, side)
+    wbate = {
+        "weights": w,
+        "estimate_p": float(w @ est_p),
+        "estimate_q": est,
+        "std_err_q": se,
+        "t_value": float(tt[0]),
+        "p_value": float(pp[0]),
+        "ci_lower": float(l0[0]),
+        "ci_upper": float(h0[0]),
+    }
+    if k == 1:
+        estimand = "Boundary effect tau(b) at the evaluation point"
+    elif weights is None:
+        estimand = "WBATE: equally weighted average of the pointwise boundary effects"
+    else:
+        estimand = "WBATE: weighted average of the pointwise boundary effects"
+    info: Dict[str, Any] = {
+        "approach": approach,
+        "reference": "R rd2d 1.0.0 "
+        + ("rd2d()" if approach == "location" else "rd2d.distance()"),
+        "polynomial_p": p,
+        "kernel": kernel,
+        "vce": vce,
+        "fitmethod": fitmethod,
+        "masspoints": masspoints,
+        "bwcheck": res["bwcheck"],
+        "bwselect": res["bwselect"],
+        "cluster": cluster,
+        "fuzzy": is_fuzzy,
+        "side": side,
+        "n_eval_points": k,
+        "eval_points": b.tolist(),
+        "cov_p": res["cov_p"],
+        "cov_q": res["cov_q"],
+        "headline": "estimate_q" if k == 1 else "WBATE (bias-corrected centre)",
+        "wbate": wbate,
+    }
+    if approach == "location":
+        info["kernel_type"] = kernel_type
+        info["deriv"] = res["deriv"]
+        for tag in ("p", "q"):
+            f = res[f"fit_{tag}"]
+            # bandwidths the fits actually used (after the bwcheck clamp)
+            info[f"h_used_{tag}"] = np.column_stack(
+                [f["h0x"], f["h0y"], f["h1x"], f["h1y"]]
+            )
+    else:
+        info["q"] = res["q"]
+    if is_fuzzy:
+        for tag in ("p", "q"):
+            info[f"itt_{tag}"] = res[f"itt_{tag}"]
+            info[f"fs_{tag}"] = res[f"fs_{tag}"]
+            info[f"se_itt_{tag}"] = res[f"se_itt_{tag}"]
+            info[f"se_fs_{tag}"] = res[f"se_fs_{tag}"]
+    else:
+        for tag in ("p", "q"):
+            for part in ("mu0", "mu1", "se0", "se1"):
+                info[f"{part}_{tag}"] = res[f"{part}_{tag}"]
+    return CausalResult(
+        method=f"2D Boundary RD ({approach}-based, rd2d)",
+        estimand=estimand,
+        estimate=est,
+        se=se,
+        pvalue=float(pp[0]),
+        ci=(float(l0[0]), float(h0[0])),
+        alpha=alpha,
+        n_obs=n,
+        detail=detail,
+        model_info=info,
+        _citation_key="rd2d",
+    )
 
 
 def rd2d_bw(
@@ -327,36 +917,56 @@ def rd2d_bw(
     x2: str,
     treatment: str,
     boundary: Optional[Callable] = None,
-    approach: str = "distance",
+    approach: str = "location",
     p: int = 1,
     kernel: str = "triangular",
-) -> float:
+    *,
+    eval_points: Optional[np.ndarray] = None,
+    n_eval: int = 1,
+    deriv: Tuple[int, int] = (0, 0),
+    tangvec: Optional[np.ndarray] = None,
+    kernel_type: str = "prod",
+    bwselect: str = "mserd",
+    method: str = "dpi",
+    vce: str = "hc1",
+    cluster: Optional[str] = None,
+    fuzzy: Optional[str] = None,
+    bwparam: str = "main",
+    fitmethod: str = "joint",
+    masspoints: str = "check",
+    bwcheck: Union[int, str, None] = "auto",
+    scaleregul: float = 1.0,
+    scalebiascrct: float = 1.0,
+    stdvars: bool = True,
+    kink_unknown: Union[bool, Tuple[bool, bool]] = False,
+    kink_position: Optional[Sequence] = None,
+    cqt: float = 0.5,
+    distance: Optional[Union[np.ndarray, List[str]]] = None,
+) -> pd.DataFrame:
     """
-    Bandwidth selection for 2D boundary RD.
+    Bandwidth selection for boundary discontinuity designs.
+
+    Ports R ``rd2d::rdbw2d`` (``approach="location"``) and
+    ``rd2d::rdbw2d.distance`` (``approach="distance"``)
+    [@cattaneo2025boundary], with *their* defaults -- ``bwcheck = 20``
+    (location) / ``20 + p + 1`` (distance) and ``scaleregul = 1`` -- which
+    differ from the values :func:`sp.rd2d` passes when it selects the
+    bandwidth itself (``50 + p + 1`` and 3), exactly as in R.
+
+    .. versionchanged:: 1.29.0
+       Returns a DataFrame of per-point bandwidths (R's ``$bws``) instead
+       of one float; see MIGRATION.md.
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Input dataset.
-    y : str
-        Outcome variable name.
-    x1, x2 : str
-        Running variable names.
-    treatment : str
-        Binary treatment indicator.
-    boundary : callable, optional
-        Boundary function f(x1) -> x2.  None implies x1 = 0.
-    approach : str, default 'distance'
-        'distance' or 'location'.
-    p : int, default 1
-        Polynomial order.
-    kernel : str, default 'triangular'
-        Kernel function.
+    See :func:`sp.rd2d`; ``approach="pooled"`` is not available here
+    (use :func:`sp.rdbwselect` on the signed distance).
 
     Returns
     -------
-    float
-        MSE-optimal bandwidth.
+    pd.DataFrame
+        ``b1, b2, h01, h02, h11, h12`` (location) or ``b1, b2, h0, h1``
+        (distance), one row per evaluation point.
 
     Examples
     --------
@@ -364,1019 +974,138 @@ def rd2d_bw(
     >>> import pandas as pd
     >>> import statspai as sp
     >>> rng = np.random.default_rng(42)
-    >>> n = 800
+    >>> n = 2000
     >>> x1 = rng.uniform(-1, 1, n)
     >>> x2 = rng.uniform(-1, 1, n)
     >>> treat = (x1 >= 0).astype(int)
     >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
     >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
-    >>> h = sp.rd2d_bw(df, y="y", x1="x1", x2="x2", treatment="treat")
-    >>> round(float(h), 3)
-    0.338
+    >>> bw = sp.rd2d_bw(df, y="y", x1="x1", x2="x2", treatment="treat")
+    >>> list(bw.columns)
+    ['b1', 'b2', 'h01', 'h02', 'h11', 'h12']
     """
-    _require_dataframe(data)
-    _require_columns(data, [y, x1, x2, treatment])
-    _require_options(approach=approach, kernel=kernel, p=p, h=None)
+    approach = _choice(approach, ("location", "distance"), "approach")
+    cols = [("y", y), ("x1", x1), ("x2", x2), ("treatment", treatment)]
+    if fuzzy is not None:
+        cols.append(("fuzzy", fuzzy))
+    if cluster is not None:
+        cols.append(("cluster", cluster))
+    _require_frame(data, cols)
+    kernel = _kernel(kernel)
+    p = _nonneg_int(p, "p")
     if boundary is not None and not callable(boundary):
-        raise MethodIncompatibility(
+        raise _bad(
             "boundary must be callable or None",
-            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
-            diagnostics={"boundary_type": type(boundary).__name__},
+            "Pass boundary=lambda x1: f(x1), or leave boundary=None.",
+            boundary_type=type(boundary).__name__,
         )
-
-    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
-
-    valid = np.isfinite(Y) & np.isfinite(X1) & np.isfinite(X2) & np.isfinite(T)
-    Y, X1, X2, T = Y[valid], X1[valid], X2[valid], T[valid]
-
-    treated = T == 1
-    control = T == 0
-
-    if approach == "distance":
-        dist = _signed_distance(X1, X2, T, boundary)
-        return _bw_mse_optimal_1d(Y, dist, p, kernel)
-    else:
-        return _bw_mse_optimal_2d(Y, X1, X2, T, treated, control, boundary, p, kernel)
-
-
-def rd2d_plot(
-    data: pd.DataFrame,
-    y: str,
-    x1: str,
-    x2: str,
-    treatment: str,
-    boundary: Optional[Callable[..., Any]] = None,
-    result: Optional[CausalResult] = None,
-    plot_type: str = "scatter",
-    ax: Optional[Any] = None,
-    figsize: Tuple[float, float] = (10, 8),
-) -> Tuple[Any, Any]:
-    """
-    2D boundary RD visualization.
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Input dataset.
-    y : str
-        Outcome variable name.
-    x1, x2 : str
-        Running variable names.
-    treatment : str
-        Binary treatment indicator.
-    boundary : callable, optional
-        Boundary function f(x1) -> x2.  None implies x1 = 0.
-    result : CausalResult, optional
-        Result from ``rd2d()``, used for bandwidth and effect info.
-    plot_type : str, default 'scatter'
-        ``'scatter'``: 2D scatter of (x1, x2) colored by treatment
-        status, with boundary curve and optional bandwidth region.
-        ``'heatmap'``: outcome values displayed as a heatmap with
-        boundary overlay.
-        ``'boundary_effects'``: treatment effect estimates along the
-        boundary (requires ``result`` with multiple eval points).
-    ax : matplotlib Axes, optional
-        Pre-existing axes to draw on.
-    figsize : tuple, default (10, 8)
-        Figure size.
-
-    Returns
-    -------
-    (fig, ax)
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import pandas as pd
-    >>> import statspai as sp
-    >>> rng = np.random.default_rng(42)
-    >>> n = 800
-    >>> x1 = rng.uniform(-1, 1, n)
-    >>> x2 = rng.uniform(-1, 1, n)
-    >>> treat = (x1 >= 0).astype(int)
-    >>> y = 1.5 * treat + 0.5 * x1 + 0.3 * x2 + rng.normal(0, 0.5, n)
-    >>> df = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "treat": treat})
-    >>> res = sp.rd2d(df, y="y", x1="x1", x2="x2", treatment="treat")
-    >>> fig, ax = sp.rd2d_plot(
-    ...     df, y="y", x1="x1", x2="x2", treatment="treat", result=res
-    ... )
-    """
+    kernel_type = _choice(kernel_type, _KERNEL_TYPES, "kernel_type")
+    vce = _choice(vce, _VCES, "vce")
+    bwselect = _choice(bwselect, _BWSELECTS, "bwselect")
+    masspoints = _choice(masspoints, _MASSPOINTS, "masspoints")
+    fitmethod = _choice(fitmethod, _FITMETHODS, "fitmethod")
+    method = _choice(method, ("dpi", "rot"), "method")
+    bwparam = _choice(bwparam, ("main", "itt"), "bwparam")
+    if cluster is not None and vce not in ("hc0", "hc1"):
+        warnings.warn(
+            "When cluster is specified, vce must be 'hc0' or 'hc1'. Resetting vce "
+            "to 'hc1'.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        vce = "hc1"
+    arrs = _numeric(data, {"y": y, "x1": x1, "x2": x2, "t": treatment, "fuzzy": fuzzy})
+    valid = (
+        np.isfinite(arrs["y"])
+        & np.isfinite(arrs["x1"])
+        & np.isfinite(arrs["x2"])
+        & np.isfinite(arrs["t"])
+    )
+    if fuzzy is not None:
+        valid &= np.isfinite(arrs["fuzzy"])
+    if cluster is not None:
+        valid &= data[cluster].notna().to_numpy()
+    arrs = {k: v[valid] for k, v in arrs.items()}
+    T = arrs["t"]
+    if not np.all(np.isin(T, (0.0, 1.0))):
+        raise _bad("treatment must be a 0/1 indicator", "Recode the assignment as 0/1.")
+    cl = data[cluster].to_numpy()[valid] if cluster is not None else None
+    b = _eval_points(eval_points, arrs["x1"], arrs["x2"], boundary, n_eval)
     try:
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import Normalize
-    except ImportError:  # pragma: no cover
-        raise ImportError(
-            "matplotlib required. Install: pip install matplotlib"
-        )  # pragma: no cover
-
-    _require_dataframe(data)
-    _require_columns(data, [y, x1, x2, treatment])
-    if boundary is not None and not callable(boundary):
-        raise MethodIncompatibility(
-            "boundary must be callable or None",
-            recovery_hint="Pass boundary=lambda x1: f(x1), or leave boundary=None.",
-            diagnostics={"boundary_type": type(boundary).__name__},
-        )
-    if plot_type not in _PLOT_TYPES:
-        raise MethodIncompatibility(
-            f"plot_type must be 'scatter', 'heatmap', or "
-            f"'boundary_effects', got '{plot_type}'",
-            recovery_hint="Use plot_type='scatter', 'heatmap', or 'boundary_effects'.",
-            diagnostics={"plot_type": plot_type},
-        )
-
-    Y, X1, X2, T = _numeric_arrays(data, y, x1, x2, treatment)
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.get_figure()
-
-    # Generate boundary curve for plotting
-    x1_range = np.linspace(X1.min(), X1.max(), 300)
-    if boundary is not None:
-        x2_boundary = np.array([boundary(v) for v in x1_range])
-    else:
-        x2_boundary = None  # vertical line at x1 = 0
-
-    if plot_type == "scatter":
-        treated_mask = T == 1
-        control_mask = T == 0
-
-        ax.scatter(
-            X1[control_mask],
-            X2[control_mask],
-            c="#3498DB",
-            alpha=0.4,
-            s=15,
-            label="Control",
-            zorder=2,
-        )
-        ax.scatter(
-            X1[treated_mask],
-            X2[treated_mask],
-            c="#E74C3C",
-            alpha=0.4,
-            s=15,
-            label="Treated",
-            zorder=2,
-        )
-
-        # Boundary
-        if boundary is not None:
-            assert x2_boundary is not None
-            ax.plot(
-                x1_range, x2_boundary, "k-", linewidth=2, label="Boundary", zorder=3
+        if approach == "location":
+            if tangvec is not None:
+                tangvec = np.asarray(tangvec, dtype=float).reshape(len(b), 2)
+            Y = (
+                arrs["y"]
+                if fuzzy is None
+                else np.column_stack([arrs["y"], arrs["fuzzy"]])
             )
-        else:
-            ax.axvline(x=0, color="k", linewidth=2, label="Boundary (x1=0)", zorder=3)
-
-        # Bandwidth region
-        if result is not None and "bandwidth" in result.model_info:
-            bw = result.model_info["bandwidth"]
-            if boundary is not None:
-                # Draw dashed lines offset from boundary
-                x2_bw_upper = x2_boundary + bw
-                x2_bw_lower = x2_boundary - bw
-                ax.plot(
-                    x1_range,
-                    x2_bw_upper,
-                    "k--",
-                    linewidth=0.8,
-                    alpha=0.5,
-                    label=f"h = {bw:.3f}",
-                )
-                ax.plot(x1_range, x2_bw_lower, "k--", linewidth=0.8, alpha=0.5)
-            else:
-                ax.axvspan(-bw, bw, alpha=0.08, color="gray", label=f"h = {bw:.3f}")
-
-        ax.set_xlabel(x1, fontsize=11)
-        ax.set_ylabel(x2, fontsize=11)
-        ax.set_title("2D Boundary RD: Treatment Assignment", fontsize=13)
-        ax.legend(fontsize=9, loc="best")
-
-    elif plot_type == "heatmap":
-        norm = Normalize(vmin=np.nanpercentile(Y, 2), vmax=np.nanpercentile(Y, 98))
-        scatter = ax.scatter(
-            X1, X2, c=Y, cmap="RdYlBu_r", norm=norm, s=12, alpha=0.7, zorder=2
-        )
-        fig.colorbar(scatter, ax=ax, label=y, shrink=0.8)
-
-        if boundary is not None:
-            assert x2_boundary is not None
-            ax.plot(
-                x1_range, x2_boundary, "k-", linewidth=2.5, label="Boundary", zorder=3
+            D = Rd2dData(arrs["x1"], arrs["x2"], T, Y, cl)
+            out = rd2d_location_bw(
+                D,
+                b,
+                p,
+                tuple(int(v) for v in deriv),
+                tangvec,
+                kernel,
+                kernel_type,
+                bwselect,
+                method,
+                vce,
+                _bwcheck_value(bwcheck, 20),
+                masspoints,
+                fitmethod,
+                float(scaleregul),
+                float(scalebiascrct),
+                bool(stdvars),
+                bwparam,
             )
-        else:
-            ax.axvline(x=0, color="k", linewidth=2.5, label="Boundary (x1=0)", zorder=3)
-
-        ax.set_xlabel(x1, fontsize=11)
-        ax.set_ylabel(x2, fontsize=11)
-        ax.set_title("2D Boundary RD: Outcome Heatmap", fontsize=13)
-        ax.legend(fontsize=9, loc="best")
-
-    elif plot_type == "boundary_effects":
-        if result is None or result.detail is None:
-            raise MethodIncompatibility(  # pragma: no cover
-                "plot_type='boundary_effects' requires a result from "
-                "rd2d() with multiple eval points.",
-                recovery_hint=(
-                    "Pass result=rd2d(..., approach='location', n_eval > 1)."
-                ),
-                diagnostics={"plot_type": plot_type, "has_result": result is not None},
+            h = out["bws"]
+            return pd.DataFrame(
+                {
+                    "b1": b[:, 0],
+                    "b2": b[:, 1],
+                    "h01": h[:, 0],
+                    "h02": h[:, 1],
+                    "h11": h[:, 2],
+                    "h12": h[:, 3],
+                }
             )
-        detail = result.detail
-        if "eval_x1" not in detail.columns:
-            raise MethodIncompatibility(  # pragma: no cover
-                "Result detail does not contain boundary eval points. "
-                "Use approach='location' with n_eval > 1.",
-                recovery_hint=(
-                    "Re-estimate with rd2d(..., approach='location', " "n_eval > 1)."
-                ),
-                diagnostics={"detail_columns": list(detail.columns)},
+        Dm = _distance_matrix(arrs["x1"], arrs["x2"], T, b, distance, data, valid)
+        ku = _kink_unknown(kink_unknown)
+        kp = _kink_position(kink_position, len(b))
+        if kp.any() and ku[0]:
+            raise _bad(
+                "Use either kink_position or kink_unknown, not both.",
+                "Drop one of the two kink options.",
             )
-
-        ax.errorbar(
-            detail["eval_x1"],
-            detail["estimate"],
-            yerr=[
-                detail["estimate"] - detail["ci_lower"],
-                detail["ci_upper"] - detail["estimate"],
-            ],
-            fmt="o-",
-            color="#2C3E50",
-            capsize=4,
-            capthick=1.2,
-            linewidth=1.5,
-            markersize=6,
-            zorder=3,
+        out = rd2d_distance_bw(
+            arrs["y"],
+            Dm,
+            b,
+            p,
+            ku,
+            kp,
+            kernel,
+            bwselect,
+            vce,
+            _bwcheck_value(bwcheck, 20 + p + 1),
+            masspoints,
+            cl,
+            float(scaleregul),
+            float(cqt),
+            fitmethod,
+            None if fuzzy is None else arrs["fuzzy"],
+            bwparam,
         )
-        ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
-
-        # Mark pooled estimate
-        if result.estimate is not None:
-            ax.axhline(
-                y=result.estimate,
-                color="#E74C3C",
-                linestyle=":",
-                linewidth=1.2,
-                alpha=0.8,
-                label=f"Pooled = {result.estimate:.4f}",
-            )
-            ax.legend(fontsize=9, loc="best")
-
-        ax.set_xlabel(f"{x1} (along boundary)", fontsize=11)
-        ax.set_ylabel("Treatment Effect", fontsize=11)
-        ax.set_title("2D Boundary RD: Effects Along Boundary", fontsize=13)
-
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.tick_params(labelsize=10)
-    fig.tight_layout()
-
-    return fig, ax
-
-
-# ======================================================================
-# Distance-based approach
-# ======================================================================
-
-
-def _rd2d_distance(
-    Y: np.ndarray,
-    X1: np.ndarray,
-    X2: np.ndarray,
-    T: np.ndarray,
-    treated: np.ndarray,
-    control: np.ndarray,
-    boundary: Optional[Callable],
-    p: int,
-    kernel: str,
-    h: Optional[float],
-    bwselect: str,
-    alpha: float,
-    n: int,
-) -> CausalResult:
-    """Distance-based 2D RD: project to distance, run univariate RD."""
-    # Compute signed distance to boundary
-    dist = _signed_distance(X1, X2, T, boundary)
-
-    # Bandwidth selection on the distance variable
-    right = dist >= 0  # treated side
-    left = dist < 0  # control side
-
-    n_left = int(left.sum())
-    n_right = int(right.sum())
-    if n_left < p + 2 or n_right < p + 2:
-        raise DataInsufficient(  # pragma: no cover
-            f"Not enough observations on each side of the boundary "
-            f"(left={n_left}, right={n_right}, need >= {p + 2}).",
-            recovery_hint="Increase sample size or use a lower polynomial order.",
-            diagnostics={
-                "n_left": n_left,
-                "n_right": n_right,
-                "min_required_per_side": int(p + 2),
-            },
-        )
-
-    h_auto = h is None
-    if h is None:
-        h = _bw_mse_optimal_1d(Y, dist, p, kernel)
-
-    # Local polynomial RD on distance
-    tau, se, n_eff_l, n_eff_r = _local_poly_rd_1d(Y, dist, left, right, h, p, kernel)
-
-    # Inference
-    z_crit = stats.norm.ppf(1 - alpha / 2)
-    z_stat = tau / se if se > 0 else 0.0
-    pvalue = float(2 * stats.norm.sf(abs(z_stat)))
-    ci = (tau - z_crit * se, tau + z_crit * se)
-
-    detail = pd.DataFrame(
-        {
-            "method": ["Distance-based RD"],
-            "estimate": [tau],
-            "se": [se],
-            "z": [z_stat],
-            "pvalue": [pvalue],
-            "ci_lower": [ci[0]],
-            "ci_upper": [ci[1]],
-        }
+    except ValueError as exc:
+        if "bwcheck" in str(exc):
+            raise DataInsufficient(
+                str(exc),
+                recovery_hint="Decrease bwcheck or set bwcheck=None.",
+                diagnostics={"bwcheck": bwcheck},
+            ) from exc
+        raise
+    return pd.DataFrame(
+        {"b1": b[:, 0], "b2": b[:, 1], "h0": out["h0"], "h1": out["h1"]}
     )
-
-    model_info: Dict[str, Any] = {
-        "approach": "distance",
-        "polynomial_p": p,
-        "kernel": kernel,
-        "bandwidth": round(float(h), 6),
-        "bwselect": bwselect if h_auto else "manual",
-        "n_left": n_left,
-        "n_right": n_right,
-        "n_effective_left": n_eff_l,
-        "n_effective_right": n_eff_r,
-        "boundary": "x1=0" if boundary is None else "custom",
-    }
-
-    return CausalResult(
-        method="2D Boundary RD (distance-based)",
-        estimand="Boundary RD Effect",
-        estimate=tau,
-        se=se,
-        pvalue=pvalue,
-        ci=ci,
-        alpha=alpha,
-        n_obs=n,
-        detail=detail,
-        model_info=model_info,
-        _citation_key="rd2d",
-    )
-
-
-# ======================================================================
-# Location-based approach
-# ======================================================================
-
-
-def _rd2d_location(
-    Y: np.ndarray,
-    X1: np.ndarray,
-    X2: np.ndarray,
-    T: np.ndarray,
-    treated: np.ndarray,
-    control: np.ndarray,
-    boundary: Optional[Callable],
-    p: int,
-    kernel: str,
-    h: Optional[float],
-    bwselect: str,
-    eval_points: Optional[np.ndarray],
-    n_eval: int,
-    alpha: float,
-    n: int,
-) -> CausalResult:
-    """Location-based 2D RD: bivariate local polynomial at boundary."""
-    # Determine evaluation points along boundary
-    if eval_points is not None:
-        eval_pts = np.atleast_2d(eval_points)
-    else:
-        eval_pts = _generate_eval_points(X1, X2, boundary, n_eval)
-
-    # Bandwidth selection
-    h_auto = h is None
-    if h is None:
-        h = _bw_mse_optimal_2d(Y, X1, X2, T, treated, control, boundary, p, kernel)
-
-    z_crit = stats.norm.ppf(1 - alpha / 2)
-
-    # Estimate effect at each evaluation point
-    point_results = []
-    for k in range(len(eval_pts)):
-        b1, b2 = eval_pts[k, 0], eval_pts[k, 1]
-
-        tau_k, se_k = _bivariate_local_poly_rd(
-            Y, X1, X2, treated, control, b1, b2, h, p, kernel
-        )
-
-        z_k = tau_k / se_k if se_k > 0 else 0.0
-        pv_k = float(2 * stats.norm.sf(abs(z_k)))
-        ci_k = (tau_k - z_crit * se_k, tau_k + z_crit * se_k)
-
-        point_results.append(
-            {
-                "eval_x1": b1,
-                "eval_x2": b2,
-                "estimate": tau_k,
-                "se": se_k,
-                "z": z_k,
-                "pvalue": pv_k,
-                "ci_lower": ci_k[0],
-                "ci_upper": ci_k[1],
-            }
-        )
-
-    detail = pd.DataFrame(point_results)
-
-    # Pool estimates via inverse-variance weighting
-    if len(point_results) == 1:
-        tau_pool = point_results[0]["estimate"]
-        se_pool = point_results[0]["se"]
-    else:
-        tau_pool, se_pool = _inverse_variance_pool(
-            detail["estimate"].values, detail["se"].values
-        )
-
-    z_pool = tau_pool / se_pool if se_pool > 0 else 0.0
-    pv_pool = float(2 * stats.norm.sf(abs(z_pool)))
-    ci_pool = (tau_pool - z_crit * se_pool, tau_pool + z_crit * se_pool)
-
-    model_info: Dict[str, Any] = {
-        "approach": "location",
-        "polynomial_p": p,
-        "kernel": kernel,
-        "bandwidth": round(float(h), 6),
-        "bwselect": bwselect if h_auto else "manual",
-        "n_eval_points": len(eval_pts),
-        "eval_points": eval_pts.tolist(),
-        "boundary": "x1=0" if boundary is None else "custom",
-    }
-
-    return CausalResult(
-        method="2D Boundary RD (location-based)",
-        estimand="Boundary RD Effect",
-        estimate=tau_pool,
-        se=se_pool,
-        pvalue=pv_pool,
-        ci=ci_pool,
-        alpha=alpha,
-        n_obs=n,
-        detail=detail,
-        model_info=model_info,
-        _citation_key="rd2d",
-    )
-
-
-# ======================================================================
-# Distance computation helpers
-# ======================================================================
-
-
-def _signed_distance(
-    X1: np.ndarray,
-    X2: np.ndarray,
-    T: np.ndarray,
-    boundary: Optional[Callable],
-) -> np.ndarray:
-    """
-    Compute signed distance from each observation to the boundary.
-
-    Positive on the treated side, negative on the control side.
-    """
-    if boundary is None:
-        return _signed_distance_to_vertical(X1, T, cutoff=0.0)
-    else:
-        return _signed_distance_to_curve(X1, X2, T, boundary)
-
-
-def _signed_distance_to_vertical(
-    X1: np.ndarray,
-    T: np.ndarray,
-    cutoff: float = 0.0,
-) -> np.ndarray:
-    """
-    Signed distance to vertical boundary x1 = cutoff.
-
-    For vertical boundary, distance is simply x1 - cutoff.
-    Sign is determined by position relative to cutoff (not treatment
-    status), so it works correctly for both sharp and fuzzy designs.
-    Positive = right of cutoff, negative = left.
-    """
-    return X1 - cutoff
-
-
-def _signed_distance_to_curve(
-    X1: np.ndarray,
-    X2: np.ndarray,
-    T: np.ndarray,
-    boundary_fn: Callable[[float], float],
-) -> np.ndarray:
-    """
-    Signed distance to an arbitrary boundary curve f(x1) -> x2.
-
-    For each observation, numerically finds the closest point on the
-    boundary and computes the Euclidean distance.  Sign is positive
-    for treated, negative for control.
-    """
-    n = len(X1)
-    dist = np.empty(n)
-
-    # Determine search range for boundary parameter
-    x1_min, x1_max = X1.min(), X1.max()
-    margin = 0.1 * (x1_max - x1_min)
-    search_lo = x1_min - margin
-    search_hi = x1_max + margin
-
-    for i in range(n):
-        xi1, xi2 = X1[i], X2[i]
-
-        # Minimize squared distance to boundary curve
-        def sq_dist(t: float) -> float:
-            return float((xi1 - t) ** 2 + (xi2 - boundary_fn(t)) ** 2)
-
-        # Use bounded minimization with a few restarts
-        best_d2 = np.inf
-        # Try starting from a grid to avoid local minima
-        n_starts = 5
-        starts = np.linspace(search_lo, search_hi, n_starts)
-        # Also try the observation's own x1 as starting point
-        starts = np.append(starts, xi1)
-
-        for s in starts:
-            try:
-                res = optimize.minimize_scalar(
-                    sq_dist,
-                    bounds=(search_lo, search_hi),
-                    method="bounded",
-                )
-                if res.fun < best_d2:
-                    best_d2 = res.fun
-            except Exception:  # pragma: no cover
-                pass  # pragma: no cover
-
-        dist[i] = np.sqrt(max(best_d2, 0.0))
-
-    # Apply sign: positive for treated, negative for control
-    sign = np.where(T == 1, 1.0, -1.0)
-    return np.asarray(dist * sign, dtype=float)
-
-
-# ======================================================================
-# Univariate local polynomial RD (for distance approach)
-# ======================================================================
-
-
-def _local_poly_rd_1d(
-    Y: np.ndarray,
-    X: np.ndarray,
-    left: np.ndarray,
-    right: np.ndarray,
-    h: float,
-    p: int,
-    kernel: str,
-) -> Tuple[float, float, int, int]:
-    """
-    Standard univariate local polynomial RD at cutoff = 0.
-
-    Returns (tau, se, n_eff_left, n_eff_right).
-    """
-    beta_l, vcov_l, n_l = _wls_local_poly(Y[left], X[left], h, p, kernel)
-    beta_r, vcov_r, n_r = _wls_local_poly(Y[right], X[right], h, p, kernel)
-
-    tau = float(beta_r[0] - beta_l[0])
-    se = float(np.sqrt(vcov_r[0, 0] + vcov_l[0, 0]))
-
-    return tau, se, n_l, n_r
-
-
-# _wls_local_poly is an alias for the canonical WLS local polynomial
-# fitter in _core. rd2d historically called it without cluster/covs;
-# the unified version is behaviorally identical in that mode (the
-# minimum-obs threshold tightens from k+1 to k+2, which only matters
-# in pathological small-bandwidth cases and trades a single observation
-# for numerical stability in the HC1 degrees-of-freedom correction).
-from ._core import _local_poly_wls as _wls_local_poly  # noqa: E402
-from ._core import _sandwich_variance  # noqa: E402
-
-# ======================================================================
-# Bivariate local polynomial (for location approach)
-# ======================================================================
-
-
-def _bivariate_local_poly_rd(
-    Y: np.ndarray,
-    X1: np.ndarray,
-    X2: np.ndarray,
-    treated: np.ndarray,
-    control: np.ndarray,
-    b1: float,
-    b2: float,
-    h: float,
-    p: int,
-    kernel: str,
-) -> Tuple[float, float]:
-    """
-    Estimate boundary RD effect at point (b1, b2) via bivariate
-    local polynomial on each side.
-
-    For p=1 (local linear):
-        Y_i = alpha + beta1*(X1_i - b1) + beta2*(X2_i - b2) + eps_i
-    with product kernel weighting.
-
-    Returns (tau, se) where tau = alpha_R - alpha_L.
-    """
-    # Fit on treated (right) side
-    beta_r, vcov_r, n_r = _bivariate_wls(
-        Y[treated], X1[treated], X2[treated], b1, b2, h, p, kernel
-    )
-    # Fit on control (left) side
-    beta_l, vcov_l, n_l = _bivariate_wls(
-        Y[control], X1[control], X2[control], b1, b2, h, p, kernel
-    )
-
-    # Treatment effect = intercept_R - intercept_L
-    tau = float(beta_r[0] - beta_l[0])
-    se = float(np.sqrt(vcov_r[0, 0] + vcov_l[0, 0]))
-
-    return tau, se
-
-
-def _bivariate_wls(
-    y: np.ndarray,
-    x1: np.ndarray,
-    x2: np.ndarray,
-    b1: float,
-    b2: float,
-    h: float,
-    p: int,
-    kernel: str,
-) -> Tuple[np.ndarray, np.ndarray, int]:
-    """
-    WLS bivariate local polynomial evaluated at (b1, b2).
-
-    Uses product kernel: K(u1) * K(u2) where u1 = (x1-b1)/h,
-    u2 = (x2-b2)/h.
-
-    For p=1: regressors are [1, (x1-b1), (x2-b2)]
-    For p=2: [1, (x1-b1), (x2-b2), (x1-b1)^2, (x1-b1)*(x2-b2), (x2-b2)^2]
-
-    Returns (beta, vcov, n_effective).
-    """
-    dx1 = x1 - b1
-    dx2 = x2 - b2
-
-    u1 = dx1 / h
-    u2 = dx2 / h
-
-    # Product kernel
-    w1 = _kernel_fn(u1, kernel)
-    w2 = _kernel_fn(u2, kernel)
-    w = w1 * w2
-
-    in_bw = (np.abs(u1) <= 1) & (np.abs(u2) <= 1)
-    n_eff = int(in_bw.sum())
-
-    # Build design matrix based on polynomial order
-    cols = _bivariate_design_columns(dx1[in_bw], dx2[in_bw], p)
-    k = cols.shape[1]
-
-    if n_eff < k + 1:
-        return np.zeros(k), np.eye(k) * 1e10, 0
-
-    y_bw = y[in_bw]
-    w_bw = w[in_bw]
-
-    sqw = np.sqrt(w_bw)
-    Xw = cols * sqw[:, np.newaxis]
-    yw = y_bw * sqw
-
-    try:
-        XtWX = Xw.T @ Xw
-        beta = np.linalg.solve(XtWX, Xw.T @ yw)
-    except np.linalg.LinAlgError:  # pragma: no cover
-        beta = np.linalg.lstsq(Xw, yw, rcond=None)[0]
-        XtWX = Xw.T @ Xw
-
-    resid = y_bw - cols @ beta
-
-    vcov = _sandwich_variance(Xw, yw, beta, resid, n_eff, k, None, weights=w_bw)
-
-    return beta, vcov, n_eff
-
-
-def _bivariate_design_columns(
-    dx1: np.ndarray,
-    dx2: np.ndarray,
-    p: int,
-) -> np.ndarray:
-    """
-    Build bivariate polynomial design matrix up to order p.
-
-    p=0: [1]
-    p=1: [1, dx1, dx2]
-    p=2: [1, dx1, dx2, dx1^2, dx1*dx2, dx2^2]
-    p=3: [1, dx1, dx2, dx1^2, dx1*dx2, dx2^2,
-           dx1^3, dx1^2*dx2, dx1*dx2^2, dx2^3]
-    """
-    n = len(dx1)
-    columns = [np.ones(n)]
-
-    for order in range(1, p + 1):
-        for j in range(order + 1):
-            columns.append(dx1 ** (order - j) * dx2**j)
-
-    return np.column_stack(columns)
-
-
-# ======================================================================
-# Bandwidth selection
-# ======================================================================
-
-
-def _bw_mse_optimal_1d(
-    Y: np.ndarray,
-    dist: np.ndarray,
-    p: int,
-    kernel: str,
-) -> float:
-    """
-    MSE-optimal bandwidth for distance-based 2D RD.
-
-    Standard univariate MSE-optimal bandwidth on the distance variable.
-    """
-    n = len(Y)
-    left = dist < 0
-    right = dist >= 0
-
-    sd_x = np.std(dist)
-    x_range = np.ptp(dist)
-
-    # Pilot bandwidth (Silverman rule)
-    h_pilot = 1.06 * sd_x * n ** (-1 / 5)
-    h_pilot = max(h_pilot, 0.01 * x_range)
-
-    # Density at zero
-    n_near = np.sum(np.abs(dist) <= h_pilot)
-    f_c = n_near / (2 * h_pilot * n) if (h_pilot > 0 and n > 0) else 1.0
-    f_c = max(f_c, 1e-10)
-
-    # Conditional variance from local linear residuals on each side
-    sigma2_l = _residual_variance_1d(Y[left], dist[left], h_pilot, kernel)
-    sigma2_r = _residual_variance_1d(Y[right], dist[right], h_pilot, kernel)
-
-    # Second derivatives (curvature -> bias)
-    h_deriv = max(np.median(np.abs(dist)), h_pilot) * 1.5
-    m2_l = _second_deriv_1d(Y[left], dist[left], h_deriv, kernel)
-    m2_r = _second_deriv_1d(Y[right], dist[right], h_deriv, kernel)
-
-    C_K = _kernel_mse_constant(kernel)
-
-    bias_sq = ((m2_r - m2_l) / 2) ** 2
-    if bias_sq < 1e-12:
-        h_opt = h_pilot
-    else:
-        h_opt = (C_K * (sigma2_l + sigma2_r) / (f_c * bias_sq * n)) ** (1 / 5)
-
-    h_opt = np.clip(h_opt, 0.02 * x_range, 0.98 * x_range)
-    return float(h_opt)
-
-
-def _bw_mse_optimal_2d(
-    Y: np.ndarray,
-    X1: np.ndarray,
-    X2: np.ndarray,
-    T: np.ndarray,
-    treated: np.ndarray,
-    control: np.ndarray,
-    boundary: Optional[Callable],
-    p: int,
-    kernel: str,
-) -> float:
-    """
-    MSE-optimal bandwidth for location-based 2D RD.
-
-    Uses leave-one-out cross-validation on each side to select
-    a common bandwidth for the product kernel.
-    """
-    n = len(Y)
-
-    # Use cross-validation on a coarse grid
-    # First compute a reference scale
-    scale1 = np.std(X1) if np.std(X1) > 0 else 1.0
-    scale2 = np.std(X2) if np.std(X2) > 0 else 1.0
-    scale = (scale1 + scale2) / 2
-
-    h_pilot = scale * n ** (-1 / 5)
-
-    # Grid of candidate bandwidths
-    h_candidates = h_pilot * np.array([0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-
-    # Pick boundary centroid as evaluation point
-    if boundary is not None:
-        x1_med = np.median(X1)
-        b1 = x1_med
-        b2 = boundary(x1_med)
-    else:
-        b1, b2 = 0.0, np.median(X2)
-
-    best_cv = np.inf
-    best_h = h_pilot
-
-    for h_cand in h_candidates:
-        cv_score = 0.0
-        for side, mask in [("treated", treated), ("control", control)]:
-            y_s = Y[mask]
-            x1_s = X1[mask]
-            x2_s = X2[mask]
-            n_s = len(y_s)
-            if n_s < 10:
-                continue  # pragma: no cover
-
-            # Compute product kernel weights
-            dx1 = x1_s - b1
-            dx2 = x2_s - b2
-            u1 = dx1 / h_cand
-            u2 = dx2 / h_cand
-            w1 = _kernel_fn(u1, kernel)
-            w2 = _kernel_fn(u2, kernel)
-            w = w1 * w2
-            in_bw = (np.abs(u1) <= 1) & (np.abs(u2) <= 1)
-
-            if in_bw.sum() < 5:
-                cv_score += 1e10
-                continue
-
-            # Simple LOO-CV approximation via hat matrix
-            cols = _bivariate_design_columns(dx1[in_bw], dx2[in_bw], p)
-            y_bw = y_s[in_bw]
-            w_bw = w[in_bw]
-
-            sqw = np.sqrt(w_bw)
-            Xw = cols * sqw[:, np.newaxis]
-            yw = y_bw * sqw
-
-            try:
-                XtWX = Xw.T @ Xw
-                XtWX_inv = np.linalg.inv(XtWX)
-                H = Xw @ XtWX_inv @ Xw.T
-                resid = yw - H @ yw
-                h_diag = np.diag(H)
-                h_diag = np.clip(h_diag, 0, 0.999)
-                loo_resid = resid / (1 - h_diag)
-                cv_score += float(np.mean(loo_resid**2))
-            except np.linalg.LinAlgError:  # pragma: no cover
-                cv_score += 1e10
-
-        if cv_score < best_cv:
-            best_cv = cv_score
-            best_h = h_cand
-
-    return float(best_h)
-
-
-# ======================================================================
-# Evaluation point generation
-# ======================================================================
-
-
-def _generate_eval_points(
-    X1: np.ndarray,
-    X2: np.ndarray,
-    boundary: Optional[Callable],
-    n_eval: int,
-) -> np.ndarray:
-    """
-    Generate evaluation points along the boundary.
-
-    Spreads points evenly along the boundary within the data range.
-    """
-    if n_eval < 1:
-        n_eval = 1
-
-    if boundary is None:
-        # Boundary is x1 = 0
-        if n_eval == 1:
-            return np.array([[0.0, np.median(X2)]])
-        else:
-            x2_lo = np.percentile(X2, 10)
-            x2_hi = np.percentile(X2, 90)
-            x2_grid = np.linspace(x2_lo, x2_hi, n_eval)
-            return np.column_stack([np.zeros(n_eval), x2_grid])
-    else:
-        # Sample along boundary within data range
-        x1_lo = np.percentile(X1, 10)
-        x1_hi = np.percentile(X1, 90)
-        if n_eval == 1:
-            x1_mid = (x1_lo + x1_hi) / 2
-            return np.array([[x1_mid, boundary(x1_mid)]])
-        else:
-            x1_grid = np.linspace(x1_lo, x1_hi, n_eval)
-            x2_grid = np.array([boundary(v) for v in x1_grid])
-            return np.column_stack([x1_grid, x2_grid])
-
-
-# ======================================================================
-# Inverse-variance pooling
-# ======================================================================
-
-
-def _inverse_variance_pool(
-    estimates: np.ndarray,
-    se: np.ndarray,
-) -> Tuple[float, float]:
-    """
-    Inverse-variance weighted pooling of multiple estimates.
-
-    Returns (pooled_estimate, pooled_se).
-    """
-    # Guard against zero/tiny SEs
-    se = np.maximum(se, 1e-10)
-    weights = 1.0 / se**2
-    w_sum = weights.sum()
-
-    if w_sum < 1e-20:
-        return float(np.mean(estimates)), float(np.mean(se))
-
-    pooled = float(np.sum(weights * estimates) / w_sum)
-    pooled_se = float(np.sqrt(1.0 / w_sum))
-
-    return pooled, pooled_se
-
-
-# ======================================================================
-# Bandwidth helpers (univariate)
-# ======================================================================
-
-
-def _residual_variance_1d(
-    y: np.ndarray,
-    x: np.ndarray,
-    h: float,
-    kernel: str,
-) -> float:
-    """Conditional variance at x=0 from local linear residuals."""
-    if len(y) == 0:
-        return 1.0
-    u = x / h
-    in_bw = np.abs(u) <= 1
-    if in_bw.sum() < 5:
-        return float(np.var(y)) if len(y) > 0 else 1.0
-
-    y_bw, x_bw = y[in_bw], x[in_bw]
-    w_bw = _kernel_fn(u[in_bw], kernel)
-
-    X_mat = np.column_stack([np.ones(len(x_bw)), x_bw])
-    sqw = np.sqrt(w_bw)
-    Xw = X_mat * sqw[:, np.newaxis]
-    yw = y_bw * sqw
-
-    try:
-        beta = np.linalg.lstsq(Xw, yw, rcond=None)[0]
-        resid = y_bw - X_mat @ beta
-        return float(np.average(resid**2, weights=w_bw))
-    except Exception:  # pragma: no cover
-        return float(np.var(y_bw))
-
-
-def _second_deriv_1d(
-    y: np.ndarray,
-    x: np.ndarray,
-    h: float,
-    kernel: str,
-) -> float:
-    """Estimate m''(0) via local cubic regression."""
-    if len(y) == 0:
-        return 0.0
-    u = x / h
-    in_bw = np.abs(u) <= 1
-    if in_bw.sum() < 6:
-        return 0.0
-
-    y_bw, x_bw = y[in_bw], x[in_bw]
-    w_bw = _kernel_fn(u[in_bw], kernel)
-
-    X_mat = np.column_stack([x_bw**j for j in range(4)])
-    sqw = np.sqrt(w_bw)
-    Xw = X_mat * sqw[:, np.newaxis]
-    yw = y_bw * sqw
-
-    try:
-        beta = np.linalg.lstsq(Xw, yw, rcond=None)[0]
-        return float(2 * beta[2])
-    except Exception:  # pragma: no cover
-        return 0.0
-
-
-# ======================================================================
-# Kernel functions (canonical definitions live in ._core)
-# ======================================================================
-
-from ._core import _kernel_fn, _kernel_mse_constant  # noqa: F401, E402

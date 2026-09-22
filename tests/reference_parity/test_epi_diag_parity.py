@@ -58,6 +58,10 @@ def test_power_case_control_closed_form(nc, orr, p0):
     s = math.sqrt(p1 * (1 - p1) + p0 * (1 - p0))
     hand = NormalDist().cdf((abs(p1 - p0) * math.sqrt(nc) - _ZA * s) / s)
     got = _power(
-        sp.power_case_control(n_cases=nc, odds_ratio=orr, exposure_prevalence=p0)
+        # The unpooled Wald closed form; the default test ("chi2") is pinned
+        # to Stata power twoproportions in test_survival_epi_R_parity.py.
+        sp.power_case_control(
+            n_cases=nc, odds_ratio=orr, exposure_prevalence=p0, test="wald"
+        )
     )
     assert got == pytest.approx(hand, abs=_TOL)

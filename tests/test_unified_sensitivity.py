@@ -94,6 +94,7 @@ def test_unified_sensitivity_oster_matches_oster_bounds():
         r2_treated=0.15,
         r2_controlled=0.45,
         beta_uncontrolled=0.5,
+        rho_max=1.0,
     )
     direct = sp.oster_bounds(
         beta_short=0.5,
@@ -108,6 +109,21 @@ def test_unified_sensitivity_oster_matches_oster_bounds():
     assert dash.oster["beta_star"] == pytest.approx(direct["beta_adjusted"])
     # The breakdown delta is not the input proportionality delta (1.0).
     assert dash.oster["delta"] != pytest.approx(1.0)
+
+
+def test_unified_sensitivity_default_rmax_is_oster_rule_on_both_paths():
+    """Default R_max is min(1, 1.3 R2_long) (sp.oster_bounds' default); an
+    explicit rho_max is honoured on the data path too (it used to be
+    ignored there)."""
+    res = _FakeResult(estimate=0.3, se=0.1, ci=(0.1, 0.5))
+    with pytest.warns(DeprecationWarning):
+        dash = sp.unified_sensitivity(
+            res, r2_treated=0.15, r2_controlled=0.45, beta_uncontrolled=0.5
+        )
+    direct = sp.oster_bounds(
+        beta_short=0.5, r2_short=0.15, beta_long=0.3, r2_long=0.45, delta=1.0
+    )
+    assert dash.oster["delta"] == pytest.approx(direct["delta_for_zero"])
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ Discrete Outcomes." *JASA*, 115(529), 123-137. [@chernozhukov2020generic]
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple
 
@@ -26,8 +27,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from ._results import DecompResultMixin
+from ..exceptions import ConvergenceFailure, MethodIncompatibility
 from ._common import add_constant, logit_fit, logit_predict, prepare_frame
+from ._results import DecompResultMixin
 
 # ════════════════════════════════════════════════════════════════════════
 # Distribution regression
@@ -66,12 +68,20 @@ def _fit_dr(
             betas[i, 0] = np.log(p / (1 - p))
         else:
             try:
-                # Distribution regression deliberately tolerates
-                # near-separation at extreme thresholds; we fall back
-                # to the empirical proportion below.
+                # Distribution regression tolerates near-separation at
+                # extreme thresholds (the NR loop clips the index); a
+                # singular information matrix falls back to the empirical
+                # proportion, loudly.
                 b, _ = logit_fit(ind, X, warn_on_nonconvergence=False)
                 betas[i] = b
-            except Exception:  # noqa: BLE001
+            except (np.linalg.LinAlgError, ConvergenceFailure, RuntimeError) as exc:
+                warnings.warn(
+                    f"cfm_decompose: the distribution-regression logit at "
+                    f"threshold {t:.6g} failed ({type(exc).__name__}: {exc}); "
+                    "using the unconditional proportion there.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
                 betas[i] = 0.0
                 p = ind.mean()
                 p = np.clip(p, 1e-3, 1 - 1e-3)
@@ -95,13 +105,25 @@ def _counterfactual_cdf(
     # predicted probabilities at each threshold
     preds = np.array([logit_predict(b, X_source) for b in betas])  # (n_t, n_src)
     cdf = preds.mean(axis=1)
-    # Enforce monotonicity (rearrangement via sorting)
+    # Enforce monotonicity by rearrangement: sort the CDF values across the
+    # (sorted) thresholds (Chernozhukov, Fernandez-Val & Galichon 2010), as
+    # Chernozhukov, Fernandez-Val & Melly's own ``cdeco`` does. Up to 1.28.0
+    # this took the running maximum, which is a different monotone
+    # projection whenever the raw distribution-regression CDF crosses.
     order = np.argsort(thresholds)
     thr = thresholds[order]
-    cdf_sorted = cdf[order]
-    cdf_mono = np.maximum.accumulate(cdf_sorted)
-    cdf_mono = np.clip(cdf_mono, 0.0, 1.0)
+    cdf_mono = np.clip(np.sort(cdf[order]), 0.0, 1.0)
     return thr, cdf_mono
+
+
+def _invert_cdf_step(thr: np.ndarray, cdf: np.ndarray, taus: np.ndarray) -> np.ndarray:
+    """Step-function inverse used by ``cdeco``'s ``getquantile``.
+
+    ``Q(tau) = thr[j]`` for the first threshold whose CDF value exceeds
+    ``tau`` strictly, i.e. ``thr[min(#{F <= tau}, T - 1)]`` (0-based).
+    """
+    idx = np.array([int(np.sum(cdf <= t)) for t in np.atleast_1d(taus)])
+    return np.asarray(thr[np.minimum(idx, len(thr) - 1)])
 
 
 def _invert_cdf(thr: np.ndarray, cdf: np.ndarray, taus: np.ndarray) -> np.ndarray:
@@ -198,6 +220,8 @@ def cfm_decompose(
     reference: int = 0,
     n_thresh: int = 40,
     ks_test: bool = True,
+    thresholds: Optional[Sequence[float]] = None,
+    inversion: str = "interpolate",
 ) -> CFMResult:
     """
     Chernozhukov-Fernández-Val-Melly (2013) counterfactual decomposition.
@@ -213,7 +237,19 @@ def cfm_decompose(
         regression coefficients applied to B's X (F_{Y<0|1>}), opposite
         to the reweighting convention in ``dfl_decompose``.
     n_thresh : int — number of thresholds for distribution regression
+        (ignored when ``thresholds`` is given).
     ks_test : bool — whether to compute Kolmogorov-Smirnov gap test
+    thresholds : sequence of float, optional
+        Explicit distribution-regression thresholds, shared by both groups.
+        Default: ``n_thresh`` quantiles of the pooled outcome at
+        ``linspace(0.02, 0.98, n_thresh)``.
+    inversion : {'interpolate', 'step'}, default 'interpolate'
+        How the estimated CDF, known only at the thresholds, is inverted.
+        ``'interpolate'`` interpolates linearly between thresholds (a
+        smoothed quantile). ``'step'`` returns the first threshold at which
+        the CDF exceeds ``tau`` -- the step-function inverse of
+        Chernozhukov, Fernández-Val & Melly's Stata ``cdeco``; with the same
+        thresholds it reproduces ``cdeco, method(logit)``.
 
     Returns
     -------
@@ -251,8 +287,25 @@ def cfm_decompose(
         tau_seq = tau_grid
     tau_eval = np.asarray(tau_seq, dtype=float)
 
+    if reference not in (0, 1):
+        raise MethodIncompatibility(f"reference must be 0 or 1, got {reference!r}")
+
+    if inversion not in ("interpolate", "step"):
+        raise MethodIncompatibility(
+            f"inversion must be 'interpolate' or 'step', got {inversion!r}"
+        )
+    invert = _invert_cdf if inversion == "interpolate" else _invert_cdf_step
+
     # Common threshold grid based on pooled y
-    thr = _threshold_grid(y_vec, n_thresh=n_thresh)
+    if thresholds is None:
+        thr = _threshold_grid(y_vec, n_thresh=n_thresh)
+    else:
+        thr = np.sort(np.asarray(thresholds, dtype=float))
+        if thr.ndim != 1 or len(thr) < 2:
+            raise MethodIncompatibility(
+                "thresholds must be a 1-D sequence of length >= 2."
+            )
+        n_thresh = len(thr)
 
     betas_a = _fit_dr(y_a, X_a, thr)
     betas_b = _fit_dr(y_b, X_b, thr)
@@ -264,9 +317,9 @@ def cfm_decompose(
     else:
         thr_cf, cdf_cf = _counterfactual_cdf(betas_b, X_a, thr)
 
-    q_a = _invert_cdf(thr_a, cdf_a, tau_eval)
-    q_b = _invert_cdf(thr_b, cdf_b, tau_eval)
-    q_cf = _invert_cdf(thr_cf, cdf_cf, tau_eval)
+    q_a = invert(thr_a, cdf_a, tau_eval)
+    q_b = invert(thr_b, cdf_b, tau_eval)
+    q_cf = invert(thr_cf, cdf_cf, tau_eval)
 
     gap = q_a - q_b
     if reference == 0:

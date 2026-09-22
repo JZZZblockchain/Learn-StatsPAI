@@ -39,5 +39,7 @@ def test_recovers_planted_break_date(result):
 
 def test_break_improves_fit_and_is_significant(result):
     assert float(result.rss_segments) < 0.5 * float(result.rss_full)
-    assert float(result.p_values[0]) < 0.01
+    # sup F(1|0) against the Bai-Perron 5% critical value (round 2: the
+    # sequential procedure reports critical values, not p-values)
+    assert float(result.f_stats[0]) > float(result.critical_values[0])
     assert float(result.f_stats[0]) > 100

@@ -2,21 +2,22 @@
 Tests for Meta-Learners module (S/T/X/R/DR-Learner).
 """
 
-import pytest
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+import pytest
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
+import statspai as sp
+from statspai.core.results import CausalResult
+from statspai.exceptions import DataInsufficient, MethodIncompatibility
 from statspai.metalearners import (
-    metalearner,
+    DRLearner,
+    RLearner,
     SLearner,
     TLearner,
     XLearner,
-    RLearner,
-    DRLearner,
+    metalearner,
 )
-from statspai.core.results import CausalResult
-from statspai.exceptions import DataInsufficient, MethodIncompatibility
 
 # ======================================================================
 # Fixtures: DGPs with known true CATE
@@ -960,3 +961,49 @@ class TestBLPTest:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestCDDFRegressionOnNull:
+    """Regression (1.30.0): BLP / GATES on a constant effect must not fire.
+
+    Before 1.30.0 blp_test regressed on the T-learner's *in-sample* CATE
+    predictions; with tau = 1 everywhere it reported beta2 ~ 1.4 with
+    p ~ 1e-52 on this very design. The out-of-fold proxy removes that.
+    """
+
+    def _data(self):
+        rng = np.random.default_rng(0)
+        n = 400
+        x1 = rng.normal(size=n)
+        x2 = rng.normal(size=n)
+        d = rng.integers(0, 2, size=n)
+        y = 0.5 * x1 + d * 1.0 + rng.normal(size=n)
+        return pd.DataFrame(dict(y=y, d=d, x1=x1, x2=x2, p=0.5))
+
+    def test_blp_null(self):
+        df = self._data()
+        r = metalearner(df, y="y", treat="d", covariates=["x1", "x2"], learner="t")
+        out = sp.blp_test(
+            r, df, y="y", treat="d", covariates=["x1", "x2"], propensity="p"
+        )
+        assert out["proxy_source"] == "cross_fit"
+        assert out["beta2_pvalue"] > 0.05
+        old = sp.blp_test(
+            r,
+            df,
+            y="y",
+            treat="d",
+            covariates=["x1", "x2"],
+            propensity="p",
+            proxy="in_sample",
+        )
+        assert old["beta2_pvalue"] < 1e-10  # the defect, still reachable on request
+
+    def test_gates_null(self):
+        df = self._data()
+        r = metalearner(df, y="y", treat="d", covariates=["x1", "x2"], learner="t")
+        out = sp.gate_test(
+            r, df, by="cate", y="y", treat="d", covariates=["x1", "x2"], propensity="p"
+        )
+        assert out["method"] == "gates"
+        assert out["omnibus_pvalue"] > 0.05

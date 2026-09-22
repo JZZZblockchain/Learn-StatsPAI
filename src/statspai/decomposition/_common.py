@@ -978,3 +978,20 @@ def prepare_frame(
                 diagnostics={"n_weights": len(w_out), "n_rows": len(df)},
             )
     return df, w_out
+
+
+def averaged_inverse_cdf(sample: np.ndarray, taus: np.ndarray) -> np.ndarray:
+    """Equal-weight Hyndman-Fan type-2 quantile (``mm_quantile`` default).
+
+    ``Q(p) = X_(j)`` with ``j - 1 < pN < j``, and ``(X_(j) + X_(j+1)) / 2``
+    when ``pN = j`` exactly. Written out because ``np.quantile``'s
+    ``method=`` keyword needs numpy >= 1.22 and the package supports 1.20.
+    """
+    s = np.sort(np.asarray(sample, dtype=float))
+    N = len(s)
+    h = np.asarray(taus, dtype=float) * N
+    k = np.floor(h).astype(int)
+    tie = h == k
+    hi = np.clip(k, 0, N - 1)  # X_(k+1) in 1-based order
+    lo = np.clip(k - 1, 0, N - 1)  # X_(k)
+    return np.where(tie, 0.5 * (s[lo] + s[hi]), s[hi])

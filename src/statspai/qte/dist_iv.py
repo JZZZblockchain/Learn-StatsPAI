@@ -40,7 +40,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
-from ._core import complier_cdfs, invert_cdf, kernel_density_at
+from ._core import complier_cdfs, invert_cdf, kernel_density_at, logit_propensity
 
 
 @dataclass
@@ -152,12 +152,8 @@ class DistIVResult(ResultProtocolMixin):
 
 
 def _logit_pi(X: np.ndarray, Z: np.ndarray) -> np.ndarray:
-    """P(Z = 1 | X) by logistic regression, trimmed away from {0, 1}."""
-    from sklearn.linear_model import LogisticRegression
-
-    clf = LogisticRegression(max_iter=2000, solver="lbfgs", C=1e6)
-    clf.fit(X, Z)
-    pi = np.asarray(clf.predict_proba(X)[:, 1])
+    """P(Z = 1 | X) by the logit MLE, trimmed away from {0, 1}."""
+    pi = logit_propensity(X, Z)
     return np.clip(pi, 0.01, 0.99)
 
 

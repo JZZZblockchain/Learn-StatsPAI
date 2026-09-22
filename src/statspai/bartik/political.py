@@ -1,40 +1,29 @@
 """
-Shift-Share Instruments for Political Science (Park & Xu, arXiv:2603.00135, 2026).
+Shift-share IV wrappers for political-science panels.
 
-Adapts the canonical Bartik IV design to political-science settings
-where:
+Background: Park, P. K. (2026), "Shift-Share Designs in Political Science",
+arXiv preprint [@park2026shift] (single-authored; earlier versions of this
+module cited it as "Park & Xu" and attributed specific recommendations and
+section numbers to it that were not verified -- they have been removed).
 
-1. The "industries" are often political-exposure categories (e.g.
-   incumbency of co-ethnics, share of coverage by partisan media,
-   share of employment in import-competing sectors).
-2. The "shift" is a national-level political or policy shock
-   (e.g. a federal policy change, national coverage volume).
-3. The outcome is a political behaviour — vote share, turnout,
-   polarisation — so the linear 2SLS benchmark is supplemented with
-   non-monotone and pre-trend diagnostics that are standard in PS
-   panel data.
+``shift_share_political`` builds a long-difference cross-section (last minus
+first period per unit) and runs :func:`sp.bartik` on it (2SLS, HC1 SE), and
+adds:
 
-Compared to :func:`sp.bartik`, this wrapper
+* AKM (Adao-Kolesar-Morales 2019) shock-level SE and the AKM0 confidence
+  interval of the same IV, computed by the shared ``_akm`` kernel that
+  reproduces R ``ShiftShareSE::ivreg_ss`` [@ado2019shift];
+* the Goldsmith-Pinkham, Sorkin & Swift Rotemberg weights of the Bartik IV
+  (as returned by ``sp.bartik``, matching R ``bartik.weight::bw``);
+* a share-balance regression of pre-period covariates on the shares.
 
-* builds the shift-share IV from a long-form panel (unit × time)
-  instead of the cross-sectional API,
-* runs an AKM (Adão-Kolesár-Morales 2019) shock-level cluster SE,
-* ships two extra diagnostics Park-Xu (2026) recommend as default:
-  (a) a **share-balance** test of pre-treatment unit covariates on
-  the exposure share matrix, (b) a **Rotemberg top-K** report
-  identifying the industries that dominate the identifying variation.
-
-References
-----------
-Park, P. K. & Xu, Y. (2026).
-"Shift-Share Designs in Political Science." arXiv:2603.00135. [@park2026shift]
-
-Adão, R., Kolesár, M. & Morales, E. (2019).
-"Shift-Share Designs: Theory and Inference." QJE, 134(4). [@ado2019shift]
+``shift_share_political_panel`` runs pooled 2SLS with unit / time / two-way
+fixed effects on the period-specific instrument ``Z_it = sum_k s_ikt g_kt``.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from numbers import Real
 from typing import Any, Dict, List, Optional, Sequence
@@ -60,8 +49,9 @@ __all__ = [
 class ShiftSharePoliticalResult(ResultProtocolMixin):
     """Structured output of :func:`shift_share_political`.
 
-    Wraps a standard :class:`CausalResult` (point + SEs) plus the two
-    Park-Xu (2026) diagnostics: share-balance and Rotemberg top-K.
+    Wraps a standard :class:`CausalResult` (2SLS point estimate, HC1 SE)
+    plus the AKM shock-level SE (``diagnostics``), Rotemberg weights and a
+    share-balance table.
 
     Examples
     --------
@@ -113,12 +103,13 @@ class ShiftSharePoliticalResult(ResultProtocolMixin):
         se = self.iv_result.se
         lo, hi = self.iv_result.ci
         lines = [
-            "Shift-Share (Bartik) — Political Science (Park-Xu 2026)",
+            "Shift-Share (Bartik) IV — long differences",
             "-" * 60,
             f"  Units / periods         : {self.n_units} × {self.n_periods}",
             f"  Industries in exposure  : {self.n_industries}",
             f"  IV estimate             : {est:+.6f}",
-            f"  SE (AKM shock-cluster)  : {se:.6f}",
+            f"  SE (HC1)                : {se:.6f}",
+            f"  SE (AKM shock-level)    : {self.diagnostics.get('akm_se', float('nan')):.6f}",
             f"  95% CI                  : [{lo:+.6f}, {hi:+.6f}]",
             "",
             "  Rotemberg top-5 industries (by weight):",
@@ -330,17 +321,17 @@ def _long_to_panel(
 def _rotemberg_weights(
     shares: np.ndarray, shocks: np.ndarray, dx: np.ndarray
 ) -> np.ndarray:
-    """Rotemberg weights α_k proportional to shock variation × exposure.
+    """GPSS Rotemberg weights with only an intercept as control.
 
-    α_k ∝ g_k * (∑_i s_{ik} (x_i - x̄)) ; we return the normalised vector.
+    ``alpha_k = g_k s_k' M x / sum_j g_j s_j' M x`` (signed normalisation:
+    the weights sum to one and may be negative).
     """
     x_c = dx - dx.mean()
     num: np.ndarray = np.asarray(shocks * (shares.T @ x_c), dtype=float)
-    tot = np.sum(np.abs(num))
-    if tot > 0:
-        weights: np.ndarray = np.asarray(num / float(tot), dtype=float)
-        return weights
-    return np.asarray(num, dtype=float)
+    tot = float(np.sum(num))
+    if abs(tot) > 0:
+        return np.asarray(num / tot, dtype=float)
+    return np.full_like(num, np.nan)
 
 
 def _share_balance_test(
@@ -350,8 +341,13 @@ def _share_balance_test(
     """Regress each covariate on the share matrix and report the F-stat."""
     results = []
     X = shares_df.to_numpy(dtype=float)
-    n, k = X.shape
+    n = X.shape[0]
     X_design = np.column_stack([np.ones(n), X])
+    # Shares that sum to one make the intercept collinear with them, so the
+    # number of restrictions is rank([1, S]) - 1, not the number of columns
+    # (the old df1 = K, df2 = n - K - 1 overstated df1 by one).
+    rank = int(np.linalg.matrix_rank(X_design))
+    k = rank - 1
     for col in covariates.columns:
         z = covariates[col].to_numpy(dtype=float)
         if not np.isfinite(z).all():
@@ -363,7 +359,7 @@ def _share_balance_test(
         if tss <= 0 or rss <= 0:
             continue
         r2 = 1 - rss / tss
-        df1, df2 = k, max(n - k - 1, 1)
+        df1, df2 = k, max(n - rank, 1)
         F = (r2 / k) / ((1 - r2) / max(df2, 1)) if r2 < 1 else float("inf")
         pv = float(stats.f.sf(F, df1, df2)) if np.isfinite(F) else 0.0
         results.append(
@@ -395,7 +391,7 @@ def shift_share_political(
     leave_one_out: bool = True,
     alpha: float = 0.05,
 ) -> ShiftSharePoliticalResult:
-    """Park-Xu (2026) shift-share IV for political-science panel data.
+    """Long-difference shift-share IV with AKM SE and Rotemberg weights.
 
     Parameters
     ----------
@@ -413,11 +409,23 @@ def shift_share_political(
         Pre-treatment covariates (measured at the first period per unit)
         used for the share-balance diagnostic.
     leave_one_out, alpha
-        Forwarded to :func:`sp.bartik`.
+        Forwarded to :func:`sp.bartik`. With national ``shocks`` and no
+        regional shocks ``sp.bartik`` cannot form a leave-one-out
+        instrument; it warns and uses the plain Bartik instrument.
 
     Returns
     -------
     ShiftSharePoliticalResult
+        ``estimate`` / ``se`` / ``ci``: 2SLS of the long-differenced outcome
+        on the long-differenced ``endog`` instrumented by
+        ``B_i = sum_k s_ik g_k`` (intercept only), HC1 SE with normal CI.
+        ``diagnostics['akm_se']``, ``['akm_ci']``, ``['akm0_ci']``,
+        ``['akm_pvalue']``: AKM / AKM0 inference for the same IV (shares
+        as the ``W`` matrix, intercept as control). ``rotemberg_top``:
+        ``alpha_k``, ``beta_k`` of Goldsmith-Pinkham, Sorkin & Swift
+        (weights sum to one and may be negative). ``share_balance``: F-test
+        of each covariate on the shares (restrictions = rank of
+        ``[1, shares]`` minus one).
 
     Examples
     --------
@@ -547,13 +555,45 @@ def shift_share_political(
     else:
         causal = ivres
 
-    # --- Rotemberg top-K diagnostic ---------------------------------------
-    shares_arr = shares_aligned.to_numpy(dtype=float)
-    shocks_arr = shocks.to_numpy(dtype=float)
-    dx = cs[endog].to_numpy(dtype=float)
-    alphas = _rotemberg_weights(shares_arr, shocks_arr, dx)
-    rot_df = (
-        pd.DataFrame(
+    # --- AKM shock-level inference -----------------------------------------
+    akm_diag: Dict[str, Any] = {}
+    if isinstance(ivres, EconometricResults):
+        from ._akm import _akm_fit
+
+        ssi = ivres.data_info["_shift_share_inputs"]
+        akm = _akm_fit(
+            ssi["y"],
+            ssi["shift_share"],
+            shares_aligned.to_numpy(dtype=float),
+            ssi["controls"],
+            y2=ssi["endog"],
+            alpha=alpha,
+        )
+        akm_diag = {
+            "akm_se": akm["se"]["AKM"],
+            "akm_ci": (akm["ci_l"]["AKM"], akm["ci_r"]["AKM"]),
+            "akm_pvalue": akm["p"]["AKM"],
+            "akm0_ci": (akm["ci_l"]["AKM0"], akm["ci_r"]["AKM0"]),
+            "akm0_pvalue": akm["p"]["AKM0"],
+            "akm0_ci_type": akm["akm0_ci_type"],
+            "ehw_se_no_ssc": akm["se"]["EHW"],
+        }
+        rw = ivres.model_info["rotemberg_weights"]
+        rot_df = pd.DataFrame(
+            {
+                "industry": rw["industry"].to_numpy(),
+                "shock": rw["shock"].to_numpy(),
+                "rotemberg_weight": rw["weight"].to_numpy(),
+                "beta_k": rw["beta"].to_numpy(),
+                "abs_weight": np.abs(rw["weight"].to_numpy()),
+            }
+        )
+    else:  # pragma: no cover - sp.bartik always returns EconometricResults
+        shares_arr = shares_aligned.to_numpy(dtype=float)
+        shocks_arr = shocks.to_numpy(dtype=float)
+        dx = cs[endog].to_numpy(dtype=float)
+        alphas = _rotemberg_weights(shares_arr, shocks_arr, dx)
+        rot_df = pd.DataFrame(
             {
                 "industry": list(shares.columns),
                 "shock": shocks_arr,
@@ -561,9 +601,7 @@ def shift_share_political(
                 "abs_weight": np.abs(alphas),
             }
         )
-        .sort_values("abs_weight", ascending=False)
-        .reset_index(drop=True)
-    )
+    rot_df = rot_df.sort_values("abs_weight", ascending=False).reset_index(drop=True)
 
     # --- Share-balance diagnostic -----------------------------------------
     if covariates:
@@ -582,6 +620,7 @@ def shift_share_political(
         n_industries=int(shares.shape[1]),
         method="shift_share_political",
         diagnostics={
+            **akm_diag,
             "leave_one_out": bool(leave_one_out),
             "rotemberg_top1_share": (
                 float(rot_df.iloc[0]["abs_weight"]) if len(rot_df) > 0 else 0.0
@@ -594,7 +633,7 @@ def shift_share_political(
 
 
 # ===========================================================================
-# Multi-period panel extension (Park-Xu 2026, §4.2)
+# Multi-period panel extension
 # ===========================================================================
 
 
@@ -607,8 +646,8 @@ class ShiftSharePoliticalPanelResult(ResultProtocolMixin):
     estimate : float
         Pooled 2SLS coefficient on ``endog``.
     se : float
-        Panel-clustered SE (unit by default; shock-clustered available
-        via the underlying AKM correction — stored in
+        SE of the requested ``cluster`` type (unit-clustered CR0 by
+        default; with ``cluster='shock'`` the AKM SE, also stored in
         ``diagnostics['akm_se']``).
     ci : tuple
         ``(lower, upper)`` at ``alpha``.
@@ -624,7 +663,9 @@ class ShiftSharePoliticalPanelResult(ResultProtocolMixin):
     method : str
     diagnostics : dict
         Estimator-side diagnostics: ``fe`` (mode), ``cluster``, ``akm_se``,
-        ``n_obs``, ``first_stage_F``.
+        ``akm0_ci``, ``n_obs``, ``balanced``, ``first_stage_F`` (homoskedastic
+        F of the excluded instrument, df net of the absorbed FE;
+        ``fixest::fitstat(, "ivf1")``).
     model_info : dict
         Output-layer metadata: ``model_type``, ``method``, ``fixed_effects``
         (column-name list as ``"unit+time"``), ``cluster``. Consumed by
@@ -676,7 +717,7 @@ class ShiftSharePoliticalPanelResult(ResultProtocolMixin):
         lo, hi = self.ci
         cluster_label = self.diagnostics.get("cluster", "unit")
         lines = [
-            "Shift-Share (Bartik) — Political Science, Panel (Park-Xu 2026 §4.2)",
+            "Shift-Share (Bartik) IV — panel with fixed effects",
             "-" * 70,
             f"  Units × periods         : {self.n_units} × {self.n_periods}",
             f"  Industries              : {self.n_industries}",
@@ -853,7 +894,7 @@ def shift_share_political_panel(
     alpha: float = 0.05,
     fe: str = "two-way",
 ) -> ShiftSharePoliticalPanelResult:
-    """Multi-period panel shift-share IV (Park-Xu 2026 §4.2).
+    """Multi-period panel shift-share IV with fixed effects.
 
     Pooled 2SLS with unit / time / two-way fixed effects, using the
     period-specific Bartik instrument
@@ -873,11 +914,18 @@ def shift_share_political_panel(
     shocks : Series, DataFrame(time × industry), or dict[time → Series]
     covariates : sequence of str, optional
         Time-varying controls.
-    cluster : {'unit', 'time', 'twoway'}, default 'unit'
-        Cluster structure for the panel SE.
+    cluster : {'unit', 'time', 'twoway', 'shock'}, default 'unit'
+        SE type. ``'unit'`` / ``'time'``: one-way cluster-robust (CR0, no
+        small-sample factor; ``fixest`` with ``ssc(adj = FALSE,
+        cluster.adj = FALSE)``). ``'twoway'``: Cameron-Gelbach-Miller
+        two-way clustering by unit and time (CR0 components). ``'shock'``:
+        AKM shock-level SE (= ``ShiftShareSE::ivreg_ss`` with the FE as
+        controls; shock clusters are industries if the shocks are constant
+        over time, industry x period otherwise).
     alpha : float, default 0.05
     fe : {'two-way', 'unit', 'time', 'none'}, default 'two-way'
-        Fixed-effect structure.  ``'two-way'`` is the Park-Xu default.
+        Fixed-effect structure (exact within transformation, also on
+        unbalanced panels).
 
     Returns
     -------
@@ -926,8 +974,7 @@ def shift_share_political_panel(
         raise MethodIncompatibility(
             f"cluster must be unit/time/twoway/shock; got {cluster!r}. "
             "`'shock'` invokes the Adão-Kolesár-Morales (2019) "
-            "shock-clustered variance estimator — strongly recommended "
-            "by Park-Xu (2026) §4.2.",
+            "shock-level variance estimator.",
             recovery_hint="Use cluster='unit', 'time', 'twoway', or 'shock'.",
             diagnostics={"argument": "cluster", "value": cluster},
         )
@@ -983,17 +1030,52 @@ def shift_share_political_panel(
         )
 
     # --- Within-transformation for FE ------------------------------------
-    def _demean(df: pd.DataFrame, cols: Sequence[str]) -> pd.DataFrame:
-        out = df.copy()
-        if fe in ("two-way", "unit"):
-            out[cols] = out[cols].sub(out.groupby(unit)[cols].transform("mean"))
-        if fe in ("two-way", "time"):
-            out[cols] = out[cols].sub(out.groupby(time)[cols].transform("mean"))
-        return out
+    unit_codes = pd.factorize(df_iv[unit])[0]
+    time_codes = pd.factorize(df_iv[time])[0]
+    n_u = int(unit_codes.max()) + 1
+    n_t = int(time_codes.max()) + 1
+    balanced = len(df_iv) == n_u * n_t and not df_iv.duplicated([unit, time]).any()
+
+    def _demean_cols(M: np.ndarray) -> np.ndarray:
+        """Exact within transformation for the chosen FE structure.
+
+        One pass of unit then time demeaning is exact only for a balanced
+        panel; otherwise alternate the two projections to convergence
+        (the old code always did one pass, which is not the two-way
+        within transformation on an unbalanced panel).
+        """
+        M = np.array(M, dtype=float, copy=True)
+
+        def by(codes: np.ndarray, n_groups: int, A: np.ndarray) -> np.ndarray:
+            sums = np.zeros((n_groups, A.shape[1]))
+            np.add.at(sums, codes, A)
+            cnt = np.bincount(codes, minlength=n_groups)[:, None]
+            return A - (sums / cnt)[codes]
+
+        if fe == "unit":
+            return by(unit_codes, n_u, M)
+        if fe == "time":
+            return by(time_codes, n_t, M)
+        if fe == "none":
+            return M
+        scale = max(1.0, float(np.abs(M).max()) if M.size else 1.0)
+        for _ in range(100000):
+            M_new = by(time_codes, n_t, by(unit_codes, n_u, M))
+            delta = float(np.abs(M_new - M).max()) if M.size else 0.0
+            M = M_new
+            if balanced or delta < 1e-14 * scale:
+                return M
+        warnings.warn(  # pragma: no cover
+            "two-way within transformation did not converge",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        return M  # pragma: no cover
 
     work_cols = [outcome, endog, "__bartik_iv__"] + cov_cols
     _finite_frame(df_iv[work_cols], name="panel outcome/endog/instrument/covariates")
-    df_demean = _demean(df_iv, work_cols)
+    df_demean = df_iv.copy()
+    df_demean[work_cols] = _demean_cols(df_iv[work_cols].to_numpy(dtype=float))
 
     Y = df_demean[outcome].to_numpy(dtype=float)
     D = df_demean[endog].to_numpy(dtype=float)
@@ -1016,88 +1098,80 @@ def shift_share_political_panel(
     S2_struct = np.column_stack([np.ones(len(Y)), D, X_cov])
     resid = Y - S2_struct @ b2
 
+    # Number of absorbed FE parameters (connected panel) + intercept
+    k_fe = {"two-way": n_u + n_t - 1, "unit": n_u, "time": n_t, "none": 1}[fe]
+    n_obs = len(Y)
+
     # --- Standard errors --------------------------------------------------
+    akm0_ci = None
     if cluster == "shock":
-        # Adão-Kolesár-Morales (2019) shock-clustered variance for panel
-        # shift-share.  For each shock k compute the stacked score
-        #   u_k = sum_{i, t} s_{ikt} * Z_tilde_{it} * eps_{it}
-        # and assemble var(beta) = (D_hat' D_tilde)^{-2} * sum_k u_k^2 in
-        # the demeaned (within-FE) space.  D_tilde, Z_tilde, and eps here
-        # are the FE-demeaned endogenous regressor, instrument, and 2SLS
-        # residuals respectively.
-        Z_tilde = df_demean["__bartik_iv__"].to_numpy(dtype=float)
-        D_tilde = df_demean[endog].to_numpy(dtype=float)
-        # Residuals of the structural equation in demeaned space (without
-        # the covariates, which are demeaned too and already inside S2_struct).
-        eps = resid
-        # Build the score per shock k across all (i, t).
-        u_k = np.zeros(len(industries), dtype=float)
-        # Align rows of df_iv with shares_by_t lookup.
-        unit_vals = df_iv[unit].to_numpy()
-        time_vals = df_iv[time].to_numpy()
-        for k_idx, ind in enumerate(industries):
-            contrib = 0.0
-            for t in times:
-                shares_t = shares_by_t[t]
-                if ind not in shares_t.columns:
-                    continue
-                mask = time_vals == t
-                if not mask.any():
-                    continue
-                # shares at (units_in_t, industry=ind).  Reindex by row's
-                # unit to align row-wise with Z_tilde / eps.
-                s_col = (
-                    shares_t[ind]
-                    .reindex(unit_vals[mask])
-                    .to_numpy(
-                        dtype=float,
-                        na_value=0.0,
-                    )
-                )
-                contrib += float(np.sum(s_col * Z_tilde[mask] * eps[mask]))
-            u_k[k_idx] = contrib
-        # Denominator: (D_hat' D_tilde) under FE demeaning.
-        denom = float(np.dot(D_hat, D_tilde))
-        if abs(denom) < 1e-12:
-            raise NumericalInstability(
-                "AKM shock-cluster SE: (D_hat' D_tilde) ≈ 0 — instrument "
-                "too weak after FE demeaning.",
-                recovery_hint=(
-                    "Check first-stage strength, simplify fixed effects, or use a stronger "
-                    "shift-share instrument."
-                ),
-                diagnostics={
-                    "function": "shift_share_political_panel",
-                    "cluster": "shock",
-                    "denominator": denom,
-                },
+        # Adao-Kolesar-Morales (2019) shock-level SE via the shared kernel
+        # (= R ShiftShareSE::ivreg_ss with the FE as controls). The FE are
+        # partialled out first (FWL), so the controls passed are the
+        # intercept and the demeaned covariates. The share matrix W has one
+        # column per shock g_kt: per industry when the shocks do not vary
+        # over time (Z_it = s_it' g), per (industry, period) otherwise, so
+        # that the instrument is exactly W g in both cases.
+        from ._akm import _akm_fit
+
+        shocks_constant = all(
+            np.array_equal(
+                shocks_by_t[t].reindex(industries).to_numpy(dtype=float),
+                shocks_by_t[times[0]].reindex(industries).to_numpy(dtype=float),
             )
-        var_akm = float(np.sum(u_k**2) / denom**2)
-        se = float(np.sqrt(max(var_akm, 0.0)))
+            for t in times
+        )
+        W_blocks = []
+        for t in times:
+            mask = (df_iv[time] == t).to_numpy()
+            S_t = (
+                shares_by_t[t]
+                .reindex(df_iv.loc[mask, unit])
+                .reindex(columns=industries)
+                .to_numpy(dtype=float, na_value=0.0)
+            )
+            block = np.zeros((len(df_iv), len(industries)))
+            block[mask] = S_t
+            W_blocks.append(block)
+        W = sum(W_blocks) if shocks_constant else np.hstack(W_blocks)
+        akm = _akm_fit(
+            Y,
+            Z,
+            W,
+            np.column_stack([np.ones(n_obs), X_cov]),
+            y2=D,
+            alpha=alpha,
+        )
+        se = float(akm["se"]["AKM"])
         akm_se = se
+        akm0_ci = (akm["ci_l"]["AKM0"], akm["ci_r"]["AKM0"])
         cluster_label = "shock (AKM 2019)"
     else:
-        # Unit / time / two-way cluster-robust sandwich on stage-2.
-        cluster_col = (
-            df_iv[unit].to_numpy()
-            if cluster == "unit"
-            else (
-                df_iv[time].to_numpy()
-                if cluster == "time"
-                else (
-                    df_iv[unit].astype(str) + "_" + df_iv[time].astype(str)
-                ).to_numpy()
-            )
-        )
+        # Cluster-robust (CR0, no small-sample factor) sandwich on stage 2:
+        # V = (Dh'Dh)^-1 [sum_g (Dh_g' e_g)(Dh_g' e_g)'] (Dh'Dh)^-1.
+        # 'twoway' is Cameron-Gelbach-Miller two-way clustering,
+        # V_unit + V_time - V_unit x time (the old code clustered on the
+        # unit x time cell, i.e. HC0, under the 'twoway' label).
         bread = np.linalg.pinv(S2.T @ S2)
-        meat = np.zeros_like(bread)
-        for g in np.unique(cluster_col):
-            idx = np.where(cluster_col == g)[0]
-            Sg = S2[idx]
-            rg = resid[idx]
-            scores = Sg * rg[:, None]
-            sg = scores.sum(axis=0)
-            meat += np.outer(sg, sg)
+        scores_all = S2 * resid[:, None]
+
+        def _meat(codes: np.ndarray) -> np.ndarray:
+            n_g = int(codes.max()) + 1
+            sg = np.zeros((n_g, S2.shape[1]))
+            np.add.at(sg, codes, scores_all)
+            return sg.T @ sg
+
+        if cluster == "unit":
+            meat = _meat(unit_codes)
+        elif cluster == "time":
+            meat = _meat(time_codes)
+        else:
+            cell = pd.factorize(
+                pd.Series(unit_codes).astype(str)
+                + "_"
+                + pd.Series(time_codes).astype(str)
+            )[0]
+            meat = _meat(unit_codes) + _meat(time_codes) - _meat(cell)
         vcov = bread @ meat @ bread
         se = float(np.sqrt(max(vcov[1, 1], 0.0)))
         akm_se = None
@@ -1106,6 +1180,17 @@ def shift_share_political_panel(
 
     z = _norm.ppf(1 - alpha / 2)
     ci = (beta - z * se, beta + z * se)
+
+    # First-stage F of the excluded instrument (homoskedastic; restricted
+    # model drops Z), df = n - (FE parameters + instrument + covariates).
+    rss_u = float(np.sum((D - D_hat) ** 2))
+    S1r = np.column_stack([np.ones(n_obs), X_cov])
+    pir, *_ = np.linalg.lstsq(S1r, D, rcond=None)
+    rss_r = float(np.sum((D - S1r @ pir) ** 2))
+    df_fs = n_obs - (k_fe + 1 + X_cov.shape[1])
+    first_stage_F = (
+        (rss_r - rss_u) / (rss_u / df_fs) if rss_u > 0 and df_fs > 0 else float("nan")
+    )
 
     # --- Per-period cross-sectional estimates ----------------------------
     per_period_rows = []
@@ -1137,33 +1222,37 @@ def shift_share_political_panel(
     per_period = pd.DataFrame(per_period_rows)
 
     # --- Rotemberg weights aggregated across periods ---------------------
+    # GPSS weights of the pooled FE-IV: with x~ the endogenous regressor
+    # after partialling out the FE and covariates,
+    # alpha_kt = g_kt sum_i s_ikt x~_it / sum_{k,t} (same), summed over t per
+    # industry. They sum to one and may be negative. (The old code demeaned x
+    # by period only -- ignoring unit FE and covariates -- and normalised by
+    # the sum of absolute values.)
+    if X_cov.shape[1]:
+        Xc1 = np.column_stack([np.ones(n_obs), X_cov])
+        x_tilde = D - Xc1 @ np.linalg.lstsq(Xc1, D, rcond=None)[0]
+    else:
+        x_tilde = D - (D.mean() if fe == "none" else 0.0)
     rot_acc = {ind: 0.0 for ind in industries}
     for t in times:
-        shares_t = shares_by_t[t]
+        mask = (df_iv[time] == t).to_numpy()
         shocks_t = shocks_by_t[t]
-        sub = df_iv[df_iv[time] == t]
-        d_c = sub[endog].to_numpy(dtype=float) - sub[endog].mean()
         aligned = [ind for ind in industries if ind in shocks_t.index]
-        if not aligned:
-            continue
         S_aligned = (
-            shares_t.loc[sub[unit].astype(int), aligned].to_numpy(dtype=float)
-            if all(u in shares_t.index for u in sub[unit])
-            else shares_t.reindex(sub[unit])[aligned].to_numpy(dtype=float)
+            shares_by_t[t]
+            .reindex(df_iv.loc[mask, unit])[aligned]
+            .to_numpy(dtype=float, na_value=0.0)
         )
         g_aligned = shocks_t.loc[aligned].to_numpy(dtype=float)
-        alpha_t = g_aligned * (S_aligned.T @ d_c)
+        alpha_t = g_aligned * (S_aligned.T @ x_tilde[mask])
         for ind, w in zip(aligned, alpha_t):
             rot_acc[ind] += float(w)
-    total = sum(abs(v) for v in rot_acc.values())
+    total = sum(rot_acc.values())
     rot_rows = []
     for ind, w in rot_acc.items():
+        a_k = w / total if total != 0 else float("nan")
         rot_rows.append(
-            {
-                "industry": ind,
-                "rotemberg_weight": (w / total) if total > 0 else 0.0,
-                "abs_weight": abs(w) / total if total > 0 else 0.0,
-            }
+            {"industry": ind, "rotemberg_weight": a_k, "abs_weight": abs(a_k)}
         )
     rot_df = (
         pd.DataFrame(rot_rows)
@@ -1212,12 +1301,10 @@ def shift_share_political_panel(
             "fe": fe,
             "cluster": cluster_label,
             "akm_se": akm_se,
+            "akm0_ci": akm0_ci,
             "n_obs": int(len(df_iv)),
-            "first_stage_F": float(
-                (D_hat.var() / max(resid.var(), 1e-12))
-                if resid.var() > 0
-                else float("nan")
-            ),
+            "balanced": bool(balanced),
+            "first_stage_F": float(first_stage_F),
         },
         model_info={
             "model_type": "Shift-Share IV (panel)",

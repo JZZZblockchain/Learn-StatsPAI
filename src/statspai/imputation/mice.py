@@ -24,6 +24,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 
 class MICEResult(ResultProtocolMixin):
@@ -95,59 +96,134 @@ class MICEResult(ResultProtocolMixin):
         return _rubins_rules(estimates)
 
 
-def _rubins_rules(estimates: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _barnard_rubin_df(m: int, b: np.ndarray, t: np.ndarray, dfcom: float) -> np.ndarray:
+    """Barnard & Rubin (1999) small-sample degrees of freedom.
+
+    ``lambda = (1 + 1/m) b / t``; ``nu_old = (m - 1) / lambda^2`` (Rubin
+    1987) and, for finite ``dfcom``,
+    ``nu = (m - 1) tmp / ((dfcom + 3)(m - 1) + lambda^2 tmp)`` with
+    ``tmp = (1 - lambda)(1 + dfcom) dfcom`` -- algebraically
+    ``1 / (1/nu_old + 1/nu_obs)``, written as R ``mice:::barnard.rubin``
+    writes it so that ``b = 0`` (no between-imputation variance) gives
+    ``nu_obs`` instead of ``inf / inf``.
+    """
+    lam = (1.0 + 1.0 / m) * b / t
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if not np.isfinite(dfcom):
+            return (m - 1) / lam**2
+        tmp = (1.0 - lam) * (1.0 + dfcom) * dfcom
+        return (m - 1) * tmp / ((dfcom + 3.0) * (m - 1) + lam**2 * tmp)
+
+
+def _rubins_rules(
+    estimates: List[Dict[str, Any]],
+    dfcom: Optional[float] = None,
+    alpha: float = 0.05,
+) -> Dict[str, Any]:
     """
     Apply Rubin's (1987) combination rules.
 
     Parameters
     ----------
     estimates : list of dict
-        Each dict has 'params' (array) and 'var_cov' (matrix).
+        Each dict has 'params' (array) and 'var_cov' (matrix), and
+        optionally 'df_resid' (complete-data residual degrees of freedom).
+    dfcom : float, optional
+        Complete-data degrees of freedom. Defaults to the ``df_resid`` the
+        estimates carry (all must agree), else infinity (large sample).
+    alpha : float, default 0.05
+        Level of the returned confidence intervals.
 
     Returns
     -------
     dict
-        Combined estimates with keys: 'params', 'se', 'tvalues',
-        'pvalues', 'fmi' (fraction of missing information).
+        ``params`` (Q-bar), ``se``, ``tvalues``, ``pvalues``, ``ci_lower``,
+        ``ci_upper``, ``df``, ``dfcom``, ``ubar``, ``b``, ``t``, ``riv``,
+        ``lambda``, ``fmi``, ``fmi_barnard_rubin`` (all per coefficient),
+        ``var_cov`` (the total
+        covariance ``U-bar + (1 + 1/m) B``) and ``n_imputations``.
+
+    Notes
+    -----
+    These are the quantities R ``mice::pool`` reports. The degrees of
+    freedom are Barnard & Rubin's (1999) small-sample df when ``dfcom`` is
+    finite and Rubin's (1987) ``(m - 1) / lambda^2`` otherwise; the
+    fraction of missing information is ``(riv + 2/(df + 3)) / (riv + 1)``
+    with that same df (R ``mice``); ``fmi_barnard_rubin`` is Barnard &
+    Rubin's (1999) small-sample version ``1 - [l(df)/l(dfcom)] U/T`` with
+    ``l(u) = (u + 1)/(u + 3)``, which is what Stata ``mi estimate`` reports
+    (it equals ``fmi`` when ``dfcom`` is infinite). Before 1.30 StatsPAI
+    always used Rubin's large-sample df (while labelling it Barnard-Rubin),
+    which overstates the df -- and understates p-values -- when the
+    complete-data df is small.
     """
     m = len(estimates)
-    params_list = [e["params"] for e in estimates]
-    vcov_list = [e["var_cov"] for e in estimates]
+    if m < 2:
+        raise DataInsufficient(
+            "Rubin's rules need at least two imputations.",
+            recovery_hint="Pool the estimates from m >= 2 imputed datasets.",
+        )
+    params_list = np.asarray([np.asarray(e["params"], dtype=float) for e in estimates])
+    vcov_list = np.asarray([np.asarray(e["var_cov"], dtype=float) for e in estimates])
+
+    if dfcom is None:
+        dfs = [e.get("df_resid") for e in estimates]
+        if all(d is not None for d in dfs):
+            if len(set(float(d) for d in dfs)) != 1:
+                raise MethodIncompatibility(
+                    f"complete-data df differ across imputations ({sorted(set(dfs))}); "
+                    "pass dfcom= explicitly",
+                    recovery_hint="Pass dfcom= explicitly.",
+                )
+            dfcom = float(dfs[0])
+        else:
+            dfcom = float("inf")
+    dfcom = float(dfcom)
 
     # Combined point estimate: mean across imputations
-    Q_bar = np.mean(params_list, axis=0)
-
+    Q_bar = params_list.mean(axis=0)
     # Within-imputation variance
-    U_bar = np.mean(vcov_list, axis=0)
-
-    # Between-imputation variance
-    B = np.zeros_like(U_bar)
-    for q in params_list:
-        diff = q - Q_bar
-        B += np.outer(diff, diff)
-    B /= m - 1
-
+    U_bar = vcov_list.mean(axis=0)
+    # Between-imputation variance (m - 1 divisor)
+    dev = params_list - Q_bar
+    B = dev.T @ dev / (m - 1)
     # Total variance
     T = U_bar + (1 + 1 / m) * B
 
-    se = np.sqrt(np.diag(T))
+    ubar = np.diag(U_bar)
+    b = np.diag(B)
+    t = np.diag(T)
+    se = np.sqrt(t)
     tvalues = Q_bar / se
-
-    # Degrees of freedom (Barnard-Rubin 1999)
-    r = (1 + 1 / m) * np.diag(B) / np.diag(U_bar)
-    nu_old = (m - 1) * (1 + 1 / r) ** 2
-    # Large sample df
-    pvalues = 2 * stats.t.sf(np.abs(tvalues), np.maximum(nu_old, 1))
-
-    # Fraction of missing information
-    fmi = (r + 2 / (nu_old + 3)) / (r + 1)
+    riv = (1 + 1 / m) * b / ubar
+    lam = (1 + 1 / m) * b / t
+    df = _barnard_rubin_df(m, b, t, dfcom)
+    pvalues = 2 * stats.t.sf(np.abs(tvalues), df)
+    tcrit = stats.t.ppf(1 - alpha / 2, df)
+    fmi = (riv + 2 / (df + 3)) / (riv + 1)
+    # Barnard & Rubin (1999, p. 953) small-sample FMI, as Stata's
+    # `mi estimate` reports it: 1 - [l(df) / l(dfcom)] U/T, l(u) = (u+1)/(u+3).
+    if np.isfinite(dfcom):
+        fmi_br = 1 - ((df + 1) / (df + 3)) / ((dfcom + 1) / (dfcom + 3)) * ubar / t
+    else:
+        fmi_br = fmi
 
     return {
         "params": Q_bar,
         "se": se,
         "tvalues": tvalues,
         "pvalues": pvalues,
+        "ci_lower": Q_bar - tcrit * se,
+        "ci_upper": Q_bar + tcrit * se,
+        "df": df,
+        "dfcom": dfcom,
+        "ubar": ubar,
+        "b": b,
+        "t": t,
+        "riv": riv,
+        "lambda": lam,
         "fmi": fmi,
+        "fmi_barnard_rubin": fmi_br,
         "var_cov": T,
         "n_imputations": m,
     }
@@ -306,8 +382,8 @@ def mice(
     ...     estimates.append({'params': r.params.values,
     ...                       'var_cov': np.diag(r.std_errors.values ** 2)})
     >>> combined = result.combine(estimates)
-    >>> sorted(combined)[:2]
-    ['fmi', 'n_imputations']
+    >>> {'fmi', 'df', 'n_imputations'} <= set(combined)
+    True
     """
     rng = np.random.default_rng(seed)
     df = data.copy()
@@ -454,7 +530,13 @@ def mi_estimate(
     Returns
     -------
     dict
-        Combined estimates (Rubin's rules).
+        Combined estimates (Rubin's rules), keyed as in
+        :meth:`MICEResult.combine`, plus ``var_names``. The within-imputation
+        covariance is the estimator's full ``var_cov`` when it exposes one
+        (``data_info['var_cov']``), else the diagonal of squared standard
+        errors; the complete-data df for Barnard-Rubin is its ``df_resid``
+        when exposed, else infinity. This reproduces R ``mice::pool`` and
+        Stata ``mi estimate`` (small-sample df) for ``sp.regress``.
 
     Examples
     --------
@@ -474,21 +556,24 @@ def mi_estimate(
     ['Intercept', 'x1', 'x2']
     """
     estimates = []
-
+    var_names: Optional[List[str]] = None
     for i in range(mice_result.n_imputations):
         df_i = mice_result.complete(i)
         result = estimator(data=df_i, **kwargs)
-        estimates.append(
-            {
-                "params": result.params.values,
-                "var_cov": np.diag(result.std_errors.values**2),
-            }
-        )
+        params = result.params
+        info = getattr(result, "data_info", None) or {}
+        V = info.get("var_cov")
+        k = len(params)
+        if V is None or np.shape(V) != (k, k):
+            # No full covariance exposed: pool the variances only.
+            V = np.diag(np.asarray(result.std_errors, dtype=float) ** 2)
+        est = {"params": np.asarray(params, dtype=float), "var_cov": np.asarray(V)}
+        if info.get("df_resid") is not None:
+            est["df_resid"] = float(info["df_resid"])
+        estimates.append(est)
+        if var_names is None:
+            var_names = list(getattr(params, "index", range(k)))
 
     combined = _rubins_rules(estimates)
-    # Add variable names from the first result
-    df_0 = mice_result.complete(0)
-    first_result = estimator(data=df_0, **kwargs)
-    combined["var_names"] = list(first_result.params.index)
-
+    combined["var_names"] = var_names
     return combined

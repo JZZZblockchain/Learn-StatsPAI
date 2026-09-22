@@ -15,6 +15,7 @@ effect is transportable via the transport formula
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -68,7 +69,16 @@ def identify_transport(
     outcome: str | Iterable[str],
     selection_nodes: str | Iterable[str],
 ) -> TransportIdentificationResult:
-    """Test s-admissibility of some conditioning set.
+    """Test s-admissibility of some pre-treatment conditioning set.
+
+    Searches for a set ``Z`` of non-descendants of the treatment that
+    d-separates every selection node from the outcome given ``X ∪ Z`` in
+    the graph with arrows into ``X`` removed. That is a *sufficient*
+    condition suited to the covariates-only target design of
+    :func:`sp.transport_weights_fn`; it is not the complete
+    Bareinboim-Pearl algorithm (R ``causaleffect::transport``), which also
+    uses observational outcome data from the target and identifies more
+    effects (e.g. ``X -> Y, S -> Y`` via ``P*(Y | X)``).
 
     Parameters
     ----------
@@ -110,7 +120,15 @@ def identify_transport(
     Y = _ensure_set(outcome)
     S = _ensure_set(selection_nodes)
 
-    candidates = set(dag._nodes) - X - Y - S
+    # Z must be a non-descendant of X: the transport formula weights by the
+    # target *margin* P(Z)_T, which equals P(Z | do(X))_T only then. Before
+    # 1.30 mediators were admitted, e.g. X -> Z -> Y, S -> Z returned
+    # sum_z P(Y | do(X), z)_S P(z)_T, which is wrong (the correct functional
+    # needs P(z | do(X))_T, i.e. outcome-stage data in the target).
+    desc_x: set = set()
+    for x in X:
+        desc_x |= set(dag.descendants(x))
+    candidates = set(dag._nodes) - X - Y - S - desc_x
     from ..dag.do_calculus import _bar, _d_separated
 
     bar_x = _bar(dag, into=X)

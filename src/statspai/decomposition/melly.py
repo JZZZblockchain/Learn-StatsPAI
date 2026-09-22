@@ -29,9 +29,10 @@ from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-from ._common import add_constant, prepare_frame
+from ..exceptions import MethodIncompatibility
+from ._common import add_constant, averaged_inverse_cdf, prepare_frame
 from ._results import DecompResultMixin
-from .machado_mata import _qreg_grid
+from .machado_mata import _qreg_grid, _tau_process_grid
 
 
 @dataclass
@@ -101,14 +102,19 @@ def _unconditional_quantiles(
     """
     Melly's unconditional CDF inversion.
 
+    Pools the ``n * J`` fitted conditional quantiles ``x_i' β(u_j)`` with
+    equal mass ``1/(nJ)`` -- the midpoint-rule estimate of
+    ``F(y) = n^{-1} Σ_i ∫_0^1 1{x_i'β(u) <= y} du`` -- and inverts it with
+    the averaged inverse CDF (Hyndman & Fan type 2: the left-continuous
+    inverse, averaging the two order statistics where the CDF is flat at
+    exactly ``tau``). That is ``mm_quantile``'s default definition, used by
+    Chernozhukov, Fernández-Val & Melly's Stata ``cdeco``. Up to 1.28.0 this
+    interpolated linearly between order statistics (type 7).
+
     Returns Q(τ) for τ in tau_eval.
     """
-    J, k = beta_grid.shape
-    # Predicted conditional quantiles: (J, n)
-    preds = beta_grid @ X_source.T
-    # Flatten to get unconditional sample
-    sample = preds.ravel()
-    return np.asarray(np.quantile(sample, tau_eval))
+    preds = beta_grid @ X_source.T  # (J, n)
+    return averaged_inverse_cdf(preds.ravel(), tau_eval)
 
 
 def melly_decompose(
@@ -118,7 +124,7 @@ def melly_decompose(
     x: Sequence[str],
     tau_grid: Optional[Sequence[float]] = None,
     reference: int = 0,
-    n_tau_qr: int = 99,
+    n_tau_qr: int = 100,
 ) -> MellyResult:
     """
     Melly (2005) quantile decomposition.
@@ -132,7 +138,11 @@ def melly_decompose(
         Same convention as ``machado_mata``: ``reference=0`` uses A's β
         on B's X (coefficient-swap counterfactual F_{Y<0|1>}), opposite
         to ``dfl_decompose`` whose ``reference=0`` uses A's X with B's β.
-    n_tau_qr : int — QR estimation grid resolution
+    n_tau_qr : int, default 100
+        Number ``J`` of quantile regressions in the process, fitted at the
+        midpoints ``(j - 0.5)/J`` (the grid of Stata ``cdeco``). Changed in
+        1.29.0 from 99 regressions on ``linspace(0.01, 0.99, 99)``, which
+        dropped the outer 0.5% of each conditional tail.
 
     Returns
     -------
@@ -179,7 +189,10 @@ def melly_decompose(
         tau_seq = tau_grid
     tau_eval = np.asarray(tau_seq, dtype=float)
 
-    tau_qr = np.linspace(0.01, 0.99, n_tau_qr)
+    if reference not in (0, 1):
+        raise MethodIncompatibility(f"reference must be 0 or 1, got {reference!r}")
+
+    tau_qr = _tau_process_grid(n_tau_qr)
     beta_a_grid = _qreg_grid(y_a, X_a, tau_qr)
     beta_b_grid = _qreg_grid(y_b, X_b, tau_qr)
 

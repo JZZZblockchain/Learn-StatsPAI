@@ -19,7 +19,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
-from ..exceptions import StatsPAIWarning
+from ..exceptions import DataInsufficient, MethodIncompatibility, StatsPAIWarning
 
 
 class AttritionResult(ResultProtocolMixin):
@@ -101,6 +101,7 @@ def attrition_test(
     treatment: str,
     observed: str,
     covariates: Optional[List[str]] = None,
+    correction: bool = True,
 ) -> AttritionResult:
     """
     Test for differential attrition in an RCT.
@@ -114,6 +115,10 @@ def attrition_test(
         Indicator for whether outcome is observed (1) or missing (0).
     covariates : list of str, optional
         Baseline covariates to test as predictors of attrition.
+    correction : bool, default True
+        Yates' continuity correction for the 2x2 differential-attrition
+        test (R ``chisq.test``'s default). ``False`` gives Pearson's chi2,
+        which is what Stata ``tabulate treat observed, chi2`` reports.
 
     Returns
     -------
@@ -156,7 +161,7 @@ def attrition_test(
 
     # Chi-squared test for differential attrition
     table = pd.crosstab(data[treatment], data[observed])
-    chi2, p_val = stats.chi2_contingency(table)[:2]
+    chi2, p_val = stats.chi2_contingency(table, correction=correction)[:2]
 
     # Covariate predictors of attrition
     cov_tests = None
@@ -208,6 +213,7 @@ def attrition_bounds(
     observed: Optional[str] = None,
     method: str = "lee",
     alpha: float = 0.05,
+    trimming: str = "quantile",
 ) -> Dict[str, Any]:
     """
     Compute bounds on treatment effects under attrition.
@@ -224,11 +230,23 @@ def attrition_bounds(
     method : str, default 'lee'
         Bounding method: 'lee' (Lee 2009), 'manski' (worst-case).
     alpha : float, default 0.05
+    trimming : {'quantile', 'exact'}, default 'quantile'
+        Lee trimming rule, as in :func:`sp.lee_bounds`: Lee's
+        sample-quantile estimator, or fractional trimming of the
+        observations tied at the quantile (what Stata ``leebounds`` is
+        written to compute). The Lee bounds equal ``sp.lee_bounds``'
+        exactly.
 
     Returns
     -------
     dict
         Keys: 'lower_bound', 'upper_bound', 'naive_ate', 'method', 'n_obs'.
+
+    Notes
+    -----
+    Before 1.30 ``method='lee'`` kept ``n - ceil(q n)`` observations,
+    one fewer than Lee's sample-quantile rule whenever ``q n`` is not an
+    integer, and disagreed with ``sp.lee_bounds`` on the same data.
 
     Examples
     --------
@@ -267,35 +285,27 @@ def attrition_bounds(
     naive_ate = y_treat.mean() - y_control.mean()
 
     if method == "lee":
-        # Lee (2009) trimming bounds
-        p_treat = obs_mask[treat_mask].mean()
-        p_control = obs_mask[~treat_mask].mean()
+        # Lee (2009) trimming bounds, through the shared helper that
+        # sp.lee_bounds uses (Lee's sample-quantile rule, as Stata
+        # `leebounds` computes it). This used to be a second implementation
+        # that kept n - ceil(q n) observations -- one fewer than Lee's rule
+        # whenever q n is not an integer.
+        from ..bounds.lee_manski import _compute_lee_bounds
 
-        if p_treat > p_control:
-            # Trim treatment group from top/bottom
-            trim_frac = 1 - p_control / p_treat
-            y_sorted = np.sort(y_treat)
-            n_trim = int(np.ceil(len(y_sorted) * trim_frac))
-
-            # Lower bound: trim from top
-            y_trim_low = y_sorted[: len(y_sorted) - n_trim]
-            lower = y_trim_low.mean() - y_control.mean()
-
-            # Upper bound: trim from bottom
-            y_trim_up = y_sorted[n_trim:]
-            upper = y_trim_up.mean() - y_control.mean()
-        elif p_control > p_treat:
-            trim_frac = 1 - p_treat / p_control
-            y_sorted = np.sort(y_control)
-            n_trim = int(np.ceil(len(y_sorted) * trim_frac))
-
-            y_trim_low = y_sorted[n_trim:]
-            lower = y_treat.mean() - y_trim_low.mean()
-
-            y_trim_up = y_sorted[: len(y_sorted) - n_trim]
-            upper = y_treat.mean() - y_trim_up.mean()
-        else:
-            lower = upper = naive_ate
+        p_treat = float(obs_mask[treat_mask].mean())
+        p_control = float(obs_mask[~treat_mask].mean())
+        if p_treat == 0 or p_control == 0:
+            raise DataInsufficient(
+                "One arm has no observed outcomes.",
+                recovery_hint="Lee bounds need observed outcomes in both arms.",
+            )
+        if trimming not in ("quantile", "exact"):
+            raise MethodIncompatibility(
+                f"trimming must be 'quantile' or 'exact', got {trimming!r}"
+            )
+        lower, upper = _compute_lee_bounds(
+            y_treat, y_control, p_treat, p_control, trimming
+        )
 
     elif method == "manski":
         # Manski worst-case bounds

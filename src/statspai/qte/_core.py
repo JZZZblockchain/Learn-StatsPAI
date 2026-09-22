@@ -37,6 +37,7 @@ __all__ = [
     "complier_cdfs",
     "kernel_density_at",
     "rearrange",
+    "logit_propensity",
     "multiplier_bootstrap",
     "uniform_band",
     "functional_test",
@@ -141,6 +142,31 @@ def invert_cdf(grid: np.ndarray, cdf: np.ndarray, taus: np.ndarray) -> np.ndarra
     idx = np.searchsorted(cdf, taus, side="left")
     idx = np.clip(idx, 0, len(grid) - 1)
     return np.asarray(grid[idx])
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Propensity score
+# ══════════════════════════════════════════════════════════════════════
+
+
+def logit_propensity(X: np.ndarray, D: np.ndarray) -> np.ndarray:
+    """``P(D = 1 | X)`` from the unpenalised logit MLE (intercept added).
+
+    Newton-Raphson to a 1e-10 step, i.e. the MLE Stata's ``logit`` and R's
+    ``glm(family = binomial)`` report. Up to 1.28.0 the QTE family used
+    ``sklearn``'s ``LogisticRegression(C=1e6)``: an L2-penalised fit
+    stopped by L-BFGS's default 1e-4 gradient tolerance, whose fitted
+    probabilities sat ~2.5e-5 from the MLE on a 1,000-row fixture.
+    Callers clip / trim as their estimator requires.
+    """
+    from ..decomposition._common import add_constant, logit_fit
+
+    X = np.asarray(X, dtype=float)
+    if X.ndim == 1:
+        X = X[:, None]
+    Xc = add_constant(X)
+    beta, _ = logit_fit(np.asarray(D, dtype=float), Xc, max_iter=200, tol=1e-10)
+    return np.asarray(1.0 / (1.0 + np.exp(-(Xc @ beta))))
 
 
 # ══════════════════════════════════════════════════════════════════════

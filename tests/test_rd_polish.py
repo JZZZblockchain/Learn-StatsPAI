@@ -199,22 +199,21 @@ class TestRDDiscrete:
     def test_honest_ci_at_least_naive(self, discrete_data):
         r = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0)
         info = r.model_info["discrete"]
-        h_len = info["honest_ci"][1] - info["honest_ci"][0]
+        h_len = r.ci[1] - r.ci[0]
         n_len = info["naive_ci"][1] - info["naive_ci"][0]
         assert h_len >= n_len  # honest CIs should never be narrower
 
     def test_too_few_mass_points_errors(self):
         df = pd.DataFrame({"y": [1.0] * 10, "x": [1.0, 2.0, 3.0] * 3 + [3.0]})
-        with pytest.raises(ValueError, match="distinct mass points"):
+        # 1.29.0 (RDHonest port): too few observations in the window raises
+        with pytest.raises(ValueError):
             sp.rd_discrete(df, y="y", x="x", c=2.5)
 
     def test_h_filter_consistent(self, discrete_data):
-        """With h=∞ (effectively) the filter is a no-op and the
-        estimate must match the unfiltered call.  Exercises the B1
-        re-binning fix.
-        """
-        r_full = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0, method="bsd")
-        r_h = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0, method="bsd", h=1000.0)
+        """BME with a window wider than the support is RDHonestBME's
+        default h = Inf."""
+        r_full = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0, method="bme")
+        r_h = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0, method="bme", h=1000.0)
         assert abs(r_full.estimate - r_h.estimate) < 1e-9
 
     def test_h_filter_drops_far_mass_points(self, discrete_data):
@@ -222,12 +221,12 @@ class TestRDDiscrete:
         The estimate should differ from the full-bandwidth call (the
         DGP is flat on each side, so they should still cover truth).
         """
-        r_h = sp.rd_discrete(discrete_data, y="y", x="x", c=0.0, method="bsd", h=4.0)
+        r_h = sp.rd_discrete(
+            discrete_data, y="y", x="x", c=0.0, method="bme", h=4.0, order=1
+        )
         info = r_h.model_info["discrete"]
         # DGP has integer mass points; h=4 keeps |x-0|<=4 → x ∈ {-4,…,4}.
-        # That yields 4 negative values (-4,-3,-2,-1) and 5 nonneg (0,…,4).
-        assert info["n_left"] == 4
-        assert info["n_right"] == 5
+        assert info["eff_obs"] == int((discrete_data["x"].abs() <= 4).sum())
         truth = discrete_data.attrs["true_effect"]
         ci_lo, ci_hi = r_h.ci
         assert ci_lo <= truth <= ci_hi

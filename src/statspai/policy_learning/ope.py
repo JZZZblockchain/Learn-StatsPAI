@@ -32,16 +32,17 @@ for counterfactual learning." *NeurIPS*.
 from __future__ import annotations
 
 import warnings
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from scipy import stats
 
-from ..exceptions import ConvergenceWarning
-
-# sklearn is imported lazily inside the functions that need it so that
-# ``import statspai`` doesn't pull ~245 sklearn submodules through this
-# file when the user never touches ope.
+from ..exceptions import (
+    AssumptionViolation,
+    ConvergenceWarning,
+    IdentificationFailure,
+    MethodIncompatibility,
+)
 
 # Single canonical OPEResult lives in ``ope.estimators``; re-exporting it
 # here so ``isinstance(sp.direct_method(...), sp.OPEResult)`` is True
@@ -49,6 +50,11 @@ from ..exceptions import ConvergenceWarning
 # policy_learning OPEResult dataclass (with extra ``estimator/n_obs/detail``
 # fields) is replicated as properties / diagnostics on the canonical class.
 from ..ope.estimators import OPEResult as _CanonicalOPEResult
+
+# sklearn is imported lazily inside the functions that need it so that
+# ``import statspai`` doesn't pull ~245 sklearn submodules through this
+# file when the user never touches ope.
+
 
 OPEResult = _CanonicalOPEResult
 
@@ -105,6 +111,73 @@ def _fit_propensity(X: np.ndarray, A: np.ndarray) -> Tuple[np.ndarray, bool]:
         return np.full(len(A), 1.0 / len(np.unique(A))), True
 
 
+def _behaviour_ratio(pi_t: np.ndarray, pi_b: Any, n: int, clip: float) -> np.ndarray:
+    """Importance weights ``pi_e(A|X) / pi_b(A|X)`` capped at ``clip``.
+
+    ``clip`` caps the *weight* (``obp``'s ``lambda_``); it does not floor the
+    behaviour propensity. Before 1.30.0 ``pi_b`` was also floored at
+    ``1/clip``, which shrank the weight of every unit with
+    ``pi_b < 1/clip`` even when its true weight was below the cap.
+    """
+    pb = np.asarray(pi_b, dtype=float).ravel()
+    if pb.shape[0] != n:
+        raise MethodIncompatibility(
+            f"pi_behavior must have length {n}; got {pb.shape[0]}.",
+            recovery_hint="Pass one logging propensity per logged action.",
+        )
+    if np.any(pb <= 0) or not np.isfinite(pb).all():
+        raise AssumptionViolation(
+            "pi_behavior must be strictly positive and finite: an action "
+            "logged with probability 0 has an undefined importance weight.",
+            recovery_hint=(
+                "Importance weighting needs positivity: every logged action must have "
+                "a positive, finite logging propensity."
+            ),
+        )
+    return np.minimum(pi_t / pb, clip)
+
+
+def _policy_matrix(pi_target: Any, X: np.ndarray, n: int, n_actions: int) -> np.ndarray:
+    """(n, K) evaluation-policy probabilities; a 1-D input is an action vector."""
+    if callable(pi_target):
+        return np.asarray(pi_target(X), dtype=float)
+    arr = np.asarray(pi_target)
+    if arr.ndim == 1:
+        acts = arr.astype(int)
+        if not np.array_equal(acts, arr) or acts.min() < 0 or acts.max() >= n_actions:
+            raise MethodIncompatibility(
+                "A 1-D pi_target for direct_method / doubly_robust is a "
+                "deterministic action vector with integer entries in [0, "
+                f"{n_actions}).",
+                recovery_hint=(
+                    "Pass integer action labels in [0, n_actions) or an (n, n_actions)"
+                    " probability matrix."
+                ),
+            )
+        out = np.zeros((n, n_actions))
+        out[np.arange(n), acts] = 1.0
+        return out
+    return np.asarray(arr, dtype=float)
+
+
+def _resolve_q(
+    q_hat: Optional[np.ndarray],
+    X: np.ndarray,
+    A: np.ndarray,
+    R: np.ndarray,
+    n_actions: int,
+) -> np.ndarray:
+    if q_hat is None:
+        return _fit_q(X, A, R, n_actions)
+    Q = np.asarray(q_hat, dtype=float)
+    if Q.shape != (len(A), n_actions) or not np.isfinite(Q).all():
+        raise MethodIncompatibility(
+            f"q_hat must be a finite (n, n_actions) = ({len(A)}, {n_actions}) matrix.",
+            recovery_hint="Pass q_hat=None to fit the outcome model internally.",
+        )
+    return Q
+
+
 def _fit_q(X: np.ndarray, A: np.ndarray, R: np.ndarray, n_actions: int) -> np.ndarray:
     """Return (n, K) Q-hat matrix via a single RF on (X, A one-hot)."""
     from sklearn.ensemble import RandomForestRegressor
@@ -135,8 +208,15 @@ def direct_method(
     pi_target: Any,
     n_actions: Optional[int] = None,
     alpha: float = 0.05,
+    q_hat: Optional[np.ndarray] = None,
 ) -> OPEResult:
     """Direct outcome regression (plug-in Q-model) OPE.
+
+    ``V = mean_i sum_a pi_e(a|X_i) Q(X_i, a)``. ``Q`` is ``q_hat`` when
+    given (an ``(n, n_actions)`` matrix of reward-model predictions),
+    otherwise a random forest on ``(X, one-hot A)``. A 1-D ``pi_target`` is
+    a deterministic action vector. With the same ``Q`` this is ``obp``'s
+    ``DirectMethod``.
 
     Examples
     --------
@@ -155,17 +235,8 @@ def direct_method(
     R = np.asarray(R)
     if n_actions is None:
         n_actions = int(A.max()) + 1
-    Q = _fit_q(X, A, R, n_actions)
-    # Compute pi_target probability matrix for all actions
-    if callable(pi_target):
-        pi_mat = pi_target(X)
-    else:
-        pi_mat = np.asarray(pi_target)
-        if pi_mat.ndim == 1:
-            # Deterministic policy: action vector
-            tmp = np.zeros((len(A), n_actions))
-            tmp[np.arange(len(A)), pi_mat.astype(int)] = 1.0
-            pi_mat = tmp
+    Q = _resolve_q(q_hat, X, A, R, n_actions)
+    pi_mat = _policy_matrix(pi_target, X, len(A), n_actions)
     V_per = (Q * pi_mat).sum(axis=1)
     V = float(V_per.mean())
     se = float(V_per.std(ddof=1) / np.sqrt(len(A)))
@@ -190,6 +261,15 @@ def ips(
     alpha: float = 0.05,
 ) -> OPEResult:
     """Inverse propensity score OPE.
+
+    ``V = mean_i w_i R_i`` with ``w_i = min(pi_e(A_i|X_i) / pi_b(A_i|X_i),
+    clip)``; ``pi_target`` 1-D is ``pi_e(A_i|X_i)``, 2-D is ``(n, K)``
+    probabilities. ``clip`` is ``obp``'s ``lambda_`` (``np.inf`` for no
+    cap). SE ``sd(w R)/sqrt(n)``.
+
+    .. versionchanged:: 1.30.0
+       ``clip`` caps the weight only; ``pi_b`` is no longer floored at
+       ``1/clip``.
 
     Notes
     -----
@@ -218,8 +298,7 @@ def ips(
         pi_b, pi_b_fallback = pi_behavior, False
     else:
         pi_b, pi_b_fallback = _fit_propensity(X, A.astype(int))
-    pi_b = np.clip(pi_b, 1 / clip, 1.0)
-    ratio = np.clip(pi_t / pi_b, 0, clip)
+    ratio = _behaviour_ratio(pi_t, pi_b, len(A), clip)
     V_per = ratio * R
     V = float(V_per.mean())
     se = float(V_per.std(ddof=1) / np.sqrt(len(A)))
@@ -248,6 +327,15 @@ def snips(
 ) -> OPEResult:
     """Self-normalised IPS (bias-reduction for large IS weights).
 
+    ``V = sum_i w_i R_i / sum_i w_i`` (``obp``'s
+    ``SelfNormalizedInverseProbabilityWeighting``), weights as in
+    :func:`ips`. SE is the delta-method ``sd(w (R - V)) / (mean(w) sqrt(n))``.
+
+    .. versionchanged:: 1.30.0
+       The SE divided by ``sum(w)`` where ``mean(w)`` belongs, so it was
+       too small by a factor of about ``sqrt(n)`` (0.00039 against a
+       bootstrap 0.0174 at n = 2000). ``clip`` no longer floors ``pi_b``.
+
     Notes
     -----
     If ``pi_behavior`` is None and the internal behavior-policy logistic
@@ -275,21 +363,21 @@ def snips(
         pi_b, pi_b_fallback = pi_behavior, False
     else:
         pi_b, pi_b_fallback = _fit_propensity(X, A.astype(int))
-    pi_b = np.clip(pi_b, 1 / clip, 1.0)
-    ratio = np.clip(pi_t / pi_b, 0, clip)
-    denom = max(float(ratio.sum()), 1e-6)
-    V = float((ratio * R).sum() / denom)
-    # Approximate SE via delta method (ratio estimator).
-    numer_var = np.var(ratio * R, ddof=1)
-    denom_var = np.var(ratio, ddof=1)
-    cov = np.cov(ratio * R, ratio, ddof=1)[0, 1]
+    ratio = _behaviour_ratio(pi_t, pi_b, len(A), clip)
     n = len(A)
-    se = float(
-        np.sqrt(
-            max(numer_var / denom - V * cov * 2 / denom + V**2 * denom_var / denom, 0)
-            / n
+    w_bar = float(ratio.mean())
+    if w_bar <= 0:
+        raise IdentificationFailure(
+            "SNIPS: all importance weights are zero.",
+            recovery_hint=(
+                "The evaluation policy puts no mass on any logged action; check "
+                "overlap between pi_target and the logged actions."
+            ),
         )
-    )
+    V = float(np.mean(ratio * R) / w_bar)
+    # Delta method for the ratio of means: the influence function is
+    # (w_i R_i - V w_i) / mean(w).
+    se = float(np.std(ratio * (R - V), ddof=1) / (w_bar * np.sqrt(n)))
     crit = float(stats.norm.ppf(1 - alpha / 2))
     return _wrap(
         "SNIPS",
@@ -313,8 +401,15 @@ def doubly_robust(
     n_actions: Optional[int] = None,
     clip: float = 50.0,
     alpha: float = 0.05,
+    q_hat: Optional[np.ndarray] = None,
 ) -> OPEResult:
     """Doubly-robust OPE (Dudik et al. 2011).
+
+    ``V = mean_i [ sum_a pi_e(a|X_i) Q(X_i, a) + w_i (R_i - Q(X_i, A_i)) ]``
+    with ``w_i = min(pi_e(A_i|X_i) / pi_b(A_i|X_i), clip)``. ``Q`` is
+    ``q_hat`` when given, else a random forest. A 1-D ``pi_target`` is a
+    deterministic action vector. With the same ``Q`` and
+    ``clip = lambda_`` this is ``obp``'s ``DoublyRobust``.
 
     Notes
     -----
@@ -340,27 +435,22 @@ def doubly_robust(
     R = np.asarray(R)
     if n_actions is None:
         n_actions = int(A.max()) + 1
-    pi_t_a = _target_prob(pi_target, X, A)
+    A = A.astype(int)
+    pi_mat = _policy_matrix(pi_target, X, len(A), n_actions)
+    # The target probability of the *logged* action comes from the same
+    # matrix: before 1.30.0 a 1-D action vector was read here as a vector
+    # of probabilities, so the correction term was weighted by action
+    # indices.
+    pi_t_a = pi_mat[np.arange(len(A)), A]
     if pi_behavior is not None:
         pi_b, pi_b_fallback = pi_behavior, False
     else:
-        pi_b, pi_b_fallback = _fit_propensity(X, A.astype(int))
-    pi_b = np.clip(pi_b, 1 / clip, 1.0)
+        pi_b, pi_b_fallback = _fit_propensity(X, A)
 
-    Q = _fit_q(X, A, R, n_actions)
-    if callable(pi_target):
-        pi_mat = pi_target(X)
-    else:
-        pi_mat_raw = np.asarray(pi_target)
-        if pi_mat_raw.ndim == 1:
-            tmp = np.zeros((len(A), n_actions))
-            tmp[np.arange(len(A)), pi_mat_raw.astype(int)] = 1.0
-            pi_mat = tmp
-        else:
-            pi_mat = pi_mat_raw
+    Q = _resolve_q(q_hat, X, A, R, n_actions)
     Q_pi = (Q * pi_mat).sum(axis=1)
     resid = R - Q[np.arange(len(A)), A]
-    ratio = np.clip(pi_t_a / pi_b, 0, clip)
+    ratio = _behaviour_ratio(pi_t_a, pi_b, len(A), clip)
     V_per = Q_pi + ratio * resid
     V = float(V_per.mean())
     se = float(V_per.std(ddof=1) / np.sqrt(len(A)))

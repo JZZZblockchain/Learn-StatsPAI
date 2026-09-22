@@ -37,6 +37,7 @@ from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from ..exceptions import MethodIncompatibility
 from ._common import add_constant, logit_fit, logit_predict, prepare_frame
 from ._results import DecompResultMixin
 
@@ -252,21 +253,39 @@ def fairlie(
     """
     Fairlie (2005) nonlinear decomposition for binary outcomes.
 
-    Procedure: fit model on reference group; rank-match one group onto
-    the other; compute mean predicted probability under counterfactual
-    X; variable-level contribution = change in mean prediction when
-    that variable is swapped to the other group's value.
+    Procedure (as in Jann's Stata ``fairlie``): fit the binary model on the
+    reference group; sort each group by its predicted probability; if the
+    groups differ in size, draw a random subsample of the larger one the
+    size of the smaller (kept in rank order); pair the two groups rank to
+    rank; then switch the covariates from group A's (``group == 0``) values
+    to group B's one variable at a time, in the order given. Variable
+    ``j``'s contribution is the change in the mean predicted probability at
+    its switch, averaged over ``n_sim`` subsamples. With equal group sizes
+    there is no subsample and the decomposition is deterministic.
 
     Parameters
     ----------
     data : pd.DataFrame
     y : str — binary {0, 1}
-    group : str — binary
+    group : str — binary; ``0`` is group A, ``1`` group B (gap = A - B)
     x : Sequence[str]
     model : {'logit', 'probit'}
-    reference : {0, 1} — whose coefficients to use
-    n_sim : int — number of random matchings to average over
+    reference : {0, 1} — whose coefficients to use (``fairlie``'s
+        ``reference()``). The switching always runs from A's covariates to
+        B's, so the contributions share the sign of the explained gap.
+    n_sim : int — number of random subsamples to average over (``reps()``)
     seed : int or None
+
+    Returns
+    -------
+    NonlinearDecompResult
+        ``detailed`` carries each variable's contribution and its
+        delta-method standard error (``fairlie``'s ``e(V)``: the variance
+        of the mean-probability change given the model's coefficient
+        covariance, averaged over subsamples). The contributions are NOT
+        rescaled: they sum to the explained gap of the matched sample,
+        which equals ``explained`` exactly when the groups are the same
+        size.
 
     Examples
     --------
@@ -280,6 +299,12 @@ def fairlie(
     >>> list(res.detailed["variable"])
     ['education', 'experience']
     """
+    if model not in ("logit", "probit"):
+        raise MethodIncompatibility(f"model must be 'logit' or 'probit', got {model!r}")
+    if reference not in (0, 1):
+        raise MethodIncompatibility(f"reference must be 0 or 1, got {reference!r}")
+    if int(n_sim) < 1:
+        raise MethodIncompatibility("n_sim must be a positive integer.")
     cols = [y, group] + list(x)
     df, _ = prepare_frame(data, cols)
     g = df[group].astype(int).to_numpy()
@@ -298,57 +323,71 @@ def fairlie(
     predict = logit_predict if model == "logit" else _probit_predict
     fit = logit_fit if model == "logit" else _probit_fit
 
-    # Fit on reference group
-    if reference == 0:
-        beta_ref, _ = fit(y_a, X_a)
-        X_ref = X_a
-        X_other = X_b
-    else:
-        beta_ref, _ = fit(y_b, X_b)
-        X_ref = X_b
-        X_other = X_a
+    y_ref, X_ref = (y_a, X_a) if reference == 0 else (y_b, X_b)
+    beta_ref, V_ref = fit(y_ref, X_ref)
+    if model == "probit":
+        V_ref = _probit_oim_vcov(y_ref, X_ref, beta_ref)
 
-    # Resampling-based matching to make samples equal size
-    rng = np.random.default_rng(seed)
-    n_match = min(len(X_ref), len(X_other))
+    def _dens(eta: np.ndarray) -> np.ndarray:
+        if model == "logit":
+            pr = 1.0 / (1.0 + np.exp(-eta))
+            return np.asarray(pr * (1.0 - pr))
+        from scipy.stats import norm
 
-    # Baseline: mean predicted probability in each group using its own data
+        return np.asarray(norm.pdf(eta))
+
     rate_a = float(np.mean(y_a))
     rate_b = float(np.mean(y_b))
     gap = rate_a - rate_b
 
-    # Fairlie's simulated detailed contributions
-    contributions = np.zeros(X_raw.shape[1])
-    for _ in range(n_sim):
-        idx_ref = rng.choice(len(X_ref), size=n_match, replace=False)
-        idx_other = rng.choice(len(X_other), size=n_match, replace=False)
-        X_r = X_ref[idx_ref].copy()
-        X_o = X_other[idx_other].copy()
+    # Rank each group by its predicted probability under the reference
+    # coefficients (stable sort, like Mata's order()).
+    ord_a = np.argsort(predict(beta_ref, X_a), kind="mergesort")
+    ord_b = np.argsort(predict(beta_ref, X_b), kind="mergesort")
+    n_match = min(len(ord_a), len(ord_b))
+    rng = np.random.default_rng(seed)
 
-        # Start from own-group X, swap one variable at a time
-        X_swap = X_r.copy()
-        p_prev = predict(beta_ref, X_swap).mean()
-        for j in range(X_raw.shape[1]):
-            X_swap[:, j + 1] = X_o[:, j + 1]
-            p_new = predict(beta_ref, X_swap).mean()
-            contributions[j] += p_prev - p_new
-            p_prev = p_new
+    k = X_raw.shape[1]
+    contributions = np.zeros(k)
+    variances = np.zeros(k)
+    for _ in range(int(n_sim)):
+        # Random subset of the larger group's ranks, kept in rank order.
+        sa = (
+            ord_a
+            if len(ord_a) == n_match
+            else ord_a[np.sort(rng.permutation(len(ord_a))[:n_match])]
+        )
+        sb = (
+            ord_b
+            if len(ord_b) == n_match
+            else ord_b[np.sort(rng.permutation(len(ord_b))[:n_match])]
+        )
+        x_left = X_a[sa].copy()
+        for j in range(k):
+            x_right = x_left.copy()
+            x_right[:, j + 1] = X_b[sb, j + 1]
+            eta_l = x_left @ beta_ref
+            eta_r = x_right @ beta_ref
+            contributions[j] += float(
+                np.mean(predict(beta_ref, x_left) - predict(beta_ref, x_right))
+            )
+            dx = (_dens(eta_l)[:, None] * x_left).mean(axis=0) - (
+                _dens(eta_r)[:, None] * x_right
+            ).mean(axis=0)
+            variances[j] += float(dx @ V_ref @ dx)
+            x_left = x_right
     contributions = contributions / n_sim
+    variances = variances / n_sim
 
-    # Overall: predicted-mean gap when we use ref coefficients on both
-    p_a_ref = predict(beta_ref, X_a).mean()
-    p_b_ref = predict(beta_ref, X_b).mean()
-    explained = p_a_ref - p_b_ref
+    # Total explained: reference coefficients on each group's full sample.
+    explained = float(predict(beta_ref, X_a).mean() - predict(beta_ref, X_b).mean())
     unexplained = gap - explained
-
-    # Normalise contributions so they sum to explained
-    if abs(contributions.sum()) > 1e-12:
-        contributions = contributions * (explained / contributions.sum())
 
     detailed = pd.DataFrame(
         {
             "variable": list(x),
             "contribution": contributions,
+            "se": np.sqrt(np.clip(variances, 0.0, None)),
             "pct_of_explained": (
                 contributions / explained * 100
                 if abs(explained) > 1e-12

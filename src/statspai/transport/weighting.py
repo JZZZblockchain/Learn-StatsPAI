@@ -12,8 +12,10 @@ Also known as inverse odds of sampling weighting.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Sequence
+
 import numpy as np
 import pandas as pd
 
@@ -37,7 +39,10 @@ class TransportWeightResult(ResultProtocolMixin):
     effect_transported : float
         Weighted effect transported to the target population.
     se_transported : float
-        Standard error of the transported effect.
+        Standard error of the transported effect: the HC0 sandwich of the
+        weighted difference in means with the weights treated as fixed
+        (ignores estimation of the sampling model, so it is not the full
+        M-estimation SE).
 
     Examples
     --------
@@ -180,8 +185,13 @@ def transport_weights(
     mt0 = (w0 * yobs).sum() / max(w0.sum(), 1e-12)
     transported = mt1 - mt0
 
-    v1 = (w1 * (yobs - mt1) ** 2).sum() / max(w1.sum(), 1e-12) ** 2
-    v0 = (w0 * (yobs - mt0) ** 2).sum() / max(w0.sum(), 1e-12) ** 2
+    # Sandwich (HC0) variance of the two Hajek means, weights held fixed:
+    # sum w^2 (y - m)^2 / (sum w)^2 per arm -- the robust SE of the
+    # treatment coefficient in a WLS regression of y on a with weights w.
+    # Before 1.30 the numerator used w instead of w^2, so the SE was not
+    # invariant to rescaling the weights.
+    v1 = (w1**2 * (yobs - mt1) ** 2).sum() / max(w1.sum(), 1e-12) ** 2
+    v0 = (w0**2 * (yobs - mt0) ** 2).sum() / max(w0.sum(), 1e-12) ** 2
     se = float(np.sqrt(v1 + v0))
     ess = float(w.sum() ** 2 / (w**2).sum())
 

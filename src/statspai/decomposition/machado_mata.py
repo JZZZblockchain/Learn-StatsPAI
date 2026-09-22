@@ -24,47 +24,15 @@ from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-from ._common import add_constant, prepare_frame
+from ..exceptions import MethodIncompatibility
+from ._common import add_constant
+from ._common import averaged_inverse_cdf as _q2
+from ._common import prepare_frame
 from ._results import DecompResultMixin
 
 # ════════════════════════════════════════════════════════════════════════
-# Quantile regression via IRLS (Koenker)
+# Quantile regression process (exact linear-programming solution)
 # ════════════════════════════════════════════════════════════════════════
-
-
-def _qreg_irls(
-    y: np.ndarray,
-    X: np.ndarray,
-    tau: float,
-    max_iter: int = 50,
-    tol: float = 1e-6,
-) -> np.ndarray:
-    """
-    Quantile regression via Iteratively Reweighted Least Squares.
-
-    Uses the weight w_i = 1/max(|resid_i|, eps) and adjusts residuals
-    for asymmetry (Koenker's algorithm, adequate but not optimal).
-    For higher accuracy one could wire to scipy.optimize or statsmodels.
-    """
-    n, k = X.shape
-    # initialise with OLS
-    beta = np.linalg.lstsq(X, y, rcond=None)[0]
-    eps = 1e-6
-    for _ in range(max_iter):
-        resid = y - X @ beta
-        # asymmetric check function weights
-        w = np.where(resid >= 0, tau, 1 - tau) / np.maximum(np.abs(resid), eps)
-        # Weighted LS
-        WX = X * w[:, None]
-        try:
-            beta_new = np.linalg.solve(X.T @ WX, X.T @ (w * y))
-        except np.linalg.LinAlgError:
-            beta_new = np.linalg.lstsq(X.T @ WX, X.T @ (w * y), rcond=None)[0]
-        if np.max(np.abs(beta_new - beta)) < tol:
-            beta = beta_new
-            break
-        beta = beta_new
-    return np.asarray(beta)
 
 
 def _qreg_grid(
@@ -72,11 +40,40 @@ def _qreg_grid(
     X: np.ndarray,
     tau_grid: np.ndarray,
 ) -> np.ndarray:
-    """Run quantile regression at each τ, return (n_tau, k) coefficient matrix."""
+    """Quantile regression at each τ; returns the (n_tau, k) coefficient matrix.
+
+    Each fit is the exact minimiser of the check-function objective, solved
+    as a linear program by :func:`statspai.regression.quantile._qreg_fit`
+    (the solver behind ``sp.qreg``). Up to 1.28.0 this used an iteratively
+    reweighted least-squares approximation that stopped far from the
+    optimum -- coefficients off by 1-5% at the median and by several
+    hundred percent on small slopes in the tails -- and every Melly and
+    Machado-Mata counterfactual inherited the error.
+    """
+    from ..regression.quantile import _qreg_fit
+
     out = np.empty((len(tau_grid), X.shape[1]))
     for i, t in enumerate(tau_grid):
-        out[i] = _qreg_irls(y, X, t)
+        out[i] = _qreg_fit(y, X, float(t))
     return out
+
+
+def _tau_process_grid(n_tau_qr: int) -> np.ndarray:
+    """Midpoint grid ``(j - 0.5) / J``, ``j = 1..J``, for the QR process.
+
+    Each point carries mass ``1/J`` of the uniform on (0, 1), so pooling the
+    ``J`` fitted conditional quantiles with equal weight integrates
+    ``∫_0^1 1{x'β(u) <= y} du`` by the midpoint rule over the whole unit
+    interval. This is the grid of Chernozhukov, Fernández-Val & Melly's own
+    implementations (Stata ``cdeco`` / ``counterfactual``; R
+    ``Counterfactual``). The pre-1.29 grid ``linspace(0.01, 0.99, 99)``
+    covered only (0.005, 0.995), silently trimming 1% of the conditional
+    distribution.
+    """
+    J = int(n_tau_qr)
+    if J < 2:
+        raise MethodIncompatibility("n_tau_qr must be at least 2.")
+    return (np.arange(1, J + 1) - 0.5) / J
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -174,7 +171,7 @@ def machado_mata(
     tau_grid: Optional[Sequence[float]] = None,
     reference: int = 0,
     n_sim: int = 500,
-    n_tau_qr: int = 99,
+    n_tau_qr: int = 100,
     inference: str = "none",
     n_boot: int = 199,
     alpha: float = 0.05,
@@ -200,7 +197,14 @@ def machado_mata(
            ``reference=0`` means *A's β, B's X* (coefficient swap).
            See ``dfl_decompose`` docstring for the full convention map.
     n_sim : int — number of (τ, obs) draws per counterfactual
-    n_tau_qr : int — τ grid resolution for quantile regression estimation
+    n_tau_qr : int, default 100
+        Number ``J`` of quantile regressions, fitted at the midpoints
+        ``(j - 0.5)/J``; each simulated draw picks one of them uniformly,
+        so the draws sample the uniform on (0, 1) at resolution ``1/J``
+        (Machado & Mata draw ``u ~ U(0, 1)`` directly; with this grid, as
+        ``n_sim -> inf`` the decomposition converges to
+        :func:`melly_decompose` on the same ``J``). Changed in 1.29.0 from
+        99 regressions on ``linspace(0.01, 0.99, 99)``.
     inference : {'none', 'bootstrap'}
     n_boot : int
     alpha : float
@@ -251,7 +255,14 @@ def machado_mata(
         tau_src = tau_grid
     tau_arr = np.asarray(tau_src, dtype=float)
 
-    tau_qr = np.linspace(0.01, 0.99, n_tau_qr)
+    if reference not in (0, 1):
+        raise MethodIncompatibility(f"reference must be 0 or 1, got {reference!r}")
+    if inference not in ("none", "bootstrap"):
+        raise MethodIncompatibility(
+            f"inference must be 'none' or 'bootstrap', got {inference!r}"
+        )
+
+    tau_qr = _tau_process_grid(n_tau_qr)
     beta_a_grid = _qreg_grid(y_a, X_a, tau_qr)
     beta_b_grid = _qreg_grid(y_b, X_b, tau_qr)
 
@@ -278,9 +289,9 @@ def machado_mata(
 
     rows = []
     for t in tau_arr:
-        q_a = float(np.quantile(y_a_sim, t))
-        q_b = float(np.quantile(y_b_sim, t))
-        q_cf = float(np.quantile(y_cf_sim, t))
+        q_a = float(_q2(y_a_sim, t))
+        q_b = float(_q2(y_b_sim, t))
+        q_cf = float(_q2(y_cf_sim, t))
         gap = q_a - q_b
         if reference == 0:
             composition = q_a - q_cf  # effect of X being A-like vs B-like (A's coefs)
@@ -312,6 +323,8 @@ def machado_mata(
     if inference == "bootstrap":
         rng_b = np.random.default_rng(seed)
         boot_list = []
+        n_failed = 0
+        last_error: Optional[BaseException] = None
         strata = g
         for _ in range(n_boot):
             # Stratified bootstrap
@@ -320,39 +333,59 @@ def machado_mata(
                 s_idx = np.where(strata == s)[0]
                 idx_parts.append(rng_b.choice(s_idx, size=len(s_idx), replace=True))
             idx = np.concatenate(idx_parts)
+            g_i = g[idx]
+            y_i = y_vec[idx]
+            X_i = X_raw[idx]
+            X_a_i = add_constant(X_i[g_i == 0])
+            X_b_i = add_constant(X_i[g_i == 1])
+            y_a_i = y_i[g_i == 0]
+            y_b_i = y_i[g_i == 1]
             try:
-                g_i = g[idx]
-                y_i = y_vec[idx]
-                X_i = X_raw[idx]
-                X_a_i = add_constant(X_i[g_i == 0])
-                X_b_i = add_constant(X_i[g_i == 1])
-                y_a_i = y_i[g_i == 0]
-                y_b_i = y_i[g_i == 1]
-                if len(y_a_i) < 20 or len(y_b_i) < 20:
-                    continue  # pragma: no cover
                 beta_a_i = _qreg_grid(y_a_i, X_a_i, tau_qr)
                 beta_b_i = _qreg_grid(y_b_i, X_b_i, tau_qr)
-                ya_sim = simulate(beta_a_i, X_a_i, n_sim)
-                yb_sim = simulate(beta_b_i, X_b_i, n_sim)
-                if reference == 0:
-                    ycf_sim = simulate(beta_a_i, X_b_i, n_sim)
-                else:
-                    ycf_sim = simulate(beta_b_i, X_a_i, n_sim)
-                gaps_b = []
-                comps_b = []
-                for t in tau_arr:
-                    q_a_b = np.quantile(ya_sim, t)
-                    q_b_b = np.quantile(yb_sim, t)
-                    q_cf_b = np.quantile(ycf_sim, t)
-                    gaps_b.append(q_a_b - q_b_b)
-                    if reference == 0:
-                        comps_b.append(q_a_b - q_cf_b)
-                    else:
-                        comps_b.append(q_cf_b - q_b_b)
-                boot_list.append((gaps_b, comps_b))
-            except Exception:  # noqa: BLE001  # pragma: no cover
+            except (np.linalg.LinAlgError, ValueError) as exc:
+                n_failed += 1
+                last_error = exc
                 continue
-        if len(boot_list) > 10:
+            ya_sim = simulate(beta_a_i, X_a_i, n_sim)
+            yb_sim = simulate(beta_b_i, X_b_i, n_sim)
+            if reference == 0:
+                ycf_sim = simulate(beta_a_i, X_b_i, n_sim)
+            else:
+                ycf_sim = simulate(beta_b_i, X_a_i, n_sim)
+            gaps_b = []
+            comps_b = []
+            for t in tau_arr:
+                q_a_b = _q2(ya_sim, t)
+                q_b_b = _q2(yb_sim, t)
+                q_cf_b = _q2(ycf_sim, t)
+                gaps_b.append(q_a_b - q_b_b)
+                if reference == 0:
+                    comps_b.append(q_a_b - q_cf_b)
+                else:
+                    comps_b.append(q_cf_b - q_b_b)
+            boot_list.append((gaps_b, comps_b))
+        if n_failed:
+            import warnings
+
+            warnings.warn(
+                f"machado_mata: {n_failed}/{n_boot} bootstrap replications "
+                f"failed ({type(last_error).__name__}: {last_error}); the "
+                "standard errors use the remaining replications.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        if len(boot_list) <= 10:
+            import warnings
+
+            warnings.warn(
+                f"machado_mata: only {len(boot_list)} of {n_boot} bootstrap "
+                "replications available (need > 10); standard errors not "
+                "computed (se is None).",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        else:
             gaps_arr = np.array([b[0] for b in boot_list])
             comps_arr = np.array([b[1] for b in boot_list])
             se_df = pd.DataFrame(

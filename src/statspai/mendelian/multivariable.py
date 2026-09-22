@@ -9,7 +9,7 @@ Three extensions to the single-exposure MR suite:
 2. **Mediation MR (two-step MR)** (Burgess et al. 2015) — decompose the
    total effect of an exposure into direct and mediator-mediated paths
    using two IVW regressions.
-3. **MR-BMA** (Zuber, Colijn, Staley & Burgess 2020) — Bayesian model
+3. **MR-BMA** (Zuber, Colijn, Klaver & Burgess 2020) — Bayesian model
    averaging over the 2^k subsets of exposures to identify which are
    causal when many correlated risk factors are considered.
 
@@ -28,6 +28,7 @@ import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import MethodIncompatibility
 
 __all__ = [
     "mr_multivariable",
@@ -111,7 +112,9 @@ class MRBMAResult(ResultProtocolMixin):
     exposures: List[str]
     marginal_inclusion: pd.Series  # P(exposure in the causal set)
     best_models: pd.DataFrame
-    model_priors: np.ndarray
+    model_priors: np.ndarray  # posterior model probabilities (all models)
+    model_averaged_estimate: Optional[pd.Series] = None  # BMA causal effects
+    method: str = "bf"
 
     def summary(self) -> str:
         lines = [
@@ -259,6 +262,11 @@ def mr_multivariable(
     # Sandwich SE
     resid = Y - X @ alpha_hat
     sigma2 = float(np.sum(w * resid**2) / max(n - len(exposures), 1))
+    # Multiplicative random effects, as MendelianRandomization::mr_mvivw's
+    # default model: the residual standard error scales the fixed-effect SE
+    # only when it exceeds 1 (under-dispersion is not rewarded). Before
+    # 1.30 an RSE below 1 shrank the SE below the fixed-effect SE.
+    sigma2 = max(sigma2, 1.0)
     var_alpha = sigma2 * np.linalg.inv(XtWX)
     se_alpha = np.sqrt(np.diag(var_alpha))
     z = stats.norm.ppf(1 - alpha / 2)
@@ -363,14 +371,16 @@ def mr_mediation(
     -----
     Two-step approach (Burgess et al. 2015):
 
-    1. **Step 1 — total effect (IVW)**: α_total = IVW(β_Y ~ β_X).
+    1. **Step 1 — total effect (IVW)**: α_total = IVW(β_Y ~ β_X)
+       (``sp.mr_ivw``'s default model: multiplicative random effects).
     2. **Step 2a — exposure → mediator**: α_XM = IVW(β_M ~ β_X).
     3. **Step 2b — direct effect via MVMR**:
        α_direct = MVMR(β_Y ~ β_X, β_M).
     4. **Indirect**: α_indirect = α_total − α_direct.
 
-    Delta-method SE for the indirect effect combines SEs from steps 1
-    and 3.
+    The direct effect is ``sp.mr_multivariable`` (``mr_mvivw``). The SE of
+    the indirect effect combines the SEs of steps 1 and 3 as if they were
+    independent (they are not; treat it as approximate).
 
     Examples
     --------
@@ -421,10 +431,16 @@ def mr_mediation(
     bY = df[beta_outcome].to_numpy(dtype=float)
     seY = df[se_outcome].to_numpy(dtype=float)
 
-    # Total effect
-    w = 1.0 / seY**2
-    total = float(np.sum(w * bX * bY) / np.sum(w * bX**2))
-    total_se = float(np.sqrt(1.0 / np.sum(w * bX**2)))
+    # Total effect: IVW with MendelianRandomization's default model
+    # (multiplicative random effects, SE * max(1, RSE)), i.e. sp.mr_ivw.
+    # Before 1.30 this was a local IVW with the fixed-effect SE, which
+    # round-1 of the parity campaign had already removed from sp.mr_ivw.
+    from .mr import mr_ivw as _mr_ivw
+
+    seX = df[se_exposure].to_numpy(dtype=float)
+    _tot = _mr_ivw(bX, bY, seX, seY)
+    total = float(_tot["estimate"])
+    total_se = float(_tot["se"])
 
     # Direct effect via MVMR on [β_X, β_M]
     mvmr_df = df[[beta_outcome, se_outcome, beta_exposure, beta_mediator]].rename(
@@ -453,7 +469,8 @@ def mr_mediation(
     )
 
     indirect = total - direct
-    # Delta-method SE (approx): Var(A - B) = Var(A) + Var(B) (ignoring cov).
+    # Difference method; the SE treats the total and direct estimates as
+    # independent (no reference implementation computes this quantity).
     indirect_se = float(np.sqrt(total_se**2 + direct_se**2))
     prop_mediated = (indirect / total) if abs(total) > 1e-12 else np.nan
 
@@ -484,6 +501,8 @@ def mr_bma(
     exposures: Optional[Sequence[str]] = None,
     max_model_size: Optional[int] = None,
     prior_inclusion: float = 0.5,
+    prior_sd: float = 0.5,
+    method: str = "bf",
 ) -> MRBMAResult:
     """Mendelian Randomization with Bayesian Model Averaging.
 
@@ -492,27 +511,42 @@ def mr_bma(
     snp_associations : DataFrame
     outcome, outcome_se, exposures : see :func:`mr_multivariable`
     max_model_size : int, optional
-        Maximum number of exposures in any one model. Defaults to
-        ``len(exposures)``. Set a smaller value for very high-dimensional
-        exposure sets (restricts to at most k at a time).
+        Maximum number of exposures in any one model (Zuber et al.'s
+        ``kmax``). Defaults to ``len(exposures)``.
     prior_inclusion : float, default 0.5
-        Prior probability that each exposure is in the true causal model.
+        Prior probability that each exposure is in the true causal model
+        (``prior_prob``); a model of size ``s`` has prior
+        ``p^s (1 - p)^(k - s)``.
+    prior_sd : float, default 0.5
+        Standard deviation ``sigma`` of the independent normal prior on
+        each causal effect (Zuber et al.'s ``sigma``).
+    method : {'bf', 'bic'}, default 'bf'
+        ``'bf'`` is MR-BMA as Zuber, Colijn, Klaver & Burgess (2020) define
+        and implement it (their ``summary_mvMR_BF``): the IVW-scaled
+        regression ``beta_Y / se_Y ~ beta_X / se_Y`` without intercept, a
+        closed-form Bayes factor under the normal prior, posterior-mean
+        effects averaged over models. ``'bic'`` is the pre-1.30 behaviour:
+        posterior weights ``exp(-BIC/2)`` from weighted least squares.
 
     Returns
     -------
     MRBMAResult
-        Marginal inclusion probabilities and top posterior models.
+        ``marginal_inclusion`` (posterior inclusion probabilities),
+        ``model_averaged_estimate`` (BMA causal effects), ``best_models``
+        (top 20; ``log10_bf`` or ``bic``), ``model_priors`` (posterior
+        probability of every model, in enumeration order).
 
     Notes
     -----
-    Iterates over the 2^k − 1 non-empty subsets of ``exposures``. For
-    each model, fits the MVMR WLS regression and computes the BIC:
+    With ``X = beta_X / se_Y``, ``Y = beta_Y / se_Y`` and a model ``g``,
+    ``Omega^-1 = sigma^-2 I + X_g'X_g``, ``B = Omega X_g'Y`` and
 
-        BIC_M = n * log(RSS_M / n) + k_M * log(n)
+        log10 BF_g = -0.5 log10 det(Omega^-1) - |g| log10 sigma
+                     - (n/2) [log10(Y'Y - B' Omega^-1 B) - log10(Y'Y)].
 
-    Model posterior ∝ exp(-BIC_M / 2) * prior(M).
-
-    Runs quickly for k ≤ 12. For more exposures use ``max_model_size``.
+    Before 1.30 this function returned BIC-weighted BMA under the MR-BMA
+    name (``method='bic'``); its inclusion probabilities differ from
+    Zuber et al.'s and it reported no averaged effect.
 
     Examples
     --------
@@ -540,11 +574,19 @@ def mr_bma(
 
     References
     ----------
-    Zuber, V., Colijn, J. M., Staley, J. R. & Burgess, S. (2020).
+    Zuber, V., Colijn, J. M., Klaver, C. & Burgess, S. (2020).
     "Selecting likely causal risk factors from high-throughput
     experiments using multivariable Mendelian randomization."
     Nature Communications 11, 29. [@zuber2020selecting]
     """
+    if method not in ("bf", "bic"):
+        raise MethodIncompatibility(f"method must be 'bf' or 'bic'; got {method!r}")
+    if not 0 < prior_inclusion < 1:
+        raise MethodIncompatibility(
+            f"prior_inclusion must be in (0, 1); got {prior_inclusion}"
+        )
+    if not prior_sd > 0:
+        raise MethodIncompatibility(f"prior_sd must be positive; got {prior_sd}")
     if exposures is None:
         exposures = [
             c
@@ -574,37 +616,64 @@ def mr_bma(
     X_all = df[list(exposures)].to_numpy(dtype=float)
     w = 1.0 / se_y**2
     log_n = float(np.log(n))
+    # Zuber et al.: IVW scaling, summary statistics of the scaled regression.
+    Xs = X_all / se_y[:, None]
+    Ys = Y / se_y
+    XtX = Xs.T @ Xs
+    XtY = Xs.T @ Ys
+    YtY = float(Ys @ Ys)
 
     posterior_scores: List[Tuple[Tuple[int, ...], float, float]] = []
-    # Each entry: (model index tuple, bic, log_prior)
+    thetas: List[np.ndarray] = []
+    # Each entry: (model index tuple, score, log_prior); score is log10 BF
+    # ('bf') or BIC ('bic').
     for size in range(1, max_model_size + 1):
         for combo in combinations(range(k), size):
-            X_m = X_all[:, list(combo)]
-            # Weighted OLS
-            XtWX = X_m.T @ (w[:, None] * X_m)
-            XtWY = X_m.T @ (w * Y)
-            try:
-                alpha = np.linalg.solve(XtWX, XtWY)
-            except np.linalg.LinAlgError:
-                continue
-            resid = Y - X_m @ alpha
-            rss = float(np.sum(w * resid**2))
-            # BIC (weighted-least-squares Gaussian approximation)
-            bic = n * np.log(rss / n) + size * log_n
-            # Beta-Binomial-style prior
-            log_prior = size * np.log(prior_inclusion) + (k - size) * np.log(
-                1.0 - prior_inclusion
-            )
-            posterior_scores.append((combo, bic, log_prior))
+            idx = list(combo)
+            if method == "bf":
+                inv_omega = XtX[np.ix_(idx, idx)] + np.eye(size) / prior_sd**2
+                B = np.linalg.solve(inv_omega, XtY[idx])
+                resid_ss = YtY - float(B @ inv_omega @ B)
+                score = float(
+                    -0.5 * np.log10(np.linalg.det(inv_omega))
+                    - size * np.log10(prior_sd)
+                    - (n / 2.0) * (np.log10(resid_ss) - np.log10(YtY))
+                )
+                log_prior = size * np.log10(prior_inclusion) + (k - size) * np.log10(
+                    1.0 - prior_inclusion
+                )
+                theta = np.zeros(k)
+                theta[idx] = B
+            else:
+                X_m = X_all[:, idx]
+                XtWX = X_m.T @ (w[:, None] * X_m)
+                XtWY = X_m.T @ (w * Y)
+                try:
+                    alpha = np.linalg.solve(XtWX, XtWY)
+                except np.linalg.LinAlgError:
+                    continue
+                resid = Y - X_m @ alpha
+                rss = float(np.sum(w * resid**2))
+                score = n * np.log(rss / n) + size * log_n
+                log_prior = size * np.log(prior_inclusion) + (k - size) * np.log(
+                    1.0 - prior_inclusion
+                )
+                theta = np.zeros(k)
+                theta[idx] = alpha
+            posterior_scores.append((combo, score, log_prior))
+            thetas.append(theta)
 
     if not posterior_scores:
         raise RuntimeError("MR-BMA: no models could be fit.")
 
-    # Compute posterior probabilities (normalised via log-sum-exp).
-    log_scores = np.array([-s[1] / 2.0 + s[2] for s in posterior_scores])
+    if method == "bf":
+        log_scores = np.array([s_[1] + s_[2] for s_ in posterior_scores]) * np.log(10.0)
+    else:
+        log_scores = np.array([-s_[1] / 2.0 + s_[2] for s_ in posterior_scores])
     log_scores -= log_scores.max()
     probs = np.exp(log_scores)
     probs /= probs.sum()
+    bma = pd.Series(np.asarray(thetas).T @ probs, index=exposures)
 
     # Marginal inclusion
     marginal = np.zeros(k)
@@ -621,7 +690,7 @@ def mr_bma(
             {
                 "model": "+".join(exposures[j] for j in combo),
                 "size": len(combo),
-                "bic": posterior_scores[i][1],
+                ("log10_bf" if method == "bf" else "bic"): posterior_scores[i][1],
                 "posterior_prob": float(probs[i]),
             }
         )
@@ -632,4 +701,6 @@ def mr_bma(
         marginal_inclusion=marginal_series,
         best_models=best_models,
         model_priors=probs,
+        model_averaged_estimate=bma,
+        method=method,
     )

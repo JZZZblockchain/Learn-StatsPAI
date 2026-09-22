@@ -15,14 +15,14 @@ Development Field Experiments." *AEJ: Applied*, 1(4), 200-232.
 """
 
 import warnings
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from .._result_serialize import ResultProtocolMixin
-from ..exceptions import StatsPAIWarning
+from ..exceptions import MethodIncompatibility, StatsPAIWarning
 
 
 class RandomizationResult(ResultProtocolMixin):
@@ -239,7 +239,23 @@ def randomize(
     cluster : str, optional
         Cluster variable for cluster randomization.
     method : str, default 'simple'
-        'simple', 'complete', 'stratified', 'cluster'.
+        'simple' (independent Bernoulli draws; ``randomizr::simple_ra``),
+        'complete' (fixed arm counts; ``complete_ra``), 'stratified'
+        (complete randomization within each stratum; ``block_ra``) or
+        'cluster' (complete randomization of clusters; ``cluster_ra``).
+        Passing ``strata=`` / ``cluster=`` selects the block / cluster
+        design whatever ``method`` says.
+
+    Notes
+    -----
+    Arm counts follow ``randomizr::complete_ra``: ``floor(N p_j)`` units per
+    arm, with the misfits allocated at random in proportion to the
+    fractional parts. Before 1.30 (a) ``method='complete'`` silently did
+    simple randomization, (b) stratified counts used Python's
+    round-half-to-even and gave every misfit of an odd stratum to a fixed
+    arm (strata of 5 got 2 treated, strata of 7 got 4), (c) cluster
+    randomization was Bernoulli per cluster, and (d) re-randomization
+    redrew by simple randomization, discarding the strata / clusters.
     balance_vars : list of str, optional
         Variables to check balance on (for re-randomization).
     n_rerand : int, default 0
@@ -280,60 +296,59 @@ def randomize(
 
     if prob is None:
         prob = [1.0 / n_arms] * n_arms
+    prob_arr = np.asarray(prob, dtype=float)
+    if (
+        len(prob_arr) != n_arms
+        or np.any(prob_arr < 0)
+        or abs(prob_arr.sum() - 1) > 1e-9
+    ):
+        raise MethodIncompatibility(
+            f"prob must be {n_arms} non-negative numbers summing to 1; got {prob}"
+        )
+    if method not in ("simple", "complete", "stratified", "cluster"):
+        raise MethodIncompatibility(
+            "method must be 'simple', 'complete', 'stratified' or 'cluster'; got "
+            f"{method!r}"
+        )
+    if method == "stratified" and strata is None:
+        raise MethodIncompatibility(
+            "method='stratified' needs strata=", recovery_hint="Pass strata=<column>."
+        )
+    if method == "cluster" and cluster is None:
+        raise MethodIncompatibility(
+            "method='cluster' needs cluster=", recovery_hint="Pass cluster=<column>."
+        )
 
-    assignments: np.ndarray
-    if method == "simple" and strata is None and cluster is None:
-        # Complete randomization
-        assignments = rng.choice(n_arms, size=n, p=prob)
+    def _draw() -> np.ndarray:
+        if strata is not None:
+            out = np.empty(n, dtype=int)
+            pos = {lab: i for i, lab in enumerate(df.index)}
+            for _, group in df.groupby(strata, sort=True):
+                idx = np.array([pos[i] for i in group.index])
+                out[idx] = _complete_ra(len(idx), prob_arr, rng)
+            return out
+        if cluster is not None:
+            codes, uniq = pd.factorize(df[cluster], sort=True)
+            return _complete_ra(len(uniq), prob_arr, rng)[codes]
+        if method == "simple":
+            return rng.choice(n_arms, size=n, p=prob_arr)
+        return _complete_ra(n, prob_arr, rng)
 
-    elif strata is not None or method == "stratified":
-        # Stratified (block) randomization
-        assignments = np.empty(n, dtype=int)
-        strata_col = cast(str, strata)
-        for _, group in df.groupby(strata_col):
-            idx = group.index
-            g_n = len(idx)
-            # Within each stratum, do complete randomization
-            counts = [int(round(p * g_n)) for p in prob]
-            # Adjust rounding — ensure no negative counts
-            while sum(counts) < g_n:
-                counts[0] += 1
-            while sum(counts) > g_n:
-                # Find largest count to decrement
-                max_idx = max(range(len(counts)), key=lambda i: counts[i])
-                counts[max_idx] -= 1
-            arm_labels = np.concatenate(
-                [np.full(max(c, 0), arm) for arm, c in enumerate(counts)]
-            )
-            rng.shuffle(arm_labels)
-            assignments[idx] = arm_labels[:g_n]
+    assignments = _draw()
 
-    elif cluster is not None or method == "cluster":
-        # Cluster randomization
-        cluster_col = cast(str, cluster)
-        clusters = df[cluster_col].unique()
-        n_clusters = len(clusters)
-        cluster_assignments = rng.choice(n_arms, size=n_clusters, p=prob)
-        cluster_map = dict(zip(clusters, cluster_assignments))
-        assignments = df[cluster_col].map(cluster_map).to_numpy(dtype=int)
-
-    else:
-        assignments = rng.choice(n_arms, size=n, p=prob)
-
-    # Re-randomization
+    # Re-randomization: redraw from the SAME design (it used to redraw by
+    # simple randomization, discarding strata, clusters and fixed counts).
     if n_rerand > 0 and balance_vars is not None:
         best_assignments = assignments.copy()
         best_distance = _mahalanobis_distance(df, balance_vars, assignments)
-
         for _ in range(n_rerand):
-            new_assignments = rng.choice(n_arms, size=n, p=prob)
+            new_assignments = _draw()
             d = _mahalanobis_distance(df, balance_vars, new_assignments)
             if d < best_distance:
                 best_distance = d
                 best_assignments = new_assignments.copy()
                 if d < rerand_threshold:
                     break
-
         assignments = best_assignments
 
     df[treatment_col] = assignments
@@ -356,6 +371,29 @@ def randomize(
         balance=bal.__dict__ if bal else None,
         seed=seed,
     )
+
+
+def _complete_ra(N: int, prob: np.ndarray, rng: Any) -> np.ndarray:
+    """Complete random assignment of ``N`` units, R ``randomizr`` rule.
+
+    Transcribes ``randomizr::complete_ra(prob_each = prob)``: arm ``j``
+    first gets ``floor(N p_j)`` units; the ``N - sum floor(N p_j)`` misfit
+    units go to arms drawn without replacement with probabilities
+    ``(N p_j - floor(N p_j)) / remainder``; the labels are then permuted.
+    Every arm therefore gets ``floor(N p_j)`` or ``floor(N p_j) + 1``
+    units and each unit's marginal probability of arm ``j`` is ``p_j`` when
+    at most one unit is a misfit.
+    """
+    floor = np.floor(N * prob + 1e-9).astype(int)
+    rem = N - int(floor.sum())
+    labels = np.repeat(np.arange(len(prob)), floor)
+    if rem > 0:
+        fix = N * prob - floor
+        fix = np.clip(fix, 0.0, None)
+        extra = rng.choice(len(prob), size=rem, replace=False, p=fix / fix.sum())
+        labels = np.concatenate([labels, extra])
+    rng.shuffle(labels)
+    return labels
 
 
 def _mahalanobis_distance(
@@ -384,6 +422,7 @@ def balance_check(
     treatment: str,
     covariates: List[str],
     alpha: float = 0.05,
+    equal_var: bool = False,
 ) -> BalanceResult:
     """
     Check covariate balance between treatment and control.
@@ -400,6 +439,13 @@ def balance_check(
     covariates : list of str
         Covariates to check balance on.
     alpha : float, default 0.05
+    equal_var : bool, default False
+        Per-covariate difference test. ``False`` is Welch's unequal-variance
+        t-test. ``True`` is the pooled-variance t-test -- the OLS t-test of
+        the covariate on the treatment dummy -- which is what Stata
+        ``iebaltab`` reports (its pair test regresses the variable on the
+        group dummy; its difference is control minus treatment, the
+        opposite sign of ``diff`` here).
 
     Returns
     -------
@@ -450,7 +496,7 @@ def balance_check(
 
         # t-test
         t_stat, p_val = stats.ttest_ind(
-            treat[var].dropna(), control[var].dropna(), equal_var=False
+            treat[var].dropna(), control[var].dropna(), equal_var=equal_var
         )
 
         rows.append(
