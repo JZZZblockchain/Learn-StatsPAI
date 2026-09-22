@@ -112,15 +112,18 @@ def test_grf_aipw_recovers_grf_ci(fitted_cf, r_reference):
 def test_grf_plugin_is_documented_convenience_estimand(fitted_cf, r_reference):
     """Documents (does not validate) the plug-in CATE average path.
 
-    ``cf.ate()`` is the mean of the CATE predictions; it is retained as
-    a convenience but is NOT the parity estimand. This test asserts that
-    it remains a distinct, finite CATE-summary path so a regression that
-    silently aliases it to the AIPW estimand is caught, without treating
-    the plug-in mean as validated.
+    ``float(cf.ate())`` is the doubly-robust (AIPW) estimate its SE / CI
+    describe; the mean of the CATE predictions is kept as a convenience in
+    ``detail["plug_in_estimate"]`` but is NOT the parity estimand. This test
+    asserts that the plug-in remains a distinct, finite CATE-summary path so a
+    regression that silently aliases it to the AIPW estimand is caught,
+    without treating the plug-in mean as validated.
     """
-    plug_in = float(fitted_cf.ate())
+    ate = fitted_cf.ate()
+    plug_in = float(ate.detail["plug_in_estimate"])
     detail = fitted_cf.average_treatment_effect(target_sample="all")
     aipw = float(detail["estimate"])
+    assert float(ate) == pytest.approx(aipw, abs=1e-12)
     assert math.isfinite(plug_in)
     # The plug-in path is the mean of the out-of-bag CATE predictions ...
     assert plug_in == pytest.approx(float(fitted_cf.predict().mean()), abs=1e-12)
