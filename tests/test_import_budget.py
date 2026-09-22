@@ -76,33 +76,56 @@ def test_mypy_config_note_with_analysis_passes(monkeypatch) -> None:
             "pyproject.toml: [mypy]: python_version: Python 3.9 is not "
             "supported (must be 3.10 or higher)\n"
             "src/statspai/parity.py:63: error: Returning Any [no-any-return]\n"
-            "/usr/lib/python3/coverage/debug.py:169: error: match unsupported\n"
+            "/usr/lib/python3/somepkg/mod.py:12: error: Returning Any "
+            "[no-any-return]\n"
+            "Found 2 errors in 2 files (checked 900 source files)\n"
         )
 
     monkeypatch.setattr(quality_gate, "_run", lambda cmd: Proc())
 
     result = quality_gate.run_mypy(max_errors=25)
 
-    # Only the ``src/statspai`` error counts; the third-party ``coverage`` error
-    # is ignored, and the config note does not mark the run as failed.
+    # Only the ``src/statspai`` error counts; the third-party type error is
+    # ignored, and the config note does not mark the run as failed.
     assert result.count == 1
     assert result.command_failed is False
     assert result.passed is True
 
 
-def test_mypy_third_party_parse_error_does_not_fail_gate(monkeypatch) -> None:
-    # mypy follows imports into installed third-party packages; a parse error
-    # there (``match`` under ``python_version = 3.9``) drives the exit code to 2
-    # without any StatsPAI-code problem. The gate must stay green.
+def test_mypy_third_party_parse_error_fails_gate(monkeypatch) -> None:
+    # A [syntax] error anywhere — here ``match`` in coverage under
+    # ``python_version = 3.9`` — is blocking: mypy stops before type-checking
+    # src/statspai, so the StatsPAI count is meaningless. This exact run passed
+    # the gate for months with observed=1 while the real count was ~800.
     quality_gate = _load_quality_gate_module()
 
     class Proc:
-        returncode = 2  # blocking exit driven purely by the third-party file
-        stdout = "/usr/lib/python3/coverage/debug.py:169: error: match syntax\n"
+        returncode = 2
+        stdout = (
+            "/usr/lib/python3/coverage/debug.py:169: error: Pattern matching is "
+            "only supported in Python 3.10 and greater  [syntax]\n"
+            "Found 1 error in 1 file (errors prevented further checking)\n"
+        )
 
     monkeypatch.setattr(quality_gate, "_run", lambda cmd: Proc())
 
     result = quality_gate.run_mypy(max_errors=25)
+
+    assert result.count == 0
+    assert result.command_failed is True
+    assert result.passed is False
+
+
+def test_mypy_clean_run_passes(monkeypatch) -> None:
+    quality_gate = _load_quality_gate_module()
+
+    class Proc:
+        returncode = 0
+        stdout = "Success: no issues found in 900 source files\n"
+
+    monkeypatch.setattr(quality_gate, "_run", lambda cmd: Proc())
+
+    result = quality_gate.run_mypy(max_errors=0)
 
     assert result.count == 0
     assert result.command_failed is False

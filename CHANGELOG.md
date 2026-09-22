@@ -2,6 +2,21 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **CI mypy gate was not type-checking anything.** With `python_version = "3.9"`
+  in `[tool.mypy]`, mypy followed imports into `coverage/debug.py` (which uses
+  `match`), hit a blocking `[syntax]` error and stopped before checking
+  `src/statspai`. `scripts/quality_gate.py` treated that aborted run as valid,
+  so the gate reported `observed=1 baseline=25` and passed. The mypy target is
+  now 3.10, the interpreter the gate runs on (3.9 compatibility is still
+  covered by the 3.9 test leg). The gate now trusts a run only when mypy's
+  summary says it finished checking; `errors prevented further checking` fails
+  it. `DEFAULT_MYPY_MAX` is reset from 25 to 828, the first real measurement
+  (lean CI env, py3.10, mypy 1.20). The ratchet still only goes down.
+
 ## [1.29.0] — 2026-09-22
 
 ### ⚠️ Cross-language parity campaign, phase 3 (StatsPAI vs R / Stata)

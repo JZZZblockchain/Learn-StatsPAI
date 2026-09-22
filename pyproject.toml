@@ -244,7 +244,13 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.9"
+# Match the interpreter the CI gate runs on (ubuntu + 3.10), not the 3.9 floor
+# in ``requires-python``. Installed third-party packages target the running
+# interpreter; under ``python_version = "3.9"`` mypy hit ``match`` in
+# ``coverage/debug.py``, reported a blocking [syntax] error and never
+# type-checked src/statspai at all. 3.9 compatibility is enforced by the 3.9
+# leg of the test matrix, which actually imports and runs the code.
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

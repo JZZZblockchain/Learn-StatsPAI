@@ -18,10 +18,12 @@ from typing import Optional, Sequence
 
 DEFAULT_FLAKE8_MAX = 1000
 # Baseline for StatsPAI-authored type debt only (see ``run_mypy`` — the count is
-# scoped to ``src/statspai/`` lines). Measured 0 under the pinned mypy 1.x with
-# the lean ``.[dev]`` typed surface; the buffer absorbs minor mypy/dep version
-# drift between CI and dev venvs. Lower as fixes land — never raise it.
-DEFAULT_MYPY_MAX = 25
+# scoped to ``src/statspai/`` lines). Reset 2026-09-22 to the first real
+# measurement: the earlier value of 25 was set against runs that aborted on a
+# third-party [syntax] error before type-checking anything (observed=1), so it
+# never reflected our code. Measured 828 under mypy 1.20 with the lean
+# ``.[dev,fixest]`` CI env on py3.10. Lower as fixes land — never raise it.
+DEFAULT_MYPY_MAX = 828
 FORBIDDEN_IMPORT_PREFIXES = (
     "numba",
     "sklearn",
@@ -99,26 +101,25 @@ def run_mypy(max_errors: int) -> GateResult:
         "-m",
         "mypy",
         "src/statspai",
-        "--no-error-summary",
         "--hide-error-context",
     ]
     proc = _run(cmd)
     # Count only errors in our own tree. mypy follows imports into installed
-    # third-party packages (e.g. ``coverage/debug.py``) whose presence and
-    # Python-version compatibility vary by venv; counting those made the
-    # ratchet depend on the environment rather than on StatsPAI code — the same
-    # instability the ``ignore_missing_imports`` note in pyproject.toml fights.
+    # third-party packages whose presence varies by venv; counting those made
+    # the ratchet depend on the environment rather than on StatsPAI code — the
+    # same instability the ``ignore_missing_imports`` note in pyproject.toml
+    # fights.
     count = len(re.findall(r"^src[\\/]statspai[\\/]\S+: error:", proc.stdout, re.M))
-    # A run is trustworthy as long as mypy actually analysed something — it
-    # emitted at least one ``<file>.py:<line>:`` diagnostic or the "Success"
-    # banner. We must NOT key failure off the exit code alone: mypy follows
-    # imports into installed third-party packages, and a parse error there
-    # (e.g. ``coverage/debug.py`` using ``match`` under ``python_version=3.9``)
-    # drives the exit code to 2 without any problem in StatsPAI code. Only a
-    # run that produced no analysis at all — an unreadable config or an
-    # internal crash — is a real gate failure.
-    analysed = bool(re.search(r"^\S+\.py:\d+: ", proc.stdout, re.M)) or (
-        "Success: no issues" in proc.stdout
+    # Trust the run only if mypy says it finished type-checking: the summary
+    # banner is ``Success: no issues found in N source files`` or ``Found ...
+    # (checked N source files)``. A blocking error anywhere — including a
+    # [syntax] error in a third-party file — ends with ``(errors prevented
+    # further checking)`` instead, and the StatsPAI count is then meaningless
+    # (it read 1 for months while the real count was in the hundreds). Config
+    # notes and third-party *type* errors do not block and do not fail the gate.
+    analysed = bool(
+        re.search(r"^Success: no issues found in \d+ source file", proc.stdout, re.M)
+        or re.search(r"\(checked \d+ source files?\)", proc.stdout)
     )
     command_failed = "INTERNAL ERROR" in proc.stdout or not analysed
     return GateResult(
