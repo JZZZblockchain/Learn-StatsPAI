@@ -959,14 +959,39 @@ def rd2d_bw(
 
     Parameters
     ----------
-    See :func:`sp.rd2d`; ``approach="pooled"`` is not available here
-    (use :func:`sp.rdbwselect` on the signed distance).
+    data : pandas.DataFrame
+        Long frame holding the outcome, both running variables and the
+        treatment indicator.
+    y, x1, x2, treatment : str
+        Column names, as in :func:`sp.rd2d`.
+    boundary : callable, optional
+        ``f(x1) -> x2`` tracing the boundary; ``None`` uses ``x1 = 0``.
+    approach : {'location', 'distance'}, default 'location'
+        Bivariate fit at boundary points, or a univariate fit on the
+        signed distance. ``sp.rd2d``'s ``'pooled'`` has no bandwidth
+        selector of its own -- call :func:`sp.rdbwselect` on the signed
+        distance instead.
+    p : int, default 1
+        Polynomial order of the point estimator.
+    kernel : str, default 'triangular'
+        ``'triangular'``, ``'uniform'`` or ``'epanechnikov'``.
 
     Returns
     -------
     pd.DataFrame
         ``b1, b2, h01, h02, h11, h12`` (location) or ``b1, b2, h0, h1``
         (distance), one row per evaluation point.
+
+    Notes
+    -----
+    The remaining keyword arguments -- ``eval_points``, ``n_eval``,
+    ``deriv``, ``tangvec``, ``kernel_type``, ``bwselect``, ``method``,
+    ``vce``, ``cluster``, ``fuzzy``, ``bwparam``, ``fitmethod``,
+    ``masspoints``, ``bwcheck``, ``scaleregul``, ``scalebiascrct``,
+    ``stdvars``, ``kink_unknown``, ``kink_position``, ``cqt`` and
+    ``distance`` -- carry the meaning and the defaults they have in
+    ``rd2d::rdbw2d``; :func:`sp.rd2d` documents the ones the two
+    functions share.
 
     Examples
     --------

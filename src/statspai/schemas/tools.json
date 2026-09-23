@@ -19963,11 +19963,15 @@
       "properties": {
         "approach": {
           "default": "location",
-          "description": "approach parameter (str).",
+          "description": "Bivariate fit at boundary points, or a univariate fit on the signed distance. ``sp.rd2d``'s ``'pooled'`` has no bandwidth selector of its own -- call :func:`sp.rdbwselect` on the signed distance instead.",
+          "enum": [
+            "location",
+            "distance"
+          ],
           "type": "string"
         },
         "boundary": {
-          "description": "boundary parameter (Optional[Callable]).",
+          "description": "``f(x1) -> x2`` tracing the boundary; ``None`` uses ``x1 = 0``.",
           "type": "string"
         },
         "bwcheck": {
@@ -20027,7 +20031,7 @@
         },
         "kernel": {
           "default": "triangular",
-          "description": "Kernel function used for weighting or smoothing.",
+          "description": "``'triangular'``, ``'uniform'`` or ``'epanechnikov'``.",
           "type": "string"
         },
         "kernel_type": {
@@ -20064,7 +20068,7 @@
         },
         "p": {
           "default": 1,
-          "description": "p parameter (int).",
+          "description": "Polynomial order of the point estimator.",
           "type": "integer"
         },
         "scalebiascrct": {
@@ -20087,7 +20091,7 @@
           "type": "string"
         },
         "treatment": {
-          "description": "Treatment indicator, treatment variable, or treatment array.",
+          "description": "Column names, as in :func:`sp.rd2d`.",
           "type": "string"
         },
         "vce": {
@@ -20096,15 +20100,15 @@
           "type": "string"
         },
         "x1": {
-          "description": "x1 parameter (str).",
+          "description": "Column names, as in :func:`sp.rd2d`.",
           "type": "string"
         },
         "x2": {
-          "description": "x2 parameter (str).",
+          "description": "Column names, as in :func:`sp.rd2d`.",
           "type": "string"
         },
         "y": {
-          "description": "Outcome variable column name or outcome array.",
+          "description": "Column names, as in :func:`sp.rd2d`.",
           "type": "string"
         }
       },
