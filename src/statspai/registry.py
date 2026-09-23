@@ -1205,7 +1205,7 @@ def _build_registry() -> None:
         FunctionSpec(
             name="ddd",
             category="causal",
-            description="Triple Differences (DDD). Extends 2x2 DID with a within-unit subgroup comparison to eliminate additional confounders.",
+            description="Triple Differences (DDD). Extends 2x2 DID with a within-unit subgroup comparison to eliminate additional confounders. method='3wfe' (default) is the triple-interaction regression; covariates there are additive and do not identify the covariate-adjusted ATT, so method='dr'/'reg'/'ipw' with id= routes to the conditional estimators of sp.ddd_heterogeneous.",
             params=[
                 ParamSpec("data", "DataFrame", True),
                 ParamSpec("y", "str", True, description="Outcome variable"),
@@ -1227,6 +1227,25 @@ def _build_registry() -> None:
                     False,
                     None,
                     "Cluster variable for standard errors",
+                ),
+                ParamSpec(
+                    "id",
+                    "str",
+                    False,
+                    None,
+                    "Unit identifier; required by every method other than "
+                    "'3wfe', which pairs each unit's two periods",
+                ),
+                ParamSpec(
+                    "method",
+                    "str",
+                    False,
+                    "3wfe",
+                    "'3wfe' is the triple-interaction regression; 'dr' / "
+                    "'reg' / 'ipw' hand the design to sp.ddd_heterogeneous, "
+                    "whose covariate adjustment identifies the DDD ATT under "
+                    "conditional parallel trends",
+                    ["3wfe", "dr", "reg", "ipw"],
                 ),
             ],
             returns="CausalResult",
@@ -13453,14 +13472,21 @@ def _build_registry() -> None:
             category="causal",
             description=(
                 "DiD with time-varying covariates frozen at baseline (Caetano, "
-                "Callaway, Payne & Rodrigues 2022, arXiv:2202.02903). Avoids the "
-                "bad-controls bias that arises when treatment affects the "
+                "Callaway, Payne & Sant'Anna 2026, arXiv:2608.03881). Avoids "
+                "the bad-controls bias that arises when treatment affects the "
                 "covariates: freezes X at period g + baseline_offset (default "
                 "g-1) per cohort and uses the frozen values as controls in a "
-                "per-(g, t) outcome-regression DiD fitted on never-treated units "
-                "(ptetools X_{g-1} estimator). aggregation='group' averages each "
-                "cohort's post-period cells then weights cohorts by size; 'simple' "
-                "weights every cell by its treated count."
+                "per-(g, t) DiD on the long difference. est_method picks the "
+                "cell estimator (outcome regression, stabilised IPW, or the "
+                "doubly robust combination), control_group widens the "
+                "comparison set to the not-yet-treated, and vce switches "
+                "between the cluster bootstrap, the influence-function "
+                "plug-in and the multiplier bootstrap. "
+                "covariate_pretest=True adds the paper's two placebo "
+                "statistics on the covariate itself. aggregation='group' "
+                "averages each cohort's post-period cells then weights "
+                "cohorts by size; 'simple' weights every cell by its treated "
+                "count."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -13486,6 +13512,41 @@ def _build_registry() -> None:
                     False,
                     -1,
                     "Offset relative to first-treatment period for freezing",
+                ),
+                ParamSpec(
+                    "est_method",
+                    "str",
+                    False,
+                    "reg",
+                    "Cell estimator: outcome regression, stabilised IPW, or "
+                    "the doubly robust combination",
+                    ["reg", "ipw", "dr"],
+                ),
+                ParamSpec(
+                    "control_group",
+                    "str",
+                    False,
+                    "nevertreated",
+                    "Comparison units; 'notyettreated' adds cohorts that "
+                    "have not switched by either period of the cell",
+                    ["nevertreated", "notyettreated"],
+                ),
+                ParamSpec(
+                    "vce",
+                    "str",
+                    False,
+                    "bootstrap",
+                    "Standard error: unit cluster bootstrap, the "
+                    "influence-function plug-in, or the multiplier bootstrap",
+                    ["bootstrap", "analytic", "multiplier"],
+                ),
+                ParamSpec(
+                    "covariate_pretest",
+                    "bool",
+                    False,
+                    False,
+                    "Also run the comparison with each covariate as the "
+                    "outcome, before and after treatment",
                 ),
                 ParamSpec("n_boot", "int", False, 500),
                 ParamSpec("alpha", "float", False, 0.05),
@@ -13549,6 +13610,15 @@ def _build_registry() -> None:
                 ),
             ],
             alternatives=["callaway_santanna", "drdid", "wooldridge_did"],
+            validation_notes=[
+                "tests/reference_parity/test_did_synth_didvar_parity.py: "
+                "every post cell and both aggregates match R ptetools "
+                "1.0.1 and did 2.3.0 for the regression estimator, and "
+                "did::att_gt for the dr / ipw / not-yet-treated paths -- "
+                "point estimates and per-cell standard errors alike, at "
+                "3.6e-15 (reg, not-yet-treated), 1.0e-11 (dr) and "
+                "3.8e-11 (ipw)."
+            ],
             typical_n_min=150,
         )
     )

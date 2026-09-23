@@ -397,6 +397,58 @@ def test_timevarying_overall_matches_references(tvc):
     assert grp.model_info["att_simple"] == pytest.approx(smp.estimate, rel=1e-14)
 
 
+@pytest.mark.parametrize(
+    "key, kwargs",
+    [
+        ("tvc_did_dr", {"est_method": "dr"}),
+        ("tvc_did_ipw", {"est_method": "ipw"}),
+        ("tvc_did_notyet", {"control_group": "notyettreated"}),
+        (
+            "tvc_did_dr_notyet",
+            {"est_method": "dr", "control_group": "notyettreated"},
+        ),
+    ],
+)
+def test_timevarying_dr_ipw_and_notyet_match_did(tvc, key, kwargs):
+    """The estimators added in 1.31.0, against did::att_gt on the same cells.
+
+    ``did`` takes each panel 2x2's covariates from its base period, which
+    under ``base_period='universal'`` is ``g - 1`` for every post cell -- the
+    same frozen covariate this estimator uses -- so the two are the same
+    estimand and must agree to machine precision, not merely in expectation.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = sp.did_timevarying_covariates(
+            tvc,
+            "y",
+            unit="id",
+            time="time",
+            cohort="g",
+            covariates=["x1", "x2"],
+            vce="analytic",
+            **kwargs,
+        )
+    ref = _REF[key]
+    got = _cells(res)
+    r = _ref_cells(ref)
+    assert set(r.index) == set(got.index), key
+    np.testing.assert_allclose(
+        got.loc[r.index].to_numpy(), r.to_numpy(), rtol=_RTOL, err_msg=key
+    )
+    np.testing.assert_allclose(res.estimate, ref["group_att"], rtol=_RTOL)
+    np.testing.assert_allclose(
+        res.model_info["att_simple"], ref["simple_att"], rtol=_RTOL
+    )
+    # The per-cell standard errors come from the same influence functions.
+    np.testing.assert_allclose(
+        res.detail.set_index(["cohort", "time"])["se_gt"].loc[r.index].to_numpy(),
+        _num(ref["se"]),
+        rtol=_RTOL,
+        err_msg=f"{key} se",
+    )
+
+
 def test_timevarying_single_covariate_matches_did(tvc):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

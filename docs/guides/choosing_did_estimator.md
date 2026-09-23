@@ -141,6 +141,17 @@ rpt.forward_engineering_checklist()
 | With covariates, doubly-robust             | `sp.drdid(df, y='y', group='d', time='post', covariates=[...])`         |
 | Repeated cross-section (no panel match)    | `sp.did(..., panel=False)`                                              |
 | Triple differences (DDD)                   | `sp.ddd(df, y='y', treat='d', time='t', subgroup='eligible')`           |
+| DDD **with covariates**                    | `sp.ddd(..., covariates=[...], id='unit', method='dr')`                 |
+
+> **DDD covariates do not go in the regression.** `method='3wfe'` (the
+> default) puts them in additively, which does not identify the
+> covariate-adjusted ATT — and when the covariate is time-invariant it
+> changes the triple-interaction coefficient by nothing at all, since a
+> variable with no time variation has no triple difference. On the design
+> in `tests/test_ddd_covariates.py` the true effect is 2.0, the regression
+> returns 2.968 with or without the covariate, and `method='dr'` returns
+> 2.054. Pass `id=` and `method='dr'` (or `'reg'` / `'ipw'`) to get the
+> conditional estimators of Ortiz-Villavicencio & Sant'Anna (2025).
 
 **Minimum viable robustness suite for 2x2 DID:**
 ```python
@@ -324,7 +335,17 @@ and "checked against the reference" are different claims.
 | Pre-test power / detectable trend | `sp.pretrends_power`, `sp.pretrends_slope_for_power` | match Roth's `pretrends` 0.1.0 within its own Monte-Carlo noise (Track A 76) |
 | Spatial spillovers, heterogeneity-robust | `sp.spillover_did` | **no reference implementation exists**; design-recovery evidence only |
 | LP-DiD | `sp.lp_did` | implemented, but not verified against the published paper and carries no parity test |
-| Time-varying covariates DiD | `sp.did_timevarying_covariates` | implemented; the attribution could not be verified, see the module docstring |
+| Time-varying covariates / bad controls | `sp.did_timevarying_covariates` | approach 1 of Caetano, Callaway, Payne & Sant'Anna (2026); the regression cell matches R `ptetools` / `did`, and the DR, IPW, not-yet-treated and analytic-SE paths are checked on a design where the treatment moves the covariate by a known amount |
+
+Covariates that the treatment itself moves are the case to be careful with.
+Controlling for them contemporaneously is the classic bad-control mistake —
+on the test panel in `tests/test_did_bad_controls.py` a two-way
+fixed-effects regression with the covariate on the right-hand side returns
+-0.18 for a true effect of 1.0, because the covariate carries part of the
+effect. `sp.did_timevarying_covariates` freezes the covariate at `g-1`
+instead, and `covariate_pretest=True` says whether that was necessary (how
+much the treatment moves the covariate) and whether it was enough (a placebo
+run a period earlier).
 
 **Read the third column.** Everything above the spillover row is pinned
 against an independent implementation; below it, correctness rests on

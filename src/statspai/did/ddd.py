@@ -36,7 +36,106 @@ from scipy import stats
 
 from .._aliases import accepts_aliases
 from ..core.results import CausalResult
+from ..exceptions import AssumptionWarning, MethodIncompatibility
 from ._core import require_bool
+
+_METHODS = ("3wfe", "dr", "reg", "ipw")
+
+
+def _delegate_to_heterogeneous(
+    data: pd.DataFrame,
+    *,
+    y: str,
+    treat: str,
+    time: str,
+    subgroup: str,
+    covariates: Optional[List[str]],
+    id: Optional[str],
+    method: str,
+    alpha: float,
+    weights: Optional[str],
+    cluster: Optional[str],
+) -> CausalResult:
+    """Run the 2x2x2 design through the heterogeneity-robust DDD estimator.
+
+    ``sp.ddd_heterogeneous`` is written for staggered panels, but a two-period
+    design with a single treated cohort is the special case it collapses to,
+    and it is the path that carries the conditional-parallel-trends estimators
+    (and their R ``triplediff`` parity).  The translation is one column: the
+    cohort is the post period for the treated group and ``never_value`` for
+    everyone else.
+    """
+    from .ddd_heterogeneous import ddd_heterogeneous
+
+    if id is None:
+        raise MethodIncompatibility(
+            f"method={method!r} pairs each unit's two periods, so it needs "
+            "id=<unit column>. Use method='3wfe' for the pooled "
+            "triple-interaction regression, which does not.",
+            diagnostics={"method": method},
+        )
+    if weights is not None:
+        raise MethodIncompatibility(
+            f"method={method!r} does not take weights= yet; use "
+            "method='3wfe', or sp.ddd_heterogeneous directly.",
+            diagnostics={"method": method, "weights": weights},
+        )
+    if cluster is not None:
+        raise MethodIncompatibility(
+            f"method={method!r} clusters on id= by construction -- its "
+            "influence functions are summed within unit -- so a separate "
+            f"cluster={cluster!r} would be ignored. Drop it, or use "
+            "method='3wfe', which honours it.",
+            diagnostics={"method": method, "cluster": cluster},
+        )
+    periods = sorted(pd.Series(data[time]).dropna().unique())
+    if len(periods) != 2:
+        raise MethodIncompatibility(
+            f"method={method!r} expects the two-period design sp.ddd is for; "
+            f"`{time}` takes {len(periods)} values. For staggered adoption "
+            "call sp.ddd_heterogeneous, which is built for it.",
+            diagnostics={"n_periods": len(periods)},
+        )
+    treat_vals = sorted(pd.Series(data[treat]).dropna().unique())
+    if len(treat_vals) != 2:
+        raise MethodIncompatibility(
+            f"`{treat}` must be a two-valued group indicator; got "
+            f"{len(treat_vals)} values.",
+            diagnostics={"n_treat_values": len(treat_vals)},
+        )
+    post = periods[1]
+    try:
+        post_num = float(post)
+        period_num = pd.to_numeric(data[time], errors="raise")
+    except (TypeError, ValueError) as exc:
+        raise MethodIncompatibility(
+            f"method={method!r} needs a numeric `{time}`, because the cohort "
+            "it builds is the post period itself; recode the two periods as "
+            "numbers (e.g. 0/1).",
+            diagnostics={"time": time},
+        ) from exc
+    # A sentinel that cannot collide with either period, whatever they are.
+    never = float(min(float(v) for v in periods)) - 1.0
+    # Two distinct values of `treat` already guarantee a comparison group.
+    is_treated = data[treat] == treat_vals[1]
+    frame = data.copy()
+    frame[time] = period_num
+    frame["__cohort__"] = np.where(is_treated, post_num, never)
+    res = ddd_heterogeneous(
+        frame,
+        y=y,
+        unit=id,
+        time=time,
+        cohort="__cohort__",
+        subgroup=subgroup,
+        never_value=never,
+        x=list(covariates) if covariates else None,
+        est_method=method,
+        alpha=alpha,
+    )
+    res.model_info["ddd_method"] = method
+    res.model_info["ddd_delegated_from"] = "sp.ddd"
+    return res
 
 
 @accepts_aliases(_strict=True, controls="covariates")
@@ -51,6 +150,9 @@ def ddd(
     robust: bool = True,
     alpha: float = 0.05,
     weights: Optional[str] = None,
+    *,
+    id: Optional[str] = None,
+    method: str = "3wfe",
 ) -> CausalResult:
     """
     Triple Differences (DDD) estimator.
@@ -95,6 +197,26 @@ def ddd(
     weights : str, optional
         Column name for analytical weights (e.g. population weights).
         Equivalent to Stata's ``[aweight=...]``.
+    id : str, optional
+        Unit identifier. Required by every ``method`` other than
+        ``'3wfe'``, which needs to pair each unit's two periods.
+
+        .. versionadded:: 1.31.0
+    method : {'3wfe', 'dr', 'reg', 'ipw'}, default '3wfe'
+        ``'3wfe'`` is the triple-interaction regression described above, and
+        is what this function has always computed. The other three hand the
+        design to :func:`sp.ddd_heterogeneous` -- the doubly robust,
+        outcome-regression and inverse-probability-weighting estimators of
+        Ortiz-Villavicencio and Sant'Anna (2025), pinned against R
+        ``triplediff`` -- which is the covariate adjustment that identifies
+        the DDD ATT under conditional parallel trends. They need ``id=``.
+
+        Without covariates the point estimate is the same either way (the
+        cell means are the same object); the standard errors are not,
+        because the panel route differences within unit while ``'3wfe'``
+        treats the two periods as independent cross-sections.
+
+        .. versionadded:: 1.31.0
 
     Returns
     -------
@@ -135,6 +257,26 @@ def ddd(
     True
     """
     robust = require_bool(robust, argument="robust")
+    if method not in _METHODS:
+        raise MethodIncompatibility(
+            f"method must be one of {_METHODS}; got {method!r}.",
+            diagnostics={"method": method},
+        )
+    if method != "3wfe":
+        return _delegate_to_heterogeneous(
+            data,
+            y=y,
+            treat=treat,
+            time=time,
+            subgroup=subgroup,
+            covariates=covariates,
+            id=id,
+            method=method,
+            alpha=alpha,
+            weights=weights,
+            cluster=cluster,
+        )
+
     df = data.copy()
     diagnostics = []
     if covariates:
@@ -144,9 +286,10 @@ def ddd(
             "if their outcome effect is common across all eight cells and "
             "their distribution does not differ across cells "
             "(Ortiz-Villavicencio & Sant'Anna 2025). For conditional parallel "
-            "trends use sp.ddd_heterogeneous(..., x=[...], est_method='dr')."
+            "trends pass method='dr' with id=<unit column>, which hands the "
+            "design to sp.ddd_heterogeneous."
         )
-        warnings.warn(msg, UserWarning, stacklevel=2)
+        warnings.warn(msg, AssumptionWarning, stacklevel=2)
         diagnostics.append(
             {"check": "ddd_additive_covariates", "status": "warn", "message": msg}
         )

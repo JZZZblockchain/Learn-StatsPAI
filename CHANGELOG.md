@@ -44,6 +44,64 @@ All notable changes to StatsPAI will be documented in this file.
     `data`/`unit`/`time`, incomplete units dropped and counted with a
     warning about what that does to the population, duplicated unit-periods
     refused by name, and `periods=` to pick a balanced window.
+- **`sp.ddd(method='dr'|'reg'|'ipw', id=...)`: covariates that actually
+  identify the triple-difference ATT.** Passing `covariates=` to the
+  triple-interaction regression has never identified the covariate-adjusted
+  DDD ATT (Ortiz-Villavicencio & Sant'Anna 2025, [ortiz2025better]); 1.30.0
+  already warned about it. The warning is now an `AssumptionWarning` and,
+  more usefully, there is somewhere to go: `method='dr'` (or `'reg'` /
+  `'ipw'`) with `id=<unit column>` hands the two-period design to
+  `sp.ddd_heterogeneous`, whose conditional estimators carry R `triplediff`
+  parity (Track A 77). Without covariates the point estimate is identical
+  either way (1e-9 on the test design) because the cell means are the same
+  object; the standard error is not, because the panel route differences
+  within unit while `'3wfe'` treats the two periods as independent cross
+  sections.
+
+  How bad the additive term is, measured: on a design whose covariate is
+  distributed differently across the four (treat, subgroup) cells and whose
+  untreated trend loads on it, the true effect is 2.0, the unadjusted DDD
+  returns **2.968** — and adding the covariate additively returns 2.968 as
+  well, to twelve digits. A time-invariant covariate has no triple
+  difference to contribute, so the adjustment is arithmetically a no-op
+  while the bias it is meant to remove lives in the covariate's effect on
+  the *trend*. With a time-varying covariate the additive term does move the
+  coefficient (2.569), just not to the truth. `method='dr'` returns 2.054
+  and `'reg'` 1.982. `tests/test_ddd_covariates.py` measures all of it.
+
+- **`sp.did_timevarying_covariates` gains the doubly robust, IPW and
+  not-yet-treated paths, an analytic standard error, and the covariate
+  pre-tests** — approach 1 of Caetano, Callaway, Payne and Sant'Anna (2026)
+  [caetano2026difference], the paper that supersedes the 2022 preprint this
+  module was built from. `est_method={'reg','ipw','dr'}` selects the cell
+  estimator; these are the same functions `sp.callaway_santanna` dispatches
+  to, applied to the long difference with the covariates frozen at `g-1`, so
+  a `'dr'` cell is consistent if either the outcome model or the propensity
+  score is right. `control_group='notyettreated'` widens the comparison set
+  with the `G > max(t, g-1)` rule R `did` uses. `vce='analytic'` is the
+  influence-function plug-in (no resampling) and `vce='multiplier'` the
+  multiplier bootstrap on the same influence functions; `'bootstrap'` stays
+  the default, so every number this module already printed is unchanged.
+  All three cell estimators and the not-yet-treated comparison are pinned
+  against `did::att_gt(xformla = ~x1 + x2, base_period = "universal")` on the
+  same panel — `did` takes each 2x2's covariates from its base period, which
+  under a universal base is `g-1`, so it is the same estimand and the two
+  must agree to machine precision rather than in expectation. Every cell's
+  ATT *and its standard error* match: 3.6e-15 for regression with
+  not-yet-treated comparisons, 1.0e-11 for doubly robust and 3.8e-11 for
+  IPW (the two that solve a logit, hence the convergence-tolerance floor).
+  `covariate_pretest=True` reports two statistics per covariate, both the
+  module's own comparison run with the covariate in place of the outcome:
+  the post-treatment one measures how much the treatment moves the covariate
+  (the evidence that it is a genuine bad control), and the pre one is a
+  placebo with every cohort shifted a period earlier, so it sits entirely
+  before treatment. On a panel where the treatment raises the covariate by
+  1.5 and the outcome loads on it, `reg`, `ipw` and `dr` all recover the
+  planted ATT of 1.0 (0.996, 0.997, 1.030 at SE 0.065), the pre-test reads
+  the covariate shift back as 1.51 while its placebo is 0.03 (p = 0.52), and
+  a two-way fixed-effects regression that controls for the *contemporaneous*
+  covariate — the practice the paper argues against — returns **-0.18**.
+  `tests/test_did_bad_controls.py` measures every number quoted here.
 
 ## [1.30.0] — 2026-09-23
 

@@ -7446,7 +7446,7 @@
     "name": "did_summary_to_markdown"
   },
   {
-    "description": "DiD with time-varying covariates frozen at baseline (Caetano, Callaway, Payne & Rodrigues 2022, arXiv:2202.02903). Avoids the bad-controls bias that arises when treatment affects the covariates: freezes X at period g + baseline_offset (default g-1) per cohort and uses the frozen values as controls in a per-(g, t) outcome-regression DiD fitted on never-treated units (ptetools X_{g-1} estimator). aggregation='group' averages each cohort's post-period cells then weights cohorts by size; 'simple' weights every cell by its treated count. Validation: certified parity evidence. Assumptions: Conditional parallel trends given frozen baseline X; No anticipation; SUTVA. Pre-conditions: staggered adoption with >= 1 never-treated unit; covariates column(s) exist for the baseline period per cohort; integer-valued time column. Failure modes: No observation at baseline period for some units -> Fallback uses the first observed period; review detail coverage; Covariate measured with error or missing -> Impute (sp.mice_impute) or restrict to a complete sub-sample before calling; Pre-trend joint test p < 0.05 (or underpowered at 0.10) -> Use sp.sensitivity_rr (Rambachan & Roth honest CI) or switch to...",
+    "description": "DiD with time-varying covariates frozen at baseline (Caetano, Callaway, Payne & Sant'Anna 2026, arXiv:2608.03881). Avoids the bad-controls bias that arises when treatment affects the covariates: freezes X at period g + baseline_offset (default g-1) per cohort and uses the frozen values as controls in a per-(g, t) DiD on the long difference. est_method picks the cell estimator (outcome regression, stabilised IPW, or the doubly robust combination), control_group widens the comparison set to the not-yet-treated, and vce switches between the cluster bootstrap, the influence-function plug-in and the multiplier bootstrap. covariate_pretest=True adds the paper's two placebo statistics on the covariate itself. aggregation='group' averages each cohort's post-period cells then weights cohorts by size; 'simple' weights every cell by its treated count. Validation: certified parity evidence. Assumptions: Conditional parallel trends given frozen baseline X; No anticipation; SUTVA. Pre-conditions: staggered adoption with >= 1 never-treated unit; covariates column(s) exist for the baseline period per cohort; integer-valued time column. Failure modes: No observation at baseline period for some uni...",
     "input_schema": {
       "properties": {
         "aggregation": {
@@ -7472,12 +7472,36 @@
           "description": "First-treatment period (never_value = never-treated)",
           "type": "string"
         },
+        "control_group": {
+          "default": "nevertreated",
+          "description": "Comparison units; 'notyettreated' adds cohorts that have not switched by either period of the cell",
+          "enum": [
+            "nevertreated",
+            "notyettreated"
+          ],
+          "type": "string"
+        },
+        "covariate_pretest": {
+          "default": false,
+          "description": "Also run the comparison with each covariate as the outcome, before and after treatment",
+          "type": "boolean"
+        },
         "covariates": {
           "description": "Time-varying covariates to freeze at baseline",
           "items": {
             "type": "string"
           },
           "type": "array"
+        },
+        "est_method": {
+          "default": "reg",
+          "description": "Cell estimator: outcome regression, stabilised IPW, or the doubly robust combination",
+          "enum": [
+            "reg",
+            "ipw",
+            "dr"
+          ],
+          "type": "string"
         },
         "n_boot": {
           "default": 500,
@@ -7499,6 +7523,16 @@
         },
         "unit": {
           "description": "Unit identifier column.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "bootstrap",
+          "description": "Standard error: unit cluster bootstrap, the influence-function plug-in, or the multiplier bootstrap",
+          "enum": [
+            "bootstrap",
+            "analytic",
+            "multiplier"
+          ],
           "type": "string"
         },
         "y": {

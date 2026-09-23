@@ -118,6 +118,30 @@ out$tvc_did_x1 <- list(
   group_att = aggte(cs1, type = "group", bstrap = FALSE, cband = FALSE)$overall.att
 )
 
+# The estimators sp.did_timevarying_covariates gained in 1.31.0: the doubly
+# robust and stabilised-IPW cells, and the not-yet-treated comparison group.
+# `did` takes covariates from the base period of each panel 2x2, which under
+# base_period = "universal" is g - 1 for every post cell -- the same frozen
+# covariate the StatsPAI estimator uses.
+tvc_variant <- function(est, cgroup) {
+  cs <- suppressWarnings(att_gt(
+    yname = "y", gname = "g", tname = "time", idname = "id", data = tvc,
+    xformla = ~ x1 + x2, est_method = est, control_group = cgroup,
+    base_period = "universal", bstrap = FALSE, cband = FALSE
+  ))
+  keep <- cs$t >= cs$group
+  list(
+    group = cs$group[keep], time = cs$t[keep], att = cs$att[keep],
+    se = cs$se[keep],
+    simple_att = aggte(cs, type = "simple", bstrap = FALSE, cband = FALSE)$overall.att,
+    group_att = aggte(cs, type = "group", bstrap = FALSE, cband = FALSE)$overall.att
+  )
+}
+out$tvc_did_dr <- tvc_variant("dr", "nevertreated")
+out$tvc_did_ipw <- tvc_variant("ipw", "nevertreated")
+out$tvc_did_notyet <- tvc_variant("reg", "notyettreated")
+out$tvc_did_dr_notyet <- tvc_variant("dr", "notyettreated")
+
 # --------------------------------------------------------------- distDD --
 data(mpdta, package = "did")
 mp <- as.data.frame(mpdta)[, c("countyreal", "year", "lemp", "lpop", "first.treat")]
