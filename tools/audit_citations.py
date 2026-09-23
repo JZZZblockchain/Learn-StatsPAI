@@ -1082,7 +1082,19 @@ def diff_citation(c: Citation, truth: PaperMeta) -> list[str]:
     # component. We keep the unsplit version too so compound surnames
     # like "Tabord-Meehan" still match against themselves.
     hyphen_tokens = {t.strip("'") for t in re.split(r"[-\s]+", claim_norm)}
-    all_claim_tokens = claim_tokens | hyphen_tokens
+
+    # An author surname can carry the English possessive: "Arkhangelsky-
+    # Samkov's Algorithm 1", "Han & Shah's estimator". ``strip("'")`` only
+    # removes a trailing apostrophe, so "shah's" stayed unmatched and the
+    # correctly-cited coauthor was reported missing. Strip a trailing "'s"
+    # as well. This cannot hide a wrong attribution: the bare surname still
+    # has to be one of the paper's real authors to count as present.
+    possessive_tokens = {
+        t[:-2]
+        for t in (claim_tokens | hyphen_tokens)
+        if t.endswith("'s") and len(t) > 2
+    }
+    all_claim_tokens = claim_tokens | hyphen_tokens | possessive_tokens
 
     # Count how many truth authors appear in the claim. If zero, this is
     # almost certainly a bare arXiv URL / reference field with no

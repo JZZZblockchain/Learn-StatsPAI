@@ -927,3 +927,53 @@ def test_possessive_form_resolves_to_the_bare_surname():
         id="10.32614/RJ-2016-040",
     )
     assert ac.diff_citation(c, truth) == []
+
+
+def test_possessive_surname_counts_as_present():
+    """ "Han & Shah's estimator" cites both authors.
+
+    ``strip("'")`` removes a trailing apostrophe but leaves the "s" of the
+    English possessive, so "shah's" never matched the surname and the
+    auditor reported the correctly-cited coauthor as missing. Three such
+    claims in docs/ held the Citation Audit workflow red.
+    """
+    truth = ac.PaperMeta(
+        authors=["Jessy Xinyi Han", "Devavrat Shah"],
+        title="T",
+        year=2025,
+        source="arxiv",
+    )
+    claim = _make_citation(
+        "no longer claims to be Han & Shah's SSC (arXiv:2511.14133), a "
+        "different estimator",
+        id="2511.14133",
+    )
+    assert ac.diff_citation(claim, truth) == []
+
+
+def test_possessive_on_a_hyphenated_author_pair_counts_as_present():
+    truth = ac.PaperMeta(
+        authors=["Dmitry Arkhangelsky", "Aleksei Samkov"],
+        title="T",
+        year=2024,
+        source="arxiv",
+    )
+    claim = _make_citation(
+        "Arkhangelsky-Samkov's Algorithm 1 (arXiv:2404.00164; checked on "
+        "the arXiv HTML v2)",
+        id="2404.00164",
+    )
+    assert ac.diff_citation(claim, truth) == []
+
+
+def test_possessive_does_not_excuse_a_genuinely_missing_author():
+    """The bare surname must still be a real author; the strip only
+    removes the possessive, it does not relax the membership test."""
+    truth = ac.PaperMeta(
+        authors=["Jessy Xinyi Han", "Devavrat Shah"],
+        title="T",
+        year=2025,
+        source="arxiv",
+    )
+    claim = _make_citation("Han's SSC (arXiv:2511.14133)", id="2511.14133")
+    assert any("Devavrat Shah" in issue for issue in ac.diff_citation(claim, truth))
