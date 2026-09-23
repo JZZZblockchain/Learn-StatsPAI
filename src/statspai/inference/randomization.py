@@ -37,6 +37,38 @@ from ..core.results import CausalResult
 StatFn = Callable[[np.ndarray, np.ndarray], float]
 Permuter = Callable[[], np.ndarray]
 
+# Relative slack when counting permutations that tie with the observed
+# statistic.  Ties count as extreme (the ri2 / randomizr convention), so the
+# comparison has to survive round-off: a statistic that is mathematically a
+# tie can come back one ULP below the observed value, and dropping it from
+# the count moves the p-value by a full 1/n_perm.  ``statistic="ks"`` is the
+# case that bites.  On n=12 the KS statistic takes six exact values j/6, but
+# ``scipy.stats.ks_2samp`` builds them as a max over differences of two
+# ECDFs: since SciPy 1.18 those six values arrive as eleven distinct floats.
+# Under a strict ``>=`` the enumerated count over all 924 assignments falls
+# from 438 to 384 and the two-sided p-value moves 0.4740 -> 0.4156, breaking
+# parity with R's ri2 on a SciPy upgrade alone.  1e-12 is far below any
+# difference an applied statistic can resolve and far above accumulated
+# floating-point noise.
+_TIE_RTOL = 1e-12
+
+
+def _share_at_least(
+    perm_stats: np.ndarray, obs_stat: float, *, two_sided: bool
+) -> float:
+    """Share of permutations at least as extreme as ``obs_stat``.
+
+    Ties count as extreme, up to ``_TIE_RTOL`` scaled by the magnitude of the
+    observed statistic (round-off is proportional to it).
+    """
+    perm = np.asarray(perm_stats, dtype=float)
+    obs = float(obs_stat)
+    if two_sided:
+        perm = np.abs(perm)
+        obs = abs(obs)
+    tol = _TIE_RTOL * max(1.0, abs(obs))
+    return float(np.mean(perm >= obs - tol))
+
 
 # ======================================================================
 # FisherResult class
@@ -405,8 +437,8 @@ def fisher_exact(
             perm_stats[b] = stat_fn(Y, D_perm)
 
     # P-values
-    p_two_sided = float(np.mean(np.abs(perm_stats) >= np.abs(obs_stat)))
-    p_one_sided = float(np.mean(perm_stats >= obs_stat))
+    p_two_sided = _share_at_least(perm_stats, obs_stat, two_sided=True)
+    p_one_sided = _share_at_least(perm_stats, obs_stat, two_sided=False)
 
     # Hodges-Lehmann confidence interval (only for ATE)
     if statistic == "ate":
@@ -617,8 +649,8 @@ def ri_test(
 
     # P-values (ties with the observed statistic count as extreme; the
     # enumerated set contains the observed assignment itself)
-    p_two_sided = float(np.mean(np.abs(perm_stats) >= np.abs(obs_stat)))
-    p_one_sided = float(np.mean(perm_stats >= obs_stat))
+    p_two_sided = _share_at_least(perm_stats, obs_stat, two_sided=True)
+    p_one_sided = _share_at_least(perm_stats, obs_stat, two_sided=False)
 
     return {
         "observed": obs_stat,
@@ -820,15 +852,12 @@ def _hodges_lehmann_ci(
             t_perm_all = (assignments @ Y_adj) / n1 - ((1.0 - assignments) @ Y_adj) / (
                 assignments.shape[1] - n1
             )
-            p_values[i] = float(np.mean(np.abs(t_perm_all) >= abs(obs_adj)))
+            p_values[i] = _share_at_least(t_perm_all, obs_adj, two_sided=True)
             continue
-        count = 0
+        t_perm_mc = np.empty(n_perm_grid)
         for b in range(n_perm_grid):
-            D_perm = perm_fn()
-            t_perm = stat_fn(Y_adj, D_perm)
-            if abs(t_perm) >= abs(obs_adj):
-                count += 1
-        p_values[i] = count / n_perm_grid
+            t_perm_mc[b] = stat_fn(Y_adj, perm_fn())
+        p_values[i] = _share_at_least(t_perm_mc, obs_adj, two_sided=True)
 
     # CI = set of tau_0 where p >= alpha
     in_ci = tau_grid[p_values >= alpha]

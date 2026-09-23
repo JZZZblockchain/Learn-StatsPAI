@@ -40,22 +40,37 @@ def _fit(df, **kw):
     return sp.causal_forest("y ~ d | x1 + x2 + x3", data=df, **kw)
 
 
+# Pinned from the pre-change code (origin/main 4bf29552) on macOS/arm64.
+# These are coarse regression canaries, NOT a cross-platform contract: the
+# engine is bit-deterministic for a given random_state on a given machine
+# (verified for 1, 2, 4 and 8 numba threads), but a split is an argmax over
+# criteria, so a difference in summation order -- which is what a different
+# SIMD width gives you -- flips a split and the whole subtree below it.
+# Measured on this DGP: jittering X and y by a *relative 1e-15*, i.e. pure
+# round-off, moves the ATE by up to 4.7e-3 relative while leaving
+# ``W_hat.sum()`` bit-identical. The original rtol=1e-9 duly passed on
+# macOS/arm64 and failed on the Linux/x86-64 pandas-3 leg by 2.9e-4 with
+# every library version identical. Do not re-tighten these; a real engine
+# regression moves them by far more than a percent.
+_ATE_PIN_RTOL = 2e-2
+_W_PIN_RTOL = 1e-3
+
+
 def test_estimate_unchanged_and_nuisances_exposed():
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         cf = _fit(_data())
     assert not _overlap_warnings(rec)
-    # Pinned from the pre-change code (origin/main 4bf29552); the numba
-    # engine is deterministic given random_state, rtol covers only
-    # cross-platform floating-point round-off.
     np.testing.assert_allclose(
-        cf.diagnostics["average_treatment_effect"], 1.3218728216088307, rtol=1e-9
+        cf.diagnostics["average_treatment_effect"],
+        1.3218728216088307,
+        rtol=_ATE_PIN_RTOL,
     )
-    np.testing.assert_allclose(float(cf.ate()), 1.3757088560133564, rtol=1e-9)
+    np.testing.assert_allclose(float(cf.ate()), 1.3757088560133564, rtol=_ATE_PIN_RTOL)
     nu = cf.get_nuisances()
     np.testing.assert_array_equal(nu["W_hat"], cf._e_insample)
     np.testing.assert_array_equal(nu["Y_hat"], cf._m_insample)
-    np.testing.assert_allclose(nu["W_hat"].sum(), 162.80336902315491, rtol=1e-9)
+    np.testing.assert_allclose(nu["W_hat"].sum(), 162.80336902315491, rtol=_W_PIN_RTOL)
     assert not nu["W_hat"].flags.writeable and not nu["Y_hat"].flags.writeable
     assert nu["W_hat"] is not cf._e_insample  # a copy, internals untouched
     assert nu["source"] == {
@@ -97,6 +112,24 @@ def test_warning_is_attributed_to_the_caller():
         hits = _overlap_warnings(rec)
         assert len(hits) == 1
         assert hits[0].filename == __file__
+
+
+def test_fit_is_bit_deterministic_given_random_state():
+    # What the absolute pins above were really guarding, stated so that it
+    # holds on every platform rather than on the one they were taken from.
+    df = _data()
+    a, b = _fit(df), _fit(df)
+    assert float(a.ate()) == float(b.ate())
+    assert (
+        a.diagnostics["average_treatment_effect"]
+        == b.diagnostics["average_treatment_effect"]
+    )
+    np.testing.assert_array_equal(
+        a.get_nuisances()["W_hat"], b.get_nuisances()["W_hat"]
+    )
+    np.testing.assert_array_equal(
+        a.effect(df[["x1", "x2", "x3"]]), b.effect(df[["x1", "x2", "x3"]])
+    )
 
 
 def test_warning_does_not_change_estimate():

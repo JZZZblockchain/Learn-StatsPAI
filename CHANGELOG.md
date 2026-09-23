@@ -149,6 +149,34 @@ bit-identical numbers (pinned regression tests in the new test files).
   shared DiD machinery reads `pretrend_test["statistic"]`, which
   `harvest_did` never emitted. It now emits both `statistic` and the
   original `chi2` alias.
+- **⚠️ Correctness: `sp.ri_test` / `sp.fisher_exact` p-values depended on the
+  SciPy version.** Permutations tying with the observed statistic count as
+  extreme (the ri2 / randomizr convention), but the count used an exact
+  floating-point `>=`. `stat="ks"` is where that breaks: on n = 12 the KS
+  statistic takes six exact values j/6, yet `scipy.stats.ks_2samp` builds
+  them as a max over two ECDFs, and since SciPy 1.18 those six values come
+  back as eleven distinct floats. 54 of the 924 enumerated assignments then
+  landed under the observed value by less than 1e-9, the extreme count fell
+  438 -> 384 and the two-sided p-value moved 0.4740 -> 0.4156, losing parity
+  with R's `ri2` on a dependency upgrade alone. Ties are now counted within
+  1e-12 relative to the statistic's magnitude (`sp.rdrbounds` already
+  guarded its permutation count the same way), so both
+  SciPy 1.15 and 1.18 give 438/924. Continuous statistics are unaffected:
+  1e-12 is below anything they resolve.
+- **A causal-forest regression test pinned a macOS/arm64 number as if it were
+  a cross-platform contract**, and had been failing on the Linux CI leg since
+  it landed. The GRF engine is bit-deterministic for a given `random_state`
+  on a given machine (verified for 1-8 numba threads) but a split is an
+  argmax over criteria, so a different summation order flips one and the
+  subtree below it: jittering the test's design matrix by a relative 1e-15
+  moves its ATE by up to 4.7e-3, twenty times the 2.9e-4 that was being
+  called a failure. The pins are now coarse canaries, and the invariant they
+  were reaching for -- two fits of the same data agree bit for bit -- is
+  asserted directly, where it holds everywhere.
+- **`sp.continuous_did(...)` raised `ValueError: output array is read-only`
+  under pandas 3.** Copy-on-write hands `.to_numpy()` a read-only view of
+  the frame's own buffer, and the missing-value mask was built up with an
+  in-place `&=`. The mask is now materialised with `copy=True`.
 - **`sp.causal_forest(data=, y=, d=, x=[...])` dropped the feature names**,
   so `cf.effect(df[x])`, `cf.predict(df)` and the BLP / importance tables
   saw `X0, X1, ...`, and a DataFrame with the right columns raised "missing

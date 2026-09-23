@@ -285,7 +285,10 @@ def _continuous_did_twfe(
     df["_dose_post"] = df[dose] * df[post]
     x_cols = ["_dose_post"] + list(controls or [])
     needed = [y, id, time] + x_cols + ([cluster] if cluster else [])
-    valid = df[needed].notna().all(axis=1).to_numpy()
+    # ``copy=True``: under pandas 3's copy-on-write ``to_numpy()`` can hand
+    # back a read-only view of the frame's own buffer, and the ``&=`` below
+    # writes in place ("ValueError: output array is read-only").
+    valid = df[needed].notna().all(axis=1).to_numpy(copy=True)
     for c in [y] + x_cols:
         valid &= np.isfinite(df[c].to_numpy(dtype=float))
     dfv = df.loc[valid].reset_index(drop=True)
