@@ -1723,11 +1723,16 @@ def forest_policy_tree(
     ...     "y ~ d | z", data=df, fe="twoway", unit="id", time="t",
     ...     clusters=df["id"].to_numpy(), n_estimators=100, random_state=0,
     ... )
-    >>> res = sp.forest_policy_tree(cf, depth=1, cost=0.3)
+    >>> res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3)
     >>> 0.0 <= res["share_treated"] <= 1.0
     True
-    >>> sorted(res["gain_over_treat_all"])
-    ['ci_high', 'ci_low', 'estimate', 'p', 'se', 'z']
+    >>> gain = res["gain_over_treat_all"]
+    >>> sorted(k for k in gain if k in {"estimate", "se", "ci_low", "ci_high"})
+    ['ci_high', 'ci_low', 'estimate', 'se']
+    >>> gain["n_splits"], res["n_splits"]
+    (3, 3)
+    >>> sorted(res["diagnostics"]["split_stability"])[:2]
+    ['root_covariate_counts', 'root_covariate_modal_share']
 
 
     **Many splits, not one.** One split is a draw: it fixes both the rule

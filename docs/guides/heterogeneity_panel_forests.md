@@ -460,18 +460,39 @@ returns the rule — a depth-limited tree in the effect modifiers, the object
 a programme could actually be written in — and prices it.
 
 ```python
-res = sp.forest_policy_tree(cf, depth=2, cost=0.3, covariates=C)
+res = sp.forest_policy_tree(cf, depth=2, cost=0.05, covariates=C,
+                            members=members)
 print(res["rules"])
-# IF z <= -0.0164:
-#   DON'T TREAT (n=216, avg_benefit=-0.6139)
-# ELSE (z > -0.0164):
-#   TREAT (n=202, avg_benefit=0.6093)
+# IF log_gdppc <= 10.4316:
+#   IF pre_trade <= 19.1339:
+#     DON'T TREAT (n=22, avg_benefit=-0.0815)
+#   ELSE (pre_trade > 19.1339):
+#     TREAT (n=78, avg_benefit=0.0995)
+# ELSE (log_gdppc > 10.4316):
+#   IF log_gdppc <= 10.4557:
+#     DON'T TREAT (n=12, avg_benefit=-0.0321)
+#   ELSE (log_gdppc > 10.4557):
+#     TREAT (n=133, avg_benefit=0.0797)
 
-res["value"]                # value per treated cell of following the rule
+res["value"]                # +0.0553, 95% CI [-0.0199, +0.1479]
 res["value_treat_all"]      # ... of treating every cell (the ATT minus cost)
-res["gain_over_treat_all"]  # the difference, with its own standard error
-res["share_treated"]        # how much of the programme the rule keeps
+res["gain_over_treat_all"]  # -0.0033, 95% CI [-0.0277, +0.0067], p = 0.91
+res["share_treated"]        # 0.92 -- the rule keeps almost the whole programme
+res["diagnostics"]["split_stability"]
+# {'root_covariate_counts': {'pre_trade': 11, 'log_gdp_prod': 5,
+#                            'log_gdppc': 4},
+#  'root_covariate_modal_share': 0.55, ...}
 ```
+
+Read that the way section 5 read the RATE on the same panel: **the tree
+always prints a rule, and here the evidence does not support it.** The gain
+over treating everyone is -0.003 with an interval straddling zero, and the
+root covariate changed across the splits — `pre_trade` in eleven of twenty,
+`log_gdp_prod` in five, `log_gdppc` in four. A rule that cannot survive a
+different half of the countries is not a rule this sample identified,
+however confidently the tree prints it. (`cost=0.05` against an ATT of
+0.134 makes targeting a real question here; `cost=0` would make treating
+everyone optimal by construction.)
 
 Three things this inherits from the design, and one it adds.
 
