@@ -112,6 +112,7 @@ from scipy import stats
 from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
+from ..exceptions import MethodIncompatibility
 from . import _core as _dc
 
 
@@ -297,19 +298,32 @@ def did_multiplegt_dyn(
         raise ValueError(f"Treatment {treatment!r} must be binary 0/1")
     if weights is not None:
         if weights not in df.columns:
-            raise ValueError(f"weights column {weights!r} not in data")
+            raise MethodIncompatibility(
+                f"weights column {weights!r} not in data",
+                diagnostics={"weights": weights},
+            )
         wv = pd.to_numeric(df[weights], errors="coerce")
         if (wv.dropna() < 0).any():
-            raise ValueError(f"weights column {weights!r} has negative values")
+            raise MethodIncompatibility(
+                f"weights column {weights!r} has negative values",
+                diagnostics={"weights": weights},
+            )
         df[weights] = wv
     if cluster is not None:
         if cluster not in df.columns:
-            raise ValueError(f"cluster column {cluster!r} not in data")
+            raise MethodIncompatibility(
+                f"cluster column {cluster!r} not in data",
+                diagnostics={"cluster": cluster},
+            )
         if df[cluster].isna().any():
-            raise ValueError(f"cluster column {cluster!r} has missing values")
+            raise MethodIncompatibility(
+                f"cluster column {cluster!r} has missing values",
+                diagnostics={"cluster": cluster},
+            )
         if (df.groupby(group)[cluster].nunique() > 1).any():
-            raise ValueError(
-                f"group {group!r} must be nested within cluster {cluster!r}"
+            raise MethodIncompatibility(
+                f"group {group!r} must be nested within cluster {cluster!r}",
+                diagnostics={"group": group, "cluster": cluster},
             )
 
     df = df.sort_values([group, time]).reset_index(drop=True)

@@ -1,7 +1,7 @@
 # StatsPAI
 
 **Validation-tiered Python workflows for causal inference and applied
-econometrics.** One `import statspai as sp` exposes **1,193 registered
+econometrics.** One `import statspai as sp` exposes **1,195 registered
 functions** across 87 submodules (live count: `python
 scripts/registry_stats.py`) spanning classical regression, staggered
 DiD, regression discontinuity,
@@ -195,7 +195,7 @@ estimator-level reference:
   title   = {StatsPAI: A Unified, Agent-Native Python Toolkit for
              Causal Inference and Applied Econometrics},
   year    = {2026},
-  version = {1.29.0},
+  version = {1.30.0},
   doi     = {10.5281/zenodo.19933900},
   url     = {https://doi.org/10.5281/zenodo.19933900},
   license = {MIT}

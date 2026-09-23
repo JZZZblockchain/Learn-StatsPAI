@@ -422,19 +422,27 @@ def did_imputation(
 
     if weights is not None:
         if weights not in df.columns:
-            raise ValueError(f"weights column '{weights}' not found in data.")
+            raise MethodIncompatibility(
+                f"weights column '{weights}' not found in data.",
+                diagnostics={"weights": weights},
+            )
         if project is not None:
-            raise NotImplementedError(
+            raise MethodIncompatibility(
                 "did_imputation: weights= combined with project= is not "
-                "implemented; run the projection unweighted or drop project=."
+                "implemented; run the projection unweighted or drop project=.",
+                diagnostics={"weights": weights, "project": list(project)},
             )
         _wei_col = df[weights].to_numpy(dtype=float)
         if not np.all(np.isfinite(_wei_col)) or np.any(_wei_col < 0):
-            raise ValueError(
-                f"weights column '{weights}' must be finite and non-negative."
+            raise MethodIncompatibility(
+                f"weights column '{weights}' must be finite and non-negative.",
+                diagnostics={"weights": weights},
             )
         if not np.any(_wei_col > 0):
-            raise ValueError(f"weights column '{weights}' is identically zero.")
+            raise MethodIncompatibility(
+                f"weights column '{weights}' is identically zero.",
+                diagnostics={"weights": weights},
+            )
         df["_wei"] = _wei_col
     else:
         df["_wei"] = 1.0

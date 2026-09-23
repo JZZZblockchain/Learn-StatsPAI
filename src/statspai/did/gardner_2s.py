@@ -57,6 +57,7 @@ from scipy import stats as sp_stats
 from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 __all__ = ["gardner_did", "did_2stage"]
 
@@ -217,11 +218,12 @@ def _did2s_vcov(
     cl_codes, cl_idx = np.unique(cluster, return_inverse=True)
     n_clusters = len(cl_codes)
     if n_clusters < 2:
-        raise ValueError(
+        raise DataInsufficient(
             "gardner_did: the cluster-robust variance needs at least two "
             f"clusters, got {n_clusters}; the summed influence functions of a "
             "single cluster are identically zero. Pass a finer cluster= "
-            "(the default clusters on the unit) or vce='none'."
+            "(the default clusters on the unit) or vce='none'.",
+            diagnostics={"n_clusters": int(n_clusters)},
         )
 
     xtx = X2_w.T @ X2_w
@@ -417,10 +419,11 @@ def gardner_did(
             "vce must be 'analytic', 'stage2', 'bootstrap', or 'none'; " f"got {vce!r}"
         )
     if vce == "stage2" and weights is not None:
-        raise ValueError(
+        raise MethodIncompatibility(
             "gardner_did: vce='stage2' is the unweighted pre-correction SE kept "
             "only to reproduce earlier output; it has no weighted form. Use "
-            "vce='analytic' (the did2s-corrected variance) with weights=."
+            "vce='analytic' (the did2s-corrected variance) with weights=.",
+            diagnostics={"vce": "stage2"},
         )
     if controls is None:
         controls = []
@@ -448,9 +451,10 @@ def gardner_did(
     if weights is not None:
         w = df[weights].to_numpy(dtype=float)
         if not np.all(np.isfinite(w)) or np.any(w <= 0):
-            raise ValueError(
+            raise MethodIncompatibility(
                 f"weights column '{weights}' must be finite and strictly "
-                "positive; drop zero-weight rows before calling gardner_did"
+                "positive; drop zero-weight rows before calling gardner_did",
+                diagnostics={"weights": weights},
             )
     else:
         w = np.ones(n, dtype=float)
@@ -539,7 +543,7 @@ def gardner_did(
         names = ["ATT"]
         count_list = [int(treated_now.sum())]
         if count_list[0] == 0:
-            raise ValueError(
+            raise DataInsufficient(
                 "gardner_did: no treated observations (first_treat never "
                 "reached within the sample), the ATT is undefined."
             )

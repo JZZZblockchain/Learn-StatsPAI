@@ -182,7 +182,7 @@ def bjs_exact_se(
 
 
 @overload
-def bjs_se_for_target(
+def bjs_se_for_target(  # noqa: E704
     *,
     design_all: sparse.csr_matrix,
     design_untreated: sparse.csr_matrix,
@@ -198,7 +198,7 @@ def bjs_se_for_target(
 
 
 @overload
-def bjs_se_for_target(
+def bjs_se_for_target(  # noqa: E704
     *,
     design_all: sparse.csr_matrix,
     design_untreated: sparse.csr_matrix,

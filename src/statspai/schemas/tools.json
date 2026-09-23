@@ -6284,6 +6284,118 @@
     "name": "did_bcf"
   },
   {
+    "description": "Calibrated placebo simulation for DiD estimator selection: strip the estimated effect out of the observed panel, redraw the adoption pattern, inject a known effect, and refit every candidate estimator. Returns bias, RMSE, coverage and rejection rate with Monte Carlo standard errors, so the choice of estimator is settled on this panel rather than by citation. Assumptions: The redrawn assignment is random, so parallel trends holds by construction; the table measures estimator behaviour, not the credibility of the design; The calibration removes the horizon-averaged estimated effect, not cell-level deviations from it; The target is the treated-observation average of the injected effect; a heterogeneous effect makes estimand differences show up as bias. Pre-conditions: one row per (unit, period); cohort constant within a unit; at least two never-treated units to redraw an assignment against; a balanced panel for resample='units'. Failure modes: Fewer than two never-treated units, so a redrawn assignment has no comparison group -> Extend the panel with untreated units, or study the design with sp.did_few_treated instead; resample='units' on an unbalanced panel -> Use resample='wild' or...",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "One minus the nominal level",
+          "type": "number"
+        },
+        "assignment": {
+          "default": "resample_cohorts",
+          "description": "How the adoption pattern is redrawn",
+          "enum": [
+            "resample_cohorts",
+            "random_timing",
+            "observed"
+          ],
+          "type": "string"
+        },
+        "calibrate": {
+          "default": "imputation",
+          "description": "Removal of the observed effect before injecting a known one",
+          "enum": [
+            "imputation",
+            "none"
+          ],
+          "type": "string"
+        },
+        "cohort": {
+          "description": "Period of first treatment; 0/NaN/inf = never",
+          "type": "string"
+        },
+        "control_group": {
+          "default": "nevertreated",
+          "description": "Comparison group handed to the estimators that take one",
+          "enum": [
+            "nevertreated",
+            "notyettreated"
+          ],
+          "type": "string"
+        },
+        "effect": {
+          "default": 0.0,
+          "description": "Effect injected into treated cells (0 = a size study); a callable of the horizon, or of (cohort, period), gives a heterogeneous one",
+          "type": "number"
+        },
+        "estimators": {
+          "description": "Candidates to score",
+          "enum": [
+            "twfe",
+            "callaway_santanna",
+            "sun_abraham",
+            "did_imputation",
+            "gardner_did",
+            "etwfe",
+            "did_multiplegt_dyn",
+            "stacked_did",
+            "lp_did"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Unit identifier",
+          "type": "string"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Replications in parallel (-1 = all CPUs)",
+          "type": "integer"
+        },
+        "n_sims": {
+          "default": 200,
+          "description": "Replications",
+          "type": "integer"
+        },
+        "resample": {
+          "default": "units",
+          "description": "Outcome noise: unit residual paths, a unit-level Rademacher multiplier, or none",
+          "enum": [
+            "units",
+            "wild",
+            "none"
+          ],
+          "type": "string"
+        },
+        "seed": {
+          "default": 0,
+          "description": "Base seed; draw k uses seed + k",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Period column",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cohort",
+        "id",
+        "time",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "did_calibrated_simulation"
+  },
+  {
     "description": "Count the clusters treatment is assigned at and grade the count against the simulation grid of Ulloa-Perez et al. (2025), who found that at 30 clusters every modern staggered DiD estimator they evaluated under-covered a nominal 95% interval, with coverage improving as clusters accumulated. Thirty is the smallest cell they ran, so fewer clusters is reported as outside their evidence rather than as merely worse. Also reports clusters per cohort, since a group-time effect rests on the clusters in its own cohort. Assumptions: The grading reports what published simulation evidence exists at this cluster count; it is not a power calculation for this design or estimator. Pre-conditions: panel with unit and cohort columns. Failure modes: Cluster column empty or absent -> Check that the cluster column is populated. Alternatives: sp.wild_cluster_bootstrap, sp.ri_test, sp.conley.",
     "input_schema": {
       "properties": {

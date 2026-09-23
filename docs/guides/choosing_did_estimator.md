@@ -201,6 +201,39 @@ TWFE over them.
 > state in your write-up which average you are reporting. Both are pinned
 > against R and Stata in Track A module `17_etwfe`.
 
+#### Or settle it on your own panel
+
+A default is a prior, not evidence. `sp.did_calibrated_simulation` turns the
+choice into a measurement: it removes the estimated effect from your outcome,
+redraws the adoption pattern, injects an effect you specify, and refits every
+candidate.
+
+```python
+study = sp.did_calibrated_simulation(
+    df, y='y', id='i', time='t', cohort='first_treat',
+    estimators=['twfe', 'callaway_santanna', 'sun_abraham',
+                'did_imputation', 'gardner_did', 'etwfe'],
+    effect=0.05,          # or 0.0 for a pure size / coverage study
+    n_sims=200, seed=1, n_jobs=-1,
+)
+print(study.summary())
+study.best('rmse')
+```
+
+The redrawn assignment is random, so parallel trends holds by construction:
+what the table measures is the estimators on your cohort structure, your
+serial correlation and your number of treated units — not whether your design
+is credible. Run it *before* fixing the specification, and report the table
+alongside the estimate. `effect=0.0` doubles as a size check: a rejection rate
+far above the nominal level on your own panel is a warning about the standard
+errors, not about the point estimates.
+
+One caveat worth stating in the write-up: the calibration subtracts an
+*estimated* effect, so the null it creates is zero up to an error of order
+`n^{-1/2}` that every replication shares. That shifts all estimators the same
+way, so the table compares estimators more precisely than it measures any one
+estimator's absolute bias.
+
 **Default recommendation when in doubt: `sp.callaway_santanna(..., estimator='dr')`.**
 Doubly-robust CS is the modern "no-regret" default — it's robust to both
 outcome-model and propensity-score misspecification, and its aggregation

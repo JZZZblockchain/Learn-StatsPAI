@@ -22,7 +22,7 @@ Unified API for causal inference and econometrics:
 >>> sp.outreg2(result, filename="results.xlsx")
 """
 
-__version__ = "1.29.0"
+__version__ = "1.30.0"
 __author__ = "Biaoyue Wang and Scott Rozelle"
 __email__ = "brycew6m@stanford.edu"
 
@@ -125,6 +125,7 @@ from .did import (
     did_analysis,
     did_balance,
     did_bcf,
+    did_calibrated_simulation,
     did_cluster_diagnostics,
     did_design_contract,
     did_few_treated,
@@ -2032,6 +2033,7 @@ __all__ = [
     # Panel / DID extras
     "aggte",
     "cs_jackknife",
+    "did_calibrated_simulation",
     "did_few_treated",
     "event_study_vcov",
     "uniform_bands",

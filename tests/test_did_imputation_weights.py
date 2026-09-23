@@ -136,7 +136,7 @@ def test_weights_validation(castle):
             first_treat="gvar",
             weights="nope",
         )
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(sp.MethodIncompatibility, match="project="):
         sp.did_imputation(
             castle,
             y="l_homicide",

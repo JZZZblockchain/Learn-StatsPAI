@@ -13532,6 +13532,123 @@
     }
   },
   {
+    "description": "Calibrated placebo simulation for DiD estimator selection: strip the estimated effect out of the observed panel, redraw the adoption pattern, inject a known effect, and refit every candidate estimator. Returns bias, RMSE, coverage and rejection rate with Monte Carlo standard errors, so the choice of estimator is settled on this panel rather than by citation.",
+    "name": "did_calibrated_simulation",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "One minus the nominal level",
+          "type": "number"
+        },
+        "assignment": {
+          "default": "resample_cohorts",
+          "description": "How the adoption pattern is redrawn",
+          "enum": [
+            "resample_cohorts",
+            "random_timing",
+            "observed"
+          ],
+          "type": "string"
+        },
+        "calibrate": {
+          "default": "imputation",
+          "description": "Removal of the observed effect before injecting a known one",
+          "enum": [
+            "imputation",
+            "none"
+          ],
+          "type": "string"
+        },
+        "cohort": {
+          "description": "Period of first treatment; 0/NaN/inf = never",
+          "type": "string"
+        },
+        "control_group": {
+          "default": "nevertreated",
+          "description": "Comparison group handed to the estimators that take one",
+          "enum": [
+            "nevertreated",
+            "notyettreated"
+          ],
+          "type": "string"
+        },
+        "data": {
+          "description": "Long unit x period panel",
+          "type": "string"
+        },
+        "effect": {
+          "default": 0.0,
+          "description": "Effect injected into treated cells (0 = a size study); a callable of the horizon, or of (cohort, period), gives a heterogeneous one",
+          "type": "number"
+        },
+        "estimators": {
+          "description": "Candidates to score",
+          "enum": [
+            "twfe",
+            "callaway_santanna",
+            "sun_abraham",
+            "did_imputation",
+            "gardner_did",
+            "etwfe",
+            "did_multiplegt_dyn",
+            "stacked_did",
+            "lp_did"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Unit identifier",
+          "type": "string"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Replications in parallel (-1 = all CPUs)",
+          "type": "integer"
+        },
+        "n_sims": {
+          "default": 200,
+          "description": "Replications",
+          "type": "integer"
+        },
+        "resample": {
+          "default": "units",
+          "description": "Outcome noise: unit residual paths, a unit-level Rademacher multiplier, or none",
+          "enum": [
+            "units",
+            "wild",
+            "none"
+          ],
+          "type": "string"
+        },
+        "seed": {
+          "default": 0,
+          "description": "Base seed; draw k uses seed + k",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Period column",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "id",
+        "time",
+        "cohort"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Event-study coefficients and their joint covariance from any DiD event-study fit (callaway_santanna/aggte, event_study, sun_abraham, gardner_did, did_imputation, stacked_did, lp_did, did_multiplegt_dyn, etwfe). Feeds uniform bands and HonestDiD; flags joint=False when only diagonal or block-diagonal covariance exists.",
     "name": "event_study_vcov",
     "parameters": {

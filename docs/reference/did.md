@@ -95,6 +95,19 @@ built from the control groups and inverted; `method='ferman_pinto'`
 additionally rescales it for the heteroskedasticity unequal group sizes
 generate (needs `group_size=`).
 
+### `sp.did_calibrated_simulation(data, y, id, time, cohort, estimators=..., effect=0.0)`
+
+Scores candidate estimators on a placebo simulation calibrated to your own
+panel: the estimated dynamic effect is removed with the imputation fit, the
+adoption pattern is redrawn, a known effect is injected, and every candidate
+is refit `n_sims` times. Returns bias, RMSE, coverage, rejection rate and the
+ratio of mean reported SE to realised dispersion, each with a Monte Carlo
+standard error, plus `.best('rmse')`. The redrawn assignment is random, so
+parallel trends holds by construction and the table is about the estimators,
+not the design. `stacked_did` and `lp_did` estimate over an event *window*,
+which need not cover the same cells as the overall ATT — read a gap for them
+as a possible estimand difference.
+
 ### `sp.cs_jackknife(data, y, g, time, id, type='simple')`
 
 Delete-one-cluster (CV3) jackknife of a Callaway–Sant'Anna aggregate,

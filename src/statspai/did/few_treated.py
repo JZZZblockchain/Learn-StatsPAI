@@ -119,6 +119,8 @@ def did_few_treated(
 ) -> CausalResult:
     """Conley--Taber / Ferman--Pinto inference with few treated groups.
 
+    .. versionadded:: 1.30.0
+
     Parameters
     ----------
     data : pandas.DataFrame

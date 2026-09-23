@@ -132,6 +132,8 @@ def _from_labelled(
 def event_study_vcov(result: Any, *, allow_diagonal: bool = True) -> EventStudyVcov:
     """Event-study coefficients and their joint covariance, from any DiD fit.
 
+    .. versionadded:: 1.30.0
+
     Reads the covariance each estimator produces:
 
     ========================================  ==================================
@@ -312,6 +314,8 @@ def uniform_bands(
     seed: Optional[int] = 0,
 ) -> pd.DataFrame:
     """Sup-t simultaneous confidence band for an event study.
+
+    .. versionadded:: 1.30.0
 
     Parameters
     ----------

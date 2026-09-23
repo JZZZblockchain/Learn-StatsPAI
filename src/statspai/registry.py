@@ -14490,6 +14490,172 @@ def _build_registry() -> None:
 
     register(
         FunctionSpec(
+            name="did_calibrated_simulation",
+            category="causal",
+            description=(
+                "Calibrated placebo simulation for DiD estimator selection: "
+                "strip the estimated effect out of the observed panel, redraw "
+                "the adoption pattern, inject a known effect, and refit every "
+                "candidate estimator. Returns bias, RMSE, coverage and "
+                "rejection rate with Monte Carlo standard errors, so the "
+                "choice of estimator is settled on this panel rather than by "
+                "citation."
+            ),
+            params=[
+                ParamSpec(
+                    "data", "DataFrame", True, description="Long unit x period panel"
+                ),
+                ParamSpec("y", "str", True, description="Outcome column"),
+                ParamSpec("id", "str", True, description="Unit identifier"),
+                ParamSpec("time", "str", True, description="Period column"),
+                ParamSpec(
+                    "cohort",
+                    "str",
+                    True,
+                    description="Period of first treatment; 0/NaN/inf = never",
+                ),
+                ParamSpec(
+                    "estimators",
+                    "list",
+                    False,
+                    None,
+                    "Candidates to score",
+                    [
+                        "twfe",
+                        "callaway_santanna",
+                        "sun_abraham",
+                        "did_imputation",
+                        "gardner_did",
+                        "etwfe",
+                        "did_multiplegt_dyn",
+                        "stacked_did",
+                        "lp_did",
+                    ],
+                ),
+                ParamSpec(
+                    "effect",
+                    "float",
+                    False,
+                    0.0,
+                    "Effect injected into treated cells (0 = a size study); a "
+                    "callable of the horizon, or of (cohort, period), gives a "
+                    "heterogeneous one",
+                ),
+                ParamSpec(
+                    "assignment",
+                    "str",
+                    False,
+                    "resample_cohorts",
+                    "How the adoption pattern is redrawn",
+                    ["resample_cohorts", "random_timing", "observed"],
+                ),
+                ParamSpec(
+                    "calibrate",
+                    "str",
+                    False,
+                    "imputation",
+                    "Removal of the observed effect before injecting a known one",
+                    ["imputation", "none"],
+                ),
+                ParamSpec(
+                    "resample",
+                    "str",
+                    False,
+                    "units",
+                    "Outcome noise: unit residual paths, a unit-level "
+                    "Rademacher multiplier, or none",
+                    ["units", "wild", "none"],
+                ),
+                ParamSpec(
+                    "control_group",
+                    "str",
+                    False,
+                    "nevertreated",
+                    "Comparison group handed to the estimators that take one",
+                    ["nevertreated", "notyettreated"],
+                ),
+                ParamSpec("n_sims", "int", False, 200, "Replications"),
+                ParamSpec("alpha", "float", False, 0.05, "One minus the nominal level"),
+                ParamSpec("seed", "int", False, 0, "Base seed; draw k uses seed + k"),
+                ParamSpec(
+                    "n_jobs",
+                    "int",
+                    False,
+                    1,
+                    "Replications in parallel (-1 = all CPUs)",
+                ),
+            ],
+            returns=(
+                "DidSimulationStudy (.table per estimator, .draws, .failures, "
+                ".best(criterion), .summary())"
+            ),
+            example=(
+                'sp.did_calibrated_simulation(df, y="lemp", id="countyreal", '
+                'time="year", cohort="first_treat", '
+                'estimators=["twfe", "callaway_santanna", "did_imputation"], '
+                "effect=0.05, n_sims=200)"
+            ),
+            tags=["did", "simulation", "estimator_selection", "coverage", "causal"],
+            reference=(
+                "Ulloa-Perez, Bair, Navathe & Linn (2025) "
+                "[@ulloaperez2025comparative]; the calibration step is the "
+                "imputation fit of Borusyak, Jaravel & Spiess (2024) "
+                "[@borusyak2024revisiting]"
+            ),
+            pre_conditions=[
+                "one row per (unit, period); cohort constant within a unit",
+                "at least two never-treated units to redraw an assignment " "against",
+                "a balanced panel for resample='units'",
+            ],
+            assumptions=[
+                "The redrawn assignment is random, so parallel trends holds by "
+                "construction; the table measures estimator behaviour, not the "
+                "credibility of the design",
+                "The calibration removes the horizon-averaged estimated effect, "
+                "not cell-level deviations from it",
+                "The target is the treated-observation average of the injected "
+                "effect; a heterogeneous effect makes estimand differences show "
+                "up as bias",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="Fewer than two never-treated units, so a redrawn "
+                    "assignment has no comparison group",
+                    exception="statspai.DataInsufficient",
+                    remedy="Extend the panel with untreated units, or study "
+                    "the design with sp.did_few_treated instead.",
+                    alternative="did_few_treated",
+                ),
+                FailureMode(
+                    symptom="resample='units' on an unbalanced panel",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Use resample='wild' or resample='none'.",
+                    alternative="did_calibrated_simulation",
+                ),
+                FailureMode(
+                    symptom="Units treated in the first period carry no "
+                    "pre-period and are dropped",
+                    exception="statspai.AssumptionWarning",
+                    remedy="Extend the panel backwards, or accept that every "
+                    "estimator drops them too.",
+                    alternative="did_calibrated_simulation",
+                ),
+            ],
+            alternatives=["compare_estimators", "synth_power", "auto_did"],
+            typical_n_min=200,
+            validation_notes=[
+                "tests/test_did_calibrated_simulation.py: after calibration the "
+                "imputation estimator returns exactly zero at every horizon "
+                "(1e-10); with a constant injected effect and a randomised "
+                "assignment every estimator recovers it within 2 Monte Carlo "
+                "standard errors; under a true null the rejection rate sits at "
+                "the nominal level within Monte Carlo error."
+            ],
+        )
+    )
+
+    register(
+        FunctionSpec(
             name="event_study_vcov",
             category="causal",
             description=(

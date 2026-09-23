@@ -21,6 +21,7 @@ from scipy import stats
 
 from .._aliases import accepts_aliases
 from ..core.results import CausalResult
+from ..exceptions import DataInsufficient
 
 
 @accepts_aliases(_strict=True, id="group", unit="group", covariates="controls")
@@ -241,10 +242,11 @@ def stacked_did(
     # ── Step 6: Aggregate ATT (post-treatment periods) ───────────── #
     post_ks = [k for k in rel_times_est if k >= 0]
     if len(post_ks) == 0:
-        raise ValueError(
+        raise DataInsufficient(
             f"stacked_did: window={window} contains no post-treatment "
             "relative time (k >= 0) with data, so the ATT is not defined. "
-            "Widen the window's upper end."
+            "Widen the window's upper end.",
+            diagnostics={"window": list(window)},
         )
     if len(post_ks) > 0:
         att = np.mean([es_betas[k] for k in post_ks])

@@ -44,6 +44,7 @@ from .analysis import DIDAnalysis, did_analysis
 from .bacon import bacon_decomposition
 from .balance import DiDBalanceResult, did_balance
 from .bjs_inference import bjs_pretrend_joint
+from .calibrated_simulation import DidSimulationStudy, did_calibrated_simulation
 from .callaway_santanna import callaway_santanna
 from .cgs_continuous import ContinuousDoseResult, cgs_continuous_did
 from .cic import cic
@@ -908,6 +909,8 @@ __all__ = [
     "callaway_santanna",
     "aggte",
     "cs_jackknife",
+    "did_calibrated_simulation",
+    "DidSimulationStudy",
     "did_few_treated",
     "event_study_vcov",
     "uniform_bands",

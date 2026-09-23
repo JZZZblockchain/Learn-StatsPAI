@@ -23711,6 +23711,175 @@
   },
   {
     "alternatives": [
+      "compare_estimators",
+      "synth_power",
+      "auto_did"
+    ],
+    "assumptions": [
+      "The redrawn assignment is random, so parallel trends holds by construction; the table measures estimator behaviour, not the credibility of the design",
+      "The calibration removes the horizon-averaged estimated effect, not cell-level deviations from it",
+      "The target is the treated-observation average of the injected effect; a heterogeneous effect makes estimand differences show up as bias"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Calibrated placebo simulation for DiD estimator selection: strip the estimated effect out of the observed panel, redraw the adoption pattern, inject a known effect, and refit every candidate estimator. Returns bias, RMSE, coverage and rejection rate with Monte Carlo standard errors, so the choice of estimator is settled on this panel rather than by citation.",
+    "example": "sp.did_calibrated_simulation(df, y=\"lemp\", id=\"countyreal\", time=\"year\", cohort=\"first_treat\", estimators=[\"twfe\", \"callaway_santanna\", \"did_imputation\"], effect=0.05, n_sims=200)",
+    "failure_modes": [
+      {
+        "alternative": "did_few_treated",
+        "exception": "statspai.DataInsufficient",
+        "remedy": "Extend the panel with untreated units, or study the design with sp.did_few_treated instead.",
+        "symptom": "Fewer than two never-treated units, so a redrawn assignment has no comparison group"
+      },
+      {
+        "alternative": "did_calibrated_simulation",
+        "exception": "statspai.MethodIncompatibility",
+        "remedy": "Use resample='wild' or resample='none'.",
+        "symptom": "resample='units' on an unbalanced panel"
+      },
+      {
+        "alternative": "did_calibrated_simulation",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "Extend the panel backwards, or accept that every estimator drops them too.",
+        "symptom": "Units treated in the first period carry no pre-period and are dropped"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "did_calibrated_simulation",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "one row per (unit, period); cohort constant within a unit",
+      "at least two never-treated units to redraw an assignment against",
+      "a balanced panel for resample='units'"
+    ],
+    "reference": "Ulloa-Perez, Bair, Navathe & Linn (2025) [@ulloaperez2025comparative]; the calibration step is the imputation fit of Borusyak, Jaravel & Spiess (2024) [@borusyak2024revisiting]",
+    "signature": {
+      "description": "Calibrated placebo simulation for DiD estimator selection: strip the estimated effect out of the observed panel, redraw the adoption pattern, inject a known effect, and refit every candidate estimator. Returns bias, RMSE, coverage and rejection rate with Monte Carlo standard errors, so the choice of estimator is settled on this panel rather than by citation.",
+      "name": "did_calibrated_simulation",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "One minus the nominal level",
+            "type": "number"
+          },
+          "assignment": {
+            "default": "resample_cohorts",
+            "description": "How the adoption pattern is redrawn",
+            "enum": [
+              "resample_cohorts",
+              "random_timing",
+              "observed"
+            ],
+            "type": "string"
+          },
+          "calibrate": {
+            "default": "imputation",
+            "description": "Removal of the observed effect before injecting a known one",
+            "enum": [
+              "imputation",
+              "none"
+            ],
+            "type": "string"
+          },
+          "cohort": {
+            "description": "Period of first treatment; 0/NaN/inf = never",
+            "type": "string"
+          },
+          "control_group": {
+            "default": "nevertreated",
+            "description": "Comparison group handed to the estimators that take one",
+            "enum": [
+              "nevertreated",
+              "notyettreated"
+            ],
+            "type": "string"
+          },
+          "data": {
+            "description": "Long unit x period panel",
+            "type": "string"
+          },
+          "effect": {
+            "default": 0.0,
+            "description": "Effect injected into treated cells (0 = a size study); a callable of the horizon, or of (cohort, period), gives a heterogeneous one",
+            "type": "number"
+          },
+          "estimators": {
+            "description": "Candidates to score",
+            "enum": [
+              "twfe",
+              "callaway_santanna",
+              "sun_abraham",
+              "did_imputation",
+              "gardner_did",
+              "etwfe",
+              "did_multiplegt_dyn",
+              "stacked_did",
+              "lp_did"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Unit identifier",
+            "type": "string"
+          },
+          "n_jobs": {
+            "default": 1,
+            "description": "Replications in parallel (-1 = all CPUs)",
+            "type": "integer"
+          },
+          "n_sims": {
+            "default": 200,
+            "description": "Replications",
+            "type": "integer"
+          },
+          "resample": {
+            "default": "units",
+            "description": "Outcome noise: unit residual paths, a unit-level Rademacher multiplier, or none",
+            "enum": [
+              "units",
+              "wild",
+              "none"
+            ],
+            "type": "string"
+          },
+          "seed": {
+            "default": 0,
+            "description": "Base seed; draw k uses seed + k",
+            "type": "integer"
+          },
+          "time": {
+            "description": "Period column",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "id",
+          "time",
+          "cohort"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [
+      "tests/test_did_calibrated_simulation.py: after calibration the imputation estimator returns exactly zero at every horizon (1e-10); with a constant injected effect and a randomised assignment every estimator recovers it within 2 Monte Carlo standard errors; under a true null the rejection rate sits at the nominal level within Monte Carlo error."
+    ],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
       "uniform_bands",
       "honest_did"
     ],
