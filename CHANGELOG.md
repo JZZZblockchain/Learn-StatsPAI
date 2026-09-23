@@ -208,6 +208,384 @@ bit-identical numbers (pinned regression tests in the new test files).
   `statspai`, so it is not deduplicated across fits.
 - Shared validator `statspai.core._validate.validate_fold_indices` for the two
   `fold_indices=` arguments above.
+- **The repeated-cross-section aggregation gap against Stata `csdid` is now
+  a documented convention rather than an open question.** With repeated
+  cross-sections the `ATT(g, t)` cells agree three ways to machine
+  precision but the aggregates do not: StatsPAI and R `did` weight a cohort
+  by its share of treated observations, while `csdid` weights each cell by
+  its own treated count (base period plus comparison period) and weights a
+  cohort into the group average by its *mean* cell weight rather than its
+  total. `tests/reference_parity/test_rcs_aggregation_conventions.py` pins
+  our aggregates to R at 1e-12 and rebuilds Stata's simple ATT, its three
+  cohort ATTs and its group average from our own cells at 1e-12, so the 0.02
+  to 1.4 percent gap on that fixture can be priced instead of reported as
+  unexplained. The rule was read off `csdid_estat.ado` (`csdid_group`) and
+  is written out in the test's docstring and in
+  [`docs/guides/repeated_cross_sections.md`](docs/guides/repeated_cross_sections.md).
+
+- **`sp.did_few_treated`: Conley--Taber (2011) and Ferman--Pinto (2019)
+  inference for designs with one or a handful of treated clusters.** The
+  cluster-robust variance estimates the treated side's contribution from as
+  many draws as there are treated clusters, so with one it over-rejects
+  regardless of the total: on a 30-group panel with AR(1) errors it rejects a
+  true null 74 percent of the time at a nominal 5 percent. Both methods here
+  read the placebo distribution of the coefficient off the *control* groups
+  -- applying the treated groups' residualised treatment path to each control
+  group's residual path -- and invert it, which allows arbitrary within-group
+  serial correlation. `method='conley_taber'` rejects 3 percent on that same
+  design. `method='ferman_pinto'` additionally rescales each control draw for
+  the heteroskedasticity that unequal group sizes generate, fitting
+  `Var(W) = A + B / M` on the control draws (non-negative least squares when
+  the unrestricted fit goes negative, with a warning): with a small, noisy
+  treated group Conley--Taber rejects 18 percent at a nominal 10 percent and
+  Ferman--Pinto 13.5 percent. The point estimate is the usual two-way
+  fixed-effects coefficient, which these methods do not claim is consistent
+  with a fixed number of treated groups; what they deliver is the test and
+  the interval. `tests/test_did_few_treated.py` measures every number quoted
+  here. `sp.audit` gains a `few_treated_clusters` check that routes a design
+  with fewer than ten treated clusters here (and to `sp.cs_jackknife`), and
+  `sp.callaway_santanna` reports `model_info['n_treated_units']`, the count
+  that check reads — treated *clusters*, which is what the few-treated
+  literature counts, not cohorts.
+
+- **`sp.event_study_vcov(result)` and `sp.uniform_bands(result)`: joint
+  event-study covariance and sup-t simultaneous bands for every DiD event
+  study**, not only Callaway--Sant'Anna. `event_study_vcov` reads the joint
+  covariance of `callaway_santanna` / `aggte`, `event_study`,
+  `sun_abraham`, `gardner_did`, `did_imputation`, `stacked_did`, `lp_did`,
+  `did_multiplegt_dyn` and `etwfe`, and flags `joint=False` when only a
+  diagonal or block-diagonal matrix exists. `uniform_bands` replaces the
+  pointwise critical value by the `1 - alpha` quantile of `max|Z|`,
+  `Z ~ N(0, R)` (Montiel Olea and Plagborg-Moller 2019), over all, post or
+  pre event times; with no joint covariance it uses the Sidak value, which
+  is conservative. To support this the estimators now expose the matrix:
+  `did_imputation` `model_info['event_study_vcov']` (the BJS cluster scores
+  cross-multiplied; the horizon block reproduces Stata `did_imputation`'s
+  `e(V)` on mpdta to 1.3e-6, the size of Stata's own point-estimate gap to
+  the exact imputation), `stacked_did` (the stacked regression's sandwich),
+  `lp_did` (per-horizon cluster scores stacked, `suest`-style),
+  `did_multiplegt_dyn` (clustered influence sums under `se_method='analytic'`,
+  replicate covariance under the bootstrap) and `etwfe_emfx(type='event' /
+  'calendar')` (`model_info['vcov']`). Every diagonal reproduces the
+  estimator's reported SEs to 1e-12 (`tests/test_es_inference.py`).
+- **`sp.enhanced_event_study_plot(..., uniform_band=True)`** overlays that
+  band on the event-study figure, pre and post windows computed separately;
+  it warns and falls back to the pointwise interval when the estimator
+  exposes no usable covariance.
+
+- **`sp.honest_did(method='smoothness')` solves the Rambachan--Roth FLCI for
+  every estimator above**, through `event_study_vcov`. It previously did so
+  only for Callaway--Sant'Anna fits and fell back to a worst-case-bias
+  interval, with a warning, for Sun--Abraham, dynamic TWFE, Gardner,
+  stacked, LP-DiD, dCDH and ETWFE fits. The output frame now records which
+  interval it holds in `.attrs['interval']` (`'flci'` or
+  `'worst_case_bias'`). Raw `sp.etwfe` fits are accepted directly. The one
+  remaining fallback is `did_imputation(pretrend_method='bjs')`, whose leads
+  come from an auxiliary regression with no cross-covariance to the
+  imputation horizons.
+
+- **`sp.sun_abraham` exposes the aggregate under both variance conventions
+  and the joint event-time covariance.** `model_info['se_fixest_att_share']`
+  is the standard error of the fixest `agg='att'` aggregate when the
+  cohort-share estimation term (Sun and Abraham 2021, Prop. 3) is carried
+  into the aggregate, which is what a `lincom` on Stata
+  `eventstudyinteract`'s `e(V_iw)` returns; `model_info['se_fixest_att']`
+  remains the fixed-share value `fixest::sunab` reports.
+  `model_info['vcov_event_time']` (with `model_info['event_times']`) is the
+  joint covariance of the interaction-weighted event-time coefficients,
+  regression cross terms plus the share term on the diagonal, i.e. the
+  matrix `e(V_iw)` itself. On the castle-doctrine and no-fault-divorce panels
+  the share-term aggregate reproduces Stata's `lincom` to <= 1.3e-9 relative
+  (unweighted and population-weighted) and the fixed-share aggregate
+  reproduces R to <= 1.3e-9 (`tests/test_sun_abraham_share_aggregate.py`).
+  Surfaced by the DiD reconciliation study, where the headline Sun-Abraham
+  standard error differed between the two references by 1.4 to 5.5 percent
+  for this reason.
+
+- `sp.etwfe(weights=...)`: observation weights for the linear ETWFE. The
+  cohort-by-period regression becomes weighted least squares with R `fixest`
+  `weights=` / Stata `reghdfe [pw=]` semantics (zero-weight rows dropped with
+  a warning; NaN or negative weights raise `MethodIncompatibility`), keeping
+  the unweighted fit's cluster-robust small-sample convention
+  `G/(G-1) * (n-1)/(n-K)` with `n` counting observations. Threaded through
+  the dispatcher into the not-yet-treated, never-treated and repeated
+  cross-section branches (`weights` with `xvar` or with
+  `family='poisson'/'logit'` raises rather than being silently ignored).
+- `sp.etwfe(agg_weights=...)` / `sp.etwfe_emfx(agg_weights=...)`: how the
+  estimated cells enter the `simple` / `event` / `group` / `calendar`
+  aggregates of a weighted fit. `'estimation'` (default) is Stata
+  `jwdid, estat`: cell `(g, t)` carries the sum of the estimation weights over
+  its treated observations, `W_{g,t} = sum_{i in g} w_{i,t}`; under
+  never-treated controls this makes the `simple` aggregate identical to the
+  weighted Callaway--Sant'Anna simple ATT (an estimand-level identity, hence
+  the default). `'unit'` is R `etwfe::emfx`: one unit weight per treated
+  observation, `W_{g,t} = n_{g,t}`, with the estimation weights entering the
+  regression only. `etwfe_emfx(agg_weights=None)` inherits the fit's rule.
+  Without `weights` the two rules coincide and every number is unchanged.
+  Event-study cells (`model_info['event_study']`) and the cohort `detail`
+  now carry both totals (`n_cell_obs` / `w_cell_obs`, `n_treated_obs` /
+  `w_treated_obs`, `w_obs`); `model_info['ssc']['sum_weights']` records the
+  weight total.
+- Reference parity (`tests/test_etwfe_weights_reference.py`, castle-doctrine
+  and no-fault-divorce panels, both control groups): under
+  `agg_weights='estimation'` every `att` / `dyn_e*` / `group_*` / `cal_*`
+  estimate reproduces Stata `jwdid [pw=]` + `estat` to <= 1.1e-12 relative and
+  the SEs reproduce Stata's after the documented
+  `sqrt((n - K_R)/(n - K_Stata))` degrees-of-freedom factor to <= 1.9e-12
+  (castle K = 66/61 never, 36/31 not-yet; divorce 429/417 and 303/291);
+  under `agg_weights='unit'` the estimates reproduce R `etwfe(weights=)` +
+  `emfx` to <= 4.9e-12 and the SEs to <= 3.3e-6 (marginaleffects'
+  numerical Jacobian). The never-treated weighted `simple` aggregate equals
+  Stata `csdid [pw=], estat simple` to <= 9.1e-15 on both panels. The
+  divorce panel is shipped as `tests/fixtures/divorce_no_fault_panel.csv`
+  (byte-identical to the reconciliation study's locked CSV).
+- Registry: `etwfe` gains the `weights` and `agg_weights` parameter specs,
+  a limitation entry for the unsupported `xvar` / nonlinear-family
+  combinations, and a validation note pointing at the new parity test;
+  agent schemas regenerated.
+
+- **`sp.did_multiplegt_dyn(weights=)`** — observation weights, Stata
+  `did_multiplegt_dyn, weight()` / R `weight=`, whose spelling is accepted
+  as the alias `weight=` (the canonical parameter name across the package is
+  `weights`). The weight is read at the
+  row a unit contributes from (period `F+l` for an effect, `F-1+|l|` for a
+  placebo, exactly as the reference's `N_gt`), so time-varying weights
+  behave identically; switcher means, control means, cohort weights and
+  the `aggregation='switchers'` weights all become weighted. `detail`
+  keeps the raw switcher count in `n_switchers` and adds the weighted one
+  in `w_switchers`; `model_info` gains `weight` and `n_groups`. On the
+  castle-doctrine panel with `weight='popwt'` every effect, placebo,
+  `Av_tot_eff` and analytic SE matches R `DIDmultiplegtDYN` 2.3.4 to 4e-15
+  and Stata `did_multiplegt_dyn` to 2e-7 (which is R's own gap to Stata).
+
+- **`sp.gardner_did(weights=)`**, the counterpart of R `did2s(weights=)`
+  and Stata `did2s [aw=]`: strictly positive estimation weights applied to
+  both stages, with the corrected variance built on the weighted objects
+  exactly as `did2s` does. Pinned against the population-weighted
+  castle-doctrine rows (`popwt`) at rel < 1.2e-7 on estimate and SE.
+
+- **`sp.aggte` exposes the joint covariance of its cells.** Every
+  aggregation (`simple`, `dynamic`, `group`, `calendar`) now carries
+  `model_info['vcov']` (the covariance the reported standard errors are
+  the square-root diagonal of), `model_info['influence_functions']` (the
+  corrected per-cell functions, cohort-share estimation term included),
+  `model_info['cell_labels']`, and for `type='dynamic'`
+  `model_info['vcv_pre']` / `['pre_event_times']` for the pre-treatment
+  block -- the object R `did` returns as `aggte(...)$inf.function`.
+  Downstream consumers read it: `sp.honest_did(method='smoothness')` on a
+  dynamic `aggte` result now runs the exact Rambachan--Roth FLCI on that
+  covariance instead of the worst-case-bias fallback, and
+  `sp.pretrends_power` / `sp.pretrends_slope_for_power` use the full
+  pre-period covariance instead of the diagonal. Surfaced by the DiD
+  reconciliation study (Paper-DiD-JAE), where both fell back silently on
+  every Callaway--Sant'Anna event study.
+
+- **`sp.lp_did` reports the pooled estimates** Stata `lpdid` calls
+  `pooled_results`: `model_info['pooled']['post']` regresses the average
+  long difference over `[0, h_max]` on the clean-control sample of `h_max`,
+  and `['pre']` does the same over `[h_min, -2]`. On a design where every
+  horizon shares one sample the pooled coefficient equals the mean of the
+  per-horizon coefficients exactly (`tests/test_lp_did_pooled.py`); on the
+  castle-doctrine panel it is pinned against `lpdid` in the DiD
+  reconciliation study.
+
+### Changed
+
+- **Canonical parameter names on three DiD entry points**, with the old
+  spellings kept as aliases so no call breaks: `sp.cs_jackknife(t=, i=)` is
+  now `(time=, id=)`, `sp.did_multiplegt_dyn(weight=)` is now `(weights=)`,
+  and the new `sp.did_few_treated` uses `id=` / `covariates=`. The
+  signature house-style ratchet (`scripts/signature_house_style.py`) is five
+  sites below its baseline as a result.
+
+### ⚠️ Correctness
+
+- **`sp.honest_did` / `sp.breakdown_m` on a raw Callaway--Sant'Anna fit used
+  an event-study covariance whose off-diagonal blocks were wrong.**
+  `sp.aggte` did not expose the joint covariance of its cells, so the
+  fixed-length-CI route rebuilt one from the per-cell influence functions
+  with the estimated cohort shares held fixed -- dropping, off the diagonal,
+  the same weight-estimation term whose omission from the *diagonal* was
+  fixed in 1.22. The diagonal therefore agreed with the reported standard
+  errors while the cross-cell entries were up to 8 percent from R `did`'s,
+  and the FLCI built on them was wrong in a direction that depends on the
+  panel: on the `sp.cs_report` demo it made the breakdown `M*` about three
+  times too large, i.e. the design looked far more robust to violations of
+  parallel trends than it is. `sp.aggte` now reports the covariance behind
+  its own standard errors in `model_info['vcov']`, every caller reads it,
+  and it reproduces R `did`'s `t(IF) %*% IF / n^2` on the castle-doctrine
+  panel to 2.8e-13 on all 196 entries
+  (`tests/reference_parity/test_aggte_vcov_r_parity.py`). **Re-run any
+  HonestDiD sensitivity taken from a raw `callaway_santanna` fit**; results
+  routed through `sp.aggte(type='dynamic')` were already correct.
+
+- **`sp.etwfe_emfx(type='event' | 'calendar')` headline.** The returned
+  `.estimate` was the mean of every reported row -- with
+  `include_leads=True`, pre-treatment placebo coefficients included -- and
+  `.se`, `.pvalue` and `.ci` were `NaN`. The headline is now the mean of the
+  post-treatment rows (all rows for `'calendar'`) with its delta-method SE
+  through the joint covariance of the rows, which is now exposed. The
+  per-row `detail` table is unchanged.
+- **`sp.stacked_did` returned `att = 0.0`, `se = 0.0`** when the window had
+  no post-treatment relative time with data. It now raises.
+- **The Callaway--Sant'Anna joint pre-trend test on ATT(g, t) cells is
+  rank-aware.** Under a universal base period the pre-treatment cells are
+  linear combinations of the same control-group long differences, and a
+  single-unit cohort adds cells with no treated-side variation, so their
+  covariance is singular by construction (rank 17 of 30 on the
+  castle-doctrine panel). The old code added a `1e-10` ridge and inverted,
+  returning a Wald statistic of order `1e9` on that panel. It now uses the
+  spectral pseudo-inverse with `df = rank` (what Stata's `test` does when
+  it drops redundant constraints) and reports `n_cells`, `rank` and
+  `rank_deficient`. Full-rank panels are unchanged.
+- **`sp.ddd(covariates=...)` now warns.** Covariates entered additively in
+  the triple-interaction regression identify the covariate-adjusted DDD ATT
+  only if their outcome effect is common to all eight cells and their
+  distribution does not shift across cells (Ortiz-Villavicencio and
+  Sant'Anna 2025). The number is unchanged; the warning and
+  `model_info['diagnostics']` point to `sp.ddd_heterogeneous(x=...,
+  est_method='dr')`, the doubly robust estimator of that paper.
+- **Two functions no longer claim to implement papers they only take
+  inspiration from.** `sp.did_misclassified` takes the misclassification
+  rate and anticipation window as inputs and applies a mechanical
+  adjustment; Augustin, Gutknecht and Liu (2025) identify both from the
+  data. `sp.bridge(kind='did_sc')` fits DiD and SC separately and reports an
+  inverse-variance combination, which has none of the double robustness of
+  Sun, Xie and Zhang (2025). Docstrings and the registry entry now say so;
+  numbers are unchanged.
+
+- **`sp.lp_did` leads used a stricter clean-control window than Stata
+  `lpdid`.** At lead `h < 0` StatsPAI required a control's treatment to be
+  zero over `[t+h-1, t-1]`, one period more than the outcomes entering the
+  long difference `Y_{t+h} - Y_{t-1}`; `lpdid` (the author implementation)
+  applies the horizon-zero condition at every lead (`CCS_m<h> = CCS_0`),
+  i.e. `[t+h, t-1]`. The extra period dropped the earliest observable
+  calendar year at every lead: pure-control observations at shallow leads
+  (coefficient unchanged, `(N-1)/(N-K)` shifted by one year and one year
+  effect) and early switchers at the deepest lead (point estimate moved).
+  Now `[t+h, t-1]`. On the castle-doctrine and no-fault-divorce panels every
+  lead's sample size matches `lpdid` (376/326/276/226 and 464/423/382/341)
+  and estimates and SEs agree to 1e-7 / 1e-8; Track A module 83's lead rows
+  moved from a registered 3.9e-4 SE gap to 2e-16, and its R transcription
+  was aligned to the same rule. Post-treatment horizons and the pooled
+  post window are unchanged.
+
+- **`sp.did_multiplegt_dyn` placebo lags 2 and deeper used the wrong
+  sample.** The reference computes placebo `l` on the switchers and
+  controls behind effect `l` — the mirror image about `F-1`: a switcher
+  must be observed at `F-1+l` (so a cohort that cannot support effect `l`
+  drops from placebo `l` too) and the controls are the units not yet
+  switched at `F-1+l`. StatsPAI took the lag-1 rule for every lag
+  (controls not yet switched at `F`, no anchor-period requirement). On
+  the castle-doctrine panel (`dynamic=4, placebo=3`) `placebo_2` moves
+  from 0.062241 to 0.050966 and `placebo_3` from 0.015389 (21 switchers)
+  to 0.023244 (20 switchers); both are now pinned to R `DIDmultiplegtDYN`
+  / Stata `did_multiplegt_dyn` to 1e-6 relative
+  (`tests/test_did_multiplegt_dyn_castle_reference.py`). `placebo_1` is
+  the same object under both rules and is unchanged, as are all effects.
+  Track A module 78's fixtures were not affected (every cohort there
+  supports every requested lag), which is why the module passed while
+  the rule was wrong.
+
+- **`sp.did_multiplegt_dyn(se_method='analytic')` is now the authors'
+  variance and is pinned to the reference.** It used to be the plain
+  two-sample influence function: no small-sample cell factor, a zero
+  residual for any single-switcher cohort, no summation within
+  `cluster`. That ran 4–18 percent below the reference on the
+  castle-doctrine panel (e.g. `dyn_e0` 0.04106 vs 0.04389, `placebo_1`
+  0.03921 vs 0.04786) and about 1 percent below on the Track A fixture.
+  The analytic path now builds the reference's `U_Gg_var`: each (g, t)
+  contribution is the long difference minus its *cell* mean — the cohort
+  for a switcher, the (baseline, t) not-yet-switched set for a control —
+  times `sqrt(n_cell/(n_cell-1))` with `n_cell` the number of distinct
+  clusters in the cell; a cell with a single cluster is centred on and
+  scaled by the pooled switcher+control cell at that period instead
+  (this is what a lone switcher such as castle's 2005 cohort needs);
+  contributions are summed within `cluster` before squaring and the
+  variance is `Σ_c (Σ_{g∈c} U_g)² / G²`. Every per-horizon SE and the
+  `Av_tot_eff` SE now match R `DIDmultiplegtDYN` 2.3.4 to 4e-15 relative
+  and Stata `did_multiplegt_dyn` to 2e-7 on the castle-doctrine panel
+  (weighted and unweighted) and on both Track A module 78 fixtures
+  including the switch-off design
+  (`tests/reference_parity/test_multiplegt_dyn_parity.py`, which used to
+  assert a bounded 1.5 percent gap and now asserts 1e-6 parity). The
+  `cluster=` argument is now honoured by the analytic path (it was
+  bootstrap-only); `group` must be nested in `cluster`, and a missing
+  cluster value is an error. Point estimates on the analytic path are
+  unchanged, and the default `se_method='bootstrap'` is unchanged.
+
+- ⚠️ **correctness fix — `sp.etwfe_emfx(type='event' | 'group' |
+  'calendar')` did not reproduce R `etwfe::emfx` / Stata `jwdid, estat`,
+  and `cgroup='nevertreated'` was not honoured by those aggregations.**
+  Three defects compounded: (i) the event and calendar views weighted each
+  cohort's cell by the cohort's *total* number of treated post-period
+  observations instead of the cell's own count (R weights every treated
+  observation `N = 1`), so cohorts with longer post-windows were over-
+  weighted; (ii) the group view reported the pooled cohort × post
+  coefficient of a separate regression rather than the cohort's average
+  post-treatment cell; (iii) `cgroup='nevertreated'` was served by the
+  historical `sp.wooldridge_did` unit-demeaned regression, whose cells never
+  reached the group view and whose small-sample `K` (51) is not the one R's
+  design implies (66), so the group rows were identical under both control
+  groups and the never-treated headline SE matched neither R nor Stata.
+  The linear `sp.etwfe` fit now uses R's design for both control groups
+  (cohort + period fixed effects, `ivar = NULL`; never-treated: a cell for
+  every period of every cohort except `g - 1`), every aggregation averages
+  the cohort-by-period cells over their own treated observations with
+  delta-method SEs through the cluster-robust cell covariance, and
+  `sp.etwfe(...).detail` is now the R `emfx(type = 'group')` table (the
+  `weighting='cohort'` headline therefore moves with it; `type='simple'`
+  point estimates are unchanged). On the castle-doctrine panel
+  (`sp.datasets.castle_doctrine`): `dyn_e0` moved 0.05927 → 0.0710706
+  (not-yet) and 0.09527 → 0.0972154 (never); `group_2009` 0.19798 →
+  0.2110805 (not-yet) and 0.1980 → −0.0028081 (never); the never-treated
+  `att` SE 0.0409008 → 0.0415298. All 36 rows (simple, `e = 0..5`, five
+  cohorts, six calendar years, both control groups) are pinned against R
+  `etwfe` 0.6.2 in `tests/test_etwfe_emfx_reference.py` to 1e-9 relative
+  on the estimates and 1e-6 on the SEs (the residual is
+  `marginaleffects`' finite-difference Jacobian; R's own
+  `sqrt(w' vcov(e) w)` agrees to 1e-13), and reproduce Stata `jwdid` v2.2
+  to 1e-9 on the SEs after the documented degrees-of-freedom factor
+  `sqrt((n - K) / (n - K_Stata))`, `K_Stata = K - n_cohorts` (fixest counts
+  the cohort-FE parameters, reghdfe drops the unit FE as nested in the
+  cluster; `model_info['ssc']` records `n`, `K`, `G`). Without covariates
+  the never-treated aggregates now coincide with Callaway–Sant'Anna's
+  never-treated `aggte` to 1e-9, as they should. Surfaced by the DiD
+  reconciliation study (Paper-DiD-JAE).
+- `sp.etwfe_emfx(type='event', include_leads=True)` weights pre-treatment
+  cells by their own observation counts (`event_study['n_cell_obs']`, also
+  added to `sp.wooldridge_did` results) instead of the cohort's
+  post-period total.
+
+- **`sp.sun_abraham(weights=)` standard errors at multi-cohort relative
+  times moved by 0.8-2.9 percent.** The cohort-share variance term of
+  Sun and Abraham (2021, Prop. 3) was built from the unweighted
+  multinomial covariance `(diag(w) - ww')/N_l` even when observation
+  weights were supplied. Stata `eventstudyinteract [aw=]` builds it from
+  the weighted share regression's robust sandwich,
+  `sum omega_i^2 u_i u_i' / (sum omega_i)^2` with `omega` rescaled to mean
+  one over the estimation sample; that is what is computed now. On the
+  castle-doctrine panel every weighted event-time SE reproduces
+  `eventstudyinteract` to 2.3e-7 (was up to 2.9 percent away, in both
+  directions); unweighted SEs and all point estimates are unchanged
+  (6.7e-10). Single-cohort relative times, where the term vanishes, were
+  never affected. Surfaced by the DiD reconciliation study's weighted
+  castle-doctrine panel.
+
+- **`sp.did_imputation` gains `weights=`** (Stata `did_imputation [aw=]`,
+  R `didimputation(wname=)`): weighted least squares in the untreated
+  Y(0) model, omega-weighted averages over treated cells, and the exact
+  variance with the weighted projection `-W Z0 (Z0' W Z0)^-1 Z1' u`.
+  Pinned to Stata `did_imputation` (Borusyak's implementation) on the
+  castle-doctrine panel: headline ATT, every horizon and every lead agree
+  on estimate and standard error to 1e-6
+  (`tests/test_did_imputation_weights.py`). R `didimputation` 0.5.1
+  agrees on the weighted point estimates but not on the weighted standard
+  errors (16 percent on the headline, up to 57 percent by horizon): it
+  row-scales the design by `omega` on *both* sides of the normal equations
+  (`Z0' W^2 Z0`), so its weight vector no longer reproduces its own
+  estimate (`v'y` = 0.0428 against an estimate of 0.0659 on castle).
+  StatsPAI follows the author implementation.
 
 ### Fixed
 
@@ -2479,6 +2857,25 @@ reference sides re-derive with zero drift (R 89/89, Stata 85/85, Python 89/89).
   finishes in 534 s with `n_jobs=-1` on 8 cores; the serial loop had passed
   22 CPU-minutes when it was stopped. The wall time is set by the slowest
   in-hull placebos, not divided evenly by the core count.
+- **`sp.cs_jackknife` — cluster-jackknife (CV3) inference for
+  Callaway–Sant'Anna aggregates** [@karim2026improved]. Deletes one cluster
+  at a time, re-estimates every ATT(g, t) and the cohort shares,
+  re-aggregates with `sp.aggte(type=...)`, and reports
+  `(R-1)/R * sum (ATT_(-h) - ATT)^2` with `t(R-1)` inference — the
+  few-cluster / few-treated-cluster alternative to the analytic and
+  multiplier-bootstrap standard errors, which both over-reject there. Follows
+  the authors' R `didjack` and Stata `csdidjack` exactly, including the
+  single-treated-cluster skip. On the castle-doctrine panel (50 states; never-
+  and not-yet-treated controls, unweighted and population-weighted, simple /
+  dynamic / group / calendar) every aggregate and every delete-one replicate
+  reproduces R `didjack` 0.1.0 to 4e-15, and Stata `csdidjack` 0.5.2 matches
+  to 4e-15 on the twelve aggregates it implements
+  (`tests/test_cs_jackknife_reference.py`). Running `csdidjack` needs one
+  workaround: `csdid` 1.81 calls an undefined `easter_egg` program with
+  probability 1/1000 per call, so define it as a no-op first.
+  A delete-one sample that cannot identify the aggregate (e.g. deleting the
+  only never-treated unit) raises `DataInsufficient` naming the cluster rather
+  than dropping the replicate.
 
 ### ⚠️ Correctness
 
@@ -3459,6 +3856,32 @@ not the numbers themselves. Users who cited a grade below should re-read it.
   the caption now reads the release version from `pyproject.toml`.
 
 ### Changed
+
+- `sp.etwfe` / `sp.etwfe_emfx` results record `model_info['weights']`,
+  `model_info['agg_weights']` and `model_info['cell_weight_column']`
+  (`'n_cell_obs'` for unweighted fits, unchanged numerics); the
+  `etwfe_emfx` `weight_column` bookkeeping reads `event_w_treated_obs`
+  only for weighted fits under the Stata rule.
+
+- **`sp.did_multiplegt_dyn` method label and registry text** no longer
+  claim that the analytic influence-function variance is unimplemented or
+  that switch-off events are ignored; the remaining MVP scope (no
+  `controls=`, trends, `normalized`/`continuous` options, no
+  heteroskedastic-weights variant, joint tests from the bootstrap only) is
+  stated instead. `stability` stays `experimental`.
+
+- `sp.gardner_did` in event-study mode now reports the overall ATT's SE as
+  `sqrt(a' V a)` on the full Stage-2 covariance (exposed as
+  `model_info['vcov']` / `['cell_labels']`) instead of treating horizons as
+  independent; the point estimate is the same weight-share average and
+  equals the static ATT whenever every post horizon is requested.
+  `vce='none'` now skips inference (NaN `se`, `ci`, `pvalue`) rather than
+  computing the old SE silently; a single cluster raises `ValueError`
+  (the two-stage cluster sum is identically zero there) instead of
+  returning a floating-point-noise SE; and the static-mode bootstrap no
+  longer emits a spurious "0/199 bootstrap replicates succeeded"
+  `RuntimeWarning` (the per-coefficient array was never filled outside
+  event-study mode and was overwritten anyway).
 
 - Line-length hygiene only, no behaviour change: 35 over-long comment and
   plain-string lines under `src/statspai` were wrapped (string literals

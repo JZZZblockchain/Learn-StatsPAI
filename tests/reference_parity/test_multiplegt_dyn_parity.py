@@ -23,9 +23,10 @@ cohorts {3, 5, 7} plus never-treated, effect 1.5.
 Index convention: the R package labels from 1, so ``Effect_k`` is horizon
 ``k - 1`` and ``Placebo_k`` is horizon ``-k``.
 
-Not compared: standard errors. The package reports analytical
-influence-function SEs; this estimator has only a cluster bootstrap. That is
-a real gap in the implementation, not a tolerance question.
+Standard errors: since 1.25.1 ``se_method='analytic'`` is the package's own
+influence-function variance and is held to 1e-6 relative against the
+authors' Stata ``did_multiplegt_dyn`` e() scalars on both fixtures (the R
+script of module 78 records se = NA; R and Stata agree to 1e-8 here).
 
 References
 ----------
@@ -157,18 +158,23 @@ def test_placebos_are_near_zero_and_effects_are_not(fit):
 # Analytic standard errors: available, bounded, and NOT claimed as parity.
 # --------------------------------------------------------------------------
 
-# DIDmultiplegtDYN's reported standard errors, by StatsPAI horizon.
+# The authors' reported standard errors, by StatsPAI horizon. Values are the
+# Stata did_multiplegt_dyn e() scalars recorded in
+# tests/stata_parity/results/78_multiplegt_dyn_Stata.json (the R side of
+# module 78 emits se = NA); R and Stata agree on this fixture to 1e-8.
 R_SE = {
-    0: 0.09740853,
-    1: 0.09518580,
-    2: 0.12724023,
-    3: 0.12652024,
-    -1: 0.1016065,
-    -2: 0.1284979,
+    0: 0.0974085251327481,
+    1: 0.0951857985598889,
+    2: 0.1272402321160343,
+    3: 0.1265202362410527,
+    -1: 0.1016065452322047,
+    -2: 0.1284979216297459,
 }
-# The analytic variance is the standard two-sample influence function, not
-# dCDH's own derivation, so it is held to a bounded gap rather than parity.
-SE_GAP = 0.015
+R_SE_AV_TOT_EFF = 0.082423911082919
+# Since 1.25.1 the analytic variance is the reference's own U_Gg_var
+# (cell-demeaned residuals, sqrt(n/(n-1)) cell factor, cluster-summed), so
+# it is held to strict parity, not a bounded gap.
+SE_RTOL = 1e-6
 
 
 @pytest.fixture(scope="module")
@@ -189,23 +195,40 @@ def analytic_fit(panel):
 
 
 @pytest.mark.parametrize("h", sorted(R_SE))
-def test_analytic_se_is_close_to_the_reference(analytic_fit, h):
-    """Bounded, measured, and explicitly not parity.
+def test_analytic_se_matches_the_reference(analytic_fit, h):
+    """Strict parity on every horizon.
 
-    The analytic form agrees with this module's own cluster bootstrap; the
-    ~1% gap against DIDmultiplegtDYN is dCDH's variance derivation, which
-    is not reproduced. Pinned as a bound so a regression that widens it
-    still fails.
+    ⚠️ Before 1.25.1 this was a bounded ~1% gap: the analytic form was the
+    plain two-sample influence function, without the reference's
+    ``sqrt(n/(n-1))`` cell factor and pooled-cell fallback for
+    single-cluster cells.
     """
     es = analytic_fit.model_info["event_study"].set_index("relative_time")
     got = float(es.loc[h, "se"])
-    ref = R_SE[h]
-    assert 0 < got < ref, (got, ref)
-    assert abs(got / ref - 1.0) < SE_GAP, (h, got, ref)
+    assert got == pytest.approx(R_SE[h], rel=SE_RTOL), (h, got, R_SE[h])
+
+
+def test_analytic_se_of_av_tot_eff_matches_the_reference(panel):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fit = sp.did_multiplegt_dyn(
+            panel,
+            y="y",
+            group="id",
+            time="t",
+            treatment="d",
+            dynamic=3,
+            placebo=2,
+            n_boot=0,
+            se_method="analytic",
+            aggregation="switchers",
+        )
+    assert fit.estimate == pytest.approx(R_AV_TOT_EFF, abs=1e-9)
+    assert fit.se == pytest.approx(R_SE_AV_TOT_EFF, rel=SE_RTOL)
 
 
 def test_analytic_se_agrees_with_the_bootstrap(panel):
-    """What makes the analytic form trustworthy despite the reference gap."""
+    """Independent check: the cluster bootstrap lands within its own noise."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         # 400 draws is enough to bound the comparison without making the

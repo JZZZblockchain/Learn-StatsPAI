@@ -95,6 +95,30 @@ Two rules carry over from the panel path and are enforced, not assumed:
   contributions together, so a within-unit-varying weight would silently
   reweight that unit's own periods against each other.
 
+## Aggregation weights: R `did` and Stata `csdid` differ here
+
+With repeated cross-sections there are no units to count, so the
+aggregation of `ATT(g, t)` has to weight cells by observations — and the
+two reference implementations pick different weights. The cells agree to
+machine precision; the aggregates do not.
+
+- **StatsPAI and R `did`**: a cohort's weight is its share of treated
+  observations, constant across `t` within the cohort.
+- **Stata `csdid`**: each *cell* carries its own treated-observation count
+  (the base period's observations plus the comparison period's), and the
+  group average weights a cohort by its *mean* cell weight rather than its
+  total — so a cohort observed for fewer post-treatment periods is not
+  down-weighted for having fewer of them.
+
+On the fixture in `tests/reference_parity/test_rcs_aggregation_conventions.py`
+the simple ATT differs by 0.7 percent, the calendar average by 1.4 percent
+and the group average by 0.02 percent. That test rebuilds each of Stata's
+three aggregates from StatsPAI's own cells to 1e-12, so a reconciliation
+against `csdid` on repeated cross-sections can price the difference instead
+of recording it as unexplained. Neither convention is wrong; they are
+different weighted averages of the same cells, and which one a paper wants
+is a statement about its estimand.
+
 <!-- AGENT-BLOCK-START: did -->
 
 ## For Agents
@@ -119,6 +143,7 @@ Two rules carry over from the panel path and are enforced, not assumed:
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.callaway_santanna`

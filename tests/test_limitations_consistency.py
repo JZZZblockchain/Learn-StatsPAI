@@ -110,7 +110,7 @@ LIMITATIONS_DESCRIPTIVE_ONLY: Dict[str, List[str]] = {
     ],
     "did_multiplegt_dyn": [
         "switch-off events are handled, but the",
-        "se_method='analytic' is available but the paper's own",
+        "se_method='analytic' reproduces DIDmultiplegtDYN's variance only",
         # Documented parity boundary, not a code path that raises: the
         # headline weights differ from DIDmultiplegtDYN's Av_tot_eff and
         # both are reachable. Pinned in Track A module 78.
@@ -356,6 +356,18 @@ def _runtime_map() -> (
                 first_treat="g",
                 family="poisson",
                 xvar="dose",
+            ),
+            MethodIncompatibility,
+        ),
+        ("etwfe", "weights= is not yet supported together with xvar"): (
+            lambda: sp.etwfe(
+                df_panel,
+                y="y",
+                group="i",
+                time="t",
+                first_treat="g",
+                xvar="dose",
+                weights="dose",
             ),
             MethodIncompatibility,
         ),

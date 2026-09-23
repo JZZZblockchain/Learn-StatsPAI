@@ -1,0 +1,38 @@
+{
+ "source": "Stata 18 MP, did_imputation (Borusyak, SSC); import delimited ... asdouble; replace first_treat=. if first_treat==0; did_imputation lemp countyreal year first_treat, horizons(0/3) autosample",
+ "data": "sp.datasets.mpdta() written with DataFrame.to_csv(index=False)",
+ "generated": "2026-09-23",
+ "b": [
+  -0.037551514404924546,
+  -0.03158363926877428,
+  -0.04451606172551692,
+  -0.025420302687052754
+ ],
+ "V": [
+  [
+   3.901157536620025e-05,
+   2.788743773212734e-05,
+   3.300798592160972e-05,
+   4.723652290167028e-05
+  ],
+  [
+   2.788743773212734e-05,
+   6.608710167264252e-05,
+   3.835855937011925e-05,
+   6.650437815674339e-05
+  ],
+  [
+   3.300798592160972e-05,
+   3.835855937011925e-05,
+   0.00014532217021930344,
+   7.83341701601269e-05
+  ],
+  [
+   4.723652290167028e-05,
+   6.650437815674339e-05,
+   7.83341701601269e-05,
+   0.00017903793753771692
+  ]
+ ],
+ "note": "Stata's iterative fixed-effect solver leaves its point estimates up to 8e-6 relative from the exact least-squares imputation (which StatsPAI and a dense lstsq reproduce); e(V) inherits the same gap."
+}

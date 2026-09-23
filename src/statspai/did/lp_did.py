@@ -6,16 +6,17 @@ Dube, A., Girardi, D., Jordà, Ò. and Taylor, A. M. (2025). "A Local
 Projections Approach to Difference-in-Differences." *Journal of Applied
 Econometrics*, 40(7), 741-758. [@dube2025local]
 
-.. warning::
+.. note::
    The citation above is verified (Crossref: DOI 10.1002/jae.70000, authors,
-   volume, issue and pages all confirmed). The **implementation** is not: it
-   follows the LP-DiD construction as described in secondary summaries, and
-   several specification details -- the clean-control definition, the handling
-   of switch-off events, and the exact leading specification -- have not been
-   checked against the published text. There is no parity test against a
-   reference implementation, which is why ``sp.lp_did`` carries
-   ``validation_status='api_stable'`` rather than a validated tier. Treat the
-   numbers as indicative until that gap is closed.
+   volume, issue and pages all confirmed). The absorbing-treatment path is
+   pinned against the authors' Stata ``lpdid`` 1.0.2 on the castle-doctrine
+   and no-fault-divorce panels (every lead, lag and pooled window: estimates
+   to reghdfe's 1e-7 solver tolerance, standard errors to 1e-8, identical
+   per-horizon sample sizes; ``tests/test_lp_did_lpdid_reference.py`` and the
+   parity suite's module ``83_lpdid``). The clean-control window at lead
+   ``h < 0`` is ``[t+h, t-1]``, lpdid's ``CCS_m<h> = CCS_0`` rule. Not
+   verified against ``lpdid``: non-absorbing (switch-off) treatments, the
+   ``rw`` reweighting option, and covariates.
 
 Scope
 -----
@@ -192,6 +193,7 @@ def lp_did(
     # Per-horizon regression
     es_rows: List[Dict[str, Any]] = []
     horizon_range = list(range(h_min, h_max + 1))
+    horizon_scores: Dict[int, Dict[Any, float]] = {}
 
     for h in horizon_range:
         # Build long-difference sample: for each (i, t) where Δd_{i,t} is
@@ -227,6 +229,7 @@ def lp_did(
         # Regression: Δy ~ Δd + controls + time FE
         y_col = "_dy"
         x_cols = ["_delta_d"] + (controls or [])
+        horizon_scores[h] = {}
         beta_h, se_h, n_obs = _ols_with_cluster_se(
             rows,
             y_col=y_col,
@@ -234,6 +237,7 @@ def lp_did(
             time_col=time,
             cluster_col=cluster_var,
             time_fe=time_fe,
+            scores_out=horizon_scores[h],
         )
 
         z = beta_h / se_h if (se_h is not None and se_h > 0) else np.nan
@@ -264,6 +268,49 @@ def lp_did(
 
     es_df = _dc.event_study_frame(es_rows)
 
+    # Joint covariance across horizons. Each horizon is its own regression,
+    # but all of them are clustered on the same units, so stacking their
+    # per-cluster scores gives the cross-horizon covariance (Stata ``suest``
+    # logic); the diagonal is exactly each regression's CR1 variance.
+    _est_h = [
+        r["relative_time"]
+        for r in es_rows
+        if np.isfinite(r["se"]) and horizon_scores.get(r["relative_time"])
+    ]
+    es_vcov = None
+    if _est_h:
+        _S = pd.DataFrame({h: pd.Series(horizon_scores[h]) for h in _est_h}).fillna(0.0)
+        _M = _S.to_numpy()
+        es_vcov = pd.DataFrame(_M.T @ _M, index=_est_h, columns=_est_h)
+
+    # Pooled estimates, as Stata ``lpdid`` reports them: one regression whose
+    # left-hand side is the *average* long difference over the post window,
+    # ``mean_{h=0..H} Y_{t+h} - Y_{t-1}``, on the sample that is a clean
+    # control through ``t+H`` (the horizon-``H`` sample); and the mirror
+    # image over the pre window ``[h_min, -2]`` (``-1`` is the reference).
+    pooled: Dict[str, Any] = {}
+    for label, hs, h_anchor in (
+        ("post", list(range(0, h_max + 1)), h_max),
+        ("pre", list(range(h_min, -1)), h_min),
+    ):
+        if not hs or (label == "post" and h_max < 0) or (label == "pre" and h_min > -2):
+            continue
+        pooled[label] = _pooled_lp_did(
+            df=df,
+            y=y,
+            unit=unit,
+            time=time,
+            treatment=treatment,
+            hs=hs,
+            h_anchor=h_anchor,
+            controls=controls or [],
+            clean_controls=clean_controls,
+            never_treated_ids=never_treated_ids,
+            cluster_var=cluster_var,
+            time_fe=time_fe,
+            alpha=alpha,
+        )
+
     # Headline estimate: ATT at horizon 0.
     h0_row = next((r for r in es_rows if r["relative_time"] == 0), None)
     if h0_row is None:
@@ -288,17 +335,107 @@ def lp_did(
         n_obs=int(len(df)),
         model_info={
             "event_study": es_df,
+            "event_study_vcov": es_vcov,
             "horizons": horizon_range,
             "clean_controls": clean_controls,
             "time_fe": time_fe,
             "cluster_var": cluster_var,
             "controls": controls,
+            # ``pooled['post']`` / ``pooled['pre']``: the lpdid pooled
+            # regressions over the post window [0, h_max] and the pre window
+            # [h_min, -2]; each is {estimate, se, pvalue, ci_lower, ci_upper,
+            # n_obs, horizons}.
+            "pooled": pooled,
             # Not implemented: joint placebo test + overall Wald across horizons
             # will follow a subsequent PR; left out here to keep MVP honest.
             "joint_placebo_test": None,
             "joint_overall_test": None,
         },
     )
+
+
+def _pooled_lp_did(
+    *,
+    df: pd.DataFrame,
+    y: str,
+    unit: str,
+    time: str,
+    treatment: str,
+    hs: List[int],
+    h_anchor: int,
+    controls: List[str],
+    clean_controls: str,
+    never_treated_ids: Optional[set],
+    cluster_var: str,
+    time_fe: bool,
+    alpha: float,
+) -> Dict[str, Any]:
+    """One pooled LP-DiD regression over the horizons ``hs``.
+
+    Mirrors ``lpdid``: the left-hand side is the average of ``Y_{t+h}`` over
+    ``hs`` minus ``Y_{t-1}`` and the sample is the clean-control sample of the
+    anchor horizon (the end of the window), so every observation in it has a
+    clean window covering all of ``hs``.
+    """
+    sample = _build_lp_did_sample(
+        df=df,
+        y=y,
+        unit=unit,
+        time=time,
+        treatment=treatment,
+        h=h_anchor,
+        controls=controls,
+        clean_controls=clean_controls,
+        never_treated_ids=never_treated_ids,
+    )
+    empty = {
+        "estimate": np.nan,
+        "se": np.nan,
+        "pvalue": np.nan,
+        "ci_lower": np.nan,
+        "ci_upper": np.nan,
+        "n_obs": 0,
+        "horizons": list(hs),
+    }
+    if sample is None or len(sample) == 0:
+        return empty
+    local = df[[unit, time, y]].copy()
+    grp = local.groupby(unit)[y]
+    local["_y_base"] = grp.shift(1)
+    leads = np.column_stack([grp.shift(-h).values for h in hs])
+    local["_y_avg"] = leads.mean(axis=1)
+    local["_dy_pooled"] = local["_y_avg"] - local["_y_base"]
+    merged = sample.merge(
+        local[[unit, time, "_dy_pooled"]], on=[unit, time], how="left"
+    )
+    merged = merged[np.isfinite(merged["_dy_pooled"].values)]
+    if len(merged) == 0:
+        return empty
+    beta, se, n_obs = _ols_with_cluster_se(
+        merged,
+        y_col="_dy_pooled",
+        x_cols=["_delta_d"] + controls,
+        time_col=time,
+        cluster_col=cluster_var,
+        time_fe=time_fe,
+    )
+    if se is None or not np.isfinite(se) or se <= 0:
+        return {
+            **empty,
+            "estimate": float(beta) if np.isfinite(beta) else np.nan,
+            "n_obs": int(n_obs),
+        }
+    z_crit = stats.norm.ppf(1 - alpha / 2)
+    z = beta / se
+    return {
+        "estimate": float(beta),
+        "se": float(se),
+        "pvalue": float(2 * (1 - stats.norm.cdf(abs(z)))),
+        "ci_lower": float(beta - z_crit * se),
+        "ci_upper": float(beta + z_crit * se),
+        "n_obs": int(n_obs),
+        "horizons": list(hs),
+    }
 
 
 # -------------------------------------------------------------------
@@ -350,9 +487,15 @@ def _build_lp_did_sample(
 
     # Stable-0 flag for each (i, t): treatment equals 0 for all periods in
     # [t−1, t+h] for this unit. For h >= 0, we check [t−1, t+h]; for h < 0
-    # (placebo), we check [t+h−1, t−1] (the control should already not have
-    # treated prior to the "event").
-    window_start_offset = min(-1, h - 1)
+    # (placebo), we check [t+h, t−1] -- the periods whose outcomes enter the
+    # long difference Y_{t+h} - Y_{t-1}.  This is the Stata ``lpdid`` rule
+    # (``CCS_m<h> = CCS_0``: a control is any observation untreated at t,
+    # with the lead-h difference observed).  Requiring one period more,
+    # [t+h-1, t-1], drops the earliest observable calendar year at every
+    # lead: the pure-control observations it removes leave the coefficient
+    # unchanged but shift the residual degrees of freedom, and at the deepest
+    # lead it removes early switchers and moves the point estimate.
+    window_start_offset = min(-1, h)
     window_end_offset = max(0, h)
 
     # Build a per-unit forward/backward rolling check.
@@ -404,8 +547,16 @@ def _ols_with_cluster_se(
     time_col: str,
     cluster_col: str,
     time_fe: bool,
+    scores_out: Optional[Dict[Any, float]] = None,
 ) -> Tuple[float, Optional[float], int]:
-    """OLS with cluster-robust SE. Returns (β on first x, SE on first x, n)."""
+    """OLS with cluster-robust SE. Returns (β on first x, SE on first x, n).
+
+    When ``scores_out`` is a dict it is filled with the per-cluster
+    influence of the first coefficient, ``sqrt(c) * [(X'X)^-1 X_g' u_g]_0``
+    with ``c`` this regression's CR1 factor, so the squared scores sum to
+    the reported variance and scores from several horizons' regressions
+    give their joint (``suest``-style) covariance.
+    """
     y = sample[y_col].values.astype(float)
     X_parts = [sample[c].values.astype(float).reshape(-1, 1) for c in x_cols]
 
@@ -449,6 +600,12 @@ def _ols_with_cluster_se(
     n_cl = len(unique_clusters)
     correction = (n_cl / max(n_cl - 1, 1)) * ((n - 1) / max(n - k, 1))
     var_cov = correction * (XtX_inv @ meat @ XtX_inv)
+    if scores_out is not None:
+        row0 = XtX_inv[0]
+        root_c = float(np.sqrt(correction))
+        for c in unique_clusters:
+            mask = clusters == c
+            scores_out[c] = root_c * float(row0 @ (X[mask].T @ resid[mask]))
 
     beta_first = float(beta[0])
     se_first = float(np.sqrt(max(var_cov[0, 0], 0.0)))

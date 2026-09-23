@@ -6,7 +6,7 @@
 #
 #   at horizon h, regress  dy = Y_{t+h} - Y_{t-1}  on  dd = d_t - d_{t-1}
 #     * treated arm      : dd == 1
-#     * clean control    : d == 0 across [t + min(-1, h-1), t + max(0, h)]
+#     * clean control    : d == 0 across [t + min(-1, h), t + max(0, h)] (Stata lpdid: CCS_m<h> = CCS_0)
 #                          and dd == 0
 #     * calendar-time fixed effects
 #     * cluster-robust SE by unit
@@ -44,7 +44,7 @@ paths <- split(df$d, df$unit)
 ys <- split(df$y, df$unit)
 
 lpdid_at_horizon <- function(h) {
-  win_lo <- min(-1L, h - 1L)
+  win_lo <- min(-1L, h)
   win_hi <- max(0L, h)
 
   recs <- list()

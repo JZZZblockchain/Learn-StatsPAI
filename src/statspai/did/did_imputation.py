@@ -47,6 +47,7 @@ def _didimp_cluster_bootstrap(
     cluster: str,
     n_boot: int,
     seed: int,
+    weights: Optional[str] = None,
 ) -> float:
     """Pairs-cluster bootstrap of the overall ATT for ``did_imputation``.
 
@@ -83,6 +84,7 @@ def _didimp_cluster_bootstrap(
                 horizon=None,
                 cluster="__bcl",
                 vce="none",
+                weights=weights,
             )
         except Exception:
             continue  # replicate stays NaN; bootstrap_se tracks the failure
@@ -117,6 +119,7 @@ def did_imputation(
     project: Optional[List[str]] = None,
     save_weights: bool = False,
     save_residuals: bool = False,
+    weights: Optional[str] = None,
 ) -> CausalResult:
     """
     Borusyak, Jaravel & Spiess (2024) imputation DID estimator.
@@ -282,6 +285,15 @@ def did_imputation(
         variable.  Results land in ``model_info['hetby']`` (one row per
         level: att, se, ci, pvalue, n_obs).  SEs use the same
         influence-function machinery as the overall ATT.
+    weights : str, optional
+        Column of estimation weights ``omega_i`` (Stata ``[aw=]``, R
+        ``didimputation(weights=)``). The untreated Y(0) model is fit by
+        weighted least squares, every reported average is the
+        ``omega``-weighted mean over the treated cells it covers, and the
+        exact variance uses the weighted projection. Like ``weights=`` on
+        the other staggered estimators this changes the *estimand*: the
+        weighted ATT averages over the population the treated units
+        represent, not over the units. Not combinable with ``project=``.
     save_weights : bool, default False
         Stata ``did_imputation, saveweights()``: store the exact
         estimation weights ``w`` such that ``ATT = w'y`` in
@@ -407,6 +419,25 @@ def did_imputation(
         raise ValueError(f"vce must be 'analytic', 'bootstrap', or 'none'; got {vce!r}")
     if cluster is None:
         cluster = group
+
+    if weights is not None:
+        if weights not in df.columns:
+            raise ValueError(f"weights column '{weights}' not found in data.")
+        if project is not None:
+            raise NotImplementedError(
+                "did_imputation: weights= combined with project= is not "
+                "implemented; run the projection unweighted or drop project=."
+            )
+        _wei_col = df[weights].to_numpy(dtype=float)
+        if not np.all(np.isfinite(_wei_col)) or np.any(_wei_col < 0):
+            raise ValueError(
+                f"weights column '{weights}' must be finite and non-negative."
+            )
+        if not np.any(_wei_col > 0):
+            raise ValueError(f"weights column '{weights}' is identically zero.")
+        df["_wei"] = _wei_col
+    else:
+        df["_wei"] = 1.0
 
     if pretrend_method not in PRETREND_METHODS:
         raise ValueError(
@@ -584,6 +615,8 @@ def did_imputation(
                 f"to {axis}s with enough untreated history."
             )
 
+    _wei_all = df["_wei"].to_numpy(dtype=float)
+    _wei_arg = _wei_all if weights is not None else None
     y0_hat, beta, X_u_design, X_all = _fit_untreated_twfe_sparse(
         df=df,
         untreated=untreated,
@@ -596,6 +629,9 @@ def did_imputation(
         unit_covariates=unit_cov_names,
         time_covariates=time_cov_names,
         fe=fe,
+        weights=(
+            untreated["_wei"].to_numpy(dtype=float) if weights is not None else None
+        ),
     )
 
     # These arguments are retained for the existing SE helper API.  The
@@ -618,8 +654,13 @@ def did_imputation(
     # ── Step 4: Aggregate treatment effects ────────────────────── #
     treated_df = df[treated_mask].copy()
 
-    # Overall ATT
-    att = float(treated_df["_tau_hat"].mean())
+    # Overall ATT: the omega-weighted mean over treated cells (R didimputation
+    # normalises wtr * weight to sum to one; Stata normalises wei * wtr).
+    _wei_treated = treated_df["_wei"].to_numpy(dtype=float)
+    att = float(
+        np.sum(_wei_treated * treated_df["_tau_hat"].to_numpy(dtype=float))
+        / np.sum(_wei_treated)
+    )
 
     # ── Step 5: Standard errors ────────────────────────────────── #
     # Cluster-robust SEs with influence-function approach
@@ -639,7 +680,9 @@ def did_imputation(
     _n_treated_obs = int(treated_mask.sum())
     _w_overall = np.zeros(len(df), dtype=float)
     if _n_treated_obs > 0:
-        _w_overall[treated_mask] = 1.0 / _n_treated_obs
+        _w_overall[treated_mask] = _wei_all[treated_mask] / np.sum(
+            _wei_all[treated_mask]
+        )
     se_att = _bjs_se(
         design_all=X_all,
         design_untreated=X_u_design,
@@ -649,6 +692,7 @@ def did_imputation(
         cluster=_cluster_vals,
         cohort=_cohort_vals,
         relative_time=_rel_vals,
+        weights=_wei_arg,
     )
 
     # Standard-error mode for the overall ATT. The analytic route is now
@@ -664,7 +708,16 @@ def did_imputation(
         # the point estimate excluded.
         boot_data = df.drop(columns=[c for c in df.columns if c.startswith("_")])
         se_boot = _didimp_cluster_bootstrap(
-            boot_data, y, group, time, first_treat, controls, cluster, n_boot, boot_seed
+            boot_data,
+            y,
+            group,
+            time,
+            first_treat,
+            controls,
+            cluster,
+            n_boot,
+            boot_seed,
+            weights=weights,
         )
         if np.isfinite(se_boot):
             se_att = se_boot
@@ -677,8 +730,10 @@ def did_imputation(
     event_study_df = None
     pretrend_test = None
 
+    event_study_vcov = None
     if horizon is not None:
         es_rows = []
+        es_scores: Dict[int, pd.Series] = {}
 
         # For event study, we need all obs of eventually-treated units
         # (including pre-treatment periods for placebo/pre-trend checks)
@@ -703,12 +758,13 @@ def did_imputation(
             if n_k == 0:
                 continue
 
-            att_k = float(tau_hat[mask_k].mean())
+            _wei_k = _wei_all[mask_k]
+            att_k = float(np.sum(_wei_k * tau_hat[mask_k]) / np.sum(_wei_k))
 
             # Cluster SE for this horizon
             _w_k = np.zeros(len(df), dtype=float)
-            _w_k[mask_k] = 1.0 / n_k
-            se_k = _bjs_se(
+            _w_k[mask_k] = _wei_k / np.sum(_wei_k)
+            se_k, es_scores[int(k)] = _bjs_se(
                 design_all=X_all,
                 design_untreated=X_u_design,
                 treated_mask=treated_mask,
@@ -717,6 +773,8 @@ def did_imputation(
                 cluster=_cluster_vals,
                 cohort=_cohort_vals,
                 relative_time=_rel_vals,
+                weights=_wei_arg,
+                return_scores=True,
             )
 
             pval_k = float(2 * stats.norm.sf(abs(att_k / se_k))) if se_k > 0 else 1.0
@@ -749,6 +807,19 @@ def did_imputation(
                 )
                 event_study_df = event_study_df.loc[~thin].reset_index(drop=True)
 
+        # Joint covariance of the residual-average horizons: every one is a
+        # linear functional v_k' y of the same fit, so Cov(k, k') is the sum
+        # over clusters of the products of their BJS scores (Stata
+        # did_imputation's e(V)). The diagonal reproduces the reported SEs.
+        _kept = (
+            [int(k) for k in event_study_df["relative_time"]]
+            if len(event_study_df)
+            else []
+        )
+        if _kept:
+            _S = pd.concat([es_scores[k] for k in _kept], axis=1).fillna(0.0).to_numpy()
+            event_study_vcov = pd.DataFrame(_S.T @ _S, index=_kept, columns=_kept)
+
         # ── Pre-treatment reference convention ─────────────────── #
         # Post-treatment coefficients are imputation residuals under every
         # convention; only the leads differ.  See did/_bjs_pretrends.py
@@ -766,7 +837,7 @@ def did_imputation(
                     "did_imputation is only pinned for the default "
                     "unit+time model. It is not pinned with fe=, "
                     "unit_covariates= or time_covariates=.",
-                    remedy=(
+                    recovery_hint=(
                         "Pass pretrend_method='in-sample' to keep the "
                         "residual-average leads, or drop the non-default "
                         "fixed-effect structure for the pre-trend run."
@@ -784,7 +855,31 @@ def did_imputation(
                 n_unit_columns=int(len(np.unique(uid_u)) - 1),
                 leads=requested_leads,
                 alpha=alpha,
+                weights_untreated=(
+                    untreated["_wei"].to_numpy(dtype=float)
+                    if weights is not None
+                    else None
+                ),
             )
+            _lead_vcov = pre_frame.attrs.get("vcov")
+            if _lead_vcov is not None:
+                # The leads come from a separate auxiliary regression on the
+                # untreated sample; their covariance with the imputation
+                # horizons is not produced by that construction (nor by Stata
+                # did_imputation), so the joint matrix is block diagonal and
+                # flagged as such.
+                _leads = [int(k) for k in pre_frame["relative_time"]]
+                _post = (
+                    event_study_vcov if event_study_vcov is not None else pd.DataFrame()
+                )
+                _labels = _leads + list(_post.index)
+                _full = np.zeros((len(_labels), len(_labels)))
+                _nl = len(_leads)
+                _full[:_nl, :_nl] = np.asarray(_lead_vcov, dtype=float)
+                if len(_post):
+                    _full[_nl:, _nl:] = _post.to_numpy()
+                event_study_vcov = pd.DataFrame(_full, index=_labels, columns=_labels)
+                event_study_vcov.attrs["block_diagonal"] = True
             event_study_df = (
                 pd.concat([pre_frame, event_study_df], ignore_index=True)
                 .sort_values("relative_time")
@@ -810,6 +905,9 @@ def did_imputation(
                 event_study_df.loc[pre_mask, col] = (
                     event_study_df.loc[pre_mask, col] * factor
                 )
+            if event_study_vcov is not None:
+                _scale = np.where(np.asarray(event_study_vcov.index) < 0, factor, 1.0)
+                event_study_vcov = event_study_vcov * np.outer(_scale, _scale)
             # The z-statistic is scale-invariant, so p-values are unchanged.
 
         # Pre-trend joint test (Wald chi-squared, independence
@@ -884,9 +982,10 @@ def did_imputation(
             n_level = int(level_mask.sum())
             if n_level == 0:
                 continue
-            att_h = float(tau_hat[level_mask].mean())
+            _wei_h = _wei_all[level_mask]
+            att_h = float(np.sum(_wei_h * tau_hat[level_mask]) / np.sum(_wei_h))
             _w_h = np.zeros(len(df), dtype=float)
-            _w_h[level_mask] = 1.0 / n_level
+            _w_h[level_mask] = _wei_h / np.sum(_wei_h)
             se_h = _bjs_se(
                 design_all=X_all,
                 design_untreated=X_u_design,
@@ -896,6 +995,7 @@ def did_imputation(
                 cluster=_cluster_vals,
                 cohort=_cohort_vals,
                 relative_time=_rel_vals,
+                weights=_wei_arg,
             )
             pval_h = float(2 * stats.norm.sf(abs(att_h / se_h))) if se_h > 0 else 1.0
             het_rows.append(
@@ -917,20 +1017,15 @@ def did_imputation(
     # (Stata: saveweights()).  Solving (X_u'X_u) z = X̄_treated recovers
     # them exactly; `w @ y == ATT` is verified in the test suite.
     if save_weights:
-        n1 = float(treated_mask.sum())
-        x_bar_treated = np.asarray(X_all[treated_mask].sum(axis=0)).ravel() / n1
-        normal_mat = (X_u_design.T @ X_u_design).tocsr()
-        z_sol = lsqr(
-            normal_mat,
-            x_bar_treated,
-            atol=1e-12,
-            btol=1e-12,
-            iter_lim=max(1000, 4 * normal_mat.shape[1]),
-        )[0]
-        weights_vec = np.zeros(len(df))
-        weights_vec[treated_mask] = 1.0 / n1
-        untreated_rows = ~treated_mask
-        weights_vec[untreated_rows] = -np.asarray(X_all[untreated_rows] @ z_sol).ravel()
+        from ._bjs_variance import bjs_weight_vector as _bjs_weight_vector
+
+        weights_vec = _bjs_weight_vector(
+            design_all=X_all,
+            design_untreated=X_u_design,
+            treated_mask=treated_mask,
+            target_weights=_w_overall,
+            weights=_wei_arg,
+        )
 
     if save_residuals:
         residuals_vec = np.where(~treated_mask, y_all - y0_hat, np.nan)
@@ -945,6 +1040,7 @@ def did_imputation(
         "n_never_treated": int(df["_never_treated"].sum() // max(n_times, 1)),
         "cluster_var": cluster,
         "vce": vce,
+        "weights": weights,
     }
 
     if has_controls:
@@ -953,6 +1049,7 @@ def did_imputation(
 
     if event_study_df is not None and len(event_study_df) > 0:
         model_info["event_study"] = event_study_df
+        model_info["event_study_vcov"] = event_study_vcov
         # The reference convention is part of what the event study *is*,
         # not a tuning note: two packages can agree on every post-treatment
         # coefficient and still plot different pre-trends (Roth 2026).
@@ -1021,6 +1118,7 @@ def did_imputation(
                 "hetby": hetby,
                 "save_weights": save_weights,
                 "save_residuals": save_residuals,
+                "weights": weights,
             },
             data=data,
             overwrite=False,
@@ -1115,8 +1213,13 @@ def _fit_untreated_twfe_sparse(
     unit_covariates: Optional[List[str]] = None,
     time_covariates: Optional[List[str]] = None,
     fe: Optional[Sequence[str]] = None,
+    weights: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray, sparse.csr_matrix, sparse.csr_matrix]:
     """Fit untreated-only TWFE by sparse least squares and predict all rows.
+
+    ``weights`` (estimation weights on the untreated rows) turn the solve
+    into weighted least squares by row-scaling the design and outcome by
+    ``sqrt(omega)``; the returned design matrices are unscaled.
 
     The untreated sample in staggered DID is usually unbalanced: early
     cohorts contribute fewer untreated periods than late or never-treated
@@ -1241,12 +1344,19 @@ def _fit_untreated_twfe_sparse(
     # diagonal D — so unlike centring the covariate it cannot change the
     # column span. That matters because centring is only span-preserving
     # when the parent fixed effect is also in the model, which fe=[] breaks.
-    col_norms = np.sqrt(np.asarray(X_u.multiply(X_u).sum(axis=0)).ravel())
+    if weights is not None:
+        sqrt_w = np.sqrt(np.asarray(weights, dtype=float))
+        X_solve = sparse.diags(sqrt_w) @ X_u
+        y_solve = y_u * sqrt_w
+    else:
+        X_solve = X_u
+        y_solve = y_u
+    col_norms = np.sqrt(np.asarray(X_solve.multiply(X_solve).sum(axis=0)).ravel())
     col_norms[col_norms <= 0] = 1.0  # unused levels: leave them alone
     scale = sparse.diags(1.0 / col_norms)
     fit = lsqr(
-        X_u @ scale,
-        y_u,
+        X_solve @ scale,
+        y_solve,
         atol=1e-12,
         btol=1e-12,
         iter_lim=max(2000, 8 * n_cols),

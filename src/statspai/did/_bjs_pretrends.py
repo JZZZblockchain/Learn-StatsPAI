@@ -59,7 +59,7 @@ in Regression Imputation Difference-in-Differences."
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -167,8 +167,15 @@ def bjs_pretrend_path(
     n_unit_columns: int,
     leads: List[int],
     alpha: float = 0.05,
+    weights_untreated: Optional[np.ndarray] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, float]]:
     """Pre-trend coefficients under the BJS / Stata ``did_imputation`` rule.
+
+    ``weights_untreated`` are estimation weights on the untreated rows; the
+    auxiliary regression is then weighted least squares with the
+    cluster-robust sandwich built from ``omega_i x_i e_i`` scores, which is
+    what row-scaling every matrix by ``sqrt(omega)`` before the unweighted
+    algebra delivers.
 
     Runs the auxiliary dynamic TWFE regression on the untreated
     observations only.  ``design_untreated`` is the same Y(0) design the
@@ -243,6 +250,12 @@ def bjs_pretrend_path(
         mask = rel_u == float(k)
         lead_matrix[:, j] = mask.astype(float)
         counts.append(int(mask.sum()))
+
+    if weights_untreated is not None:
+        sqrt_w = np.sqrt(np.asarray(weights_untreated, dtype=float))
+        y_u = y_u * sqrt_w
+        lead_matrix = lead_matrix * sqrt_w[:, None]
+        design_untreated = sparse.diags(sqrt_w) @ design_untreated
     empty = [k for k, c in zip(leads, counts) if c == 0]
     if empty:
         raise MethodIncompatibility(
@@ -348,6 +361,9 @@ def bjs_pretrend_path(
             "n_obs": counts,
         }
     )
+    # Joint covariance of the lead coefficients, for callers that assemble
+    # an event-study covariance (sp.event_study_vcov / honest_did).
+    frame.attrs["vcov"] = vcov
 
     joint: Dict[str, float] = {}
     try:

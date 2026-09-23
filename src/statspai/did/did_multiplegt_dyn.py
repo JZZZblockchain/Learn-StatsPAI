@@ -14,13 +14,14 @@ Verified anchor
 
 Identification details
 ----------------------
-Items 2-4 below are now pinned against the authors' R package
-``DIDmultiplegtDYN`` 2.3.4 (Track A module ``78_multiplegt_dyn``,
-``tests/reference_parity/test_multiplegt_dyn_parity.py``): on a
-binary absorbing design the effect and placebo estimates agree to
-machine precision, which settles the window and weighting conventions
-that used to carry ``[待核验]`` markers. Items 1 and 5 remain open and
-are what keeps this estimator off a paper-faithful claim.
+Every item below is pinned against the authors' own implementations:
+R ``DIDmultiplegtDYN`` 2.3.4 (Track A module ``78_multiplegt_dyn``,
+``tests/reference_parity/test_multiplegt_dyn_parity.py``) and Stata
+``did_multiplegt_dyn`` (``tests/stata_parity/78_multiplegt_dyn.do``), plus
+the castle-doctrine panel in
+``tests/test_did_multiplegt_dyn_castle_reference.py``. Effects, placebos,
+switcher counts, the switcher-weighted aggregate and -- since 1.25.1 --
+the analytic standard errors agree to better than 1e-6 relative.
 
 1. **Switcher definition**: each unit's FIRST treatment change, in either
    direction, at period F. Switch-off events are switchers too -- that is
@@ -29,11 +30,6 @@ are what keeps this estimator off a paper-faithful claim.
    (a unit going 1 -> 0 belongs against units that were at 1 and stayed),
    and the difference is divided by the change in treatment so both
    directions measure the same effect per unit of treatment.
-
-   Pinned on a panel where treatment switches both ways: effects, placebo
-   and every switcher count match the reference exactly. Earlier releases
-   dropped switch-off events silently, which changed the estimand on any
-   non-absorbing panel.
 
 2. **Control group per horizon l**: "not-yet-treated at F+l" = units
    whose d stays at its pre-F value through F+l inclusive, which is
@@ -47,49 +43,61 @@ are what keeps this estimator off a paper-faithful claim.
        δ_l = Σ_F w_F × {E[Y_{F+l} − Y_{F−1} | switchers at F]
                         − E[Y_{F+l} − Y_{F−1} | not-yet-treated at F+l]}
 
-   with weights ``w_F`` proportional to the number of switchers at F.
-   Confirmed by parity. The heteroskedastic-weights variant (dCDH 2023
-   EJ survey) is still not implemented.
+   with weights ``w_F`` proportional to the (weighted) number of
+   switchers at F. The heteroskedastic-weights variant (dCDH 2023 EJ
+   survey) is not implemented.
 
-4. **Placebo lag l < 0**: the effect window reflected about F-1, i.e.
-   ``Y_{F-1-|l|} − Y_{F-1}``, reported with the reverse sign so it sits
-   on the same event-study scale as the effects. Confirmed by parity
-   against ``Placebo_|l|``.
+4. **Placebo lag l < 0** is the mirror image of effect ``|l| − 1`` about
+   the base period: the outcome contrast is ``Y_{F−1−|l|} − Y_{F−1}``,
+   but the *sample* is the one behind effect ``|l| − 1`` -- switchers
+   observed at ``F − 1 + |l|`` and controls not yet switched at
+   ``F − 1 + |l|`` -- with the extra requirement that ``Y_{F−1−|l|}`` be
+   observed. This is what the reference calls the placebo being computed
+   "on the same switchers and controls as the corresponding effect".
+
+   .. versionchanged:: 1.26.0
+      ⚠️ Placebo lags 2 and deeper used to take the controls not yet
+      switched at ``F`` (the lag-1 rule) and did not require the
+      switcher to be observed at ``F − 1 + |l|``. That is a different
+      quantity: on the castle-doctrine panel ``placebo_2`` moved from
+      0.062241 to 0.050966 and ``placebo_3`` from 0.015389 (21
+      switchers) to 0.023244 (20 switchers). Placebo 1 was already the
+      same object under both rules and is unchanged.
 
    .. versionchanged:: 1.21.0
-      ⚠️ This used to be ``Y_{F-1-|l|} − Y_{F-1-|l|-1}`` -- a
+      ⚠️ Before 1.21.0 this was ``Y_{F−1−|l|} − Y_{F−1−|l|−1}`` -- a
       one-period difference sliding backwards rather than a mirrored
-      long difference. That is a different quantity, it silently used
-      fewer cohorts at each lag, and it did not match the reference.
-      Every placebo number changes. See MIGRATION.md.
+      long difference.
 
-5. **Inference**: ``se_method='analytic'`` builds each horizon's influence
-   function directly -- every horizon is a switcher-weighted sum of
-   two-sample mean differences, so its influence function is the matching
-   sum of within-group deviations, and the horizons are combined as
-   functions rather than by adding variances (they share control units).
+5. **Inference**: ``se_method='analytic'`` is the authors' influence
+   function variance (``U_Gg_var`` in the package source): every
+   (g, t) contribution is a *cell-demeaned* residual, ``diff_y − Ê``,
+   where the cell is the cohort for a switcher and the (baseline, t)
+   control set for a control, multiplied by the small-sample factor
+   ``sqrt(n_cell / (n_cell − 1))`` with ``n_cell`` the number of distinct
+   clusters in the cell. A cell with a single cluster (e.g. a cohort with
+   one switcher) is centred on and scaled by the pooled switcher+control
+   cell at that period instead -- without this a lone switcher would
+   contribute a zero residual and the variance would be understated.
+   Contributions are summed within ``cluster`` before squaring, and the
+   variance is ``Σ_c (Σ_{g∈c} U_g)² / G²`` with ``G`` the number of
+   groups.
 
-   That is a legitimate variance estimator and it agrees with this
-   module's own cluster bootstrap, but it is **not the paper's formula**
-   and is **not pinned** against ``DIDmultiplegtDYN``: on the parity
-   fixture it runs about 1% below the package's reported standard errors
-   at every horizon (worst 1.0%), and 1.7% below on the aggregate. The
-   remaining gap is [待核验] -- dCDH's own variance derivation, which
-   this does not reproduce. The default stays ``'bootstrap'``.
+   .. versionchanged:: 1.26.0
+      ⚠️ The previous analytic variance used the plain two-sample
+      influence function (no DOF factor, zero residual for
+      single-switcher cohorts, no cluster summation). It ran 4-18 %
+      below the reference on the castle-doctrine panel and ~1 % below
+      on the Track A fixture. It now reproduces ``DIDmultiplegtDYN`` /
+      Stata ``did_multiplegt_dyn`` to 1e-6 relative on every horizon
+      and on the switcher-weighted aggregate. The default stays
+      ``'bootstrap'``; ``model_info['se_method']`` records the choice.
 
-Scope for this first cut
-------------------------
-- Never-treated and not-yet-treated control variants.
-- Placebo + dynamic horizons with cluster bootstrap SE.
-- Joint Wald tests for placebo and overall (placebo + dynamic) via the
-  ``_core.joint_wald`` helper on the bootstrap covariance.
-- NO switch-off events, NO heteroskedastic weights, NO analytical IF.
-
-Users who need paper-faithful numerics should wait for the next
-iteration when the paper's equations are in-hand and reference parity
-vs. R ``DIDmultiplegtDYN`` is in place. In the interim, the function
-raises its method label so no user can mistake this for a paper-
-faithful implementation.
+Not implemented
+---------------
+``controls=``, ``trends_nonparam`` / ``trends_lin``, ``normalized``,
+``continuous`` and the heteroskedastic-weights variant. Joint tests still
+come from the cluster bootstrap. See ``docs/rfc/multiplegt_dyn.md``.
 """
 
 from __future__ import annotations
@@ -107,7 +115,9 @@ from ..core.results import CausalResult
 from . import _core as _dc
 
 
-@accepts_aliases(_strict=True, id="group", unit="group", treat="treatment")
+@accepts_aliases(
+    _strict=True, id="group", unit="group", treat="treatment", weight="weights"
+)
 def did_multiplegt_dyn(
     data: pd.DataFrame,
     y: str,
@@ -119,6 +129,7 @@ def did_multiplegt_dyn(
     dynamic: int = 3,
     control: str = "not_yet_treated",
     cluster: Optional[str] = None,
+    weights: Optional[str] = None,
     n_boot: int = 500,
     alpha: float = 0.05,
     seed: Optional[int] = None,
@@ -140,45 +151,58 @@ def did_multiplegt_dyn(
     time : str
         Integer-valued period column.
     treatment : str
-        Binary time-varying treatment (0/1). Only switch-on events
-        (d=0 → d=1) are used in this MVP; switch-off events are flagged
-        [待核验] and not handled.
+        Binary time-varying treatment (0/1). Switch-on and switch-off
+        events are both used; see ``switchers=`` to separate them.
     placebo : int, default 0
         Number of pre-treatment placebo horizons (l = -1, ..., -placebo).
     dynamic : int, default 3
-        Number of post-treatment dynamic horizons (l = 0, ..., dynamic).
+        Number of post-treatment dynamic horizons (l = 0, ..., dynamic),
+        i.e. ``dynamic + 1`` effects. R / Stata ``effects=k`` is
+        ``dynamic=k-1`` here: their ``Effect_k`` is horizon ``k-1``.
     control : {'not_yet_treated', 'never_treated'}, default
         ``'not_yet_treated'``.
     cluster : str, optional
-        Cluster column for bootstrap SE (defaults to group).
+        Cluster column (defaults to ``group``). Used by the bootstrap and,
+        since 1.25.1, by the analytic variance: influence contributions
+        are summed within cluster before squaring, and the small-sample
+        cell factor counts distinct clusters, exactly as the reference
+        does. ``group`` must be nested in ``cluster``.
+    weights : str, optional
+        Observation weight column (Stata ``weight()`` / R ``weight=``, whose
+        spelling is accepted here as the alias ``weight=``).
+        The weight is read at the row a unit contributes from -- period
+        ``F+l`` for an effect and ``F-1+|l|`` for a placebo, mirroring the
+        reference -- so time-varying weights behave identically. Every
+        switcher mean, control mean, cohort weight and the switcher counts
+        used by ``aggregation='switchers'`` become weighted; ``detail``
+        keeps the raw count in ``n_switchers`` and the weighted one in
+        ``w_switchers``. Must be non-negative; a zero or missing weight
+        drops the row.
     n_boot : int, default 500
-        Bootstrap replications. Analytical IF variance [待核验] pending,
-        so standard errors are not comparable to DIDmultiplegtDYN's.
+        Bootstrap replications.
     alpha : float, default 0.05
     seed : int, optional
     se_method : {"bootstrap", "analytic"}, default "bootstrap"
-        ``"bootstrap"`` resamples clusters; ``"analytic"`` uses the
-        influence functions and needs no draws, which makes it roughly a
-        hundred times faster.
-
-        The analytic variance is NOT pinned against ``DIDmultiplegtDYN``.
-        It agrees with this module's own bootstrap and sits about 1% below
-        the package's reported standard errors on the parity fixture; the
-        residual is dCDH's own variance derivation, which is not
-        reproduced here. The default stays on the bootstrap for that
-        reason, and ``model_info["se_method"]`` records the choice.
+        ``"bootstrap"`` resamples clusters; ``"analytic"`` is the authors'
+        influence-function variance and needs no draws, which makes it
+        roughly a hundred times faster. It is pinned against
+        ``DIDmultiplegtDYN`` and Stata ``did_multiplegt_dyn`` to 1e-6
+        relative on every horizon and on the switcher-weighted aggregate
+        (module docstring, item 5). The default stays on the bootstrap so
+        existing callers' numbers do not move; ``model_info["se_method"]``
+        records the choice.
 
         ``joint_placebo_test`` and ``joint_overall_test`` still come from
         the bootstrap, so they are ``None`` when ``n_boot=0``.
     aggregation : {"simple", "switchers"}, default "simple"
         How the dynamic horizons are combined into the headline
         ``estimate``. ``"simple"`` gives each horizon equal weight;
-        ``"switchers"`` weights horizon ``l`` by the number of switchers
-        contributing to it, which reproduces ``DIDmultiplegtDYN``'s
-        ``Av_tot_eff``. The two differ whenever later horizons rest on
-        fewer cohorts, which is the normal case in staggered designs.
-        The default is left on ``"simple"`` because changing it would
-        move the number existing callers get back;
+        ``"switchers"`` weights horizon ``l`` by the (weighted) number of
+        switchers contributing to it, which reproduces ``DIDmultiplegtDYN``'s
+        ``Av_tot_eff`` and its standard error. The two differ whenever
+        later horizons rest on fewer cohorts, which is the normal case in
+        staggered designs. The default is left on ``"simple"`` because
+        changing it would move the number existing callers get back;
         ``model_info["aggregation"]`` records which was used.
     switchers : {None, 'in', 'out'}, optional
         Estimate on switch-**in** events (treatment rises above its
@@ -271,6 +295,22 @@ def did_multiplegt_dyn(
             raise ValueError(f"Column {col!r} not in data")
     if not set(df[treatment].dropna().unique()) <= {0, 1}:
         raise ValueError(f"Treatment {treatment!r} must be binary 0/1")
+    if weights is not None:
+        if weights not in df.columns:
+            raise ValueError(f"weights column {weights!r} not in data")
+        wv = pd.to_numeric(df[weights], errors="coerce")
+        if (wv.dropna() < 0).any():
+            raise ValueError(f"weights column {weights!r} has negative values")
+        df[weights] = wv
+    if cluster is not None:
+        if cluster not in df.columns:
+            raise ValueError(f"cluster column {cluster!r} not in data")
+        if df[cluster].isna().any():
+            raise ValueError(f"cluster column {cluster!r} has missing values")
+        if (df.groupby(group)[cluster].nunique() > 1).any():
+            raise ValueError(
+                f"group {group!r} must be nested within cluster {cluster!r}"
+            )
 
     df = df.sort_values([group, time]).reset_index(drop=True)
     cluster_var = cluster if cluster is not None else group
@@ -303,6 +343,8 @@ def did_multiplegt_dyn(
         control=control,
         switchers=switchers,
         same_switchers=same_switchers,
+        weights=weights,
+        cluster=cluster_var,
     )
 
     # Cluster bootstrap for SE
@@ -348,6 +390,8 @@ def did_multiplegt_dyn(
                 control=control,
                 switchers=switchers,
                 same_switchers=same_switchers,
+                weights=weights,
+                cluster=cluster_var,
             )
             for j, h in enumerate(horizons):
                 # Align by h
@@ -405,6 +449,39 @@ def did_multiplegt_dyn(
 
     es_df = _dc.event_study_frame(es_rows)
 
+    # Joint covariance of the reported placebos and effects. Analytic: the
+    # horizons' clustered influence sums, cross-multiplied -- the same
+    # object whose diagonal is each horizon's SE (the reference's
+    # sqrt(var_sq_sum)/G). Bootstrap: the covariance of the replicates.
+    _ok = [
+        (j, h)
+        for j, h in enumerate(horizons)
+        if np.isfinite(es_rows[j]["se"]) and es_rows[j]["se"] > 0
+    ]
+    es_vcov = None
+    if _ok:
+        _labels = [int(h) for _, h in _ok]
+        if se_method == "analytic":
+            _rows_h = {r["horizon"]: r for r in main["cell_estimates"]}
+            _ncl = int(main["cluster_codes"].max()) + 1
+            _S = np.column_stack(
+                [
+                    np.bincount(
+                        main["cluster_codes"],
+                        weights=_rows_h[h]["_influence"],
+                        minlength=_ncl,
+                    )
+                    for _, h in _ok
+                ]
+            )
+            _V: Optional[np.ndarray] = (_S.T @ _S) / float(main["n_groups"]) ** 2
+        else:
+            _B = boot_hist[:, [j for j, _ in _ok]]
+            _B = _B[np.all(np.isfinite(_B), axis=1)]
+            _V = np.cov(_B, rowvar=False, ddof=1) if len(_B) > 1 else None
+        if _V is not None:
+            es_vcov = pd.DataFrame(np.atleast_2d(_V), index=_labels, columns=_labels)
+
     # Joint tests
     placebo_idx = [j for j, h in enumerate(horizons) if h < 0]
     dyn_idx = [j for j, h in enumerate(horizons) if h >= 0]
@@ -448,19 +525,22 @@ def did_multiplegt_dyn(
         equal_test = _effects_equal_test(main, horizons, boot_hist, sel)
 
     # Headline estimate over the dynamic horizons. "simple" gives each
-    # horizon equal weight; "switchers" weights by the switchers behind
-    # each one, which is DIDmultiplegtDYN's Av_tot_eff.
+    # horizon equal weights; "switchers" weights by the (weighted) switchers
+    # behind each one, which is DIDmultiplegtDYN's Av_tot_eff.
     dyn_est = np.array(
         [es_rows[j]["att"] for j in dyn_idx],
         dtype=float,
     )
+    rows_by_h = {r["horizon"]: r for r in main["cell_estimates"]}
+
+    def _switcher_weight(j: int) -> float:
+        r_h = rows_by_h.get(horizons[j])
+        return float(r_h["w_switchers"]) if r_h is not None else 0.0
+
     if not dyn_est.size:
         headline = np.nan
     elif aggregation == "switchers":
-        w = np.array(
-            [float(main["cell_estimates"][j]["n_switchers"]) for j in dyn_idx],
-            dtype=float,
-        )
+        w = np.array([_switcher_weight(j) for j in dyn_idx], dtype=float)
         ok = np.isfinite(dyn_est) & (w > 0)
         headline = (
             float(np.sum(w[ok] * dyn_est[ok]) / np.sum(w[ok])) if ok.any() else np.nan
@@ -475,10 +555,7 @@ def did_multiplegt_dyn(
             # nanmean of an all-NaN replicate row is an intended NaN.
             warnings.simplefilter("ignore", RuntimeWarning)
             if aggregation == "switchers":
-                wb = np.array(
-                    [float(main["cell_estimates"][j]["n_switchers"]) for j in dyn_idx],
-                    dtype=float,
-                )
+                wb = np.array([_switcher_weight(j) for j in dyn_idx], dtype=float)
                 sub = boot_hist[:, dyn_idx]
                 mask = np.isfinite(sub)
                 denom = (mask * wb).sum(axis=1)
@@ -494,20 +571,20 @@ def did_multiplegt_dyn(
     if se_method == "analytic" and dyn_idx:
         # Combine the horizons' influence functions with the same weights the
         # headline uses, then square once -- the horizons share control units,
-        # so adding their variances would understate the spread.
-        rows_by_h = {r["horizon"]: r for r in main["cell_estimates"]}
+        # so adding their variances would understate the spread. This is the
+        # reference's U_Gg_var_global: Σ_l w_l U_Gg_var_l with w_l ∝ N_l.
         psis, wts = [], []
         for k, j in enumerate(dyn_idx):
             r_h = rows_by_h.get(horizons[j])
             if r_h is None or not np.isfinite(dyn_est[k]):
                 continue
             psis.append(r_h["_influence"])
-            wts.append(float(r_h["n_switchers"]) if aggregation == "switchers" else 1.0)
+            wts.append(float(r_h["w_switchers"]) if aggregation == "switchers" else 1.0)
         if psis:
             wv = np.asarray(wts, dtype=float)
             wv = wv / wv.sum()
             psi_head = np.sum([w * p for w, p in zip(wv, psis)], axis=0)
-            se_avg = float(np.sqrt(np.mean(psi_head**2) / len(psi_head)))
+            se_avg = _clustered_if_se(psi_head, main["cluster_codes"], main["n_groups"])
 
     if se_avg and se_avg > 0:
         z = headline / se_avg
@@ -518,7 +595,11 @@ def did_multiplegt_dyn(
         ci_h = (np.nan, np.nan)
 
     return CausalResult(
-        method="did_multiplegt_dyn (dCDH 2024 ReStat) [待核验 — MVP, not paper-parity]",
+        method=(
+            "did_multiplegt_dyn (dCDH 2024 ReStat) "
+            "[MVP — pinned to DIDmultiplegtDYN for effects, placebos and "
+            "analytic SEs; controls/trends variants not implemented]"
+        ),
         estimand=(
             "Average dynamic effect across horizons 0..dynamic "
             f"({aggregation}-weighted)"
@@ -532,12 +613,15 @@ def did_multiplegt_dyn(
         detail=pd.DataFrame(main["cell_estimates"]),
         model_info={
             "event_study": es_df,
+            "event_study_vcov": es_vcov,
             "horizons": horizons,
             "control": control,
             "aggregation": aggregation,
             "se_method": se_method,
             "n_boot": n_boot,
             "cluster_var": cluster_var,
+            "weights": weights,
+            "n_groups": int(main["n_groups"]),
             "joint_placebo_test": joint_placebo,
             "joint_overall_test": joint_overall,
             "effects_equal_test": equal_test,
@@ -545,9 +629,11 @@ def did_multiplegt_dyn(
             "switchers": switchers,
             "same_switchers": same_switchers,
             "warning": (
-                "MVP implementation: no analytical IF variance, no "
-                "switch-off handling, no heteroskedastic weights. See "
-                "docs/rfc/multiplegt_dyn.md for the production roadmap."
+                "MVP scope: no controls=, trends_nonparam/trends_lin, "
+                "normalized or continuous options and no "
+                "heteroskedastic-weights variant; joint tests come from "
+                "the bootstrap only. See docs/rfc/multiplegt_dyn.md for "
+                "the production roadmap."
             ),
         },
         _citation_key="dechaisemartin2024difference",
@@ -565,7 +651,7 @@ def _first_switch(
     group: str,
     time: str,
     treatment: str,
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Each unit's first treatment change: when, which way, and from what.
 
     Returns three frames keyed on ``group``: ``_F`` (the period of the first
@@ -601,6 +687,21 @@ def _first_switch(
     )
 
 
+def _clustered_if_se(
+    psi: np.ndarray, cluster_codes: np.ndarray, n_groups: int
+) -> float:
+    """``sqrt(Σ_c (Σ_{g∈c} ψ_g)²) / G`` -- the reference's ``sqrt(var_sq_sum)/G``.
+
+    ``psi`` is the group-level influence contribution scaled so that its
+    mean is the estimate (``G / N`` × raw contribution). With one group per
+    cluster this is the plain ``sqrt(mean(ψ²) / G)``.
+    """
+    sums = np.bincount(
+        cluster_codes, weights=psi, minlength=int(cluster_codes.max()) + 1
+    )
+    return float(np.sqrt(np.sum(sums**2)) / n_groups)
+
+
 def _estimate_all_horizons(
     *,
     df: pd.DataFrame,
@@ -612,30 +713,37 @@ def _estimate_all_horizons(
     control: str,
     switchers: Optional[str] = None,
     same_switchers: bool = False,
+    weights: Optional[str] = None,
+    cluster: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compute δ_l for each horizon h using long-difference event-study.
 
     For each unique first-treatment period F in the sample:
       switchers at F = units with _F == F.
       For each horizon l:
-        - If l >= 0: compare Y_{F+l} − Y_{F-1} between switchers and controls.
-        - If l < 0: compare Y_{F-1-|l|} − Y_{F-1} (placebo), i.e. the
-          mirror image of the l = |l| - 1 effect, run backwards over the
-          pre-period. Matches DIDmultiplegtDYN's Placebo_|l|.
+        - If l >= 0: compare Y_{F+l} − Y_{F-1} between switchers and controls
+          not yet switched at F+l.
+        - If l < 0: compare Y_{F-1-|l|} − Y_{F-1} (placebo) on the SAME
+          switchers and controls as effect |l|-1, i.e. the anchor period is
+          F-1+|l|. Matches DIDmultiplegtDYN's Placebo_|l|.
       Control set depends on `control=`.
 
-    Aggregate per horizon with n_switchers weights.
+    Aggregate per horizon with (weighted) n_switchers weights, and carry
+    the reference's influence-function variance (``U_Gg_var``) per group.
     """
     cells: List[Dict[str, Any]] = []
 
     # Unit-level index for the influence functions. Each horizon's estimate
     # is a weighted sum of two-sample mean differences, so its influence
-    # function is the corresponding sum of within-group deviations -- and
+    # function is the corresponding sum of within-cell deviations -- and
     # summing rather than adding variances is what carries the fact that a
     # control unit can serve several events.
     all_units = pd.Index(sorted(df[group].unique()))
     n_panel = len(all_units)
     unit_pos = pd.Series(np.arange(n_panel), index=all_units)
+    cl_col = cluster if cluster is not None else group
+    cluster_of = df.groupby(group)[cl_col].first().reindex(all_units)
+    cluster_codes = pd.factorize(cluster_of.to_numpy())[0]
 
     # switchers=: estimate switch-in and switch-out events separately.
     # dCDH recommend running the command twice rather than pooling, because
@@ -658,7 +766,11 @@ def _estimate_all_horizons(
 
     F_values = sorted(df["_F"].dropna().unique())
     if not F_values:
-        return {"cell_estimates": []}
+        return {
+            "cell_estimates": [],
+            "cluster_codes": cluster_codes,
+            "n_groups": n_panel,
+        }
 
     # Never-treated set (units with _F NaN)
     never_ids = set(df[df["_F"].isna()][group].unique())
@@ -668,7 +780,10 @@ def _estimate_all_horizons(
     t_min = float(df[time].min())
 
     for h in horizons:
-        horizon_acc = {"sum_delta": 0.0, "n_switchers": 0, "n_events": 0}
+        sum_wdelta = 0.0
+        w_total = 0.0
+        n_sw = 0
+        n_events = 0
         psi = np.zeros(n_panel, dtype=float)
 
         for F in F_values:
@@ -687,18 +802,22 @@ def _estimate_all_horizons(
                     t_min=t_min,
                     n_panel=n_panel,
                     unit_pos=unit_pos,
+                    weights=weights,
+                    cluster_of=cluster_of,
                 )
                 if _cell is None:
                     continue
-                horizon_acc["sum_delta"] += _cell["delta"] * _cell["n_sw"]
-                horizon_acc["n_switchers"] += _cell["n_sw"]
-                horizon_acc["n_events"] += 1
-                psi += _cell["psi"] * _cell["n_sw"]
+                sum_wdelta += _cell["delta"] * _cell["w_sw"]
+                w_total += _cell["w_sw"]
+                n_sw += _cell["n_sw"]
+                n_events += 1
+                psi += _cell["psi"]
 
-        if horizon_acc["n_switchers"] > 0:
-            delta_l = horizon_acc["sum_delta"] / horizon_acc["n_switchers"]
-            psi = psi / horizon_acc["n_switchers"]
-            se_analytic = float(np.sqrt(np.mean(psi**2) / n_panel))
+        if w_total > 0:
+            delta_l = sum_wdelta / w_total
+            # Reference scaling: U_Gg = (G / N_l) × Σ_t contribution_gt.
+            psi = np.asarray(psi * (n_panel / w_total), dtype=float)
+            se_analytic = _clustered_if_se(psi, cluster_codes, n_panel)
         else:
             delta_l = np.nan
             se_analytic = np.nan
@@ -707,14 +826,37 @@ def _estimate_all_horizons(
             {
                 "horizon": h,
                 "delta_l": float(delta_l) if np.isfinite(delta_l) else np.nan,
-                "n_switchers": horizon_acc["n_switchers"],
-                "n_events": horizon_acc["n_events"],
+                "n_switchers": n_sw,
+                "w_switchers": float(w_total),
+                "n_events": n_events,
                 "_influence": psi,
                 "_se_analytic": se_analytic,
             }
         )
 
-    return {"cell_estimates": cells}
+    return {
+        "cell_estimates": cells,
+        "cluster_codes": cluster_codes,
+        "n_groups": n_panel,
+    }
+
+
+def _cell_centre(
+    n_own: int, mean_own: float, n_pool: int, mean_pool: float
+) -> Tuple[float, float]:
+    """(Ê, DOF) for one cell of the reference variance.
+
+    ``compute_E_hat_gt`` / ``compute_DOF_gt`` in ``DIDmultiplegtDYN``: a cell
+    with at least two clusters is centred on its own mean and scaled by
+    ``sqrt(n/(n-1))``; a single-cluster cell borrows the pooled
+    switcher+control cell at the same period; a cell that cannot even do
+    that is left uncentred with factor 1.
+    """
+    if n_own >= 2:
+        return mean_own, float(np.sqrt(n_own / (n_own - 1.0)))
+    if n_pool >= 2:
+        return mean_pool, float(np.sqrt(n_pool / (n_pool - 1.0)))
+    return 0.0, 1.0
 
 
 def _one_event(
@@ -732,6 +874,8 @@ def _one_event(
     t_min: float,
     n_panel: int,
     unit_pos: pd.Series,
+    weights: Optional[str],
+    cluster_of: pd.Series,
 ) -> Optional[Dict[str, Any]]:
     """One (switch period, direction) event at horizon ``h``.
 
@@ -747,6 +891,12 @@ def _one_event(
       same "effect per unit of treatment".
     * It is otherwise an ordinary two-sample comparison, so the influence
       function has the same shape.
+
+    The *anchor* period ``F − 1 + i`` (``i = h + 1`` for an effect,
+    ``i = |h|`` for a placebo) decides the sample: a unit must be observed
+    there, controls must not have switched by then, and ``weights`` is read
+    there. For a placebo the outcome contrast is nonetheless the mirrored
+    ``Y_{F−1−i} − Y_{F−1}``.
     """
     sw_mask = (df["_F"] == F) & (df["_dir"] == direction)
     if "_elig" in df.columns:
@@ -762,57 +912,105 @@ def _one_event(
 
     if h >= 0:
         t_pre, t_post = F - 1, F + h
+        t_anchor = t_post
     else:
-        t_pre, t_post = F - 1 - abs(h), F - 1
+        i = -h
+        t_pre, t_post = F - 1 - i, F - 1
+        t_anchor = F - 1 + i
     if t_pre < t_min:
         return None
 
     # Controls: never-switchers plus units that have not switched by the
-    # comparison period, restricted to the switcher's baseline level.
+    # anchor period, restricted to the switcher's baseline level.
     if control == "never_treated":
         candidates = never_ids
     else:
-        threshold = F + max(h, 0)
-        candidates = set(df[(df["_F"] > threshold) | (df["_F"].isna())][group].unique())
+        candidates = set(df[(df["_F"] > t_anchor) | (df["_F"].isna())][group].unique())
     pre_rows = df[df[time] == t_pre]
     same_base = set(pre_rows[pre_rows[treatment] == base_level][group].unique())
     ctrl_ids = (candidates & same_base) - switcher_ids
     if not ctrl_ids:
         return None
 
-    sw_dy = _unit_change(df, group, time, y, switcher_ids, t_pre, t_post)
-    c_dy = _unit_change(df, group, time, y, ctrl_ids, t_pre, t_post)
-    if sw_dy is None or c_dy is None or len(sw_dy) == 0 or len(c_dy) == 0:
+    sw = _event_sample(
+        df, group, time, y, weights, switcher_ids, t_pre, t_post, t_anchor
+    )
+    ct = _event_sample(df, group, time, y, weights, ctrl_ids, t_pre, t_post, t_anchor)
+    if sw is None or ct is None:
         return None
+    sw_ids, sw_dy, sw_w = sw
+    c_ids, c_dy, c_w = ct
 
-    sign = -1.0 if h < 0 else 1.0
-    delta = sign * (sw_dy.mean() - c_dy.mean()) / direction
+    w_s = float(sw_w.sum())
+    w_c = float(c_w.sum())
+    mean_s = float(np.sum(sw_w * sw_dy) / w_s)
+    mean_c = float(np.sum(c_w * c_dy) / w_c)
+    scale = (-1.0 if h < 0 else 1.0) / direction
+    delta = scale * (mean_s - mean_c)
+
+    # Reference variance cells: the cohort for switchers, the (baseline, t)
+    # control set for controls, and the pooled cell as the fallback when a
+    # cell holds a single cluster. Cluster counts, weighted means.
+    n_s = int(cluster_of.loc[sw_ids].nunique())
+    n_c = int(cluster_of.loc[c_ids].nunique())
+    n_pool = int(cluster_of.loc[sw_ids.append(c_ids)].nunique())
+    mean_pool = float((np.sum(sw_w * sw_dy) + np.sum(c_w * c_dy)) / (w_s + w_c))
+    e_s, dof_s = _cell_centre(n_s, mean_s, n_pool, mean_pool)
+    e_c, dof_c = _cell_centre(n_c, mean_c, n_pool, mean_pool)
 
     psi = np.zeros(n_panel, dtype=float)
-    psi[unit_pos.reindex(sw_dy.index).to_numpy()] = (
-        sw_dy.to_numpy() - sw_dy.mean()
-    ) * (n_panel / len(sw_dy))
-    psi[unit_pos.reindex(c_dy.index).to_numpy()] -= (c_dy.to_numpy() - c_dy.mean()) * (
-        n_panel / len(c_dy)
-    )
-    psi = psi * sign / direction
+    psi[unit_pos.reindex(sw_ids).to_numpy()] += sw_w * dof_s * (sw_dy - e_s)
+    psi[unit_pos.reindex(c_ids).to_numpy()] -= (w_s / w_c) * c_w * dof_c * (c_dy - e_c)
+    psi *= scale
 
-    return {"delta": float(delta), "n_sw": len(sw_dy), "psi": psi}
+    return {"delta": float(delta), "n_sw": int(len(sw_ids)), "w_sw": w_s, "psi": psi}
 
 
-def _unit_change(df, group, time, y, ids, t_pre, t_post):
-    """Per-unit outcome change between two periods, indexed by unit.
+def _unit_values(
+    df: pd.DataFrame,
+    group: str,
+    time: str,
+    y: str,
+    ids: Any,
+    t: Any,
+) -> pd.Series:
+    """``y`` at period ``t`` for the given units, indexed by unit, NaN dropped."""
+    sub = df[(df[time] == t) & df[group].isin(ids)]
+    s = sub.set_index(group)[y].astype(float)
+    return s[s.notna()]
 
-    Only units observed at BOTH ends contribute -- a unit missing either
-    period has no change and cannot enter the difference.
+
+def _event_sample(
+    df, group, time, y, weights, ids, t_pre, t_post, t_anchor
+) -> Optional[Tuple[pd.Index, np.ndarray, np.ndarray]]:
+    """Units observed at every period the event needs, with their change and weights.
+
+    Only units observed at BOTH ends of the contrast (and at the anchor
+    period, which for a placebo is a third period) contribute -- a unit
+    missing any of them has no change and cannot enter the difference. The
+    weights is the reference's ``N_gt`` at the anchor row; zero or missing
+    weights drop the unit.
     """
-    sub = df[df[group].isin(ids) & df[time].isin([t_pre, t_post])]
-    pre = sub[sub[time] == t_pre].set_index(group)[y]
-    post = sub[sub[time] == t_post].set_index(group)[y]
+    pre = _unit_values(df, group, time, y, ids, t_pre)
+    post = _unit_values(df, group, time, y, ids, t_post)
     idx = pre.index.intersection(post.index)
+    if t_anchor != t_post:
+        anchor = _unit_values(df, group, time, y, ids, t_anchor)
+        idx = idx.intersection(anchor.index)
     if len(idx) == 0:
         return None
-    return post.loc[idx] - pre.loc[idx]
+    if weights is None:
+        w = np.ones(len(idx), dtype=float)
+    else:
+        sub = df[(df[time] == t_anchor) & df[group].isin(idx)].set_index(group)[weights]
+        w = sub.reindex(idx).astype(float).fillna(0.0).to_numpy()
+        keep = w != 0
+        if not keep.any():
+            return None
+        idx = idx[keep]
+        w = w[keep]
+    dy = (post.loc[idx] - pre.loc[idx]).to_numpy(dtype=float)
+    return idx, dy, w
 
 
 def _restrict_to_common_switchers(

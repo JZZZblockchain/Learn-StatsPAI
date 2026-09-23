@@ -77,7 +77,7 @@ These are machine-readable through `sp.describe_function(name)["limitations"]` a
 - `network_exposure`: only `design="bernoulli"` is implemented.
 - `etwfe`: `panel=False` with `cgroup="nevertreated"` is not implemented.
 - `continuous_did`: `method="cgs"` is an MVP without full CGS parity.
-- `did_multiplegt_dyn`: experimental MVP; switch-off events, analytical IF variance, and heteroskedastic weights are not implemented.
+- `did_multiplegt_dyn`: experimental MVP. Effects, placebos, switcher counts, `Av_tot_eff` and the analytic influence-function SEs are pinned to `DIDmultiplegtDYN` / Stata `did_multiplegt_dyn` (Track A 78 and the castle-doctrine reference test); `controls=`, trends, `normalized`/`continuous` and the heteroskedastic-weights variant are not implemented.
 
 ## Auditing
 

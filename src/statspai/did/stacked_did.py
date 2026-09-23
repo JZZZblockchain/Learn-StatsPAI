@@ -229,13 +229,26 @@ def stacked_did(
     for idx, k in enumerate(rel_times_est):
         es_se[k] = se_vec[idx]
 
+    # Joint covariance of the event-study coefficients (one stacked
+    # regression, so the cross-horizon terms are available exactly).
+    V = _cluster_robust_vcov(X_dm, residuals, cluster_ids)
+    es_vcov = pd.DataFrame(
+        np.asarray(V, dtype=float)[: len(rel_times_est), : len(rel_times_est)],
+        index=[int(k) for k in rel_times_est],
+        columns=[int(k) for k in rel_times_est],
+    )
+
     # ── Step 6: Aggregate ATT (post-treatment periods) ───────────── #
     post_ks = [k for k in rel_times_est if k >= 0]
+    if len(post_ks) == 0:
+        raise ValueError(
+            f"stacked_did: window={window} contains no post-treatment "
+            "relative time (k >= 0) with data, so the ATT is not defined. "
+            "Widen the window's upper end."
+        )
     if len(post_ks) > 0:
         att = np.mean([es_betas[k] for k in post_ks])
-        # Delta method: ATT = mean of post betas → se = sqrt(sum of var / n^2)
-        # Use cluster-robust vcov for joint inference
-        V = _cluster_robust_vcov(X_dm, residuals, cluster_ids)
+        # Delta method: ATT = mean of post betas → se = sqrt(w' V w)
         post_indices = [rel_times_est.index(k) for k in post_ks]
         n_post = len(post_indices)
         w = np.zeros(len(rel_times_est))
@@ -243,9 +256,6 @@ def stacked_did(
             w[pi] = 1.0 / n_post
         att_var = w @ V @ w
         att_se = np.sqrt(max(att_var, 0.0))
-    else:
-        att = 0.0
-        att_se = 0.0
 
     z_crit = stats.norm.ppf(1 - alpha / 2)
     att_pval = float(2 * stats.norm.sf(abs(att) / att_se)) if att_se > 0 else np.nan
@@ -296,6 +306,7 @@ def stacked_did(
         "event_study": detail,
         "event_study_betas": es_betas,
         "event_study_se": es_se,
+        "event_study_vcov": es_vcov,
     }
 
     _result = CausalResult(

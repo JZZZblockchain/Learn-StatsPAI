@@ -272,6 +272,14 @@ def honest_did(
             stacklevel=2,
         )
 
+    _mi = getattr(result, "model_info", None) or {}
+    if _mi.get("event_vcov") is not None and "cohorts" in _mi:
+        # A raw sp.etwfe fit stores cohort-by-period cells; its event study
+        # is the event-time aggregation of those cells.
+        from .wooldridge_did import etwfe_emfx
+
+        result = etwfe_emfx(result, type="event", include_leads=True)
+
     es = _extract_event_study(result)
     z_crit = stats.norm.ppf(1 - alpha / 2)
 
@@ -334,7 +342,9 @@ def honest_did(
                             "rejects_zero": not (_res.ci_lower <= 0 <= _res.ci_upper),
                         }
                     )
-                return pd.DataFrame(rows)
+                _out = pd.DataFrame(rows)
+                _out.attrs["interval"] = "flci"
+                return _out
 
         warnings.warn(
             "honest_did(method='smoothness'): the event-study covariance is "
@@ -342,8 +352,10 @@ def honest_did(
             "(theta_hat +/- M*(e+1) +/- z*SE) rather than the Rambachan-Roth "
             "FLCI. That approximation ignores the pre-period covariance and "
             "can be narrower than the true confidence set, overstating "
-            "robustness. Pass a Callaway-Sant'Anna result (which carries "
-            "influence functions) or backend='r'.",
+            "robustness. The estimator did not expose a joint event-study "
+            "covariance (see sp.event_study_vcov: did_imputation's BJS leads "
+            "come from a separate regression); refit with an estimator that "
+            "does, or pass backend='r'.",
             UserWarning,
             stacklevel=2,
         )
@@ -395,7 +407,9 @@ def honest_did(
             diagnostics={"method": method},
         )
 
-    return pd.DataFrame(rows)
+    _out = pd.DataFrame(rows)
+    _out.attrs["interval"] = "worst_case_bias"
+    return _out
 
 
 def _honest_did_r_backend(
@@ -848,6 +862,11 @@ def _extract_event_study(result: CausalResult) -> pd.DataFrame:
     """
     info = result.model_info or {}
     es = cast(Optional[pd.DataFrame], info.get("event_study"))
+    if isinstance(es, dict):
+        # sp.gardner_did keeps its event study as a 'D_k+h'-keyed dict.
+        from .es_inference import _es_frame
+
+        es = _es_frame(result)
     if es is None and getattr(result, "detail", None) is not None:
         det = result.detail
         if isinstance(det, pd.DataFrame) and {"relative_time", "att", "se"}.issubset(

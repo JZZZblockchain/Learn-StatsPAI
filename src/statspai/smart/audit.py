@@ -35,6 +35,7 @@ from ..core._agent_summary import (  # Threshold constants imported (not re-stat
     _COX_PH_ALPHA,
     _ESS_MIN,
     _FEW_CLUSTERS_MIN,
+    _FEW_TREATED_MIN,
     _HECKMAN_RHO_BOUNDARY,
     _OVERLAP_MIN,
     _PRETREND_ALPHA,
@@ -205,6 +206,28 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         rationale="Pre-trend tests are low-power; Rambachan-Roth (2023) "
         "honest CIs quantify how much violation the estimate "
         "tolerates.",
+    ),
+    _Check(
+        name="few_treated_clusters",
+        question="Are there enough *treated* clusters for the cluster-robust "
+        "standard error to be reliable (>= 10)?",
+        applies_to=("did",),
+        requires_evidence=("n_treated_units",),
+        evidence_paths=_pp(
+            ("n_treated_units",),
+            ("diagnostics", "n_treated_units"),
+        ),
+        threshold=_FEW_TREATED_MIN,
+        compare="greater_passes",
+        suggest_function="sp.did_few_treated",
+        importance="high",
+        rationale="The cluster-robust variance estimates the treated side's "
+        "contribution from as many draws as there are treated "
+        "clusters, so with one or a handful it over-rejects whatever "
+        "the total cluster count (Conley-Taber 2011; Ferman-Pinto "
+        "2019). sp.did_few_treated inverts a placebo distribution "
+        "built from the control groups; sp.cs_jackknife is the CV3 "
+        "alternative.",
     ),
     _Check(
         name="bacon_decomposition",

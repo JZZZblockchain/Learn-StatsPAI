@@ -69,13 +69,46 @@ sp.did(df, y="y", treat="first_treat", time="year", id="unit",
 de Chaisemartin–D'Haultfoeuille DID for switch-on-off treatments,
 with dCDH 2024 joint placebo Wald and average cumulative effect.
 
+## Inference
+
+### `sp.event_study_vcov(result, allow_diagonal=True)`
+
+The joint covariance of an event study, read off whichever estimator
+produced it (CS / `aggte`, `event_study`, `sun_abraham`, `gardner_did`,
+`did_imputation`, `stacked_did`, `lp_did`, `did_multiplegt_dyn`, `etwfe`).
+Returns `times`, `beta`, `vcov`, `joint` and `source`; `joint=False` flags
+the cases where only a diagonal or block-diagonal matrix exists.
+
+### `sp.uniform_bands(result, alpha=0.05, which='all', window=None)`
+
+Sup-t simultaneous band over the covered event times — the object an
+event-study *plot* needs, since a pointwise interval covers one horizon at
+a time. Falls back to the conservative Sidak critical value when the
+covariance is not joint.
+
+### `sp.did_few_treated(data, y, id, time, treat, method='conley_taber')`
+
+Conley–Taber (2011) and Ferman–Pinto (2019) inference for designs with one
+or a handful of *treated* clusters, where the cluster-robust variance
+over-rejects whatever the total cluster count. The placebo distribution is
+built from the control groups and inverted; `method='ferman_pinto'`
+additionally rescales it for the heteroskedasticity unequal group sizes
+generate (needs `group_size=`).
+
+### `sp.cs_jackknife(data, y, g, time, id, type='simple')`
+
+Delete-one-cluster (CV3) jackknife of a Callaway–Sant'Anna aggregate,
+against R `didjack` and Stata `csdidjack`.
+
 ## Sensitivity
 
 ### `sp.honest_did(result, e, m_grid=None, method='smoothness')`
 ### `sp.breakdown_m(result, e, method='smoothness')`
 
-Rambachan & Roth (2023).  Accept any CausalResult carrying an event
-study (CS, SA, BJS, or `aggte(dynamic)`).
+Rambachan & Roth (2023).  Accept any CausalResult carrying an event study;
+the fixed-length interval uses the joint covariance `sp.event_study_vcov`
+recovers, and `result.attrs['interval']` records whether the returned
+table is the FLCI or the worst-case-bias fallback.
 
 ### `sp.bjs_pretrend_joint(result, data, ..., n_boot=300, seed=None)`
 

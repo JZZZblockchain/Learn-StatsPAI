@@ -151,8 +151,11 @@ class TestCallawaySantannaPretrend:
         """
         t = sp.callaway_santanna(mpdta, **CS).diagnostics["pretrend_test"]
         assert t["df"] == 5
-        assert t["statistic"] == pytest.approx(7.7912309648774976, rel=1e-9)
-        assert t["pvalue"] == pytest.approx(0.1740323045946247, rel=1e-9)
+        # 7.7912309648774976 / 0.1740323045946247 until the 1e-10 ridge was
+        # removed from the covariance inverse; the ridge-free quadratic form
+        # is 7.7912366, which is R did's own W = 7.791237 on this panel.
+        assert t["statistic"] == pytest.approx(7.791236627200241, rel=1e-9)
+        assert t["pvalue"] == pytest.approx(0.1740319683939516, rel=1e-9)
 
     def test_none_disables(self, mpdta):
         assert (

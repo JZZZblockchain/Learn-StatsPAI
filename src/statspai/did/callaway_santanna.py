@@ -33,7 +33,12 @@ from scipy import stats
 
 from .._aliases import accepts_aliases
 from ..core.results import CausalResult
-from ..exceptions import ConvergenceWarning, DataInsufficient, MethodIncompatibility
+from ..exceptions import (
+    AssumptionWarning,
+    ConvergenceWarning,
+    DataInsufficient,
+    MethodIncompatibility,
+)
 from ._core import cohort_share_context as _cohort_share_context
 from ._core import covariates_from_formula as _covariates_from_formula
 from ._core import drop_unusable_rows as _drop_unusable_rows
@@ -42,6 +47,11 @@ from ._core import normalize_se_method as _normalize_se_method
 from ._core import parallel_trends_block as _pt_block
 from ._core import require_bool as _require_bool
 from ._core import weight_influence as _weight_influence
+
+#: Below this many treated clusters the cluster-robust and multiplier-
+#: bootstrap variances over-reject whatever the total cluster count
+#: (Conley-Taber 2011; Ferman-Pinto 2019). ``sp.audit`` uses the same cutoff.
+_FEW_TREATED_UNITS = 10
 
 
 class CallawayNotImplemented(MethodIncompatibility, NotImplementedError):
@@ -868,6 +878,23 @@ def callaway_santanna(
             stacklevel=2,
         )
 
+    # Few *treated* clusters: the cluster-robust / multiplier-bootstrap
+    # variance estimates the treated side's contribution from as many draws
+    # as there are treated clusters, so it over-rejects whatever the total
+    # cluster count (Conley-Taber 2011; Ferman-Pinto 2019).
+    _n_treated_units = int((unit_info[g] > 0).sum())
+    if _n_treated_units < _FEW_TREATED_UNITS:
+        warnings.warn(
+            f"callaway_santanna: only {_n_treated_units} treated units. The "
+            "analytic and multiplier-bootstrap standard errors estimate the "
+            "treated side's variance from that many draws and over-reject "
+            "however many control units there are. Report "
+            "sp.did_few_treated (Conley-Taber / Ferman-Pinto) or "
+            "sp.cs_jackknife (CV3) alongside.",
+            AssumptionWarning,
+            stacklevel=2,
+        )
+
     # 8. Build result
     model_info: Dict[str, Any] = {
         "estimator": estimator.upper(),
@@ -890,6 +917,9 @@ def callaway_santanna(
         "weights": weights,
         "weighted": weights is not None,
         "n_units": n_units,
+        # Treated *clusters*, not cohorts: what the few-treated-cluster
+        # literature counts (sp.did_few_treated, sp.cs_jackknife).
+        "n_treated_units": _n_treated_units,
         "n_periods": len(time_periods),
         "n_cohorts": len(cohorts),
         "cohorts": cohorts,
@@ -2243,32 +2273,52 @@ def _pretrend_test(
     else:
         V = np.diag(pre["se"].values ** 2)
 
-    # Regularise for numerical stability
-    V += np.eye(k) * 1e-10
-
-    try:
-        V_inv = np.linalg.inv(V)
-        W = float(theta @ V_inv @ theta)
-    except np.linalg.LinAlgError:
-        V_inv = np.linalg.pinv(V)
-        W = float(theta @ V_inv @ theta)
+    # The pre-treatment ATT(g, t) cells are linearly dependent by
+    # construction whenever the panel has more cells than independent
+    # long differences: under a universal base period every cell is a
+    # difference Y_t - Y_{g-1} of the same control-group means, and a cohort
+    # with a single unit contributes no treated-side variation at all.  On
+    # the castle-doctrine panel (50 states, 30 pre cells) V has rank 17.
+    # Ridge-regularising and inverting such a matrix returned a Wald
+    # statistic of order 1e9 -- a number, not a test.  Use the spectral
+    # pseudo-inverse instead: the statistic is the quadratic form on the
+    # non-null eigenspace and the degrees of freedom are the rank, which is
+    # what Stata's ``test`` does when it drops redundant constraints.
+    V = 0.5 * (V + V.T)
+    eigval, eigvec = np.linalg.eigh(V)
+    tol = (
+        max(float(np.max(np.abs(eigval))), 0.0) * max(k, 1) * np.finfo(float).eps * 1e3
+    )
+    nonnull = eigval > tol
+    rank = int(nonnull.sum())
+    if rank == 0:
+        return {"statistic": np.nan, "df": 0, "n_cells": k, "rank": 0, "pvalue": np.nan}
+    proj = eigvec[:, nonnull].T @ theta
+    W = float(np.sum(proj**2 / eigval[nonnull]))
 
     # The pre-period ATT(g,t) are strongly correlated (shared base period and
-    # control group), and V is *estimated*, so the plug-in chi²(k) Wald
+    # control group), and V is *estimated*, so the plug-in chi²(r) Wald
     # over-rejects in finite samples (≈0.14 at a nominal 5% level for ~60
     # units, vs the Callaway–Sant'Anna multiplier-bootstrap pre-test which is
     # correctly sized). Apply the Hotelling T² finite-sample correction:
-    #   F = W · (G − k) / (k · (G − 1))  ~  F(k, G − k)
+    #   F = W · (G − r) / (r · (G − 1))  ~  F(r, G − r)
     # which is exact under (asymptotically) normal influence functions and
-    # converges to chi²(k)/k as G → ∞. Falls back to chi² when G is unknown
-    # or too small relative to k.
-    if G is not None and G > k + 1:
-        f_stat = W * (G - k) / (k * (G - 1))
-        pvalue = float(stats.f.sf(f_stat, k, G - k))
+    # converges to chi²(r)/r as G → ∞. Falls back to chi² when G is unknown
+    # or too small relative to r.
+    if G is not None and G > rank + 1:
+        f_stat = W * (G - rank) / (rank * (G - 1))
+        pvalue = float(stats.f.sf(f_stat, rank, G - rank))
     else:
-        pvalue = float(stats.chi2.sf(W, k))
+        pvalue = float(stats.chi2.sf(W, rank))
 
-    return {"statistic": W, "df": k, "pvalue": pvalue}
+    return {
+        "statistic": W,
+        "df": rank,
+        "n_cells": k,
+        "rank": rank,
+        "rank_deficient": rank < k,
+        "pvalue": pvalue,
+    }
 
 
 # ======================================================================

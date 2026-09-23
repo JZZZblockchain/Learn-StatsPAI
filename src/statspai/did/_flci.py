@@ -52,7 +52,7 @@ Trends." *Review of Economic Studies*, 90(5), 2555-2591. [@rambachan2023more]
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 from scipy import optimize, special
@@ -82,37 +82,69 @@ def event_study_moments(result) -> Optional[tuple]:
     """
     inf_matrix = getattr(result, "_influence_funcs", None)
     detail = getattr(result, "detail", None)
-    if inf_matrix is None or detail is None:
+    model_info = getattr(result, "model_info", None) or {}
+
+    # 1. An ``aggte(type='dynamic')`` result already carries the joint
+    #    covariance of its event-time cells, built from the *corrected*
+    #    per-cell influence functions (cohort-share estimation term
+    #    included).  Read it directly so the FLCI sees exactly the object the
+    #    reported standard errors came from.
+    vcov = model_info.get("vcov")
+    if (
+        vcov is not None
+        and model_info.get("aggregation") == "dynamic"
+        and detail is not None
+        and {"relative_time", "att"}.issubset(set(detail.columns))
+    ):
+        sigma = np.asarray(vcov, dtype=float)
+        betahat = np.asarray(detail["att"], dtype=float)
+        times = np.asarray(detail["relative_time"], dtype=int)
+        if sigma.shape == (betahat.size, betahat.size) and betahat.size >= 2:
+            return betahat, sigma, times
         return None
-    required = {"group", "relative_time", "att"}
+
+    # 2. A raw Callaway-Sant'Anna fit: aggregate it to the dynamic event
+    #    study through ``aggte`` so the covariance carries the same
+    #    weight-estimation term as the reported event-study SEs.  Building
+    #    ``W Psi'Psi W'`` with fixed weights here would silently drop that
+    #    term -- the omission the ``mpdta`` reconciliation flagged as a
+    #    defect in the aggregate SE.
+    if inf_matrix is None or detail is None:
+        return _moments_from_other_estimators(result)
+    required = {"group", "time", "relative_time", "att", "se"}
     if not required.issubset(set(detail.columns)):
         return None
-
-    model_info = getattr(result, "model_info", None) or {}
-    n_units = model_info.get("n_units", getattr(result, "n_obs", None))
-    if not n_units:
-        return None
-
     try:
-        from .aggte import _weights_dynamic
+        from .aggte import aggte as _aggte
     except ImportError:  # pragma: no cover - internal layout guard
         return None
-
-    finite = np.isfinite(np.asarray(detail["att"], dtype=float))
-    if not finite.all():
-        detail = detail.loc[finite].reset_index(drop=True)
-        inf_matrix = inf_matrix[:, np.asarray(finite)]
-
-    labels, weights = _weights_dynamic(
-        detail, model_info.get("cohort_sizes"), -np.inf, np.inf
-    )
-    if weights.shape[0] < 2:
+    try:
+        dyn = _aggte(result, type="dynamic", bstrap=False, cband=False)
+    except Exception:  # noqa: BLE001 - caller falls back and says so
         return None
+    return event_study_moments(dyn)
 
-    betahat = weights @ np.asarray(detail["att"], dtype=float)
-    psi = np.asarray(inf_matrix, dtype=float) @ weights.T
-    sigma = (psi.T @ psi) / float(n_units) ** 2
-    return betahat, sigma, np.asarray(labels, dtype=int)
+
+def _moments_from_other_estimators(result: Any) -> Optional[tuple]:
+    """Joint event-study moments for estimators other than CS / aggte.
+
+    Delegates to :func:`statspai.did.es_inference.event_study_vcov` and
+    returns ``None`` unless a *joint* covariance is available: the FLCI
+    with a diagonal or block-diagonal matrix would silently understate the
+    correlation between pre- and post-period coefficients, so callers fall
+    back to their documented approximation instead.
+    """
+    try:
+        from .es_inference import event_study_vcov
+    except ImportError:  # pragma: no cover - internal layout guard
+        return None
+    try:
+        es = event_study_vcov(result, allow_diagonal=False)
+    except Exception:  # noqa: BLE001 - no event study: caller falls back
+        return None
+    if not es.joint or es.beta.size < 2:
+        return None
+    return es.beta, es.vcov, es.times
 
 
 class FLCIResult(NamedTuple):

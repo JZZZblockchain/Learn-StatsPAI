@@ -1695,6 +1695,19 @@ class CausalResult:
             "  publisher={Elsevier}\n"
             "}"
         ),
+        "cs_jackknife": (
+            "@misc{karim2026improved,\n"
+            "  title={Improved Inference for {CSDID} Using the Cluster "
+            "Jackknife},\n"
+            "  author={Karim, Sunny R. and Nielsen, Morten {\\O}rregaard "
+            "and MacKinnon, James G. and Webb, Matthew D.},\n"
+            "  year={2026},\n"
+            "  eprint={2602.12043},\n"
+            "  archivePrefix={arXiv},\n"
+            "  primaryClass={econ.EM},\n"
+            "  note={arXiv preprint, first posted 2026-02-12}\n"
+            "}"
+        ),
         "sun_abraham": (
             "@article{sun2021estimating,\n"
             "  title={Estimating dynamic treatment effects in event studies "

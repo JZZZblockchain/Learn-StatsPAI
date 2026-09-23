@@ -1181,6 +1181,14 @@ def _build_registry() -> None:
                     remedy="Use wild cluster bootstrap (sp.wild_cluster_bootstrap).",
                     alternative="sp.wild_cluster_bootstrap",
                 ),
+                FailureMode(
+                    symptom="Few *treated* clusters (one or a handful)",
+                    exception="AssumptionWarning",
+                    remedy="Cluster-robust SEs over-reject whatever the total "
+                    "cluster count; use sp.did_few_treated (Conley-Taber / "
+                    "Ferman-Pinto) or sp.cs_jackknife (CV3).",
+                    alternative="sp.did_few_treated",
+                ),
             ],
             alternatives=[
                 "callaway_santanna",
@@ -7870,10 +7878,12 @@ def _build_registry() -> None:
             name="gardner_did",
             category="causal",
             description=(
-                "Gardner (2021) two-stage DID. Stage-1 fits two-way FEs on "
+                "Gardner (2022) two-stage DID. Stage-1 fits two-way FEs on "
                 "untreated observations; Stage-2 regresses the residualised "
-                "outcome on treatment dummies (ATT or event study). Numerically "
-                "close to Borusyak-Jaravel-Spiess imputation with unit-clustered SEs."
+                "outcome on treatment dummies (ATT or event study). Standard "
+                "errors are the Butts-Gardner two-stage corrected clustered "
+                "variance (R/Stata did2s), reproduced to ~1e-8 on castle-doctrine; "
+                "weights= gives did2s(weights=) / [aw=]."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -7930,6 +7940,14 @@ def _build_registry() -> None:
                     "boot_seed", "int", False, None, "Seed for the cluster bootstrap"
                 ),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Strictly positive estimation weights for both stages "
+                    "(R did2s weights= / Stata [aw=])",
+                ),
             ],
             returns="CausalResult",
             example='sp.gardner_did(df, y="wage", group="county", time="year", first_treat="first_treat", event_study=True)',
@@ -11821,13 +11839,25 @@ def _build_registry() -> None:
                     "project(); mutually exclusive with hetby.",
                 ),
                 ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Estimation weights omega (Stata did_imputation [aw=], R "
+                    "didimputation wname=): weighted least squares in the "
+                    "untreated Y(0) model, omega-weighted averages over "
+                    "treated cells, exact variance with the weighted "
+                    "projection. Changes the estimand, not the precision. "
+                    "Not combinable with project.",
+                ),
+                ParamSpec(
                     "vce",
                     "str",
                     False,
                     "analytic",
                     "Standard-error mode for the overall ATT. 'analytic' is "
-                    "fast but anti-conservative (~0.87 coverage); "
-                    "'bootstrap' resamples clusters.",
+                    "the exact BJS variance (reproduces Stata did_imputation "
+                    "and R didimputation); 'bootstrap' resamples clusters.",
                     ["analytic", "bootstrap"],
                 ),
                 ParamSpec(
@@ -12360,6 +12390,34 @@ def _build_registry() -> None:
                     "cgroup='notyet', and no xvar.",
                     ["gaussian", "poisson", "logit", "binomial"],
                 ),
+                ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Column of non-negative observation weights. The "
+                    "cohort-by-period regression becomes weighted least "
+                    "squares with R fixest weights= / Stata reghdfe [pw=] "
+                    "semantics (zero-weight rows are dropped, NaN or negative "
+                    "weights raise), keeping the unweighted fit's "
+                    "cluster-robust small-sample convention. Not available "
+                    "with xvar or family='poisson'/'logit'.",
+                ),
+                ParamSpec(
+                    "agg_weights",
+                    "str",
+                    False,
+                    "estimation",
+                    "How cohort-by-period cells enter the emfx aggregates "
+                    "when weights= is set (the rules coincide otherwise). "
+                    "'estimation' (Stata jwdid, estat): each cell weighted by "
+                    "the sum of the estimation weights over its treated "
+                    "observations, so the never-treated simple aggregate "
+                    "equals the weighted Callaway-Sant'Anna simple ATT. "
+                    "'unit' (R etwfe::emfx): one unit weight per treated "
+                    "observation, estimation weights enter the regression only.",
+                    ["estimation", "unit"],
+                ),
             ],
             returns="CausalResult",
             example='sp.etwfe(df, y="y", group="i", time="t", first_treat="g")',
@@ -12386,6 +12444,8 @@ def _build_registry() -> None:
                 "family='poisson'/'logit' reports an average marginal effect "
                 "on the response scale (counts / probability) rather than a "
                 "link-scale coefficient — the R etwfe::emfx convention",
+                "weights= is not yet supported together with xvar or with "
+                "family='poisson'/'logit'; both combinations raise",
             ],
         )
     )
@@ -12964,11 +13024,12 @@ def _build_registry() -> None:
             name="did_misclassified",
             category="causal",
             description=(
-                "Staggered DiD robust to treatment-timing misclassification "
-                "and anticipation. Adjusts the CS-style aggregation for a "
-                "user-supplied misclassification probability pi_misclass and "
-                "a known anticipation horizon. Use when first-treat dates "
-                "are noisy (e.g., survey-reported)."
+                "Heuristic what-if adjustment of a staggered DiD for a "
+                "user-supplied timing-misclassification probability "
+                "pi_misclass and anticipation horizon. A sensitivity check "
+                "motivated by Augustin-Gutknecht-Liu (2025), not their "
+                "estimator: it does not identify misclassification or "
+                "anticipation from the data."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -13027,10 +13088,13 @@ def _build_registry() -> None:
                 "docs/rfc/multiplegt_dyn.md). At each horizon l ∈ {-placebo, "
                 "..., dynamic}, compares Y_{F+l} − Y_{F-1} between units "
                 "first switching at F and a not-yet-treated or never-treated "
-                "control set held stable across the horizon. **MVP caveats**: "
-                "analytical influence-function variance [待核验] is not yet "
-                "implemented (SE via cluster bootstrap); switch-off events "
-                "are ignored; heteroskedastic-weights variant pending."
+                "control set held stable across the horizon. Effects, "
+                "placebos, switcher counts, the switcher-weighted aggregate "
+                "and the analytic (se_method='analytic') standard errors are "
+                "pinned to the authors' DIDmultiplegtDYN / Stata "
+                "did_multiplegt_dyn; weight= is supported. **MVP caveats**: "
+                "no controls=, trends or normalized/continuous options; "
+                "heteroskedastic-weights variant pending."
             ),
             params=[
                 ParamSpec("data", "DataFrame", True),
@@ -13068,7 +13132,10 @@ def _build_registry() -> None:
                     "treatment",
                     "str",
                     True,
-                    description="Binary treatment (0/1), switch-on only in MVP",
+                    description=(
+                        "Binary treatment (0/1); switch-on and switch-off "
+                        "events both count, see switchers="
+                    ),
                 ),
                 ParamSpec(
                     "placebo",
@@ -13076,6 +13143,17 @@ def _build_registry() -> None:
                     False,
                     0,
                     "Number of pre-treatment placebo horizons",
+                ),
+                ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Observation weights (Stata did_multiplegt_dyn weight(), "
+                    "R weight=, both accepted as the alias weight=): read at "
+                    "the row a unit contributes from; "
+                    "switcher means, control means, cohort weights and the "
+                    "switchers aggregation all become weighted.",
                 ),
                 ParamSpec(
                     "dynamic",
@@ -13144,20 +13222,23 @@ def _build_registry() -> None:
             reference=(
                 "de Chaisemartin & D'Haultfœuille (2024) "
                 "[@dechaisemartin2024difference]; DOI "
-                "10.1162/rest_a_01414. Effects, placebos and the "
-                "switcher-weighted aggregate are pinned against the authors' "
-                "DIDmultiplegtDYN on absorbing binary treatment (Track A "
-                "module 78); switch-off handling and the analytical IF "
-                "variance are still missing."
+                "10.1162/rest_a_01414. Effects, placebos, the "
+                "switcher-weighted aggregate and the analytic "
+                "influence-function SEs are pinned against the authors' "
+                "DIDmultiplegtDYN and Stata did_multiplegt_dyn on absorbing "
+                "and switch-off designs (Track A module 78) and on the "
+                "castle-doctrine panel with and without weights "
+                "(tests/test_did_multiplegt_dyn_castle_reference.py)."
             ),
             stability="experimental",
             limitations=[
                 "switch-off events are handled, but the "
                 "heteroskedastic-weights variant (dCDH 2023 EJ survey) is "
                 "not implemented",
-                "se_method='analytic' is available but the paper's own "
-                "variance formula is not implemented: it is not pinned to "
-                "DIDmultiplegtDYN and runs about 1% below its reported SEs",
+                "se_method='analytic' reproduces DIDmultiplegtDYN's variance "
+                "only for the options implemented here: controls=, trends and "
+                "normalized/continuous variants are not implemented, and the "
+                "joint placebo/overall tests come from the bootstrap only",
                 "the headline aggregation convention differs from "
                 "DIDmultiplegtDYN's Av_tot_eff: the default weights horizons "
                 "equally; pass aggregation='switchers' to match the R package",
@@ -13172,7 +13253,8 @@ def _build_registry() -> None:
                 "No anticipation prior to F",
                 "Stable control treatment across horizon window",
                 "SUTVA",
-                "[待核验] MVP omits the paper's analytical IF variance",
+                "Analytic SEs are the authors' U_Gg influence-function "
+                "variance clustered at `cluster` (default: group)",
             ],
             failure_modes=[
                 FailureMode(
@@ -14291,6 +14373,326 @@ def _build_registry() -> None:
             ],
             alternatives=["callaway_santanna", "sun_abraham", "did_imputation"],
             typical_n_min=50,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="did_few_treated",
+            category="causal",
+            description=(
+                "Conley-Taber (2011) and Ferman-Pinto (2019) inference for a "
+                "DiD with few treated groups: the placebo distribution of the "
+                "coefficient is read off the control groups, the interval is "
+                "inverted from it, and Ferman-Pinto rescales the draws for "
+                "the heteroskedasticity unequal group sizes generate. Use "
+                "when one or a handful of clusters are treated, where the "
+                "cluster-robust variance over-rejects badly."
+            ),
+            params=[
+                ParamSpec(
+                    "data", "DataFrame", True, description="Group-by-period panel"
+                ),
+                ParamSpec("y", "str", True, description="Outcome column"),
+                ParamSpec("id", "str", True, description="Group identifier"),
+                ParamSpec("time", "str", True, description="Period column"),
+                ParamSpec(
+                    "treat",
+                    "str",
+                    True,
+                    description="0/1 treatment by group and period",
+                ),
+                ParamSpec(
+                    "method",
+                    "str",
+                    False,
+                    "conley_taber",
+                    "Placebo construction",
+                    ["conley_taber", "ferman_pinto"],
+                ),
+                ParamSpec(
+                    "covariates", "list", False, None, "Covariates partialled out"
+                ),
+                ParamSpec(
+                    "group_size",
+                    "str",
+                    False,
+                    None,
+                    "Observations behind each cell (required by ferman_pinto)",
+                ),
+                ParamSpec(
+                    "alpha", "float", False, 0.05, "One minus the confidence level"
+                ),
+                ParamSpec("null_value", "float", False, 0.0, "Null the p-value tests"),
+                ParamSpec(
+                    "max_draws",
+                    "int",
+                    False,
+                    10000,
+                    "Cap on control-group combinations",
+                ),
+                ParamSpec("seed", "int", False, 0, "Seed for random combinations"),
+            ],
+            returns="CausalResult (inverted interval; detail = the placebo draws)",
+            example=(
+                'sp.did_few_treated(df, y="y", id="state", time="year", '
+                'treat="policy", method="ferman_pinto", group_size="n")'
+            ),
+            tags=["did", "inference", "few_clusters", "placebo", "causal"],
+            reference=(
+                "Conley & Taber (2011) REStat [@conley2011inference]; "
+                "Ferman & Pinto (2019) REStat [@ferman2019inference]"
+            ),
+            pre_conditions=[
+                "one row per (unit, time); collapse individual data first",
+                "many control groups (at least ten; the asymptotics are in "
+                "their number)",
+            ],
+            assumptions=[
+                "Group-level errors are independent across groups",
+                "Conley-Taber: identically distributed across groups; "
+                "Ferman-Pinto relaxes this to Var(W) = A + B / M",
+                "The point estimate is not consistent with a fixed number of "
+                "treated groups",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="Fewer than ten control groups",
+                    exception="statspai.DataInsufficient",
+                    remedy="Use wild cluster bootstrap or a design with more "
+                    "treated clusters.",
+                    alternative="wild_cluster_bootstrap",
+                ),
+                FailureMode(
+                    symptom="ferman_pinto without group_size",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Pass the cell counts, or use method='conley_taber'.",
+                    alternative="did_few_treated",
+                ),
+            ],
+            alternatives=[
+                "wild_cluster_bootstrap",
+                "cs_jackknife",
+                "cluster_robust_se",
+            ],
+            typical_n_min=100,
+            validation_notes=[
+                "tests/test_did_few_treated.py: with one treated group and AR(1) "
+                "errors the cluster-robust test rejects a true null 74% of the "
+                "time at nominal 5% while Conley-Taber rejects 3%; under the "
+                "Ferman-Pinto heteroskedasticity structure with a small treated "
+                "group Conley-Taber rejects 18% at nominal 10% and Ferman-Pinto "
+                "13.5%. The statistic is also reconstructed from a hand-built "
+                "two-way demeaning."
+            ],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="event_study_vcov",
+            category="causal",
+            description=(
+                "Event-study coefficients and their joint covariance from any "
+                "DiD event-study fit (callaway_santanna/aggte, event_study, "
+                "sun_abraham, gardner_did, did_imputation, stacked_did, "
+                "lp_did, did_multiplegt_dyn, etwfe). Feeds uniform bands and "
+                "HonestDiD; flags joint=False when only diagonal or block-"
+                "diagonal covariance exists."
+            ),
+            params=[
+                ParamSpec(
+                    "result",
+                    "CausalResult",
+                    True,
+                    description="Fitted event-study estimator",
+                ),
+                ParamSpec(
+                    "allow_diagonal",
+                    "bool",
+                    False,
+                    True,
+                    "Fall back to diag(se^2) with a warning when no joint "
+                    "covariance exists",
+                ),
+            ],
+            returns="EventStudyVcov(times, beta, vcov, joint, source, note)",
+            example="sp.event_study_vcov(sp.sun_abraham(df, y='lemp', "
+            "g='first_treat', t='year', i='countyreal'))",
+            tags=["did", "event_study", "inference", "vcov", "honest_did"],
+            reference="Rambachan & Roth (2023) [@rambachan2023more]",
+            alternatives=["uniform_bands", "honest_did"],
+            validation_notes=[
+                "tests/test_es_inference.py: the diagonal reproduces every estimator's "
+                "reported SEs to 1e-12; cross-horizon blocks checked against a "
+                "cluster bootstrap"
+            ],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="uniform_bands",
+            category="causal",
+            description=(
+                "Sup-t simultaneous confidence band for an event study from any "
+                "DiD estimator: critical value = 1-alpha quantile of max|Z| with "
+                "Z ~ N(0, R), R the correlation of the covered coefficients. "
+                "Falls back to the conservative Sidak value when the estimator "
+                "exposes no joint covariance."
+            ),
+            params=[
+                ParamSpec(
+                    "result",
+                    "CausalResult",
+                    True,
+                    description="Fitted event-study estimator",
+                ),
+                ParamSpec(
+                    "alpha", "float", False, 0.05, "One minus simultaneous coverage"
+                ),
+                ParamSpec(
+                    "which",
+                    "str",
+                    False,
+                    "all",
+                    "Event times covered jointly",
+                    ["all", "post", "pre"],
+                ),
+                ParamSpec(
+                    "window",
+                    "tuple",
+                    False,
+                    None,
+                    "Restrict covered event times to lo <= k <= hi",
+                ),
+                ParamSpec(
+                    "n_draws",
+                    "int",
+                    False,
+                    100000,
+                    "Gaussian draws for the critical value",
+                ),
+                ParamSpec("seed", "int", False, 0, "Seed for the draws"),
+            ],
+            returns="DataFrame with pointwise ci_* and simultaneous cband_*; "
+            "attrs carry crit values",
+            example="sp.uniform_bands(fit, which='post')",
+            tags=["did", "event_study", "inference", "uniform_band", "sup_t"],
+            reference=(
+                "Montiel Olea & Plagborg-Moller (2019) [@olea2019simultaneous]; "
+                "Callaway & Sant'Anna (2021) [@callaway2021difference]"
+            ),
+            alternatives=["aggte", "event_study_vcov"],
+            validation_notes=[
+                "tests/test_es_inference.py: Sidak identity under independence, "
+                "matches aggte(cband=True) critical value within Monte Carlo error, "
+                "simultaneous coverage ~ 1-alpha in simulation"
+            ],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="cs_jackknife",
+            category="causal",
+            description=(
+                "Delete-one-cluster jackknife (CV3) standard error for a "
+                "Callaway-Sant'Anna aggregate: drop each cluster, re-estimate "
+                "every ATT(g,t) and the cohort shares, re-aggregate, and "
+                "report (R-1)/R * sum (ATT_(-h) - ATT)^2 with t(R-1) "
+                "inference.  The few-cluster / few-treated-cluster "
+                "alternative to the analytic and multiplier-bootstrap SEs, "
+                "matching R didjack and Stata csdidjack."
+            ),
+            params=[
+                ParamSpec("data", "DataFrame", True, description="Balanced long panel"),
+                ParamSpec("y", "str", True, description="Outcome column"),
+                ParamSpec(
+                    "g",
+                    "str",
+                    True,
+                    description="First-treatment period (0 = never treated)",
+                ),
+                ParamSpec("time", "str", True, description="Time column"),
+                ParamSpec("id", "str", True, description="Unit column"),
+                ParamSpec(
+                    "type",
+                    "str",
+                    False,
+                    "simple",
+                    "Aggregation whose overall summary is jackknifed",
+                    ["simple", "dynamic", "group", "calendar"],
+                ),
+                ParamSpec(
+                    "cluster",
+                    "str",
+                    False,
+                    None,
+                    "Time-invariant cluster variable; defaults to the unit",
+                ),
+                ParamSpec(
+                    "alpha", "float", False, 0.05, "Level of the t(R-1) interval"
+                ),
+            ],
+            returns="CausalResult (se = CV3; detail = one row per delete-one "
+            "replicate)",
+            example=(
+                'sp.cs_jackknife(df, y="y", g="g", time="year", id="state", '
+                'type="simple", control_group="nevertreated", estimator="reg")'
+            ),
+            tags=[
+                "did",
+                "callaway_santanna",
+                "jackknife",
+                "few_clusters",
+                "inference",
+                "causal",
+            ],
+            reference=(
+                "Karim, Nielsen, MacKinnon & Webb (2026) arXiv:2602.12043 "
+                "[@karim2026improved]; Callaway & Sant'Anna (2021) JoE "
+                "[@callaway2021difference]"
+            ),
+            pre_conditions=[
+                "every delete-one-cluster sample still identifies the "
+                "requested aggregate",
+                "cluster membership is constant within unit",
+            ],
+            assumptions=[
+                "Same identifying assumptions as callaway_santanna (parallel "
+                "trends, no anticipation, SUTVA)",
+                "Clusters are independent; inference uses t with R-1 degrees "
+                "of freedom",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="Deleting one cluster removes the only "
+                    "never-treated or not-yet-treated comparison",
+                    exception="statspai.DataInsufficient",
+                    remedy="Report the analytic or bootstrap SE and state that "
+                    "the jackknife is undefined on this design.",
+                    alternative="aggte",
+                ),
+                FailureMode(
+                    symptom="Inference options (bstrap, cband, se_method) "
+                    "passed through",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Drop them; the jackknife is the inference.",
+                    alternative="",
+                ),
+            ],
+            alternatives=["aggte", "callaway_santanna", "wild_cluster_bootstrap"],
+            typical_n_min=50,
+            validation_notes=[
+                "Reference parity: tests/test_cs_jackknife_reference.py pins R "
+                "didjack 0.1.0 "
+                "(16 aggregates) and Stata csdidjack 0.5.2 (12 aggregates) on "
+                "the locked "
+                "castle-doctrine panel, every SE and delete-one replicate at rel 1e-10 "
+                "(observed ~4e-15)",
+                "Definition and failure modes: tests/test_cs_jackknife.py",
+            ],
         )
     )
 
@@ -16249,7 +16651,17 @@ _CERTIFIED_VARIANT_LIMITATIONS: Dict[str, Dict[str, List[str]]] = {
             "both comparison groups by module 17_etwfe. They were read off "
             "an unsaturated cohort x post regression through 1.26.0 and were "
             "wrong by up to 37%; see the 1.27.0 CHANGELOG correctness entry. "
-            "The pooled ATT is unchanged.",
+            "The pooled ATT is unchanged. "
+            "weights= is pinned on the castle-doctrine and no-fault-divorce "
+            "panels: estimates under agg_weights='estimation' reproduce "
+            "Stata jwdid [pw=] + estat (simple / event / group / calendar) "
+            "to ~1e-12 and the never-treated simple aggregate equals the "
+            "weighted Callaway-Sant'Anna simple ATT to 1e-14; "
+            "agg_weights='unit' reproduces R etwfe::emfx with weights= to "
+            "~1e-12 (SEs to ~3e-6, marginaleffects' numerical Jacobian). "
+            "Stata SEs differ from R/StatsPAI only by the documented "
+            "sqrt((n - K_R) / (n - K_Stata)) degrees-of-freedom factor "
+            "(tests/test_etwfe_weights_reference.py).",
         ],
     },
 }

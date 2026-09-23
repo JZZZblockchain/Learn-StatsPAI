@@ -6,11 +6,11 @@
       "module": "83_lpdid",
       "side": "py",
       "statistic": "lpdid_h-2_att",
-      "estimate": 0.021281799524604073,
-      "se": 0.07521997777868647,
+      "estimate": 0.021281799524603073,
+      "se": 0.07519028272342658,
       "ci_lo": null,
       "ci_hi": null,
-      "n": 790,
+      "n": 990,
       "extra": {}
     },
     {

@@ -1424,6 +1424,24 @@ cannot quietly return.
 
 <a id="forest-continuous-treatment-ate"></a>
 
+## unreleased — ⚠️ `etwfe_emfx(type='event'|'calendar')` headline excludes leads and has an SE {#etwfe-emfx-event-headline}
+
+**Affects:** `.estimate`, `.se`, `.pvalue`, `.ci` of `sp.etwfe_emfx(..., type='event')` and `type='calendar'`. The per-row `detail` table is unchanged.
+
+**What changed.** The headline was the unweighted mean of all reported rows; with `include_leads=True` that averaged placebo leads into a treatment effect. It is now the mean of the post-treatment event-time rows (all rows for `'calendar'`), and its SE is the delta method through the rows' joint covariance (`model_info['vcov']`) instead of `NaN`.
+
+**To reproduce the old point estimate:** `r.detail['estimate'].mean()`.
+
+## `lp_did` pre-treatment leads: clean-control window now matches Stata `lpdid` {#lp-did-lead-window}
+
+**Since:** unreleased (after 1.25.1). **Affects:** only the leads `h < 0` of `sp.lp_did` (`model_info['event_study']` rows with `relative_time < 0`) and the pooled pre window `model_info['pooled']['pre']`; post-treatment horizons and the pooled post window are unchanged.
+
+**What changed.** A control observation at lead `h` was required to be untreated over `[t+h-1, t-1]`; it is now required over `[t+h, t-1]`, the periods whose outcomes enter `Y_{t+h} - Y_{t-1}`, which is the rule of Stata `lpdid` (`CCS_m<h> = CCS_0`). The old rule discarded the earliest observable calendar year at every lead.
+
+**Size.** On the castle-doctrine panel the lead standard errors move by 3e-4 to 1.2e-3 at leads -2 to -4 and the lead -5 estimate by 6 percent; on the no-fault-divorce panel by 2e-3 to 7e-3 and 14 percent. The new numbers match `lpdid` to 1e-7 on both panels with identical per-lead sample sizes.
+
+**To keep the old numbers:** there is no switch; the old window was a defect (a stricter sample than the estimator's definition), not a convention.
+
 ## 1.25.0 — ⚠️ Causal-forest ATE/ATT no longer report an AIPW score for a continuous treatment
 
 **Who is affected.** Callers of `CausalForest.ate()`, `.att()`, or

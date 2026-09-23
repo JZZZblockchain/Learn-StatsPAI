@@ -33,7 +33,7 @@ Mammen, E. (1993).
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -396,6 +396,27 @@ def aggte(
         overall_est + z_point * overall_se,
     )
 
+    # Joint covariance of the reported cells. Built from the same corrected
+    # per-cell influence functions as every standard error above, so a
+    # downstream joint test (pre-trend Wald), sensitivity analysis
+    # (honest DiD FLCI) or power calculation (Roth 2022) reads the object the
+    # reported SEs came from rather than a diagonal approximation of it.
+    # R ``did`` exposes the same thing as ``aggte(...)$inf.function``.
+    labels_arr = np.asarray(labels)
+    if psi_cells is not None:
+        vcov_cells = psi_cells.T @ psi_cells / float(n_units) ** 2
+        vcov_source = "influence_functions"
+    else:
+        vcov_cells = np.diag(np.asarray(se_cells, dtype=float) ** 2)
+        vcov_source = "diagonal_fallback"
+    vcv_pre = None
+    pre_event_times = None
+    if type == "dynamic":
+        pre_idx = np.where(labels_arr.astype(float) < 0)[0]
+        if pre_idx.size:
+            vcv_pre = vcov_cells[np.ix_(pre_idx, pre_idx)]
+            pre_event_times = [int(e) for e in labels_arr[pre_idx]]
+
     agg_info = {
         "aggregation": type,
         "balance_e": balance_e,
@@ -407,6 +428,12 @@ def aggte(
         "crit_val_uniform": float(crit_unif),
         "n_units": n_units,
         "overall_influence_function": overall_inf,
+        "influence_functions": psi_cells,
+        "vcov": vcov_cells,
+        "vcov_source": vcov_source,
+        "cell_labels": _plain_labels(labels_arr),
+        "vcv_pre": vcv_pre,
+        "pre_event_times": pre_event_times,
         "source_method": result.method,
         "share_variance": bool(share_variance),
     }
@@ -623,6 +650,19 @@ def _analytic_se_influence(
     """
     psi = inf_matrix @ W.T  # (n_units, K)
     return _se_from_influence(psi, n_units)
+
+
+def _plain_labels(labels: np.ndarray) -> List[Any]:
+    """Cell labels as JSON-friendly Python scalars (``'overall'`` stays a str)."""
+    out: List[Any] = []
+    for x in labels:
+        try:
+            f = float(x)
+        except (TypeError, ValueError):
+            out.append(str(x))
+            continue
+        out.append(int(f) if f.is_integer() else f)
+    return out
 
 
 def _se_from_influence(psi: np.ndarray, n_units: int) -> np.ndarray:

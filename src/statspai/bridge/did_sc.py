@@ -1,9 +1,16 @@
 """
-Bridge: DiD ≡ Synthetic Control (Sun, Xie & Zhang 2025, arXiv 2503.11375).
+Bridge: compare a 2x2 DiD with a synthetic control on one treated unit.
 
-Identifies the ATT under either parallel trends (DiD) or the SC
-factor-model condition. Both paths target the same ATT; agreement
-implies the doubly-robust estimate is well-defined.
+Motivated by Sun, Xie & Zhang (2025, arXiv 2503.11375), who show that
+DiD and SC can be combined into a doubly robust estimator identified
+under *either* parallel trends *or* the SC condition. This bridge is a
+heuristic diagnostic in that spirit, **not** their estimator: it fits the
+two paths separately (cell-mean 2x2 DiD with a unit bootstrap SE;
+classic SCM with a donor-placebo SE), tests their agreement, and reports
+an inverse-variance combination. That combination has no double
+robustness guarantee -- if only one of the two identifying conditions
+holds, the combined number inherits the other path's bias in proportion
+to its precision weight. Read the agreement test, not the combination.
 """
 
 from __future__ import annotations

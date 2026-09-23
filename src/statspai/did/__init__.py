@@ -49,6 +49,7 @@ from .cgs_continuous import ContinuousDoseResult, cgs_continuous_did
 from .cic import cic
 from .cohort_anchored import cohort_anchored_event_study
 from .continuous_did import continuous_did
+from .cs_jackknife import cs_jackknife
 from .ddd import ddd
 from .design_audit import (
     DiDClusterDiagnostics,
@@ -67,7 +68,9 @@ from .es_convention import (
     compare_event_study_conventions,
     event_study_convention,
 )
+from .es_inference import event_study_vcov, uniform_bands
 from .event_study import event_study
+from .few_treated import did_few_treated
 from .functional_form import (
     DistributionalDiDResult,
     FunctionalFormResult,
@@ -904,6 +907,10 @@ __all__ = [
     "ddd",
     "callaway_santanna",
     "aggte",
+    "cs_jackknife",
+    "did_few_treated",
+    "event_study_vcov",
+    "uniform_bands",
     "influence_functions",
     "aggte_from_influence",
     "cs_report",

@@ -107,6 +107,15 @@ _COX_PH_ALPHA = 0.05
 #: remedy. 30 is the conservative end of the common 30-50 rule of thumb.
 _FEW_CLUSTERS_MIN = 30
 
+#: Few *treated* clusters. The cluster-robust variance estimates the treated
+#: side's contribution from as many draws as there are treated clusters, so
+#: the over-rejection is governed by that count and not by the total (Conley
+#: and Taber 2011; Ferman and Pinto 2019). Ten is the point below which the
+#: placebo-distribution methods of ``sp.did_few_treated`` are the safer
+#: report; with one treated cluster the CRVE rejects a true null most of the
+#: time whatever the number of controls.
+_FEW_TREATED_MIN = 10
+
 #: Synthetic-control pre-fit quality: pre-treatment RMSPE divided by the
 #: pre-period SD of the treated outcome. Deliberately conservative (0.6 ⇒ the
 #: synthetic unit explains < ~64% of pre-period variance) so it clears the

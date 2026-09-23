@@ -850,8 +850,16 @@ def test_gardner_event_study_cohort_never_reaches_treatment():
 
 
 def test_gardner_single_cluster_paths():
+    # The did2s two-stage cluster sum over a single cluster is identically
+    # zero (both stages' normal equations), so the analytic path refuses
+    # rather than reporting a floating-point-noise SE; vce='none' still
+    # returns the point estimate with NaN inference.
     df = _gardner_panel()
     df["one"] = 1
+    with pytest.raises(ValueError, match="at least two clusters"):
+        sp.gardner_did(
+            df, y="y", group="unit", time="time", first_treat="g", cluster="one"
+        )
     r = sp.gardner_did(
         df,
         y="y",
@@ -862,7 +870,7 @@ def test_gardner_single_cluster_paths():
         vce="none",
     )
     assert abs(r.estimate - 2.0) < 0.4
-    assert r.se > 0  # G=1 → dof correction falls back to 1.0, SE still finite
+    assert np.isnan(r.se) and np.isnan(r.pvalue)
     r_es = sp.gardner_did(
         df,
         y="y",
@@ -873,9 +881,9 @@ def test_gardner_single_cluster_paths():
         event_study=True,
         vce="none",
     )
-    # single-cluster bins use the plain std-error-of-the-mean fallback
     assert np.isfinite(r_es.estimate)
     assert r_es.estimate == pytest.approx(r.estimate, abs=0.3)
+    assert all(np.isnan(v) for v in r_es.model_info["event_study"]["se"].values())
 
 
 def test_gardner_bootstrap_event_study():

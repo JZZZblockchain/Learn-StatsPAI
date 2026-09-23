@@ -79,7 +79,13 @@ _SE_RTOL = 1e-7
 # The default share_variance=True adds a positive semi-definite term at
 # multi-cohort relative times; on this fixture it is at most 0.76%
 # (unweighted) / 2.2% (weighted) of the SE.
-_SHARE_TERM_CEIL = {False: 1e-2, True: 2.5e-2}
+# Under omega the share term is the weighted share regression's robust sandwich (the
+# eventstudyinteract construction, reproduced to 2.3e-7 on the castle-doctrine panel);
+# on
+# this fixture it reaches 5.7 percent of the fixed-share SE at e = -3, so the ceiling
+# is a
+# loose sanity bound, not a parity tolerance.
+_SHARE_TERM_CEIL = {False: 1e-2, True: 1e-1}
 
 
 @pytest.fixture(scope="module")

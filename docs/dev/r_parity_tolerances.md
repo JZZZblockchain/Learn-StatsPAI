@@ -371,9 +371,12 @@ items follow.
    on *every* R-joined SE row of every PASS module (all 87 pass), and
    `test_every_stata_se_row_is_inside_budget_or_registered` requires any
    Stata SE row over budget to carry a mechanism in
-   `compare.py::STATA_SE_GAP_NOTES` (three entries: `04_csdid`
+   `compare.py::STATA_SE_GAP_NOTES` (two entries: `04_csdid`
    `group_overall` 0.27%, fixed-share aggregation; `71_dml_family`
-   PLIV, `ivreg`'s `N/(N-K)`; `83_lpdid` horizons, `reghdfe`'s K).
+   PLIV, `ivreg`'s `N/(N-K)`. The `83_lpdid` lead-row entry, 3.9e-4 and
+   attributed to `reghdfe`'s K, was removed on 2026-09-07: the gap was a
+   StatsPAI lead-sample rule one period stricter than `lpdid`'s, and the
+   rows now agree to 2e-16).
 8. ~~**`04_csdid` `group_overall` Stata SE (0.27%) — open.**~~ **Closed
    (2026-09-05).** `csdid`'s `estat group` GAverage aggregates the
    per-cohort influence functions with the cohort shares held fixed;

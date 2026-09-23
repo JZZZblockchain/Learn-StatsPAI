@@ -114,6 +114,30 @@ cs = sp.callaway_santanna(
 es = sp.aggte(cs, type='dynamic')   # inherits the clustering automatically
 ```
 
+### Few clusters: the cluster jackknife
+
+The analytic influence-function SE and the multiplier bootstrap rest on the
+same asymptotics, and both over-reject when there are few clusters or few
+treated clusters [@karim2026improved]. `sp.cs_jackknife` deletes one cluster
+at a time, refits every ATT(g, t) and the cohort shares, re-aggregates, and
+reports the CV3 standard error with `t(R-1)` inference — the computation of
+R `didjack` and Stata `csdidjack`:
+
+```python
+jk = sp.cs_jackknife(
+    df, y='y', g='first_treat', t='year', i='id',
+    type='simple', control_group='nevertreated', estimator='reg',
+)
+jk.se, jk.ci, jk.model_info['df']          # CV3 SE, t(R-1) interval, R-1
+jk.model_info['analytic_se']               # the influence-function SE, for comparison
+jk.detail                                  # one row per deleted cluster
+```
+
+Every `callaway_santanna` argument except the inference options passes
+through. If deleting some cluster leaves the aggregate unidentified (the only
+never-treated unit, a cohort carried by one cluster), the call raises and names
+that cluster instead of quietly dropping the replicate.
+
 ## Migrating from Stata `csdid`
 
 The option names do **not** line up, and two of the mismatches change
@@ -264,6 +288,7 @@ event time — call [`cs_report()`](cs_report.md).
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.sun_abraham`

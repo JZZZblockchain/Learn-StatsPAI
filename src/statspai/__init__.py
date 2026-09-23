@@ -115,6 +115,7 @@ from .did import (
     cohort_anchored_event_study,
     cohort_event_study_plot,
     compare_event_study_conventions,
+    cs_jackknife,
     cs_report,
     ddd,
     design_robust_event_study,
@@ -126,6 +127,7 @@ from .did import (
     did_bcf,
     did_cluster_diagnostics,
     did_design_contract,
+    did_few_treated,
     did_forest,
     did_imputation,
     did_misclassified,
@@ -144,6 +146,7 @@ from .did import (
     etwfe_emfx,
     event_study,
     event_study_convention,
+    event_study_vcov,
     functional_form_test,
     gardner_did,
     ggdid,
@@ -170,6 +173,7 @@ from .did import (
     sun_abraham,
     treatment_rollout_plot,
     twfe_decomposition,
+    uniform_bands,
     wooldridge_did,
 )
 from .dml import (  # v1.7 long-panel DML; v1.13 DML-OVB sensitivity + diagnostics
@@ -2027,6 +2031,10 @@ __all__ = [
     "shapley_inequality",
     # Panel / DID extras
     "aggte",
+    "cs_jackknife",
+    "did_few_treated",
+    "event_study_vcov",
+    "uniform_bands",
     "influence_functions",
     "aggte_from_influence",
     "ggdid",

@@ -1,19 +1,24 @@
 """
-Staggered Adoption DiD with Misclassification and Anticipation
-(Augustin, Gutknecht & Liu 2025, arXiv 2507.20415). [@did_misclassified2025]
+Staggered DiD with a user-supplied timing-misclassification rate and
+anticipation offset -- a heuristic sensitivity adjustment.
 
-Extends Callaway-Sant'Anna to handle two common practical
-imperfections:
+Motivated by Augustin, Gutknecht & Liu (2025, arXiv 2507.20415)
+[@did_misclassified2025], but **not** an implementation of their
+estimators. That paper identifies the misclassification and anticipation
+structure from the data (modified estimators for the ATT of observed and
+of true switchers, plus two moment-based specification tests). This
+function instead takes the misclassification probability ``pi_misclass``
+and the number of anticipation leads as *inputs* and applies two
+mechanical corrections to a naive staggered DiD:
 
-1. **Treatment timing misclassification**: the recorded first-treatment
-   period ``g`` may be off by ±1 with known probability ``π_mis``.
-2. **Anticipation effects**: units may respond to known future
-   treatment, biasing pre-trends.
+1. **Anticipation**: subtract the average of the first
+   ``anticipation_periods`` lead coefficients from the post-treatment ATT.
+2. **Misclassification**: rescale by a symmetric +/-1-period
+   misclassification factor implied by ``pi_misclass``.
 
-Both are handled by a moment-condition correction: subtract the
-expected anticipation lead-coefficient from the post-treatment ATT
-and re-weight the cohort-time cells by the inverse misclassification
-matrix.
+Use it as a what-if sensitivity check ("how large would the ATT be if a
+share ``pi`` of adoption dates were off by one period?"), not as an
+estimator with the paper's guarantees.
 """
 
 from __future__ import annotations
@@ -40,7 +45,9 @@ def did_misclassified(
     alpha: float = 0.05,
 ) -> CausalResult:
     """
-    Staggered DiD robust to timing misclassification + anticipation.
+    Heuristic what-if adjustment of a staggered DiD for a *given* timing
+    misclassification rate and anticipation window (see module docstring:
+    not the Augustin-Gutknecht-Liu estimator).
 
     Parameters
     ----------

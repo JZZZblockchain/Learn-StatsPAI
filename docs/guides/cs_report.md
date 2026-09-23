@@ -136,6 +136,7 @@ rpt = sp.cs_report(cs, n_boot=500, random_state=0)
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.sun_abraham`

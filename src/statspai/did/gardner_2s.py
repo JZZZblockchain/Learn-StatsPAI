@@ -1,7 +1,7 @@
 r"""
-Gardner (2021) two-stage DID estimator (a.k.a. ``did2s``).
+Gardner (2022) two-stage DID estimator (a.k.a. ``did2s``).
 
-The **two-stage DID** method of Gardner (2021) recovers the ATT under staggered
+The **two-stage DID** method of Gardner (2022) recovers the ATT under staggered
 treatment adoption by a two-step regression:
 
 1. **Stage 1 — Fit FE model on untreated rows only.**
@@ -12,38 +12,36 @@ treatment adoption by a two-step regression:
 
 2. **Stage 2 — Residualise + regress on treatment.**
    Construct the residualised outcome  Y_tilde_it = Y_it - (predicted from
-   Stage 1), and fit a pooled regression on treatment dummies (either a single
-   ATT or an event-study by relative time):
+   Stage 1), and fit a pooled regression, without intercept, on treatment
+   dummies (either a single ATT or an event-study by relative time):
 
        Y_tilde_it = tau * D_it + u_it.
 
-The default standard errors (``vce='analytic'``) are the *corrected* clustered
-variance of Gardner (2022) as implemented by R ``did2s::did2s`` and Stata
-``did2s``: the Stage-2 cluster sandwich is built from the two-stage influence
-function, so the estimation error of the Stage-1 fixed effects propagates into
-the Stage-2 variance instead of being treated as known. Writing ``X1`` for the
-Stage-1 design, ``X10`` for that design with treated rows zeroed, ``e1`` for
-the Stage-1 residual (zero on treated rows), ``X2`` / ``e2`` for the Stage-2
-design and residual, and ``g`` for clusters::
+The default standard errors (``vce='analytic'``) are the two-stage corrected
+clustered variance of Butts & Gardner (2022): the influence function of the
+Stage-2 coefficients is adjusted for the estimation of the Stage-1 fixed
+effects,
 
-    gamma = (X10' X10)^{-1} X1' X2
-    s_g   = sum_{i in g} ( x2_i e2_i  -  gamma' x10_i e1_i )
-    V     = (X2' X2)^{-1} [ sum_g s_g s_g' ] (X2' X2)^{-1}
+    IF_i = (X2'X2)^{-1} [ X2'X1 (X10'X10)^{-1} x10_i e1_i  -  x2_i e2_i ],
 
-with no small-sample cluster factor, exactly as the two reference
-implementations. ``vce='stage2'`` recovers the previous default, which
-clustered the Stage-2 residuals only and therefore understated uncertainty
-(about 26% low on the mpdta fixture); ``vce='bootstrap'`` resamples whole
-clusters and re-runs both stages. The estimator closely parallels the
-Borusyak-Jaravel-Spiess (2024) imputation estimator numerically, but the
-two-step regression framing makes event studies and covariate interactions
-trivial.
+where ``X1`` is the Stage-1 design on every row, ``X10`` the same design with
+treated rows zeroed, ``e1`` the Stage-1 residual (zero on treated rows), ``X2``
+the Stage-2 design and ``e2`` the Stage-2 residual; the variance is the sum
+over clusters of the outer product of the summed contributions, with no
+small-sample factor. This is the construction of R ``did2s`` 1.2.1 and Stata
+``did2s`` v0.5, which StatsPAI reproduces to ~1e-8 relative on the
+castle-doctrine panel (``tests/test_gardner_did2s_reference.py``).
+``vce='bootstrap'`` resamples whole clusters and re-runs both stages. The
+estimator closely parallels the Borusyak-Jaravel-Spiess (2024) imputation
+estimator numerically, but the two-step regression framing makes event studies
+and covariate interactions trivial.
 
 References
 ----------
-[@gardner2022twostage] Gardner (2022), "Two-stage differences in differences."
-[@butts2022stage] Butts and Gardner (2022), "did2s: Two-Stage
-    Difference-in-Differences", *The R Journal*.
+Gardner, J. (2022).  "Two-stage differences in differences."
+    arXiv:2207.05943. [@gardner2022twostage]
+Butts, K. and Gardner, J. (2022).  "did2s: Two-Stage Difference-in-Differences."
+    *R Journal*, 14(3), 162-173. [@butts2022stage]
 """
 
 from __future__ import annotations
@@ -53,6 +51,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from scipy import linalg as sp_linalg
 from scipy import stats as sp_stats
 
 from .._aliases import accepts_aliases
@@ -75,14 +74,13 @@ def _gardner_cluster_bootstrap(
     names: List[str],
     n_boot: int,
     seed: int,
+    weights: Optional[str],
 ) -> Tuple[Dict[str, float], float]:
     """Pairs-cluster bootstrap of the *full* Gardner two-step procedure.
 
-    Resamples whole clusters and re-runs both stages, so the Stage-1
-    estimation error enters the SE by construction. This is the
-    ``bootstrap = TRUE`` path of ``did2s::did2s``; the default analytic SE
-    reaches the same target through the corrected influence function
-    (:func:`_did2s_corrected_vcov`). Returns ``(per_coef_se, overall_att_se)``.
+    Resamples whole clusters and re-runs both stages on every replicate,
+    so the bootstrap distribution carries the Stage-1 estimation error as
+    well as the Stage-2 one. Returns ``(per_coef_se, overall_att_se)``.
     """
     rng = np.random.default_rng(seed)
     clusters = pd.unique(df[cluster])
@@ -121,6 +119,7 @@ def _gardner_cluster_bootstrap(
                 horizon=horizon,
                 cluster="__bcl",
                 vce="none",
+                weights=weights,
             )
         except Exception:
             continue  # replicate stays NaN; bootstrap_se tracks the failure
@@ -130,18 +129,15 @@ def _gardner_cluster_bootstrap(
         if es:
             for nm in names:
                 boot_coefs[nm][b] = float(es["coef"].get(nm, np.nan))
-        elif names:
-            # Static mode: the single coefficient *is* the overall ATT.
-            # Filling it here keeps bootstrap_se from reporting a false
-            # "0/n replicates succeeded" for a series that was never used.
-            boot_coefs[names[0]][b] = boot_overall[b]
 
     overall_se = _bootstrap_se(boot_overall, label="did.gardner.overall")
+    if not event_study:
+        # Static mode: the single coefficient *is* the overall ATT (the
+        # per-name arrays are only filled from the event-study dict).
+        return {names[0]: overall_se}, overall_se
     se_dict: Dict[str, float] = {}
     for nm in names:
         se_dict[nm] = _bootstrap_se(boot_coefs[nm], label=f"did.gardner[{nm}]")
-    if not event_study and names:
-        se_dict[names[0]] = overall_se
     return se_dict, overall_se
 
 
@@ -150,7 +146,11 @@ def _cluster_vcov(
     resid: np.ndarray,
     cluster: np.ndarray,
 ) -> np.ndarray:
-    """Liang-Zeger cluster-robust variance for an OLS coefficient vector."""
+    """Liang-Zeger cluster-robust variance for an OLS coefficient vector.
+
+    Carries the ``G/(G-1) (n-1)/(n-k)`` factor. Used only by the legacy
+    ``vce='stage2'`` mode, which treats the Stage-1 fit as known.
+    """
     n, k = X.shape
     xtx_inv = np.linalg.pinv(X.T @ X)
     clusters = np.unique(cluster)
@@ -158,9 +158,7 @@ def _cluster_vcov(
     meat = np.zeros((k, k))
     for g in clusters:
         mask = cluster == g
-        xg = X[mask]
-        eg = resid[mask]
-        s = xg.T @ eg
+        s = X[mask].T @ resid[mask]
         meat += np.outer(s, s)
     if G > 1 and n > k:
         dof = G / (G - 1) * (n - 1) / (n - k)
@@ -169,62 +167,88 @@ def _cluster_vcov(
     return np.asarray(dof * xtx_inv @ meat @ xtx_inv, dtype=float)
 
 
-def _did2s_corrected_vcov(
-    X2: np.ndarray,
-    resid2: np.ndarray,
-    X1: np.ndarray,
-    untreated: np.ndarray,
-    resid1: np.ndarray,
+def _stage2_bin_se(y_k: np.ndarray, cl_k: np.ndarray) -> float:
+    """Legacy Stage-2-only cluster SE of an (unweighted) within-bin mean."""
+    uniq = np.unique(cl_k)
+    coef_k = float(np.mean(y_k))
+    if len(uniq) > 1:
+        sq = 0.0
+        for g in uniq:
+            sq += float(np.sum(y_k[cl_k == g] - coef_k)) ** 2
+        return float(np.sqrt(max(sq / (len(y_k) ** 2), 0.0)))
+    return float(np.std(y_k, ddof=1) / np.sqrt(len(y_k)))
+
+
+def _did2s_vcov(
+    A_un_w: np.ndarray,
+    e1_w: np.ndarray,
+    A_full_w: np.ndarray,
+    X2_w: np.ndarray,
+    e2_w: np.ndarray,
+    untreated_mask: np.ndarray,
     cluster: np.ndarray,
 ) -> np.ndarray:
-    """Two-stage (did2s) corrected cluster-robust variance of the Stage-2 OLS.
+    """Butts-Gardner (2022) two-stage corrected clustered covariance.
 
-    Implements the corrected clustered variance of Gardner (2022) exactly as
-    ``did2s::did2s`` (R, 1.2.1) and Stata ``did2s`` build it. With ``X10``
-    the Stage-1 design ``X1`` with treated rows zeroed and ``e1`` the Stage-1
-    residual (also zero on treated rows), the per-observation influence
-    contribution to the Stage-2 score is ``x2_i e2_i - gamma' x10_i e1_i``
-    where ``gamma = (X10'X10)^{-1} X1'X2`` maps Stage-1 coefficient error into
-    the Stage-2 score. Summing within clusters and sandwiching with
-    ``(X2'X2)^{-1}`` gives the variance. No small-sample cluster factor is
-    applied, matching both references (the Stage-2-only
-    :func:`_cluster_vcov` applies ``G/(G-1) (n-1)/(n-k)``).
+    Every input is already scaled by ``sqrt(weight)`` (the identity for an
+    unweighted fit), so the algebra below is the R ``did2s`` one verbatim:
 
-    Rank-deficient ``X10'X10`` (a unit or period with no untreated rows)
-    falls back to the Moore-Penrose inverse, mirroring
-    ``did2s:::robust_solve_XtX``.
+    * ``IF_ss``  = (X2'X2)^{-1} x2_i e2_i                    (Stage-2 term)
+    * ``IF_fs``  = (X2'X2)^{-1} Γ' x10_i e1_i,  Γ = (X10'X10)^{-1} X1'X2
+                                                            (Stage-1 term)
+    * ``V``      = Σ_g s_g s_g',  s_g = Σ_{i∈g} (IF_fs,i − IF_ss,i)
+
+    ``X10`` is the Stage-1 design with treated rows zeroed, which is the
+    untreated-row block ``A_un_w`` here; ``e1`` is zero on treated rows by
+    construction, so only untreated rows carry a Stage-1 term. No
+    small-sample factor is applied (``did2s`` applies none).
 
     Parameters
     ----------
-    X2, resid2
-        Stage-2 design (``n x k2``) and residual.
-    X1, untreated, resid1
-        Stage-1 design on *all* rows (``n x k1``), the untreated-row mask,
-        and the Stage-1 residual on all rows (only untreated entries are
-        used).
-    cluster
-        Cluster labels, length ``n``.
+    A_un_w : (n_un, p) Stage-1 design on the untreated rows.
+    e1_w : (n_un,) Stage-1 residuals on the untreated rows.
+    A_full_w : (n, p) Stage-1 design evaluated on every row (``X1``).
+    X2_w : (n, k) Stage-2 design.
+    e2_w : (n,) Stage-2 residuals.
+    untreated_mask : (n,) bool, True where the row entered Stage 1.
+    cluster : (n,) cluster labels.
     """
-    from scipy import linalg as sp_linalg
+    n, k = X2_w.shape
+    cl_codes, cl_idx = np.unique(cluster, return_inverse=True)
+    n_clusters = len(cl_codes)
+    if n_clusters < 2:
+        raise ValueError(
+            "gardner_did: the cluster-robust variance needs at least two "
+            f"clusters, got {n_clusters}; the summed influence functions of a "
+            "single cluster are identically zero. Pass a finer cluster= "
+            "(the default clusters on the unit) or vce='none'."
+        )
 
-    untreated = np.asarray(untreated, dtype=bool)
-    X10 = np.where(untreated[:, None], X1, 0.0)
-    e1 = np.where(untreated, resid1, 0.0)
-    gram1 = X10.T @ X10
-    x1t_x2 = X1.T @ X2
+    xtx = X2_w.T @ X2_w
     try:
-        chol = sp_linalg.cho_factor(gram1, lower=True, check_finite=False)
-        gamma = sp_linalg.cho_solve(chol, x1t_x2, check_finite=False)
-    except (np.linalg.LinAlgError, sp_linalg.LinAlgError):
-        gamma = np.linalg.pinv(gram1, hermitian=True) @ x1t_x2
-    # n x k2 influence contributions (sign is irrelevant for the outer product).
-    score = X2 * resid2[:, None] - (X10 @ gamma) * e1[:, None]
-    codes, uniq = pd.factorize(np.asarray(cluster))
-    sums = np.zeros((len(uniq), X2.shape[1]))
-    np.add.at(sums, codes, score)
-    meat = sums.T @ sums
-    xtx_inv = np.linalg.pinv(X2.T @ X2, hermitian=True)
-    return np.asarray(xtx_inv @ meat @ xtx_inv, dtype=float)
+        m_inv = np.linalg.inv(xtx)
+    except np.linalg.LinAlgError:  # pragma: no cover - defensive
+        m_inv = np.linalg.pinv(xtx)
+
+    # Γ = (X10'X10)^{-1} X1'X2. Cholesky when the Stage-1 design has full
+    # column rank; otherwise the minimum-norm solution, which is what
+    # did2s::robust_solve_XtX falls back to (pseudo-inverse). Rows of X1 in
+    # the row space of X10 receive the same adjustment either way.
+    ata = A_un_w.T @ A_un_w
+    atx2 = A_full_w.T @ X2_w
+    try:
+        gamma = sp_linalg.cho_solve(sp_linalg.cho_factor(ata), atx2)
+    except np.linalg.LinAlgError:
+        gamma = np.linalg.lstsq(ata, atx2, rcond=None)[0]
+
+    # Per-observation influence contributions, one row per observation:
+    #   IF_i = e1_i a_i' Γ M  -  e2_i x2_i' M      (M symmetric)
+    IF = -(X2_w * e2_w[:, None]) @ m_inv
+    IF[untreated_mask] += ((A_un_w * e1_w[:, None]) @ gamma) @ m_inv
+
+    S = np.zeros((n_clusters, k), dtype=float)
+    np.add.at(S, cl_idx, IF)
+    return np.asarray(S.T @ S, dtype=float)
 
 
 def _build_fe_design(
@@ -279,8 +303,9 @@ def gardner_did(
     vce: str = "analytic",
     n_boot: int = 199,
     boot_seed: int = 0,
+    weights: Optional[str] = None,
 ) -> CausalResult:
-    """Gardner (2021) two-stage DID estimator.
+    """Gardner (2022) two-stage DID estimator.
 
     Parameters
     ----------
@@ -296,65 +321,71 @@ def gardner_did(
         First-treatment-period column.  Never-treated units should be encoded
         as ``0``, ``NaN``, or ``+inf``.
     controls : list of str, optional
-        Additional covariates included in both stages.
+        Additional covariates included in Stage 1.
     event_study : bool, default False
         If True, Stage 2 reports coefficients by relative time
         ``k = t - first_treat_i``.
     horizon : list of int, optional
         Relative-time leads/lags to report when ``event_study=True``;
         defaults to ``range(-5, 6)`` intersected with available support.
+        Each reported coefficient is the (weighted) mean of the residualised
+        outcome at that relative time; the Stage-2 regression has no
+        intercept, so the set of horizons requested does not change any
+        individual coefficient or its standard error.
     cluster : str, optional
-        Cluster variable for Stage-2 SEs.  Defaults to ``group``.
+        Cluster variable for the standard errors.  Defaults to ``group``.
+        At least two clusters are required.
     alpha : float, default 0.05
         Two-sided CI level.
-    vce : {'analytic', 'stage2', 'bootstrap', 'none'}, default 'analytic'
+    vce : {'analytic', 'bootstrap', 'none'}, default 'analytic'
         Standard-error mode. ``'analytic'`` is the two-stage corrected
-        clustered variance of Gardner (2022): the Stage-2 cluster sandwich is
-        built from the influence function of *both* stages, so the estimation
-        error of the Stage-1 fixed effects is propagated. It reproduces R
-        ``did2s::did2s`` and Stata ``did2s`` (rel < 1e-6 on the mpdta
-        fixture) and carries no small-sample cluster factor, as they do not.
-        ``'stage2'`` is the previous default: it clusters the Stage-2 residuals
-        alone (with the ``G/(G-1)(n-1)/(n-k)`` factor) as if the imputed
-        counterfactual were known data, and understates uncertainty (about
-        26% low on mpdta; empirically ~0.78 coverage at a nominal 95% level).
-        It is kept so earlier numbers can be reproduced and emits a
-        ``UserWarning``. ``'bootstrap'`` resamples whole clusters and re-runs
-        the full two-step procedure (``did2s(bootstrap = TRUE)``). ``'none'``
-        is the fast internal path used by the bootstrap replicates (Stage-2
-        SE, no warning). Point estimates are identical in every mode.
+        clustered variance of Butts & Gardner (2022): the Stage-2 influence
+        function is adjusted for the estimation of the Stage-1 fixed effects
+        (see the module docstring), which is what R ``did2s`` and Stata
+        ``did2s`` report and what StatsPAI reproduces to ~1e-8 relative.
+        ``'bootstrap'`` resamples whole clusters and re-runs the full
+        two-step procedure. ``'none'`` skips inference (``se``, ``ci`` and
+        ``pvalue`` are NaN); it is what the bootstrap uses internally.
+        Point estimates are identical in every mode.
     n_boot : int, default 199
         Number of cluster-bootstrap replications when ``vce='bootstrap'``.
     boot_seed : int, default 0
         Seed for the cluster bootstrap (deterministic results).
+    weights : str, optional
+        Column of strictly positive estimation weights applied to both
+        stages (weighted least squares), the counterpart of R
+        ``did2s(weights=)`` and Stata ``did2s [aw=]``. In event-study mode
+        the overall ATT is the weight-share average of the post-treatment
+        coefficients.
 
     Returns
     -------
     CausalResult
         ``.estimate`` is the overall ATT; ``.model_info['event_study']``
-        carries the event-study dict when requested.  Supplies ``.summary()``,
-        ``.cite()``, and is compatible with ``sp.outreg2()``.
+        carries the event-study dict when requested, and
+        ``.model_info['vcov']`` / ``['cell_labels']`` the covariance of the
+        Stage-2 coefficients (``vce='analytic'`` only).  Supplies
+        ``.summary()``, ``.cite()``, and is compatible with ``sp.outreg2()``.
 
     Notes
     -----
     Identification requires the usual staggered-DID conditions (parallel
     trends, no anticipation) plus a linear two-way FE + additive covariate
-    structure for the untreated potential outcome.  Standard errors cluster
-    by ``cluster`` (default: unit). In event-study mode the per-horizon SEs
-    come from the same corrected variance (each horizon dummy is a Stage-2
-    regressor), and the overall ATT is the treated-observation-weighted mean
-    of the post-treatment horizons with its SE taken from the full
-    cross-horizon covariance; ``model_info['event_study']['vcov']`` carries
-    that covariance. Units with no untreated observation make the Stage-1
-    Gram matrix rank deficient; the variance then uses the Moore-Penrose
-    inverse, as ``did2s`` does.
+    structure for the untreated potential outcome.
+
+    In event-study mode ``.estimate`` is the weight-share average of the
+    post-treatment coefficients (the ``did2s`` aggregated-ATT convention),
+    which equals the static ATT whenever every post-treatment horizon is in
+    ``horizon``; its analytic SE is the delta-method SE ``sqrt(a' V a)`` on
+    the full Stage-2 covariance, which is *not* the static-ATT SE because the
+    saturated Stage-2 residuals differ from the single-dummy ones.
 
     References
     ----------
-    [@gardner2022twostage] Gardner (2022), "Two-stage differences in
-    differences."
-    [@butts2022stage] Butts and Gardner (2022), "did2s: Two-Stage
-    Difference-in-Differences", *The R Journal*.
+    Gardner, J. (2022). Two-stage differences in differences.
+    arXiv:2207.05943. [@gardner2022twostage]
+    Butts, K. and Gardner, J. (2022). did2s: Two-Stage
+    Difference-in-Differences. *R Journal*, 14(3), 162-173. [@butts2022stage]
 
     Examples
     --------
@@ -385,26 +416,49 @@ def gardner_did(
         raise ValueError(
             "vce must be 'analytic', 'stage2', 'bootstrap', or 'none'; " f"got {vce!r}"
         )
+    if vce == "stage2" and weights is not None:
+        raise ValueError(
+            "gardner_did: vce='stage2' is the unweighted pre-correction SE kept "
+            "only to reproduce earlier output; it has no weighted form. Use "
+            "vce='analytic' (the did2s-corrected variance) with weights=."
+        )
     if controls is None:
         controls = []
     df = data.copy()
-    for col in [y, group, time, first_treat] + controls:
+    required = [y, group, time, first_treat] + list(controls)
+    if weights is not None:
+        required.append(weights)
+    for col in required:
         if col not in df.columns:
             raise ValueError(f"Column '{col}' not found in data")
 
     df[y] = pd.to_numeric(df[y], errors="coerce")
-    df = df.dropna(subset=[y, group, time, first_treat]).reset_index(drop=True)
+    subset = [y, group, time, first_treat]
+    if weights is not None:
+        df[weights] = pd.to_numeric(df[weights], errors="coerce")
+        subset.append(weights)
+    df = df.dropna(subset=subset).reset_index(drop=True)
 
     if cluster is None:
         cluster = group
     elif cluster not in df.columns:
         raise ValueError(f"cluster column '{cluster}' not found")
 
+    n = len(df)
+    if weights is not None:
+        w = df[weights].to_numpy(dtype=float)
+        if not np.all(np.isfinite(w)) or np.any(w <= 0):
+            raise ValueError(
+                f"weights column '{weights}' must be finite and strictly "
+                "positive; drop zero-weight rows before calling gardner_did"
+            )
+    else:
+        w = np.ones(n, dtype=float)
+    sw = np.sqrt(w)
+
     ft = df[first_treat].to_numpy(dtype=float)
     t_arr = df[time].to_numpy(dtype=float)
-    treated_now = np.array(
-        [(np.isfinite(fi) and fi > 0 and ti >= fi) for fi, ti in zip(ft, t_arr)]
-    )
+    treated_now = np.isfinite(ft) & (ft > 0) & (t_arr >= ft)
     df["_D"] = treated_now.astype(float)
 
     # ── Stage 1: FE + covariate regression on untreated rows ────── #
@@ -414,7 +468,7 @@ def gardner_did(
 
     unit_all = df[group].to_numpy()
     time_all = df[time].to_numpy()
-    X_all = df[controls].to_numpy(dtype=float) if controls else np.zeros((len(df), 0))
+    X_all = df[controls].to_numpy(dtype=float) if controls else np.zeros((n, 0))
 
     # Stage-1 fit: design against ALL units/times seen in the data; rows from
     # untreated subset only.  Units that appear only in treated rows simply
@@ -431,8 +485,10 @@ def gardner_did(
         t_levels=t_levels,
     )
     y_un = df.loc[untreated_mask, y].to_numpy(dtype=float)
+    sw_un = sw[untreated_mask]
+    A_un_w = A_un if weights is None else A_un * sw_un[:, None]
 
-    coefs, *_ = np.linalg.lstsq(A_un, y_un, rcond=None)
+    coefs, *_ = np.linalg.lstsq(A_un_w, y_un * sw_un, rcond=None)
 
     # Predict counterfactual Y(0) for all rows using Stage-1 coefficients.
     A_full, _, _ = _build_fe_design(
@@ -445,16 +501,17 @@ def gardner_did(
     y_all_arr = df[y].to_numpy(dtype=float)
     y_hat_0 = A_full @ coefs
     y_tilde = y_all_arr - y_hat_0
+    # Stage-1 residuals; zero on treated rows in did2s, so only the
+    # untreated block is carried.
+    e1_un = y_tilde[untreated_mask]
 
-    # ── Stage 2: recover treatment effects from the imputed gap ──── #
-    # Overall ATT: clustered OLS of ỹ on the treatment indicator, with
-    # an intercept to absorb any mean residual in the untreated rows.
-    # Event study: direct within-(cohort × relative-time) averaging of ỹ
-    # — the Borusyak-Jaravel-Spiess style — to avoid the reference-
-    # category contamination bias that a Stage-2 dummy regression would
-    # introduce (the "baseline" in a dummy regression lumps never-treated
-    # units together with treated units outside the event-study horizon,
-    # pulling every coefficient toward the residual mean).
+    # ── Stage 2: regress ỹ (no intercept) on treatment dummies ──── #
+    # Overall ATT: ỹ ~ 0 + D, so the coefficient is the (weighted) mean of
+    # ỹ over treated rows. Event study: ỹ ~ 0 + Σ_k 1{rel = k}, so every
+    # coefficient is the (weighted) within-bin mean — the did2s construction
+    # (``second_stage = ~ i(rel, ref = ...)`` with fixest's ``~ 0 +``). No
+    # reference category enters, which is what keeps the leads free of the
+    # contamination a dummy regression with intercept would introduce.
     cl = df[cluster].to_numpy()
     if event_study:
         rel_time = np.where(
@@ -468,99 +525,82 @@ def gardner_did(
             if 0 not in horizon:
                 horizon.append(0)
             horizon = sorted(set(horizon))
-
-        names, est_list, se_list, count_list, mask_list = [], [], [], [], []
-        for k in horizon:
-            key = f"D_k{int(k):+d}"
-            names.append(key)
-            mask = rel_time == k
-            mask_list.append(mask)
-            n_k = int(mask.sum())
-            count_list.append(n_k)
-            if n_k == 0:
-                est_list.append(float("nan"))
-                se_list.append(float("nan"))
-                continue
-            y_k = y_tilde[mask]
-            coef_k = float(np.mean(y_k))
-            # Stage-2-only cluster-robust SE of the within-bin mean (the
-            # 'stage2' / 'none' modes; overwritten below for 'analytic').
-            cl_k = cl[mask]
-            uniq = np.unique(cl_k)
-            G = len(uniq)
-            if G > 1:
-                # SE of the unweighted mean over n rows, allowing cluster
-                # correlation: Var(mean) ≈ (1/n²) Σ_g (Σ_{i∈g} (y_ki - coef))²
-                sq = 0.0
-                for g in uniq:
-                    idx = cl_k == g
-                    sq += float(np.sum(y_k[idx] - coef_k)) ** 2
-                var_k = sq / (len(y_k) ** 2)
-                se_k = float(np.sqrt(max(var_k, 0.0)))
-            else:
-                se_k = float(np.std(y_k, ddof=1) / np.sqrt(len(y_k)))
-            est_list.append(coef_k)
-            se_list.append(se_k)
-        est = np.array(est_list)
-        se = np.array(se_list)
-        n_h = len(names)
-        es_vcov = np.full((n_h, n_h), np.nan)
-        if vce == "analytic":
-            # The bin means are the OLS coefficients of ỹ on the mutually
-            # exclusive horizon dummies (no intercept) -- did2s's
-            # `~ 0 + i(rel_time, ref = ...)` second stage -- so the
-            # corrected two-stage variance applies column by column, and
-            # the off-diagonal blocks give the cross-horizon covariance.
-            keep = [j for j, n_k in enumerate(count_list) if n_k > 0]
-            if keep:
-                X2_es = np.column_stack([mask_list[j].astype(float) for j in keep])
-                resid2_es = y_tilde - X2_es @ est[keep]
-                V_es = _did2s_corrected_vcov(
-                    X2_es, resid2_es, A_full, untreated_mask, y_tilde, cl
-                )
-                es_vcov[np.ix_(keep, keep)] = V_es
-                se = np.sqrt(np.clip(np.diag(es_vcov), 0, None))
-        coef_dict = dict(zip(names, est))
-        se_dict = dict(zip(names, se))
-        count_dict = dict(zip(names, count_list))
+        horizon = [int(k) for k in horizon]
+        names = [f"D_k{k:+d}" for k in horizon]
+        bin_masks = [rel_time == k for k in horizon]
+        count_list = [int(m.sum()) for m in bin_masks]
+        supported = [j for j, n_k in enumerate(count_list) if n_k > 0]
+        X2 = (
+            np.column_stack([bin_masks[j].astype(float) for j in supported])
+            if supported
+            else np.zeros((n, 0))
+        )
     else:
-        X2 = df["_D"].to_numpy(dtype=float).reshape(-1, 1)
         names = ["ATT"]
-        design2 = np.column_stack([np.ones(len(y_tilde)), X2])
-        coef2, *_ = np.linalg.lstsq(design2, y_tilde, rcond=None)
-        resid2 = y_tilde - design2 @ coef2
-        if vce == "analytic":
-            # did2s regresses on the treatment dummy alone; the influence
-            # function of the treatment coefficient is identical under the
-            # [1, D] parametrisation because the intercept lies in the
-            # Stage-1 column space (the untreated-row terms cancel exactly).
-            V = _did2s_corrected_vcov(
-                design2, resid2, A_full, untreated_mask, y_tilde, cl
+        count_list = [int(treated_now.sum())]
+        if count_list[0] == 0:
+            raise ValueError(
+                "gardner_did: no treated observations (first_treat never "
+                "reached within the sample), the ATT is undefined."
             )
-        else:
-            V = _cluster_vcov(design2, resid2, cl)
-        se_full = np.sqrt(np.clip(np.diag(V), 0, None))
-        est = coef2[1:]
-        se = se_full[1:]
-        coef_dict = dict(zip(names, est))
-        se_dict = dict(zip(names, se))
+        supported = [0]
+        X2 = df["_D"].to_numpy(dtype=float).reshape(-1, 1)
 
-    # Standard-error mode. 'analytic' (default) is the did2s-corrected
-    # two-stage clustered variance computed above; 'stage2' is the legacy
-    # Stage-2-only sandwich (kept for reproducing earlier numbers, warns);
-    # 'bootstrap' resamples whole clusters and re-runs both stages; 'none'
-    # is the Stage-2 sandwich without the warning (used internally by the
-    # bootstrap to avoid recursion).
+    k2 = X2.shape[1]
+    X2_w = X2 if weights is None else X2 * sw[:, None]
+    if k2 > 0:
+        coef2, *_ = np.linalg.lstsq(X2_w, y_tilde * sw, rcond=None)
+    else:
+        coef2 = np.zeros(0, dtype=float)
+    e2 = y_tilde - X2 @ coef2
+    wsum_supported = X2_w.T @ sw if k2 > 0 else np.zeros(0)  # Σ w per column
+
+    est = np.full(len(names), np.nan, dtype=float)
+    est[supported] = coef2
+    coef_dict = dict(zip(names, est))
+    count_dict = dict(zip(names, count_list))
+    supported_names = [names[j] for j in supported]
+
+    # ── Inference ─────────────────────────────────────────────────── #
+    V: Optional[np.ndarray] = None
+    se_dict: Dict[str, float] = {nm: float("nan") for nm in names}
     boot_overall_se: Optional[float] = None
-    if vce == "analytic" and len(pd.unique(cl)) < 2:
+    n_clusters = int(pd.unique(cl).size)
+    if vce == "analytic" and k2 > 0:
+        A_full_w = A_full if weights is None else A_full * sw[:, None]
+        V = _did2s_vcov(
+            A_un_w,
+            e1_un * sw_un,
+            A_full_w,
+            X2_w,
+            e2 * sw,
+            untreated_mask,
+            cl,
+        )
+        se_supported = np.sqrt(np.clip(np.diag(V), 0.0, None))
+        for nm, s in zip(supported_names, se_supported):
+            se_dict[nm] = float(s)
+    elif vce == "stage2" and k2 > 0:
         warnings.warn(
-            "gardner_did: the cluster-robust variance needs at least two "
-            "clusters; with a single cluster the two-stage corrected SE "
-            "degenerates to zero. Pass a finer `cluster` or vce='bootstrap'.",
+            "gardner_did: vce='stage2' clusters the Stage-2 residuals only and "
+            "ignores the variance from estimating the Stage-1 fixed effects, "
+            "so it understates uncertainty (about 26% low on mpdta; "
+            "empirically ~0.78 coverage at a nominal 95% level). It is kept "
+            "only to reproduce earlier output; the default vce='analytic' is "
+            "the did2s-corrected two-stage variance.",
             UserWarning,
             stacklevel=2,
         )
-    if vce == "bootstrap":
+        if event_study:
+            for j in supported:
+                m = bin_masks[j]
+                se_dict[names[j]] = _stage2_bin_se(y_tilde[m], cl[m])
+        else:
+            design2 = np.column_stack([np.ones(n), X2])
+            coef_s2, *_ = np.linalg.lstsq(design2, y_tilde, rcond=None)
+            V_s2 = _cluster_vcov(design2, y_tilde - design2 @ coef_s2, cl)
+            se_dict[names[0]] = float(np.sqrt(max(V_s2[1, 1], 0.0)))
+    elif vce == "bootstrap":
         se_dict, boot_overall_se = _gardner_cluster_bootstrap(
             df,
             y,
@@ -574,17 +614,7 @@ def gardner_did(
             names,
             n_boot,
             boot_seed,
-        )
-    elif vce == "stage2":
-        warnings.warn(
-            "gardner_did: vce='stage2' clusters the Stage-2 residuals only and "
-            "ignores the variance from estimating the Stage-1 fixed effects, "
-            "so it understates uncertainty (about 26% low on mpdta; "
-            "empirically ~0.78 coverage at a nominal 95% level). It is kept "
-            "only to reproduce earlier output; the default vce='analytic' is "
-            "the did2s-corrected two-stage variance.",
-            UserWarning,
-            stacklevel=2,
+            weights,
         )
 
     z = sp_stats.norm.ppf(1 - alpha / 2)
@@ -593,37 +623,28 @@ def gardner_did(
     }
 
     if event_study:
-        post_keys = [
-            k
-            for k in names
-            if int(k.split("k")[1]) >= 0
-            and np.isfinite(coef_dict[k])
-            and count_dict.get(k, 0) > 0
-        ]
-        if post_keys:
-            # Treated-observation-weighted mean of the post-treatment coefs
-            # (the did2s aggregated-ATT convention). An *unweighted* mean
-            # disagrees with the non-event-study ATT whenever the horizons have
-            # unbalanced support / heterogeneous effects.
-            w = np.array([count_dict[k] for k in post_keys], dtype=float)
-            wn = w / w.sum()
-            coefs_post = np.array([coef_dict[k] for k in post_keys], dtype=float)
-            att_overall = float(np.dot(wn, coefs_post))
+        # Treated-weight-share average of the post-treatment coefficients
+        # (the did2s aggregated-ATT convention); equals the static ATT when
+        # every post horizon is in ``horizon``. An *unweighted* mean disagrees
+        # with it whenever the horizons have unbalanced support.
+        horizons_int: List[int] = list(horizon or [])
+        post_pos = [p for p, j in enumerate(supported) if horizons_int[j] >= 0]
+        if post_pos:
+            shares = wsum_supported[post_pos] / wsum_supported[post_pos].sum()
+            att_overall = float(np.dot(shares, coef2[post_pos]))
             if vce == "bootstrap" and boot_overall_se is not None:
-                # Bootstrapping the overall ATT directly accounts for the
-                # cross-horizon correlation.
                 att_se = float(boot_overall_se)
-            elif vce == "analytic":
-                # Delta method through the full corrected cross-horizon
-                # covariance: Var(w'θ) = w' V w.
-                idx = [names.index(k) for k in post_keys]
-                V_post = es_vcov[np.ix_(idx, idx)]
-                att_se = float(np.sqrt(max(float(wn @ V_post @ wn), 0.0)))
+            elif V is not None:
+                V_post = V[np.ix_(post_pos, post_pos)]
+                att_se = float(np.sqrt(max(float(shares @ V_post @ shares), 0.0)))
+            elif vce == "stage2":
+                # Legacy: horizons treated as independent.
+                ses_post = np.array(
+                    [se_dict[supported_names[p]] for p in post_pos], dtype=float
+                )
+                att_se = float(np.sqrt(np.sum((shares * ses_post) ** 2)))
             else:
-                # Stage-2-only SE of the weighted average (horizons treated
-                # as independent; the legacy 'stage2' / 'none' behaviour).
-                ses_post = np.array([se_dict[k] for k in post_keys], dtype=float)
-                att_se = float(np.sqrt(np.sum((wn * ses_post) ** 2)))
+                att_se = float("nan")
         else:
             att_overall, att_se = float("nan"), float("nan")
     else:
@@ -639,6 +660,11 @@ def gardner_did(
     n_units = int(df[group].nunique())
     n_treated_units = int(df.loc[treated_now, group].nunique())
 
+    es_vcov_df = None
+    if event_study and V is not None:
+        full = np.full((len(names), len(names)), np.nan)
+        full[np.ix_(supported, supported)] = V
+        es_vcov_df = pd.DataFrame(full, index=names, columns=names)
     se_convention = {
         "analytic": (
             "did2s corrected two-stage clustered variance (Gardner 2022): "
@@ -650,28 +676,29 @@ def gardner_did(
             "ignores Stage-1 estimation error (understates)"
         ),
         "bootstrap": "pairs-cluster bootstrap of the full two-step procedure",
-        "none": "Stage-2-only cluster sandwich (internal fast path)",
+        "none": "no inference (internal fast path of the bootstrap)",
     }[vce]
     model_info = {
-        "method": "Gardner 2021 two-stage DID",
+        "method": "Gardner 2022 two-stage DID",
         "vce": vce,
         "se_convention": se_convention,
-        "n_obs": int(len(df)),
+        "weights": weights,
+        "n_obs": n,
         "n_units": n_units,
         "n_treated_units": n_treated_units,
+        "n_clusters": n_clusters,
         "alpha": alpha,
         "stage1_n": int(untreated_mask.sum()),
+        "vcov": V,
+        "cell_labels": supported_names if V is not None else None,
         "event_study": (
             {
                 "horizon": names,
                 "coef": coef_dict,
                 "se": se_dict,
                 "ci": ci,
-                "vcov": (
-                    pd.DataFrame(es_vcov, index=names, columns=names)
-                    if vce == "analytic"
-                    else None
-                ),
+                "n_obs": count_dict,
+                "vcov": es_vcov_df,
             }
             if event_study
             else None
@@ -683,14 +710,14 @@ def gardner_did(
     }
 
     _result = CausalResult(
-        method="Gardner 2021 two-stage DID (did2s)",
+        method="Gardner 2022 two-stage DID (did2s)",
         estimand="ATT",
         estimate=att_overall,
         se=att_se,
         pvalue=pvalue,
         ci=(att_overall - z * att_se, att_overall + z * att_se),
         alpha=alpha,
-        n_obs=int(len(df)),
+        n_obs=n,
         model_info=model_info,
     )
     try:
@@ -709,6 +736,8 @@ def gardner_did(
                 "horizon": horizon,
                 "cluster": cluster,
                 "alpha": alpha,
+                "vce": vce,
+                "weights": weights,
             },
             data=data,
             overwrite=False,

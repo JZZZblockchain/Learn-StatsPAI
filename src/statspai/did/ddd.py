@@ -27,6 +27,7 @@ Olden, A. and Møen, J. (2022).
 *The Econometrics Journal*, 25(3), 531-553. [@olden2022triple]
 """
 
+import warnings
 from typing import List, Optional
 
 import numpy as np
@@ -74,7 +75,17 @@ def ddd(
         E.g. low-wage workers (affected) vs high-wage workers (unaffected)
         in a minimum wage study.
     covariates : list of str, optional
-        Additional control variables.
+        Additional control variables, entered additively in the
+        triple-interaction regression. This identifies the DDD ATT only
+        when the covariates' effect on the outcome is common to all eight
+        (treat, time, subgroup) cells and their distribution does not
+        shift across cells; otherwise the triple-interaction coefficient
+        is not the covariate-adjusted DDD ATT (Ortiz-Villavicencio and
+        Sant'Anna 2025, [@ortiz2025better]). A ``UserWarning`` says so and
+        the caveat is recorded in ``model_info['diagnostics']``. For
+        conditional-parallel-trends DDD use
+        ``sp.ddd_heterogeneous(..., x=covariates, est_method='dr')``,
+        the doubly robust estimator of that paper.
     cluster : str, optional
         Cluster variable for cluster-robust standard errors.
     robust : bool, default True
@@ -125,6 +136,20 @@ def ddd(
     """
     robust = require_bool(robust, argument="robust")
     df = data.copy()
+    diagnostics = []
+    if covariates:
+        msg = (
+            "sp.ddd: covariates enter the triple-interaction regression "
+            "additively, which identifies the covariate-adjusted DDD ATT only "
+            "if their outcome effect is common across all eight cells and "
+            "their distribution does not differ across cells "
+            "(Ortiz-Villavicencio & Sant'Anna 2025). For conditional parallel "
+            "trends use sp.ddd_heterogeneous(..., x=[...], est_method='dr')."
+        )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+        diagnostics.append(
+            {"check": "ddd_additive_covariates", "status": "warn", "message": msg}
+        )
 
     # Validate binary variables
     for col, label in [(treat, "Treatment"), (time, "Time"), (subgroup, "Subgroup")]:
@@ -306,6 +331,7 @@ def ddd(
         "robust_se": robust,
         "cluster": cluster,
         "weights": weights,
+        "diagnostics": diagnostics,
     }
 
     _result = CausalResult(

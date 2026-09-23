@@ -12,12 +12,46 @@ their tooling directly into every event-study object in the library.
 | `sp.honest_did(result, e, m_grid=None, method='smoothness')` | Robust CI at event time `e` across a grid of violation magnitudes `M` |
 | `sp.breakdown_m(result, e, method='smoothness')` | Largest `M*` at which the effect remains significant |
 
-Both functions are *polymorphic*: they accept
+Both functions are *polymorphic*: since 1.30 they accept any fitted
+event study in the library — `callaway_santanna()` and
+`aggte(type='dynamic')`, `event_study()`, `sun_abraham()`,
+`gardner_did(event_study=True)`, `did_imputation(horizon=...)`,
+`stacked_did()`, `lp_did()`, `did_multiplegt_dyn()`, and `etwfe()` (raw
+fit or `etwfe_emfx(type='event')`).
 
-- a `callaway_santanna()` result (event study in `model_info`),
-- a `sun_abraham()` result,
-- or an `aggte(type='dynamic')` result (event study in `detail` with
-  Mammen uniform bands).
+The fixed-length interval is a function of the event-study vector **and
+its joint covariance**, which `sp.event_study_vcov(result)` reads off
+each estimator. Where that covariance is genuinely unavailable —
+`did_imputation(pretrend_method='bjs')`, whose leads come from a
+separate auxiliary regression — `honest_did` falls back to a
+worst-case-bias interval, says so in a warning, and records which one it
+returned in `result.attrs['interval']` (`'flci'` or
+`'worst_case_bias'`).
+
+> **⚠️ 1.30 correctness fix.** Handed a *raw* `callaway_santanna()` fit,
+> earlier versions rebuilt that covariance with the estimated cohort
+> shares held fixed. The diagonal matched the reported standard errors,
+> so nothing looked wrong, but the off-diagonal blocks were up to 8
+> percent from R `did`'s and the FLCI built on them was too narrow — on
+> the `cs_report` demo panel the breakdown `M*` came out about three
+> times too large. Re-run any HonestDiD sensitivity taken from a raw fit.
+
+## Simultaneous bands on the same covariance
+
+```python
+band = sp.uniform_bands(fit, which='post')      # sup-t over the post path
+band.attrs['crit_uniform'], band.attrs['crit_pointwise']
+```
+
+A 95 percent *pointwise* interval covers one horizon; a plot invites a
+statement about the whole path, which needs the sup-t critical value —
+the `1 - alpha` quantile of `max_j |Z_j|` with `Z ~ N(0, R)`. On a
+five-horizon window it is typically 2.4 to 2.5 against 1.96, so the band
+is 20 to 30 percent wider, and horizons that are individually
+significant often stop being so. `which='pre'` does the same for a
+visual pre-trend check, and `window=(lo, hi)` restricts the band to the
+horizons a figure actually displays (the critical value depends on how
+many are covered).
 
 ## Typical pipeline
 
@@ -68,6 +102,7 @@ the effect survives a violation equal to one pointwise standard error.
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.callaway_santanna`

@@ -22,6 +22,7 @@ for embedding in multi-panel figures.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -732,6 +733,7 @@ def event_study_plot(
     marker: str = "o",
     markersize: int = 6,
     alpha_level: float = 0.05,
+    uniform_band: bool = False,
     **kwargs: Any,
 ) -> Tuple[Any, Any]:
     """
@@ -758,6 +760,14 @@ def event_study_plot(
         Shade pre-treatment region.
     shade_post : bool, default True
         Shade post-treatment region.
+    uniform_band : bool, default False
+        Overlay the sup-t *simultaneous* band (:func:`sp.uniform_bands`),
+        computed separately for the leads and for the post-treatment
+        horizons from the estimator's joint event-study covariance. A
+        pointwise interval covers one horizon; a plot invites a statement
+        about the path, which is what this band licenses. Silently skipped
+        -- with a warning -- when the estimator exposes no event-study
+        covariance at all.
     pre_color : str
         Pre-treatment shading color.
     post_color : str
@@ -823,6 +833,35 @@ def event_study_plot(
 
     # CI band
     ax.fill_between(e, lo, hi, alpha=ci_alpha, color=color, zorder=2)
+
+    # Simultaneous (sup-t) band, pre and post windows separately.
+    if uniform_band:
+        from .es_inference import uniform_bands as _uniform_bands
+
+        drawn = False
+        for which in ("pre", "post"):
+            try:
+                band = _uniform_bands(result, alpha=alpha_level, which=which)
+            except Exception:  # noqa: BLE001 - absence reported below
+                continue
+            ax.fill_between(
+                band["relative_time"].to_numpy(dtype=float),
+                band["cband_lower"].to_numpy(dtype=float),
+                band["cband_upper"].to_numpy(dtype=float),
+                alpha=ci_alpha * 0.6,
+                color=color,
+                zorder=1,
+            )
+            drawn = True
+        if not drawn:
+            warnings.warn(
+                "event_study_plot(uniform_band=True): no simultaneous band "
+                "could be built for this result (sp.uniform_bands found no "
+                "usable event-study covariance); the pointwise interval is "
+                "drawn alone.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # Line
     ax.plot(e, att, color=color, linewidth=1, alpha=0.6, zorder=3)

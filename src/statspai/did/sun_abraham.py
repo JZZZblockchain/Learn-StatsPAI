@@ -59,6 +59,36 @@ from ._core import fe_dof_not_nested as _fe_dof_not_nested
 # ======================================================================
 
 
+def _cohort_share_vcov_weighted(
+    shares: np.ndarray,
+    eligible: list,
+    omega: np.ndarray,
+    cohort_at_rows: np.ndarray,
+) -> np.ndarray:
+    """Weighted analogue of :func:`_cohort_share_vcov`.
+
+    With observation weights the share of cohort ``g`` at relative time
+    ``l`` is the omega-weighted mean of the cohort indicator over the rows
+    at ``l``, and the robust sandwich of that weighted regression is
+
+        Var(w_hat_l) = sum_i omega_i^2 u_i u_i' / (sum_i omega_i)^2,
+        u_ig = 1{g_i = g} - w_hat_g,
+
+    with ``omega`` rescaled to mean one over the estimation sample. This is
+    exactly Stata ``eventstudyinteract``'s ``regress ... [aw] ; avar ...,
+    robust`` construction (``Sxxi S Sxxi / N`` with ``Sxx = X'WX/N``); at
+    omega == 1 it collapses to the multinomial form.
+    """
+    u = np.column_stack(
+        [
+            (cohort_at_rows == g_val).astype(float) - share
+            for share, g_val in zip(shares, eligible)
+        ]
+    )
+    uw = u * omega[:, None]
+    return np.asarray((uw.T @ uw) / float(omega.sum()) ** 2, dtype=float)
+
+
 def _cohort_share_vcov(shares: np.ndarray, n_obs: int) -> np.ndarray:
     """Covariance matrix of the estimated cohort shares at one relative time.
 
@@ -88,6 +118,27 @@ def _cohort_share_vcov(shares: np.ndarray, n_obs: int) -> np.ndarray:
     if k <= 1 or n_obs <= 0:
         return np.zeros((k, k))
     return (np.diag(shares) - np.outer(shares, shares)) / float(n_obs)
+
+
+def _joint_event_time_vcov(
+    combos: "dict[int, Tuple[np.ndarray, float]]", v_int: np.ndarray
+) -> np.ndarray:
+    """``Cov(δ̂_ℓ, δ̂_m) = w_ℓ' Var(β̂) w_m`` plus the share term on the diagonal.
+
+    This is the matrix Stata ``eventstudyinteract`` stores as ``e(V_iw)``:
+    its ``avar`` on mutually exclusive relative-time dummies has no
+    cross-relative-time share covariance, so the share term is diagonal.
+    """
+    es = sorted(combos)
+    k = len(es)
+    cov = np.empty((k, k), dtype=float)
+    for a, ea in enumerate(es):
+        wa, share_a = combos[ea]
+        for b, eb in enumerate(es):
+            wb, _ = combos[eb]
+            cov[a, b] = float(wa @ v_int @ wb)
+        cov[a, a] += share_a
+    return cov
 
 
 def _sunab_pretrend_test(
@@ -587,6 +638,21 @@ def sun_abraham(
     # `control_cohort == 0`, so reference units must not inflate N_ℓ.
     _est_rows = df[df[g].isin(cohorts)]
     n_obs_at_rel = _est_rows["_rel_time"].value_counts().to_dict()
+    # Under omega the share regression is weighted least squares and its
+    # robust sandwich is built from omega_i^2 u_i u_i' with the weights
+    # normalised to mean one over the estimation sample, which is what
+    # eventstudyinteract's ``regress ... [aw]`` + ``avar ... robust``
+    # computes (Stata rescales aweights to sum to N). Keep the per-row
+    # omega and cohort at every relative time for that construction.
+    _omega_rows: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
+    if weights is not None:
+        _w_est = _est_rows[weights].to_numpy(dtype=float)
+        _w_est = _w_est / _w_est.mean()
+        _g_est = _est_rows[g].to_numpy()
+        _rel_est = _est_rows["_rel_time"].to_numpy()
+        for _e in np.unique(_rel_est):
+            _m = _rel_est == _e
+            _omega_rows[int(_e)] = (_w_est[_m], _g_est[_m])
 
     es_rows = []
     combos: Dict[int, Tuple[np.ndarray, float]] = {}
@@ -630,11 +696,14 @@ def sun_abraham(
             [beta_int[interact_meta.index((g_val, e))] for g_val in eligible],
             dtype=float,
         )
-        var_share = (
-            _cohort_share_vcov(shares, n_obs_at_rel.get(e, 0))
-            if share_variance
-            else np.zeros((len(eligible), len(eligible)))
-        )
+        if not share_variance:
+            var_share = np.zeros((len(eligible), len(eligible)))
+        elif weights is None:
+            var_share = _cohort_share_vcov(shares, n_obs_at_rel.get(e, 0))
+        else:
+            var_share = _cohort_share_vcov_weighted(
+                shares, eligible, *_omega_rows[int(e)]
+            )
         var_e = float(w @ V_int @ w) + float(beta_e @ var_share @ beta_e)
         se_e = float(np.sqrt(max(var_e, 0.0)))
         pval = float(2 * stats.norm.sf(abs(est_e / se_e))) if se_e > 0 else 1.0
@@ -719,6 +788,31 @@ def sun_abraham(
         se_fixest = float(np.sqrt(max(W_fixest @ V_int @ W_fixest, 0.0)))
         summary_stats["fixest_att"] = (att_fixest, se_fixest, W_fixest)
 
+        # The same aggregate with the cohort-share estimation term carried,
+        # which is what a ``lincom`` on Stata ``eventstudyinteract``'s
+        # ``e(V_iw)`` returns.  The share terms of different relative times
+        # are independent (the share regression's dummies are mutually
+        # exclusive), so the aggregate's extra variance is the sum of
+        # omega_e^2 times each relative time's share term, with omega_e the
+        # weight the aggregate puts on relative time e.
+        meta_set = set(interact_meta)
+        share_extra = 0.0
+        for e in post["relative_time"]:
+            if e not in combos:
+                continue
+            omega_e = float(
+                sum(
+                    W_fixest[interact_meta.index((g_val, e))]
+                    for g_val in cohorts
+                    if (g_val, e) in meta_set
+                )
+            )
+            share_extra += omega_e**2 * combos[e][1]
+        se_fixest_share = float(
+            np.sqrt(max(W_fixest @ V_int @ W_fixest + share_extra, 0.0))
+        )
+        summary_stats["fixest_att_share"] = (att_fixest, se_fixest_share, W_fixest)
+
     att, se_att, _ = summary_stats[aggregation_key]
 
     z = att / se_att if se_att > 0 else 0.0
@@ -741,6 +835,15 @@ def sun_abraham(
         "se_event_time": float(summary_stats["event_time"][1]),
         "att_fixest_att": float(summary_stats["fixest_att"][0]),
         "se_fixest_att": float(summary_stats["fixest_att"][1]),
+        # eventstudyinteract e(V_iw) convention (cohort-share term carried in the
+        # aggregate); equals se_fixest_att when share_variance=False
+        "se_fixest_att_share": float(
+            summary_stats.get("fixest_att_share", summary_stats["fixest_att"])[1]
+        ),
+        # joint covariance of the IW event-time coefficients: regression cross
+        # terms plus the share term on the diagonal (the matrix e(V_iw))
+        "vcov_event_time": _joint_event_time_vcov(combos, V_int),
+        "event_times": sorted(combos),
         "se_type": f"cluster-robust on {cluster_col}",
         "n_clusters": int(n_clust),
         "n_coeffs": int(k_int),

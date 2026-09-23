@@ -255,12 +255,6 @@ STATA_SE_GAP_NOTES: dict[str, str] = {
         "IIVM are at 4e-10 because ddml's `regress` final stage on the "
         "orthogonalised score has no such factor."
     ),
-    "83_lpdid": (
-        "non-headline horizon rows (3.9e-4): lpdid's per-horizon regressions "
-        "run through reghdfe, whose K counts the absorbed time effects; the "
-        "LP-DiD estimator itself is pinned on both sides at 1e-12 by the "
-        "point estimates and the R transcription."
-    ),
 }
 
 
@@ -2030,7 +2024,8 @@ def render_tex(modules: list[str]) -> str:
         "% Re-run after any module change to refresh.\n"
         "\\begin{longtable}{p{0.10\\linewidth}p{0.27\\linewidth}"
         "p{0.40\\linewidth}p{0.16\\linewidth}}\n"
-        f"\\caption{{Track A parity headline for \\statspai{{}} {_release_version()} vs the "
+        f"\\caption{{Track A parity headline for \\statspai{{}} "
+        f"{_release_version()} vs the "
         "canonical \\proglang{R} reference on the calibrated replicas. The "
         "``Worst diff'' column reports the worst residual gap across the "
         "module's headline rows (point estimates only; per-row SE diffs "

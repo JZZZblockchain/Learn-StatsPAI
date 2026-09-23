@@ -54,17 +54,17 @@ the substantive object -- are identical either way.
 
 Scope & caveats
 ---------------
-- First cut supports **never-treated controls only**. Not-yet-treated
-  controls per-(g, t) is a straightforward extension left for a
-  follow-up once parity tests exist.
-- Covariate adjustment is not implemented. ``triplediff::ddd`` supports
-  regression adjustment, IPW and doubly-robust estimation with an
-  ``xformla``; the parity above only covers the no-covariate case, which
-  is the only one this function can express.
-- Inference is cluster bootstrap at the unit level (n_boot draws),
-  matching the pattern used in `sp.did_multiplegt`. An analytical
-  influence-function variance is not implemented, so standard errors are
-  NOT pinned against ``triplediff`` (which reports analytical ones).
+- Controls: ``control_group="nevertreated"`` (default) or
+  ``"notyettreated"``; see that parameter for how the latter departs from
+  ``triplediff`` 0.2.4.
+- Covariates: ``x=`` with ``est_method`` in ``{"dr", "ipw", "reg"}`` gives
+  the conditional-DDD estimators of Ortiz-Villavicencio and Sant'Anna
+  (2025). Adding covariates linearly to a triple-interaction regression
+  (what ``sp.ddd(covariates=...)`` does) is not equivalent in general.
+- Inference: ``se="analytic"`` (influence functions, what ``triplediff``
+  reports; the default with covariates) or ``se="bootstrap"`` (unit-level
+  cluster bootstrap; the default without covariates and the only path that
+  fills ``model_info['placebo_joint_test']``).
 """
 
 from __future__ import annotations

@@ -35,12 +35,14 @@ Designs: Robust and Efficient Estimation."  *Review of Economic Studies*,
 
 from __future__ import annotations
 
+from typing import Literal, Optional, Tuple, Union, overload
+
 import numpy as np
 import pandas as pd
 from scipy import sparse
 from scipy.sparse.linalg import splu
 
-__all__ = ["bjs_weight_vector", "bjs_exact_se"]
+__all__ = ["bjs_weight_vector", "bjs_exact_se", "bjs_cluster_scores"]
 
 
 def bjs_weight_vector(
@@ -49,6 +51,7 @@ def bjs_weight_vector(
     design_untreated: sparse.csr_matrix,
     treated_mask: np.ndarray,
     target_weights: np.ndarray,
+    weights: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """The exact linear weights ``v`` with ``tau_hat = v' y``.
 
@@ -57,11 +60,22 @@ def bjs_weight_vector(
     elsewhere).  Untreated rows receive minus the least-squares
     projection of those weights through the Y(0) design, which is what
     makes the estimator an imputation rather than a raw mean.
+
+    ``weights`` are the estimation weights ``omega`` (Stata ``[aw=]``, R
+    ``weights=``) on every row.  The Y(0) model is then fit by weighted
+    least squares, ``a = (Z0' W Z0)^-1 Z0' W y0``, so the projection of
+    the target onto untreated rows becomes ``-W Z0 (Z0' W Z0)^-1 Z1' w``;
+    with ``weights=None`` this is the unweighted expression.
     """
     treated = np.asarray(treated_mask, dtype=bool)
     w = np.asarray(target_weights, dtype=float)
 
-    gram = (design_untreated.T @ design_untreated).tocsc()
+    if weights is None:
+        gram = (design_untreated.T @ design_untreated).tocsc()
+    else:
+        omega = np.asarray(weights, dtype=float)
+        w_untreated = sparse.diags(omega[~treated])
+        gram = (design_untreated.T @ w_untreated @ design_untreated).tocsc()
     # Z'w over ALL target rows, not just treated ones. The target of a
     # post-treatment horizon sits on treated cells, so the two agree
     # there; the target of a pre-treatment lead under the in-sample
@@ -86,12 +100,14 @@ def bjs_weight_vector(
     # exactly. This reduces to the reference's expression whenever the
     # target is confined to treated cells.
     projection = np.asarray(design_all @ solved, dtype=float).ravel()
+    if weights is not None:
+        projection = projection * np.asarray(weights, dtype=float)
     v = w.copy()
     v[~treated] -= projection[~treated]
     return v
 
 
-def bjs_exact_se(
+def bjs_cluster_scores(
     *,
     v: np.ndarray,
     adjusted: np.ndarray,
@@ -99,14 +115,16 @@ def bjs_exact_se(
     cluster: np.ndarray,
     cohort: np.ndarray,
     relative_time: np.ndarray,
-) -> float:
-    """Cluster-robust standard error of ``v' y`` under the BJS convention.
+) -> pd.Series:
+    """Per-cluster scores of ``v' y`` under the BJS convention.
 
     Mirrors ``didimputation::se_inner``: treated rows are demeaned within
     their (cohort, relative-time) block using ``v^2`` weights, untreated
-    rows keep their Y(0) residual, and the cluster scores are summed.
-
-    No small-sample correction is applied, matching both references.
+    rows keep their Y(0) residual, and the products ``v * tau`` are summed
+    within clusters. The variance of one target is the sum of its squared
+    scores; the covariance of two targets estimated on the same fit is the
+    sum of the products of their scores (the joint ``e(V)`` Stata
+    ``did_imputation`` reports). Indexed by cluster label.
     """
     treated = np.asarray(treated_mask, dtype=bool)
     v = np.asarray(v, dtype=float)
@@ -135,8 +153,64 @@ def bjs_exact_se(
         )
         tau[treated] = adj[treated] - cell_mean
 
-    scores = pd.Series(v * tau).groupby(pd.Series(np.asarray(cluster))).sum().to_numpy()
+    return pd.Series(v * tau).groupby(pd.Series(np.asarray(cluster))).sum()
+
+
+def bjs_exact_se(
+    *,
+    v: np.ndarray,
+    adjusted: np.ndarray,
+    treated_mask: np.ndarray,
+    cluster: np.ndarray,
+    cohort: np.ndarray,
+    relative_time: np.ndarray,
+) -> float:
+    """Cluster-robust standard error of ``v' y`` under the BJS convention.
+
+    The square root of the summed squared :func:`bjs_cluster_scores`. No
+    small-sample correction is applied, matching both references.
+    """
+    scores = bjs_cluster_scores(
+        v=v,
+        adjusted=adjusted,
+        treated_mask=treated_mask,
+        cluster=cluster,
+        cohort=cohort,
+        relative_time=relative_time,
+    ).to_numpy()
     return float(np.sqrt(np.sum(scores**2)))
+
+
+@overload
+def bjs_se_for_target(
+    *,
+    design_all: sparse.csr_matrix,
+    design_untreated: sparse.csr_matrix,
+    treated_mask: np.ndarray,
+    target_weights: np.ndarray,
+    adjusted: np.ndarray,
+    cluster: np.ndarray,
+    cohort: np.ndarray,
+    relative_time: np.ndarray,
+    weights: Optional[np.ndarray] = ...,
+    return_scores: Literal[False] = ...,
+) -> float: ...
+
+
+@overload
+def bjs_se_for_target(
+    *,
+    design_all: sparse.csr_matrix,
+    design_untreated: sparse.csr_matrix,
+    treated_mask: np.ndarray,
+    target_weights: np.ndarray,
+    adjusted: np.ndarray,
+    cluster: np.ndarray,
+    cohort: np.ndarray,
+    relative_time: np.ndarray,
+    weights: Optional[np.ndarray] = ...,
+    return_scores: Literal[True],
+) -> Tuple[float, pd.Series]: ...
 
 
 def bjs_se_for_target(
@@ -149,15 +223,23 @@ def bjs_se_for_target(
     cluster: np.ndarray,
     cohort: np.ndarray,
     relative_time: np.ndarray,
-) -> float:
-    """Convenience wrapper: build ``v`` then evaluate the variance."""
+    weights: Optional[np.ndarray] = None,
+    return_scores: bool = False,
+) -> Union[float, Tuple[float, pd.Series]]:
+    """Convenience wrapper: build ``v`` then evaluate the variance.
+
+    With ``return_scores=True`` returns ``(se, scores)`` where ``scores`` is
+    the per-cluster :func:`bjs_cluster_scores` series, so a caller holding
+    several targets can assemble their joint covariance.
+    """
     v = bjs_weight_vector(
         design_all=design_all,
         design_untreated=design_untreated,
         treated_mask=treated_mask,
         target_weights=target_weights,
+        weights=weights,
     )
-    return bjs_exact_se(
+    scores = bjs_cluster_scores(
         v=v,
         adjusted=adjusted,
         treated_mask=treated_mask,
@@ -165,3 +247,5 @@ def bjs_se_for_target(
         cohort=cohort,
         relative_time=relative_time,
     )
+    se = float(np.sqrt(np.sum(scores.to_numpy() ** 2)))
+    return (se, scores) if return_scores else se

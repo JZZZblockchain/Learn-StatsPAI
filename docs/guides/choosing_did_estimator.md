@@ -305,10 +305,14 @@ reports the same distinction as `validation_status`.
 > is the 2020 pair rollup extended to H horizons — numerically close on simple
 > DGPs, different in identification, control construction and inference.
 
-> **`sp.did_multiplegt_dyn` is still `experimental`** despite the parity.
-> Switch-off events are dropped and the paper's own variance formula is not
-> implemented; `se_method='analytic'` is available and agrees with the
-> bootstrap, but runs about 1% below the R package's standard errors.
+> **`sp.did_multiplegt_dyn` is still `experimental`** despite the parity:
+> switch-off events are dropped, and `controls=` / `trends_lin` /
+> `normalized` / `continuous` are not implemented. Its variance is no
+> longer a gap, though — since 1.30 `se_method='analytic'` builds the
+> authors' `U_Gg_var` (each `(g, t)` contribution centred on its cell mean
+> with the `sqrt(n/(n-1))` factor, summed within clusters before squaring)
+> and reproduces R `DIDmultiplegtDYN` 2.3.4 to 4e-15 on the castle-doctrine
+> panel, weighted and unweighted, placebos included.
 
 ## 5. Reading the output
 
@@ -352,6 +356,7 @@ r.cite()      # BibTeX for the underlying paper
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.callaway_santanna`
@@ -399,6 +404,7 @@ r.cite()      # BibTeX for the underlying paper
 | Staggered treatment timing with TWFE method | `AssumptionWarning` | TWFE can give negative weights; use Callaway-Sant'Anna, Sun-Abraham, or BJS imputation. | `sp.callaway_santanna` |
 | Pre-trend test underpowered (Roth 2022) | `AssumptionWarning` | Check sp.pretrends_power — if low, report honest CI via sp.sensitivity_rr. | `sp.sensitivity_rr` |
 | Few clusters at unit level | `AssumptionWarning` | Use wild cluster bootstrap (sp.wild_cluster_bootstrap). | `sp.wild_cluster_bootstrap` |
+| Few *treated* clusters (one or a handful) | `AssumptionWarning` | Cluster-robust SEs over-reject whatever the total cluster count; use sp.did_few_treated (Conley-Taber / Ferman-Pinto) or sp.cs_jackknife (CV3). | `sp.did_few_treated` |
 
 **Alternatives (ranked)**
 - `sp.sun_abraham`
