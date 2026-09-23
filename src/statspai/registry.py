@@ -2496,6 +2496,140 @@ def _build_registry() -> None:
 
     register(
         FunctionSpec(
+            name="forest_policy_tree",
+            category="causal",
+            description=(
+                "Treatment rule for a causal forest with fixed effects, and "
+                "what it was worth. sp.policy_tree needs a doubly-robust "
+                "score and so a propensity, which a within-unit design has "
+                "none of; the imputation scores that give the ATT are used "
+                "instead, which fixes the population to the treated cells: "
+                "of the cells that were treated, which should have been. "
+                "Fits on one half of the units and prices on the other, "
+                "because a rule maximised on the scores it is then priced "
+                "against is priced on its own noise -- where the true gain "
+                "was exactly 0, the same-sample version averaged +0.048 and "
+                "called it significant 13% of the time, against +0.005 and "
+                "3.5% split. Value, treat-all value and the gain between "
+                "them share one exact, cluster- or dyad-robust covariance."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "CausalForest",
+                    True,
+                    description="Fitted GRF-engine forest with fe='twoway'.",
+                ),
+                ParamSpec(
+                    "depth",
+                    "int",
+                    False,
+                    2,
+                    "Tree depth; <= 2 is searched exactly, deeper is greedy.",
+                ),
+                ParamSpec(
+                    "cost",
+                    "float",
+                    False,
+                    0.0,
+                    "Cost of treating one cell, in the outcome's units. The "
+                    "rule treats where the effect exceeds it; with cost=0 and "
+                    "positive effects, treating everyone is optimal.",
+                ),
+                ParamSpec(
+                    "x",
+                    "list|array",
+                    False,
+                    None,
+                    "Policy covariates; default the forest's effect modifiers.",
+                ),
+                ParamSpec("min_leaf_size", "int", False, None),
+                ParamSpec(
+                    "train_frac",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of units (members) that fit the rule.",
+                ),
+                ParamSpec("random_state", "int", False, 0),
+                ParamSpec(
+                    "members",
+                    "array",
+                    False,
+                    None,
+                    "(n, 2) members of each dyadic row; splits by member.",
+                ),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "variance",
+                    "str",
+                    False,
+                    "bjs",
+                    "Centring of treated residuals before the cohort x "
+                    "event-time blocks.",
+                    enum=["bjs", "forest"],
+                ),
+                ParamSpec("cluster", "str|array", False, None),
+                ParamSpec(
+                    "covariates",
+                    "str|list",
+                    False,
+                    "none",
+                    "Covariates in the untreated outcome model; controls= is "
+                    "accepted as an alias.",
+                ),
+            ],
+            returns=(
+                "dict: rules (printable), tree, policy (0/1 per priced cell), "
+                "value / value_treat_all / gain_over_treat_all (each with "
+                "estimate, se, ci, p), share_treated, n_train_units, "
+                "n_eval_units, split_by, method, diagnostics."
+            ),
+            example="sp.forest_policy_tree(cf, depth=2, cost=0.05)",
+            tags=[
+                "forest",
+                "policy",
+                "targeting",
+                "panel",
+                "heterogeneous",
+                "causal",
+            ],
+            reference=(
+                "[@athey2021policy], [@borusyak2024revisiting], "
+                "[@kattenberg2023causal]"
+            ),
+            pre_conditions=[
+                "forest fitted with sp.causal_forest(..., fe='twoway')",
+                "enough treated cells in each half to fill a leaf",
+            ],
+            assumptions=[
+                "parallel trends and no anticipation (imputation scores)",
+                "the rule applies to treated cells; effects on untreated "
+                "cells are not identified (check sp.forest_support first)",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="MethodIncompatibility: this is for fe= forests",
+                    exception="statspai.MethodIncompatibility",
+                    remedy=(
+                        "A pooled forest has a propensity and a "
+                        "population-wide estimand; use sp.policy_tree."
+                    ),
+                    alternative="sp.policy_tree",
+                ),
+                FailureMode(
+                    symptom="DataInsufficient: not enough treated cells",
+                    exception="statspai.DataInsufficient",
+                    remedy="Lower min_leaf_size or depth, or widen the panel.",
+                    alternative="sp.forest_group_effects",
+                ),
+            ],
+            alternatives=["policy_tree", "rate_split", "forest_group_effects"],
+        )
+    )
+
+    register(
+        FunctionSpec(
             name="rate_split",
             category="causal",
             description=(

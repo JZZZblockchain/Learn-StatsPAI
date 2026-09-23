@@ -27,6 +27,7 @@ from .causal_forest import CausalForest, causal_forest
 from .forest_heterogeneity import (
     cate_pretrend_test,
     forest_group_effects,
+    forest_policy_tree,
     forest_support,
     rate_split,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "forest_support",
     "cate_pretrend_test",
     "rate_split",
+    "forest_policy_tree",
     "multi_arm_forest",
     "MultiArmForestResult",
     "iv_forest",

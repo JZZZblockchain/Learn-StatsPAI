@@ -1319,6 +1319,7 @@ __all__ = [
     "test_calibration",  # GRF-compatible alias of calibration_test
     "rate",
     "rate_split",
+    "forest_policy_tree",
     "forest_group_effects",
     "forest_support",
     "cate_pretrend_test",
@@ -2832,6 +2833,7 @@ _register_lazy(
     "forest_support",
     "cate_pretrend_test",
     "rate_split",
+    "forest_policy_tree",
 )
 _register_lazy(
     "forest.forest_inference",

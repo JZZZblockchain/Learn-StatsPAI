@@ -427,6 +427,66 @@ zero. The second is why `"bjs"` is the default and `"forest"` is not: each
 is calibrated for a different estimand, and the population one is what a
 reader takes away.
 
+### From "is it worth targeting?" to "target like this"
+
+`sp.rate_split` says whether *some* ranking pays. `sp.forest_policy_tree`
+returns the rule — a depth-limited tree in the effect modifiers, the object
+a programme could actually be written in — and prices it.
+
+```python
+res = sp.forest_policy_tree(cf, depth=2, cost=0.3, covariates=C)
+print(res["rules"])
+# IF z <= -0.0164:
+#   DON'T TREAT (n=216, avg_benefit=-0.6139)
+# ELSE (z > -0.0164):
+#   TREAT (n=202, avg_benefit=0.6093)
+
+res["value"]                # value per treated cell of following the rule
+res["value_treat_all"]      # ... of treating every cell (the ATT minus cost)
+res["gain_over_treat_all"]  # the difference, with its own standard error
+res["share_treated"]        # how much of the programme the rule keeps
+```
+
+Three things this inherits from the design, and one it adds.
+
+**`cost` is usually what makes the question real.** With `cost=0` and
+effects positive everywhere, treating every cell is optimal and the tree
+has nothing to find. Set `cost` in the outcome's units and the rule treats
+where the effect clears it.
+
+**The rule is retrospective.** The scores exist on treated cells, so the
+question is "of the cells that were treated, which should have been" — not
+whether an untreated unit should be treated, which is an extrapolation of
+`tau(x)` that `average_treatment_effect` also refuses here. Run
+`sp.forest_support` before carrying a rule to units the design never
+switched.
+
+**Fitted and priced on disjoint units, always.** This is the same trap as
+section 5 and it bites harder, because a tree is chosen to maximise the
+very quantity it is then graded on. On a design where *every rule is worth
+exactly the same* — no heterogeneity, and `cost` equal to the constant
+effect, so the true gain over treating everyone is exactly 0 (200
+replications, N = 200 units, T = 8):
+
+| | mean gain | claims a significant gain |
+| --- | --- | --- |
+| fitted and priced on the same cells | **+0.048** (own se 0.037) | **13.0%** |
+| fitted and priced on disjoint halves | **+0.005** | **3.5%** |
+
+and the split costs almost nothing when the heterogeneity is real: with
+`tau = 0.3 + 0.8 z` and `cost = 0.3` the oracle gain is `0.8 phi(0) =
+0.3191`, the split-sample estimate averaged **0.3189** at 99.5% power, and
+the same-sample one **0.3316**. There is no flag to turn the split off.
+
+**What it adds: the gain has a standard error.** Value, treat-all value and
+the gain between them are three linear functionals of the same `y` from one
+design, so the gain is reportable on its own rather than as two overlapping
+intervals. Its estimate is exactly the difference; its variance is not the
+difference of the other two, because the BJS centring weights the cohort ×
+event-time mean by each functional's own `v^2` and the gain's weights
+vanish on every cell the rule treats. Both readings are conservative
+(0.063 and 0.096 against a Monte Carlo 0.047); the narrower is reported.
+
 ## 6. DiD causal forests for staggered adoption
 
 ```python
@@ -497,6 +557,7 @@ treatment, CATT 10 for `x1 = 1` and 1 for `x1 = 0`) is a known-truth test in
 | Imputation ATT / group coverage, calibration size and power | T1 (Monte Carlo, section 3) | `tests/reference_parity/test_fe_forest_imputation_recovery.py` |
 | RATE = rank weights o imputation weights; weights annihilate the FE design and put zero net weight on D | exact (1e-15 / 1e-10) | `tests/test_forest_rate_fe.py` |
 | RATE bias and coverage, reuse bias, `rate_split` size and power | T1 (Monte Carlo, section 5) | `tests/reference_parity/test_fe_forest_rate_recovery.py` |
+| Policy-tree gain: same-sample bias, split-sample size and power, coverage of the fitted rule's true value | T1 (Monte Carlo, section 5) | `tests/reference_parity/test_fe_forest_policy_recovery.py` |
 
 **Comparison with `causalfe`.** `causalfe` 0.3.2 [aytug2026causalfe] is the
 Python implementation of [kattenberg2023causal] used in [aytug2026euro]. On

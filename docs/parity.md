@@ -30,9 +30,9 @@ Read the two evidence kinds separately. Only the first answers "does StatsPAI ag
 | **Compared against R/Stata** (T2) | bit-exact | 362 |
 | | aligned | 53 |
 | | **subtotal** | **415** |
-| **No external software reference** | analytical-only (T1) | 129 |
+| **No external software reference** | analytical-only (T1) | 130 |
 | | external-replication (published numbers) | 2 |
-| | **subtotal** | **131** |
+| | **subtotal** | **132** |
 | No numerical evidence yet | unverified | 651 |
 
 ### Honest denominators
@@ -41,10 +41,10 @@ The all-registered denominator understates coverage: it counts result and except
 
 | denominator | cross-language | any evidence | total | cross-lang share |
 | --- | ---: | ---: | ---: | ---: |
-| estimator callables | 415 | 545 | 785 | 52.9% |
+| estimator callables | 415 | 546 | 786 | 52.8% |
 | infrastructure (parity N/A) | 0 | 0 | 125 | 0.0% |
 | result / exception classes | 0 | 1 | 287 | 0.0% |
-| **all registered** | 415 | 546 | 1197 | 34.7% |
+| **all registered** | 415 | 547 | 1198 | 34.6% |
 
 ### Coverage by estimator family
 
@@ -52,7 +52,7 @@ Families with zero cross-language rows are the highest-leverage targets when a r
 
 | family | cross-language | any evidence | estimator callables |
 | --- | ---: | ---: | ---: |
-| causal | 147 | 212 | 343 |
+| causal | 147 | 213 | 344 |
 | regression | 32 | 36 | 37 |
 | spatial | 28 | 29 | 34 |
 | panel | 27 | 28 | 30 |
@@ -534,7 +534,7 @@ Reproduces published-paper numbers; sources in `tests/external_parity/PUBLISHED_
 | `aggte` | [`test_honest_did_paper_parity.py`](../tests/external_parity/test_honest_did_paper_parity.py) (+1) |
 | `parallel_trends_robustness` | [`test_rebel_canal_published.py`](../tests/external_parity/test_rebel_canal_published.py) |
 
-## analytical-only — 129 functions
+## analytical-only — 130 functions
 
 Recovers a known DGP truth / closed-form identity within tolerance; no cross-package reference. See `tests/reference_parity/REFERENCES.md`.
 
@@ -591,6 +591,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `focal_cate` | [`test_ml_causal_recovery_parity_round2.py`](../tests/reference_parity/test_ml_causal_recovery_parity_round2.py) |
 | `forest_diagnostics` | [`test_ml_causal_R_parity.py`](../tests/reference_parity/test_ml_causal_R_parity.py) |
 | `forest_group_effects` | [`test_fe_forest_imputation_recovery.py`](../tests/reference_parity/test_fe_forest_imputation_recovery.py) |
+| `forest_policy_tree` | [`test_fe_forest_policy_recovery.py`](../tests/reference_parity/test_fe_forest_policy_recovery.py) |
 | `fortified_pci` | [`test_proximal_parity.py`](../tests/reference_parity/test_proximal_parity.py) |
 | `front_door` | [`test_front_door_parity.py`](../tests/reference_parity/test_front_door_parity.py) |
 | `frontdoor` | [`test_frontdoor_parity.py`](../tests/reference_parity/test_frontdoor_parity.py) |

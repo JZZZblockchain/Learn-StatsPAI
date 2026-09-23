@@ -6,6 +6,47 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **`sp.forest_policy_tree`: the treatment rule a fixed-effects forest
+  implies, and what it was worth.** `sp.policy_tree` maximises a
+  doubly-robust objective and so needs a propensity; a within-unit design
+  has none. The imputation scores that give the ATT serve instead, which
+  fixes the population to the treated cells: the rule answers "of the cells
+  that were treated, which should have been", not whether an untreated unit
+  should be treated -- that is the extrapolation
+  `average_treatment_effect` already refuses here, and
+  `sp.forest_support` is the check before carrying a rule to units the
+  design never switched.
+  - Depth `<= 2` is searched exactly and deeper is greedy, reusing
+    `policy_learning`'s `exact_policy_tree` and `PolicyTree` rather than
+    growing a second policy tree inside the forest module. `cost` is
+    usually what makes targeting a real question: with `cost=0` and
+    positive effects, treating everyone is optimal.
+  - **Fitted and priced on disjoint units, with no flag to turn that off.**
+    A tree chosen to maximise the value of the scores it is then priced
+    against is priced on its own noise. On a design where *every rule is
+    worth exactly the same* -- no heterogeneity, `cost` equal to the
+    constant effect, so the true gain over treating everyone is exactly 0
+    (200 replications, N = 200, T = 8) -- the same-sample gain averaged
+    **+0.048**, larger than its own standard error of 0.037, and **13.0%**
+    of runs reported a significant benefit from targeting. Split:
+    **+0.005** and **3.5%**. With real heterogeneity the split costs almost
+    nothing: oracle gain `0.8 phi(0) = 0.3191`, split-sample **0.3189** at
+    99.5% power against a same-sample 0.3316.
+  - `value`, `value_treat_all` and `gain_over_treat_all` are three linear
+    functionals of one `y` from one design, so the gain is reportable on
+    its own rather than as two overlapping intervals. Its estimate is
+    exactly the difference; its variance is not the difference of theirs,
+    because the BJS centring weights the cohort x event-time mean by each
+    functional's own `v^2`. Both readings are conservative (0.063 and 0.096
+    against a Monte Carlo 0.047) and the narrower is reported.
+  - A rule that treats every cell now reports a gain of exactly 0 with a
+    standard error of exactly 0 and `p = 1`, rather than `NaN` from the
+    dyadic-variance guard: a structurally zero functional is not a variance
+    that could not be estimated.
+  - `sp.rate_split` and this share `_refit_halves`, which also now carries
+    the parent forest's feature names onto the refitted halves -- diagnostics
+    used to come back as `X2` instead of `gdp`.
+
 - **`sp.dynamic_dml`: heterogeneous effects of a treatment *sequence*
   (Lewis & Syrgkanis 2021).** The gap this closes: `sp.dml_panel` assumes
   one homogeneous effect and a treatment that does not move the future

@@ -1482,6 +1482,83 @@
     }
   },
   {
+    "description": "Treatment rule for a causal forest with fixed effects, and what it was worth. sp.policy_tree needs a doubly-robust score and so a propensity, which a within-unit design has none of; the imputation scores that give the ATT are used instead, which fixes the population to the treated cells: of the cells that were treated, which should have been. Fits on one half of the units and prices on the other, because a rule maximised on the scores it is then priced against is priced on its own noise -- where the true gain was exactly 0, the same-sample version averaged +0.048 and called it significant 13% of the time, against +0.005 and 3.5% split. Value, treat-all value and the gain between them share one exact, cluster- or dyad-robust covariance. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "forest_policy_tree",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "cluster": {
+          "description": "Cluster identifier column for clustered standard errors.",
+          "type": "string"
+        },
+        "cost": {
+          "default": 0.0,
+          "description": "Cost of treating one cell, in the outcome's units. The rule treats where the effect exceeds it; with cost=0 and positive effects, treating everyone is optimal.",
+          "type": "number"
+        },
+        "covariates": {
+          "default": "none",
+          "description": "Covariates in the untreated outcome model; controls= is accepted as an alias.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "depth": {
+          "default": 2,
+          "description": "Tree depth; <= 2 is searched exactly, deeper is greedy.",
+          "type": "integer"
+        },
+        "forest": {
+          "description": "Fitted GRF-engine forest with fe='twoway'.",
+          "type": "string"
+        },
+        "members": {
+          "description": "(n, 2) members of each dyadic row; splits by member.",
+          "type": "string"
+        },
+        "min_leaf_size": {
+          "description": "min_leaf_size parameter (int).",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "train_frac": {
+          "default": 0.5,
+          "description": "Share of units (members) that fit the rule.",
+          "type": "number"
+        },
+        "variance": {
+          "default": "bjs",
+          "description": "Centring of treated residuals before the cohort x event-time blocks.",
+          "enum": [
+            "bjs",
+            "forest"
+          ],
+          "type": "string"
+        },
+        "x": {
+          "description": "Policy covariates; default the forest's effect modifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Rank-weighted average treatment effect (AUTOC / QINI) of a causal forest's targeting rule, fitted and evaluated on disjoint units. sp.rate ranks the rows it also scores, which for a fe= forest is not a valid test -- every imputation score carries -gamma_hat_t from the periods the forest saw, so a nominal 5% test rejected 17.5% of the time under no heterogeneity at all (AUTOC averaged -0.025, not 0). Splitting units (or dyadic members) brings that to 7.5% and +0.0008, at 99.5% power. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "rate_split",
     "parameters": {
