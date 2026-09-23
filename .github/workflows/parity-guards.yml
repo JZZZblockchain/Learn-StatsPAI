@@ -56,7 +56,11 @@ jobs:
         # cross-software evidence they pin never actually ran here.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,fixest]"
+          # rd-cct pins the official rdrobust port that ``bwselect='cct'``
+          # delegates to. Without it the Track A alias test does not skip --
+          # it ERRORS with ModuleNotFoundError, i.e. this job reported a
+          # missing optional backend as a parity failure.
+          pip install -e ".[dev,fixest,rd-cct]"
       - name: Run reference_parity suite
         run: |
           pytest tests/reference_parity/ -q --no-header

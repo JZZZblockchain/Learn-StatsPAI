@@ -82,10 +82,23 @@ def fit(data):
 
 
 def test_nodes_are_identical():
+    """Both sides integrate on the same nodes.
+
+    Not a bitwise check. The nodes are recomputed here (the fixture stores
+    what pyblp was fed), and the inverse-normal transform of the Halton
+    draws is one-ULP platform-dependent: on the Linux CI runner 16 of the
+    100 draws land 4.4e-16 from the macOS values the fixture was generated
+    on, which ``assert_array_equal`` turned into a red gate on an identity
+    that holds. 1e-12 is four orders below any difference that could move
+    the estimates this file pins at 1e-6, and a genuinely different Halton
+    stream would be off by ~1e-1, not 1e-16.
+    """
     d1 = _blp._halton_sequence(REF["n_draws"], 1, seed=REF["seed"])
     d2 = _blp._halton_sequence(REF["n_draws"], 2, seed=REF["seed"])
-    np.testing.assert_array_equal(d1[:, 0], REF["est_x1"]["nodes"])
-    np.testing.assert_array_equal(d2, np.array(REF["elast_fixed"]["nodes"]))
+    np.testing.assert_allclose(d1[:, 0], REF["est_x1"]["nodes"], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(
+        d2, np.array(REF["elast_fixed"]["nodes"]), rtol=0, atol=1e-12
+    )
 
 
 def test_point_estimates(fit):
