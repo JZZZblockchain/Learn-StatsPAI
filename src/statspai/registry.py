@@ -2734,6 +2734,18 @@ def _build_registry() -> None:
                     "Learner type",
                     ["s", "t", "x", "r", "dr"],
                 ),
+                ParamSpec(
+                    "fold_indices",
+                    "array",
+                    False,
+                    None,
+                    "Explicit cross-fitting partition: one integer label "
+                    "0..n_folds-1 per row of data. Replaces every internal split "
+                    "(R/DR nuisances and the AIPW cross-fit behind estimate/se). "
+                    "Default None keeps KFold(n_folds, shuffle=True, "
+                    "random_state=42); passing that split's labels reproduces "
+                    "the default exactly.",
+                ),
             ],
             returns="Meta-learner result with CATE predictions",
             example='sp.metalearner(df, y="outcome", treat="treat", covariates=["x1","x2"], learner="x")',
@@ -3183,6 +3195,19 @@ def _build_registry() -> None:
                     "q_bound]`` before targeting. ``tmle::tmle`` truncates at ``1 "
                     "- alpha = 5e-4`` (its default ``alpha = 0.9995``); pass "
                     "``q_bound=5e-4`` to reproduce it.",
+                ),
+                ParamSpec(
+                    "fold_indices",
+                    "array",
+                    False,
+                    None,
+                    "Opt-in CV-TMLE: one integer label 0..K-1 (K >= 2) per row "
+                    "of data. Q and g are then Super Learners fitted outside "
+                    "each fold and predicted inside it; the fluctuation is "
+                    "fitted on the pooled out-of-fold predictions and the SE is "
+                    "the EIF at the targeted fits. The default (None) fits both "
+                    "nuisances on the full sample (not cross-fitted). Not "
+                    "combinable with Q / g1W.",
                 ),
             ],
             returns="TMLE result",

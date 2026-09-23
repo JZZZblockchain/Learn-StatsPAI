@@ -1687,6 +1687,10 @@
           "description": "pandas DataFrame containing the variables used by the estimator.",
           "type": "string"
         },
+        "fold_indices": {
+          "description": "Explicit cross-fitting partition: one integer label 0..n_folds-1 per row of data. Replaces every internal split (R/DR nuisances and the AIPW cross-fit behind estimate/se). Default None keeps KFold(n_folds, shuffle=True, random_state=42); passing that split's labels reproduces the default exactly.",
+          "type": "string"
+        },
         "learner": {
           "default": "dr",
           "description": "Learner type",
@@ -1975,6 +1979,10 @@
         "estimand": {
           "default": "ATE",
           "description": "Target estimand",
+          "type": "string"
+        },
+        "fold_indices": {
+          "description": "Opt-in CV-TMLE: one integer label 0..K-1 (K >= 2) per row of data. Q and g are then Super Learners fitted outside each fold and predicted inside it; the fluctuation is fitted on the pooled out-of-fold predictions and the SE is the EIF at the targeted fits. The default (None) fits both nuisances on the full sample (not cross-fitted). Not combinable with Q / g1W.",
           "type": "string"
         },
         "q_bound": {
@@ -29121,6 +29129,10 @@
           "description": "Model for tau(X). Fit on pseudo-outcome.",
           "type": "string"
         },
+        "fold_indices": {
+          "description": "Explicit cross-fitting partition, one label in ``0..n_folds-1`` per row passed to :meth:`fit`. Default ``None`` keeps the historical ``KFold(n_folds, shuffle=True, random_state=42)``.",
+          "type": "string"
+        },
         "n_folds": {
           "default": 5,
           "description": "Cross-fitting folds for nuisance estimation.",
@@ -29146,6 +29158,10 @@
       "properties": {
         "cate_model": {
           "description": "Final-stage model for tau(X).",
+          "type": "string"
+        },
+        "fold_indices": {
+          "description": "Explicit cross-fitting partition, one label in ``0..n_folds-1`` per row passed to :meth:`fit`. Default ``None`` keeps the historical ``KFold(n_folds, shuffle=True, random_state=42)``.",
           "type": "string"
         },
         "n_folds": {
@@ -31562,6 +31578,10 @@
         "fluctuation": {
           "default": "single",
           "description": "fluctuation parameter (str).",
+          "type": "string"
+        },
+        "fold_indices": {
+          "description": "Opt-in cross-validated TMLE partition (labels ``0..K-1``, one per row of ``data``); see :func:`statspai.tmle`. ``None`` (default) fits Q and g on the full sample, i.e. not cross-fitted.",
           "type": "string"
         },
         "g1W": {

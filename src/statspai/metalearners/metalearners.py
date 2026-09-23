@@ -149,20 +149,47 @@ def _prepare_effect_matrix(estimator: Any, X: Any, *, context: str) -> np.ndarra
     return X_arr
 
 
+def _fold_splits(
+    X: np.ndarray,
+    n_folds: int,
+    seed: int = 42,
+    fold_indices: Optional[np.ndarray] = None,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """Cross-fitting ``(train, test)`` index pairs.
+
+    Without ``fold_indices`` this is the historical
+    ``KFold(n_folds, shuffle=True, random_state=seed)`` split. With a
+    validated label vector (see :func:`statspai.core._validate.
+    validate_fold_indices`) fold ``k`` is held out as
+    ``(flatnonzero(f != k), flatnonzero(f == k))``. ``KFold.split`` also
+    returns sorted index arrays, so the label vector of a ``KFold`` split
+    reproduces that split exactly.
+    """
+    if fold_indices is None:
+        from sklearn.model_selection import KFold
+
+        kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
+        return list(kf.split(X))
+    f = np.asarray(fold_indices)
+    return [
+        (np.flatnonzero(f != k), np.flatnonzero(f == k))
+        for k in range(int(f.max()) + 1)
+    ]
+
+
 def _cross_fit_predict(
     model: Any,
     X: np.ndarray,
     y: np.ndarray,
     n_folds: int,
     method: str = "predict",
+    fold_indices: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Out-of-fold predictions via cross-fitting."""
     from sklearn.base import clone
-    from sklearn.model_selection import KFold
 
-    kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
     preds = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in kf.split(X):
+    for train_idx, test_idx in _fold_splits(X, n_folds, 42, fold_indices):
         m = clone(model)
         m.fit(X[train_idx], y[train_idx])
         if method == "predict_proba":
@@ -199,6 +226,7 @@ def _cross_fit_aipw_phi(
     n_folds: int = 5,
     clip: Tuple[float, float] = (0.01, 0.99),
     seed: int = 42,
+    fold_indices: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, dict[str, Any]]:
     """Cross-fit AIPW (DR) pseudo-outcome :math:`\\varphi_i`.
 
@@ -221,14 +249,12 @@ def _cross_fit_aipw_phi(
     estimator (S/T/X/R/DR) the user has chosen for heterogeneity.
     """
     from sklearn.base import clone
-    from sklearn.model_selection import KFold
 
     n = len(Y)
     mu1_hat = np.zeros(n, dtype=float)
     mu0_hat = np.zeros(n, dtype=float)
     e_hat = np.zeros(n, dtype=float)
-    kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
-    for tr, te in kf.split(X):
+    for tr, te in _fold_splits(X, n_folds, seed, fold_indices):
         X_tr, Y_tr, D_tr = X[tr], Y[tr], D[tr]
         X_te = X[te]
         m1 = clone(outcome_model)
@@ -270,6 +296,20 @@ def _cross_fit_aipw_phi(
         "clip": clip,
     }
     return np.asarray(phi, dtype=float), diag
+
+
+def _resolve_learner_folds(
+    learner: Any, n: int, D: np.ndarray, context: str
+) -> Optional[np.ndarray]:
+    """Validate a learner's ``fold_indices`` against the arrays given to fit."""
+    raw = getattr(learner, "fold_indices", None)
+    if raw is None:
+        return None
+    from ..core._validate import validate_fold_indices
+
+    return validate_fold_indices(
+        raw, n, context=context, n_folds=learner.n_folds, binary_target=D
+    )
 
 
 # ======================================================================
@@ -550,6 +590,10 @@ class RLearner:
         Model for tau(X). Fit on pseudo-outcome.
     n_folds : int, default 5
         Cross-fitting folds for nuisance estimation.
+    fold_indices : array-like of int, optional
+        Explicit cross-fitting partition, one label in ``0..n_folds-1``
+        per row passed to :meth:`fit`. Default ``None`` keeps the
+        historical ``KFold(n_folds, shuffle=True, random_state=42)``.
 
     Examples
     --------
@@ -577,6 +621,7 @@ class RLearner:
         propensity_model: Any = None,
         cate_model: Any = None,
         n_folds: int = 5,
+        fold_indices: Any = None,
     ) -> None:
         self.outcome_model = (
             outcome_model if outcome_model is not None else _default_outcome_model()
@@ -590,17 +635,26 @@ class RLearner:
             cate_model if cate_model is not None else _default_cate_model()
         )
         self.n_folds = n_folds
+        self.fold_indices = fold_indices
         self._fitted = False
 
     def fit(self, X: Any, Y: Any, D: Any) -> "RLearner":
         from sklearn.base import clone
 
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
+        folds = _resolve_learner_folds(self, len(Y), D, "RLearner.fit()")
 
         # Cross-fit nuisance
-        m_hat = _cross_fit_predict(self.outcome_model, X, Y, self.n_folds)
+        m_hat = _cross_fit_predict(
+            self.outcome_model, X, Y, self.n_folds, fold_indices=folds
+        )
         e_hat = _cross_fit_predict(
-            self.propensity_model, X, D, self.n_folds, method="predict_proba"
+            self.propensity_model,
+            X,
+            D,
+            self.n_folds,
+            method="predict_proba",
+            fold_indices=folds,
         )
         e_hat = np.asarray(np.clip(e_hat, 0.01, 0.99), dtype=float)
 
@@ -656,6 +710,10 @@ class DRLearner:
         Final-stage model for tau(X).
     n_folds : int, default 5
         Cross-fitting folds for nuisance estimation.
+    fold_indices : array-like of int, optional
+        Explicit cross-fitting partition, one label in ``0..n_folds-1``
+        per row passed to :meth:`fit`. Default ``None`` keeps the
+        historical ``KFold(n_folds, shuffle=True, random_state=42)``.
 
     Examples
     --------
@@ -683,6 +741,7 @@ class DRLearner:
         propensity_model: Any = None,
         cate_model: Any = None,
         n_folds: int = 5,
+        fold_indices: Any = None,
     ) -> None:
         self.outcome_model = (
             outcome_model if outcome_model is not None else _default_outcome_model()
@@ -696,22 +755,21 @@ class DRLearner:
             cate_model if cate_model is not None else _default_cate_model()
         )
         self.n_folds = n_folds
+        self.fold_indices = fold_indices
         self._fitted = False
 
     def fit(self, X: Any, Y: Any, D: Any) -> "DRLearner":
         from sklearn.base import clone
-        from sklearn.model_selection import KFold
 
         X, Y, D = np.asarray(X), np.asarray(Y).ravel(), np.asarray(D).ravel()
         n = len(Y)
-
-        kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=42)
+        folds = _resolve_learner_folds(self, n, D, "DRLearner.fit()")
 
         mu1_hat = np.zeros(n, dtype=float)
         mu0_hat = np.zeros(n, dtype=float)
         e_hat = np.zeros(n, dtype=float)
 
-        for train_idx, test_idx in kf.split(X):
+        for train_idx, test_idx in _fold_splits(X, self.n_folds, 42, folds):
             X_tr, D_tr, Y_tr = X[train_idx], D[train_idx], Y[train_idx]
             X_te = X[test_idx]
 
@@ -793,6 +851,7 @@ def metalearner(
     alpha: float = 0.05,
     d: Optional[str] = None,
     x: Optional[List[str]] = None,
+    fold_indices: Optional[Any] = None,
 ) -> CausalResult:
     """
     Estimate heterogeneous treatment effects using meta-learners.
@@ -828,6 +887,17 @@ def metalearner(
         in a future minor release.
     alpha : float, default 0.05
         Significance level.
+    fold_indices : array-like of int, optional
+        Explicit cross-fitting partition: one label per row of ``data``,
+        the labels being exactly ``0, ..., n_folds-1`` (the convention
+        ``sp.dml(fold_indices=...)`` uses); rows dropped for missing values
+        are dropped from the vector too. It replaces every internal split
+        on this code path -- the R-/DR-Learner nuisance cross-fit and the
+        AIPW cross-fit behind ``estimate`` / ``se`` for the S/T/X/R
+        learners. Each training complement must contain treated and
+        control units. The default ``None`` keeps the historical
+        ``KFold(n_folds, shuffle=True, random_state=42)``; passing that
+        split's labels reproduces the default result exactly.
 
     Returns
     -------
@@ -932,6 +1002,19 @@ def metalearner(
             f"Treatment must be binary (0/1), got unique values: {unique_d}"
         )
 
+    folds: Optional[np.ndarray] = None
+    if fold_indices is not None:
+        from ..core._validate import validate_fold_indices
+
+        folds = validate_fold_indices(
+            fold_indices,
+            len(data),
+            context="sp.metalearner",
+            keep=data[[y, treat] + list(covariates)].notna().all(axis=1).to_numpy(),
+            n_folds=n_folds,
+            binary_target=D,
+        )
+
     learner = learner.lower()
     valid = {"s", "t", "x", "r", "dr"}
     if learner not in valid:
@@ -960,6 +1043,7 @@ def metalearner(
             propensity_model=propensity_model,
             cate_model=cate_model,
             n_folds=n_folds,
+            fold_indices=folds,
         )
     else:  # 'dr'
         est = DRLearner(
@@ -967,6 +1051,7 @@ def metalearner(
             propensity_model=propensity_model,
             cate_model=cate_model,
             n_folds=n_folds,
+            fold_indices=folds,
         )
 
     est.fit(X, Y, D)
@@ -1005,6 +1090,7 @@ def metalearner(
             _outcome,
             _prop,
             n_folds=n_folds,
+            fold_indices=folds,
         )
     ate = float(np.mean(phi))
     se = float(np.std(phi, ddof=1) / np.sqrt(n))
@@ -1053,6 +1139,11 @@ def metalearner(
         "n_covariates": len(covariates),
         "n_folds": n_folds if learner in ("r", "dr") else None,
         "n_bootstrap": n_bootstrap,
+        "cross_fit_partition": (
+            "fold_indices"
+            if folds is not None
+            else f"KFold(n_splits={n_folds}, shuffle=True, random_state=42)"
+        ),
         # All learners now use AIPW (DR pseudo-outcome) for ATE + SE —
         # the chosen learner only governs CATE prediction. See the
         # ``ate_method`` note in the docstring + the v1.11.x migration
@@ -1117,6 +1208,7 @@ def metalearner(
                 "learner": learner,
                 "n_folds": n_folds,
                 "n_bootstrap": n_bootstrap,
+                "fold_indices_supplied": fold_indices is not None,
                 "alpha": alpha,
                 "outcome_model": outcome_model_name,
                 "propensity_model": propensity_model_name,

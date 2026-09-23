@@ -70,6 +70,7 @@ def tmle(
     g1W: "Optional[np.ndarray]" = None,
     fluctuation: str = "single",
     q_bound: float = 1e-5,
+    fold_indices: "Optional[Any]" = None,
 ) -> CausalResult:
     """
     Estimate causal effects using TMLE with Super Learner.
@@ -108,10 +109,58 @@ def tmle(
         truncation only binds when an initial prediction falls outside
         the observed outcome range, which is common for linear ``Q`` fits
         near the extremes.
+    fold_indices : array-like of int, optional
+        Opt-in cross-validated TMLE (CV-TMLE). One label per row of
+        ``data``, the labels being ``0, ..., K-1`` with ``K >= 2`` (the
+        convention ``sp.dml(fold_indices=...)`` uses); rows dropped for
+        missing values are dropped from the vector too. When given, the
+        initial outcome model ``Q(Y | A, W)`` and the propensity
+        ``g(A | W)`` are Super Learners fitted on the rows *outside* each
+        fold and predicted on the rows inside it, so every unit's initial
+        predictions are out of fold. The fluctuation is then fitted once on
+        the pooled out-of-fold predictions, the plug-in is the mean of the
+        targeted out-of-fold counterfactual predictions, and the standard
+        error is the sample standard deviation of the efficient influence
+        function at those targeted fits over ``sqrt(n)``. ``n_folds`` keeps
+        its meaning (the Super Learner's internal CV folds, now run inside
+        each training set). Cannot be combined with ``Q`` / ``g1W``.
+        ``result.model_info["cross_fitted"]`` is ``True`` and
+        ``model_info["n_cv_folds"]`` is ``K``; the per-fold ensemble
+        weights are in ``model_info["sl_outcome_weights_by_fold"]`` /
+        ``["sl_propensity_weights_by_fold"]`` (entry ``k`` is the Super
+        Learner fitted on the rows with ``fold != k``), and the full-sample
+        ``sl_*_weights`` keys are ``None``. A continuous outcome is min-max
+        rescaled to ``[0, 1]`` with bounds taken from the *full* retained
+        sample, as on the default path, before the per-fold fits; this is
+        a fixed affine map, not a fitted nuisance. A Super Learner failure
+        inside a training complement is re-raised naming the fold.
 
     Returns
     -------
     CausalResult
+
+    Notes
+    -----
+    **How the nuisances are fitted.** By default (``fold_indices=None``)
+    this is *not* a cross-validated TMLE: the Super Learner for ``Q`` is
+    fitted on the full sample with the treatment as a covariate, the
+    Super Learner for ``g`` is fitted on the full sample, and both are
+    evaluated on the same rows they were trained on. ``n_folds`` only
+    controls the internal cross-validation the Super Learner uses to pick
+    its ensemble weights; the final learners are refitted on all rows.
+    ``model_info["cross_fitted"]`` is ``False`` on this path. Pass
+    ``fold_indices`` for out-of-fold initial fits.
+
+    **ATT.** With ``estimand='ATT'`` only the outcome model is targeted;
+    ``g`` is held at its (truncated) initial fit and is not updated. The
+    clever covariate is ``H(A, W) = A - (1 - A) g / (1 - g)`` (so
+    ``H(0, W) = -g / (1 - g)``), and the reported estimate uses the
+    estimating-equation form
+    ``mean(A (Y - Q*(0,W)) / p - (1 - A) g (Y - Q*(0,W)) / ((1 - g) p))``
+    with ``p`` the treated share of the retained sample, not the plug-in
+    ``mean over treated of Q*(1,W) - Q*(0,W)``. The SE is the standard
+    deviation of the corresponding influence function (the summand minus
+    ``psi A / p``) over ``sqrt(n)``.
 
     References
     ----------
@@ -149,6 +198,7 @@ def tmle(
         g1W=g1W,
         fluctuation=fluctuation,
         q_bound=q_bound,
+        fold_indices=fold_indices,
     )
     _result = est.fit()
     try:
@@ -167,6 +217,7 @@ def tmle(
                 "propensity_bounds": list(propensity_bounds),
                 "random_state": random_state,
                 "q_bound": q_bound,
+                "cross_fitted": fold_indices is not None,
                 "outcome_library": (
                     [type(m).__name__ for m in outcome_library]
                     if outcome_library
@@ -184,6 +235,38 @@ def tmle(
     except Exception:  # pragma: no cover
         pass
     return _result
+
+
+def _fit_in_fold(
+    sl: SuperLearner, X: np.ndarray, y: np.ndarray, k: int, what: str
+) -> None:
+    """Fit a CV-TMLE nuisance on fold ``k``'s training complement.
+
+    A failure is re-raised, same class where possible, with the fold named
+    so the caller can see which partition cell broke the fit.
+    """
+    try:
+        sl.fit(X, y)
+    except Exception as exc:
+        from ..exceptions import StatsPAIError
+
+        msg = (
+            f"sp.tmle (CV-TMLE): fitting the {what} Super Learner on the "
+            f"training complement of fold {k} (rows with fold != {k}) failed: "
+            f"{getattr(exc, 'message', None) or exc}"
+        )
+        if isinstance(exc, StatsPAIError):
+            raise type(exc)(
+                msg,
+                recovery_hint=exc.recovery_hint,
+                diagnostics={**exc.diagnostics, "cv_fold": k},
+                alternative_functions=exc.alternative_functions,
+            ) from exc
+        try:
+            new_exc = type(exc)(msg)
+        except Exception:
+            new_exc = RuntimeError(msg)
+        raise new_exc from exc
 
 
 # ======================================================================
@@ -208,6 +291,10 @@ class TMLE:
     alpha : float
     propensity_bounds : tuple
     random_state : int
+    fold_indices : array-like of int, optional
+        Opt-in cross-validated TMLE partition (labels ``0..K-1``, one per
+        row of ``data``); see :func:`statspai.tmle`. ``None`` (default)
+        fits Q and g on the full sample, i.e. not cross-fitted.
 
     Examples
     --------
@@ -248,6 +335,7 @@ class TMLE:
         g1W: "Optional[np.ndarray]" = None,
         fluctuation: str = "single",
         q_bound: float = 1e-5,
+        fold_indices: "Optional[Any]" = None,
     ):
         if not (0 < q_bound < 0.5):
             raise MethodIncompatibility(
@@ -273,6 +361,17 @@ class TMLE:
         self.alpha = alpha
         self.propensity_bounds = propensity_bounds
         self.random_state = random_state
+        if fold_indices is not None and (Q is not None or g1W is not None):
+            raise MethodIncompatibility(
+                "tmle: fold_indices cross-fits the Super Learner nuisances, "
+                "but Q / g1W were supplied, so no nuisance would be fitted "
+                "on the partition.",
+                recovery_hint=(
+                    "Drop fold_indices when passing precomputed Q / g1W (make "
+                    "those out-of-fold yourself), or drop Q / g1W."
+                ),
+            )
+        self.fold_indices = fold_indices
 
     def fit(self) -> CausalResult:
         """Run TMLE and return causal effect estimates."""
@@ -291,6 +390,20 @@ class TMLE:
         unique_a = np.unique(A)
         if not (len(unique_a) == 2 and set(unique_a.astype(int)) == {0, 1}):
             raise ValueError(f"Treatment must be binary (0/1), got: {unique_a}")
+
+        # Opt-in CV-TMLE partition, aligned with the input rows and then
+        # subset to the complete cases kept above.
+        folds: "Optional[np.ndarray]" = None
+        if self.fold_indices is not None:
+            from ..core._validate import validate_fold_indices
+
+            folds = validate_fold_indices(
+                self.fold_indices,
+                len(self.data),
+                context="sp.tmle",
+                keep=self.data[cols].notna().all(axis=1).to_numpy(),
+                binary_target=A,
+            )
 
         # Detect if outcome is binary
         is_binary_outcome = set(np.unique(Y)) <= {0.0, 1.0}
@@ -331,6 +444,27 @@ class TMLE:
                 Q_bar_0 = Q_in[:, 0].copy()
                 Q_bar_1 = Q_in[:, 1].copy()
             Q_bar_A = np.where(A == 1, Q_bar_1, Q_bar_0)
+        elif folds is not None:
+            # CV-TMLE: each unit's initial predictions come from a Super
+            # Learner that never saw it.
+            Q_bar_A = np.empty(n)
+            Q_bar_1 = np.empty(n)
+            Q_bar_0 = np.empty(n)
+            sl_Q_folds = []
+            for k in range(int(folds.max()) + 1):
+                tr = np.flatnonzero(folds != k)
+                te = np.flatnonzero(folds == k)
+                sl_Q_k = SuperLearner(
+                    library=self.outcome_library,
+                    n_folds=self.n_folds,
+                    task="classification" if is_binary_outcome else "regression",
+                    random_state=self.random_state,
+                )
+                _fit_in_fold(sl_Q_k, AW[tr], Y_scaled[tr], k, "outcome model Q")
+                Q_bar_A[te] = sl_Q_k.predict(AW[te])
+                Q_bar_1[te] = sl_Q_k.predict(W1[te])
+                Q_bar_0[te] = sl_Q_k.predict(W0[te])
+                sl_Q_folds.append(sl_Q_k)
         else:
             sl_Q = SuperLearner(
                 library=self.outcome_library,
@@ -356,6 +490,21 @@ class TMLE:
                 raise ValueError(
                     f"tmle: g1W must have length n = {n}; " f"got {g_hat_raw.shape[0]}."
                 )
+        elif folds is not None:
+            g_hat_raw = np.empty(n)
+            sl_g_folds = []
+            for k in range(int(folds.max()) + 1):
+                tr = np.flatnonzero(folds != k)
+                te = np.flatnonzero(folds == k)
+                sl_g_k = SuperLearner(
+                    library=self.propensity_library,
+                    n_folds=self.n_folds,
+                    task="classification",
+                    random_state=self.random_state,
+                )
+                _fit_in_fold(sl_g_k, W[tr], A[tr], k, "propensity model g")
+                g_hat_raw[te] = sl_g_k.predict(W[te])
+                sl_g_folds.append(sl_g_k)
         else:
             sl_g = SuperLearner(
                 library=self.propensity_library,
@@ -527,16 +676,51 @@ class TMLE:
             # Absent when the caller supplied the corresponding nuisance
             # directly: there is no Super Learner to report weights for,
             # and ``sl_Q`` / ``sl_g`` are never bound on that path.
+            # One ensemble weight vector for the full-sample fit. Under
+            # fold_indices there is one Super Learner per training
+            # complement: these are None and the ``*_by_fold`` lists hold
+            # entry k = weights of the ensemble fitted on rows with
+            # fold != k.
             "sl_outcome_weights": (
-                None if self.Q_init is not None else sl_Q.weights_.tolist()
+                None
+                if self.Q_init is not None or folds is not None
+                else sl_Q.weights_.tolist()
             ),
             "sl_propensity_weights": (
-                None if self.g1W_init is not None else sl_g.weights_.tolist()
+                None
+                if self.g1W_init is not None or folds is not None
+                else sl_g.weights_.tolist()
+            ),
+            "sl_outcome_weights_by_fold": (
+                [m.weights_.tolist() for m in sl_Q_folds] if folds is not None else None
+            ),
+            "sl_propensity_weights_by_fold": (
+                [m.weights_.tolist() for m in sl_g_folds] if folds is not None else None
             ),
             "nuisance_source": {
-                "Q": "supplied" if self.Q_init is not None else "super_learner",
-                "g1W": "supplied" if self.g1W_init is not None else "super_learner",
+                "Q": (
+                    "supplied"
+                    if self.Q_init is not None
+                    else (
+                        "super_learner_out_of_fold"
+                        if folds is not None
+                        else "super_learner"
+                    )
+                ),
+                "g1W": (
+                    "supplied"
+                    if self.g1W_init is not None
+                    else (
+                        "super_learner_out_of_fold"
+                        if folds is not None
+                        else "super_learner"
+                    )
+                ),
             },
+            # True only for the opt-in CV-TMLE path; the default fits both
+            # nuisances on the full sample and evaluates them in sample.
+            "cross_fitted": folds is not None,
+            "n_cv_folds": None if folds is None else int(folds.max()) + 1,
             "fluctuation": self.fluctuation,
             "q_bound": self.q_bound,
             # ``epsilon`` stays the scalar it has always been under the
@@ -548,13 +732,24 @@ class TMLE:
             "epsilon_vec": [float(v) for v in np.atleast_1d(epsilon_vec)],
         }
 
-        self._sl_Q = None if self.Q_init is not None else sl_Q
-        self._sl_g = None if self.g1W_init is not None else sl_g
+        # One fitted Super Learner, or one per fold under CV-TMLE.
+        self._sl_Q: Any
+        self._sl_g: Any
+        if folds is not None:
+            self._sl_Q = sl_Q_folds
+            self._sl_g = sl_g_folds
+        else:
+            self._sl_Q = None if self.Q_init is not None else sl_Q
+            self._sl_g = None if self.g1W_init is not None else sl_g
         self._epsilon = epsilon
         self._epsilon_vec = np.atleast_1d(epsilon_vec)
 
         return CausalResult(
-            method="TMLE (van der Laan & Rose 2011)",
+            method=(
+                "CV-TMLE (van der Laan & Rose 2011)"
+                if folds is not None
+                else "TMLE (van der Laan & Rose 2011)"
+            ),
             estimand=self.estimand,
             estimate=psi,
             se=se,

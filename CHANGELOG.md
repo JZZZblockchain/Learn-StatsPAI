@@ -82,6 +82,47 @@ All notable changes to StatsPAI will be documented in this file.
   positional argument, as the panel-forest guide already wrote it (the call
   used to fail because the first parameter is `X`).
 
+Three nuisance-control additions motivated by the audit of the ML4CI
+companion paper. All are opt-in or read-only: existing calls return
+bit-identical numbers (pinned regression tests in the new test files).
+
+- **`sp.tmle(fold_indices=...)`: cross-validated TMLE.** One integer label
+  `0..K-1` (`K >= 2`) per row of `data`, the convention `sp.dml(fold_indices=)`
+  uses; rows dropped for missing values are dropped from the vector. When
+  given, the initial `Q(Y | A, W)` and `g(A | W)` Super Learners are fitted
+  outside each fold and predicted inside it, the fluctuation is fitted once on
+  the pooled out-of-fold predictions, and the SE is the efficient influence
+  function at those targeted fits. `model_info["cross_fitted"]` and
+  `model_info["n_cv_folds"]` record the path; per-fold ensemble weights are in
+  `model_info["sl_outcome_weights_by_fold"]` / `["sl_propensity_weights_by_fold"]`
+  (entry `k` = the Super Learner fitted on rows with fold != k); a continuous
+  outcome's `[0, 1]` rescaling uses full-sample bounds; a Super Learner failure
+  in a training complement is re-raised naming the fold; `result.method` reads
+  `CV-TMLE (...)`. The docstring now also states that the ATT path targets
+  only `Q` and reports the estimating-equation form. Cannot be combined with `Q=` / `g1W=`. The docstring now
+  states that the default path fits both nuisances on the full sample and
+  evaluates them in sample (it is not cross-fitted); `n_folds` only drives the
+  Super Learner's internal weight selection.
+- **`sp.metalearner(fold_indices=...)`** (and `sp.RLearner` / `sp.DRLearner`
+  `fold_indices=`): an explicit cross-fitting partition with labels
+  `0..n_folds-1`, used for every internal split on that path (the R/DR
+  nuisance cross-fit and the AIPW cross-fit behind `estimate` / `se` for the
+  S/T/X/R learners). The default still draws
+  `KFold(n_folds, shuffle=True, random_state=42)`; passing that split's labels
+  reproduces the default exactly. `model_info["cross_fit_partition"]` names
+  the partition used.
+- **`CausalForest.get_nuisances()`** returns read-only copies of the forest's
+  internal nuisances (`Y_hat`, `W_hat`) that the forest was grown on and its
+  doubly robust averages use, with their source. At fit time, for a binary
+  0/1 treatment without `fe=`, `diagnostics["nuisance_overlap"]` records how
+  many internal propensities fall outside `[0.01, 0.99]`
+  (`CausalForest.NUISANCE_OVERLAP_BOUNDS`), and an `AssumptionWarning` fires
+  when that share exceeds 5% (`NUISANCE_OVERLAP_MAX_SHARE`). No estimate
+  changes. The warning is attributed to the first caller frame outside
+  `statspai`, so it is not deduplicated across fits.
+- Shared validator `statspai.core._validate.validate_fold_indices` for the two
+  `fold_indices=` arguments above.
+
 ### Fixed
 
 - **`sp.causal_forest(data=, y=, d=, x=[...])` dropped the feature names**,

@@ -22,7 +22,10 @@ References
 [@athey2019generalized], [@wager2018estimation], [@kattenberg2023causal]
 """
 
+import os
+import sys
 import warnings
+from types import FrameType
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -44,6 +47,29 @@ from ..exceptions import (
 
 if TYPE_CHECKING:
     from ..core.results import ScalarEffect
+
+
+_STATSPAI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _external_stacklevel() -> int:
+    """``stacklevel`` for a ``warnings.warn`` issued by this function's caller
+    that attributes the warning to the first frame outside ``statspai``.
+
+    A fixed level lands on whichever package frame happens to sit there
+    (``_aliases.py`` under ``sp.causal_forest``, ``fit`` for direct
+    ``CausalForest().fit``), and Python's default filter then shows the
+    warning once per *package* line, i.e. once per session.
+    """
+    level = 1  # the caller of this helper, where warnings.warn is called
+    frame: Optional[FrameType] = sys._getframe(1)
+    prefix = _STATSPAI_DIR + os.sep
+    while frame is not None and os.path.abspath(frame.f_code.co_filename).startswith(
+        prefix
+    ):
+        level += 1
+        frame = frame.f_back
+    return level
 
 
 def _sp_stats() -> Any:
@@ -586,6 +612,7 @@ class CausalForest(BaseModel):
             "average_treatment_effect": ate,
             "treatment_type": "discrete" if self.discrete_treatment else "continuous",
         }
+        self._record_nuisance_overlap()
 
         return self
 
@@ -784,7 +811,136 @@ class CausalForest(BaseModel):
             "treatment_type": "discrete" if self.discrete_treatment else "continuous",
             **diagnostics,
         }
+        self._record_nuisance_overlap()
         return self
+
+    #: Propensities outside this interval count as near-violations of
+    #: overlap for the fit-time diagnostic below.
+    NUISANCE_OVERLAP_BOUNDS: Tuple[float, float] = (0.01, 0.99)
+    #: Warn when more than this share of the forest's internal propensities
+    #: fall outside ``NUISANCE_OVERLAP_BOUNDS``.
+    NUISANCE_OVERLAP_MAX_SHARE: float = 0.05
+
+    def _record_nuisance_overlap(self) -> None:
+        """Fit-time overlap check on the forest's own propensity ``W_hat``.
+
+        The doubly robust averages (``ate()``, ``att()``,
+        ``average_treatment_effect()``) divide by ``W_hat`` and
+        ``1 - W_hat``. When many of the internal out-of-bag / cross-fitted
+        propensities sit near 0 or 1 those averages are driven by a handful
+        of units, and nothing in the point estimate says so. This records
+        ``diagnostics["nuisance_overlap"]`` and emits an
+        :class:`~statspai.AssumptionWarning` when the share outside
+        ``NUISANCE_OVERLAP_BOUNDS`` exceeds ``NUISANCE_OVERLAP_MAX_SHARE``.
+        It reads the nuisances only; no estimate changes.
+        """
+        lo, hi = self.NUISANCE_OVERLAP_BOUNDS
+        info: Dict[str, Any] = {
+            "bounds": (float(lo), float(hi)),
+            "max_share": float(self.NUISANCE_OVERLAP_MAX_SHARE),
+        }
+        tv = np.asarray(getattr(self, "_treatment_values", []), dtype=float)
+        binary = (
+            bool(self.discrete_treatment)
+            and tv.size == 2
+            and set(tv.tolist()) == {0.0, 1.0}
+        )
+        e_raw = getattr(self, "_e_insample", None)
+        if getattr(self, "fe", None) is not None:
+            info.update(
+                applicable=False,
+                reason="fe= forest: W_hat is a within-transformed treatment "
+                "prediction, not a propensity",
+            )
+        elif not binary or e_raw is None:
+            info.update(
+                applicable=False,
+                reason="treatment is not binary 0/1; W_hat is not a propensity",
+            )
+        else:
+            e = np.asarray(e_raw, dtype=float).ravel()
+            n_lo = int(np.sum(e < lo))
+            n_hi = int(np.sum(e > hi))
+            share = (n_lo + n_hi) / max(e.size, 1)
+            flagged = share > self.NUISANCE_OVERLAP_MAX_SHARE
+            info.update(
+                applicable=True,
+                n=int(e.size),
+                n_below=n_lo,
+                n_above=n_hi,
+                share_outside=float(share),
+                min=float(np.min(e)),
+                max=float(np.max(e)),
+                n_at_zero=int(np.sum(e <= 0.0)),
+                n_at_one=int(np.sum(e >= 1.0)),
+                warning=flagged,
+            )
+            if flagged:
+                warnings.warn(
+                    f"CausalForest: {n_lo + n_hi}/{e.size} "
+                    f"({100 * share:.1f}%) of the forest's internal "
+                    f"propensities W_hat lie outside [{lo}, {hi}] "
+                    f"(min {info['min']:.3g}, max {info['max']:.3g}). The "
+                    "doubly robust ATE / ATT divide by W_hat and 1 - W_hat, "
+                    "so they rest on a few units and may be unstable. Inspect "
+                    "cf.get_nuisances() / cf.diagnostics['nuisance_overlap'], "
+                    "consider target_sample='overlap', trimming, or a "
+                    "smoother propensity model (model_t= or W_hat=).",
+                    AssumptionWarning,
+                    stacklevel=_external_stacklevel(),
+                )
+        self.diagnostics = dict(self.diagnostics or {})
+        self.diagnostics["nuisance_overlap"] = info
+
+    def get_nuisances(self) -> Dict[str, Any]:
+        """Return the forest's internal nuisance predictions (read-only copies).
+
+        Returns
+        -------
+        dict
+            ``"Y_hat"``: ``E[Y | X, W]`` and ``"W_hat"``: ``E[T | X, W]``
+            (the propensity for a binary treatment) for every training row,
+            exactly the arrays the forest was grown on and the doubly robust
+            averages use -- out-of-bag regression-forest predictions by
+            default, cross-fitted ``model_y`` / ``model_t`` predictions, or
+            the caller's ``Y_hat`` / ``W_hat``. The arrays are copies with
+            ``writeable=False``. ``"source"`` says which, and ``"overlap"``
+            is ``diagnostics["nuisance_overlap"]``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import statspai as sp
+        >>> rng = np.random.default_rng(0)
+        >>> X = rng.normal(size=(300, 2))
+        >>> T = rng.binomial(1, 0.5, size=300)
+        >>> Y = X[:, 0] * T + rng.normal(size=300)
+        >>> cf = sp.causal_forest(Y=Y, T=T, X=X, n_estimators=100,
+        ...                       random_state=0)
+        >>> nu = cf.get_nuisances()
+        >>> nu["W_hat"].shape
+        (300,)
+        """
+        if not getattr(self, "fitted_", False):
+            raise MethodIncompatibility(
+                "CausalForest.get_nuisances() requires a fitted forest.",
+                recovery_hint="Call fit() (or sp.causal_forest()) first.",
+            )
+        out: Dict[str, Any] = {}
+        for key, attr in (("Y_hat", "_m_insample"), ("W_hat", "_e_insample")):
+            arr = np.array(getattr(self, attr), dtype=float, copy=True)
+            arr.setflags(write=False)
+            out[key] = arr
+        diag = self.diagnostics or {}
+        out["source"] = dict(
+            diag.get("nuisance_source")
+            or {
+                "Y_hat": "legacy cross_val_predict",
+                "W_hat": "legacy cross_val_predict",
+            }
+        )
+        out["overlap"] = dict(diag.get("nuisance_overlap") or {})
+        return out
 
     def _parse_formula_inputs(
         self, formula: str, data: pd.DataFrame

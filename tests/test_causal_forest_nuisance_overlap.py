@@ -1,0 +1,143 @@
+"""``CausalForest.get_nuisances()`` and the fit-time propensity-overlap check."""
+
+import warnings
+
+import numpy as np
+import pandas as pd
+import pytest
+
+import statspai as sp
+from statspai.exceptions import AssumptionWarning, MethodIncompatibility
+
+
+def _data(n=300, seed=20260922, strength=None):
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(n, 3))
+    if strength is None:
+        p = 1 / (1 + np.exp(-(0.6 * X[:, 0] - 0.4 * X[:, 1])))
+    else:
+        p = 1 / (1 + np.exp(-strength * X[:, 0]))
+    D = rng.binomial(1, p)
+    Y = 1.5 * D + X @ np.array([1.0, -0.5, 0.3]) + 0.5 * D * X[:, 2]
+    Y = Y + rng.normal(size=n)
+    df = pd.DataFrame(X, columns=["x1", "x2", "x3"])
+    df["y"], df["d"] = Y, D
+    return df
+
+
+def _overlap_warnings(record):
+    return [
+        w
+        for w in record
+        if issubclass(w.category, AssumptionWarning)
+        and "internal propensities" in str(w.message)
+    ]
+
+
+def _fit(df, **kw):
+    kw.setdefault("n_estimators", 200)
+    kw.setdefault("random_state", 1)
+    return sp.causal_forest("y ~ d | x1 + x2 + x3", data=df, **kw)
+
+
+def test_estimate_unchanged_and_nuisances_exposed():
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        cf = _fit(_data())
+    assert not _overlap_warnings(rec)
+    # Pinned from the pre-change code (origin/main 4bf29552); the numba
+    # engine is deterministic given random_state, rtol covers only
+    # cross-platform floating-point round-off.
+    np.testing.assert_allclose(
+        cf.diagnostics["average_treatment_effect"], 1.3218728216088307, rtol=1e-9
+    )
+    np.testing.assert_allclose(float(cf.ate()), 1.3757088560133564, rtol=1e-9)
+    nu = cf.get_nuisances()
+    np.testing.assert_array_equal(nu["W_hat"], cf._e_insample)
+    np.testing.assert_array_equal(nu["Y_hat"], cf._m_insample)
+    np.testing.assert_allclose(nu["W_hat"].sum(), 162.80336902315491, rtol=1e-9)
+    assert not nu["W_hat"].flags.writeable and not nu["Y_hat"].flags.writeable
+    assert nu["W_hat"] is not cf._e_insample  # a copy, internals untouched
+    assert nu["source"] == {
+        "Y_hat": "grf regression forest (OOB)",
+        "W_hat": "grf regression forest (OOB)",
+    }
+    ov = cf.diagnostics["nuisance_overlap"]
+    assert ov["applicable"] is True and ov["warning"] is False
+    assert nu["overlap"] == ov
+
+
+def test_weak_overlap_warns_and_records():
+    df = _data(n=600, strength=8.0)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        cf = _fit(df)
+    hits = _overlap_warnings(rec)
+    assert len(hits) == 1
+    ov = cf.diagnostics["nuisance_overlap"]
+    e = cf.get_nuisances()["W_hat"]
+    share = np.mean((e < 0.01) | (e > 0.99))
+    assert ov["warning"] is True
+    assert ov["share_outside"] == pytest.approx(share)
+    assert share > cf.NUISANCE_OVERLAP_MAX_SHARE
+    assert ov["n_below"] + ov["n_above"] == int(np.sum((e < 0.01) | (e > 0.99)))
+
+
+def test_warning_is_attributed_to_the_caller():
+    df = _data(n=600, strength=8.0)
+    for fit in (
+        lambda: _fit(df),
+        lambda: sp.CausalForest(n_estimators=200, random_state=1).fit(
+            "y ~ d | x1 + x2 + x3", data=df
+        ),
+    ):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            fit()
+        hits = _overlap_warnings(rec)
+        assert len(hits) == 1
+        assert hits[0].filename == __file__
+
+
+def test_warning_does_not_change_estimate():
+    df = _data(n=600, strength=8.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        a = _fit(df)
+    with warnings.catch_warnings():
+        warnings.simplefilter("always")
+        b = _fit(df)
+    assert float(a.ate()) == float(b.ate())
+
+
+def test_supplied_w_hat_is_checked_and_reported():
+    df = _data(n=400)
+    w_hat = np.where(np.arange(len(df)) % 4 == 0, 0.001, 0.5)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        cf = _fit(df, W_hat=w_hat)
+    assert _overlap_warnings(rec)
+    nu = cf.get_nuisances()
+    np.testing.assert_array_equal(nu["W_hat"], w_hat)
+    assert nu["source"]["W_hat"] == "user-supplied"
+    assert cf.diagnostics["nuisance_overlap"]["share_outside"] == pytest.approx(0.25)
+
+
+def test_continuous_treatment_is_not_checked():
+    rng = np.random.default_rng(3)
+    n = 300
+    X = rng.normal(size=(n, 2))
+    T = X[:, 0] + rng.normal(size=n)
+    Y = T * X[:, 1] + rng.normal(size=n)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        cf = sp.causal_forest(
+            Y=Y, T=T, X=X, discrete_treatment=False, n_estimators=100, random_state=0
+        )
+    assert not _overlap_warnings(rec)
+    assert cf.diagnostics["nuisance_overlap"]["applicable"] is False
+
+
+def test_get_nuisances_requires_fit():
+    with pytest.raises(MethodIncompatibility):
+        sp.CausalForest().get_nuisances()

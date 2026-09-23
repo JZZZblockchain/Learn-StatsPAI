@@ -15487,6 +15487,10 @@
           },
           "type": "array"
         },
+        "fold_indices": {
+          "description": "Explicit cross-fitting partition: one integer label 0..n_folds-1 per row of data. Replaces every internal split (R/DR nuisances and the AIPW cross-fit behind estimate/se). Default None keeps KFold(n_folds, shuffle=True, random_state=42); passing that split's labels reproduces the default exactly.",
+          "type": "string"
+        },
         "learner": {
           "default": "dr",
           "description": "Learner type",
@@ -27283,6 +27287,10 @@
         "estimand": {
           "default": "ATE",
           "description": "Target estimand",
+          "type": "string"
+        },
+        "fold_indices": {
+          "description": "Opt-in CV-TMLE: one integer label 0..K-1 (K >= 2) per row of data. Q and g are then Super Learners fitted outside each fold and predicted inside it; the fluctuation is fitted on the pooled out-of-fold predictions and the SE is the EIF at the targeted fits. The default (None) fits both nuisances on the full sample (not cross-fitted). Not combinable with Q / g1W.",
           "type": "string"
         },
         "q_bound": {
