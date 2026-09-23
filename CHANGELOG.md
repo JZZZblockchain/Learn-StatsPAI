@@ -91,12 +91,34 @@ All notable changes to StatsPAI will be documented in this file.
   for by accident, and a silent NaN reads as a missing estimate rather
   than as a design that cannot be estimated.
 
-  `trends_lin`, `continuous` and `predict_het` remain unimplemented.
+  **`continuous=k`** joins them (same precision: 8.9e-16 and 5.6e-16 for
+  degrees 1 and 2). It is the escape hatch for Design Restriction 1(i):
+  when every group has a different period-one treatment there is no group
+  to match a switcher against, so the status-quo outcome *evolution* is
+  modelled as a degree-`k` polynomial in the period-one treatment, fitted
+  **per period** on the not-yet-switched cells and residualised out. Per
+  period is the load-bearing word — a single pooled polynomial with time
+  effects, the other reading of the documentation, lands 8 to 16 percent
+  away. With `continuous=` the treatment need not be binary, which is the
+  one case where that check is relaxed.
+
+  `model_info['group_effects']` now carries each switching group's own
+  estimated effect at each horizon. They average to the reported `delta_l`
+  exactly and their counts match what the reference reports, which makes
+  them the dependent variable a heterogeneity regression needs.
+
+  `trends_lin` and `predict_het` remain unimplemented.
   `trends_lin` was written as the reference documents it — an event study
   on the outcome's first difference, summed over horizons — and does not
   reproduce the reference, so it is absent rather than wrong; the module
   docstring records both series and what has been ruled out, so the next
-  attempt starts from evidence.
+  attempt starts from evidence. `predict_het` is absent for the same
+  reason: the group effects it would regress are now exposed and verified,
+  but the reference's coefficients
+  (`[0.5416409, 1.1172626, 1.2236984, 2.2393611]` on the options fixture)
+  are reproduced neither by regressing them pooled (0.475 at horizon 0) nor
+  with cohort fixed effects (0.562), and the reference does not expose the
+  dependent variable it used.
 
 - **`sp.dynamic_dml`: heterogeneous effects of a treatment *sequence*
   (Lewis & Syrgkanis 2021).** The gap this closes: `sp.dml_panel` assumes

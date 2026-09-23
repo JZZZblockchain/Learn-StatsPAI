@@ -1,6 +1,20 @@
 # RFC — `sp.did_multiplegt_dyn`: de Chaisemartin-D'Haultfœuille (2024) intertemporal event-study DiD
 
-> **Status**: draft 2026-04-23. No code written yet. All paper-specific formulas below carry `[待核验]` until two-source verification per CLAUDE.md §10. Verified anchors: `paper.bib` entry `dechaisemartin2024difference` (DOI 10.1162/rest_a_01414, *ReStat* 2024). ArXiv identifier for working-paper version left unstated until confirmed.
+> **Status**: implemented; this file is now the record of what is done and
+> what is not, not a plan. Shipped and pinned against R `DIDmultiplegtDYN`
+> 2.3.4 on identical CSV bytes: the estimator itself, the analytic
+> influence-function variance, and the `controls=`, `trends_nonparam=`,
+> `normalized=` and `continuous=` options (2e-16 to 9e-16 relative on every
+> effect and placebo — `tests/reference_parity/test_dcdh_options_parity.py`
+> and Track A module 78). **Still open**: `trends_lin` and `predict_het`,
+> both implemented-then-withheld because they do not reproduce the
+> reference and the discrepancy has not been located; the module docstring
+> of `did_multiplegt_dyn.py` records the two series and what has been ruled
+> out, which is where a next attempt should start. Also open: the
+> heteroskedastic-weights variant, and joint tests still come from the
+> cluster bootstrap. The original draft follows.
+>
+> **Original status**: draft 2026-04-23. No code written yet. All paper-specific formulas below carry `[待核验]` until two-source verification per CLAUDE.md §10. Verified anchors: `paper.bib` entry `dechaisemartin2024difference` (DOI 10.1162/rest_a_01414, *ReStat* 2024). ArXiv identifier for working-paper version left unstated until confirmed.
 
 ## 1. 动机
 

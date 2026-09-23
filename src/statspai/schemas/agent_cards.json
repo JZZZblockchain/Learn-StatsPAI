@@ -21775,6 +21775,10 @@
             "description": "Cluster column (defaults to group)",
             "type": "string"
           },
+          "continuous": {
+            "description": "Degree of the per-period polynomial in the period-one treatment that replaces the baseline match when every group's period-one treatment differs; the treatment may then be non-binary",
+            "type": "integer"
+          },
           "control": {
             "default": "not_yet_treated",
             "description": "Control group",

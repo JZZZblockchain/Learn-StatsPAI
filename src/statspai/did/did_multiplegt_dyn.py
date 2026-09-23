@@ -95,14 +95,21 @@ the analytic standard errors agree to better than 1e-6 relative.
 
 Options
 -------
-``controls=``, ``trends_nonparam=`` and ``normalized=`` reproduce
-``DIDmultiplegtDYN`` 2.3.4 to machine precision (2e-16 to 4e-16 relative on
-every effect and placebo); see
+``controls=``, ``trends_nonparam=``, ``normalized=`` and ``continuous=``
+reproduce ``DIDmultiplegtDYN`` 2.3.4 to machine precision (2e-16 to 9e-16
+relative on every effect and placebo); see
 ``tests/reference_parity/test_dcdh_options_parity.py``.
+
+``continuous=k`` is the escape hatch for Design Restriction 1(i): when every
+group has a different period-one treatment there is no group to match a
+switcher against, so the status-quo outcome *evolution* is modelled as a
+degree-``k`` polynomial in the period-one treatment instead, fitted per
+period on the not-yet-switched cells and residualised out. The treatment may
+then be non-binary, which is the one case where that check is relaxed.
 
 Not implemented
 ---------------
-``trends_lin``, ``continuous``, ``predict_het`` and the
+``trends_lin``, ``predict_het`` and the
 heteroskedastic-weights variant. Joint tests still come from the cluster
 bootstrap. See ``docs/rfc/multiplegt_dyn.md``.
 
@@ -165,6 +172,7 @@ def did_multiplegt_dyn(
     controls: Optional[List[str]] = None,
     trends_nonparam: Optional[List[str]] = None,
     normalized: bool = False,
+    continuous: Optional[int] = None,
 ) -> CausalResult:
     """dCDH (2024) intertemporal event-study DiD estimator.
 
@@ -283,6 +291,18 @@ def did_multiplegt_dyn(
         groups with the same value of these variables trend in parallel.
 
         .. versionadded:: 1.31.0
+    continuous : int, optional
+        Degree of the polynomial in the period-one treatment to model the
+        status-quo outcome evolution with. Use it when groups' period-one
+        treatments are continuous, so that no two groups share one and the
+        baseline match the other estimators rely on is impossible (Design
+        Restriction 1(i) of dCDH 2024). The polynomial is fitted per period
+        on the (g, t)s that have not switched yet and residualised out of the
+        outcome's first difference; with it, ``treatment`` need not be
+        binary, and controls are no longer required to share the switcher's
+        baseline.
+
+        .. versionadded:: 1.31.0
     normalized : bool, default False
         Report effects per unit of treatment: each horizon's effect is
         divided by the average cumulative treatment change its switchers
@@ -347,8 +367,11 @@ def did_multiplegt_dyn(
     for col in (y, group, time, treatment):
         if col not in df.columns:
             raise ValueError(f"Column {col!r} not in data")
-    if not set(df[treatment].dropna().unique()) <= {0, 1}:
-        raise ValueError(f"Treatment {treatment!r} must be binary 0/1")
+    if continuous is None and not set(df[treatment].dropna().unique()) <= {0, 1}:
+        raise ValueError(
+            f"Treatment {treatment!r} must be binary 0/1. A treatment whose "
+            "period-one values are continuous is what continuous= is for."
+        )
     if weights is not None:
         if weights not in df.columns:
             raise MethodIncompatibility(
@@ -416,6 +439,21 @@ def did_multiplegt_dyn(
     # so it is applied once, here, and the rest of the pipeline is
     # untouched.
     y_work = y
+    if continuous is not None:
+        if (
+            isinstance(continuous, bool)
+            or not isinstance(continuous, (int, np.integer))
+            or continuous < 1
+        ):
+            raise MethodIncompatibility(
+                "continuous= is the degree of the polynomial in the "
+                "period-one treatment, so it must be a positive integer; got "
+                f"{continuous!r}.",
+                diagnostics={"continuous": repr(continuous)},
+            )
+        df, y_work = _residualise_on_baseline_polynomial(
+            df, y=y_work, group=group, time=time, degree=int(continuous)
+        )
     if controls:
         df, y_work = _residualise_on_controls(
             df,
@@ -445,6 +483,7 @@ def did_multiplegt_dyn(
         weights=weights,
         cluster=cluster_var,
         normalized=normalized,
+        match_baseline=continuous is None,
     )
 
     if not any(c["n_events"] for c in main["cell_estimates"]):
@@ -512,6 +551,7 @@ def did_multiplegt_dyn(
                 weights=weights,
                 cluster=cluster_var,
                 normalized=normalized,
+                match_baseline=continuous is None,
             )
             for j, h in enumerate(horizons):
                 # Align by h
@@ -747,6 +787,12 @@ def did_multiplegt_dyn(
             "effects_equal_test": equal_test,
             "effects_equal_range": equal_range,
             "switchers": switchers,
+            # One estimated effect per switching group per horizon. These
+            # average (weighted by the event they belong to) to the reported
+            # delta_l, and are what a heterogeneity regression would use as
+            # its dependent variable -- see the note on predict_het in the
+            # module docstring.
+            "group_effects": main.get("group_effects", {}),
             "same_switchers": same_switchers,
             "warning": (
                 "controls=, trends_nonparam= and normalized= are "
@@ -820,6 +866,57 @@ def _clustered_if_se(
         cluster_codes, weights=psi, minlength=int(cluster_codes.max()) + 1
     )
     return float(np.sqrt(np.sum(sums**2)) / n_groups)
+
+
+def _residualise_on_baseline_polynomial(
+    df: pd.DataFrame,
+    *,
+    y: str,
+    group: str,
+    time: str,
+    degree: int,
+) -> Tuple[pd.DataFrame, str]:
+    """Take a polynomial in the period-one treatment out of the outcome path.
+
+    The baseline estimator compares a switcher with groups that had the same
+    period-one treatment. With a genuinely continuous period-one treatment no
+    two groups share one -- Design Restriction 1(i) of dCDH (2024) fails --
+    so the authors replace that comparison with a modelling assumption: the
+    status-quo outcome *evolution* is a polynomial of the given degree in the
+    period-one treatment. Residualising the outcome's first difference on that
+    polynomial, with time fixed effects, on the (g, t)s that have not switched
+    yet is what implements it, and the control set then no longer has to match
+    on the baseline.
+    """
+    work = df.sort_values([group, time]).copy()
+    dy = work.groupby(group)[y].diff().to_numpy(dtype=float)
+    d1 = work["_base"].to_numpy(dtype=float)
+    poly = np.column_stack([d1**k for k in range(1, degree + 1)])
+    period_codes, periods = pd.factorize(work[time], sort=True)
+    not_yet = (work["_F"].isna() | (work[time] < work["_F"])).to_numpy()
+    usable = np.isfinite(dy) & np.all(np.isfinite(poly), axis=1)
+    fit_rows = not_yet & usable
+    if int(fit_rows.sum()) <= poly.shape[1] + len(periods):
+        raise DataInsufficient(
+            "continuous=: too few not-yet-switched observations to fit a "
+            f"degree-{degree} polynomial in the period-one treatment with "
+            "time fixed effects.",
+            diagnostics={"degree": degree, "n_rows": int(fit_rows.sum())},
+        )
+    fe = np.eye(len(periods))[period_codes]
+    # One polynomial per period: the status-quo *evolution* is allowed to
+    # depend on the period-one treatment differently at each date, which a
+    # pooled polynomial plus time effects would forbid.
+    design = np.column_stack([fe] + [fe * poly[:, [j]] for j in range(poly.shape[1])])
+    coef, *_ = np.linalg.lstsq(design[fit_rows], dy[fit_rows], rcond=None)
+    resid = np.where(usable, dy - design @ coef, np.nan)
+    work["_yres_cont"] = resid
+    work["_yadj_cont"] = (
+        work.groupby(group)["_yres_cont"]
+        .apply(lambda col: col.fillna(0.0).cumsum())
+        .reset_index(level=0, drop=True)
+    )
+    return work, "_yadj_cont"
 
 
 def _residualise_on_controls(
@@ -912,6 +1009,7 @@ def _estimate_all_horizons(
     weights: Optional[str] = None,
     cluster: Optional[str] = None,
     normalized: bool = False,
+    match_baseline: bool = True,
 ) -> Dict[str, Any]:
     """Compute δ_l for each horizon h using long-difference event-study.
 
@@ -983,7 +1081,9 @@ def _estimate_all_horizons(
     # package drops the cohorts that cannot support a given placebo.
     t_min = float(df[time].min())
 
+    group_effects: Dict[int, pd.Series] = {}
     for h in horizons:
+        per_group: List[pd.Series] = []
         sum_wdelta = 0.0
         sum_wdose = 0.0
         w_total = 0.0
@@ -1011,6 +1111,7 @@ def _estimate_all_horizons(
                         weights=weights,
                         cluster_of=cluster_of,
                         trends_cell=trends_cell,
+                        match_baseline=match_baseline,
                     )
                     if _cell is None:
                         continue
@@ -1020,6 +1121,7 @@ def _estimate_all_horizons(
                     n_sw += _cell["n_sw"]
                     n_events += 1
                     psi += _cell["psi"]
+                    per_group.append(_cell["group_effects"])
 
         if w_total > 0:
             delta_l = sum_wdelta / w_total
@@ -1042,6 +1144,9 @@ def _estimate_all_horizons(
             delta_l = np.nan
             se_analytic = np.nan
 
+        group_effects[int(h)] = (
+            pd.concat(per_group) if per_group else pd.Series(dtype=float)
+        )
         cells.append(
             {
                 "horizon": h,
@@ -1058,6 +1163,7 @@ def _estimate_all_horizons(
         "cell_estimates": cells,
         "cluster_codes": cluster_codes,
         "n_groups": n_panel,
+        "group_effects": group_effects,
     }
 
 
@@ -1097,6 +1203,7 @@ def _one_event(
     weights: Optional[str],
     cluster_of: pd.Series,
     trends_cell: Any = None,
+    match_baseline: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """One (switch period, direction) event at horizon ``h``.
 
@@ -1151,9 +1258,15 @@ def _one_event(
         candidates = never_ids
     else:
         candidates = set(df[(df["_F"] > t_anchor) | (df["_F"].isna())][group].unique())
-    pre_rows = df[df[time] == t_pre]
-    same_base = set(pre_rows[pre_rows[treatment] == base_level][group].unique())
-    ctrl_ids = (candidates & same_base) - switcher_ids
+    if match_baseline:
+        pre_rows = df[df[time] == t_pre]
+        same_base = set(pre_rows[pre_rows[treatment] == base_level][group].unique())
+        ctrl_ids = (candidates & same_base) - switcher_ids
+    else:
+        # continuous=: no two groups share a period-one treatment, so the
+        # baseline match is impossible and is replaced by the polynomial
+        # already residualised out of the outcome.
+        ctrl_ids = candidates - switcher_ids
     if trends_cell is not None:
         ctrl_ids &= set(df[df["_tcell"] == trends_cell][group].unique())
     if not ctrl_ids:
@@ -1207,6 +1320,10 @@ def _one_event(
         "w_sw": w_s,
         "psi": psi,
         "dose": dose,
+        # Each switcher's own effect: the contrast behind delta with this
+        # group's outcome change in place of the switcher mean. predict_het
+        # regresses these on group-level covariates.
+        "group_effects": pd.Series(scale * (sw_dy - mean_c), index=sw_ids),
     }
 
 

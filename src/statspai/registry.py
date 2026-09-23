@@ -13501,6 +13501,16 @@ def _build_registry() -> None:
                     "switcher on, over and above the baseline treatment",
                 ),
                 ParamSpec(
+                    "continuous",
+                    "int",
+                    False,
+                    None,
+                    "Degree of the per-period polynomial in the period-one "
+                    "treatment that replaces the baseline match when every "
+                    "group's period-one treatment differs; the treatment may "
+                    "then be non-binary",
+                ),
+                ParamSpec(
                     "normalized",
                     "bool",
                     False,

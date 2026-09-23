@@ -161,3 +161,88 @@ def test_options_leave_the_default_path_untouched(panel):
     assert float(delta[0]) == pytest.approx(
         R_REFERENCE["plain"]["effects"][0], rel=1e-12
     )
+
+
+# Same package, same bytes, on the companion panel whose period-one
+# treatments are all distinct (Design Restriction 1(i) fails by design):
+#   did_multiplegt_dyn(..., effects = 3, placebo = 1, continuous = k)
+CONT_DATA = (
+    pathlib.Path(__file__).resolve().parent / "_fixtures" / "dcdh_continuous_panel.csv"
+)
+R_CONTINUOUS = {
+    1: [0.8542098191688396, 1.703596124713585, 2.727003514560116],
+    2: [0.8111434125838702, 1.867598544412068, 2.77300749685663],
+}
+
+
+@pytest.fixture(scope="module")
+def continuous_panel() -> pd.DataFrame:
+    if not CONT_DATA.exists():  # pragma: no cover - fixture ships with the repo
+        pytest.skip(f"missing panel fixture: {CONT_DATA}")
+    return pd.read_csv(CONT_DATA)
+
+
+@pytest.mark.parametrize("degree", [1, 2])
+def test_continuous_matches_didmultiplegtdyn(continuous_panel, degree):
+    """The polynomial is fitted per period, which is what reproduces it.
+
+    A single pooled polynomial with time effects -- the other reading of
+    "the status-quo outcome evolution is a polynomial in the period-one
+    treatment" -- lands 8 to 16 percent away.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = sp.did_multiplegt_dyn(
+            continuous_panel,
+            y="y",
+            group="id",
+            time="t",
+            treatment="d",
+            dynamic=2,
+            placebo=1,
+            se_method="analytic",
+            n_boot=0,
+            continuous=degree,
+        )
+    delta = res.detail.set_index("horizon")["delta_l"]
+    got = np.array([float(delta[h]) for h in range(3)])
+    np.testing.assert_allclose(got, np.array(R_CONTINUOUS[degree]), rtol=1e-12)
+
+
+def test_continuous_accepts_a_non_binary_treatment(continuous_panel):
+    """That check is exactly what continuous= exists to relax."""
+    with pytest.raises(ValueError, match="binary"):
+        sp.did_multiplegt_dyn(
+            continuous_panel, y="y", group="id", time="t", treatment="d", dynamic=1
+        )
+
+
+@pytest.mark.parametrize("degree", [0, -1, 1.5, True])
+def test_continuous_degree_must_be_a_positive_integer(continuous_panel, degree):
+    with pytest.raises(sp.MethodIncompatibility, match="positive integer"):
+        sp.did_multiplegt_dyn(
+            continuous_panel,
+            y="y",
+            group="id",
+            time="t",
+            treatment="d",
+            dynamic=1,
+            continuous=degree,
+        )
+
+
+def test_group_effects_average_to_the_reported_effect(panel):
+    """The dependent variable a heterogeneity regression would need.
+
+    predict_het is not implemented -- see the module docstring for what the
+    reference reports and what these give -- but the group-level effects it
+    would regress are exposed, and they are not approximate: each horizon's
+    effects average to that horizon's delta_l exactly, over the switcher
+    count the reference also reports.
+    """
+    res = _fit(panel)
+    delta = res.detail.set_index("horizon")["delta_l"]
+    effects = res.model_info["group_effects"]
+    for h, n in zip(range(4), (51, 39, 29, 16)):
+        assert len(effects[h]) == n
+        assert float(effects[h].mean()) == pytest.approx(float(delta[h]), rel=1e-12)

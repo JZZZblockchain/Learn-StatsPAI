@@ -43,6 +43,20 @@ run("controls", controls = c("x1", "x2"))
 run("trends_lin", npl = 1, trends_lin = TRUE)
 run("trends_nonparam", trends_nonparam = c("reg"))
 run("normalized", normalized = TRUE)
+
+# The companion panel for continuous=: every group's period-one treatment is
+# distinct, so the baseline match is impossible and the polynomial replaces it.
+cont <- read.csv(file.path(dirname(commandArgs(trailingOnly = TRUE)[1]),
+                           "dcdh_continuous_panel.csv"))
+for (k in c(1, 2)) {
+  r <- did_multiplegt_dyn(df = cont, outcome = "y", group = "id", time = "t",
+                          treatment = "d", effects = 3, placebo = 1,
+                          graph_off = TRUE, continuous = k)
+  e <- r$results$Effects
+  out[[paste0("continuous", k)]] <- list(effects = as.numeric(e[, "Estimate"]))
+  cat("ok continuous", k, "\n")
+}
+
 write(toJSON(out, digits = 15, auto_unbox = TRUE, null = "null"),
       commandArgs(trailingOnly = TRUE)[2])
 cat("written\n")

@@ -67,8 +67,50 @@ def build() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def build_continuous() -> pd.DataFrame:
+    """Companion panel for ``continuous=``: every period-one treatment differs.
+
+    Design Restriction 1(i) fails by construction -- ``d1`` is a standard
+    normal draw, so no two groups share a period-one treatment -- and the
+    status-quo path is quadratic in it, which is what the polynomial the
+    option fits has to absorb. The switch adds one unit of treatment at a
+    random date.
+    """
+    rng = np.random.default_rng(424242)
+    rows = []
+    for g in range(1, 61):
+        d1 = float(rng.normal())
+        switch = int(rng.integers(3, 8))
+        z = float(rng.normal())
+        a = float(rng.normal())
+        for t in range(1, 9):
+            d = d1 if t < switch else d1 + 1.0
+            y = (
+                a
+                + 0.25 * t
+                + (0.6 * d1 + 0.3 * d1**2) * t
+                + (0.9 + 0.3 * z) * max(0, t - switch + 1)
+                + float(rng.normal(0, 0.4))
+            )
+            rows.append(
+                {
+                    "id": g,
+                    "t": t,
+                    "d": round(d, 10),
+                    "y": round(y, 10),
+                    "z": round(z, 10),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 if __name__ == "__main__":
     df = build()
     out = HERE / "_fixtures" / f"{NAME}.csv"
     df.to_csv(out, index=False)
     print(f"wrote {out} ({len(df)} rows, {df['id'].nunique()} groups)")
+
+    cont = build_continuous()
+    out_c = HERE / "_fixtures" / "dcdh_continuous_panel.csv"
+    cont.to_csv(out_c, index=False)
+    print(f"wrote {out_c} ({len(cont)} rows, {cont['id'].nunique()} groups)")
