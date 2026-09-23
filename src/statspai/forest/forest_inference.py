@@ -346,6 +346,31 @@ def grf_calibration(
     )
 
 
+def _resolve_calibration_method(forest: "CausalForest", method: str) -> str:
+    """``'imputation'`` or ``'within'`` for an FE forest, ``'grf'`` otherwise."""
+    from . import _grf_inference as _gi
+
+    if method not in ("auto", "imputation", "within"):
+        raise MethodIncompatibility(
+            f"method must be 'auto', 'imputation' or 'within', got {method!r}.",
+            recovery_hint="Use method='auto'.",
+        )
+    if not _gi.is_fe_forest(forest):
+        if method != "auto":
+            raise MethodIncompatibility(
+                f"method={method!r} applies to causal forests with fixed "
+                "effects (fe=) only.",
+                recovery_hint="Use method='auto' for other forests.",
+            )
+        return "grf"
+    if method != "auto":
+        return method
+    binary = bool(np.all(np.isin(np.unique(forest._T_original), (0.0, 1.0))))
+    # Imputation needs period ids (fe='twoway') and an untreated state.
+    twoway = getattr(forest, "fe", None) == "twoway"
+    return "imputation" if binary and twoway else "within"
+
+
 def calibration_test(
     forest: "CausalForest",
     X: Optional[np.ndarray] = None,
@@ -353,6 +378,8 @@ def calibration_test(
     T: Optional[np.ndarray] = None,
     alpha: float = 0.05,
     vce: str = "HC3",
+    method: str = "auto",
+    controls: Any = "none",
 ) -> pd.DataFrame:
     """Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic].
 
@@ -377,12 +404,29 @@ def calibration_test(
     For forests fitted with the GRF engine (the default) ``tau_hat`` is the
     **out-of-bag** prediction, the regression uses the forest's observation
     weights and a cluster-robust covariance when the forest has clusters,
-    and ``fe=`` forests use unit/period within-transformed variables.  The
-    test is defined on the training sample, so ``X`` / ``Y`` / ``T`` may be
-    omitted (the stored arrays are used) and, if given, must equal them.
-    The regression itself is the pure operator :func:`grf_calibration`.
+    and the test is defined on the training sample, so ``X`` / ``Y`` / ``T``
+    may be omitted (the stored arrays are used) and, if given, must equal
+    them.  The regression itself is the pure operator
+    :func:`grf_calibration`.
+
+    Forests with two-way fixed effects (``fe='twoway'``) and a binary
+    treatment use ``method='imputation'`` by default: the imputation score
+    ``Y - alpha_hat_i - gamma_hat_t`` of each treated cell (unit and period
+    effects fitted on untreated cells, [borusyak2024revisiting]) is
+    regressed on ``mean(tau_oob)`` and ``tau_oob - mean(tau_oob)`` over the
+    treated cells.  The score is unbiased for each cell's effect, so
+    ``beta_differential`` is the best-linear-predictor slope of the true
+    effect on the forest prediction (it corrects the forest's shrinkage)
+    and the one-sided test of it is a heterogeneity test.  Standard errors
+    use the exact linear weights of the imputation estimator, clustered by
+    the forest's clusters, with a normal reference; ``vce`` does not apply.
+    ``method='within'`` keeps the earlier regression on globally
+    within-transformed variables [aytug2026attenuated], which tests for
+    heterogeneity but whose slope is not a de-attenuation factor.
 
     .. versionchanged:: 1.30.0
+       ``method=`` / ``controls=`` added; forests with two-way fixed
+       effects and a binary treatment default to the imputation regression.
        ``t`` / ``p`` are ``grf``'s: each coefficient against 0, one-sided,
        Student t (the ``null`` column is gone; ``t_vs_zero`` /
        ``p_one_sided`` are kept as synonyms).  Legacy-engine forests use
@@ -401,6 +445,13 @@ def calibration_test(
         Level for ``ci_low`` / ``ci_high``.
     vce : {'HC3', 'HC2', 'HC1', 'HC0'}
         Heteroskedasticity-robust covariance (``grf``'s ``vcov.type``).
+    method : {'auto', 'imputation', 'within'}, default 'auto'
+        Forests with fixed effects only: ``'auto'`` is ``'imputation'`` for
+        ``fe='twoway'`` with a binary treatment and ``'within'`` otherwise.
+        Other forests accept only ``'auto'``.
+    controls : 'none', 'auto', list of str or array, default 'none'
+        Covariates in the untreated outcome model of the imputation
+        regression (see :func:`average_treatment_effect`).
 
     Returns
     -------
@@ -464,8 +515,17 @@ def calibration_test(
     from . import _grf_inference as _gi
 
     if _gi.is_grf_forest(forest):
+        if _resolve_calibration_method(forest, method) == "imputation":
+            from ._fe_imputation import calibration_fe
+
+            return calibration_fe(forest, alpha=alpha_value, controls=controls)
         return _gi.calibration_blp(forest, alpha=alpha_value, vcov_type=vce)
 
+    if method != "auto":
+        raise MethodIncompatibility(
+            f"calibration_test(): method={method!r} needs a GRF-engine forest.",
+            recovery_hint="Refit with the default split_rule='grf'.",
+        )
     Y_hat, W_hat = _stored_training_nuisances(forest, "calibration_test()")
     tau_hat = np.asarray(forest.effect(X_), dtype=np.float64).ravel()
     return grf_calibration(
@@ -1283,6 +1343,8 @@ def average_treatment_effect(
     target_sample: str = "all",
     alpha: float = 0.05,
     clip: float = 0.01,
+    variance: str = "forest",
+    controls: Any = "none",
 ) -> Dict[str, Any]:
     """Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.
 
@@ -1319,8 +1381,25 @@ def average_treatment_effect(
     the forest has clusters, and continuous treatments use grf's
     debiasing weights -- the definitions used by
     ``grf::average_treatment_effect``.  ``X`` / ``T`` may only restate the
-    training data.  Forests with fixed effects raise: no propensity exists
-    for a within-unit design.
+    training data.
+
+    Forests with fixed effects (``fe=``) have no propensity.  For them only
+    ``target_sample='treated'`` is identified, and it is estimated by
+    imputation [borusyak2024revisiting]: unit and period effects are fitted
+    on the untreated cells, each treated cell's effect is imputed as
+    ``Y - alpha_hat_i - gamma_hat_t``, and the ATT is their mean.  The
+    standard error uses the exact linear weights of that estimator,
+    clustered by the forest's clusters; ``variance`` chooses how treated
+    residuals are centred (``'forest'``: out-of-bag forest prediction, then
+    cohort x event-time means; ``'bjs'``: cohort x event-time means only,
+    the conservative Borusyak-Jaravel-Spiess convention, identical to
+    :func:`statspai.did_imputation`).  The payload also reports
+    ``forest_plug_in``, the mean OOB prediction over the same cells, which
+    is shrunk toward zero when effects are heterogeneous.
+
+    .. versionchanged:: 1.30.0
+       Forests with fixed effects return the imputation ATT for
+       ``target_sample='treated'`` instead of raising.
 
     For other forests the doubly-robust scores exist only for the training
     sample; for other rows the function falls back to the plug-in CATE
@@ -1344,6 +1423,16 @@ def average_treatment_effect(
         inverse-propensity terms of the ATE / ATT / ATC scores. ``grf``
         does not clip; ``clip=0`` reproduces it, and the clip is inert
         whenever all propensities already lie inside the band.
+    variance : {'forest', 'bjs'}, default 'forest'
+        Forests with fixed effects only (see above); ignored otherwise.
+    controls : 'none', 'auto', list of str or array, default 'none'
+        Forests with fixed effects only: covariates in the untreated outcome
+        model ``Y(0) = alpha_i + gamma_t + C' beta``.  ``'none'`` is
+        :func:`statspai.did_imputation` without covariates (same estimate;
+        same standard error with ``variance='bjs'``).  ``'auto'`` adds the
+        effect modifiers and controls that vary within units; use it when a
+        time-varying covariate drives the untreated outcome and is not
+        itself affected by the treatment.
 
     Examples
     --------
@@ -1432,6 +1521,19 @@ def average_treatment_effect(
         )
 
     from . import _grf_inference as _gi
+
+    if _gi.is_fe_forest(forest):
+        if X is not None or T is not None:
+            _require_training_rows(forest, X, None, T, "average_treatment_effect()")
+        from ._fe_imputation import average_effect_fe
+
+        return average_effect_fe(
+            forest,
+            target_sample=target,
+            alpha=alpha_value,
+            variance=variance,
+            controls=controls,
+        )
 
     grf_forest = _gi.is_grf_forest(forest)
     use_insample = X is None and T is None
@@ -1882,6 +1984,8 @@ def calibrate_cate(
     forest: "CausalForest",
     newdata: Optional[np.ndarray] = None,
     alpha: float = 0.05,
+    method: str = "auto",
+    controls: Any = "none",
 ) -> Dict[str, Any]:
     """Rescale CATE predictions by their best-linear-predictor calibration.
 
@@ -1899,15 +2003,33 @@ def calibrate_cate(
     when the effect is homogeneous, so the correction does not manufacture
     heterogeneity.
 
-    Forests with fixed effects: the regression uses globally
-    within-transformed variables, as proposed by [@aytug2026attenuated].
-    Global two-way demeaning is exact only when the effect is homogeneous,
-    so the heterogeneity *test* keeps its size, but the slope is not a
-    de-attenuation factor.  In StatsPAI's own simulations (staggered
-    adoption selected on unit effects, N = 300 units, T = 6) the OOB
-    predictions of the FE forest had a slope of 0.65-0.91 on the true
-    effect while ``beta_differential`` stayed at 0.88-1.07, and calibrated
-    predictions did not reduce RMSE.  A warning is emitted for FE forests.
+    Forests with two-way fixed effects and a binary treatment
+    (``method='auto'`` or ``'imputation'``): the slope comes from regressing imputation scores
+    on the out-of-bag predictions over the treated cells (see
+    :func:`calibration_test`).  The scores are unbiased for each cell's
+    effect, so the slope is a genuine de-attenuation factor, and
+    ``tau_bar`` is the mean prediction over treated cells, so
+    ``beta_mean * tau_bar`` is the imputation ATT.  In StatsPAI's
+    simulations (N = 300 units, T = 8, staggered adoption selected on the
+    unit effect, 200 replications) this reduced the RMSE of the treated
+    cells' predictions from 0.634 to 0.570 with effects ``(1 + x1)(1 +
+    0.2 e)`` and from 0.213 to 0.118 with a constant effect.  The map is
+    estimated on treated cells; applying it to other rows assumes it
+    carries over.
+
+    ``method='within'`` uses globally within-transformed variables, as
+    proposed by [@aytug2026attenuated].  Global two-way demeaning is exact
+    only when the effect is homogeneous, so the heterogeneity *test* keeps
+    its size, but the slope is not a de-attenuation factor: in StatsPAI's
+    simulations (N = 300, T = 6) the OOB predictions had a slope of
+    0.65-0.91 on the true effect while ``beta_differential`` stayed at
+    0.88-1.07, and calibrated predictions did not reduce RMSE.  A warning
+    is emitted in that case.
+
+    .. versionchanged:: 1.30.0
+       Forests with fixed effects and a binary treatment calibrate against
+       imputation scores by default (``method='within'`` restores the
+       earlier regression).
 
     Parameters
     ----------
@@ -1919,6 +2041,10 @@ def calibrate_cate(
         an alias.
     alpha : float, default 0.05
         Level for the reported slope confidence intervals.
+    method : {'auto', 'imputation', 'within'}, default 'auto'
+        Forests with fixed effects only; see :func:`calibration_test`.
+    controls : 'none', 'auto', list of str or array, default 'none'
+        Imputation regression only; see :func:`average_treatment_effect`.
 
     Returns
     -------
@@ -1956,12 +2082,19 @@ def calibrate_cate(
             "GRF-engine forests provide.",
             recovery_hint="Refit with the default split_rule='grf'.",
         )
-    table = _gi.calibration_blp(forest, alpha=alpha_value)
+    resolved = _resolve_calibration_method(forest, method)
+    oob = np.asarray(forest._oob_tau, dtype=np.float64)
+    if resolved == "imputation":
+        from ._fe_imputation import calibration_fe
+
+        table = calibration_fe(forest, alpha=alpha_value, controls=controls)
+        tau_bar = float(table.attrs["tau_bar"])
+    else:
+        table = _gi.calibration_blp(forest, alpha=alpha_value)
+        w = _gi._weights(forest, oob.size)
+        tau_bar = float(np.sum(w * oob) / np.sum(w))
     b_mean = float(table.loc["mean_forest_prediction", "coef"])
     b_diff = float(table.loc["differential_forest_prediction", "coef"])
-    oob = np.asarray(forest._oob_tau, dtype=np.float64)
-    w = _gi._weights(forest, oob.size)
-    tau_bar = float(np.sum(w * oob) / np.sum(w))
     if newdata is None:
         raw = oob.copy()
     else:
@@ -1974,7 +2107,7 @@ def calibrate_cate(
     calibrated = b_mean * tau_bar + b_diff * (raw - tau_bar)
     detected = bool(table.loc["differential_forest_prediction", "p_one_sided"] < 0.05)
     notes = []
-    if _gi.is_fe_forest(forest):
+    if resolved == "within":
         notes.append(
             "for forests with fixed effects the calibration slope comes from "
             "a globally within-transformed regression, which is misspecified "
@@ -2007,7 +2140,7 @@ def calibrate_cate(
         "calibration": table,
         "heterogeneity_detected": detected,
         "warnings": notes,
-        "method": "blp_oob",
+        "method": "blp_oob" if resolved != "imputation" else "blp_imputation",
     }
 
 

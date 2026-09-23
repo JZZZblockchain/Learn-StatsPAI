@@ -56,7 +56,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,668 | 13 | 25 |
 | `spatial` | 6,968 | 30 | 38 |
-| `forest` | 6,768 | 9 | 9 |
+| `forest` | 6,768 | 9 | 12 |
 | `plots` | 6,002 | 7 | 8 |
 | `bayes` | 5,170 | 12 | 19 |
 | `mendelian` | 4,916 | 13 | 38 |
@@ -126,7 +126,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `checks` | 152 | 2 | 0 |
 | `causal` | 111 | 1 | 0 |
 | `schemas` | 0 | 0 | 0 |
-| **Total** | **404,864** | **773** | **1186** |
+| **Total** | **404,864** | **773** | **1189** |
 ## 3 · Causal-inference coverage matrix (full)
 
 Legend: B = broad API coverage within this comparison table; Y = implemented entry points; P = partial, scattered, or single-algorithm support; N = no first-class entry point. These are API-breadth labels, not validation tiers.

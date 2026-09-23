@@ -126,24 +126,32 @@ class TestFixedEffectsForest:
         assert 0 < diag["share_units_switching_treatment"] < 1
 
     def test_doubly_robust_averages_are_refused(self, heterogeneous):
-        _, cf = heterogeneous
+        # No propensity: the ATE over all cells and RATE stay refused; the
+        # effect on treated cells and the BLP use imputation scores instead
+        # (tests/test_forest_fe_imputation.py).
+        df, cf = heterogeneous
         with pytest.raises(MethodIncompatibility, match="fixed effects"):
             cf.average_treatment_effect()
-        with pytest.raises(MethodIncompatibility, match="fixed effects"):
-            cf.best_linear_projection()
         with pytest.raises(MethodIncompatibility, match="fixed effects"):
             sp.rate(cf)
         effect = cf.ate()  # plug-in value survives, inference error recorded
         assert np.isfinite(float(effect))
         assert effect.inference_error is not None
+        att = cf.average_treatment_effect("treated")
+        treated = df["d"].to_numpy() == 1
+        assert (
+            abs(att["estimate"] - df["tau"].to_numpy()[treated].mean()) < 4 * att["se"]
+        )
+        assert list(cf.best_linear_projection().index)[0] == "Intercept"
 
     def test_calibrate_cate_warns_that_fe_slope_is_not_deattenuation(
         self, heterogeneous
     ):
         _, cf = heterogeneous
         with pytest.warns(AssumptionWarning, match="does not correct the shrinkage"):
-            out = sp.calibrate_cate(cf)
+            out = sp.calibrate_cate(cf, method="within")
         assert out["cate"].shape == cf.predict().shape
+        assert sp.calibrate_cate(cf)["method"] == "blp_imputation"
 
     def test_unbalanced_panel(self):
         df = _panel(seed=3, hetero=True, drop=0.2)

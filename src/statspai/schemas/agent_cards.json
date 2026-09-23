@@ -2335,10 +2335,10 @@
         "symptom": "sp.calibration_test differential_forest_prediction p_one_sided > 0.05"
       },
       {
-        "alternative": "sp.did_forest",
+        "alternative": "sp.forest_group_effects",
         "exception": "statspai.MethodIncompatibility",
-        "remedy": "Doubly-robust averages need a propensity; use group-time averages instead.",
-        "symptom": "average_treatment_effect raises MethodIncompatibility on an fe= forest"
+        "remedy": "Parallel trends identifies effects on treated cells: use target_sample='treated' (imputation ATT) or sp.forest_group_effects; counterfactual effects of never-treated units are extrapolations (sp.forest_support).",
+        "symptom": "average_treatment_effect(target_sample='all') raises MethodIncompatibility on an fe= forest"
       },
       {
         "alternative": "sp.causal_forest",
@@ -2431,9 +2431,10 @@
           },
           "split_rule": {
             "default": "grf",
-            "description": "'legacy' reproduces the pre-1.29 estimator (deprecated).",
+            "description": "'cffe' (fe= only) uses the tau-heterogeneity criterion of Kattenberg, Scheer and Thiel instead of the GRF gradient; 'legacy' reproduces the pre-1.29 estimator (deprecated).",
             "enum": [
               "grf",
+              "cffe",
               "legacy"
             ],
             "type": "string"
@@ -2474,6 +2475,261 @@
       "Causal-forest parity evidence is overlap-sensitive; the paper documents the NSW-DW row as an overlap failure mode."
     ],
     "validation_status": "certified"
+  },
+  {
+    "alternatives": [
+      "did_forest",
+      "cate_by_group",
+      "gate_test"
+    ],
+    "assumptions": [
+      "fe= forests: parallel trends and no anticipation (imputation)",
+      "pooled forests: unconfoundedness and overlap (AIPW)",
+      "cluster='dyadic': many members; unreliable with few (warned)"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test.",
+    "example": "sp.forest_group_effects(cf, members=df[['country_i', 'country_j']].to_numpy(), scale='percent')",
+    "failure_modes": [
+      {
+        "alternative": "sp.forest_group_effects",
+        "exception": "statspai.AssumptionWarning",
+        "remedy": "The dyadic variance was not positive (few members); report pair-clustered SEs.",
+        "symptom": "se is NaN with cluster='dyadic'"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "forest_group_effects",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "forest fitted with sp.causal_forest (default GRF engine)",
+      "fe= forests: binary treatment and untreated periods for treated units",
+      "by / members aligned with the rows used to fit the forest"
+    ],
+    "reference": "[@borusyak2024revisiting], [@chernozhukov2025generic], [@aronow2015cluster], [@aytug2026euro]",
+    "signature": {
+      "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test.",
+      "name": "forest_group_effects",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "by": {
+            "description": "None, 'cate_quantile', or one label per training row.",
+            "type": "string"
+          },
+          "cluster": {
+            "description": "None (forest clusters), 'dyadic' (needs members) or cluster ids.",
+            "type": "string"
+          },
+          "controls": {
+            "default": "none",
+            "description": "fe= forests: covariates in the untreated outcome model ('none' = did_imputation, 'auto' = time-varying x/w, or names).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forest": {
+            "description": "Fitted GRF-engine forest.",
+            "type": "string"
+          },
+          "members": {
+            "description": "(n, 2) members of each dyadic row; with by=None one group per member.",
+            "type": "string"
+          },
+          "min_rows": {
+            "default": 1,
+            "description": "min_rows parameter (int).",
+            "type": "integer"
+          },
+          "n_groups": {
+            "default": 4,
+            "description": "Quantile groups for by='cate_quantile'.",
+            "type": "integer"
+          },
+          "scale": {
+            "default": "level",
+            "description": "'percent' adds 100*(exp(x)-1) columns for log outcomes.",
+            "enum": [
+              "level",
+              "percent"
+            ],
+            "type": "string"
+          },
+          "variance": {
+            "default": "forest",
+            "description": "fe= forests: centre treated residuals on the OOB forest ('forest') or on cohort x event-time means only ('bjs').",
+            "enum": [
+              "forest",
+              "bjs"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "forest"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": null,
+    "validation_notes": [
+      "tests/reference_parity/test_fe_forest_imputation_recovery.py",
+      "API/unit contract evidence: tests/test_forest_fe_imputation.py"
+    ],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "overlap_plot",
+      "forest_diagnostics"
+    ],
+    "assumptions": [
+      "Predictions for untreated units assume tau(x) carries over at equal x"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Support diagnostics for counterfactual CATE predictions: for each new row, the forest CATE with its little-bag interval, effect modifiers outside the range of the rows that inform the effect (switching units for fe= forests), and the k-nearest-neighbour distance relative to the reference sample.",
+    "example": "sp.forest_support(cf, df_never_treated[['x1', 'x2']])",
+    "failure_modes": [],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "forest_support",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "forest fitted with sp.causal_forest (default GRF engine)"
+    ],
+    "reference": "[@aytug2026euro]",
+    "signature": {
+      "description": "Support diagnostics for counterfactual CATE predictions: for each new row, the forest CATE with its little-bag interval, effect modifiers outside the range of the rows that inform the effect (switching units for fe= forests), and the k-nearest-neighbour distance relative to the reference sample.",
+      "name": "forest_support",
+      "parameters": {
+        "properties": {
+          "X_new": {
+            "description": "Effect modifiers to predict.",
+            "type": "string"
+          },
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "forest": {
+            "description": "Fitted GRF-engine forest.",
+            "type": "string"
+          },
+          "k": {
+            "default": 10,
+            "description": "k parameter (int).",
+            "type": "integer"
+          },
+          "quantile": {
+            "default": 0.95,
+            "description": "quantile parameter (float).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "forest",
+          "X_new"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": null,
+    "validation_notes": [
+      "API/unit contract evidence: tests/test_forest_fe_imputation.py"
+    ],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "did_forest",
+      "pretrends_test",
+      "bjs_pretrend_joint"
+    ],
+    "assumptions": [
+      "Clusters (default: unit) are independent"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Pre-trend test by predicted-effect group for causal forests with fixed effects: units sorted by their out-of-bag CATE, untreated cells regressed on unit and period effects and group x lead indicators, cluster-robust Wald tests that the leads are zero and equal across groups.",
+    "example": "sp.cate_pretrend_test(cf, n_groups=2, leads=3)",
+    "failure_modes": [],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "cate_pretrend_test",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "forest fitted with fe='twoway' (or 'unit') and a binary absorbing treatment",
+      "treated units observed for at least `leads` periods before adoption"
+    ],
+    "reference": "[@borusyak2024revisiting], [@aytug2026euro]",
+    "signature": {
+      "description": "Pre-trend test by predicted-effect group for causal forests with fixed effects: units sorted by their out-of-bag CATE, untreated cells regressed on unit and period effects and group x lead indicators, cluster-robust Wald tests that the leads are zero and equal across groups.",
+      "name": "cate_pretrend_test",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "controls": {
+            "default": "none",
+            "description": "Control-variable column names.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "forest": {
+            "description": "Fitted fe= forest.",
+            "type": "string"
+          },
+          "groups": {
+            "description": "Unit-constant labels per row.",
+            "type": "string"
+          },
+          "leads": {
+            "description": "Default: up to 4.",
+            "type": "integer"
+          },
+          "n_groups": {
+            "default": 2,
+            "description": "Number of groups.",
+            "type": "integer"
+          },
+          "time_effects": {
+            "default": "common",
+            "description": "time_effects parameter (str).",
+            "enum": [
+              "common",
+              "by_group"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "forest"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": null,
+    "validation_notes": [
+      "API/unit contract evidence: tests/test_forest_fe_imputation.py"
+    ],
+    "validation_status": "api_stable"
   },
   {
     "alternatives": [
@@ -30165,9 +30421,10 @@
           },
           "split_rule": {
             "default": "grf",
-            "description": "``\"legacy\"`` reproduces the pre-1.29 estimator and is deprecated.",
+            "description": "``\"cffe\"`` (``fe=`` forests only) replaces the GRF gradient criterion with the tau-heterogeneity criterion of Kattenberg, Scheer and Thiel (2023), the rule the ``causalfe`` package implements; see :func:`statspai.causal_forest`. ``\"legacy\"`` reproduces the pre-1.29 estimator and is deprecated.",
             "enum": [
               "grf",
+              "cffe",
               "legacy"
             ],
             "type": "string"
@@ -30245,8 +30502,23 @@
             "description": "Level for ``ci_low`` / ``ci_high``.",
             "type": "number"
           },
+          "controls": {
+            "default": "none",
+            "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
+            "type": "string"
+          },
           "forest": {
             "description": "forest parameter ('CausalForest').",
+            "type": "string"
+          },
+          "method": {
+            "default": "auto",
+            "description": "Forests with fixed effects only: ``'auto'`` is ``'imputation'`` for ``fe='twoway'`` with a binary treatment and ``'within'`` otherwise. Other forests accept only ``'auto'``.",
+            "enum": [
+              "auto",
+              "imputation",
+              "within"
+            ],
             "type": "string"
           },
           "vce": {
@@ -30271,6 +30543,7 @@
     "typical_n_min": 1000,
     "validation_notes": [
       "tests/reference_parity/test_calibration_test_parity.py",
+      "tests/reference_parity/test_fe_forest_imputation_recovery.py",
       "tests/reference_parity/test_ml_causal_R_parity.py",
       "Cross-language parity (bit-exact) vs grf::test_calibration 2.6.1 (vcov.type HC3 default and HC1), forest outputs held fixed [R R version 4.5.2 (2025-10-31), grf 2.6.1, sandwich 3.1.1]; tolerance coef, se, t 1e-10 rel (observed 1.1e-15); one-sided p-value 1e-8 rel (observed 1.6e-13) -- tests/reference_parity/test_ml_causal_R_parity.py"
     ],
@@ -30329,8 +30602,23 @@
             "description": "Level for ``ci_low`` / ``ci_high``.",
             "type": "number"
           },
+          "controls": {
+            "default": "none",
+            "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
+            "type": "string"
+          },
           "forest": {
             "description": "forest parameter ('CausalForest').",
+            "type": "string"
+          },
+          "method": {
+            "default": "auto",
+            "description": "Forests with fixed effects only: ``'auto'`` is ``'imputation'`` for ``fe='twoway'`` with a binary treatment and ``'within'`` otherwise. Other forests accept only ``'auto'``.",
+            "enum": [
+              "auto",
+              "imputation",
+              "within"
+            ],
             "type": "string"
           },
           "vce": {
@@ -30592,6 +30880,11 @@
             "description": "Propensity scores are clipped to ``[clip, 1-clip]`` before the inverse-propensity terms of the ATE / ATT / ATC scores. ``grf`` does not clip; ``clip=0`` reproduces it, and the clip is inert whenever all propensities already lie inside the band.",
             "type": "number"
           },
+          "controls": {
+            "default": "none",
+            "description": "Forests with fixed effects only: covariates in the untreated outcome model ``Y(0) = alpha_i + gamma_t + C' beta``. ``'none'`` is :func:`statspai.did_imputation` without covariates (same estimate; same standard error with ``variance='bjs'``). ``'auto'`` adds the effect modifiers and controls that vary within units; use it when a time-varying covariate drives the untreated outcome and is not itself affected by the treatment.",
+            "type": "string"
+          },
           "forest": {
             "description": "forest parameter ('CausalForest').",
             "type": "string"
@@ -30604,6 +30897,15 @@
               "treated",
               "control",
               "overlap"
+            ],
+            "type": "string"
+          },
+          "variance": {
+            "default": "forest",
+            "description": "Forests with fixed effects only (see above); ignored otherwise.",
+            "enum": [
+              "forest",
+              "bjs"
             ],
             "type": "string"
           }

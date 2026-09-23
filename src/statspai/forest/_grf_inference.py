@@ -515,8 +515,19 @@ def best_linear_projection(
     alpha: float,
     clip: float,
     vcov_type: str = "HC3",
+    controls: Any = "none",
 ) -> pd.DataFrame:
-    """Regress AIPW scores on ``(1, A)`` with a cluster-robust covariance."""
+    """Regress AIPW scores on ``(1, A)`` with a cluster-robust covariance.
+
+    FE forests regress imputation scores on ``(1, A)`` over treated cells
+    instead (:func:`._fe_imputation.best_linear_projection_fe`).
+    """
+    if is_fe_forest(forest):
+        from ._fe_imputation import best_linear_projection_fe
+
+        return best_linear_projection_fe(
+            forest, A, names[1:], alpha=alpha, controls=controls
+        )
     _require_dr(forest, "best_linear_projection()")
     require_finite_oob(forest, "best_linear_projection()")
     n = int(len(forest._Y_original))

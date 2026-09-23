@@ -55,6 +55,12 @@ Synthetic control
     ``basque_terrorism()``      — Abadie-Gardeazabal (re-exported)
     ``german_reunification()``  — ADH 2015 (re-exported)
 
+Heterogeneous effects in panels (simulated)
+    ``currency_union_panel()``  — dyadic trade panel with staggered
+                                  currency-union adoption and known
+                                  pair-level effects (layout after
+                                  Aytug 2026)
+
 Public health / epidemiology (REAL data)
     ``nhefs()``                 — Hernán-Robins *What If* NHEFS (g-methods
                                   canon: quit-smoking → weight / mortality)
@@ -87,6 +93,7 @@ from ._canonical import (
     texas_prison,
     thornton_hiv,
 )
+from ._currency_union import currency_union_panel
 
 # Data-source ingestion normalisers (World Bank / FRED / OECD-Eurostat SDMX).
 # These reshape payloads a data MCP already fetched into tidy StatsPAI frames;
@@ -316,6 +323,17 @@ def list_datasets() -> pd.DataFrame:
             "Quit-smoking IP-weighted ATT ≈ 3.4 kg, 95% CI (2.4, 4.5) (Ch12)",
             "REAL data: StatsPAI reproduces 3.4-3.5 kg across Ch12-14 g-methods",
         ),
+        (
+            "currency_union_panel",
+            "panel HTE / causal forest with FE (simulated dyadic)",
+            2205,
+            "Aytug (2026), arXiv:2601.19664 (layout only)",
+            "CFFE euro trade ATT 0.133 log points (+14.2%), Table 6, on "
+            "Eurostat EU15 data (not used here)",
+            "Simulated: true ATT on treated rows 0.133 by construction "
+            "(tau_true); FE-forest imputation ATT with controls='auto' "
+            "recovers it, the pooled forest is biased upward",
+        ),
     ]
     table = pd.DataFrame(
         registry,
@@ -350,6 +368,7 @@ __all__ = [
     "german_reunification",
     "nhefs",
     "load_nhefs",
+    "currency_union_panel",
     "list_datasets",
     "from_worldbank",
     "from_fred",

@@ -2234,16 +2234,20 @@ def _build_registry() -> None:
                     "str",
                     False,
                     "grf",
+                    "'cffe' (fe= only) uses the tau-heterogeneity criterion of "
+                    "Kattenberg, Scheer and Thiel instead of the GRF gradient; "
                     "'legacy' reproduces the pre-1.29 estimator (deprecated).",
-                    enum=["grf", "legacy"],
+                    enum=["grf", "cffe", "legacy"],
                 ),
                 ParamSpec("random_state", "int", False, None),
             ],
             returns=(
                 "CausalForest (fitted). predict() gives out-of-bag CATEs; "
                 "effect(X), effect_interval(X), average_treatment_effect(), "
-                "best_linear_projection(); sp.calibration_test / "
-                "sp.calibrate_cate / sp.rate for heterogeneity."
+                "best_linear_projection(), group_effects(); sp.calibration_test / "
+                "sp.calibrate_cate / sp.rate for heterogeneity. fe= forests: "
+                "ATT, BLP, calibration and group effects use imputation scores "
+                "(unit/period effects fitted on untreated cells)."
             ),
             example=(
                 'sp.causal_forest(data=df, y="wage", d="training", '
@@ -2295,15 +2299,17 @@ def _build_registry() -> None:
                 ),
                 FailureMode(
                     symptom=(
-                        "average_treatment_effect raises MethodIncompatibility on an "
-                        "fe= forest"
+                        "average_treatment_effect(target_sample='all') raises "
+                        "MethodIncompatibility on an fe= forest"
                     ),
                     exception="statspai.MethodIncompatibility",
                     remedy=(
-                        "Doubly-robust averages need a propensity; use group-time "
-                        "averages instead."
+                        "Parallel trends identifies effects on treated cells: use "
+                        "target_sample='treated' (imputation ATT) or "
+                        "sp.forest_group_effects; counterfactual effects of "
+                        "never-treated units are extrapolations (sp.forest_support)."
                     ),
-                    alternative="sp.did_forest",
+                    alternative="sp.forest_group_effects",
                 ),
                 FailureMode(
                     symptom=(
@@ -2334,6 +2340,235 @@ def _build_registry() -> None:
                 "iv_forest",
             ],
             typical_n_min=1000,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="forest_group_effects",
+            category="causal",
+            description=(
+                "Average treatment effects by group after a causal forest, "
+                "with valid standard errors: means of unbiased scores "
+                "(imputation scores on treated cells for fe= forests, AIPW "
+                "scores for pooled forests) over groups given by labels, by "
+                "quantiles of the out-of-bag CATE (GATES), or by membership "
+                "in dyadic data (every country over all its pairs). Pair-"
+                "clustered or dyadic-robust variance, equality Wald test."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "CausalForest",
+                    True,
+                    description="Fitted GRF-engine forest.",
+                ),
+                ParamSpec(
+                    "by",
+                    "str|array",
+                    False,
+                    None,
+                    "None, 'cate_quantile', or one label per training row.",
+                ),
+                ParamSpec(
+                    "members",
+                    "array",
+                    False,
+                    None,
+                    "(n, 2) members of each dyadic row; with by=None one group per "
+                    "member.",
+                ),
+                ParamSpec(
+                    "n_groups",
+                    "int",
+                    False,
+                    4,
+                    "Quantile groups for by='cate_quantile'.",
+                ),
+                ParamSpec(
+                    "cluster",
+                    "str|array",
+                    False,
+                    None,
+                    "None (forest clusters), 'dyadic' (needs members) or cluster ids.",
+                ),
+                ParamSpec(
+                    "variance",
+                    "str",
+                    False,
+                    "forest",
+                    "fe= forests: centre treated residuals on the OOB forest "
+                    "('forest') or on cohort x event-time means only ('bjs').",
+                    enum=["forest", "bjs"],
+                ),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "scale",
+                    "str",
+                    False,
+                    "level",
+                    "'percent' adds 100*(exp(x)-1) columns for log outcomes.",
+                    enum=["level", "percent"],
+                ),
+                ParamSpec("min_rows", "int", False, 1),
+                ParamSpec(
+                    "controls",
+                    "str|list",
+                    False,
+                    "none",
+                    "fe= forests: covariates in the untreated outcome model "
+                    "('none' = did_imputation, 'auto' = time-varying x/w, or names).",
+                ),
+            ],
+            returns=(
+                "DataFrame indexed by group: n_rows, n_units, estimate, se, z, p, "
+                "ci_low, ci_high, forest_mean; attrs method, estimand, vcov, tests."
+            ),
+            example=(
+                "sp.forest_group_effects(cf, members=df[['country_i', "
+                "'country_j']].to_numpy(), scale='percent')"
+            ),
+            tags=[
+                "forest",
+                "cate",
+                "gates",
+                "heterogeneous",
+                "panel",
+                "dyadic",
+                "group",
+            ],
+            reference=(
+                "[@borusyak2024revisiting], [@chernozhukov2025generic], "
+                "[@aronow2015cluster], [@aytug2026euro]"
+            ),
+            pre_conditions=[
+                "forest fitted with sp.causal_forest (default GRF engine)",
+                "fe= forests: binary treatment and untreated periods for treated units",
+                "by / members aligned with the rows used to fit the forest",
+            ],
+            assumptions=[
+                "fe= forests: parallel trends and no anticipation (imputation)",
+                "pooled forests: unconfoundedness and overlap (AIPW)",
+                "cluster='dyadic': many members; unreliable with few (warned)",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="se is NaN with cluster='dyadic'",
+                    exception="statspai.AssumptionWarning",
+                    remedy=(
+                        "The dyadic variance was not positive (few members); report "
+                        "pair-clustered SEs."
+                    ),
+                    alternative="sp.forest_group_effects",
+                ),
+            ],
+            alternatives=["did_forest", "cate_by_group", "gate_test"],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="forest_support",
+            category="causal",
+            description=(
+                "Support diagnostics for counterfactual CATE predictions: for "
+                "each new row, the forest CATE with its little-bag interval, "
+                "effect modifiers outside the range of the rows that inform the "
+                "effect (switching units for fe= forests), and the k-nearest-"
+                "neighbour distance relative to the reference sample."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "CausalForest",
+                    True,
+                    description="Fitted GRF-engine forest.",
+                ),
+                ParamSpec(
+                    "X_new",
+                    "DataFrame|array",
+                    True,
+                    description="Effect modifiers to predict.",
+                ),
+                ParamSpec("k", "int", False, 10),
+                ParamSpec("quantile", "float", False, 0.95),
+                ParamSpec("alpha", "float", False, 0.05),
+            ],
+            returns=(
+                "DataFrame: cate, se, ci_low, ci_high, n_outside_range, "
+                "knn_distance, knn_ratio, supported; attrs['summary']."
+            ),
+            example="sp.forest_support(cf, df_never_treated[['x1', 'x2']])",
+            tags=[
+                "forest",
+                "cate",
+                "extrapolation",
+                "overlap",
+                "counterfactual",
+                "support",
+            ],
+            reference="[@aytug2026euro]",
+            pre_conditions=["forest fitted with sp.causal_forest (default GRF engine)"],
+            assumptions=[
+                "Predictions for untreated units assume tau(x) carries over at equal x",
+            ],
+            alternatives=["overlap_plot", "forest_diagnostics"],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="cate_pretrend_test",
+            category="causal",
+            description=(
+                "Pre-trend test by predicted-effect group for causal forests "
+                "with fixed effects: units sorted by their out-of-bag CATE, "
+                "untreated cells regressed on unit and period effects and "
+                "group x lead indicators, cluster-robust Wald tests that the "
+                "leads are zero and equal across groups."
+            ),
+            params=[
+                ParamSpec(
+                    "forest", "CausalForest", True, description="Fitted fe= forest."
+                ),
+                ParamSpec("n_groups", "int", False, 2),
+                ParamSpec("leads", "int", False, None, "Default: up to 4."),
+                ParamSpec(
+                    "groups", "array", False, None, "Unit-constant labels per row."
+                ),
+                ParamSpec(
+                    "time_effects",
+                    "str",
+                    False,
+                    "common",
+                    enum=["common", "by_group"],
+                ),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec("controls", "str|list", False, "none"),
+            ],
+            returns=(
+                "dict: coefficients, joint_zero, equal_across_groups, "
+                "group_of_unit, leads, n_obs, n_clusters, method"
+            ),
+            example="sp.cate_pretrend_test(cf, n_groups=2, leads=3)",
+            tags=[
+                "forest",
+                "pretrends",
+                "parallel-trends",
+                "cate",
+                "panel",
+                "event-study",
+            ],
+            reference="[@borusyak2024revisiting], [@aytug2026euro]",
+            pre_conditions=[
+                (
+                    "forest fitted with fe='twoway' (or 'unit') and a binary "
+                    "absorbing treatment"
+                ),
+                "treated units observed for at least `leads` periods before adoption",
+            ],
+            assumptions=["Clusters (default: unit) are independent"],
+            alternatives=["did_forest", "pretrends_test", "bjs_pretrend_joint"],
         )
     )
 
@@ -15887,6 +16122,9 @@ _VALIDATED_TEST_SEED_FUNCTIONS: Dict[str, List[str]] = {
     ],
     "did_bcf": ["tests/test_did_frontiers.py", "tests/test_cov95_did_r3_did_bcf.py"],
     "did_forest": ["tests/test_did_forest.py"],
+    "forest_group_effects": ["tests/test_forest_fe_imputation.py"],
+    "forest_support": ["tests/test_forest_fe_imputation.py"],
+    "cate_pretrend_test": ["tests/test_forest_fe_imputation.py"],
     "did_misclassified": ["tests/test_did_frontiers.py"],
     "did_timevarying_covariates": ["tests/test_did_timevarying_covariates.py"],
     "cohort_anchored_event_study": ["tests/test_did_frontiers.py"],

@@ -379,6 +379,9 @@ from .fixest.wrapper import feols as feols
 from .fixest.wrapper import fepois as fepois
 from .forest.causal_forest import CausalForest as CausalForest
 from .forest.causal_forest import causal_forest as causal_forest
+from .forest.forest_heterogeneity import cate_pretrend_test as cate_pretrend_test
+from .forest.forest_heterogeneity import forest_group_effects as forest_group_effects
+from .forest.forest_heterogeneity import forest_support as forest_support
 from .forest.forest_inference import (
     average_treatment_effect as average_treatment_effect,
 )

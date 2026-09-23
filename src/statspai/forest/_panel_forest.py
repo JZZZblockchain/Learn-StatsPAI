@@ -251,6 +251,7 @@ def fit_fe(
         max_depth=cf.max_depth,
         unit=unit_codes,
         time=time_codes,
+        tau_split=str(cf.split_rule).lower().strip() == "cffe",
         **common,
     )
     tau_oob, var_oob = forest.predict_oob(X, estimate_variance=cf.ci_group_size > 1)
@@ -265,6 +266,8 @@ def fit_fe(
     cf._clusters = cluster_codes
     cf._fe_unit = unit_codes
     cf._fe_time = time_codes
+    cf._fe_W = None if W is None else np.asarray(W, dtype=float)
+    cf._fe_imputation = None  # imputation designs are rebuilt on refit
     cf._observation_weight = observation_weights(
         cluster_codes, bool(cf.equalize_cluster_weights), n
     )
@@ -276,6 +279,7 @@ def fit_fe(
         "n_units": n_units,
         "n_periods": int(time_codes.max()) + 1 if cf.fe == "twoway" else None,
         "share_units_switching_treatment": float(unit_has_variation.mean()),
+        "split_rule": str(cf.split_rule).lower().strip(),
         "num_trees": forest.num_trees,
         "mtry": forest.options.get("mtry_value"),
         "uninformative_leaf_share": (

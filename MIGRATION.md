@@ -5,6 +5,38 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="fe-forest-imputation"></a>
+
+## Unreleased — ⚠️ causal forests with fixed effects: calibration uses imputation scores
+
+**Who is affected.** Code that calls `sp.calibration_test(cf)` or
+`sp.calibrate_cate(cf)` on a forest fitted with `fe="twoway"` and a binary
+treatment. Pooled forests, `fe="unit"` forests and FE forests with a
+continuous treatment are unchanged.
+
+**What changed.** 1.29.0 regressed the globally within-transformed outcome
+on the within-transformed treatment times the OOB prediction. Global two-way
+demeaning is exact only under a constant effect, so that slope was not a
+de-attenuation factor (`calibrate_cate` warned about it). The default is now
+the imputation regression: each treated cell's `Y - alpha_hat_i -
+gamma_hat_t` (unit and period effects fitted on untreated cells) is
+regressed on the OOB prediction. Both coefficients and their standard errors
+change; `calibrate_cate(...)["method"]` is `"blp_imputation"`.
+
+```python
+sp.calibration_test(cf)                   # imputation regression (new default)
+sp.calibration_test(cf, method="within")  # the 1.29.0 numbers
+sp.calibrate_cate(cf, method="within")    # the 1.29.0 rescaling
+```
+
+At the same time `cf.average_treatment_effect("treated")`,
+`cf.best_linear_projection()` and `sp.forest_group_effects(cf)` stop raising
+for FE forests and return imputation-based estimates.
+`average_treatment_effect()` with `target_sample="all"`, `"control"` or
+`"overlap"` and `sp.rate(cf)` still raise.
+
+---
+
 ## 1.29.0 — DML orthogonality diagnostic is unavailable
 
 `dml_diagnostics(result).orth_stat` and `.orth_pvalue` now return `None`.

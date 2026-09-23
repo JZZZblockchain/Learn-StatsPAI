@@ -4,7 +4,90 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Inference for causal forests with fixed effects (`fe="twoway"` /
+  `"unit"`) through imputation scores.** A within-unit design has no
+  propensity, so 1.29.0 refused every average. Following the model the FE
+  forest already assumes (`fe="twoway"`), unit and period effects are now
+  fitted on the untreated cells
+  [borusyak2024revisiting] and every treated cell gets
+  `Gamma = Y - alpha_hat_i - gamma_hat_t`, unbiased for its own effect
+  whatever the heterogeneity. The forest is the proxy, `Gamma` the signal
+  [chernozhukov2025generic]. `controls="auto"` (or a list of names) adds
+  time-varying covariates to the untreated model linearly; the default
+  `"none"` is the pure two-way model:
+  - `cf.average_treatment_effect("treated")` returns the imputation ATT.
+    With the default `controls="none"` it *is* `sp.did_imputation`:
+    identical estimate on `mpdta` (1e-13) and, with `variance="bjs"`,
+    identical standard error (5e-15 relative), so it inherits that
+    estimator's Stata/R parity. The default
+    `variance="forest"` centres treated residuals on the out-of-bag forest
+    prediction before the cohort x event-time blocks: in 200 replications
+    (N = 300, T = 8, staggered adoption selected on the unit effect) it
+    covered the ATT 97.5% of the time with heterogeneous dynamic effects
+    (BJS convention: 100%, standard error 34% larger) and 94.5% with a
+    constant effect (Monte Carlo evidence, tier T1). The mean forest
+    prediction over the same cells is
+    reported as `forest_plug_in`; with heterogeneous effects it was biased
+    by -0.18 against -0.003 for the imputation ATT.
+  - `cf.best_linear_projection()` regresses the scores on covariates over
+    treated cells.
+  - `sp.calibration_test(cf)` / `sp.calibrate_cate(cf)` regress the scores on
+    the OOB prediction (`method="imputation"`, the new default for binary
+    FE forests). The heterogeneity test kept its size (3.5-4.0% at 5%) and
+    the slope now de-attenuates: calibrated predictions cut RMSE from 0.634
+    to 0.570 (heterogeneous) and 0.213 to 0.118 (constant effect).
+- **`sp.forest_group_effects`** (also `cf.group_effects`): group average
+  effects with valid standard errors for any grouping — labels, quantiles of
+  the OOB CATE (GATES), or membership in dyadic data (each country over all
+  of its pairs) — with pair-clustered or dyadic-robust
+  [aronow2015cluster] variances, an equality Wald test and optional percent
+  scale for log outcomes. FE forests use imputation scores (group ATTs),
+  pooled forests AIPW scores (group ATEs).
+- **`sp.forest_support`**: support diagnostics for counterfactual CATE
+  predictions (units that were never treated): range and k-nearest-neighbour
+  checks against the rows that identify the effect, benchmarked on
+  distances to *other* units.
+- **`sp.cate_pretrend_test`**: pre-trend test by predicted-effect group for
+  FE forests (untreated cells, group x lead indicators, cluster-robust Wald
+  tests that the leads are zero and equal across groups). In 100
+  replications the equality test rejected 3% of the time without a
+  pre-trend and 71% with a group-specific one.
+- **`sp.causal_forest(..., split_rule="cffe")`**: for `fe=` forests, the
+  tau-heterogeneity split criterion `n_L n_R / n^2 (tau_L - tau_R)^2` of
+  [kattenberg2023causal], the rule the `causalfe` package implements, in
+  place of the GRF gradient criterion. Everything downstream is unchanged.
+  The criterion needs the shallow, large-leaf trees it was designed with:
+  on the causalfe package's own simulation its CATE RMSE was 0.74 with
+  StatsPAI's defaults and 0.53 with `min_samples_leaf=20, max_depth=4`
+  (GRF criterion: 0.50 either way), and a warning fires on the deep
+  default.
+- **`sp.datasets.currency_union_panel`**: a simulated dyadic trade panel
+  with staggered currency-union adoption, known pair-level effects, and an
+  optional late-adopter wave during a common downturn; its layout follows
+  [aytug2026euro]. The worked example is in
+  `docs/guides/heterogeneity_panel_forests.md`.
+- `paper.bib`: `aytug2026euro` (arXiv:2601.19664; verified via the arXiv
+  API and DataCite, SSRN posting via Crossref).
+
+### Changed
+
+- ⚠️ **FE forests: `sp.calibration_test` and `sp.calibrate_cate` default to
+  the imputation regression** for `fe="twoway"` with a binary treatment (see
+  Added). The globally within-transformed regression of 1.29.0 is
+  `method="within"`; continuous treatments and `fe="unit"` keep it. See
+  [MIGRATION.md](MIGRATION.md#fe-forest-imputation).
+- `cf.average_treatment_effect("treated")` accepts the target as the first
+  positional argument, as the panel-forest guide already wrote it (the call
+  used to fail because the first parameter is `X`).
+
 ### Fixed
+
+- **`sp.causal_forest(data=, y=, d=, x=[...])` dropped the feature names**,
+  so `cf.effect(df[x])`, `cf.predict(df)` and the BLP / importance tables
+  saw `X0, X1, ...`, and a DataFrame with the right columns raised "missing
+  effect-modifier column(s)". The names are now kept.
 
 - **CI mypy gate was not type-checking anything.** With `python_version = "3.9"`
   in `[tool.mypy]`, mypy followed imports into `coverage/debug.py` (which uses

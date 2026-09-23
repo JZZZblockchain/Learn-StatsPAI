@@ -304,6 +304,72 @@ def _split_instrumental(
 
 
 @njit(cache=_CACHE, nogil=True)
+def _split_tau_heterogeneity(
+    X, idx, Yr, Wr, G, vars_, min_node_size, alpha, imbalance_penalty
+):  # type: ignore[no-untyped-def]
+    """Best tau-heterogeneity split (Kattenberg, Scheer and Thiel 2023, eq. 4).
+
+    Scores a candidate split by ``n_L n_R / n^2 (tau_L - tau_R)^2`` with
+    ``tau = sum G W~ Y~ / sum G W~^2`` evaluated on the *parent's*
+    node-residualized outcome and treatment, which is what the authors'
+    implementation searches over.  A child whose residualized treatment has
+    no variation carries no ``tau`` and is skipped.  ``alpha`` is applied to
+    the child's share of node rows (the grf criterion's size measure does
+    not exist here) and ``imbalance_penalty`` is subtracted as in grf.
+    """
+    m = idx.size
+    num_tot = 0.0
+    den_tot = 0.0
+    for t in range(m):
+        j = idx[t]
+        num_tot += G[j] * Wr[j] * Yr[j]
+        den_tot += G[j] * Wr[j] * Wr[j]
+    min_rows = min_node_size
+    if alpha > 0.0:
+        a_rows = int(alpha * m)
+        if a_rows > min_rows:
+            min_rows = a_rows
+    best_dec = 0.0
+    best_var = -1
+    best_val = 0.0
+    xs = np.empty(m)
+    for v_i in range(vars_.size):
+        v = vars_[v_i]
+        for t in range(m):
+            xs[t] = X[idx[t], v]
+        order = np.argsort(xs, kind="mergesort")
+        num_l = 0.0
+        den_l = 0.0
+        ln = 0
+        for t in range(m - 1):
+            j = idx[order[t]]
+            num_l += G[j] * Wr[j] * Yr[j]
+            den_l += G[j] * Wr[j] * Wr[j]
+            ln += 1
+            if xs[order[t]] == xs[order[t + 1]]:
+                continue  # not a bucket boundary
+            rn = m - ln
+            if ln < min_rows:
+                continue
+            if rn < min_rows:
+                break
+            den_r = den_tot - den_l
+            if den_l < 1e-10 or den_r < 1e-10:
+                continue
+            tau_l = num_l / den_l
+            tau_r = (num_tot - num_l) / den_r
+            diff = tau_l - tau_r
+            dec = (ln * rn) / (m * m) * diff * diff
+            if imbalance_penalty > 0.0:
+                dec -= imbalance_penalty * (1.0 / ln + 1.0 / rn)
+            if dec > best_dec:
+                best_dec = dec
+                best_var = v
+                best_val = xs[order[t]]
+    return best_var >= 0, best_var, best_val
+
+
+@njit(cache=_CACHE, nogil=True)
 def _split_regression(
     X, idx, rho, G, vars_, alpha, imbalance_penalty
 ):  # type: ignore[no-untyped-def]
@@ -433,6 +499,7 @@ def _grow_tree(
     Wr,
     fe_max_iter,
     fe_tol,
+    tau_split,
 ):  # type: ignore[no-untyped-def]
     """Grow one tree on ``grow_samples``.
 
@@ -503,6 +570,10 @@ def _grow_tree(
         if kind == KIND_CAUSAL and stabilize_splits:
             found, var, val = _split_instrumental(
                 X, idx, rho, W, G, vars_, min_node_size, alpha, imbalance_penalty
+            )
+        elif kind == KIND_CAUSAL_FE and tau_split:
+            found, var, val = _split_tau_heterogeneity(
+                X, idx, Yr, Wr, G, vars_, min_node_size, alpha, imbalance_penalty
             )
         elif kind == KIND_CAUSAL_FE and stabilize_splits:
             found, var, val = _split_instrumental(
@@ -784,6 +855,7 @@ def _train_group(
     n_times,
     fe_max_iter,
     fe_tol,
+    tau_split,
 ):  # type: ignore[no-untyped-def]
     """Train one little-bag group of ``ci_group_size`` trees.
 
@@ -856,6 +928,7 @@ def _train_group(
             Wr,
             fe_max_iter,
             fe_tol,
+            tau_split,
         )
         root = 0
         if honesty and est_samples.size > 0:
@@ -1298,6 +1371,7 @@ def train_forest(
     time: Optional[np.ndarray] = None,
     fe_max_iter: int = 1000,
     fe_tol: float = 1e-10,
+    tau_split: bool = False,
 ) -> GRFForest:
     """Train a regression (``kind=0``) or causal (``kind=1``) forest.
 
@@ -1391,6 +1465,7 @@ def train_forest(
                 n_times,
                 int(fe_max_iter),
                 float(fe_tol),
+                bool(tau_split),
             )
         )
 
@@ -1449,6 +1524,7 @@ def _assemble(
             "alpha",
             "imbalance_penalty",
             "stabilize_splits",
+            "tau_split",
             "equalize_cluster_weights",
             "samples_per_cluster",
             "seed",

@@ -1308,6 +1308,9 @@ __all__ = [
     "calibration_test",
     "test_calibration",  # GRF-compatible alias of calibration_test
     "rate",
+    "forest_group_effects",
+    "forest_support",
+    "cate_pretrend_test",
     "honest_variance",
     "average_treatment_effect",
     "forest_diagnostics",
@@ -2806,6 +2809,12 @@ _register_lazy(
     "forest.causal_forest",
     "CausalForest",
     "causal_forest",
+)
+_register_lazy(
+    "forest.forest_heterogeneity",
+    "forest_group_effects",
+    "forest_support",
+    "cate_pretrend_test",
 )
 _register_lazy(
     "forest.forest_inference",

@@ -10,6 +10,10 @@ companions:
 - :func:`iv_forest` — instrumental-variable causal forests
   (Athey-Tibshirani-Wager 2019).
 - :func:`multi_arm_forest` — multi-arm extension.
+- :func:`forest_group_effects` / :func:`forest_support` /
+  :func:`cate_pretrend_test` -- group effects with valid SEs (imputation
+  scores for ``fe=`` forests), support of counterfactual predictions, and
+  pre-trends by predicted-effect group.
 - :func:`calibration_test` / :func:`test_calibration` /
   :func:`rate` / :func:`honest_variance` — post-fit honesty &
   calibration diagnostics.
@@ -20,6 +24,11 @@ Use ``from statspai.forest import ...`` going forward.
 """
 
 from .causal_forest import CausalForest, causal_forest
+from .forest_heterogeneity import (
+    cate_pretrend_test,
+    forest_group_effects,
+    forest_support,
+)
 from .forest_inference import (
     average_treatment_effect,
     calibrate_cate,
@@ -42,6 +51,9 @@ __all__ = [
     "honest_variance",
     "average_treatment_effect",
     "forest_diagnostics",
+    "forest_group_effects",
+    "forest_support",
+    "cate_pretrend_test",
     "multi_arm_forest",
     "MultiArmForestResult",
     "iv_forest",

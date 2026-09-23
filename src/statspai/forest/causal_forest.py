@@ -101,7 +101,11 @@ class CausalForest(BaseModel):
         Threads used to grow trees (-1 = all cores).
     verbose : int, default=0
         Verbosity level
-    split_rule : {"grf", "legacy"}, default="grf"
+    split_rule : {"grf", "cffe", "legacy"}, default="grf"
+        ``"cffe"`` (``fe=`` forests only) replaces the GRF gradient
+        criterion with the tau-heterogeneity criterion of Kattenberg,
+        Scheer and Thiel (2023), the rule the ``causalfe`` package
+        implements; see :func:`statspai.causal_forest`.
         ``"legacy"`` reproduces the pre-1.29 estimator and is deprecated.
     mtry : int, optional
         Mean number of candidate variables per split (grf default
@@ -255,6 +259,8 @@ class CausalForest(BaseModel):
         self._forest: Optional[List[DecisionTreeRegressor]] = None
         self._treatment_values: Optional[np.ndarray] = None
         self._feature_names: Optional[List[str]] = None
+        # Names of the w= columns when fitted through the column interface.
+        self._control_names: List[str] = []
 
     @accepts_aliases(unit="id")
     def fit(  # type: ignore[override]
@@ -479,7 +485,7 @@ class CausalForest(BaseModel):
                 recovery_hint="Provide a non-constant continuous treatment.",
             )
 
-        if split_rule == "grf":
+        if split_rule in ("grf", "cffe"):
             return self._fit_grf_path(
                 Y,
                 T,
@@ -585,12 +591,37 @@ class CausalForest(BaseModel):
 
     def _resolve_split_rule(self) -> str:
         rule = str(self.split_rule).lower().strip()
-        if rule not in ("grf", "legacy"):
+        if rule not in ("grf", "cffe", "legacy"):
             raise MethodIncompatibility(
-                "CausalForest: split_rule must be 'grf' or 'legacy'.",
+                "CausalForest: split_rule must be 'grf', 'cffe' or 'legacy'.",
                 recovery_hint="Use the default split_rule='grf'.",
                 diagnostics={"split_rule": self.split_rule},
             )
+        if rule == "cffe":
+            if self.fe is None:
+                raise MethodIncompatibility(
+                    "CausalForest: split_rule='cffe' is the tau-heterogeneity "
+                    "criterion of a causal forest with fixed effects.",
+                    recovery_hint=(
+                        "Pass fe='twoway' (with id= and time=), or use "
+                        "split_rule='grf'."
+                    ),
+                )
+            deep = self.max_depth is None or int(self.max_depth) > 6
+            if int(self.min_samples_leaf) < 20 and deep:
+                warnings.warn(
+                    "CausalForest(split_rule='cffe') with StatsPAI's default "
+                    "tree size: the tau-heterogeneity criterion compares leaf "
+                    "ratios and was designed for the shallow, large-leaf trees "
+                    "of its reference implementation. In StatsPAI's simulations "
+                    "(the causalfe package's own DGP, 15 replications) its CATE "
+                    "RMSE was 0.74 with min_samples_leaf=5 and no depth cap "
+                    "against 0.53 with min_samples_leaf=20, max_depth=4 (the "
+                    "GRF criterion: 0.50 either way). Pass those settings to "
+                    "reproduce the reference implementation.",
+                    AssumptionWarning,
+                    stacklevel=3,
+                )
         if rule == "legacy":
             warnings.warn(
                 "CausalForest(split_rule='legacy') reproduces the pre-1.29 "
@@ -744,7 +775,7 @@ class CausalForest(BaseModel):
         self.diagnostics = {
             "method": "Causal Forest",
             "engine": "grf",
-            "split_rule": "grf",
+            "split_rule": self._resolve_split_rule(),
             "fe": self.fe,
             "n_estimators": int(self._engine.num_trees),
             "n_features": X.shape[1],
@@ -1384,9 +1415,28 @@ class CausalForest(BaseModel):
         target_sample: str = "all",
         alpha: float = 0.05,
         clip: float = 0.01,
+        variance: str = "forest",
+        controls: Any = "none",
     ) -> Dict[str, float]:
-        """GRF-style ATE/ATT/ATC/ATO aggregation of CATE predictions."""
+        """GRF-style ATE/ATT/ATC/ATO aggregation of CATE predictions.
+
+        Forests with fixed effects support ``target_sample='treated'``
+        only, estimated by imputation; ``variance`` applies to them (see
+        :func:`statspai.average_treatment_effect`).
+
+        The target may be given positionally, as in grf:
+        ``cf.average_treatment_effect("treated")``.
+        """
         from .forest_inference import average_treatment_effect
+
+        if isinstance(X, str):
+            if T is not None or target_sample != "all":
+                raise MethodIncompatibility(
+                    "average_treatment_effect(): a string first argument is "
+                    "the target sample; do not also pass target_sample= or T=.",
+                    recovery_hint="Call cf.average_treatment_effect('treated').",
+                )
+            target_sample, X = X, None
 
         return average_treatment_effect(
             self,
@@ -1395,6 +1445,37 @@ class CausalForest(BaseModel):
             target_sample=target_sample,
             alpha=alpha,
             clip=clip,
+            variance=variance,
+            controls=controls,
+        )
+
+    def group_effects(
+        self,
+        by: Any = None,
+        *,
+        members: Any = None,
+        n_groups: int = 4,
+        cluster: Any = None,
+        variance: str = "forest",
+        alpha: float = 0.05,
+        scale: str = "level",
+        min_rows: int = 1,
+        controls: Any = "none",
+    ) -> pd.DataFrame:
+        """Average effects by group; see :func:`statspai.forest_group_effects`."""
+        from .forest_heterogeneity import forest_group_effects
+
+        return forest_group_effects(
+            self,
+            by,
+            members=members,
+            n_groups=n_groups,
+            cluster=cluster,
+            variance=variance,
+            alpha=alpha,
+            scale=scale,
+            min_rows=min_rows,
+            controls=controls,
         )
 
     def forest_diagnostics(
@@ -1505,6 +1586,7 @@ class CausalForest(BaseModel):
         X_test: Optional[np.ndarray] = None,
         alpha: float = 0.05,
         clip: float = 0.01,
+        controls: Any = "none",
     ) -> pd.DataFrame:
         r"""Best Linear Projection (BLP) of CATE on features (Semenova-Chernozhukov 2021).
 
@@ -1551,9 +1633,21 @@ class CausalForest(BaseModel):
             Index ``["Intercept", *features]`` with columns
             ``[coef, se, t, p, ci_lower, ci_upper]``. HC1 SEs.
 
+        Notes
+        -----
+        Forests with fixed effects (``fe=``) have no propensity, so the
+        response is the imputation score ``Y - alpha_hat_i - gamma_hat_t``
+        of every treated cell (unit and period effects fitted on untreated
+        cells) and the regression runs over treated cells; standard errors
+        come from the exact linear weights of that estimator, clustered by
+        the forest's clusters.  ``controls`` adds covariates to that
+        untreated model (see :func:`statspai.average_treatment_effect`).
+        See :func:`statspai.forest_group_effects`.
+
         References
         ----------
-        [@semenova2021debiased], [@athey2019generalized]
+        [@semenova2021debiased], [@athey2019generalized],
+        [@borusyak2024revisiting]
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -1624,7 +1718,7 @@ class CausalForest(BaseModel):
                 else 0
             )
             return _gi.best_linear_projection(
-                self, A, names, alpha=alpha_value, clip=clip_value
+                self, A, names, alpha=alpha_value, clip=clip_value, controls=controls
             )
 
         if X_test is None:
@@ -2041,6 +2135,8 @@ def causal_forest(
         X = data[x_cols].to_numpy()
         W = data[w_cols].to_numpy() if w_cols else None
         data = None  # arrays fully specify the fit below
+    else:
+        x_cols, w_cols = [], []
 
     cf = CausalForest(
         n_estimators=n_estimators,
@@ -2067,6 +2163,11 @@ def causal_forest(
         id=id,
         time=time,
     )
+    if x_cols:
+        # The column-name interface fits on arrays; keep the names so that
+        # effect(df[x]), predict(df) and the BLP / importance tables use them.
+        cf._feature_names = list(x_cols)
+        cf._control_names = list(w_cols)
     try:
         from ..output._lineage import attach_provenance as _attach_prov
 
