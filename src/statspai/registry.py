@@ -8014,6 +8014,161 @@ def _build_registry() -> None:
     # -- v1.7 long-panel DML (Clarke & Polselli 2025) ------------------ #
     register(
         FunctionSpec(
+            name="dynamic_dml",
+            category="causal",
+            description=(
+                "Dynamic Double/Debiased ML for a treatment assigned "
+                "repeatedly over time (Lewis & Syrgkanis 2021). Use it when "
+                "the treatment moves the state that drives later treatment: "
+                "controlling for the later state blocks the indirect path, "
+                "not controlling for it leaves the confounding in. Returns "
+                "the effect of intervening on each period's treatment on the "
+                "final outcome, the total sequence effect, and the joint "
+                "covariance -- so a contrast across periods has an honest "
+                "standard error instead of a sum of variances. Optional "
+                "linear heterogeneity in baseline modifiers. Reproduces "
+                "econml's DynamicDML to 1e-15 given the same folds and "
+                "learners."
+            ),
+            params=[
+                ParamSpec("data", "DataFrame", True, description="Long panel"),
+                ParamSpec(
+                    "y",
+                    "str",
+                    True,
+                    description="Outcome; only its last-period value is used.",
+                ),
+                ParamSpec("treat", "str", True, description="Treatment column"),
+                ParamSpec(
+                    "id",
+                    "str",
+                    True,
+                    description="Unit id column; unit= is accepted as an alias.",
+                ),
+                ParamSpec("time", "str", True, description="Period column"),
+                ParamSpec(
+                    "covariates",
+                    "list",
+                    False,
+                    None,
+                    "Time-varying state read at each period.",
+                ),
+                ParamSpec(
+                    "baseline",
+                    "list",
+                    False,
+                    None,
+                    "Time-invariant controls (first-period values).",
+                ),
+                ParamSpec(
+                    "modifiers",
+                    "list",
+                    False,
+                    None,
+                    "Baseline effect modifiers; the final stage becomes "
+                    "linear in them and result.coef holds the projection.",
+                ),
+                ParamSpec(
+                    "lags",
+                    "int",
+                    False,
+                    1,
+                    "Lagged treatments added to each period's state. "
+                    "lags=0 warns: omitting the treatment history moved the "
+                    "test design's estimates by -15%, -15% and +37%.",
+                ),
+                ParamSpec(
+                    "model_y",
+                    "sklearn estimator",
+                    False,
+                    None,
+                    "Outcome nuisance; default RidgeCV.",
+                ),
+                ParamSpec(
+                    "model_t",
+                    "sklearn estimator",
+                    False,
+                    None,
+                    "Treatment nuisance; default RidgeCV.",
+                ),
+                ParamSpec("n_folds", "int", False, 5, "Folds; whole units held out."),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec("random_state", "int", False, 0),
+                ParamSpec(
+                    "periods",
+                    "list",
+                    False,
+                    None,
+                    "Periods to use, in order; default every sorted value.",
+                ),
+                ParamSpec(
+                    "fold_ids",
+                    "array",
+                    False,
+                    None,
+                    "One fold index per complete unit, to reproduce an "
+                    "external split.",
+                ),
+            ],
+            returns=(
+                "DynamicDMLResult: .periods (per-period effect, se, ci), "
+                ".estimate/.se (total sequence effect), .vcov (joint), "
+                ".contrast(w), .cumulative(), .coef (heterogeneity), "
+                ".summary(), .diagnostics."
+            ),
+            example=(
+                "sp.dynamic_dml(df, y='sales', treat='price', unit='store', "
+                "time='week', covariates=['stock'])"
+            ),
+            tags=[
+                "dml",
+                "panel",
+                "dynamic",
+                "sequential",
+                "time-varying",
+                "heterogeneous",
+                "causal",
+            ],
+            reference="[@lewis2021double], [@econml]",
+            pre_conditions=[
+                "long panel with one row per unit-period",
+                "at least two periods; units incomplete over the window are dropped",
+                "treatment varies within period",
+            ],
+            assumptions=[
+                "sequential ignorability given the recorded state, which must "
+                "include the treatment history (lags >= 1)",
+                "no unmeasured time-varying confounding",
+                "linear-in-treatment structural mean model (SNMM)",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: the moment system is singular",
+                    exception="statspai.DataInsufficient",
+                    remedy=(
+                        "The state predicts the treatment perfectly (too many "
+                        "controls for the number of units) or a period's "
+                        "treatment is constant. Drop controls or check variance."
+                    ),
+                    alternative="sp.dml_panel",
+                ),
+                FailureMode(
+                    symptom="DataInsufficient: no unit observed in all periods",
+                    exception="statspai.DataInsufficient",
+                    remedy=(
+                        "Restrict to a balanced window with periods=[...], or "
+                        "use sp.msm / sp.ltmle, which tolerate unbalanced "
+                        "histories."
+                    ),
+                    alternative="sp.msm",
+                ),
+            ],
+            alternatives=["dml_panel", "msm", "ltmle", "gformula", "g_estimation"],
+        )
+    )
+
+    register(
+        FunctionSpec(
             name="dml_panel",
             category="causal",
             description=(

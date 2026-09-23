@@ -8621,6 +8621,97 @@
     "name": "drdid"
   },
   {
+    "description": "Dynamic Double/Debiased ML for a treatment assigned repeatedly over time (Lewis & Syrgkanis 2021). Use it when the treatment moves the state that drives later treatment: controlling for the later state blocks the indirect path, not controlling for it leaves the confounding in. Returns the effect of intervening on each period's treatment on the final outcome, the total sequence effect, and the joint covariance -- so a contrast across periods has an honest standard error instead of a sum of variances. Optional linear heterogeneity in baseline modifiers. Reproduces econml's DynamicDML to 1e-15 given the same folds and learners. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: sequential ignorability given the recorded state, which must include the treatment history (lags >= 1); no unmeasured time-varying confounding; linear-in-treatment structural mean model (SNMM). Pre-conditions: long panel with one row per unit-period; at least two periods; units incomplete over the window are dropped; treatment varies within period. Failure modes: DataInsufficient: the moment system is singular -> The state predicts the treatment...",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "baseline": {
+          "description": "Time-invariant controls (first-period values).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "covariates": {
+          "description": "Time-varying state read at each period.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fold_ids": {
+          "description": "One fold index per complete unit, to reproduce an external split.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unit id column; unit= is accepted as an alias.",
+          "type": "string"
+        },
+        "lags": {
+          "default": 1,
+          "description": "Lagged treatments added to each period's state. lags=0 warns: omitting the treatment history moved the test design's estimates by -15%, -15% and +37%.",
+          "type": "integer"
+        },
+        "model_t": {
+          "description": "Treatment nuisance; default RidgeCV.",
+          "type": "string"
+        },
+        "model_y": {
+          "description": "Outcome nuisance; default RidgeCV.",
+          "type": "string"
+        },
+        "modifiers": {
+          "description": "Baseline effect modifiers; the final stage becomes linear in them and result.coef holds the projection.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_folds": {
+          "default": 5,
+          "description": "Folds; whole units held out.",
+          "type": "integer"
+        },
+        "periods": {
+          "description": "Periods to use, in order; default every sorted value.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Period column",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment column",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome; only its last-period value is used.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "time",
+        "treat",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "dynamic_dml"
+  },
+  {
     "description": "Hainmueller (2012) entropy balancing. Targets the ATT by exactly balancing covariate means across treatment groups. No propensity-score model specification needed. Validation: certified parity evidence.",
     "input_schema": {
       "properties": {

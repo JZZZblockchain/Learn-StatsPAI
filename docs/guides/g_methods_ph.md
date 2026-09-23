@@ -221,12 +221,70 @@ drf = sp.dose_response(
 | the treatment model | time-varying | `sp.msm` |
 | neither fully, time-varying | time-varying | `sp.ltmle` |
 | a written protocol | time-varying | `sp.target_trial.*` |
+| machine learning, and want *heterogeneity* | time-varying | `sp.dynamic_dml` |
 
 All g-methods rely on **(sequential) exchangeability + positivity +
 consistency**. They cannot test these assumptions — pair every estimate
 with an `sp.evalue(...)` sensitivity analysis for unmeasured confounding
 [@vanderweele2017sensitivity] and inspect weight distributions for
 positivity violations.
+
+## 6. Sequence effects with machine learning: `sp.dynamic_dml`
+
+The g-methods above answer "what would the population average be under
+this regime". They do not say *which* period's treatment did the work, or
+*for whom*. `sp.dynamic_dml` [@lewis2021double] does both: it is the
+Neyman-orthogonal, cross-fitted counterpart of g-estimation, and it
+returns the effect of intervening on each period separately.
+
+```python
+res = sp.dynamic_dml(
+    df, y="cd4", treat="art", id="patient", time="visit",
+    covariates=["viral_load", "weight"],   # the state, read at each visit
+    modifiers=["age0"],                    # heterogeneity, baseline values
+)
+res.periods        # effect of each visit's treatment on the final outcome
+res.estimate       # treating at every visit rather than none
+res.cumulative()   # treating from visit k onward
+res.contrast([1, -1, 0])   # did the first visit matter more than the second?
+res.coef           # how each period's effect varies with age0
+```
+
+Three things to know before using it.
+
+**The estimand is the intervention effect, not the structural blip.**
+Setting `art` at visit 0 also moves the viral load at visit 1, which moves
+the outcome. `res.periods` carries those indirect paths, because a
+policy maker who sets the whole sequence gets them. On the linear system
+used in the tests the closed form is the direct effect plus
+`sum_k phi_k * d * c^(k-t-1)`, and that is what the estimator recovers.
+
+**The state must contain the treatment history.** Sequential
+ignorability is an assumption about what you recorded. `lags=1` is the
+default because omitting the one lag on the test design moved the three
+period effects by -15%, -15% and +37% *with no interval covering the
+truth* — the estimator does not get noisier when the state is
+incomplete, it gets confidently wrong. `lags=0` warns.
+
+**Report contrasts from the joint covariance, not from the table.**
+Period effects are correlated — negatively, on the test design — so
+adding their variances overstates the uncertainty of any sum. The total
+sequence effect there has a standard error of 0.032 against 0.062 from
+adding variances; `diagnostics['independent_sum_se']` reports the wrong
+number next to the right one so the gap is visible.
+
+Evidence: given the same folds and first-stage learners the estimator
+reproduces `econml.panel.dml.DynamicDML` [@econml] — the reference
+implementation, by the authors of the method — to 1e-15 relative on both
+the per-period estimates and their standard errors, and recovers the
+closed-form truth without bias at nominal coverage over replications
+(`tests/reference_parity/test_dynamic_dml_econml_parity.py`).
+
+Limitations: the panel must be balanced over the window you analyse
+(incomplete units are dropped and counted, which changes the population if
+attrition responds to treatment), the outcome is read once at the end, and
+the structural model is linear in the treatment. For unbalanced histories
+or a non-linear regime contrast, stay with `sp.ltmle` / `sp.gformula`.
 
 ## Where to next
 

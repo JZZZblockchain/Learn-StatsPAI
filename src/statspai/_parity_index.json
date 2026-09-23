@@ -3878,6 +3878,23 @@
       "tolerance": "Coefficients 7e-16 and standard errors 2e-15 on undirected and directed dyads, after the 1.28.0 fix to the shared-member weighting; also asserted against a brute-force construction of the definition."
     },
     {
+      "function": "dynamic_dml",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_dynamic_dml_econml_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "additional_tests": [
         "tests/reference_parity/test_matching_parity.py",
         "tests/reference_parity/test_paper_parity.py"

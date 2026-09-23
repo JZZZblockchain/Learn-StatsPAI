@@ -14724,6 +14724,151 @@
   },
   {
     "alternatives": [
+      "dml_panel",
+      "msm",
+      "ltmle",
+      "gformula",
+      "g_estimation"
+    ],
+    "assumptions": [
+      "sequential ignorability given the recorded state, which must include the treatment history (lags >= 1)",
+      "no unmeasured time-varying confounding",
+      "linear-in-treatment structural mean model (SNMM)"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Dynamic Double/Debiased ML for a treatment assigned repeatedly over time (Lewis & Syrgkanis 2021). Use it when the treatment moves the state that drives later treatment: controlling for the later state blocks the indirect path, not controlling for it leaves the confounding in. Returns the effect of intervening on each period's treatment on the final outcome, the total sequence effect, and the joint covariance -- so a contrast across periods has an honest standard error instead of a sum of variances. Optional linear heterogeneity in baseline modifiers. Reproduces econml's DynamicDML to 1e-15 given the same folds and learners. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "example": "sp.dynamic_dml(df, y='sales', treat='price', unit='store', time='week', covariates=['stock'])",
+    "failure_modes": [
+      {
+        "alternative": "sp.dml_panel",
+        "exception": "statspai.DataInsufficient",
+        "remedy": "The state predicts the treatment perfectly (too many controls for the number of units) or a period's treatment is constant. Drop controls or check variance.",
+        "symptom": "DataInsufficient: the moment system is singular"
+      },
+      {
+        "alternative": "sp.msm",
+        "exception": "statspai.DataInsufficient",
+        "remedy": "Restrict to a balanced window with periods=[...], or use sp.msm / sp.ltmle, which tolerate unbalanced histories.",
+        "symptom": "DataInsufficient: no unit observed in all periods"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "dynamic_dml",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "long panel with one row per unit-period",
+      "at least two periods; units incomplete over the window are dropped",
+      "treatment varies within period"
+    ],
+    "reference": "[@lewis2021double], [@econml]",
+    "signature": {
+      "description": "Dynamic Double/Debiased ML for a treatment assigned repeatedly over time (Lewis & Syrgkanis 2021). Use it when the treatment moves the state that drives later treatment: controlling for the later state blocks the indirect path, not controlling for it leaves the confounding in. Returns the effect of intervening on each period's treatment on the final outcome, the total sequence effect, and the joint covariance -- so a contrast across periods has an honest standard error instead of a sum of variances. Optional linear heterogeneity in baseline modifiers. Reproduces econml's DynamicDML to 1e-15 given the same folds and learners. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+      "name": "dynamic_dml",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "baseline": {
+            "description": "Time-invariant controls (first-period values).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "covariates": {
+            "description": "Time-varying state read at each period.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "Long panel",
+            "type": "string"
+          },
+          "fold_ids": {
+            "description": "One fold index per complete unit, to reproduce an external split.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Unit id column; unit= is accepted as an alias.",
+            "type": "string"
+          },
+          "lags": {
+            "default": 1,
+            "description": "Lagged treatments added to each period's state. lags=0 warns: omitting the treatment history moved the test design's estimates by -15%, -15% and +37%.",
+            "type": "integer"
+          },
+          "model_t": {
+            "description": "Treatment nuisance; default RidgeCV.",
+            "type": "string"
+          },
+          "model_y": {
+            "description": "Outcome nuisance; default RidgeCV.",
+            "type": "string"
+          },
+          "modifiers": {
+            "description": "Baseline effect modifiers; the final stage becomes linear in them and result.coef holds the projection.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "n_folds": {
+            "default": 5,
+            "description": "Folds; whole units held out.",
+            "type": "integer"
+          },
+          "periods": {
+            "description": "Periods to use, in order; default every sorted value.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "random_state": {
+            "default": 0,
+            "description": "Random seed or RandomState for reproducible stochastic steps.",
+            "type": "integer"
+          },
+          "time": {
+            "description": "Period column",
+            "type": "string"
+          },
+          "treat": {
+            "description": "Treatment column",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome; only its last-period value is used.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treat",
+          "id",
+          "time"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": null,
+    "validation_notes": [
+      "tests/reference_parity/test_dynamic_dml_econml_parity.py",
+      "Known-truth recovery (analytical-only) -- tests/reference_parity/test_dynamic_dml_econml_parity.py"
+    ],
+    "validation_status": "validated"
+  },
+  {
+    "alternatives": [
       "dml",
       "panel",
       "msm",

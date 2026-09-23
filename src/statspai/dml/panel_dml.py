@@ -19,10 +19,16 @@ Use this when:
 
 This does NOT do:
 
-- Time-varying confounders in the Robins 1986 sense (those need MSM or
-  g-formula; see :func:`sp.dml_msm` (v1.7) or :func:`sp.msm`).
+- Time-varying confounders in the Robins 1986 sense — when the treatment
+  moves the state that drives later treatment, this estimator is not
+  merely inefficient but wrong. Use :func:`sp.dynamic_dml`
+  (Lewis & Syrgkanis 2021: per-period sequence effects with a joint
+  covariance and optional heterogeneity), or :func:`sp.msm` /
+  :func:`sp.gformula` / :func:`sp.ltmle` for the population-average
+  regime contrasts.
 - Heterogeneous CATE in panels — see :func:`sp.causal_forest` with unit
-  FE pre-residualisation for that.
+  FE pre-residualisation, or :func:`sp.dynamic_dml` when the treatment is
+  a sequence.
 
 Model
 -----

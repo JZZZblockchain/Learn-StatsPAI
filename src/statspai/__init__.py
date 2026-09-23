@@ -187,6 +187,7 @@ from .dml import (  # v1.7 long-panel DML; v1.13 DML-OVB sensitivity + diagnosti
     DoubleMLIRM,
     DoubleMLPLIV,
     DoubleMLPLR,
+    DynamicDMLResult,
     OOFBundle,
     OOFPredictions,
     dml,
@@ -194,6 +195,7 @@ from .dml import (  # v1.7 long-panel DML; v1.13 DML-OVB sensitivity + diagnosti
     dml_model_averaging,
     dml_panel,
     dml_sensitivity,
+    dynamic_dml,
     model_averaging_dml,
 )
 from .exceptions import (
@@ -1293,6 +1295,9 @@ __all__ = [
     # v1.7 long-panel DML
     "dml_panel",
     "DMLPanelResult",
+    # dynamic (sequential) treatment DML
+    "dynamic_dml",
+    "DynamicDMLResult",
     # DeepIV
     "deepiv",
     "DeepIV",

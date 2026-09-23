@@ -52,7 +52,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `iv` | 8,444 | 17 | 10 |
 | `inference` | 8,483 | 19 | 26 |
 | `panel` | 8,358 | 12 | 18 |
-| `dml` | 7,868 | 22 | 14 |
+| `dml` | 8,628 | 23 | 16 |
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,921 | 14 | 25 |
 | `spatial` | 7,818 | 30 | 38 |

@@ -2,6 +2,49 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **`sp.dynamic_dml`: heterogeneous effects of a treatment *sequence*
+  (Lewis & Syrgkanis 2021).** The gap this closes: `sp.dml_panel` assumes
+  one homogeneous effect and a treatment that does not move the future
+  state, and `sp.msm` / `sp.gformula` / `sp.ltmle` give population-average
+  regime contrasts without saying which period did the work or for whom.
+  When the treatment moves the state that drives later treatment, the
+  static estimator is not merely inefficient but wrong: controlling for the
+  later state blocks the indirect path, not controlling for it leaves the
+  confounding in.
+  - Returns the effect of intervening on **each period's** treatment on the
+    final outcome -- indirect paths through later states included, which is
+    what setting a whole sequence delivers -- plus the total, `.contrast(w)`
+    for any linear combination, `.cumulative()` for the treat-from-here-on
+    profile, and `.coef` for linear heterogeneity in baseline modifiers.
+  - **Parity.** Given the same folds and first-stage learners it reproduces
+    `econml.panel.dml.DynamicDML` -- the reference implementation, by the
+    authors of the method -- to **1e-15 relative on both the per-period
+    estimates and their standard errors** (T2;
+    `tests/reference_parity/test_dynamic_dml_econml_parity.py`). Known-truth
+    recovery on a linear dynamic system is unbiased at nominal coverage
+    (T1, 40 replications).
+  - **Joint covariance.** The triangular moment conditions are solved as one
+    stacked system rather than by back-substitution, so the covariance
+    across periods comes with the estimate. On the test design the total
+    sequence effect's standard error is 0.032 against 0.062 from adding the
+    per-period variances -- the periods are negatively correlated, and
+    `diagnostics['independent_sum_se']` reports the wrong number beside the
+    right one.
+  - **`lags=1` by default, and it matters.** Sequential ignorability needs
+    the treatment history in the state. Omitting the one lag on the test
+    design moved the three period effects by -15%, -15% and +37% with *no
+    interval covering the truth*: an incomplete state does not make the
+    estimator noisier, it makes it confidently wrong. `lags=0` warns.
+    `docs/guides/g_methods_ph.md` section 6 has the worked version.
+  - Panel handling that the array APIs leave to the user: long-format
+    `data`/`unit`/`time`, incomplete units dropped and counted with a
+    warning about what that does to the population, duplicated unit-periods
+    refused by name, and `periods=` to pick a balanced window.
+
 ## [1.30.0] — 2026-09-23
 
 Inference, mostly. Two lines of work land together: fixed-effect causal

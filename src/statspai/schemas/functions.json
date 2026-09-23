@@ -7903,6 +7903,102 @@
     }
   },
   {
+    "description": "Dynamic Double/Debiased ML for a treatment assigned repeatedly over time (Lewis & Syrgkanis 2021). Use it when the treatment moves the state that drives later treatment: controlling for the later state blocks the indirect path, not controlling for it leaves the confounding in. Returns the effect of intervening on each period's treatment on the final outcome, the total sequence effect, and the joint covariance -- so a contrast across periods has an honest standard error instead of a sum of variances. Optional linear heterogeneity in baseline modifiers. Reproduces econml's DynamicDML to 1e-15 given the same folds and learners. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "dynamic_dml",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "baseline": {
+          "description": "Time-invariant controls (first-period values).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "covariates": {
+          "description": "Time-varying state read at each period.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "Long panel",
+          "type": "string"
+        },
+        "fold_ids": {
+          "description": "One fold index per complete unit, to reproduce an external split.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unit id column; unit= is accepted as an alias.",
+          "type": "string"
+        },
+        "lags": {
+          "default": 1,
+          "description": "Lagged treatments added to each period's state. lags=0 warns: omitting the treatment history moved the test design's estimates by -15%, -15% and +37%.",
+          "type": "integer"
+        },
+        "model_t": {
+          "description": "Treatment nuisance; default RidgeCV.",
+          "type": "string"
+        },
+        "model_y": {
+          "description": "Outcome nuisance; default RidgeCV.",
+          "type": "string"
+        },
+        "modifiers": {
+          "description": "Baseline effect modifiers; the final stage becomes linear in them and result.coef holds the projection.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_folds": {
+          "default": 5,
+          "description": "Folds; whole units held out.",
+          "type": "integer"
+        },
+        "periods": {
+          "description": "Periods to use, in order; default every sorted value.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Period column",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment column",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome; only its last-period value is used.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "id",
+        "time"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Long-panel Double/Debiased ML for static panel models with fixed effects (Clarke & Polselli 2025, simplified). Absorbs unit (and optional time) fixed effects via within-transform, cross-fits ML nuisance learners with folds that split units, and reports cluster-robust SE at the unit level. PLR moment (continuous or binary treatment). Validation: certified parity evidence.",
     "name": "dml_panel",
     "parameters": {
@@ -21882,6 +21978,104 @@
         "include_time_fe",
         "ml_g_name",
         "ml_m_name"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`dynamic_dml`.",
+    "name": "DynamicDMLResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci_lower": {
+          "description": "ci_lower parameter (float).",
+          "type": "number"
+        },
+        "ci_upper": {
+          "description": "ci_upper parameter (float).",
+          "type": "number"
+        },
+        "coef": {
+          "description": "coef parameter (Optional[pd.DataFrame]).",
+          "type": "string"
+        },
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "estimate": {
+          "description": "estimate parameter (float).",
+          "type": "number"
+        },
+        "lags": {
+          "description": "lags parameter (int).",
+          "type": "integer"
+        },
+        "method": {
+          "default": "dynamic_dml",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_folds": {
+          "description": "Number of cross-fitting or cross-validation folds.",
+          "type": "integer"
+        },
+        "n_periods": {
+          "description": "Number of periods.",
+          "type": "integer"
+        },
+        "n_units": {
+          "description": "Number of units.",
+          "type": "integer"
+        },
+        "p_value": {
+          "description": "p_value parameter (float).",
+          "type": "number"
+        },
+        "period_labels": {
+          "description": "period_labels parameter (List[Any]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "periods": {
+          "description": "periods parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        },
+        "vcov": {
+          "description": "Variance-covariance estimator option.",
+          "type": "string"
+        },
+        "z_stat": {
+          "description": "z_stat parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "periods",
+        "estimate",
+        "se",
+        "ci_lower",
+        "ci_upper",
+        "p_value",
+        "z_stat",
+        "vcov",
+        "n_units",
+        "n_periods",
+        "n_folds",
+        "period_labels",
+        "lags",
+        "alpha"
       ],
       "type": "object"
     }
