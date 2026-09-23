@@ -2469,6 +2469,133 @@ def _build_registry() -> None:
 
     register(
         FunctionSpec(
+            name="rate_split",
+            category="causal",
+            description=(
+                "Rank-weighted average treatment effect (AUTOC / QINI) of a "
+                "causal forest's targeting rule, fitted and evaluated on "
+                "disjoint units. sp.rate ranks the rows it also scores, which "
+                "for a fe= forest is not a valid test -- every imputation "
+                "score carries -gamma_hat_t from the periods the forest saw, "
+                "so a nominal 5% test rejected 17.5% of the time under no "
+                "heterogeneity at all (AUTOC averaged -0.025, not 0). "
+                "Splitting units (or dyadic members) brings that to 7.5% "
+                "and +0.0008, at 99.5% power."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "CausalForest",
+                    True,
+                    description=(
+                        "Fitted GRF-engine forest; supplies the data and the "
+                        "hyper-parameters, and is left untouched."
+                    ),
+                ),
+                ParamSpec(
+                    "target",
+                    "str",
+                    False,
+                    "AUTOC",
+                    "RATE weighting.",
+                    enum=["AUTOC", "QINI"],
+                ),
+                ParamSpec(
+                    "train_frac",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of units (members) that fit the rule.",
+                ),
+                ParamSpec("random_state", "int", False, 0, "Seed for the split."),
+                ParamSpec(
+                    "members",
+                    "array",
+                    False,
+                    None,
+                    "(n, 2) members of each dyadic row; splits by member and "
+                    "drops rows straddling the halves.",
+                ),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "variance",
+                    "str",
+                    False,
+                    "bjs",
+                    "fe= forests: 'bjs' is conservative for the population "
+                    "RATE, 'forest' exact for the realised sample's.",
+                    enum=["bjs", "forest"],
+                ),
+                ParamSpec(
+                    "cluster",
+                    "str|array",
+                    False,
+                    None,
+                    "None (forest clusters), 'dyadic' or cluster ids.",
+                ),
+                ParamSpec(
+                    "covariates",
+                    "str|list",
+                    False,
+                    "none",
+                    "fe= forests: covariates in the untreated outcome model.",
+                ),
+                ParamSpec(
+                    "se_method",
+                    "str",
+                    False,
+                    "auto",
+                    "'auto' picks 'imputation' for fe= forests, 'influence' "
+                    "otherwise.",
+                    enum=["auto", "imputation", "influence", "half_sample"],
+                ),
+                ParamSpec("q_grid", "int", False, 100, "Points on the TOC curve."),
+            ],
+            returns=(
+                "dict as sp.rate (estimate, se, ci_low, ci_high, toc_curve, ...) "
+                "plus n_train_units, n_eval_units, n_rows_dropped, split_by."
+            ),
+            example="sp.rate_split(cf, target='AUTOC')",
+            tags=[
+                "forest",
+                "cate",
+                "rate",
+                "autoc",
+                "qini",
+                "targeting",
+                "panel",
+                "heterogeneous",
+            ],
+            reference=(
+                "[@yadlowsky2025evaluating], [@borusyak2024revisiting], "
+                "[@chernozhukov2025generic]"
+            ),
+            pre_conditions=[
+                "forest fitted with sp.causal_forest (default GRF engine)",
+                "enough units that both halves keep treated and untreated cells",
+            ],
+            assumptions=[
+                "fe= forests: parallel trends and no anticipation (imputation)",
+                "pooled forests: unconfoundedness and overlap (AIPW)",
+                "the two halves are independent: split units, never rows",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: the evaluation half has no variation",
+                    exception="statspai.DataInsufficient",
+                    remedy=(
+                        "The panel is too small to split; run sp.rate with "
+                        "priorities= from a rule fitted elsewhere."
+                    ),
+                    alternative="sp.rate",
+                ),
+            ],
+            alternatives=["rate", "forest_group_effects", "cate_eval"],
+        )
+    )
+
+    register(
+        FunctionSpec(
             name="forest_support",
             category="causal",
             description=(
@@ -16151,6 +16278,10 @@ _VALIDATED_TEST_SEED_FUNCTIONS: Dict[str, List[str]] = {
     "forest_group_effects": ["tests/test_forest_fe_imputation.py"],
     "forest_support": ["tests/test_forest_fe_imputation.py"],
     "cate_pretrend_test": ["tests/test_forest_fe_imputation.py"],
+    "rate_split": [
+        "tests/test_forest_rate_fe.py",
+        "tests/reference_parity/test_fe_forest_rate_recovery.py",
+    ],
     "did_misclassified": ["tests/test_did_frontiers.py"],
     "did_timevarying_covariates": ["tests/test_did_timevarying_covariates.py"],
     "cohort_anchored_event_study": ["tests/test_did_frontiers.py"],

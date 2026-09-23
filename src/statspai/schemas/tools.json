@@ -19681,8 +19681,21 @@
           "description": "Significance level for confidence intervals and tests.",
           "type": "number"
         },
+        "cluster": {
+          "description": "Fixed-effects forests only; ``'dyadic'`` needs ``members=``.",
+          "type": "string"
+        },
+        "covariates": {
+          "default": "none",
+          "description": "Fixed-effects forests only: time-varying covariates for the untreated model behind the imputation scores. Returns dict with keys ``estimate``, ``se``, ``ci_low``, ``ci_high``, ``target``, ``toc_curve`` (``(q_grid, 2)``), ``n``, ``method``, ``priority_source``, ``n_clusters``. References [@yadlowsky2025evaluating] Examples >>> import numpy as np >>> import pandas as pd >>> import statspai as sp >>> rng = np.random.default_rng(42) >>> n = 400 >>> X = rng.normal(size=(n, 3)) >>> T = rng.binomial(1, 0.5, size=n) >>> tau = 1.0 + X[:, 0] # heterogeneous effect >>> Y = X[:, 1] + tau * T + rng.normal(scale=0.5, size=n) >>> df = pd.DataFrame({ ... \"y\": Y, \"d\": T, ... \"x0\": X[:, 0], \"x1\": X[:, 1], \"x2\": X[:, 2], ... }) >>> cf = sp.causal_forest( ... data=df, formula=\"y ~ d | x0 + x1 + x2\", ... n_estimators=50, random_state=0, ... ) >>> res = sp.rate(cf, target=\"AUTOC\") >>> sorted(res.keys()) ['ci_high', 'ci_low', 'estimate', 'method', 'n', 'n_clusters', \\ >>> res[\"toc_curve\"].shape (100, 2)",
+          "type": "string"
+        },
         "forest": {
           "description": "forest parameter ('CausalForest').",
+          "type": "string"
+        },
+        "members": {
+          "description": "Fixed-effects forests only: the two members of each dyadic row.",
           "type": "string"
         },
         "n_bootstrap": {
@@ -19700,11 +19713,13 @@
           "type": "integer"
         },
         "se_method": {
-          "default": "influence",
-          "description": "se_method parameter (str).",
+          "default": "auto",
+          "description": "``'auto'`` is ``'influence'``, or ``'imputation'`` for a forest with fixed effects. ``'imputation'`` is defined only for those.",
           "enum": [
+            "auto",
             "influence",
-            "half_sample"
+            "half_sample",
+            "imputation"
           ],
           "type": "string"
         },
@@ -19720,6 +19735,15 @@
             "QINI"
           ],
           "type": "string"
+        },
+        "variance": {
+          "default": "bjs",
+          "description": "Fixed-effects forests only: how treated residuals are centred before the cohort x event-time blocks. ``'bjs'`` (default here) is conservative for the population RATE, ``'forest'`` exact for the sample's -- see above.",
+          "enum": [
+            "bjs",
+            "forest"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -19728,6 +19752,87 @@
       "type": "object"
     },
     "name": "rate"
+  },
+  {
+    "description": "Rank-weighted average treatment effect (AUTOC / QINI) of a causal forest's targeting rule, fitted and evaluated on disjoint units. sp.rate ranks the rows it also scores, which for a fe= forest is not a valid test -- every imputation score carries -gamma_hat_t from the periods the forest saw, so a nominal 5% test rejected 17.5% of the time under no heterogeneity at all (AUTOC averaged -0.025, not 0). Splitting units (or dyadic members) brings that to 7.5% and +0.0008, at 99.5% power. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: fe= forests: parallel trends and no anticipation (imputation); pooled forests: unconfoundedness and overlap (AIPW); the two halves are independent: split units, never rows. Pre-conditions: forest fitted with sp.causal_forest (default GRF engine); enough units that both halves keep treated and untreated cells. Failure modes: DataInsufficient: the evaluation half has no variation -> The panel is too small to split; run sp.rate with priorities= from a rule fitted elsewhere. Alternatives: sp.rate, sp.forest_group_effects, sp.cate_eval.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "cluster": {
+          "description": "None (forest clusters), 'dyadic' or cluster ids.",
+          "type": "string"
+        },
+        "covariates": {
+          "default": "none",
+          "description": "fe= forests: covariates in the untreated outcome model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forest": {
+          "description": "Fitted GRF-engine forest; supplies the data and the hyper-parameters, and is left untouched.",
+          "type": "string"
+        },
+        "members": {
+          "description": "(n, 2) members of each dyadic row; splits by member and drops rows straddling the halves.",
+          "type": "string"
+        },
+        "q_grid": {
+          "default": 100,
+          "description": "Points on the TOC curve.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 0,
+          "description": "Seed for the split.",
+          "type": "integer"
+        },
+        "se_method": {
+          "default": "auto",
+          "description": "'auto' picks 'imputation' for fe= forests, 'influence' otherwise.",
+          "enum": [
+            "auto",
+            "imputation",
+            "influence",
+            "half_sample"
+          ],
+          "type": "string"
+        },
+        "target": {
+          "default": "AUTOC",
+          "description": "RATE weighting.",
+          "enum": [
+            "AUTOC",
+            "QINI"
+          ],
+          "type": "string"
+        },
+        "train_frac": {
+          "default": 0.5,
+          "description": "Share of units (members) that fit the rule.",
+          "type": "number"
+        },
+        "variance": {
+          "default": "bjs",
+          "description": "fe= forests: 'bjs' is conservative for the population RATE, 'forest' exact for the realised sample's.",
+          "enum": [
+            "bjs",
+            "forest"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    },
+    "name": "rate_split"
   },
   {
     "description": "Boundary discontinuity design: pointwise effects along a 2-D boundary. Validation: certified parity evidence. Assumptions: Conditional expectations of potential outcomes are continuous at the cutoff; Units cannot precisely manipulate the running variable around the cutoff (no sorting); For fuzzy designs: monotonicity of treatment take-up at the cutoff. Pre-conditions: A continuous running/forcing variable with a known cutoff that (sharply or fuzzily) assigns treatment; Enough observations in a neighbourhood of the cutoff to fit a local polynomial. Failure modes: Density of the running variable jumps at the cutoff (manipulation / sorting) -> Run a McCrary / density test (rdplotdensity); if manipulation is present the design is invalid near the cutoff; Estimate swings with the bandwidth -- results are not robust -> Report a bandwidth-sensitivity curve and use a data-driven MSE-optimal bandwidth. Alternatives: sp.rdrobust, sp.rdrandinf, sp.rdbwselect. Typical minimum N: 500.",

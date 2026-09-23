@@ -32,6 +32,52 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **`sp.rate` now works on causal forests with fixed effects, and
+  `sp.rate_split` grades a targeting rule honestly.** RATE was the last
+  thing an `fe=` forest could not do: the doubly-robust score it averages
+  needs a propensity, which a within-unit design has none of. The
+  imputation scores that already give the ATT
+  [borusyak2024revisiting] give the curve too, read on the population they
+  identify -- the treated cells -- so `TOC(q) = ATT(top q by S) - ATT`, a
+  retrospective targeting curve rather than the population RATE a
+  randomised design gives.
+  - **The standard error is exact, not assumed.** Conditional on the
+    ranking, AUTOC and QINI are linear in the scores, and the imputation
+    scores are linear in `y`; composing the two rank and imputation weights
+    makes RATE one more functional `v'y`, with the same cluster- and
+    dyad-robust variance as the ATT. The composed weights annihilate the
+    unit and period dummies to 1e-15 and put exactly zero net weight on the
+    treatment, RATE being a contrast; both are asserted. `se_method`
+    gains `'imputation'` (what the new default `'auto'` selects for these
+    forests) alongside the rank-corrected `'influence'`.
+  - **`variance` defaults to `'bjs'` here**, not to the `'forest'` that
+    `average_treatment_effect` uses. `'forest'` nets the fitted
+    heterogeneity out of the residual, which is calibrated for the RATE of
+    the *realised sample*; RATE loads on the tail of the effect
+    distribution, so the distinction shows where it does not for the ATT.
+    Over 120 replications (N = 150, T = 8, `tau = 0.3 + 0.5 z`, held-out
+    ranking) 95% intervals covered the population AUTOC 97.5% of the time
+    with `'bjs'` and 90.8% with `'forest'`; against the sample's own RATE,
+    99.2% and 95.8%. Bias was -0.006 on 0.452.
+  - **`sp.rate_split` (new).** `sp.rate` ranks the rows it also scores.
+    For these forests out-of-bag predictions are not enough, because every
+    imputation score carries `-gamma_hat_t` from the periods the forest
+    trained on: with **no heterogeneity at all**, AUTOC averaged -0.025
+    instead of 0 and a nominal 5% test rejected 17.5% of the time (QINI
+    13.5%) over 200 replications. `rate_split` splits the units -- or, with
+    `members=`, the nodes of a dyadic panel, dropping and counting the rows
+    that straddle the halves -- refits a forest on each, and has the
+    training half's rule ranked against scores built on the evaluation half
+    alone. On the same null it averaged +0.0008 and rejected 7.5% (QINI
+    4.0%), keeping 99.5% and 100% power against `tau = 0.3 + 0.5 z`.
+    `sp.rate` now warns on the reused path instead of silently inviting it.
+  - Below roughly 30 units a side `rate_split` warns that the split is
+    measuring itself: on the guide's 15-country trade panel it ranged over
+    +/-0.08 across six splits (two with a non-positive dyadic variance)
+    while the true-`tau` ranking on the whole sample gave 0.081 (se 0.031).
+    `docs/guides/heterogeneity_panel_forests.md` section 5 runs that as a
+    cautionary example.
+
 - **Inference for causal forests with fixed effects (`fe="twoway"` /
   `"unit"`) through imputation scores.** A within-unit design has no
   propensity, so 1.29.0 refused every average. Following the model the FE

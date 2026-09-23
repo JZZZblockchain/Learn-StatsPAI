@@ -1111,3 +1111,181 @@ def group_effects(
         if design.n_not_imputable:
             tab.attrs["n_not_imputable"] = design.n_not_imputable
     return tab
+
+
+def rate_fe(
+    forest: Any,
+    target: str = "AUTOC",
+    *,
+    priorities: Any = None,
+    q_grid: int = 100,
+    alpha: float = 0.05,
+    variance: str = "bjs",
+    cluster: Any = None,
+    members: Any = None,
+    covariates: Any = "none",
+    se_method: str = "imputation",
+) -> Dict[str, Any]:
+    r"""RATE of a fixed-effects forest, on the treated cells it identifies.
+
+    The doubly-robust score behind :func:`statspai.rate` needs a propensity,
+    which a within-unit design does not have; the imputation score
+    :math:`\Gamma_{it} = Y_{it} - \hat\alpha_i - \hat\gamma_t` does the same
+    job on treated cells, so the whole curve is read on that population:
+
+    .. math::
+        \mathrm{TOC}(q) = \mathrm{ATT}\bigl(\text{top } q
+        \text{ by } S\bigr) - \mathrm{ATT},
+
+    "how much larger is the effect among the cells this rule would have
+    prioritised". Effects on untreated cells are not identified, so this is
+    a retrospective targeting curve, not the population RATE that a
+    randomised design gives.
+
+    ``se_method="imputation"`` (default) composes the two linear maps --
+    the rank weights of :func:`statspai.forest.forest_inference.
+    rate_rank_weights` and the imputation weights of
+    :func:`functional_weights` -- so the RATE is one more linear functional
+    of ``y``, with the same exact, cluster- (or dyad-) robust variance as
+    the ATT.  It conditions on the prioritisation, which is what you want
+    when ``priorities`` were fitted elsewhere.  ``se_method="influence"``
+    instead treats the imputation scores as data and applies the
+    rank-corrected influence function of :func:`statspai.rate`: it carries
+    the cost of estimating the ranking but not of estimating the fixed
+    effects.  See :func:`statspai.rate` for which to report.
+    """
+    from .forest_inference import (
+        _rate_influence_se,
+        rate_from_scores,
+        rate_rank_weights,
+    )
+
+    context = "rate()"
+    key = str(target).upper().strip()
+    if key not in ("AUTOC", "QINI"):
+        raise MethodIncompatibility(
+            f"{context}: target must be 'AUTOC' or 'QINI'.",
+            recovery_hint="Use a supported RATE summary target.",
+            diagnostics={"target": target},
+        )
+    if se_method not in ("imputation", "influence"):
+        raise MethodIncompatibility(
+            f"{context}: se_method must be 'imputation' or 'influence' for a "
+            "forest with fixed effects.",
+            recovery_hint=(
+                "grf's half-sample bootstrap resamples units, which would have "
+                "to refit the untreated two-way model in every draw; the exact "
+                "linear-weight variance ('imputation') supersedes it here."
+            ),
+            diagnostics={"se_method": se_method},
+        )
+    design = imputation_design(forest, context, covariates)
+    _require_target_oob(forest, design, context, needed=variance == "forest")
+    rows = np.flatnonzero(design.target)
+    if rows.size < 2:
+        raise DataInsufficient(
+            f"{context}: need at least two imputable treated cells.",
+            recovery_hint="RATE ranks treated cells; this panel has too few.",
+            diagnostics={"n_treated_cells": int(rows.size)},
+        )
+    tau = _oob_tau(forest)
+    if priorities is None:
+        prio = tau[rows]
+        priority_source = "out_of_bag"
+        warnings.warn(
+            "rate(): ranking the treated cells by this same forest's own "
+            "out-of-bag predictions does not give a valid test. Every "
+            "imputation score carries -gamma_hat_t, estimated from the very "
+            "periods the forest was trained on, so the ranking and the scores "
+            "are correlated even though no unit predicts itself. Measured on "
+            "a design with no heterogeneity at all (200 replications, N = 150 "
+            "units, T = 8), AUTOC averaged -0.025 instead of 0 and a nominal "
+            "5% test rejected 17.5% of the time (QINI 13.5%); sp.rate_split(), "
+            "which fits the ranking and the scores on disjoint units, averaged "
+            "+0.0008 and rejected 7.5% (QINI 4.0%). Report this as a "
+            "diagnostic and sp.rate_split() as the test.",
+            AssumptionWarning,
+            stacklevel=3,
+        )
+    else:
+        supplied = np.asarray(priorities, dtype=float).ravel()
+        if supplied.size == design.n:
+            prio = supplied[rows]
+        elif supplied.size == rows.size:
+            prio = supplied
+        else:
+            raise MethodIncompatibility(
+                f"{context}: priorities must have one value per row "
+                f"({design.n}) or per treated cell ({rows.size}), got "
+                f"{supplied.size}.",
+                recovery_hint="Pass cf.effect(X) or a vector over treated cells.",
+            )
+        priority_source = "supplied"
+    if not np.isfinite(prio).all():
+        raise DataInsufficient(
+            f"{context}: priorities contain non-finite values.",
+            recovery_hint="Drop or impute them before ranking.",
+        )
+
+    gamma = design.gamma[rows]
+    q_targets = np.linspace(1.0 / int(q_grid), 1.0, int(q_grid))
+    q_targets[-1] = 1.0
+    core = rate_from_scores(gamma, prio, key, q_targets)
+
+    a = rate_rank_weights(prio, key)
+    W1 = np.zeros(design.n)
+    W1[rows] = a
+    mem = None if members is None else dyad_codes(members, design.n)[:2]
+    est, V, label = _estimate(forest, design, W1, variance, cluster, mem)
+    estimate = float(est[0])
+    if se_method == "imputation":
+        se = float(_safe_se(V, context)[0])
+        detail = (
+            f"exact linear weights (rank weights o imputation weights), {label}; "
+            "treated residuals centred by "
+            f"{'the OOB forest and ' if variance == 'forest' else ''}"
+            "cohort x event-time blocks; conditional on the prioritisation"
+        )
+    else:
+        codes, dyads, label = _variance_setup(design.clusters, cluster, mem, design.n)
+        if dyads is not None:
+            raise MethodIncompatibility(
+                f"{context}: se_method='influence' has no dyadic form.",
+                recovery_hint="Use the default se_method='imputation'.",
+            )
+        on_target = None
+        if codes is not None:
+            on_target = pd.factorize(codes[rows])[0]
+        se = float(_rate_influence_se(gamma, prio, key, clusters=on_target))
+        detail = (
+            "rank-corrected influence function of the imputation scores, "
+            f"{label}; carries the cost of estimating the ranking but treats "
+            "the fixed effects as known"
+        )
+
+    z = float(stats.norm.ppf(1 - float(alpha) / 2))
+    return {
+        "estimate": estimate,
+        "se": se,
+        "ci_low": estimate - z * se,
+        "ci_high": estimate + z * se,
+        "target": key,
+        "toc_curve": np.column_stack([core["toc_q"], core["toc"]]),
+        "n": int(rows.size),
+        "method": f"imputation RATE ({se_method} SE)",
+        "method_detail": detail,
+        "priority_source": priority_source,
+        "n_clusters": int(len(np.unique(design.clusters))),
+        "estimand": (
+            "TOC over treated cells: ATT(top q by priority) - ATT "
+            "(retrospective targeting; effects on untreated cells are not "
+            "identified)"
+        ),
+        "variance": variance,
+        "se_method": se_method,
+        "n_treated_cells": int(design.target.sum()),
+        "n_not_imputable": design.n_not_imputable,
+        "imputation_covariates": list(design.control_names),
+        "alpha": float(alpha),
+        "cate_source": "imputation_scores",
+    }

@@ -165,7 +165,8 @@ sp.forest_group_effects(cf, by=...)       # group ATTs (see section 4)
   `"overlap"` raise: parallel trends identifies effects on treated cells,
   and effects on untreated cells are extrapolations of `tau(x)` (predict them
   with `cf.effect(X_new)` after `sp.forest_support`, section 4). `sp.rate`
-  also raises.
+  is available but reads on the treated cells, which changes what it means
+  (section 5).
 
 Monte Carlo evidence (200 replications; N = 300 units, T = 8, cohorts 3, 5
 and 7 plus never-treated, adoption selected on the unit effect; 500 trees):
@@ -311,7 +312,122 @@ test: 5% and 95%).
 scores use; `"by_group"` runs a separate event study per group, as in the
 appendix of [aytug2026euro].
 
-## 5. DiD causal forests for staggered adoption
+## 5. Was the ranking worth anything? RATE and split-sample evaluation
+
+A forest that fits `tau(x)` well is not the same thing as a rule worth
+targeting on. The rank-weighted average treatment effect
+[yadlowsky2025evaluating] answers the second question directly: sort the
+cells by the rule, and ask how much larger the effect is among the ones it
+would have picked.
+
+```
+TOC(q) = ATT(top q by S) - ATT,
+AUTOC  = int_0^1 TOC(q) dq,      QINI = int_0^1 q TOC(q) dq
+```
+
+`sp.rate` used to refuse a forest with fixed effects, because the
+doubly-robust score it averages needs a propensity. The imputation scores of
+section 3 need none, so the curve is read on the population they identify --
+the **treated cells**. That makes it a *retrospective* targeting curve ("the
+effect was this much larger among the pairs the rule would have prioritised")
+rather than the population RATE a randomised design gives, and the returned
+`estimand` says so.
+
+The standard error is exact rather than assumed. Conditional on the ranking,
+AUTOC and QINI are *linear* in the scores -- weight `(H_m - H_{j-1} - 1) / m`
+on the `j`-th cell from the top -- and the imputation scores are themselves
+linear in `y`, so composing the two makes RATE one more functional `v'y`,
+with the same cluster- or dyad-robust variance as the ATT. The composed
+weights annihilate the unit and period dummies to 1e-15 and put exactly zero
+net weight on the treatment, RATE being a contrast rather than an effect;
+both are asserted in `tests/test_forest_rate_fe.py`.
+
+`variance` defaults to `"bjs"` here, unlike `sp.average_treatment_effect`,
+and the reason is measured. `"forest"` nets the fitted heterogeneity out of
+the residual, which estimates the variance of the RATE *of this sample*; the
+ATT converges to its population value fast enough that the distinction does
+not show, but RATE loads on the tail of the effect distribution and it does
+(table below).
+
+### Do not grade a rule on the sample that fitted it
+
+`sp.rate` ranks the cells it also scores. For a pooled forest out-of-bag
+predictions mostly handle that; for a forest with fixed effects they do not,
+because every imputation score carries `-gamma_hat_t`, estimated from the
+very periods the forest was trained on. The two stay correlated even though
+no unit predicts itself, and the estimator acquires a **negative** bias.
+
+`sp.rate_split` removes the overlap. The units -- or, with `members=`, the
+nodes of a dyadic panel -- are split in two, a forest with the same
+hyper-parameters is refitted on each half, the training half's forest ranks
+the evaluation half's treated cells, and those cells' imputation scores come
+from an untreated two-way model fitted on the evaluation half alone. Nothing
+the rule saw enters the score it is graded on. For dyadic data the split is
+by member, and flows between a training and an evaluation country are
+dropped and counted, because they belong to neither half.
+
+```python
+sp.rate(cf)                    # diagnostic; warns that it is not a test
+sp.rate(cf, priorities=other)  # valid, if `other` was fitted elsewhere
+sp.rate_split(cf)              # valid, and does the split for you
+```
+
+The price is sample: each forest sees half the units, so the rule is noisier
+than the one fitted on everything and the RATE it earns is a **lower bound**
+on what the full-sample rule is worth. Below roughly 30 units (or members) a
+side the function says so, because at that size the split is measuring
+itself. The trade panel of section 4 is exactly that case and is worth
+running as a cautionary example rather than a result:
+
+```python
+members = df[["country_i", "country_j"]].to_numpy()
+
+# The oracle ranking on the whole sample: the heterogeneity is real.
+sp.rate(cf, priorities=df["tau_true"], cluster="dyadic",
+        members=members, covariates=C)
+# AUTOC 0.0809 (se 0.0310);  QINI 0.0222 (se 0.0111)
+
+# The same design, evaluated honestly -- 15 countries, so 7 or 8 a side.
+[sp.rate_split(cf, members=members, covariates=C, random_state=s)["estimate"]
+ for s in range(6)]
+# [-0.075, -0.040, +0.037, -0.009, -0.003, +0.013]
+#  ... and two of those six report se = NaN: the dyadic variance went
+#  non-positive, which is the estimator saying the half is too thin.
+```
+
+Seed 0 alone would have read as a *significant negative* AUTOC, 95% CI
+[-0.133, -0.017]. It is split noise. With 105 pairs but only 15 countries,
+dropping the 1,176 pair-years that straddle the halves leaves a training
+forest that has seen seven countries, and the rule it learns is close to
+random. Report `sp.rate` as a diagnostic here, bring an external rule, or
+get more countries -- do not report one split as a test.
+
+Monte Carlo evidence (200 replications; N = 150 units, T = 8, staggered
+adoption selected on the unit effect, 250 trees; `tau = 0.3 + b z` with `z`
+standard normal and independent of adoption, so the population AUTOC is
+`0.9032 b` and QINI `0.2821 b` exactly):
+
+| `b = 0` (no heterogeneity: true RATE is 0 for *every* rule) | AUTOC | QINI |
+| --- | --- | --- |
+| `sp.rate`, ranked by the forest's own OOB predictions | **-0.0246**, rejects **17.5%** | -0.0055, rejects 13.5% |
+| `sp.rate_split` | **+0.0008**, rejects **7.5%** | +0.0004, rejects 4.0% |
+| `sp.rate_split`, `variance="forest"` | +0.0008, rejects 5.0% | +0.0004, rejects 4.0% |
+
+| `b = 0.5` (population AUTOC 0.4516, QINI 0.1410) | AUTOC | QINI |
+| --- | --- | --- |
+| held-out ranking, bias | -0.006 | -0.0002 |
+| held-out ranking, coverage `"bjs"` / `"forest"` | 97.5% / 90.8% | 97.5% / 89.2% |
+| coverage of the *realised sample's* RATE, `"bjs"` / `"forest"` | 99.2% / 95.8% | 99.2% / 96.7% |
+| `sp.rate_split` power at 5% | 99.5% | 100% |
+
+Read the first table as the reason `sp.rate_split` exists: on a design with
+no heterogeneity whatsoever the reused ranking rejected the null more than
+three times too often, and reported a negative AUTOC where the truth is
+zero. The second is why `"bjs"` is the default and `"forest"` is not: each
+is calibrated for a different estimand, and the population one is what a
+reader takes away.
+
+## 6. DiD causal forests for staggered adoption
 
 ```python
 res = sp.did_forest(
@@ -367,7 +483,7 @@ The simulation design of [gavrilova2025difference] (workers in firms, firm
 treatment, CATT 10 for `x1 = 1` and 1 for `x1 = 0`) is a known-truth test in
 `tests/reference_parity/test_panel_forest_recovery.py`.
 
-## 6. Evidence and parity
+## 7. Evidence and parity
 
 | What | Grade | Where |
 | --- | --- | --- |
@@ -379,6 +495,8 @@ treatment, CATT 10 for `x1 = 1` and 1 for `x1 = 0`) is a known-truth test in
 | Group, BLP and calibration estimates = OLS of imputation scores; dyadic variance = pairwise definition = `sp.dyadic_regression` | exact | `tests/test_forest_fe_imputation.py` |
 | Pre-trend regression = dummy-variable OLS with CR1 | exact (1e-8) | `tests/test_forest_fe_imputation.py` |
 | Imputation ATT / group coverage, calibration size and power | T1 (Monte Carlo, section 3) | `tests/reference_parity/test_fe_forest_imputation_recovery.py` |
+| RATE = rank weights o imputation weights; weights annihilate the FE design and put zero net weight on D | exact (1e-15 / 1e-10) | `tests/test_forest_rate_fe.py` |
+| RATE bias and coverage, reuse bias, `rate_split` size and power | T1 (Monte Carlo, section 5) | `tests/reference_parity/test_fe_forest_rate_recovery.py` |
 
 **Comparison with `causalfe`.** `causalfe` 0.3.2 [aytug2026causalfe] is the
 Python implementation of [kattenberg2023causal] used in [aytug2026euro]. On
@@ -396,7 +514,7 @@ never described as "aligned with R". Track A module 13 (AIPW ATE/ATT vs grf)
 is inside its registered budget: estimates within 0.4%, standard errors
 within 0.7%.
 
-## 7. Mapping from R `grf`
+## 8. Mapping from R `grf`
 
 | R | StatsPAI |
 | --- | --- |
@@ -416,7 +534,7 @@ Python `causalfe` (0.3.2):
 | `CFFEForest(n_trees=, max_depth=, min_leaf=).fit(X, Y, D, unit, time)` | `sp.causal_forest(Y=Y, T=D, X=X, id=unit, time=time, fe="twoway", split_rule="cffe", n_estimators=, max_depth=, min_samples_leaf=)` |
 | `predict(X)` | `cf.effect(X)`; `cf.predict()` for out-of-bag |
 | `predict_interval(X)` | `cf.effect(X)`, `cf.effect_variance(X)` |
-| `ate()` / `ate_interval()` (within-FE coefficient) | `cf.average_treatment_effect("treated")` (imputation ATT; see section 6) |
+| `ate()` / `ate_interval()` (within-FE coefficient) | `cf.average_treatment_effect("treated")` (imputation ATT; see section 7) |
 | `feature_importances()` | `cf.variable_importance()`, `cf.split_frequencies()` |
 
 ## References

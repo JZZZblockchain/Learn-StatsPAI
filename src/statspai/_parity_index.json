@@ -1631,6 +1631,7 @@
         "tests/reference_parity/test_calibration_test_parity.py",
         "tests/reference_parity/test_causal_forest_aipw_recovery.py",
         "tests/reference_parity/test_fe_forest_imputation_recovery.py",
+        "tests/reference_parity/test_fe_forest_rate_recovery.py",
         "tests/reference_parity/test_forest_ate_parity.py",
         "tests/reference_parity/test_forest_rate_honest_parity.py",
         "tests/reference_parity/test_grf_engine_statistical_parity.py",
@@ -11469,6 +11470,7 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_fe_forest_rate_recovery.py",
         "tests/reference_parity/test_forest_rate_honest_parity.py"
       ],
       "also_verified_by": [
@@ -11494,6 +11496,23 @@
         "tests/reference_parity/_fixtures/ml_causal_R.json"
       ],
       "tolerance": "Point estimate (AUTOC, QINI) and TOC curve on q = 0.1..1 exact at 1e-10 rel (observed 4.6e-15), including a 30-group tied-priority case against rank_average_treatment_effect.fit. SE is T3: the analytic rank-corrected influence-function SE is compared with grf's half-sample bootstrap (R = 2000) at 6% rel (observed 2.6% AUTOC, 1.7% QINI)."
+    },
+    {
+      "function": "rate_split",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_fe_forest_rate_recovery.py"
+      ],
+      "tolerance": ""
     },
     {
       "also_verified_by": [

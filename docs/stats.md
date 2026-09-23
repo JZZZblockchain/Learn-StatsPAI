@@ -56,7 +56,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,668 | 13 | 25 |
 | `spatial` | 6,968 | 30 | 38 |
-| `forest` | 6,768 | 9 | 12 |
+| `forest` | 10,114 | 11 | 13 |
 | `plots` | 6,002 | 7 | 8 |
 | `bayes` | 5,170 | 12 | 19 |
 | `mendelian` | 4,916 | 13 | 38 |

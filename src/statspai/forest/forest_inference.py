@@ -570,6 +570,45 @@ def _tie_averaged_sorted(
     return avg[codes[order]], order
 
 
+def rate_rank_weights(priorities: np.ndarray, target: str) -> np.ndarray:
+    r"""Weights ``a`` with ``RATE = a' scores``, given the prioritisation.
+
+    Conditional on the ranking, AUTOC and QINI are *linear* in the scores:
+    with :math:`\Gamma_{(j)}` the tie-averaged scores in descending priority
+    order and :math:`m` their number,
+
+    .. math::
+        \mathrm{AUTOC} = \tfrac1m \sum_j \Gamma_{(j)}\,(H_m - H_{j-1} - 1),
+        \qquad
+        \mathrm{QINI} = \tfrac1m \sum_j \Gamma_{(j)}
+                        \bigl(1 - \tfrac jm + \tfrac 1m
+                              - \tfrac{m+1}{2m}\bigr),
+
+    which :func:`rate_from_scores` computes by cumulative sums. Averaging
+    within a tie group is a symmetric operation, so a group's weight is the
+    mean of its members' sorted weights. Returning the weights lets a
+    caller whose scores are themselves a linear functional of the data --
+    the imputation scores of a fixed-effects forest -- compose the two and
+    get an exact standard error instead of treating the scores as data.
+    """
+    pr = np.asarray(priorities, dtype=np.float64).ravel()
+    order, codes = _priority_order(pr)
+    m = len(pr)
+    r = np.arange(1, m + 1, dtype=np.float64)
+    if target == "AUTOC":
+        harm = np.concatenate([[0.0], np.cumsum(1.0 / r)])
+        w = harm[m] - harm[r.astype(np.int64) - 1]
+        c = 1.0
+    else:
+        w = 1.0 - r / m + 1.0 / m
+        c = (m + 1.0) / (2.0 * m)
+    a_sorted = (w - c) / m
+    n_groups = int(codes.max()) + 1
+    sums = np.bincount(codes[order], weights=a_sorted, minlength=n_groups)
+    counts = np.bincount(codes, minlength=n_groups)
+    return np.asarray((sums / counts)[codes])
+
+
 def rate_from_scores(
     scores: np.ndarray,
     priorities: np.ndarray,
@@ -764,10 +803,14 @@ def rate(
     alpha: float = 0.05,
     seed: Optional[int] = None,
     priorities: Optional[np.ndarray] = None,
-    se_method: str = "influence",
+    se_method: str = "auto",
     n_bootstrap: int = 200,
+    variance: str = "bjs",
+    cluster: Any = None,
+    members: Any = None,
+    covariates: Any = "none",
 ) -> Dict[str, Any]:
-    """Rank-weighted average treatment effect (RATE) [@yadlowsky2025evaluating].
+    r"""Rank-weighted average treatment effect (RATE) [@yadlowsky2025evaluating].
 
     ``grf::rank_average_treatment_effect``: evaluates a prioritisation
     rule -- by default the forest's own CATE predictions (out-of-bag for
@@ -793,8 +836,64 @@ def rate(
     Because priorities and evaluation share one sample when
     ``priorities`` is omitted, RATE is then a *diagnostic*; for a
     pre-registered test of targeting value, fit the forest on a training
-    split and evaluate priorities on a held-out split.  Forests with fixed
-    effects raise: the doubly-robust score needs a propensity.
+    split and evaluate priorities on a held-out split.
+
+    **Forests with fixed effects** have no propensity, so the curve is read
+    on the population they identify -- the treated cells -- through the
+    imputation scores :math:`\Gamma_{it} = Y_{it} - \hat\alpha_i -
+    \hat\gamma_t` that :func:`statspai.average_treatment_effect` already
+    uses there:  ``TOC(q) = ATT(top q by priority) - ATT``, a
+    *retrospective* targeting curve ("the effect was this much larger among
+    the cells the rule would have prioritised"), not the population RATE a
+    randomised design gives.  ``variance=``, ``cluster=``, ``members=`` and
+    ``covariates=`` are then passed through exactly as in
+    :func:`statspai.forest_group_effects`, and ``se_method`` becomes:
+
+    - ``'imputation'`` (what ``'auto'`` selects): the rank weights and the
+      imputation weights are both linear, so their composition makes RATE
+      one more linear functional of ``y`` with the same exact, cluster- or
+      dyad-robust variance as the ATT.  The weights annihilate the fixed
+      effects exactly (``max |Z'V| < 1e-15`` in the committed fixture) and
+      sum to zero over treated cells, RATE being a contrast.
+    - ``'influence'``: the rank-corrected influence function applied to the
+      imputation scores -- it pays for estimating the ranking but treats
+      the fixed effects as known.
+
+    ``variance`` defaults to ``'bjs'`` here, not to the ``'forest'`` that
+    :func:`statspai.average_treatment_effect` uses, and the reason is
+    measured.  ``'forest'`` centres treated residuals on the out-of-bag
+    prediction, which nets out the effect heterogeneity and so estimates
+    the variance of the RATE *of this sample*; the ATT converges to its
+    population value fast enough that this does not show, but RATE loads on
+    the tail of the effect distribution and it does.  Over 120 replications
+    (N = 150 units, T = 8, staggered adoption selected on the unit effect,
+    tau = 0.3 + 0.5 z, priorities held out) nominal 95% intervals covered
+    the *population* AUTOC 97.5% of the time with ``'bjs'`` and 90.8% with
+    ``'forest'``; against the RATE of the realised sample it was the other
+    way round, 99.2% and 95.8%.  So ``'bjs'`` is conservative for the
+    population statement most readers want, ``'forest'`` is exact for the
+    sample one.  Bias was -0.006 on 0.452 (AUTOC) and -0.0002 on 0.141
+    (QINI).
+
+    ``se_method='half_sample'`` raises for these forests: resampling units
+    would have to refit the untreated two-way model in every draw, and the
+    exact variance supersedes it.
+
+    **Do not read the default ranking as a test.** With the forest's own
+    out-of-bag predictions the ranking and the scores share
+    ``gamma_hat_t``, so they stay correlated even though no unit predicts
+    itself.  On the null design above (200 replications, no heterogeneity
+    at all) AUTOC averaged -0.025 rather than 0 and a nominal 5% test
+    rejected 17.5% of the time, QINI 13.5%.  :func:`statspai.rate_split`,
+    which refits the rule on one half of the units and scores it on the
+    other, averaged +0.0008 and rejected 7.5% and 4.0% with 99.5% and 100%
+    power against ``tau = 0.3 + 0.5 z``.  A warning fires on this path;
+    passing ``priorities=`` from a rule fitted elsewhere also silences it.
+
+    .. versionchanged:: 1.31.0
+       Forests with fixed effects are supported (they previously raised);
+       the default ``se_method`` is ``'auto'``, which is ``'influence'`` for
+       every forest that has a propensity, as before.
 
     .. versionchanged:: 1.30.0
        Scores are ``grf``'s (unclipped) AIPW scores; tied priorities are
@@ -819,9 +918,23 @@ def rate(
     priorities : array, optional
         Priority score per training unit (higher = treat first). Defaults
         to the forest's CATE predictions.
-    se_method : {'influence', 'half_sample'}
+    se_method : {'auto', 'influence', 'half_sample', 'imputation'}
+        ``'auto'`` is ``'influence'``, or ``'imputation'`` for a forest with
+        fixed effects. ``'imputation'`` is defined only for those.
     n_bootstrap : int
         Half-sample draws for ``se_method='half_sample'``.
+    variance : {'bjs', 'forest'}
+        Fixed-effects forests only: how treated residuals are centred
+        before the cohort x event-time blocks. ``'bjs'`` (default here) is
+        conservative for the population RATE, ``'forest'`` exact for the
+        sample's -- see above.
+    cluster : array-like or 'dyadic', optional
+        Fixed-effects forests only; ``'dyadic'`` needs ``members=``.
+    members : array-like, optional
+        Fixed-effects forests only: the two members of each dyadic row.
+    covariates : {'none', 'auto'}, list of str or array, default 'none'
+        Fixed-effects forests only: time-varying covariates for the
+        untreated model behind the imputation scores.
 
     Returns
     -------
@@ -884,9 +997,10 @@ def rate(
             recovery_hint="Use q_grid >= 1.",
             diagnostics={"q_grid": q_grid},
         )
-    if se_method not in ("influence", "half_sample"):
+    if se_method not in ("auto", "influence", "half_sample", "imputation"):
         raise MethodIncompatibility(
-            "rate(): se_method must be 'influence' or 'half_sample'.",
+            "rate(): se_method must be 'auto', 'influence', 'half_sample' or "
+            "'imputation'.",
             recovery_hint="Use the analytic default or grf's half-sample bootstrap.",
             diagnostics={"se_method": se_method},
         )
@@ -916,6 +1030,30 @@ def rate(
     from . import _grf_inference as _gi
 
     grf_forest = _gi.is_grf_forest(forest)
+    if grf_forest and _gi.is_fe_forest(forest):
+        from ._fe_imputation import rate_fe
+
+        return rate_fe(
+            forest,
+            target_key,
+            priorities=priorities,
+            q_grid=q_grid_value,
+            alpha=alpha_value,
+            variance=variance,
+            cluster=cluster,
+            members=members,
+            covariates=covariates,
+            se_method=("imputation" if se_method == "auto" else se_method),
+        )
+    if se_method == "imputation":
+        raise MethodIncompatibility(
+            "rate(): se_method='imputation' is only defined for a forest with "
+            "fixed effects, whose scores are a linear functional of the data.",
+            recovery_hint="Use se_method='influence' or 'half_sample'.",
+            diagnostics={"se_method": se_method},
+        )
+    if se_method == "auto":
+        se_method = "influence"
     if grf_forest:
         _gi._require_dr(forest, "rate()")
     _require_training_rows(forest, X, Y, T, "rate()")
@@ -2022,7 +2160,8 @@ def calibrate_cate(
     heterogeneity.
 
     Forests with two-way fixed effects and a binary treatment
-    (``method='auto'`` or ``'imputation'``): the slope comes from regressing imputation scores
+    (``method='auto'`` or ``'imputation'``): the slope comes from
+    regressing imputation scores
     on the out-of-bag predictions over the treated cells (see
     :func:`calibration_test`).  The scores are unbiased for each cell's
     effect, so the slope is a genuine de-attenuation factor, and

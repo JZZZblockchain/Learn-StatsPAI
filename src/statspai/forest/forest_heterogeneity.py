@@ -20,18 +20,29 @@ effects [kattenberg2023causal] on a dyadic trade panel) on simulated data.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import warnings
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from .._aliases import accepts_aliases
-from ..exceptions import DataInsufficient, MethodIncompatibility
+from ..exceptions import (
+    AssumptionWarning,
+    DataInsufficient,
+    MethodIncompatibility,
+    NumericalInstability,
+)
 from . import _fe_imputation as fi
 from . import _grf_inference as gi
 
-__all__ = ["forest_group_effects", "forest_support", "cate_pretrend_test"]
+__all__ = [
+    "forest_group_effects",
+    "forest_support",
+    "cate_pretrend_test",
+    "rate_split",
+]
 
 
 def _require_grf(forest: Any, context: str) -> None:
@@ -710,3 +721,305 @@ def cate_pretrend_test(
             "Wald tests"
         ),
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Honest evaluation of a targeting rule
+# --------------------------------------------------------------------------- #
+
+# Below this many units (or dyadic members) a side, the split is measuring
+# itself. Not a theorem: the Monte Carlo behind sp.rate_split had 75 units a
+# side and behaved; the 15-country trade panel of the guide has 7 and does
+# not. Warn, do not refuse -- a user who wants the number can have it.
+_THIN_HALF = 30
+
+_CTOR_PARAMS = (
+    "n_estimators",
+    "min_samples_leaf",
+    "max_depth",
+    "max_samples",
+    "model_y",
+    "model_t",
+    "discrete_treatment",
+    "honest",
+    "bootstrap",
+    "random_state",
+    "n_jobs",
+    "verbose",
+    "split_rule",
+    "mtry",
+    "honesty_fraction",
+    "honesty_prune_leaves",
+    "alpha",
+    "imbalance_penalty",
+    "stabilize_splits",
+    "ci_group_size",
+    "equalize_cluster_weights",
+    "nuisance_folds",
+    "fe",
+)
+
+
+def _split_keys(
+    forest: Any, members: Any, train_frac: float, random_state: int
+) -> Tuple[np.ndarray, np.ndarray, str]:
+    """Row masks for the training and evaluation halves.
+
+    Units (or, for dyadic data, members) are split, never rows: two cells of
+    one unit share its fixed effect, and two trade flows of one country
+    share its shocks, so a row split would leak the evaluation outcomes into
+    the rule being evaluated -- the very thing the split is for.
+    """
+    n = int(len(forest._Y_original))
+    rng = np.random.default_rng(random_state)
+    if members is not None:
+        i_code, j_code, _ = fi.dyad_codes(members, n)
+        nodes = np.unique(np.concatenate([i_code, j_code]))
+        train_nodes = rng.choice(
+            nodes,
+            size=max(1, int(round(train_frac * nodes.size))),
+            replace=False,
+        )
+        i_train, j_train = np.isin(i_code, train_nodes), np.isin(j_code, train_nodes)
+        return i_train & j_train, ~i_train & ~j_train, "members"
+    keys = getattr(forest, "_clusters", None)
+    if keys is None:
+        keys = getattr(forest, "_fe_unit", None)
+    if keys is None:
+        keys = np.arange(n)
+        label = "rows"
+    else:
+        label = "units"
+    codes = pd.factorize(np.asarray(keys).ravel())[0]
+    groups = np.unique(codes)
+    train_groups = rng.choice(
+        groups, size=max(1, int(round(train_frac * groups.size))), replace=False
+    )
+    in_train = np.isin(codes, train_groups)
+    return in_train, ~in_train, label
+
+
+@accepts_aliases(_strict=True, controls="covariates")
+def rate_split(
+    forest: Any,
+    target: str = "AUTOC",
+    *,
+    train_frac: float = 0.5,
+    random_state: int = 0,
+    members: Any = None,
+    alpha: float = 0.05,
+    variance: str = "bjs",
+    cluster: Any = None,
+    covariates: Any = "none",
+    se_method: str = "auto",
+    q_grid: int = 100,
+) -> Dict[str, Any]:
+    r"""RATE of the forest's targeting rule, fitted and evaluated on disjoint units.
+
+    :func:`statspai.rate` ranks the rows it also scores. For a forest with
+    fixed effects that is not a valid test even though the predictions are
+    out-of-bag: every imputation score carries :math:`-\hat\gamma_t`,
+    estimated from the same periods the forest was trained on, so the
+    ranking and the scores stay correlated. Measured on a design with **no
+    heterogeneity whatsoever** (200 replications, N = 150 units, T = 8,
+    staggered adoption selected on the unit effect, ``tau = 0.3``): AUTOC
+    averaged **-0.025** instead of 0 and a nominal 5% test rejected
+    **17.5%** of the time; QINI averaged -0.006 and rejected 13.5%.
+
+    This function removes the overlap. The units (or, with ``members=``, the
+    nodes of a dyadic panel) are split in two; a forest with the same
+    hyper-parameters is refitted on each half; the training half's forest
+    ranks the evaluation half's treated cells, whose imputation scores come
+    from an untreated two-way model fitted on the evaluation half alone.
+    Nothing the rule saw enters the score it is graded on. On the same null
+    design AUTOC then averaged **+0.0008** and rejected **7.5%** of the time
+    (QINI +0.0004 and 4.0%); against ``tau = 0.3 + 0.5 z`` it kept 99.5% and
+    100% power. ``variance='forest'`` rejected 5.0% and 4.0% under the null
+    but understates the spread under the alternative (mean standard error
+    0.060 against a Monte Carlo 0.083), which is why ``'bjs'`` is the
+    default here.
+
+    The price is sample: each forest sees half the units, so the rule is
+    noisier than the one fitted on everything and the RATE it earns is a
+    *lower bound* on what the full-sample rule is worth. Report
+    :func:`statspai.rate` for the point estimate of the full rule if you
+    like, but report this one when the claim is that targeting pays.
+
+    Parameters
+    ----------
+    forest : fitted CausalForest
+        Supplies the data and the hyper-parameters; it is not itself used to
+        rank or to score, and is left untouched.
+    target : {'AUTOC', 'QINI'}
+    train_frac : float
+        Share of units (members) that fit the rule. The rest evaluate it.
+    random_state : int
+        Seed for the split. The refitted forests keep the original's seed.
+    members : array-like, optional
+        The two members of each dyadic row. Splitting is then by member and
+        rows that straddle the two halves are dropped (counted in the
+        result), because a flow between a training and an evaluation country
+        belongs to neither.
+    alpha, variance, cluster, covariates, se_method, q_grid
+        Passed to :func:`statspai.rate` on the evaluation half.
+
+    Returns
+    -------
+    dict
+        As :func:`statspai.rate`, plus ``n_train_units`` / ``n_eval_units``,
+        ``n_rows_dropped``, ``split_by`` and ``split_random_state``.
+
+    See Also
+    --------
+    statspai.rate : the same curve without the split (a diagnostic).
+    statspai.forest_group_effects : effects for named groups rather than a curve.
+
+    References
+    ----------
+    [@yadlowsky2025evaluating]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> import statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> rows = []
+    >>> for i in range(80):
+    ...     a, z = rng.normal(), rng.normal()
+    ...     g = 4 if i % 3 else 10**6
+    ...     for t in range(1, 7):
+    ...         d = 1.0 * (t >= g)
+    ...         y = a + 0.2 * t + (0.3 + 0.5 * z) * d + rng.normal(0, 0.5)
+    ...         rows.append((i, t, y, d, z))
+    >>> df = pd.DataFrame(rows, columns=["id", "t", "y", "d", "z"])
+    >>> cf = sp.causal_forest(
+    ...     "y ~ d | z", data=df, fe="twoway", unit="id", time="t",
+    ...     clusters=df["id"].values, n_estimators=100, random_state=0,
+    ... )
+    >>> res = sp.rate_split(cf, target="AUTOC")
+    >>> res["split_by"], res["n_eval_units"] > 0
+    ('units', True)
+    """
+    from .causal_forest import CausalForest
+    from .forest_inference import rate as _rate
+
+    context = "rate_split()"
+    _require_grf(forest, context)
+    if not 0.0 < float(train_frac) < 1.0:
+        raise MethodIncompatibility(
+            f"{context}: train_frac must be strictly between 0 and 1.",
+            recovery_hint="Use train_frac=0.5.",
+            diagnostics={"train_frac": train_frac},
+        )
+    in_train, in_eval, split_by = _split_keys(
+        forest, members, float(train_frac), int(random_state)
+    )
+    n_rows = int(len(forest._Y_original))
+    dropped = int(n_rows - in_train.sum() - in_eval.sum())
+    params = {p: getattr(forest, p) for p in _CTOR_PARAMS}
+    Y = np.asarray(forest._Y_original, dtype=float)
+    T = np.asarray(forest._T_original, dtype=float)
+    X = np.asarray(forest._X_original, dtype=float)
+    unit = getattr(forest, "_fe_unit", None)
+    time = getattr(forest, "_fe_time", None)
+    clusters = getattr(forest, "_clusters", None)
+
+    def _fit(mask: np.ndarray, side: str) -> Any:
+        if int(mask.sum()) < 2 or len(np.unique(T[mask])) < 2:
+            raise DataInsufficient(
+                f"{context}: the {side} half has no usable variation "
+                f"({int(mask.sum())} rows). Lower train_frac, or the panel is "
+                "too small to split.",
+                recovery_hint="Use sp.rate(..., priorities=) with an external rule.",
+                diagnostics={"side": side, "n_rows": int(mask.sum())},
+            )
+        sub = CausalForest(**params)
+        try:
+            sub.fit(
+                Y=Y[mask],
+                T=T[mask],
+                X=X[mask],
+                clusters=None if clusters is None else np.asarray(clusters)[mask],
+                id=None if unit is None else np.asarray(unit)[mask],
+                time=None if time is None else np.asarray(time)[mask],
+            )
+        except (DataInsufficient, MethodIncompatibility) as exc:
+            raise type(exc)(
+                f"{context}: refitting the forest on the {side} half failed -- "
+                f"{exc}",
+                recovery_hint=(
+                    "Each half has to support a forest of its own. Move rows "
+                    "with train_frac, or run sp.rate with priorities= from a "
+                    "rule fitted outside this sample."
+                ),
+                diagnostics={"side": side, "n_rows": int(mask.sum())},
+            ) from exc
+        return sub
+
+    train, evaluate = _fit(in_train, "training"), _fit(in_eval, "evaluation")
+    prio = np.asarray(train.effect(X[in_eval]), dtype=float).ravel()
+    kwargs: Dict[str, Any] = dict(
+        target=target,
+        priorities=prio,
+        alpha=alpha,
+        q_grid=q_grid,
+        se_method=se_method,
+        covariates=covariates,
+    )
+    if gi.is_fe_forest(forest):
+        kwargs.update(variance=variance, cluster=cluster)
+        if members is not None:
+            mem = np.asarray(members)
+            kwargs.update(cluster="dyadic", members=mem[in_eval])
+    try:
+        out = dict(_rate(evaluate, **kwargs))
+    except (DataInsufficient, NumericalInstability) as exc:
+        raise type(exc)(
+            f"{context}: evaluating the rule on the held-out half failed -- " f"{exc}",
+            recovery_hint=(
+                "The half-sample is thinner than the full one, so overlap or "
+                "imputability that held on all the data can fail on it. Raise "
+                "train_frac (a smaller evaluation half is not the fix -- lower "
+                "it to move rows the other way), or run sp.rate with "
+                "priorities= from a rule fitted outside this sample."
+            ),
+        ) from exc
+
+    def n_groups(mask: np.ndarray) -> int:
+        """However many of the thing that was split, not of rows."""
+        if split_by == "members":
+            i_code, j_code, _ = fi.dyad_codes(members, n_rows)
+            return int(np.unique(np.concatenate([i_code[mask], j_code[mask]])).size)
+        keys = clusters if clusters is not None else unit
+        if keys is None:
+            return int(mask.sum())
+        return int(np.unique(np.asarray(keys)[mask]).size)
+
+    n_train, n_eval = n_groups(in_train), n_groups(in_eval)
+    if min(n_train, n_eval) < _THIN_HALF:
+        warnings.warn(
+            f"rate_split(): the halves hold {n_train} and {n_eval} "
+            f"{split_by}. A rule fitted on that many is close to noise, and "
+            "the RATE it earns measures the split as much as the "
+            "heterogeneity -- on the 15-country trade panel of the guide it "
+            f"ranged over {chr(177)}0.08 across six splits, with the "
+            "dyadic variance going non-positive on two of them, while the "
+            "true-tau ranking on the whole sample gave +0.081 (se 0.031). "
+            f"The design this was calibrated on had 75 units a side. Below "
+            f"{_THIN_HALF} report sp.rate as a diagnostic, or bring an "
+            "external rule to sp.rate(..., priorities=), and do not read a "
+            "single split as a test.",
+            AssumptionWarning,
+            stacklevel=2,
+        )
+    out.update(
+        priority_source="held_out_forest",
+        n_train_units=n_train,
+        n_eval_units=n_eval,
+        n_rows_dropped=dropped,
+        split_by=split_by,
+        split_random_state=int(random_state),
+        method=out.get("method", "RATE") + ", split-sample",
+    )
+    return out

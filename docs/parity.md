@@ -30,9 +30,9 @@ Read the two evidence kinds separately. Only the first answers "does StatsPAI ag
 | **Compared against R/Stata** (T2) | bit-exact | 362 |
 | | aligned | 53 |
 | | **subtotal** | **415** |
-| **No external software reference** | analytical-only (T1) | 127 |
+| **No external software reference** | analytical-only (T1) | 128 |
 | | external-replication (published numbers) | 2 |
-| | **subtotal** | **129** |
+| | **subtotal** | **130** |
 | No numerical evidence yet | unverified | 645 |
 
 ### Honest denominators
@@ -41,10 +41,10 @@ The all-registered denominator understates coverage: it counts result and except
 
 | denominator | cross-language | any evidence | total | cross-lang share |
 | --- | ---: | ---: | ---: | ---: |
-| estimator callables | 415 | 543 | 778 | 53.3% |
+| estimator callables | 415 | 544 | 779 | 53.3% |
 | infrastructure (parity N/A) | 0 | 0 | 125 | 0.0% |
 | result / exception classes | 0 | 1 | 286 | 0.0% |
-| **all registered** | 415 | 544 | 1189 | 34.9% |
+| **all registered** | 415 | 545 | 1190 | 34.9% |
 
 ### Coverage by estimator family
 
@@ -52,7 +52,7 @@ Families with zero cross-language rows are the highest-leverage targets when a r
 
 | family | cross-language | any evidence | estimator callables |
 | --- | ---: | ---: | ---: |
-| causal | 147 | 210 | 336 |
+| causal | 147 | 211 | 337 |
 | regression | 32 | 36 | 37 |
 | spatial | 28 | 29 | 34 |
 | panel | 27 | 28 | 30 |
@@ -534,7 +534,7 @@ Reproduces published-paper numbers; sources in `tests/external_parity/PUBLISHED_
 | `aggte` | [`test_honest_did_paper_parity.py`](../tests/external_parity/test_honest_did_paper_parity.py) (+1) |
 | `parallel_trends_robustness` | [`test_rebel_canal_published.py`](../tests/external_parity/test_rebel_canal_published.py) |
 
-## analytical-only — 127 functions
+## analytical-only — 128 functions
 
 Recovers a known DGP truth / closed-form identity within tolerance; no cross-package reference. See `tests/reference_parity/REFERENCES.md`.
 
@@ -641,6 +641,7 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `proximal_surrogate_index` | [`test_surrogate_parity.py`](../tests/reference_parity/test_surrogate_parity.py) |
 | `qte_hd_panel` | [`test_hd_panel_qte.py`](../tests/reference_parity/test_hd_panel_qte.py) |
 | `quasi_untreated_test` | [`test_did_had_parity.py`](../tests/reference_parity/test_did_had_parity.py) |
+| `rate_split` | [`test_fe_forest_rate_recovery.py`](../tests/reference_parity/test_fe_forest_rate_recovery.py) |
 | `regime` | [`test_longitudinal_parity.py`](../tests/reference_parity/test_longitudinal_parity.py) |
 | `romano_wolf` | [`test_romano_wolf_parity.py`](../tests/reference_parity/test_romano_wolf_parity.py) |
 | `selection_bounds` | [`test_selection_bounds_parity.py`](../tests/reference_parity/test_selection_bounds_parity.py) |

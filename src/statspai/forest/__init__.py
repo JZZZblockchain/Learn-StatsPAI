@@ -28,6 +28,7 @@ from .forest_heterogeneity import (
     cate_pretrend_test,
     forest_group_effects,
     forest_support,
+    rate_split,
 )
 from .forest_inference import (
     average_treatment_effect,
@@ -54,6 +55,7 @@ __all__ = [
     "forest_group_effects",
     "forest_support",
     "cate_pretrend_test",
+    "rate_split",
     "multi_arm_forest",
     "MultiArmForestResult",
     "iv_forest",
