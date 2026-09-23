@@ -40,6 +40,7 @@ import pandas as pd
 from scipy import stats
 
 from ..core.results import CausalResult
+from ..exceptions import MethodIncompatibility
 from ._core import cohort_share_context as _cohort_share_context
 from ._core import multiplier_bootstrap as _core_multiplier_bootstrap
 from ._core import weight_influence as _weight_influence
@@ -63,6 +64,7 @@ def aggte(
     alpha: float = 0.05,
     random_state: Optional[int] = None,
     share_variance: bool = True,
+    agg_weights: str = "did",
 ) -> CausalResult:
     """
     Aggregate group-time ATT(g, t) estimates from ``callaway_santanna``.
@@ -99,6 +101,21 @@ def aggte(
         Otherwise pointwise intervals.
     alpha : float, default 0.05
         Nominal level for confidence intervals.
+    agg_weights : {'did', 'csdid'}, default 'did'
+        Which implementation's aggregation weights to use. ``'did'`` gives
+        a cohort one weight -- its share of the treated -- constant across
+        ``t``, which is R ``did``'s rule and what this function has always
+        done. ``'csdid'`` weights each *cell* by its own treated-observation
+        count, which is Stata ``csdid``'s rule (``csdid_group`` in
+        ``csdid_estat.ado``); its group average additionally enters each
+        cohort at its *mean* cell weight, so a cohort observed for fewer
+        post-treatment periods is not down-weighted for it. The two coincide
+        on a balanced panel and differ on repeated cross-sections -- by 0.02
+        to 1.4 percent on the fixture in
+        ``tests/reference_parity/test_rcs_aggregation_conventions.py``.
+        Available for ``type='simple'`` and ``type='group'``.
+
+        .. versionadded:: 1.31.0
     share_variance : bool, default True
         Carry the sampling variability of the *estimated* cohort shares
         into the aggregated variance (R ``did:::wif``; the Callaway &
@@ -197,8 +214,33 @@ def aggte(
     if type == "dynamic" and balance_e is not None:
         detail, inf_matrix = _apply_balance_e(detail, inf_matrix, balance_e)
 
+    if agg_weights not in ("did", "csdid"):
+        raise MethodIncompatibility(
+            f"agg_weights must be 'did' or 'csdid'; got {agg_weights!r}.",
+            diagnostics={"agg_weights": agg_weights},
+        )
+    if agg_weights == "csdid":
+        if type not in ("simple", "group"):
+            raise MethodIncompatibility(
+                "agg_weights='csdid' is defined here for type='simple' and "
+                f"type='group', the two aggregates csdid's rule was read off "
+                f"and rebuilt from; got type={type!r}.",
+                diagnostics={"type": type, "agg_weights": agg_weights},
+            )
+        if "n_treated_obs" not in detail.columns:
+            raise MethodIncompatibility(
+                "agg_weights='csdid' weights each cell by its own treated-"
+                "observation count, which this fit did not record. Refit "
+                "with sp.callaway_santanna(panel=False) -- the convention "
+                "only differs from R did's on repeated cross-sections.",
+                diagnostics={"columns": list(detail.columns)},
+            )
+
     # Build the weight matrix W: rows = reported cells, cols = ATT(g, t).
-    if type == "simple":
+    if agg_weights == "csdid":
+        labels, W = _weights_csdid(detail, type)
+        dim_name = "overall" if type == "simple" else "group"
+    elif type == "simple":
         labels, W = _weights_simple(detail, cohort_sizes)
         dim_name = "overall"
     elif type == "dynamic":
@@ -326,6 +368,20 @@ def aggte(
             idx = np.where(post_mask_agg)[0]
             w_overall = np.zeros(W.shape[0])
             w_overall[idx] = 1.0 / idx.size
+        elif type == "group" and agg_weights == "csdid":
+            # csdid's GAverage: each cohort enters with its MEAN cell
+            # weight, so a cohort observed for fewer post periods is not
+            # down-weighted for it.
+            w_overall = np.array(
+                [float(_CSDID_GROUP_SHARES.get(g, 0.0)) for g in labels],
+                dtype=float,
+            )
+            total = w_overall.sum()
+            w_overall = (
+                w_overall / total
+                if total > 0
+                else np.full(W.shape[0], 1.0 / W.shape[0])
+            )
         elif type == "group":
             # ⚠️ correctness fix: R ``did::aggte(type="group")`` reports
             # the overall as sum_g (p_g / sum p_g) * theta(g), i.e. weighted
@@ -489,6 +545,64 @@ def aggte(
 # ======================================================================
 # Weight builders
 # ======================================================================
+
+
+#: rx1 shares from the last csdid group aggregation; the overall row is
+#: formed from them, and they are not the cohort shares R ``did`` uses.
+_CSDID_GROUP_SHARES: dict = {}
+
+
+def _weights_csdid(
+    detail: pd.DataFrame,
+    type: str,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Stata ``csdid``'s aggregation weights, read off ``csdid_estat.ado``.
+
+    R ``did`` gives a cohort one weight, its share of the treated, constant
+    across ``t``. ``csdid`` weights each *cell* by its own treated-observation
+    count, so with repeated cross-sections the two disagree -- by 0.02 to 1.4
+    percent on the fixture in
+    ``tests/reference_parity/test_rcs_aggregation_conventions.py``, which
+    rebuilds every number below from these weights.
+
+    In Mata (``csdid_group``)::
+
+        bw[g, t] = N_trt(g, t) / sum over ALL cells of N_trt
+        simple   = sum_{t >= g} bw * ATT / sum_{t >= g} bw
+        ATT(g)   = sum_{t >= g, cohort g} bw * ATT / sum_{t >= g, cohort g} bw
+        GAverage = sum_g rx1_g * ATT(g),
+                   rx1_g proportional to (sum_{t >= g} bw) / #post cells of g
+
+    The last line is the one worth reading twice: a cohort enters the group
+    average with its *mean* cell weight, so being observed for fewer
+    post-treatment periods does not shrink it.
+    """
+    post = (detail["relative_time"] >= 0).to_numpy()
+    bw = detail["n_treated_obs"].to_numpy(dtype=float)
+    total = bw.sum()
+    if total <= 0 or not post.any():
+        return np.array([], dtype=object), np.zeros((0, len(detail)))
+    bw = bw / total
+
+    if type == "simple":
+        raw = np.where(post, bw, 0.0)
+        return np.array(["overall"]), (raw / raw.sum()).reshape(1, -1)
+
+    cohorts = sorted(detail.loc[post, "group"].unique())
+    rows, rx1 = [], []
+    for g in cohorts:
+        m = post & (detail["group"].to_numpy() == g)
+        w = np.where(m, bw, 0.0)
+        s = w.sum()
+        rows.append(w / s)
+        rx1.append(s / int(m.sum()))
+    W = np.vstack(rows)
+    share = np.asarray(rx1, dtype=float)
+    _CSDID_GROUP_SHARES.clear()
+    _CSDID_GROUP_SHARES.update(
+        {g: float(v) for g, v in zip(cohorts, share / share.sum())}
+    )
+    return np.array(cohorts), W
 
 
 def _cohort_weight_series(

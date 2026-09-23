@@ -13481,6 +13481,33 @@ def _build_registry() -> None:
                 ParamSpec(
                     "cluster", "str", False, None, "Cluster column (defaults to group)"
                 ),
+                ParamSpec(
+                    "controls",
+                    "list",
+                    False,
+                    None,
+                    "Covariates; the outcome's first difference is replaced "
+                    "by its residual from a regression on the covariates' "
+                    "first differences and time fixed effects, fitted on "
+                    "the not-yet-switched (g, t)s and separately by "
+                    "baseline treatment",
+                ),
+                ParamSpec(
+                    "trends_nonparam",
+                    "list",
+                    False,
+                    None,
+                    "Time-invariant variables a control must match the "
+                    "switcher on, over and above the baseline treatment",
+                ),
+                ParamSpec(
+                    "normalized",
+                    "bool",
+                    False,
+                    False,
+                    "Report the effect per unit of treatment received "
+                    "between the base period and the horizon",
+                ),
                 ParamSpec("n_boot", "int", False, 500),
                 ParamSpec("alpha", "float", False, 0.05),
                 ParamSpec("seed", "int", False, None),
@@ -14693,6 +14720,16 @@ def _build_registry() -> None:
                 ParamSpec("n_boot", "int", False, 1000),
                 ParamSpec("cband", "bool", False, True, "Uniform confidence band"),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "agg_weights",
+                    "str",
+                    False,
+                    "did",
+                    "Aggregation-weight convention: R did's cohort shares, "
+                    "or Stata csdid's per-cell treated-observation counts "
+                    "(repeated cross-sections only; simple and group)",
+                    ["did", "csdid"],
+                ),
                 ParamSpec("random_state", "int", False, None),
                 ParamSpec(
                     "share_variance",

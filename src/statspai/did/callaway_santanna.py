@@ -2634,6 +2634,16 @@ def _callaway_santanna_rcs(
             if np.isfinite(se):
                 se = float(np.sqrt(np.mean(inf_func**2) / n_scale))
         pval = float(2 * stats.norm.sf(abs(att / se))) if se > 0 else 1.0
+        # Treated observations behind this 2x2, counted over BOTH of its
+        # periods. That is the quantity Stata csdid weights cells by
+        # (e(gtt)'s N_trt); R did weights by the cohort share instead, and
+        # the two only coincide when every cell has the same number of
+        # observations in both periods. sp.aggte(agg_weights=) needs it.
+        in_cohort = g_arr == g_val
+        n_treated_obs = int(
+            np.sum(in_cohort & (t_arr == base_val))
+            + np.sum(in_cohort & (t_arr == t_val))
+        )
         gt_results.append(
             {
                 "group": g_val,
@@ -2644,6 +2654,7 @@ def _callaway_santanna_rcs(
                 "ci_upper": att + z_crit * se,
                 "pvalue": pval,
                 "relative_time": t_val - g_val,
+                "n_treated_obs": n_treated_obs,
             }
         )
         inf_funcs_list.append(inf_func)

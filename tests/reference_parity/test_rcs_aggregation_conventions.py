@@ -42,6 +42,7 @@ Reference values, run on the committed fixture (``rcs_panel.csv``)::
 from __future__ import annotations
 
 import pathlib
+import warnings
 
 import pandas as pd
 import pytest
@@ -161,6 +162,65 @@ def test_stata_csdid_aggregates_are_rebuilt_from_our_cells(fit, rcs):
     total = sum(rx1.values())
     gavg = sum(rx1[g] / total * att_g[g] for g in att_g)
     assert gavg == pytest.approx(STATA_GROUP_AVG, rel=1e-12)
+
+
+def test_agg_weights_csdid_reproduces_stata_directly(fit):
+    """The convention is not merely rebuildable, it is selectable.
+
+    The reconstruction above earns the label; this is the same arithmetic
+    inside ``sp.aggte``, so a user who wants csdid's number asks for it
+    rather than deriving it. The standard errors follow the same
+    convention: csdid treats the aggregation weights as fixed (finding F21
+    of the reconciliation study), and so does this path.
+    """
+    simple = sp.aggte(
+        fit, type="simple", bstrap=False, cband=False, agg_weights="csdid"
+    )
+    assert float(simple.estimate) == pytest.approx(STATA_SIMPLE, rel=1e-12)
+
+    group = sp.aggte(fit, type="group", bstrap=False, cband=False, agg_weights="csdid")
+    assert float(group.estimate) == pytest.approx(STATA_GROUP_AVG, rel=1e-12)
+    got = dict(zip(group.detail["group"].astype(int), group.detail["att"]))
+    for g, expected in STATA_GROUP_CELLS.items():
+        assert float(got[g]) == pytest.approx(expected, rel=1e-12), g
+
+    # The default is unchanged: R did's convention is still what you get.
+    assert float(
+        sp.aggte(fit, type="simple", bstrap=False, cband=False).estimate
+    ) == pytest.approx(R_SIMPLE, rel=1e-12)
+
+
+@pytest.mark.parametrize("kind", ["dynamic", "calendar"])
+def test_agg_weights_csdid_refuses_the_aggregates_it_was_not_read_off(fit, kind):
+    with pytest.raises(sp.MethodIncompatibility, match="type='simple'"):
+        sp.aggte(fit, type=kind, bstrap=False, cband=False, agg_weights="csdid")
+
+
+def test_agg_weights_csdid_needs_the_cell_counts(rcs):
+    """A panel fit does not record them -- and does not need them."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        panel_fit = sp.callaway_santanna(
+            rcs,
+            y="y",
+            g="gvar",
+            t="year",
+            i="id",
+            control_group="nevertreated",
+            estimator="reg",
+            base_period="universal",
+        )
+    with pytest.raises(sp.MethodIncompatibility, match="panel=False"):
+        sp.aggte(
+            panel_fit, type="simple", bstrap=False, cband=False, agg_weights="csdid"
+        )
+
+
+def test_agg_weights_rejects_an_unknown_convention(fit):
+    with pytest.raises(sp.MethodIncompatibility, match="agg_weights"):
+        sp.aggte(
+            fit, type="simple", bstrap=False, cband=False, agg_weights="hdidregress"
+        )
 
 
 def test_the_two_conventions_disagree_by_more_than_rounding(fit):

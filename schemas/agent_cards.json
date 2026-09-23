@@ -21784,6 +21784,13 @@
             ],
             "type": "string"
           },
+          "controls": {
+            "description": "Covariates; the outcome's first difference is replaced by its residual from a regression on the covariates' first differences and time fixed effects, fitted on the not-yet-switched (g, t)s and separately by baseline treatment",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "data": {
             "description": "pandas DataFrame containing the variables used by the estimator.",
             "type": "string"
@@ -21806,6 +21813,11 @@
             "default": 500,
             "description": "Number of bootstrap replications.",
             "type": "integer"
+          },
+          "normalized": {
+            "default": false,
+            "description": "Report the effect per unit of treatment received between the base period and the horizon",
+            "type": "boolean"
           },
           "placebo": {
             "default": 0,
@@ -21845,6 +21857,13 @@
           "treatment": {
             "description": "Binary treatment (0/1); switch-on and switch-off events both count, see switchers=",
             "type": "string"
+          },
+          "trends_nonparam": {
+            "description": "Time-invariant variables a control must match the switcher on, over and above the baseline treatment",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "weights": {
             "description": "Observation weights (Stata did_multiplegt_dyn weight(), R weight=, both accepted as the alias weight=): read at the row a unit contributes from; switcher means, control means, cohort weights and the switchers aggregation all become weighted.",
@@ -23800,6 +23819,15 @@
       "name": "aggte",
       "parameters": {
         "properties": {
+          "agg_weights": {
+            "default": "did",
+            "description": "Aggregation-weight convention: R did's cohort shares, or Stata csdid's per-cell treated-observation counts (repeated cross-sections only; simple and group)",
+            "enum": [
+              "did",
+              "csdid"
+            ],
+            "type": "string"
+          },
           "alpha": {
             "default": 0.05,
             "description": "Significance level for confidence intervals and tests.",

@@ -46,6 +46,57 @@ All notable changes to StatsPAI will be documented in this file.
   - `sp.rate_split` and this share `_refit_halves`, which also now carries
     the parent forest's feature names onto the refitted halves -- diagnostics
     used to come back as `X2` instead of `gdp`.
+- **`sp.aggte(agg_weights='csdid')`: the other implementation's
+  aggregation weights, selectable rather than merely documented.** R `did`
+  gives a cohort one weight — its share of the treated, constant across
+  `t`. Stata `csdid` weights each *cell* by its own treated-observation
+  count, and its group average enters each cohort at that cohort's *mean*
+  cell weight, so being observed for fewer post-treatment periods does not
+  shrink it. The two coincide on a balanced panel and disagree on repeated
+  cross-sections. 1.30.0 rebuilt csdid's numbers from our own cells to show
+  the gap was a convention rather than a defect; this release makes the
+  convention an argument. `sp.aggte(..., agg_weights='csdid')` reproduces
+  Stata's `estat simple` to 0.0e+00 and its `estat group` average to
+  2.2e-16 on the committed fixture, cohort by cohort. The default is
+  unchanged. It is defined for `type='simple'` and `type='group'` — the
+  two aggregates the rule was read off `csdid_estat.ado` for — and raises
+  for the others rather than guessing, and needs a `panel=False` fit, which
+  is the only case where the conventions differ.
+  `sp.callaway_santanna(panel=False)` now records `n_treated_obs` per
+  (g, t) cell, the count csdid weights by.
+
+- **`sp.did_multiplegt_dyn` gains `controls=`, `trends_nonparam=` and
+  `normalized=`**, the three options of the authors' own
+  `DIDmultiplegtDYN` that the module had listed as not implemented, each
+  reproducing the reference to machine precision on the same CSV bytes
+  (2e-16 to 4e-16 relative on every effect and every placebo;
+  `tests/reference_parity/test_dcdh_options_parity.py`).
+  - `controls=` is not a regression adjustment: it replaces the outcome's
+    first difference with the residual from a regression of that
+    difference on the covariates' first differences and time fixed
+    effects, fitted on the (g, t)s whose treatment has not changed yet and
+    separately for each baseline treatment value. On the test panel, whose
+    differential trend is covariate-driven by construction, it moves the
+    lag-1 placebo from 0.417 to 0.030.
+  - `trends_nonparam=` makes a control match the switcher on
+    time-invariant variables as well as on baseline treatment.
+  - `normalized=` divides each horizon's effect by the average cumulative
+    treatment its switchers received, so the series is an effect per unit
+    of treatment rather than of a path whose length grows with the
+    horizon.
+
+  ⚠️ A design where no switcher can be matched with any control now raises
+  `DataInsufficient` instead of returning `estimate = nan` with a "mean of
+  empty slice" warning. `trends_nonparam=` makes that design easy to ask
+  for by accident, and a silent NaN reads as a missing estimate rather
+  than as a design that cannot be estimated.
+
+  `trends_lin`, `continuous` and `predict_het` remain unimplemented.
+  `trends_lin` was written as the reference documents it — an event study
+  on the outcome's first difference, summed over horizons — and does not
+  reproduce the reference, so it is absent rather than wrong; the module
+  docstring records both series and what has been ruled out, so the next
+  attempt starts from evidence.
 
 - **`sp.dynamic_dml`: heterogeneous effects of a treatment *sequence*
   (Lewis & Syrgkanis 2021).** The gap this closes: `sp.dml_panel` assumes

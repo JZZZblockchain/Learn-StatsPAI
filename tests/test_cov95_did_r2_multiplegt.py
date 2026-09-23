@@ -93,9 +93,38 @@ def test_multiplegt_dyn_basic(sw):
     assert "event_study" in r.model_info
 
 
+def test_multiplegt_dyn_never_treated_controls_need_never_treated_units(sw):
+    """Every unit in this panel switches on, so there is no control set.
+
+    This used to return an all-NaN event study that the assertion here
+    (``len(es) >= 1``) accepted, because it checked the shape rather than
+    the contents. The estimator now says so.
+    """
+    assert int((sw.groupby("i")["d"].max() == 0).sum()) == 0
+    with pytest.raises(sp.DataInsufficient, match="No switcher could be matched"):
+        sp.did_multiplegt_dyn(
+            sw,
+            y="y",
+            group="i",
+            time="t",
+            treatment="d",
+            placebo=1,
+            dynamic=2,
+            control="never_treated",
+            cluster="st",
+            n_boot=40,
+            seed=2,
+        )
+
+
 def test_multiplegt_dyn_placebo_never(sw):
+    """The same call on a panel that does have never-treated units."""
+    panel = pd.concat(
+        [sw, sw[sw["i"] < 20].assign(i=lambda d: d["i"] + 1000, d=0.0)],
+        ignore_index=True,
+    )
     r = sp.did_multiplegt_dyn(
-        sw,
+        panel,
         y="y",
         group="i",
         time="t",
@@ -109,6 +138,7 @@ def test_multiplegt_dyn_placebo_never(sw):
     )
     es = r.model_info["event_study"]
     assert len(es) >= 1
+    assert np.isfinite(r.estimate)
 
 
 def test_multiplegt_dyn_bad_control_raises(sw):

@@ -230,4 +230,8 @@ class TestDidMultiplegtDynMVPLabel:
             seed=0,
         )
         assert "warning" in r.model_info
-        assert "RFC" in r.model_info["warning"] or "roadmap" in r.model_info["warning"]
+        # The note now says which options are available and pinned, which
+        # are not, and where the roadmap lives.
+        note = r.model_info["warning"]
+        assert "docs/rfc/multiplegt_dyn.md" in note
+        assert "controls=" in note and "trends_lin" in note

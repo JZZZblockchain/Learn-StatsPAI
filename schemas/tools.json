@@ -134,6 +134,15 @@
     "description": "Aggregate Callaway-Sant'Anna group-time ATTs into interpretable summaries -- overall ATT, event-study by relative time, group-specific ATT(g), or calendar-time ATT(t). Inference uses the multiplier bootstrap on the pre-stored influence functions, so SEs are correct under clustering at the unit level. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: Same identifying assumptions as the source estimator (parallel trends, no anticipation, SUTVA); For dynamic aggregation: balanced panel within the requested event-time window (use balance_e). Pre-conditions: result was produced by sp.callaway_santanna or sp.did with staggered=True; result.detail contains the per-(g, t) ATT estimates and their influence functions. Failure modes: result.detail is empty or missing influence functions -> Re-run sp.callaway_santanna; aggte requires the per-(g,t) influence functions; Empty event-time aggregation (no overlapping cohorts) -> Widen the (min_e, max_e) window or drop balance_e. Alternatives: sp.callaway_santanna, sp.sun_abraham, sp.did_imputation. Typical minimum N: 50.",
     "input_schema": {
       "properties": {
+        "agg_weights": {
+          "default": "did",
+          "description": "Aggregation-weight convention: R did's cohort shares, or Stata csdid's per-cell treated-observation counts (repeated cross-sections only; simple and group)",
+          "enum": [
+            "did",
+            "csdid"
+          ],
+          "type": "string"
+        },
         "alpha": {
           "default": 0.05,
           "description": "Significance level for confidence intervals and tests.",
@@ -7033,6 +7042,13 @@
           ],
           "type": "string"
         },
+        "controls": {
+          "description": "Covariates; the outcome's first difference is replaced by its residual from a regression on the covariates' first differences and time fixed effects, fitted on the not-yet-switched (g, t)s and separately by baseline treatment",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "dynamic": {
           "default": 3,
           "description": "Number of post-treatment dynamic horizons",
@@ -7051,6 +7067,11 @@
           "default": 500,
           "description": "Number of bootstrap replications.",
           "type": "integer"
+        },
+        "normalized": {
+          "default": false,
+          "description": "Report the effect per unit of treatment received between the base period and the horizon",
+          "type": "boolean"
         },
         "placebo": {
           "default": 0,
@@ -7090,6 +7111,13 @@
         "treatment": {
           "description": "Binary treatment (0/1); switch-on and switch-off events both count, see switchers=",
           "type": "string"
+        },
+        "trends_nonparam": {
+          "description": "Time-invariant variables a control must match the switcher on, over and above the baseline treatment",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "weights": {
           "description": "Observation weights (Stata did_multiplegt_dyn weight(), R weight=, both accepted as the alias weight=): read at the row a unit contributes from; switcher means, control means, cohort weights and the switchers aggregation all become weighted.",

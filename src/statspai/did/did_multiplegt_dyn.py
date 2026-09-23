@@ -93,11 +93,34 @@ the analytic standard errors agree to better than 1e-6 relative.
       and on the switcher-weighted aggregate. The default stays
       ``'bootstrap'``; ``model_info['se_method']`` records the choice.
 
+Options
+-------
+``controls=``, ``trends_nonparam=`` and ``normalized=`` reproduce
+``DIDmultiplegtDYN`` 2.3.4 to machine precision (2e-16 to 4e-16 relative on
+every effect and placebo); see
+``tests/reference_parity/test_dcdh_options_parity.py``.
+
 Not implemented
 ---------------
-``controls=``, ``trends_nonparam`` / ``trends_lin``, ``normalized``,
-``continuous`` and the heteroskedastic-weights variant. Joint tests still
-come from the cluster bootstrap. See ``docs/rfc/multiplegt_dyn.md``.
+``trends_lin``, ``continuous``, ``predict_het`` and the
+heteroskedastic-weights variant. Joint tests still come from the cluster
+bootstrap. See ``docs/rfc/multiplegt_dyn.md``.
+
+``trends_lin`` was implemented as the reference documents it -- an event
+study on the outcome's first difference, summed over horizons -- and does
+*not* reproduce the reference, so it is deliberately absent rather than
+wrong: on that panel the reference returns
+``[1.443025, 3.141753, 4.781375, 7.004474]`` while summing this estimator's
+first-difference effects gives ``[1.443025, 2.998724, 4.659879, 6.514063]``.
+The two agree at horizon 0 and diverge after. What is known: the
+reference's estimates do not depend on how many effects are requested,
+while the switcher counts it reports do (2, 3 or 4 requested effects give
+39, 29 or 16 for every horizon), so the counts are a reporting artefact and
+each effect has its own sample; the gap is not the pre-trend slope times
+the horizon, and is not explained by holding the switcher composition
+fixed. Naming an argument after the reference's option while computing a
+different number is the one outcome worth avoiding, so the argument is not
+offered until the arithmetic is located.
 """
 
 from __future__ import annotations
@@ -112,7 +135,7 @@ from scipy import stats
 from .._aliases import accepts_aliases
 from ..core._bootstrap import bootstrap_se as _bootstrap_se
 from ..core.results import CausalResult
-from ..exceptions import MethodIncompatibility
+from ..exceptions import DataInsufficient, MethodIncompatibility
 from . import _core as _dc
 
 
@@ -139,6 +162,9 @@ def did_multiplegt_dyn(
     switchers: Optional[str] = None,
     same_switchers: bool = False,
     effects_equal: Any = False,
+    controls: Optional[List[str]] = None,
+    trends_nonparam: Optional[List[str]] = None,
+    normalized: bool = False,
 ) -> CausalResult:
     """dCDH (2024) intertemporal event-study DiD estimator.
 
@@ -238,6 +264,33 @@ def did_multiplegt_dyn(
         than the all-zero joint test, since equality leaves the common
         level unrestricted. Rejecting says the effect moves with exposure
         length; failing to reject does **not** establish a constant effect.
+    controls : list of str, optional
+        Covariates. These do not enter a regression of the outcome: the
+        option replaces the outcome's first difference with the residual
+        from a regression of that first difference on the first differences
+        of the covariates and time fixed effects, fitted on the (g, t)s
+        whose treatment has not changed yet and separately for each value
+        of the baseline treatment. The resulting estimators are unbiased
+        under differential trends that a linear model in covariate changes
+        explains. To adjust for a time-invariant covariate, interact it
+        with the time variable first.
+
+        .. versionadded:: 1.31.0
+    trends_nonparam : list of str, optional
+        Time-invariant variables whose values a control must share with the
+        switcher, on top of sharing its baseline treatment. The estimators
+        are then unbiased even when groups trend differently, provided
+        groups with the same value of these variables trend in parallel.
+
+        .. versionadded:: 1.31.0
+    normalized : bool, default False
+        Report effects per unit of treatment: each horizon's effect is
+        divided by the average cumulative treatment change its switchers
+        received between the base period and that horizon. For a binary
+        absorbing switch the divisor is the number of periods of exposure,
+        so a flat normalized series is a constant per-period effect.
+
+        .. versionadded:: 1.31.0
 
     Returns
     -------
@@ -329,6 +382,25 @@ def did_multiplegt_dyn(
     df = df.sort_values([group, time]).reset_index(drop=True)
     cluster_var = cluster if cluster is not None else group
 
+    controls = list(controls) if controls else None
+    trends_nonparam = list(trends_nonparam) if trends_nonparam else None
+    for name, cols in (("controls", controls), ("trends_nonparam", trends_nonparam)):
+        for col in cols or []:
+            if col not in df.columns:
+                raise MethodIncompatibility(
+                    f"{name} column {col!r} not in data",
+                    diagnostics={name: cols},
+                )
+    if trends_nonparam:
+        varying = df.groupby(group)[trends_nonparam].nunique().max()
+        if int(varying.max()) > 1:
+            raise MethodIncompatibility(
+                "trends_nonparam variables must be time-invariant within a "
+                "group; they define the cells switchers are compared inside.",
+                diagnostics={"trends_nonparam": trends_nonparam},
+            )
+        df["_tcell"] = df[trends_nonparam].astype(str).agg("\u241f".join, axis=1)
+
     # Identify each unit's FIRST switch, in either direction, and which way
     # it went. A unit that turns treatment off is as much a switcher as one
     # that turns it on -- that is the whole point of the dCDH design, and
@@ -340,6 +412,19 @@ def did_multiplegt_dyn(
     df = df.merge(switch_dir, on=group, how="left")
     df = df.merge(baseline, on=group, how="left")
 
+    # controls= works by changing the outcome the estimator differences,
+    # so it is applied once, here, and the rest of the pipeline is
+    # untouched.
+    y_work = y
+    if controls:
+        df, y_work = _residualise_on_controls(
+            df,
+            y=y,
+            group=group,
+            time=time,
+            treatment=treatment,
+            controls=controls,
+        )
     # Horizons list: placebo (negative) + dynamic (0..H).
     horizons = list(range(-placebo, dynamic + 1))
     # l = -1 is a genuine placebo, not a mechanical zero: it is
@@ -349,7 +434,7 @@ def did_multiplegt_dyn(
 
     main = _estimate_all_horizons(
         df=df,
-        y=y,
+        y=y_work,
         group=group,
         time=time,
         treatment=treatment,
@@ -359,7 +444,27 @@ def did_multiplegt_dyn(
         same_switchers=same_switchers,
         weights=weights,
         cluster=cluster_var,
+        normalized=normalized,
     )
+
+    if not any(c["n_events"] for c in main["cell_estimates"]):
+        # Every horizon came back empty: there is no (switcher, control)
+        # pair anywhere in the design. Returning NaN here would look like
+        # an estimate that happens to be missing rather than a design that
+        # cannot be estimated.
+        raise DataInsufficient(
+            "No switcher could be matched with a control at any horizon: "
+            "every event needs at least one unit that has not switched by "
+            "the horizon's anchor period and shares the switcher's "
+            "baseline treatment"
+            + (" and its trends_nonparam cell" if trends_nonparam else "")
+            + ".",
+            diagnostics={
+                "n_groups": int(df[group].nunique()),
+                "control": control,
+                "trends_nonparam": trends_nonparam,
+            },
+        )
 
     # Cluster bootstrap for SE
     rng = np.random.default_rng(seed)
@@ -396,7 +501,7 @@ def did_multiplegt_dyn(
             bdf = bdf.merge(base_b, on=group, how="left")
             best = _estimate_all_horizons(
                 df=bdf,
-                y=y,
+                y=y_work,
                 group=group,
                 time=time,
                 treatment=treatment,
@@ -406,6 +511,7 @@ def did_multiplegt_dyn(
                 same_switchers=same_switchers,
                 weights=weights,
                 cluster=cluster_var,
+                normalized=normalized,
             )
             for j, h in enumerate(horizons):
                 # Align by h
@@ -643,11 +749,11 @@ def did_multiplegt_dyn(
             "switchers": switchers,
             "same_switchers": same_switchers,
             "warning": (
-                "MVP scope: no controls=, trends_nonparam/trends_lin, "
-                "normalized or continuous options and no "
-                "heteroskedastic-weights variant; joint tests come from "
-                "the bootstrap only. See docs/rfc/multiplegt_dyn.md for "
-                "the production roadmap."
+                "controls=, trends_nonparam= and normalized= are "
+                "available and pinned to DIDmultiplegtDYN; trends_lin, "
+                "continuous, predict_het and the heteroskedastic-weights "
+                "variant are not, and joint tests come from the bootstrap "
+                "only. See docs/rfc/multiplegt_dyn.md."
             ),
         },
         _citation_key="dechaisemartin2024difference",
@@ -716,6 +822,82 @@ def _clustered_if_se(
     return float(np.sqrt(np.sum(sums**2)) / n_groups)
 
 
+def _residualise_on_controls(
+    df: pd.DataFrame,
+    *,
+    y: str,
+    group: str,
+    time: str,
+    treatment: str,
+    controls: List[str],
+) -> Tuple[pd.DataFrame, str]:
+    """Replace the outcome by the cumulative residual of its first difference.
+
+    dCDH's ``controls`` option does not add covariates to a regression. It
+    replaces the first difference of the outcome with the residual from a
+    regression of that first difference on the first differences of the
+    controls and time fixed effects, fitted on the *control* (g, t)s --
+    those whose treatment has not changed yet -- and separately for each
+    value of the baseline treatment. Estimators built on those residuals
+    are unbiased even under differential trends, as long as the differential
+    trend is a linear function of the covariate changes.
+
+    Working with the cumulative sum of the residuals lets the rest of the
+    estimator stay exactly as it is: the long difference it takes,
+    ``Ytilde_{F+l} - Ytilde_{F-1}``, is the sum of the residualised first
+    differences over the horizon, which is what the option asks for.
+    """
+    work = df.sort_values([group, time]).copy()
+    cols = [y] + list(controls)
+    diffs = work.groupby(group)[cols].diff()
+    dy = diffs[y].to_numpy(dtype=float)
+    dx = diffs[list(controls)].to_numpy(dtype=float)
+
+    # Control (g, t): the treatment has not changed by t. `_F` is the first
+    # switch period, NaN for never-switchers.
+    not_yet = work["_F"].isna() | (work[time] < work["_F"])
+    usable = np.isfinite(dy) & np.all(np.isfinite(dx), axis=1)
+
+    period_codes, periods = pd.factorize(work[time], sort=True)
+    resid = np.array(dy, dtype=float)
+    for base in sorted(work["_base"].dropna().unique()):
+        in_base = (work["_base"] == base).to_numpy()
+        fit_rows = in_base & not_yet.to_numpy() & usable
+        if fit_rows.sum() <= dx.shape[1] + 1:
+            # Too few control (g, t)s at this baseline to identify the
+            # covariate slopes; leaving the first differences unadjusted
+            # would silently mix adjusted and unadjusted cells.
+            raise DataInsufficient(
+                "controls=: too few not-yet-switched observations at "
+                f"baseline treatment {base!r} to fit the first-difference "
+                "regression the option is defined by.",
+                diagnostics={"baseline": float(base), "n_rows": int(fit_rows.sum())},
+            )
+        design_rows = in_base & usable
+        d_all = np.column_stack(
+            [
+                dx[design_rows],
+                np.eye(len(periods))[period_codes[design_rows]],
+            ]
+        )
+        d_fit = np.column_stack(
+            [dx[fit_rows], np.eye(len(periods))[period_codes[fit_rows]]]
+        )
+        coef, *_ = np.linalg.lstsq(d_fit, dy[fit_rows], rcond=None)
+        resid[design_rows] = dy[design_rows] - d_all @ coef
+
+    resid[~usable] = np.nan
+    work["_yres"] = resid
+    # Cumulate within unit; the first period has no first difference and is
+    # the (arbitrary) origin, which cancels in every difference taken later.
+    work["_yadj"] = (
+        work.groupby(group)["_yres"]
+        .apply(lambda col: col.fillna(0.0).cumsum())
+        .reset_index(level=0, drop=True)
+    )
+    return work, "_yadj"
+
+
 def _estimate_all_horizons(
     *,
     df: pd.DataFrame,
@@ -729,6 +911,7 @@ def _estimate_all_horizons(
     same_switchers: bool = False,
     weights: Optional[str] = None,
     cluster: Optional[str] = None,
+    normalized: bool = False,
 ) -> Dict[str, Any]:
     """Compute δ_l for each horizon h using long-difference event-study.
 
@@ -786,6 +969,13 @@ def _estimate_all_horizons(
             "n_groups": n_panel,
         }
 
+    # trends_nonparam: one event per value of the varlist, so that a
+    # switcher is only ever compared with controls that share it.
+    if "_tcell" in df.columns:
+        trends_cells: Tuple[Any, ...] = tuple(sorted(df["_tcell"].dropna().unique()))
+    else:
+        trends_cells = (None,)
+
     # Never-treated set (units with _F NaN)
     never_ids = set(df[df["_F"].isna()][group].unique())
     # Earliest period actually observed -- a horizon whose base period
@@ -795,42 +985,58 @@ def _estimate_all_horizons(
 
     for h in horizons:
         sum_wdelta = 0.0
+        sum_wdose = 0.0
         w_total = 0.0
         n_sw = 0
         n_events = 0
-        psi = np.zeros(n_panel, dtype=float)
+        psi: np.ndarray = np.zeros(n_panel, dtype=float)
 
         for F in F_values:
             for direction in directions:
-                _cell = _one_event(
-                    df=df,
-                    y=y,
-                    group=group,
-                    time=time,
-                    treatment=treatment,
-                    F=F,
-                    h=h,
-                    direction=direction,
-                    control=control,
-                    never_ids=never_ids,
-                    t_min=t_min,
-                    n_panel=n_panel,
-                    unit_pos=unit_pos,
-                    weights=weights,
-                    cluster_of=cluster_of,
-                )
-                if _cell is None:
-                    continue
-                sum_wdelta += _cell["delta"] * _cell["w_sw"]
-                w_total += _cell["w_sw"]
-                n_sw += _cell["n_sw"]
-                n_events += 1
-                psi += _cell["psi"]
+                for trends_cell in trends_cells:
+                    _cell = _one_event(
+                        df=df,
+                        y=y,
+                        group=group,
+                        time=time,
+                        treatment=treatment,
+                        F=F,
+                        h=h,
+                        direction=direction,
+                        control=control,
+                        never_ids=never_ids,
+                        t_min=t_min,
+                        n_panel=n_panel,
+                        unit_pos=unit_pos,
+                        weights=weights,
+                        cluster_of=cluster_of,
+                        trends_cell=trends_cell,
+                    )
+                    if _cell is None:
+                        continue
+                    sum_wdelta += _cell["delta"] * _cell["w_sw"]
+                    sum_wdose += _cell["dose"] * _cell["w_sw"]
+                    w_total += _cell["w_sw"]
+                    n_sw += _cell["n_sw"]
+                    n_events += 1
+                    psi += _cell["psi"]
 
         if w_total > 0:
             delta_l = sum_wdelta / w_total
             # Reference scaling: U_Gg = (G / N_l) × Σ_t contribution_gt.
             psi = np.asarray(psi * (n_panel / w_total), dtype=float)
+            if normalized:
+                # Effect per unit of treatment: divide by the average
+                # cumulative treatment the switchers received. The influence
+                # function is scaled by the same constant, which treats the
+                # denominator as fixed -- the reference does the same.
+                dose = sum_wdose / w_total
+                if np.isfinite(dose) and dose != 0:
+                    delta_l = delta_l / dose
+                    psi = psi / dose
+                else:
+                    delta_l = np.nan
+                    psi = np.full(n_panel, np.nan)
             se_analytic = _clustered_if_se(psi, cluster_codes, n_panel)
         else:
             delta_l = np.nan
@@ -890,6 +1096,7 @@ def _one_event(
     unit_pos: pd.Series,
     weights: Optional[str],
     cluster_of: pd.Series,
+    trends_cell: Any = None,
 ) -> Optional[Dict[str, Any]]:
     """One (switch period, direction) event at horizon ``h``.
 
@@ -913,6 +1120,10 @@ def _one_event(
     ``Y_{F−1−i} − Y_{F−1}``.
     """
     sw_mask = (df["_F"] == F) & (df["_dir"] == direction)
+    if trends_cell is not None:
+        # trends_nonparam: switchers are compared only with controls that
+        # share the value of the varlist, so each cell is its own event.
+        sw_mask &= df["_tcell"] == trends_cell
     if "_elig" in df.columns:
         # same_switchers: this unit switches at F but cannot support every
         # requested horizon, so it must not contribute an effect. It stays
@@ -943,6 +1154,8 @@ def _one_event(
     pre_rows = df[df[time] == t_pre]
     same_base = set(pre_rows[pre_rows[treatment] == base_level][group].unique())
     ctrl_ids = (candidates & same_base) - switcher_ids
+    if trends_cell is not None:
+        ctrl_ids &= set(df[df["_tcell"] == trends_cell][group].unique())
     if not ctrl_ids:
         return None
 
@@ -977,7 +1190,65 @@ def _one_event(
     psi[unit_pos.reindex(c_ids).to_numpy()] -= (w_s / w_c) * c_w * dof_c * (c_dy - e_c)
     psi *= scale
 
-    return {"delta": float(delta), "n_sw": int(len(sw_ids)), "w_sw": w_s, "psi": psi}
+    dose = _event_dose(
+        df,
+        group=group,
+        time=time,
+        treatment=treatment,
+        ids=sw_ids,
+        weights=sw_w,
+        F=F,
+        h=h,
+        base_level=base_level,
+    )
+    return {
+        "delta": float(delta),
+        "n_sw": int(len(sw_ids)),
+        "w_sw": w_s,
+        "psi": psi,
+        "dose": dose,
+    }
+
+
+def _event_dose(
+    df: pd.DataFrame,
+    *,
+    group: str,
+    time: str,
+    treatment: str,
+    ids: pd.Index,
+    weights: np.ndarray,
+    F: Any,
+    h: int,
+    base_level: float,
+) -> float:
+    """Average cumulative treatment change behind one event's switchers.
+
+    ``normalized`` divides the effect by how much treatment the switchers
+    actually received between the base period and the horizon, so that the
+    reported number is an effect *per unit of treatment* rather than the
+    effect of a path whose length grows with the horizon. For a binary
+    absorbing switch this is exactly ``h + 1`` (or ``|h|`` for a placebo),
+    which is what makes the normalised series flat when the per-period
+    effect is constant.
+    """
+    span = range(0, h + 1) if h >= 0 else range(0, -h)
+    periods = [F + s for s in span]
+    sub = df[df[group].isin(set(ids)) & df[time].isin(periods)]
+    if sub.empty:
+        return float("nan")
+    per_unit = (
+        sub.assign(_inc=(sub[treatment] - base_level).abs())
+        .groupby(group)["_inc"]
+        .sum()
+        .reindex(ids)
+        .to_numpy(dtype=float)
+    )
+    w = np.asarray(weights, dtype=float)
+    total = float(w.sum())
+    if total <= 0 or not np.all(np.isfinite(per_unit)):
+        return float("nan")
+    return float(np.sum(w * per_unit) / total)
 
 
 def _unit_values(
