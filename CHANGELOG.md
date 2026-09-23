@@ -6,6 +6,49 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added
 
+- **`sp.rate_split` and `sp.forest_policy_tree` now aggregate many splits
+  (`n_splits=21`) instead of reporting one.** A literature check turned up
+  the procedure for this rather than a gap: [chernozhukov2025generic]
+  define variational estimation and inference (VEIN) precisely for the
+  problem these two functions had, and warn that "with a single splitting
+  practice, empiricists may unintentionally look for a 'good' data split,
+  which supports their prior beliefs about the likely results, thereby
+  invalidating inference" -- which is what shipping a single split with
+  `random_state` in reach invites.
+  - The estimate is the median over splits, the interval is the median of
+    conditional intervals built at `1 - alpha/2` (whose median covers at
+    `1 - alpha`), and the p-value is twice the median conditional p-value.
+    `estimate_min` / `estimate_max` / `estimate_iqr` report how far the
+    split was moving the answer. `n_splits=1` reproduces the old behaviour
+    and warns; 21 costs about twelve seconds on a 150-unit panel, 100 (as
+    they use) about a minute.
+  - **On the guide's 15-country trade panel this changes the conclusion.**
+    Single splits ranged over -0.075 to +0.051 and seed 0 alone read as a
+    *significant negative* AUTOC, 95% CI [-0.133, -0.017]. The VEIN default
+    reports +0.0001, 95% CI [-0.0566, +0.0492], p = 0.54 -- nothing, which
+    is what is there.
+  - A rule cannot be averaged, so `forest_policy_tree` reports the tree
+    from the median-gain split plus
+    `diagnostics['split_stability']`: how often each covariate was chosen
+    at the root, and the spread of thresholds and treated shares. A tight
+    interval on the value of a rule whose root covariate changes between
+    splits is not evidence for that rule.
+  - Each feature is aggregated on its own, as they do, so with
+    `n_splits > 1` the three policy-tree medians **do not** satisfy
+    `gain = value - value_treat_all`. That identity holds within a split;
+    `n_splits=1` reports it directly. Stated rather than left to be
+    discovered.
+  - Two failure modes that only appear once many splits are taken, both
+    found by running it: a partition that leaves the evaluation half with
+    no imputable treated cell is **inadmissible** rather than a draw, and
+    would otherwise have destroyed the whole call (one of 21 does on the
+    trade panel) -- those are skipped, counted in `n_splits_skipped` and
+    warned about; and a split whose dyadic variance goes non-positive
+    contributes an estimate but no interval, so the medians are taken
+    nan-aware and `n_splits_without_interval` reports how many (7 of 20
+    there). Failing only when fewer survive than there are splits to take a
+    median of, or more than half fail.
+
 - **`sp.forest_policy_tree`: the treatment rule a fixed-effects forest
   implies, and what it was worth.** `sp.policy_tree` maximises a
   doubly-robust objective and so needs a propensity; a within-unit design

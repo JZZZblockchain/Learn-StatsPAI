@@ -20,6 +20,11 @@ are pinned:
    0.3191``; the split-sample estimate averaged 0.3189 at 99.5% power
    against a same-sample 0.3316 that overshoots by 0.012.
 
+These runs use ``n_splits=1`` deliberately: the claim under test is what
+one split's pricing does against the same-sample alternative, which is the
+comparison ``n_splits`` was introduced to settle. Aggregating would hide
+exactly the quantity being measured.
+
 ``REPS`` is 30 here against the 200 those figures came from, so only the
 ordering and the sign are asserted, with bands wide enough for the Monte
 Carlo error (binomial sd ~4 points at a 5% rate).
@@ -101,7 +106,9 @@ def _run(slope: float) -> pd.DataFrame:
                 random_state=seed,
             )
             naive = _same_sample_gain(cf, COST)
-            split = sp.forest_policy_tree(cf, depth=1, cost=COST, random_state=seed)
+            split = sp.forest_policy_tree(
+                cf, depth=1, cost=COST, n_splits=1, random_state=seed
+            )
             halves = _refit_halves(cf, None, 0.5, seed, "mc")
             design_ev = fi.imputation_design(halves.evaluate, "mc", "none")
             rows_ev = np.flatnonzero(design_ev.target)

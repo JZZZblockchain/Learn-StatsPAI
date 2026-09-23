@@ -82,7 +82,9 @@ def test_finds_the_threshold_the_cost_implies(fe_forest):
 def test_a_higher_cost_treats_fewer_cells(fe_forest):
     cf, _ = fe_forest
     shares = [
-        sp.forest_policy_tree(cf, depth=1, cost=c, random_state=0)["share_treated"]
+        sp.forest_policy_tree(cf, depth=1, cost=c, n_splits=3, random_state=0)[
+            "share_treated"
+        ]
         for c in (0.0, 0.3, 0.9)
     ]
     assert shares[0] > shares[1] > shares[2]
@@ -91,13 +93,15 @@ def test_a_higher_cost_treats_fewer_cells(fe_forest):
 
 def test_depth_two_is_searched_exactly_and_deeper_is_greedy(fe_forest):
     cf, _ = fe_forest
-    assert "exact" in sp.forest_policy_tree(cf, depth=2, cost=0.3)["method"]
-    assert "greedy" in sp.forest_policy_tree(cf, depth=3, cost=0.3)["method"]
+    assert "exact" in sp.forest_policy_tree(cf, depth=2, cost=0.3, n_splits=3)["method"]
+    assert (
+        "greedy" in sp.forest_policy_tree(cf, depth=3, cost=0.3, n_splits=3)["method"]
+    )
 
 
 def test_policy_covariates_can_be_restricted(fe_forest):
     cf, _ = fe_forest
-    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, x=["z"])
+    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, x=["z"])
     assert res["policy_covariates"] == ["z"]
     assert res["tree"]["feature"] == 0
 
@@ -113,7 +117,7 @@ def test_unknown_policy_covariate_names_the_column(fe_forest):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_gain_is_exactly_the_difference_with_its_own_variance(fe_forest):
+def test_the_gain_is_exactly_the_difference_within_one_split(fe_forest):
     # The three values are functionals of one y, computed from one design,
     # so the gain's *estimate* is exactly the difference. Its *variance* is
     # not the difference of theirs: the BJS centring weights the cohort x
@@ -122,7 +126,9 @@ def test_the_gain_is_exactly_the_difference_with_its_own_variance(fe_forest):
     # cells alone. Coverage of both readings is measured in
     # tests/reference_parity/test_fe_forest_policy_recovery.py.
     cf, _ = fe_forest
-    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", AssumptionWarning)
+        res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=1, random_state=0)
     v, allv, gain = res["value"], res["value_treat_all"], res["gain_over_treat_all"]
     np.testing.assert_allclose(
         gain["estimate"], v["estimate"] - allv["estimate"], rtol=0, atol=1e-10
@@ -158,7 +164,7 @@ def test_a_rule_that_treats_everyone_has_exactly_zero_gain(fe_forest):
     # Structurally zero, not "could not be estimated": reporting NaN here
     # would be wrong, and did happen before the degenerate case was handled.
     cf, _ = fe_forest
-    res = sp.forest_policy_tree(cf, depth=1, cost=-5.0, random_state=0)
+    res = sp.forest_policy_tree(cf, depth=1, cost=-5.0, n_splits=3, random_state=0)
     assert res["share_treated"] == 1.0
     gain = res["gain_over_treat_all"]
     assert gain["estimate"] == 0.0
@@ -169,7 +175,7 @@ def test_a_rule_that_treats_everyone_has_exactly_zero_gain(fe_forest):
 
 def test_gain_is_detected_when_the_heterogeneity_is_real(fe_forest):
     cf, _ = fe_forest
-    gain = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=0)[
+    gain = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, random_state=0)[
         "gain_over_treat_all"
     ]
     assert gain["estimate"] > 0 and gain["ci_low"] > 0
@@ -190,7 +196,7 @@ def test_no_heterogeneity_leaves_nothing_for_the_rule_to_find():
 
 def test_fitting_and_pricing_use_disjoint_units(fe_forest):
     cf, df = fe_forest
-    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=0)
+    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, random_state=0)
     assert res["split_by"] == "units"
     assert res["n_train_units"] + res["n_eval_units"] == df["id"].nunique()
     assert res["n_cells_fitted"] > 0 and res["n_cells_priced"] > 0
@@ -198,19 +204,58 @@ def test_fitting_and_pricing_use_disjoint_units(fe_forest):
     assert set(np.unique(res["policy"])) <= {0, 1}
 
 
-def test_the_split_is_reproducible_and_moves_with_the_seed(fe_forest):
+def test_the_result_is_reproducible_given_random_state(fe_forest):
     cf, _ = fe_forest
-    a = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=11)
-    b = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=11)
+    a = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, random_state=11)
+    b = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, random_state=11)
     assert a["value"]["estimate"] == b["value"]["estimate"]
-    c = sp.forest_policy_tree(cf, depth=1, cost=0.3, random_state=12)
-    assert c["value"]["estimate"] != a["value"]["estimate"]
+
+
+def test_medians_over_splits_do_not_satisfy_the_arithmetic_identity(fe_forest):
+    # Documented, not a bug: each feature is VEIN-aggregated on its own, and
+    # a median of differences is not a difference of medians. Anyone who
+    # subtracts the two values and compares with the gain should find this
+    # stated rather than discover it.
+    cf, _ = fe_forest
+    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=5, random_state=0)
+    diff = res["value"]["estimate"] - res["value_treat_all"]["estimate"]
+    assert res["gain_over_treat_all"]["estimate"] != diff
+
+
+def test_split_stability_is_reported(fe_forest):
+    # A tight interval on the value of a rule that changes from split to
+    # split is not evidence for that rule.
+    cf, _ = fe_forest
+    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=5, random_state=0)
+    stab = res["diagnostics"]["split_stability"]
+    assert sum(stab["root_covariate_counts"].values()) == 5
+    assert 0.0 < stab["root_covariate_modal_share"] <= 1.0
+    assert stab["threshold_min"] <= stab["threshold_max"]
+    assert stab["share_treated_min"] <= stab["share_treated_max"]
+    assert res["representative_split"] in range(5)
+
+
+def test_one_split_warns_that_it_is_a_draw(fe_forest):
+    cf, _ = fe_forest
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=1)
+    hits = [w for w in rec if "one draw" in str(w.message)]
+    assert len(hits) == 1 and issubclass(hits[0].category, AssumptionWarning)
+    assert res["value"]["n_splits"] == 1
+
+
+@pytest.mark.parametrize("bad", [0, -1, 2.5, True])
+def test_bad_n_splits_is_refused(fe_forest, bad):
+    cf, _ = fe_forest
+    with pytest.raises(MethodIncompatibility, match="n_splits"):
+        sp.forest_policy_tree(cf, n_splits=bad)
 
 
 def test_train_frac_moves_the_halves(fe_forest):
     cf, _ = fe_forest
-    small = sp.forest_policy_tree(cf, depth=1, cost=0.3, train_frac=0.3)
-    large = sp.forest_policy_tree(cf, depth=1, cost=0.3, train_frac=0.7)
+    small = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, train_frac=0.3)
+    large = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3, train_frac=0.7)
     assert small["n_train_units"] < large["n_train_units"]
     assert small["n_cells_fitted"] < large["n_cells_fitted"]
 
@@ -252,14 +297,14 @@ def test_thin_halves_warn():
     cf = _forest(panel(seed=5, n_units=40), n_estimators=120)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
-        sp.forest_policy_tree(cf, depth=1, cost=0.3)
+        sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3)
     hits = [w for w in rec if "close to noise" in str(w.message)]
     assert len(hits) == 1 and issubclass(hits[0].category, AssumptionWarning)
 
 
 def test_rules_are_printable_and_name_the_covariates(fe_forest):
     cf, _ = fe_forest
-    res = sp.forest_policy_tree(cf, depth=1, cost=0.3)
+    res = sp.forest_policy_tree(cf, depth=1, cost=0.3, n_splits=3)
     assert "z" in res["rules"]
     assert "TREAT" in res["rules"]
     assert "treated cells" in res["estimand"]
@@ -285,7 +330,9 @@ def test_imputation_covariates_reach_the_scores():
             n_estimators=150,
             random_state=0,
         )
-        res = sp.forest_policy_tree(cf, depth=1, cost=0.3, covariates="auto")
+        res = sp.forest_policy_tree(
+            cf, depth=1, cost=0.3, n_splits=2, covariates="auto"
+        )
     assert "gdp" in res["diagnostics"]["imputation_covariates"]
 
 

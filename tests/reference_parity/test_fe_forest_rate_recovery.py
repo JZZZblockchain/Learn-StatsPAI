@@ -22,6 +22,10 @@ tabulated in ``docs/guides/heterogeneity_panel_forests.md``:
    under no heterogeneity at all and rejected 17.5% of the time;
 3. ``sp.rate_split`` removes that: +0.0008 and 7.5%, at 99.5% power.
 
+These runs use ``n_splits=1``: the claim under test is the bias of one
+split's evaluation against the reused ranking, and aggregating over splits
+would average away the quantity being measured.
+
 ``REPS`` is cut to 40 here (binomial sd ~3.4 points at a 5% rate), so the
 bands are wide enough for that Monte Carlo error and only the signs and
 orders of magnitude are asserted.
@@ -84,7 +88,7 @@ def _run(b: float) -> pd.DataFrame:
                     variance="forest",
                 )
                 reused = sp.rate(cf, target=target)
-                split = sp.rate_split(cf, target=target, random_state=s)
+                split = sp.rate_split(cf, target=target, n_splits=1, random_state=s)
                 record.update(
                     {
                         f"{target}_held_err": held["estimate"] - truth,

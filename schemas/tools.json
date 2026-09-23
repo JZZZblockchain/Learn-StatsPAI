@@ -10424,7 +10424,7 @@
     "name": "forest_group_effects"
   },
   {
-    "description": "Treatment rule for a causal forest with fixed effects, and what it was worth. sp.policy_tree needs a doubly-robust score and so a propensity, which a within-unit design has none of; the imputation scores that give the ATT are used instead, which fixes the population to the treated cells: of the cells that were treated, which should have been. Fits on one half of the units and prices on the other, because a rule maximised on the scores it is then priced against is priced on its own noise -- where the true gain was exactly 0, the same-sample version averaged +0.048 and called it significant 13% of the time, against +0.005 and 3.5% split. Value, treat-all value and the gain between them share one exact, cluster- or dyad-robust covariance. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: parallel trends and no anticipation (imputation scores); the rule applies to treated cells; effects on untreated cells are not identified (check sp.forest_support first). Pre-conditions: forest fitted with sp.causal_forest(..., fe='twoway'); enough treated cells in each half to fill a leaf. Failure modes: MethodIncompatibility: this i...",
+    "description": "Treatment rule for a causal forest with fixed effects, and what it was worth. sp.policy_tree needs a doubly-robust score and so a propensity, which a within-unit design has none of; the imputation scores that give the ATT are used instead, which fixes the population to the treated cells: of the cells that were treated, which should have been. Fits on one half of the units and prices on the other, because a rule maximised on the scores it is then priced against is priced on its own noise -- where the true gain was exactly 0, the same-sample version averaged +0.048 and called it significant 13% of the time, against +0.005 and 3.5% split. Value, treat-all value and the gain between them share one exact, cluster- or dyad-robust covariance. Aggregates n_splits draws by VEIN. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: parallel trends and no anticipation (imputation scores); the rule applies to treated cells; effects on untreated cells are not identified (check sp.forest_support first). Pre-conditions: forest fitted with sp.causal_forest(..., fe='twoway'); enough treated cells in each half to fill a leaf. Failure m...",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -10466,9 +10466,14 @@
           "description": "min_leaf_size parameter (int).",
           "type": "integer"
         },
+        "n_splits": {
+          "default": 21,
+          "description": "Splits aggregated by Chernozhukov et al. (2025) VEIN. A rule cannot be averaged, so the tree reported is the one from the median-gain split and split_stability says how far the rule itself moved. n_splits=1 warns.",
+          "type": "integer"
+        },
         "random_state": {
           "default": 0,
-          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "description": "Seeds the sequence of splits.",
           "type": "integer"
         },
         "train_frac": {
@@ -20320,6 +20325,11 @@
           "description": "(n, 2) members of each dyadic row; splits by member and drops rows straddling the halves.",
           "type": "string"
         },
+        "n_splits": {
+          "default": 21,
+          "description": "Splits aggregated by Chernozhukov et al. (2025) VEIN: median estimate, median of conditional intervals built at 1 - alpha/2, p doubled. n_splits=1 is one draw and warns.",
+          "type": "integer"
+        },
         "q_grid": {
           "default": 100,
           "description": "Points on the TOC curve.",
@@ -20327,7 +20337,7 @@
         },
         "random_state": {
           "default": 0,
-          "description": "Seed for the split.",
+          "description": "Seeds the sequence of splits.",
           "type": "integer"
         },
         "se_method": {

@@ -826,6 +826,133 @@ class _Halves:
         return int(np.unique(np.asarray(keys)[mask]).size)
 
 
+def _vein(
+    per_split: List[Dict[str, float]], alpha: float, n_splits: int
+) -> Dict[str, Any]:
+    r"""Aggregate split-conditional results the way [chernozhukov2025generic] do.
+
+    One split is not an estimator, it is a draw. Their variational
+    estimation and inference methods (VEIN) account for the splitting
+    uncertainty on top of the conditional uncertainty: the point estimate
+    is the **median** over splits, the interval is the **median of the
+    conditional intervals**, and the p-value is the **median of the
+    conditional p-values, doubled**. A median of intervals built at level
+    ``1 - a`` covers at ``1 - 2a``, so to deliver the ``1 - alpha`` the
+    caller asked for, the conditional intervals are built at
+    ``1 - alpha / 2`` -- which the callers of this helper do.
+
+    Their warning is the reason this is the default rather than an option:
+    with a single split "empiricists may unintentionally look for a 'good'
+    data split, which supports their prior beliefs about the likely
+    results, thereby invalidating inference".
+    """
+    est = np.array([r["estimate"] for r in per_split], dtype=float)
+    lo = np.array([r["ci_low"] for r in per_split], dtype=float)
+    hi = np.array([r["ci_high"] for r in per_split], dtype=float)
+    se = np.array([r["se"] for r in per_split], dtype=float)
+    pv = np.array([r["p"] for r in per_split], dtype=float)
+    if n_splits == 1:
+        out = dict(per_split[0])
+        out.update(
+            n_splits=1,
+            aggregation="single split (conditional inference, not VEIN)",
+            estimate_min=float(est[0]),
+            estimate_max=float(est[0]),
+        )
+        return out
+    point = float(np.median(est))
+    # A split whose variance was not estimable (the dyadic estimator can go
+    # non-positive) still has a usable point estimate; it just contributes
+    # no interval. Taking a plain median would let one of them turn the
+    # whole interval into NaN.
+    n_no_interval = int(np.sum(~np.isfinite(lo) | ~np.isfinite(hi)))
+    with np.errstate(invalid="ignore"):
+        pooled_p = float(min(1.0, 2.0 * np.nanmedian(pv)))
+        med_se = float(np.nanmedian(se)) if np.any(np.isfinite(se)) else float("nan")
+        med_lo = float(np.nanmedian(lo)) if np.any(np.isfinite(lo)) else float("nan")
+        med_hi = float(np.nanmedian(hi)) if np.any(np.isfinite(hi)) else float("nan")
+    return {
+        "estimate": point,
+        "se": med_se,
+        "ci_low": med_lo,
+        "ci_high": med_hi,
+        "z": float(point / med_se) if med_se > 0 else float("nan"),
+        "p": pooled_p,
+        "n_splits": int(n_splits),
+        "n_splits_without_interval": n_no_interval,
+        "aggregation": (
+            "VEIN: median over splits; the interval is the median of "
+            f"{100 * (1 - alpha / 2):.4g}% conditional intervals and covers "
+            f"at {100 * (1 - alpha):.4g}%; p is twice the median conditional p"
+        ),
+        "estimate_min": float(est.min()),
+        "estimate_max": float(est.max()),
+        "estimate_iqr": float(np.percentile(est, 75) - np.percentile(est, 25)),
+    }
+
+
+def _warn_single_split(context: str) -> None:
+    warnings.warn(
+        f"{context}: n_splits=1 reports one draw, not an estimate. The split "
+        "moves the answer -- on the guide's 15-country trade panel six splits "
+        "ranged over +/-0.08 -- and with random_state in reach it is easy to "
+        "keep the one that agrees with you, which is exactly the practice "
+        "Chernozhukov et al. (2025) show invalidates inference. Use the "
+        "default n_splits=21, or 100 as they do.",
+        AssumptionWarning,
+        stacklevel=3,
+    )
+
+
+def _run_splits(
+    run_one: Any, n_splits: int, context: str
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Run every split, tolerating the ones the panel cannot support.
+
+    A split that leaves the evaluation half with no imputable treated cell
+    is not a draw from the estimator's distribution, it is an inadmissible
+    partition -- and on a small panel at least one of twenty-one will be.
+    Failing the whole call on it would make ``n_splits`` a liability
+    exactly where the split matters most, so those are skipped and counted;
+    the estimand becomes "over admissible partitions", which the warning
+    says. Half of them failing, or fewer than three surviving, means the
+    panel is too small to split at all, and that is an error.
+    """
+    runs: List[Dict[str, Any]] = []
+    failures: List[str] = []
+    for b in range(n_splits):
+        try:
+            runs.append(run_one(b))
+        except (DataInsufficient, NumericalInstability) as exc:
+            failures.append(str(exc).splitlines()[0])
+    n_failed = len(failures)
+    # Enough must survive to take a median of, but "enough" is relative to
+    # what was asked for: n_splits=2 must not trip a floor of three.
+    needed = min(3, n_splits)
+    if len(runs) < needed or (n_splits > 1 and n_failed * 2 > n_splits):
+        raise DataInsufficient(
+            f"{context}: only {len(runs)} of {n_splits} splits could be "
+            "evaluated, so the panel is too small to split at all. First "
+            f"reason: {failures[0] if failures else 'unknown'}",
+            recovery_hint=(
+                "Bring a rule fitted outside this sample and pass it to "
+                "sp.rate(..., priorities=), or report sp.rate as a "
+                "diagnostic and say so."
+            ),
+            diagnostics={"n_splits": n_splits, "n_failed": n_failed},
+        )
+    if n_failed:
+        warnings.warn(
+            f"{context}: {n_failed} of {n_splits} splits left an evaluation "
+            "half with nothing to impute and were skipped, so the estimate "
+            "is a median over the admissible partitions rather than over all "
+            f"of them. First reason: {failures[0]}",
+            AssumptionWarning,
+            stacklevel=3,
+        )
+    return runs, n_failed
+
+
 def _refit_halves(
     forest: Any,
     members: Any,
@@ -912,11 +1039,95 @@ def _refit_halves(
     )
 
 
+def _rate_split_once(
+    forest: Any,
+    target: str = "AUTOC",
+    *,
+    train_frac: float = 0.5,
+    random_state: int = 0,
+    members: Any = None,
+    alpha: float = 0.05,
+    variance: str = "bjs",
+    cluster: Any = None,
+    covariates: Any = "none",
+    se_method: str = "auto",
+    q_grid: int = 100,
+    _warn: bool = True,
+) -> Dict[str, Any]:
+    r"""One split's RATE. :func:`rate_split` aggregates many of these."""
+
+    from .forest_inference import rate as _rate
+
+    context = "rate_split()"
+    halves = _refit_halves(forest, members, train_frac, random_state, context)
+    train, evaluate = halves.train, halves.evaluate
+    in_train, in_eval = halves.in_train, halves.in_eval
+    split_by, dropped = halves.split_by, halves.dropped
+    X = np.asarray(forest._X_original, dtype=float)
+    prio = np.asarray(train.effect(X[in_eval]), dtype=float).ravel()
+    kwargs: Dict[str, Any] = dict(
+        target=target,
+        priorities=prio,
+        alpha=alpha,
+        q_grid=q_grid,
+        se_method=se_method,
+        covariates=covariates,
+    )
+    if gi.is_fe_forest(forest):
+        kwargs.update(variance=variance, cluster=cluster)
+        if members is not None:
+            mem = np.asarray(members)
+            kwargs.update(cluster="dyadic", members=mem[in_eval])
+    try:
+        out = dict(_rate(evaluate, **kwargs))
+    except (DataInsufficient, NumericalInstability) as exc:
+        raise type(exc)(
+            f"{context}: evaluating the rule on the held-out half failed -- " f"{exc}",
+            recovery_hint=(
+                "The half-sample is thinner than the full one, so overlap or "
+                "imputability that held on all the data can fail on it. Raise "
+                "train_frac (a smaller evaluation half is not the fix -- lower "
+                "it to move rows the other way), or run sp.rate with "
+                "priorities= from a rule fitted outside this sample."
+            ),
+        ) from exc
+
+    n_train = halves.n_groups(in_train, forest, members)
+    n_eval = halves.n_groups(in_eval, forest, members)
+    if _warn and min(n_train, n_eval) < _THIN_HALF:
+        warnings.warn(
+            f"rate_split(): the halves hold {n_train} and {n_eval} "
+            f"{split_by}. A rule fitted on that many is close to noise, and "
+            "the RATE it earns measures the split as much as the "
+            "heterogeneity -- on the 15-country trade panel of the guide it "
+            f"ranged over {chr(177)}0.08 across six splits, with the "
+            "dyadic variance going non-positive on two of them, while the "
+            "true-tau ranking on the whole sample gave +0.081 (se 0.031). "
+            f"The design this was calibrated on had 75 units a side. Below "
+            f"{_THIN_HALF} report sp.rate as a diagnostic, or bring an "
+            "external rule to sp.rate(..., priorities=), and do not read a "
+            "single split as a test.",
+            AssumptionWarning,
+            stacklevel=2,
+        )
+    out.update(
+        priority_source="held_out_forest",
+        n_train_units=n_train,
+        n_eval_units=n_eval,
+        n_rows_dropped=dropped,
+        split_by=split_by,
+        split_random_state=int(random_state),
+        method=out.get("method", "RATE") + ", split-sample",
+    )
+    return out
+
+
 @accepts_aliases(_strict=True, controls="covariates")
 def rate_split(
     forest: Any,
     target: str = "AUTOC",
     *,
+    n_splits: int = 21,
     train_frac: float = 0.5,
     random_state: int = 0,
     members: Any = None,
@@ -1013,70 +1224,96 @@ def rate_split(
     >>> res = sp.rate_split(cf, target="AUTOC")
     >>> res["split_by"], res["n_eval_units"] > 0
     ('units', True)
+
+
+    **Many splits, not one.** A single split is a draw, not an estimator:
+    on the guide's 15-country trade panel six of them ranged over +/-0.08,
+    and with ``random_state`` in reach it is easy to keep the one that
+    agrees with you -- the practice [chernozhukov2025generic] show
+    invalidates inference. Their variational estimation and inference
+    (VEIN) is what ``n_splits`` does: the estimate is the median over
+    splits, the interval is the median of the conditional intervals built
+    at ``1 - alpha / 2`` (whose median covers at ``1 - alpha``), and the
+    p-value is twice the median conditional p-value. ``n_splits=21`` costs
+    about twelve seconds on a 150-unit panel; 100, as they use, costs about
+    a minute. ``n_splits=1`` reproduces a single conditional split and
+    warns. ``estimate_min`` / ``estimate_max`` / ``estimate_iqr`` in the
+    result show how much the split was moving the answer.
+
+    Parameters
+    ----------
+    forest, target, train_frac, members, alpha, variance, cluster,
+    covariates, se_method, q_grid
+        As described above.
+    n_splits : int, default 21
+        Splits to aggregate by VEIN. Odd, so the median is an order
+        statistic.
+    random_state : int, default 0
+        Seeds the *sequence* of splits; split ``b`` uses
+        ``random_state + b``.
     """
-    from .forest_inference import rate as _rate
-
     context = "rate_split()"
-    halves = _refit_halves(forest, members, train_frac, random_state, context)
-    train, evaluate = halves.train, halves.evaluate
-    in_train, in_eval = halves.in_train, halves.in_eval
-    split_by, dropped = halves.split_by, halves.dropped
-    X = np.asarray(forest._X_original, dtype=float)
-    prio = np.asarray(train.effect(X[in_eval]), dtype=float).ravel()
-    kwargs: Dict[str, Any] = dict(
-        target=target,
-        priorities=prio,
-        alpha=alpha,
-        q_grid=q_grid,
-        se_method=se_method,
-        covariates=covariates,
-    )
-    if gi.is_fe_forest(forest):
-        kwargs.update(variance=variance, cluster=cluster)
-        if members is not None:
-            mem = np.asarray(members)
-            kwargs.update(cluster="dyadic", members=mem[in_eval])
-    try:
-        out = dict(_rate(evaluate, **kwargs))
-    except (DataInsufficient, NumericalInstability) as exc:
-        raise type(exc)(
-            f"{context}: evaluating the rule on the held-out half failed -- " f"{exc}",
-            recovery_hint=(
-                "The half-sample is thinner than the full one, so overlap or "
-                "imputability that held on all the data can fail on it. Raise "
-                "train_frac (a smaller evaluation half is not the fix -- lower "
-                "it to move rows the other way), or run sp.rate with "
-                "priorities= from a rule fitted outside this sample."
-            ),
-        ) from exc
-
-    n_train = halves.n_groups(in_train, forest, members)
-    n_eval = halves.n_groups(in_eval, forest, members)
-    if min(n_train, n_eval) < _THIN_HALF:
-        warnings.warn(
-            f"rate_split(): the halves hold {n_train} and {n_eval} "
-            f"{split_by}. A rule fitted on that many is close to noise, and "
-            "the RATE it earns measures the split as much as the "
-            "heterogeneity -- on the 15-country trade panel of the guide it "
-            f"ranged over {chr(177)}0.08 across six splits, with the "
-            "dyadic variance going non-positive on two of them, while the "
-            "true-tau ranking on the whole sample gave +0.081 (se 0.031). "
-            f"The design this was calibrated on had 75 units a side. Below "
-            f"{_THIN_HALF} report sp.rate as a diagnostic, or bring an "
-            "external rule to sp.rate(..., priorities=), and do not read a "
-            "single split as a test.",
-            AssumptionWarning,
-            stacklevel=2,
+    if (
+        isinstance(n_splits, bool)
+        or not isinstance(n_splits, (int, np.integer))
+        or n_splits < 1
+    ):
+        raise MethodIncompatibility(
+            f"{context}: n_splits must be a positive integer.",
+            recovery_hint="Use n_splits=21 (the default) or 100.",
+            diagnostics={"n_splits": n_splits},
         )
-    out.update(
-        priority_source="held_out_forest",
-        n_train_units=n_train,
-        n_eval_units=n_eval,
-        n_rows_dropped=dropped,
-        split_by=split_by,
-        split_random_state=int(random_state),
-        method=out.get("method", "RATE") + ", split-sample",
+    n_splits = int(n_splits)
+    if n_splits == 1:
+        _warn_single_split(context)
+    conditional_alpha = float(alpha) if n_splits == 1 else float(alpha) / 2.0
+    runs, n_failed = _run_splits(
+        lambda b: _rate_split_once(
+            forest,
+            target,
+            train_frac=train_frac,
+            random_state=int(random_state) + b,
+            members=members,
+            alpha=conditional_alpha,
+            variance=variance,
+            cluster=cluster,
+            covariates=covariates,
+            se_method=se_method,
+            q_grid=q_grid,
+            _warn=(b == 0),
+        ),
+        n_splits,
+        context,
     )
+
+    def _conditional(r: Dict[str, Any]) -> Dict[str, float]:
+        # sp.rate reports no p-value; derive the conditional one so the
+        # median-and-double rule has something to work on.
+        se = float(r["se"])
+        z = float(r["estimate"]) / se if se > 0 else float("nan")
+        return {
+            "estimate": float(r["estimate"]),
+            "se": se,
+            "ci_low": float(r["ci_low"]),
+            "ci_high": float(r["ci_high"]),
+            "p": float(2 * stats.norm.sf(abs(z))) if se > 0 else float("nan"),
+        }
+
+    pooled = _vein([_conditional(r) for r in runs], float(alpha), len(runs))
+    out = dict(runs[0])
+    out.update(pooled)
+    out["alpha"] = float(alpha)
+    out["toc_curve"] = np.column_stack(
+        [
+            runs[0]["toc_curve"][:, 0],
+            np.median(np.stack([r["toc_curve"][:, 1] for r in runs]), axis=0),
+        ]
+    )
+    out["method"] = runs[0]["method"] + (
+        f", VEIN over {len(runs)} splits" if n_splits > 1 else ""
+    )
+    out["split_random_state"] = int(random_state)
+    out["n_splits_skipped"] = n_failed
     return out
 
 
@@ -1194,6 +1431,176 @@ def _policy_functional(
     return out
 
 
+def _forest_policy_tree_once(
+    forest: Any,
+    *,
+    depth: int = 2,
+    cost: float = 0.0,
+    x: Any = None,
+    min_leaf_size: Optional[int] = None,
+    train_frac: float = 0.5,
+    random_state: int = 0,
+    members: Any = None,
+    alpha: float = 0.05,
+    variance: str = "bjs",
+    cluster: Any = None,
+    covariates: Any = "none",
+    _warn: bool = True,
+) -> Dict[str, Any]:
+    r"""One split's rule and price. :func:`forest_policy_tree` aggregates many."""
+
+    from ..policy_learning._exact_tree import exact_policy_tree
+    from ..policy_learning.policy_tree import PolicyTree
+
+    context = "forest_policy_tree()"
+    _require_grf(forest, context)
+    if not gi.is_fe_forest(forest):
+        raise MethodIncompatibility(
+            f"{context} is for forests with fixed effects, whose scores are "
+            "imputation scores on treated cells. A pooled forest has a "
+            "propensity and a population-wide estimand, so it gets the "
+            "doubly-robust policy tree instead.",
+            recovery_hint="Use sp.policy_tree(data, y, d, X, ...).",
+            alternative_functions=["sp.policy_tree"],
+        )
+    if not isinstance(depth, (int, np.integer)) or isinstance(depth, bool) or depth < 1:
+        raise MethodIncompatibility(
+            f"{context}: depth must be a positive integer.",
+            recovery_hint="Use depth=2 (exactly searched) or depth=1.",
+            diagnostics={"depth": depth},
+        )
+    halves = _refit_halves(forest, members, train_frac, random_state, context)
+
+    names = list(getattr(forest, "_feature_names", []) or [])
+    x_all = np.asarray(forest._X_original, dtype=float)
+    if x is None:
+        cols = list(range(x_all.shape[1]))
+    elif all(isinstance(c, str) for c in np.atleast_1d(x)):
+        wanted = list(np.atleast_1d(x))
+        missing = [c for c in wanted if c not in names]
+        if missing:
+            raise MethodIncompatibility(
+                f"{context}: effect modifier(s) {missing} are not in the "
+                f"forest's features {names}.",
+                recovery_hint="Pass names the forest was fitted on, or x=None.",
+            )
+        cols = [names.index(c) for c in wanted]
+    else:
+        supplied = np.asarray(x, dtype=float)
+        if supplied.shape[0] != x_all.shape[0]:
+            raise MethodIncompatibility(
+                f"{context}: x must have one row per training row "
+                f"({x_all.shape[0]}), got {supplied.shape[0]}.",
+                recovery_hint="Pass column names instead of an array.",
+            )
+        x_all = supplied
+        cols = list(range(x_all.shape[1]))
+        names = [f"x{k}" for k in cols]
+    policy_names = [names[c] if c < len(names) else f"x{c}" for c in cols]
+
+    common = dict(
+        cost=float(cost),
+        variance=variance,
+        cluster=cluster,
+        covariates=covariates,
+        alpha=float(alpha),
+        context=context,
+    )
+    mem_train = None if members is None else np.asarray(members)[halves.in_train]
+    mem_eval = None if members is None else np.asarray(members)[halves.in_eval]
+
+    # Fit on the training half's scores.
+    design_tr = fi.imputation_design(halves.train, context, covariates)
+    rows_tr = np.flatnonzero(design_tr.target)
+    scores_tr = design_tr.gamma[rows_tr] - float(cost)
+    x_tr = x_all[halves.in_train][:, cols][rows_tr]
+    design_ev = fi.imputation_design(halves.evaluate, context, covariates)
+    rows_ev = np.flatnonzero(design_ev.target)
+    x_ev = x_all[halves.in_eval][:, cols][rows_ev]
+    leaf = (
+        int(min_leaf_size)
+        if min_leaf_size is not None
+        else max(10, int(0.05 * rows_ev.size))
+    )
+    if rows_tr.size < 2 * leaf or rows_ev.size < 2:
+        raise DataInsufficient(
+            f"{context}: {rows_tr.size} treated cell(s) to fit the rule and "
+            f"{rows_ev.size} to price it is not enough for a leaf of {leaf}.",
+            recovery_hint="Lower min_leaf_size or depth, or widen the panel.",
+            diagnostics={"n_fit": int(rows_tr.size), "n_price": int(rows_ev.size)},
+        )
+    # PolicyTree owns the tree grower, the predictor and the rule printer;
+    # reuse them rather than growing a second implementation of a policy
+    # tree in the forest module.
+    helper = PolicyTree.__new__(PolicyTree)  # its __init__ wants a dataset
+    helper.max_depth = int(depth)
+    helper.min_leaf_size = leaf
+    helper.split_step = 1
+    if int(depth) <= 2:
+        tree = exact_policy_tree(
+            x_tr, scores_tr, max_depth=int(depth), min_leaf_size=leaf
+        )
+        method = f"exact search, depth {int(depth)}"
+    else:
+        tree = helper._grow_tree(x_tr, scores_tr, depth=0)  # type: ignore[attr-defined]
+        method = f"greedy search, depth {int(depth)}"
+
+    policy = helper._predict_tree(tree, x_ev)
+    priced = _policy_functional(
+        halves.evaluate, policy, members=mem_eval, **common  # type: ignore[arg-type]
+    )
+    rules = helper._tree_to_rules(tree, policy_names)
+    n_train = halves.n_groups(halves.in_train, forest, members)
+    n_eval = halves.n_groups(halves.in_eval, forest, members)
+    if _warn and min(n_train, n_eval) < _THIN_HALF:
+        warnings.warn(
+            f"{context}: the halves hold {n_train} and {n_eval} "
+            f"{halves.split_by}. A rule fitted on that many is close to "
+            "noise, and the value it earns measures the split as much as the "
+            "heterogeneity. Report it as exploratory.",
+            AssumptionWarning,
+            stacklevel=2,
+        )
+    del mem_train
+    return {
+        "rules": rules,
+        "tree": tree,
+        "policy": np.asarray(policy, dtype=int),
+        "policy_covariates": policy_names,
+        "value": priced["policy"],
+        "value_treat_all": priced["treat_all"],
+        "gain_over_treat_all": priced["gain_over_treat_all"],
+        "share_treated": priced["_share_treated"],
+        "cost": float(cost),
+        "n_cells_priced": priced["_n_cells"],
+        "n_cells_fitted": int(rows_tr.size),
+        "n_train_units": n_train,
+        "n_eval_units": n_eval,
+        "n_rows_dropped": halves.dropped,
+        "split_by": halves.split_by,
+        "split_random_state": int(random_state),
+        "method": method,
+        "estimand": (
+            "retrospective: value per treated cell of a rule applied to the "
+            "cells that were treated; effects on untreated cells are not "
+            "identified"
+        ),
+        "alpha": float(alpha),
+        "diagnostics": {
+            "variance": variance,
+            "vcov": priced["_vcov"],
+            # The same gain read as a contrast of the first two functionals.
+            # It differs because the BJS centring is weight-dependent; see
+            # the note in the docstring before treating either as the other's
+            # mistake.
+            "gain_se_contrast": priced["_gain_se_contrast"],
+            "se_label": priced["_label"],
+            "min_leaf_size": leaf,
+            "imputation_covariates": list(design_ev.control_names),
+        },
+    }
+
+
 @accepts_aliases(_strict=True, controls="covariates")
 def forest_policy_tree(
     forest: Any,
@@ -1202,6 +1609,7 @@ def forest_policy_tree(
     cost: float = 0.0,
     x: Any = None,
     min_leaf_size: Optional[int] = None,
+    n_splits: int = 21,
     train_frac: float = 0.5,
     random_state: int = 0,
     members: Any = None,
@@ -1320,154 +1728,111 @@ def forest_policy_tree(
     True
     >>> sorted(res["gain_over_treat_all"])
     ['ci_high', 'ci_low', 'estimate', 'p', 'se', 'z']
+
+
+    **Many splits, not one.** One split is a draw: it fixes both the rule
+    and its price, and with ``random_state`` in reach it is easy to keep
+    the pair that agrees with you -- the practice
+    [chernozhukov2025generic] show invalidates inference. ``n_splits``
+    aggregates by their variational estimation and inference (VEIN): the
+    value, the treat-all value and the gain are each the median over
+    splits, their intervals are medians of conditional intervals built at
+    ``1 - alpha / 2`` (whose median covers at ``1 - alpha``), and the
+    p-values are twice the median conditional p-value. Each is aggregated
+    on its own, as [chernozhukov2025generic] do, so with ``n_splits > 1``
+    the three medians **do not** satisfy
+    ``gain = value - value_treat_all`` -- a median of differences is not a
+    difference of medians. That identity holds within each split, and
+    ``n_splits=1`` reports it directly. A *rule* cannot be
+    averaged either, so the one reported is the rule from the split whose
+    gain is the median, and ``diagnostics['split_stability']`` says how often each
+    covariate was chosen at the root and how far the thresholds and treated
+    shares moved -- if the root covariate changes from split to split, the
+    rule is not identified by this sample however tight the interval on its
+    value looks. ``n_splits=21`` costs about twelve seconds on a 150-unit
+    panel; ``n_splits=1`` reproduces one conditional split and warns.
+
+    Parameters
+    ----------
+    n_splits : int, default 21
+        Splits to aggregate by VEIN. Odd, so the median is an order
+        statistic.
+    random_state : int, default 0
+        Seeds the *sequence* of splits; split ``b`` uses
+        ``random_state + b``.
     """
-    from ..policy_learning._exact_tree import exact_policy_tree
-    from ..policy_learning.policy_tree import PolicyTree
-
     context = "forest_policy_tree()"
-    _require_grf(forest, context)
-    if not gi.is_fe_forest(forest):
+    if (
+        isinstance(n_splits, bool)
+        or not isinstance(n_splits, (int, np.integer))
+        or n_splits < 1
+    ):
         raise MethodIncompatibility(
-            f"{context} is for forests with fixed effects, whose scores are "
-            "imputation scores on treated cells. A pooled forest has a "
-            "propensity and a population-wide estimand, so it gets the "
-            "doubly-robust policy tree instead.",
-            recovery_hint="Use sp.policy_tree(data, y, d, X, ...).",
-            alternative_functions=["sp.policy_tree"],
+            f"{context}: n_splits must be a positive integer.",
+            recovery_hint="Use n_splits=21 (the default) or 100.",
+            diagnostics={"n_splits": n_splits},
         )
-    if not isinstance(depth, (int, np.integer)) or isinstance(depth, bool) or depth < 1:
-        raise MethodIncompatibility(
-            f"{context}: depth must be a positive integer.",
-            recovery_hint="Use depth=2 (exactly searched) or depth=1.",
-            diagnostics={"depth": depth},
-        )
-    halves = _refit_halves(forest, members, train_frac, random_state, context)
-
-    names = list(getattr(forest, "_feature_names", []) or [])
-    x_all = np.asarray(forest._X_original, dtype=float)
-    if x is None:
-        cols = list(range(x_all.shape[1]))
-    elif all(isinstance(c, str) for c in np.atleast_1d(x)):
-        wanted = list(np.atleast_1d(x))
-        missing = [c for c in wanted if c not in names]
-        if missing:
-            raise MethodIncompatibility(
-                f"{context}: effect modifier(s) {missing} are not in the "
-                f"forest's features {names}.",
-                recovery_hint="Pass names the forest was fitted on, or x=None.",
-            )
-        cols = [names.index(c) for c in wanted]
-    else:
-        supplied = np.asarray(x, dtype=float)
-        if supplied.shape[0] != x_all.shape[0]:
-            raise MethodIncompatibility(
-                f"{context}: x must have one row per training row "
-                f"({x_all.shape[0]}), got {supplied.shape[0]}.",
-                recovery_hint="Pass column names instead of an array.",
-            )
-        x_all = supplied
-        cols = list(range(x_all.shape[1]))
-        names = [f"x{k}" for k in cols]
-    policy_names = [names[c] if c < len(names) else f"x{c}" for c in cols]
-
-    common = dict(
-        cost=float(cost),
-        variance=variance,
-        cluster=cluster,
-        covariates=covariates,
-        alpha=float(alpha),
-        context=context,
-    )
-    mem_train = None if members is None else np.asarray(members)[halves.in_train]
-    mem_eval = None if members is None else np.asarray(members)[halves.in_eval]
-
-    # Fit on the training half's scores.
-    design_tr = fi.imputation_design(halves.train, context, covariates)
-    rows_tr = np.flatnonzero(design_tr.target)
-    scores_tr = design_tr.gamma[rows_tr] - float(cost)
-    x_tr = x_all[halves.in_train][:, cols][rows_tr]
-    design_ev = fi.imputation_design(halves.evaluate, context, covariates)
-    rows_ev = np.flatnonzero(design_ev.target)
-    x_ev = x_all[halves.in_eval][:, cols][rows_ev]
-    leaf = (
-        int(min_leaf_size)
-        if min_leaf_size is not None
-        else max(10, int(0.05 * rows_ev.size))
-    )
-    if rows_tr.size < 2 * leaf or rows_ev.size < 2:
-        raise DataInsufficient(
-            f"{context}: {rows_tr.size} treated cell(s) to fit the rule and "
-            f"{rows_ev.size} to price it is not enough for a leaf of {leaf}.",
-            recovery_hint="Lower min_leaf_size or depth, or widen the panel.",
-            diagnostics={"n_fit": int(rows_tr.size), "n_price": int(rows_ev.size)},
-        )
-    # PolicyTree owns the tree grower, the predictor and the rule printer;
-    # reuse them rather than growing a second implementation of a policy
-    # tree in the forest module.
-    helper = PolicyTree.__new__(PolicyTree)  # its __init__ wants a dataset
-    helper.max_depth = int(depth)
-    helper.min_leaf_size = leaf
-    helper.split_step = 1
-    if int(depth) <= 2:
-        tree = exact_policy_tree(
-            x_tr, scores_tr, max_depth=int(depth), min_leaf_size=leaf
-        )
-        method = f"exact search, depth {int(depth)}"
-    else:
-        tree = helper._grow_tree(x_tr, scores_tr, depth=0)  # type: ignore[attr-defined]
-        method = f"greedy search, depth {int(depth)}"
-
-    policy = helper._predict_tree(tree, x_ev)
-    priced = _policy_functional(
-        halves.evaluate, policy, members=mem_eval, **common  # type: ignore[arg-type]
-    )
-    rules = helper._tree_to_rules(tree, policy_names)
-    n_train = halves.n_groups(halves.in_train, forest, members)
-    n_eval = halves.n_groups(halves.in_eval, forest, members)
-    if min(n_train, n_eval) < _THIN_HALF:
-        warnings.warn(
-            f"{context}: the halves hold {n_train} and {n_eval} "
-            f"{halves.split_by}. A rule fitted on that many is close to "
-            "noise, and the value it earns measures the split as much as the "
-            "heterogeneity. Report it as exploratory.",
-            AssumptionWarning,
-            stacklevel=2,
-        )
-    del mem_train
-    return {
-        "rules": rules,
-        "tree": tree,
-        "policy": np.asarray(policy, dtype=int),
-        "policy_covariates": policy_names,
-        "value": priced["policy"],
-        "value_treat_all": priced["treat_all"],
-        "gain_over_treat_all": priced["gain_over_treat_all"],
-        "share_treated": priced["_share_treated"],
-        "cost": float(cost),
-        "n_cells_priced": priced["_n_cells"],
-        "n_cells_fitted": int(rows_tr.size),
-        "n_train_units": n_train,
-        "n_eval_units": n_eval,
-        "n_rows_dropped": halves.dropped,
-        "split_by": halves.split_by,
-        "split_random_state": int(random_state),
-        "method": method,
-        "estimand": (
-            "retrospective: value per treated cell of a rule applied to the "
-            "cells that were treated; effects on untreated cells are not "
-            "identified"
+    n_splits = int(n_splits)
+    if n_splits == 1:
+        _warn_single_split(context)
+    conditional_alpha = float(alpha) if n_splits == 1 else float(alpha) / 2.0
+    runs, n_failed = _run_splits(
+        lambda b: _forest_policy_tree_once(
+            forest,
+            depth=depth,
+            cost=cost,
+            x=x,
+            min_leaf_size=min_leaf_size,
+            train_frac=train_frac,
+            random_state=int(random_state) + b,
+            members=members,
+            alpha=conditional_alpha,
+            variance=variance,
+            cluster=cluster,
+            covariates=covariates,
+            _warn=(b == 0),
         ),
-        "alpha": float(alpha),
-        "diagnostics": {
-            "variance": variance,
-            "vcov": priced["_vcov"],
-            # The same gain read as a contrast of the first two functionals.
-            # It differs because the BJS centring is weight-dependent; see
-            # the note in the docstring before treating either as the other's
-            # mistake.
-            "gain_se_contrast": priced["_gain_se_contrast"],
-            "se_label": priced["_label"],
-            "min_leaf_size": leaf,
-            "imputation_covariates": list(design_ev.control_names),
-        },
+        n_splits,
+        context,
+    )
+    gains = np.array([r["gain_over_treat_all"]["estimate"] for r in runs])
+    # A rule is not a number, so the reported tree is the one from the split
+    # whose gain is the median -- a representative draw, not an average.
+    representative = int(np.argsort(gains)[len(gains) // 2])
+    out = dict(runs[representative])
+    for key in ("value", "value_treat_all", "gain_over_treat_all"):
+        out[key] = _vein([r[key] for r in runs], float(alpha), len(runs))
+    roots = [
+        (
+            r["policy_covariates"][r["tree"]["feature"]]
+            if r["tree"].get("type") == "split"
+            else "(no split)"
+        )
+        for r in runs
+    ]
+    thresholds = [
+        float(r["tree"]["threshold"]) if r["tree"].get("type") == "split" else np.nan
+        for r in runs
+    ]
+    shares = np.array([r["share_treated"] for r in runs], dtype=float)
+    counts: Dict[str, int] = {}
+    for name in roots:
+        counts[name] = counts.get(name, 0) + 1
+    out["n_splits"] = len(runs)
+    out["n_splits_skipped"] = n_failed
+    out["alpha"] = float(alpha)
+    out["split_random_state"] = int(random_state)
+    out["representative_split"] = representative
+    out["method"] = runs[representative]["method"] + (
+        f", VEIN over {len(runs)} splits" if n_splits > 1 else ""
+    )
+    out["diagnostics"] = dict(runs[representative]["diagnostics"])
+    out["diagnostics"]["split_stability"] = {
+        "root_covariate_counts": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
+        "root_covariate_modal_share": float(max(counts.values()) / len(runs)),
+        "threshold_min": float(np.nanmin(thresholds)) if runs else float("nan"),
+        "threshold_max": float(np.nanmax(thresholds)) if runs else float("nan"),
+        "share_treated_min": float(shares.min()),
+        "share_treated_max": float(shares.max()),
     }
+    return out

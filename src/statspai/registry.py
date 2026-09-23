@@ -2511,7 +2511,8 @@ def _build_registry() -> None:
                 "was exactly 0, the same-sample version averaged +0.048 and "
                 "called it significant 13% of the time, against +0.005 and "
                 "3.5% split. Value, treat-all value and the gain between "
-                "them share one exact, cluster- or dyad-robust covariance."
+                "them share one exact, cluster- or dyad-robust covariance. "
+                "Aggregates n_splits draws by VEIN."
             ),
             params=[
                 ParamSpec(
@@ -2545,13 +2546,25 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("min_leaf_size", "int", False, None),
                 ParamSpec(
+                    "n_splits",
+                    "int",
+                    False,
+                    21,
+                    "Splits aggregated by Chernozhukov et al. (2025) VEIN. A "
+                    "rule cannot be averaged, so the tree reported is the one "
+                    "from the median-gain split and split_stability says how "
+                    "far the rule itself moved. n_splits=1 warns.",
+                ),
+                ParamSpec(
                     "train_frac",
                     "float",
                     False,
                     0.5,
                     "Share of units (members) that fit the rule.",
                 ),
-                ParamSpec("random_state", "int", False, 0),
+                ParamSpec(
+                    "random_state", "int", False, 0, "Seeds the sequence of splits."
+                ),
                 ParamSpec(
                     "members",
                     "array",
@@ -2596,7 +2609,7 @@ def _build_registry() -> None:
             ],
             reference=(
                 "[@athey2021policy], [@borusyak2024revisiting], "
-                "[@kattenberg2023causal]"
+                "[@kattenberg2023causal], [@chernozhukov2025generic]"
             ),
             pre_conditions=[
                 "forest fitted with sp.causal_forest(..., fe='twoway')",
@@ -2662,13 +2675,25 @@ def _build_registry() -> None:
                     enum=["AUTOC", "QINI"],
                 ),
                 ParamSpec(
+                    "n_splits",
+                    "int",
+                    False,
+                    21,
+                    "Splits aggregated by Chernozhukov et al. (2025) VEIN: "
+                    "median estimate, median of conditional intervals built "
+                    "at 1 - alpha/2, p doubled. n_splits=1 is one draw and "
+                    "warns.",
+                ),
+                ParamSpec(
                     "train_frac",
                     "float",
                     False,
                     0.5,
                     "Share of units (members) that fit the rule.",
                 ),
-                ParamSpec("random_state", "int", False, 0, "Seed for the split."),
+                ParamSpec(
+                    "random_state", "int", False, 0, "Seeds the sequence of splits."
+                ),
                 ParamSpec(
                     "members",
                     "array",

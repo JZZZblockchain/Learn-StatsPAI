@@ -376,8 +376,28 @@ The price is sample: each forest sees half the units, so the rule is noisier
 than the one fitted on everything and the RATE it earns is a **lower bound**
 on what the full-sample rule is worth. Below roughly 30 units (or members) a
 side the function says so, because at that size the split is measuring
-itself. The trade panel of section 4 is exactly that case and is worth
-running as a cautionary example rather than a result:
+itself.
+
+### One split is a draw, not an estimate
+
+A single split fixes the answer to one partition, and with `random_state`
+in reach it is easy to keep the partition that agrees with you — the
+practice [chernozhukov2025generic] show invalidates inference. Their
+variational estimation and inference (VEIN) is what `n_splits` does, and it
+is the default:
+
+* the estimate is the **median** over splits;
+* the interval is the **median of the conditional intervals**, built at
+  `1 - alpha/2` so that their median covers at `1 - alpha`;
+* the p-value is **twice the median** conditional p-value.
+
+`n_splits=21` costs about twelve seconds on a 150-unit panel, 100 (as they
+use) about a minute, and `n_splits=1` reproduces one draw and warns.
+`estimate_min` / `estimate_max` / `estimate_iqr` report how far the split
+was moving the answer.
+
+The trade panel of section 4 shows why this matters. Fifteen countries,
+105 pairs, so a member split leaves seven or eight countries a side:
 
 ```python
 members = df[["country_i", "country_j"]].to_numpy()
@@ -387,20 +407,26 @@ sp.rate(cf, priorities=df["tau_true"], cluster="dyadic",
         members=members, covariates=C)
 # AUTOC 0.0809 (se 0.0310);  QINI 0.0222 (se 0.0111)
 
-# The same design, evaluated honestly -- 15 countries, so 7 or 8 a side.
-[sp.rate_split(cf, members=members, covariates=C, random_state=s)["estimate"]
- for s in range(6)]
+# Single splits, one seed each -- six different answers.
+[sp.rate_split(cf, members=members, covariates=C,
+               n_splits=1, random_state=s)["estimate"] for s in range(6)]
 # [-0.075, -0.040, +0.037, -0.009, -0.003, +0.013]
-#  ... and two of those six report se = NaN: the dyadic variance went
-#  non-positive, which is the estimator saying the half is too thin.
+
+# The default, aggregating 21 of them.
+sp.rate_split(cf, members=members, covariates=C)
+# estimate +0.0001, 95% CI [-0.0566, +0.0492], p 0.54
+#   n_splits 20, n_splits_skipped 1, n_splits_without_interval 7
+#   estimate_min -0.0752, estimate_max +0.0510
 ```
 
-Seed 0 alone would have read as a *significant negative* AUTOC, 95% CI
-[-0.133, -0.017]. It is split noise. With 105 pairs but only 15 countries,
-dropping the 1,176 pair-years that straddle the halves leaves a training
-forest that has seen seven countries, and the rule it learns is close to
-random. Report `sp.rate` as a diagnostic here, bring an external rule, or
-get more countries -- do not report one split as a test.
+Seed 0 alone would have read as a **significant negative** AUTOC, 95% CI
+[-0.133, -0.017]. VEIN reports what is actually there: nothing, on this
+sample, with an interval that says so. Two of the bookkeeping fields earn
+their place here — one partition left the evaluation half with no imputable
+treated cell and was skipped as inadmissible (it would otherwise have
+destroyed the whole call), and seven had a non-positive dyadic variance and
+so contributed an estimate but no interval. Both are the estimator saying
+fifteen countries is not enough, which is the honest reading.
 
 Monte Carlo evidence (200 replications; N = 150 units, T = 8, staggered
 adoption selected on the unit effect, 250 trees; `tau = 0.3 + b z` with `z`
@@ -477,6 +503,18 @@ and the split costs almost nothing when the heterogeneity is real: with
 `tau = 0.3 + 0.8 z` and `cost = 0.3` the oracle gain is `0.8 phi(0) =
 0.3191`, the split-sample estimate averaged **0.3189** at 99.5% power, and
 the same-sample one **0.3316**. There is no flag to turn the split off.
+
+**Aggregated over splits, like everything else here.** `n_splits` defaults
+to 21 and the value, the treat-all value and the gain are each VEIN-medians
+[chernozhukov2025generic]. A rule cannot be averaged, so the tree reported
+is the one from the median-gain split, and
+`diagnostics["split_stability"]` says how often each covariate was chosen at
+the root and how far the thresholds and treated shares moved. *A tight
+interval on the value of a rule whose root covariate changes from split to
+split is not evidence for that rule.* Note that each feature is aggregated
+on its own, so with `n_splits > 1` the three medians do not satisfy
+`gain = value - value_treat_all`; that identity holds within a split, and
+`n_splits=1` reports it directly.
 
 **What it adds: the gain has a standard error.** Value, treat-all value and
 the gain between them are three linear functionals of the same `y` from one
