@@ -8136,7 +8136,7 @@ def _build_registry() -> None:
                 ".summary(), .diagnostics."
             ),
             example=(
-                "sp.dynamic_dml(df, y='sales', treat='price', unit='store', "
+                "sp.dynamic_dml(df, y='sales', treat='price', id='store', "
                 "time='week', covariates=['stock'])"
             ),
             tags=[

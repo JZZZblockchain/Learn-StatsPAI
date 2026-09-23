@@ -14738,7 +14738,7 @@
     "category": "causal",
     "cost_profile": "",
     "description": "Dynamic Double/Debiased ML for a treatment assigned repeatedly over time (Lewis & Syrgkanis 2021). Use it when the treatment moves the state that drives later treatment: controlling for the later state blocks the indirect path, not controlling for it leaves the confounding in. Returns the effect of intervening on each period's treatment on the final outcome, the total sequence effect, and the joint covariance -- so a contrast across periods has an honest standard error instead of a sum of variances. Optional linear heterogeneity in baseline modifiers. Reproduces econml's DynamicDML to 1e-15 given the same folds and learners. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
-    "example": "sp.dynamic_dml(df, y='sales', treat='price', unit='store', time='week', covariates=['stock'])",
+    "example": "sp.dynamic_dml(df, y='sales', treat='price', id='store', time='week', covariates=['stock'])",
     "failure_modes": [
       {
         "alternative": "sp.dml_panel",

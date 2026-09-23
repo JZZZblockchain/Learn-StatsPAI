@@ -8,6 +8,8 @@ is not; plus the input contracts of ``clusters=`` / ``fe=``.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -126,14 +128,19 @@ class TestFixedEffectsForest:
         assert 0 < diag["share_units_switching_treatment"] < 1
 
     def test_doubly_robust_averages_are_refused(self, heterogeneous):
-        # No propensity: the ATE over all cells and RATE stay refused; the
-        # effect on treated cells and the BLP use imputation scores instead
-        # (tests/test_forest_fe_imputation.py).
+        # No propensity, so the ATE over *all* cells stays refused: parallel
+        # trends identifies the effect on treated cells and nothing else.
+        # Everything that can be read off the imputation scores instead --
+        # the ATT, the BLP, and since 1.31.0 the RATE curve -- is available
+        # (tests/test_forest_fe_imputation.py, tests/test_forest_rate_fe.py).
         df, cf = heterogeneous
         with pytest.raises(MethodIncompatibility, match="fixed effects"):
             cf.average_treatment_effect()
-        with pytest.raises(MethodIncompatibility, match="fixed effects"):
-            sp.rate(cf)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", AssumptionWarning)
+            curve = sp.rate(cf)
+        assert curve["cate_source"] == "imputation_scores"
+        assert curve["n"] == curve["n_treated_cells"]
         effect = cf.ate()  # plug-in value survives, inference error recorded
         assert np.isfinite(float(effect))
         assert effect.inference_error is not None
