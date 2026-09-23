@@ -2489,7 +2489,7 @@
     ],
     "category": "causal",
     "cost_profile": "",
-    "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test.",
+    "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "example": "sp.forest_group_effects(cf, members=df[['country_i', 'country_j']].to_numpy(), scale='percent')",
     "failure_modes": [
       {
@@ -2510,7 +2510,7 @@
     ],
     "reference": "[@borusyak2024revisiting], [@chernozhukov2025generic], [@aronow2015cluster], [@aytug2026euro]",
     "signature": {
-      "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test.",
+      "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
       "name": "forest_group_effects",
       "parameters": {
         "properties": {
@@ -2527,9 +2527,9 @@
             "description": "None (forest clusters), 'dyadic' (needs members) or cluster ids.",
             "type": "string"
           },
-          "controls": {
+          "covariates": {
             "default": "none",
-            "description": "fe= forests: covariates in the untreated outcome model ('none' = did_imputation, 'auto' = time-varying x/w, or names).",
+            "description": "fe= forests: covariates in the untreated outcome model ('none' = did_imputation, 'auto' = time-varying x/w, or names). controls= is accepted as an alias.",
             "items": {
               "type": "string"
             },
@@ -2582,9 +2582,10 @@
     "typical_n_min": null,
     "validation_notes": [
       "tests/reference_parity/test_fe_forest_imputation_recovery.py",
+      "Known-truth recovery (analytical-only) -- tests/reference_parity/test_fe_forest_imputation_recovery.py",
       "API/unit contract evidence: tests/test_forest_fe_imputation.py"
     ],
-    "validation_status": "api_stable"
+    "validation_status": "validated"
   },
   {
     "alternatives": [
@@ -2683,9 +2684,9 @@
             "description": "Significance level for confidence intervals and tests.",
             "type": "number"
           },
-          "controls": {
+          "covariates": {
             "default": "none",
-            "description": "Control-variable column names.",
+            "description": "Covariate matrix, DataFrame, or column names.",
             "items": {
               "type": "string"
             },
@@ -30510,7 +30511,7 @@
             "description": "Level for ``ci_low`` / ``ci_high``.",
             "type": "number"
           },
-          "controls": {
+          "covariates": {
             "default": "none",
             "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
             "type": "string"
@@ -30610,7 +30611,7 @@
             "description": "Level for ``ci_low`` / ``ci_high``.",
             "type": "number"
           },
-          "controls": {
+          "covariates": {
             "default": "none",
             "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
             "type": "string"
@@ -30888,9 +30889,9 @@
             "description": "Propensity scores are clipped to ``[clip, 1-clip]`` before the inverse-propensity terms of the ATE / ATT / ATC scores. ``grf`` does not clip; ``clip=0`` reproduces it, and the clip is inert whenever all propensities already lie inside the band.",
             "type": "number"
           },
-          "controls": {
+          "covariates": {
             "default": "none",
-            "description": "Forests with fixed effects only: covariates in the untreated outcome model ``Y(0) = alpha_i + gamma_t + C' beta``. ``'none'`` is :func:`statspai.did_imputation` without covariates (same estimate; same standard error with ``variance='bjs'``). ``'auto'`` adds the effect modifiers and controls that vary within units; use it when a time-varying covariate drives the untreated outcome and is not itself affected by the treatment.",
+            "description": "Forests with fixed effects only: covariates in the untreated outcome model ``Y(0) = alpha_i + gamma_t + C' beta``. ``'none'`` is :func:`statspai.did_imputation` without covariates (same estimate; same standard error with ``variance='bjs'``). ``'auto'`` adds the effect modifiers and covariates that vary within units; use it when a time-varying covariate drives the untreated outcome and is not itself affected by the treatment.",
             "type": "string"
           },
           "forest": {

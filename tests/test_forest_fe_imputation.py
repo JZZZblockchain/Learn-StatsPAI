@@ -119,7 +119,7 @@ def test_att_equals_did_imputation_on_mpdta():
     assert got["se"] == pytest.approx(ref.se, rel=1e-9)
     assert got["estimand"] == "ATT" and got["method"] == "imputation"
     # The time-invariant covariate is absorbed by the unit effect.
-    assert got["imputation_controls"] == []
+    assert got["imputation_covariates"] == []
 
 
 def test_att_equals_did_imputation_unbalanced():
@@ -134,7 +134,7 @@ def test_att_equals_did_imputation_unbalanced():
     ref = sp.did_imputation(
         df, y="y", group="id", time="t", first_treat="first_obs", cluster="id"
     )
-    got = cf.average_treatment_effect("treated", variance="bjs", controls="none")
+    got = cf.average_treatment_effect("treated", variance="bjs", covariates="none")
     assert got["estimate"] == pytest.approx(ref.estimate, rel=1e-9)
     assert got["se"] == pytest.approx(ref.se, rel=1e-8)
 
@@ -307,19 +307,19 @@ def test_currency_union_att_recovers_truth(late):
         n_estimators=300,
         random_state=0,
     )
-    res = cf.average_treatment_effect("treated", controls="auto")
+    res = cf.average_treatment_effect("treated", covariates="auto")
     truth = df.attrs["true_att"]
     assert abs(res["estimate"] - truth) < 2 * res["se"]
     # GDP varies within pairs and enters Y(0): 'auto' keeps it.
-    assert "log_gdp_prod" in res["imputation_controls"]
-    assert "pre_trade" not in res["imputation_controls"]
+    assert "log_gdp_prod" in res["imputation_covariates"]
+    assert "pre_trade" not in res["imputation_covariates"]
     # Without it (the did_imputation default) the untreated model is
     # misspecified by pair-specific GDP trends.
     bad = cf.average_treatment_effect("treated")
-    assert bad["imputation_controls"] == []
+    assert bad["imputation_covariates"] == []
     assert abs(bad["estimate"] - truth) > abs(res["estimate"] - truth)
-    named = cf.average_treatment_effect("treated", controls=["log_gdp_prod"])
-    assert named["imputation_controls"] == ["log_gdp_prod"]
+    named = cf.average_treatment_effect("treated", covariates=["log_gdp_prod"])
+    assert named["imputation_covariates"] == ["log_gdp_prod"]
 
 
 # --------------------------------------------------------------------------- #
@@ -465,7 +465,7 @@ def _lead_ols(df, rows, lead_cols):
 
 def test_pretrend_regression_matches_dummy_ols(forest, panel):
     groups = np.where(panel["x1"] > 0, "hi", "lo")
-    res = sp.cate_pretrend_test(forest, groups=groups, leads=2, controls="none")
+    res = sp.cate_pretrend_test(forest, groups=groups, leads=2, covariates="none")
     rows = panel["d"] == 0
     rel = np.where(panel.first_treat > 0, panel.t - panel.first_treat, 0)
     cols, keys = [], []
@@ -516,8 +516,8 @@ def test_array_controls_are_cached_by_content(forest, panel):
     seen = {}
     for _ in range(6):
         C = rng.standard_normal((len(panel), 1))
-        est = forest.average_treatment_effect("treated", controls=C)["estimate"]
-        fresh = fi.imputation_design(_fe(panel, n_estimators=50), controls=C)
+        est = forest.average_treatment_effect("treated", covariates=C)["estimate"]
+        fresh = fi.imputation_design(_fe(panel, n_estimators=50), covariates=C)
         ref = np.nanmean(fresh.gamma[fresh.target])
         assert est == pytest.approx(ref, rel=1e-10)
         seen[est] = True

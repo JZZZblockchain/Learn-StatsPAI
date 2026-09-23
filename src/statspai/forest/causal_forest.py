@@ -310,7 +310,7 @@ class CausalForest(BaseModel):
         ----------
         formula : str, optional
             Formula specification in the form "Y ~ T | X1 + X2 + ... [| W1 + W2 + ...]"
-            where Y is outcome, T is treatment, X are effect modifiers, W are controls
+            where Y is outcome, T is treatment, X are effect modifiers, W are covariates
         data : pd.DataFrame, optional
             Data containing all variables if using formula interface
         Y : array-like, optional
@@ -399,7 +399,7 @@ class CausalForest(BaseModel):
         if W is not None and len(W) != n_samples:
             raise MethodIncompatibility(
                 "CausalForest.fit(): W must have the same row count as Y.",
-                recovery_hint="Align controls to the outcome sample.",
+                recovery_hint="Align covariates to the outcome sample.",
                 diagnostics={"n_y": int(len(Y)), "n_w": int(len(W))},
             )
         if n_samples < 3:
@@ -431,7 +431,7 @@ class CausalForest(BaseModel):
         if W is not None and not np.isfinite(W).all():
             raise MethodIncompatibility(
                 "CausalForest.fit(): W contains NaN or infinite values.",
-                recovery_hint="Drop or impute non-finite controls.",
+                recovery_hint="Drop or impute non-finite covariates.",
             )
         n_tree_samples = int(float(self.max_samples) * n_samples)
         min_tree_samples = 2 if self.honest else 1
@@ -969,7 +969,7 @@ class CausalForest(BaseModel):
         x_part = parts[1].strip()
         x_names = [name.strip() for name in x_part.split("+")]
 
-        # Parse controls (W) if provided
+        # Parse covariates (W) if provided
         w_names = []
         if len(parts) > 2:
             w_part = parts[2].strip()
@@ -1001,7 +1001,7 @@ class CausalForest(BaseModel):
         return Y, T, X, W
 
     def _validate_fit_controls(self) -> None:
-        """Validate scalar controls before fitting expensive nuisance models."""
+        """Validate scalar covariates before fitting expensive nuisance models."""
         if (
             not isinstance(self.n_estimators, (int, np.integer))
             or isinstance(self.n_estimators, bool)
@@ -1564,6 +1564,7 @@ class CausalForest(BaseModel):
             index=pd.Index(range(1, counts.shape[0] + 1), name="depth"),
         )
 
+    @accepts_aliases(_strict=True, controls="covariates")
     def average_treatment_effect(
         self,
         X: Optional[np.ndarray] = None,
@@ -1572,7 +1573,7 @@ class CausalForest(BaseModel):
         alpha: float = 0.05,
         clip: float = 0.01,
         variance: str = "forest",
-        controls: Any = "none",
+        covariates: Any = "none",
     ) -> Dict[str, float]:
         """GRF-style ATE/ATT/ATC/ATO aggregation of CATE predictions.
 
@@ -1602,9 +1603,10 @@ class CausalForest(BaseModel):
             alpha=alpha,
             clip=clip,
             variance=variance,
-            controls=controls,
+            covariates=covariates,
         )
 
+    @accepts_aliases(_strict=True, controls="covariates")
     def group_effects(
         self,
         by: Any = None,
@@ -1616,7 +1618,7 @@ class CausalForest(BaseModel):
         alpha: float = 0.05,
         scale: str = "level",
         min_rows: int = 1,
-        controls: Any = "none",
+        covariates: Any = "none",
     ) -> pd.DataFrame:
         """Average effects by group; see :func:`statspai.forest_group_effects`."""
         from .forest_heterogeneity import forest_group_effects
@@ -1631,7 +1633,7 @@ class CausalForest(BaseModel):
             alpha=alpha,
             scale=scale,
             min_rows=min_rows,
-            controls=controls,
+            covariates=covariates,
         )
 
     def forest_diagnostics(
@@ -1681,7 +1683,7 @@ class CausalForest(BaseModel):
             "",
             f"Number of observations:   {self.data_info.get('nobs', 'Unknown')}",
             f"Number of features:       {self.data_info.get('n_features', 'Unknown')}",
-            f"Number of controls:       {self.data_info.get('n_controls', 0)}",
+            f"Number of covariates:       {self.data_info.get('n_controls', 0)}",
             "",
             f"Mean CATE (plug-in):      {ate:.6f}",
             "=" * 60,
@@ -1737,12 +1739,13 @@ class CausalForest(BaseModel):
         names = self._feature_names or [f"X{j}" for j in range(k)]
         return pd.Series(importance, index=names).sort_values(ascending=False)
 
+    @accepts_aliases(_strict=True, controls="covariates")
     def best_linear_projection(
         self,
         X_test: Optional[np.ndarray] = None,
         alpha: float = 0.05,
         clip: float = 0.01,
-        controls: Any = "none",
+        covariates: Any = "none",
     ) -> pd.DataFrame:
         r"""Best Linear Projection (BLP) of CATE on features (Semenova-Chernozhukov 2021).
 
@@ -1796,7 +1799,7 @@ class CausalForest(BaseModel):
         of every treated cell (unit and period effects fitted on untreated
         cells) and the regression runs over treated cells; standard errors
         come from the exact linear weights of that estimator, clustered by
-        the forest's clusters.  ``controls`` adds covariates to that
+        the forest's clusters.  ``covariates`` adds covariates to that
         untreated model (see :func:`statspai.average_treatment_effect`).
         See :func:`statspai.forest_group_effects`.
 
@@ -1874,7 +1877,12 @@ class CausalForest(BaseModel):
                 else 0
             )
             return _gi.best_linear_projection(
-                self, A, names, alpha=alpha_value, clip=clip_value, controls=controls
+                self,
+                A,
+                names,
+                alpha=alpha_value,
+                clip=clip_value,
+                covariates=covariates,
             )
 
         if X_test is None:

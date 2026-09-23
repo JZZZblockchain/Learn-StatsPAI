@@ -371,6 +371,7 @@ def _resolve_calibration_method(forest: "CausalForest", method: str) -> str:
     return "imputation" if binary and twoway else "within"
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def calibration_test(
     forest: "CausalForest",
     X: Optional[np.ndarray] = None,
@@ -379,7 +380,7 @@ def calibration_test(
     alpha: float = 0.05,
     vce: str = "HC3",
     method: str = "auto",
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> pd.DataFrame:
     """Best-linear-predictor calibration test of CATEs [@chernozhukov2025generic].
 
@@ -425,7 +426,7 @@ def calibration_test(
     heterogeneity but whose slope is not a de-attenuation factor.
 
     .. versionchanged:: 1.30.0
-       ``method=`` / ``controls=`` added; forests with two-way fixed
+       ``method=`` / ``covariates=`` added; forests with two-way fixed
        effects and a binary treatment default to the imputation regression.
        ``t`` / ``p`` are ``grf``'s: each coefficient against 0, one-sided,
        Student t (the ``null`` column is gone; ``t_vs_zero`` /
@@ -449,7 +450,7 @@ def calibration_test(
         Forests with fixed effects only: ``'auto'`` is ``'imputation'`` for
         ``fe='twoway'`` with a binary treatment and ``'within'`` otherwise.
         Other forests accept only ``'auto'``.
-    controls : 'none', 'auto', list of str or array, default 'none'
+    covariates : 'none', 'auto', list of str or array, default 'none'
         Covariates in the untreated outcome model of the imputation
         regression (see :func:`average_treatment_effect`).
 
@@ -518,7 +519,7 @@ def calibration_test(
         if _resolve_calibration_method(forest, method) == "imputation":
             from ._fe_imputation import calibration_fe
 
-            return calibration_fe(forest, alpha=alpha_value, controls=controls)
+            return calibration_fe(forest, alpha=alpha_value, covariates=covariates)
         return _gi.calibration_blp(forest, alpha=alpha_value, vcov_type=vce)
 
     if method != "auto":
@@ -1336,6 +1337,7 @@ def _stored_nuisances(
     return None
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def average_treatment_effect(
     forest: "CausalForest",
     X: Optional[np.ndarray] = None,
@@ -1344,7 +1346,7 @@ def average_treatment_effect(
     alpha: float = 0.05,
     clip: float = 0.01,
     variance: str = "forest",
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> Dict[str, Any]:
     """Aggregate CATE predictions into ATE/ATT/ATC/ATO targets.
 
@@ -1425,12 +1427,12 @@ def average_treatment_effect(
         whenever all propensities already lie inside the band.
     variance : {'forest', 'bjs'}, default 'forest'
         Forests with fixed effects only (see above); ignored otherwise.
-    controls : 'none', 'auto', list of str or array, default 'none'
+    covariates : 'none', 'auto', list of str or array, default 'none'
         Forests with fixed effects only: covariates in the untreated outcome
         model ``Y(0) = alpha_i + gamma_t + C' beta``.  ``'none'`` is
         :func:`statspai.did_imputation` without covariates (same estimate;
         same standard error with ``variance='bjs'``).  ``'auto'`` adds the
-        effect modifiers and controls that vary within units; use it when a
+        effect modifiers and covariates that vary within units; use it when a
         time-varying covariate drives the untreated outcome and is not
         itself affected by the treatment.
 
@@ -1532,7 +1534,7 @@ def average_treatment_effect(
             target_sample=target,
             alpha=alpha_value,
             variance=variance,
-            controls=controls,
+            covariates=covariates,
         )
 
     grf_forest = _gi.is_grf_forest(forest)
@@ -1980,12 +1982,13 @@ def forest_diagnostics(
 
 
 @accepts_aliases(X="newdata")
+@accepts_aliases(_strict=True, controls="covariates")
 def calibrate_cate(
     forest: "CausalForest",
     newdata: Optional[np.ndarray] = None,
     alpha: float = 0.05,
     method: str = "auto",
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> Dict[str, Any]:
     """Rescale CATE predictions by their best-linear-predictor calibration.
 
@@ -2043,7 +2046,7 @@ def calibrate_cate(
         Level for the reported slope confidence intervals.
     method : {'auto', 'imputation', 'within'}, default 'auto'
         Forests with fixed effects only; see :func:`calibration_test`.
-    controls : 'none', 'auto', list of str or array, default 'none'
+    covariates : 'none', 'auto', list of str or array, default 'none'
         Imputation regression only; see :func:`average_treatment_effect`.
 
     Returns
@@ -2087,7 +2090,7 @@ def calibrate_cate(
     if resolved == "imputation":
         from ._fe_imputation import calibration_fe
 
-        table = calibration_fe(forest, alpha=alpha_value, controls=controls)
+        table = calibration_fe(forest, alpha=alpha_value, covariates=covariates)
         tau_bar = float(table.attrs["tau_bar"])
     else:
         table = _gi.calibration_blp(forest, alpha=alpha_value)

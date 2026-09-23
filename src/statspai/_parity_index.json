@@ -1479,7 +1479,8 @@
     },
     {
       "additional_tests": [
-        "tests/reference_parity/test_calibration_test_parity.py"
+        "tests/reference_parity/test_calibration_test_parity.py",
+        "tests/reference_parity/test_fe_forest_imputation_recovery.py"
       ],
       "also_verified_by": [
         "reference_parity"
@@ -1629,6 +1630,7 @@
         "tests/external_parity/test_causalml_book.py",
         "tests/reference_parity/test_calibration_test_parity.py",
         "tests/reference_parity/test_causal_forest_aipw_recovery.py",
+        "tests/reference_parity/test_fe_forest_imputation_recovery.py",
         "tests/reference_parity/test_forest_ate_parity.py",
         "tests/reference_parity/test_forest_rate_honest_parity.py",
         "tests/reference_parity/test_grf_engine_statistical_parity.py",
@@ -4808,6 +4810,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_ml_causal_R_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "forest_group_effects",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_fe_forest_imputation_recovery.py"
       ],
       "tolerance": ""
     },
@@ -15280,6 +15299,7 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_truncreg_vce_parity.py",
         "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
       "also_verified_by": [

@@ -2412,12 +2412,13 @@ def _build_registry() -> None:
                 ),
                 ParamSpec("min_rows", "int", False, 1),
                 ParamSpec(
-                    "controls",
+                    "covariates",
                     "str|list",
                     False,
                     "none",
                     "fe= forests: covariates in the untreated outcome model "
-                    "('none' = did_imputation, 'auto' = time-varying x/w, or names).",
+                    "('none' = did_imputation, 'auto' = time-varying x/w, or "
+                    "names). controls= is accepted as an alias.",
                 ),
             ],
             returns=(
@@ -2544,7 +2545,7 @@ def _build_registry() -> None:
                     enum=["common", "by_group"],
                 ),
                 ParamSpec("alpha", "float", False, 0.05),
-                ParamSpec("controls", "str|list", False, "none"),
+                ParamSpec("covariates", "str|list", False, "none"),
             ],
             returns=(
                 "dict: coefficients, joint_zero, equal_across_groups, "

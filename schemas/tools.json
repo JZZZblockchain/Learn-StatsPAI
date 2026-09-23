@@ -943,9 +943,9 @@
           "description": "Propensity scores are clipped to ``[clip, 1-clip]`` before the inverse-propensity terms of the ATE / ATT / ATC scores. ``grf`` does not clip; ``clip=0`` reproduces it, and the clip is inert whenever all propensities already lie inside the band.",
           "type": "number"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
-          "description": "Forests with fixed effects only: covariates in the untreated outcome model ``Y(0) = alpha_i + gamma_t + C' beta``. ``'none'`` is :func:`statspai.did_imputation` without covariates (same estimate; same standard error with ``variance='bjs'``). ``'auto'`` adds the effect modifiers and controls that vary within units; use it when a time-varying covariate drives the untreated outcome and is not itself affected by the treatment.",
+          "description": "Forests with fixed effects only: covariates in the untreated outcome model ``Y(0) = alpha_i + gamma_t + C' beta``. ``'none'`` is :func:`statspai.did_imputation` without covariates (same estimate; same standard error with ``variance='bjs'``). ``'auto'`` adds the effect modifiers and covariates that vary within units; use it when a time-varying covariate drives the untreated outcome and is not itself affected by the treatment.",
           "type": "string"
         },
         "forest": {
@@ -2671,7 +2671,7 @@
           "description": "Level for the reported slope confidence intervals.",
           "type": "number"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
           "description": "Imputation regression only; see :func:`average_treatment_effect`.",
           "type": "string"
@@ -2775,7 +2775,7 @@
           "description": "Level for ``ci_low`` / ``ci_high``.",
           "type": "number"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
           "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
           "type": "string"
@@ -3122,9 +3122,9 @@
           "description": "Significance level for confidence intervals and tests.",
           "type": "number"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
-          "description": "Control-variable column names.",
+          "description": "Covariate matrix, DataFrame, or column names.",
           "items": {
             "type": "string"
           },
@@ -9898,7 +9898,7 @@
     "name": "forest_diagnostics"
   },
   {
-    "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test. Assumptions: fe= forests: parallel trends and no anticipation (imputation); pooled forests: unconfoundedness and overlap (AIPW); cluster='dyadic': many members; unreliable with few (warned). Pre-conditions: forest fitted with sp.causal_forest (default GRF engine); fe= forests: binary treatment and untreated periods for treated units; by / members aligned with the rows used to fit the forest. Failure modes: se is NaN with cluster='dyadic' -> The dyadic variance was not positive (few members); report pair-clustered SEs. Alternatives: sp.did_forest, sp.cate_by_group, sp.gate_test.",
+    "description": "Average treatment effects by group after a causal forest, with valid standard errors: means of unbiased scores (imputation scores on treated cells for fe= forests, AIPW scores for pooled forests) over groups given by labels, by quantiles of the out-of-bag CATE (GATES), or by membership in dyadic data (every country over all its pairs). Pair-clustered or dyadic-robust variance, equality Wald test. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact). Assumptions: fe= forests: parallel trends and no anticipation (imputation); pooled forests: unconfoundedness and overlap (AIPW); cluster='dyadic': many members; unreliable with few (warned). Pre-conditions: forest fitted with sp.causal_forest (default GRF engine); fe= forests: binary treatment and untreated periods for treated units; by / members aligned with the rows used to fit the forest. Failure modes: se is NaN with cluster='dyadic' -> The dyadic variance was not positive (few members); report pair-clustered SEs. Alternatives: sp.did_forest, sp.cate_by_group, sp.gate_test.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -9914,9 +9914,9 @@
           "description": "None (forest clusters), 'dyadic' (needs members) or cluster ids.",
           "type": "string"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
-          "description": "fe= forests: covariates in the untreated outcome model ('none' = did_imputation, 'auto' = time-varying x/w, or names).",
+          "description": "fe= forests: covariates in the untreated outcome model ('none' = did_imputation, 'auto' = time-varying x/w, or names). controls= is accepted as an alias.",
           "items": {
             "type": "string"
           },
@@ -27203,7 +27203,7 @@
           "description": "Level for ``ci_low`` / ``ci_high``.",
           "type": "number"
         },
-        "controls": {
+        "covariates": {
           "default": "none",
           "description": "Covariates in the untreated outcome model of the imputation regression (see :func:`average_treatment_effect`).",
           "type": "string"

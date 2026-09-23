@@ -116,7 +116,7 @@ A within-unit design has no propensity `E[D | X]`, so the doubly-robust
 (AIPW) scores behind a pooled forest's averages do not exist. The FE forest's
 own model supplies another unbiased signal. Fit the unit and period effects
 on the **untreated** cells only (plus any time-varying covariates, see
-`controls` below) and impute each treated cell's untreated outcome
+`covariates` below) and impute each treated cell's untreated outcome
 [borusyak2024revisiting]:
 
 ```
@@ -146,15 +146,17 @@ sp.forest_group_effects(cf, by=...)       # group ATTs (see section 4)
   cohort x event-time means (conservative). The default `variance="forest"`
   first subtracts the out-of-bag forest prediction, which never uses the
   unit's own data because trees draw whole units.
-* **`controls`.** The default `controls="none"` is the pure two-way model,
-  i.e. exactly `sp.did_imputation` without covariates. `controls="auto"`
+* **`covariates`.** The default `covariates="none"` is the pure two-way
+  model, i.e. exactly `sp.did_imputation` without covariates (which spells
+  the same argument `controls=`; that spelling is accepted here too).
+  `covariates="auto"`
   adds the effect modifiers and controls that vary within units to the
   untreated model linearly (time-invariant ones are absorbed by the unit
   effect); a list of names selects some of them. If a time-varying covariate
   such as GDP drives the outcome, leaving it out gives the untreated outcome
   unit-specific trends and biases every average (section 4); a covariate
   that itself responds to the treatment must stay out. The identity with
-  `sp.did_imputation` holds for `controls="none"` (or covariates that do not
+  `sp.did_imputation` holds for `covariates="none"` (or covariates that do not
   vary within units).
 * **Two-way only.** Imputation needs period ids, so it requires
   `fe="twoway"`; `fe="unit"` forests keep the within calibration regression
@@ -214,10 +216,10 @@ pooled.average_treatment_effect("treated")          # 0.482 (se 0.041)
 cf = sp.causal_forest(data=df, y="log_trade", d="euro", x=x,
                       id="pair", time="year", fe="twoway", random_state=0)
 C = "auto"            # GDP varies within pairs and drives trade
-att = cf.average_treatment_effect("treated", controls=C)
+att = cf.average_treatment_effect("treated", covariates=C)
 # estimate 0.134, se 0.023, 95% CI [0.089, 0.179]; forest_plug_in 0.166;
-# imputation_controls ['log_gdp_prod', 'log_gdppc']
-cf.average_treatment_effect("treated")["estimate"]   # controls="none": 0.199
+# imputation_covariates ['log_gdp_prod', 'log_gdppc']
+cf.average_treatment_effect("treated")["estimate"]   # covariates="none": 0.199
 ```
 
 The pooled forest compares core pairs, which trade more *and* adopted, with
@@ -231,8 +233,8 @@ true 0.150; `tests/test_forest_fe_imputation.py` checks both designs.
 **Which covariates drive the heterogeneity.**
 
 ```python
-sp.calibration_test(cf, controls=C)     # differential slope 0.63 (se 0.19), p = 5e-4
-cf.best_linear_projection(controls=C)   # pre_trade 0.060 (se 0.021); GDP terms ~0
+sp.calibration_test(cf, covariates=C)     # differential slope 0.63 (se 0.19), p = 5e-4
+cf.best_linear_projection(covariates=C)   # pre_trade 0.060 (se 0.021); GDP terms ~0
 ```
 
 **Pair, country and period effects.** `members` makes each country a group
@@ -242,7 +244,7 @@ that contains all of its pairs, the aggregation behind the country tables of
 ```python
 members = df[["country_i", "country_j"]].to_numpy()
 by_country = sp.forest_group_effects(cf, members=members, scale="percent",
-                                     controls=C)
+                                     covariates=C)
 #        n_rows  estimate_pct  ci_low_pct  ci_high_pct  forest_mean_pct
 # C07       185          32.5        20.2         46.0             26.6
 # C05       185          21.0        10.7         32.3             25.2
@@ -250,15 +252,15 @@ by_country = sp.forest_group_effects(cf, members=members, scale="percent",
 # C06       185           6.0        -1.5         14.2             17.8
 by_country.attrs["tests"]["equality_p"]             # 0.0008
 
-sp.forest_group_effects(cf, by="cate_quantile", controls=C)     # GATES
+sp.forest_group_effects(cf, by="cate_quantile", covariates=C)     # GATES
 #       estimate     se  forest_mean
 # Q1       0.067  0.031        0.069
 # Q4       0.192  0.030        0.267    Q4 - Q1 = 0.125 (se 0.036)
 
 period = np.where(df.year <= 2003, "1999-2003",
                   np.where(df.year <= 2008, "2004-2008", "2009-2015"))
-sp.forest_group_effects(cf, by=period, controls=C)  # 0.126, 0.126, 0.145
-sp.forest_group_effects(cf, by=df["pair"].to_numpy(), controls=C)  # per pair
+sp.forest_group_effects(cf, by=period, covariates=C)  # 0.126, 0.126, 0.145
+sp.forest_group_effects(cf, by=df["pair"].to_numpy(), covariates=C)  # per pair
 ```
 
 Group estimates average imputation scores, so each country's interval is a
@@ -294,7 +296,7 @@ sorts units by their mean OOB prediction and runs the pre-trend regression of
 [borusyak2024revisiting] on untreated cells with group x lead indicators:
 
 ```python
-pt = sp.cate_pretrend_test(cf, n_groups=2, leads=3, controls=C)
+pt = sp.cate_pretrend_test(cf, n_groups=2, leads=3, covariates=C)
 pt["equal_across_groups"]      # chi2(3) = 3.13, p = 0.37
 pt["joint_zero"]               # chi2(6) = 8.21, p = 0.22
 ```

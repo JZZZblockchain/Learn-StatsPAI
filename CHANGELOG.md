@@ -14,11 +14,12 @@ All notable changes to StatsPAI will be documented in this file.
   [borusyak2024revisiting] and every treated cell gets
   `Gamma = Y - alpha_hat_i - gamma_hat_t`, unbiased for its own effect
   whatever the heterogeneity. The forest is the proxy, `Gamma` the signal
-  [chernozhukov2025generic]. `controls="auto"` (or a list of names) adds
+  [chernozhukov2025generic]. `covariates="auto"` (or a list of names) adds
   time-varying covariates to the untreated model linearly; the default
-  `"none"` is the pure two-way model:
+  `"none"` is the pure two-way model. `controls=` is accepted as the
+  spelling `sp.did_imputation` uses:
   - `cf.average_treatment_effect("treated")` returns the imputation ATT.
-    With the default `controls="none"` it *is* `sp.did_imputation`:
+    With the default `covariates="none"` it *is* `sp.did_imputation`:
     identical estimate on `mpdta` (1e-13) and, with `variance="bjs"`,
     identical standard error (5e-15 relative), so it inherits that
     estimator's Stata/R parity. The default

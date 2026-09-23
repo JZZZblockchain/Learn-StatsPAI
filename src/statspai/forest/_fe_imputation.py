@@ -111,8 +111,8 @@ def _check_binary(T: np.ndarray, context: str) -> None:
         )
 
 
-def _candidate_controls(forest: Any, controls: Any) -> Tuple[np.ndarray, List[str]]:
-    """Resolve ``controls`` into an (n, k) matrix and names."""
+def _candidate_covariates(forest: Any, covariates: Any) -> Tuple[np.ndarray, List[str]]:
+    """Resolve ``covariates`` into an (n, k) matrix and names."""
     n = int(len(forest._Y_original))
     X = np.asarray(forest._X_original, dtype=float)
     W = getattr(forest, "_fe_W", None)
@@ -124,67 +124,68 @@ def _candidate_controls(forest: Any, controls: Any) -> Tuple[np.ndarray, List[st
         w_names = [f"W{j}" for j in range(W.shape[1])]
     pool = X if W is None else np.hstack([X, W])
     names = x_names + (w_names if W is not None else [])
-    if controls is None or (isinstance(controls, str) and controls == "none"):
+    if covariates is None or (isinstance(covariates, str) and covariates == "none"):
         return np.zeros((n, 0)), []
-    if isinstance(controls, str) and controls == "auto":
+    if isinstance(covariates, str) and covariates == "auto":
         return pool, names
-    if isinstance(controls, str):
+    if isinstance(covariates, str):
         raise MethodIncompatibility(
-            f"controls must be 'auto', 'none', a list of covariate names or an "
-            f"(n, k) array, got {controls!r}.",
+            f"covariates must be 'auto', 'none', a list of names or an "
+            f"(n, k) array, got {covariates!r}.",
             recovery_hint=(
-                "Use controls='auto' (time-varying effect modifiers and " "controls)."
+                "Use covariates='auto' (the time-varying effect modifiers and "
+                "controls of the forest)."
             ),
         )
-    if isinstance(controls, (list, tuple)) and all(
-        isinstance(c, str) for c in controls
+    if isinstance(covariates, (list, tuple)) and all(
+        isinstance(c, str) for c in covariates
     ):
-        missing = [c for c in controls if c not in names]
+        missing = [c for c in covariates if c not in names]
         if missing:
             raise MethodIncompatibility(
-                f"controls names {missing} are not effect modifiers or controls "
+                f"covariates names {missing} are not effect modifiers or controls "
                 "of the forest.",
                 recovery_hint=f"Choose among {names}, or pass an (n, k) array.",
             )
-        idx = [names.index(c) for c in controls]
-        return pool[:, idx], list(controls)
-    arr = np.asarray(controls, dtype=float)
+        idx = [names.index(c) for c in covariates]
+        return pool[:, idx], list(covariates)
+    arr = np.asarray(covariates, dtype=float)
     if arr.ndim == 1:
         arr = arr[:, None]
     if arr.shape[0] != n or not np.isfinite(arr).all():
         raise MethodIncompatibility(
-            "controls array must have one finite row per training row.",
+            "covariates array must have one finite row per training row.",
             recovery_hint="Pass an (n, k) numeric array aligned with the fit rows.",
         )
     return arr, [f"control{j}" for j in range(arr.shape[1])]
 
 
-def _cache_key(controls: Any) -> Any:
-    if controls is None or isinstance(controls, str):
-        return ("spec", controls)
-    if isinstance(controls, (list, tuple)) and all(
-        isinstance(c, str) for c in controls
+def _cache_key(covariates: Any) -> Any:
+    if covariates is None or isinstance(covariates, str):
+        return ("spec", covariates)
+    if isinstance(covariates, (list, tuple)) and all(
+        isinstance(c, str) for c in covariates
     ):
-        return ("names", tuple(controls))
+        return ("names", tuple(covariates))
     # Content hash, never id(): a temporary array can be freed and a new one
     # reuse its address, which would silently return another design.
     import hashlib
 
-    arr = np.ascontiguousarray(np.asarray(controls, dtype=float))
+    arr = np.ascontiguousarray(np.asarray(covariates, dtype=float))
     # Cache key only, never a security digest.
     digest = hashlib.sha1(arr.tobytes(), usedforsecurity=False).hexdigest()
     return ("array", arr.shape, digest)
 
 
 def imputation_design(
-    forest: Any, context: str = "imputation", controls: Any = "none"
+    forest: Any, context: str = "imputation", covariates: Any = "none"
 ) -> ImputationDesign:
     """Fit the untreated two-way model and form the imputation scores.
 
     ``Y(0) = alpha_i + gamma_t + C_it' beta`` is fitted on untreated cells.
-    ``controls="none"`` (default) is the pure two-way model -- exactly
+    ``covariates="none"`` (default) is the pure two-way model -- exactly
     :func:`statspai.did_imputation` without covariates; ``"auto"`` uses the
-    forest's effect modifiers and controls that vary within units
+    forest's effect modifiers and covariates that vary within units
     (time-invariant columns are absorbed by the unit effect and dropped); a
     list of names or an array selects them explicitly.  Controls enter
     linearly, as in :func:`statspai.did_imputation`, and must not be
@@ -194,7 +195,7 @@ def imputation_design(
     are no period ids, so neither period effects nor adoption cohorts are
     defined.
 
-    Cached on the forest per ``controls``.  Treated cells whose unit
+    Cached on the forest per ``covariates``.  Treated cells whose unit
     has no untreated period, or whose period has no untreated cell in the
     same connected component of the untreated unit-period graph, cannot be
     imputed; they are dropped from every target with a warning (and counted
@@ -204,7 +205,7 @@ def imputation_design(
     cache = getattr(forest, "_fe_imputation", None)
     if not isinstance(cache, dict):
         cache = {}
-    key = _cache_key(controls)
+    key = _cache_key(covariates)
     if key in cache:
         return cache[key]  # type: ignore[no-any-return]
     if getattr(forest, "fe", None) != "twoway":
@@ -298,10 +299,10 @@ def imputation_design(
         ),
         shape=(n, next_col),
     )
-    # Linear controls: keep columns that vary within units and periods on
+    # Linear covariates: keep columns that vary within units and periods on
     # the untreated cells (two-way demeaned residual variation), dropping
     # collinear ones.
-    C, cnames = _candidate_controls(forest, controls)
+    C, cnames = _candidate_covariates(forest, covariates)
     kept: List[int] = []
     if C.shape[1]:
         from ._grf_engine import _fe_residualize
@@ -691,7 +692,7 @@ def average_effect_fe(
     variance: str = "forest",
     cluster: Any = None,
     members: Any = None,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> Dict[str, Any]:
     """ATT of an FE forest by imputation, with its exact linear-weight SE."""
     context = "average_treatment_effect()"
@@ -708,7 +709,7 @@ def average_effect_fe(
             ),
             alternative_functions=["sp.forest_support"],
         )
-    design = imputation_design(forest, context, controls)
+    design = imputation_design(forest, context, covariates)
     _require_target_oob(forest, design, context, needed=variance == "forest")
     n = design.n
     mem = None if members is None else dyad_codes(members, n)[:2]
@@ -747,7 +748,7 @@ def average_effect_fe(
             if np.all(np.isfinite(tau[design.target]))
             else float("nan")
         ),
-        "imputation_controls": list(design.control_names),
+        "imputation_covariates": list(design.control_names),
         "weighting": (
             "equal per treated cell"
             if np.allclose(design.obs_weight, design.obs_weight[0])
@@ -765,11 +766,11 @@ def best_linear_projection_fe(
     variance: str = "forest",
     cluster: Any = None,
     members: Any = None,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> pd.DataFrame:
     """Regression of imputation scores on ``(1, A)`` over treated cells."""
     context = "best_linear_projection()"
-    design = imputation_design(forest, context, controls)
+    design = imputation_design(forest, context, covariates)
     _require_target_oob(forest, design, context, needed=variance == "forest")
     rows = np.flatnonzero(design.target)
     A_all = np.asarray(forest._X_original if A is None else A, dtype=float)
@@ -819,7 +820,7 @@ def calibration_fe(
     variance: str = "forest",
     cluster: Any = None,
     members: Any = None,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> pd.DataFrame:
     """BLP calibration of the OOB forest prediction against imputation scores.
 
@@ -831,7 +832,7 @@ def calibration_fe(
     itself rescales the predictions around their mean.
     """
     context = "calibration_test(method='imputation')"
-    design = imputation_design(forest, context, controls)
+    design = imputation_design(forest, context, covariates)
     _require_target_oob(forest, design, context)
     rows = np.flatnonzero(design.target)
     tau = _oob_tau(forest)[rows]
@@ -989,7 +990,7 @@ def group_effects(
     alpha: float = 0.05,
     scale: str = "level",
     min_rows: int = 1,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> pd.DataFrame:
     """Average effects by group with valid standard errors.
 
@@ -1023,7 +1024,7 @@ def group_effects(
     tau = _oob_tau(forest)
     fe = gi.is_fe_forest(forest)
     if fe:
-        design = imputation_design(forest, context, controls)
+        design = imputation_design(forest, context, covariates)
         _require_target_oob(
             forest,
             design,
@@ -1106,7 +1107,7 @@ def group_effects(
     tab.attrs["tests"] = _group_tests(tab["estimate"].to_numpy(), V, labels, alpha)
     tab.attrs["estimand"] = "ATT (treated cells)" if fe else "ATE (all rows)"
     if fe:
-        tab.attrs["imputation_controls"] = list(design.control_names)
+        tab.attrs["imputation_covariates"] = list(design.control_names)
         if design.n_not_imputable:
             tab.attrs["n_not_imputable"] = design.n_not_imputable
     return tab

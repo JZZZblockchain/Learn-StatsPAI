@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from .._aliases import accepts_aliases
 from ..exceptions import DataInsufficient, MethodIncompatibility
 from . import _fe_imputation as fi
 from . import _grf_inference as gi
@@ -49,6 +50,7 @@ def _require_grf(forest: Any, context: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def forest_group_effects(
     forest: Any,
     by: Any = None,
@@ -60,7 +62,7 @@ def forest_group_effects(
     alpha: float = 0.05,
     scale: str = "level",
     min_rows: int = 1,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> pd.DataFrame:
     """Average treatment effects by group, with valid standard errors.
 
@@ -118,12 +120,12 @@ def forest_group_effects(
         (interval endpoints are transformed, not re-derived).
     min_rows : int, default 1
         Drop groups with fewer eligible rows.
-    controls : "none", "auto", list of str or array, default "none"
+    covariates : "none", "auto", list of str or array, default "none"
         Forests with fixed effects only: covariates entering the untreated
         outcome model linearly, ``Y(0) = alpha_i + gamma_t + C' beta``.
         ``"none"`` is the pure two-way model of
         :func:`statspai.did_imputation`; ``"auto"`` adds the forest's effect
-        modifiers and controls that vary within units (time-invariant ones
+        modifiers and covariates that vary within units (time-invariant ones
         are absorbed by the unit effect).  Controls must not be affected by
         the treatment.
 
@@ -170,7 +172,7 @@ def forest_group_effects(
         alpha=alpha,
         scale=scale,
         min_rows=min_rows,
-        controls=controls,
+        covariates=covariates,
     )
 
 
@@ -415,6 +417,7 @@ def _two_way_demean(V: np.ndarray, unit: np.ndarray, time: np.ndarray) -> np.nda
     return np.column_stack(cols)
 
 
+@accepts_aliases(_strict=True, controls="covariates")
 def cate_pretrend_test(
     forest: Any,
     *,
@@ -423,7 +426,7 @@ def cate_pretrend_test(
     groups: Any = None,
     time_effects: str = "common",
     alpha: float = 0.05,
-    controls: Any = "none",
+    covariates: Any = "none",
 ) -> Dict[str, Any]:
     """Test whether predicted-effect groups had different pre-treatment trends.
 
@@ -465,7 +468,7 @@ def cate_pretrend_test(
         use one set of period effects; ``"by_group"`` gives each group its
         own period effects (separate event studies per group).
     alpha : float, default 0.05
-    controls : "none", "auto", list of str or array, default "none"
+    covariates : "none", "auto", list of str or array, default "none"
         Time-varying covariates added linearly, as in the imputation model
         of :func:`forest_group_effects`.
 
@@ -510,7 +513,7 @@ def cate_pretrend_test(
             f"{context}: time_effects must be 'common' or 'by_group'.",
             recovery_hint="Use time_effects='common'.",
         )
-    design = fi.imputation_design(forest, context, controls)
+    design = fi.imputation_design(forest, context, covariates)
     if not design.absorbing:
         raise MethodIncompatibility(
             f"{context} needs an absorbing (staggered) treatment so that "
@@ -606,7 +609,7 @@ def cate_pretrend_test(
         )
     n_leads_cols = len(cols)
     if design.control_names:
-        C, cnames = fi._candidate_controls(forest, controls)
+        C, cnames = fi._candidate_covariates(forest, covariates)
         C = C[:, [cnames.index(c) for c in design.control_names]]
         cols.extend(C[rows].T)
     L = np.column_stack(cols)
