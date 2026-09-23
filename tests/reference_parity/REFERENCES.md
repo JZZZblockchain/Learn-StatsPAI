@@ -305,6 +305,31 @@ package — not inferred:
   not reuse psmatch2's logit propensity score; substituting `logit(_pscore)`
   reproduces every per-covariate row while leaving Rubin's B 5.6% out.
 
+**`sp.truncreg` — the covariance options**
+(`test_truncreg_vce_parity.py`). Track A module 62 pins `truncreg`'s default
+estimates against R and Stata; `robust=` and `cluster=` are a separate
+promise, and one that was accepted and silently ignored before 1.29. The
+fixture freezes the **full** covariance matrix Stata reports under
+`vce(oim)`, `vce(robust)` and `vce(cluster cl)` on module 62's data
+(`cl = mod(_n - 1, 50)`), regenerable from
+`_fixtures/_generate_truncreg_vce_Stata.do` (Stata 18, built-in `truncreg`).
+StatsPAI reports `ln_sigma` where Stata reports `sigma`, so the comparison
+delta-maps our covariance with `J = diag(1, 1, 1, sigma)` — exact for a
+sandwich at the optimum. Observed gaps on the committed artifact:
+
+| quantity | `vce(oim)` | `vce(robust)` | `vce(cluster cl)` |
+| --- | ---: | ---: | ---: |
+| coefficients + sigma (rel) | 7.9e-8 | 7.9e-8 | 7.9e-8 |
+| standard errors (rel) | 2.4e-7 | 4.5e-7 | 4.6e-7 |
+| whole matrix, correlation units (abs) | 4.9e-7 | 9.0e-7 | 9.3e-7 |
+
+Off-diagonal entries are compared in correlation units
+(`|V - V_stata| / sqrt(V_ii V_jj)`) because a relative tolerance on a
+covariance that passes through zero is meaningless. The budget is sized to
+catch the failure that actually matters: a missing finite-sample factor
+would move the robust matrix by `n / (n - 1)` = 1e-3 and the clustered one
+by `G / (G - 1)` = 2e-2, three to four orders of magnitude outside it.
+
 **`sp.overlap_weights` — the generalized weighting family**
 (`test_overlap_weights_r_parity.py`). Frozen R fixture from
 `WeightIt::weightit(..., method = "glm", estimand = E)` on a committed

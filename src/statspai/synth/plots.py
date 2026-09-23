@@ -246,6 +246,32 @@ def synthplot(
 # ====================================================================== #
 
 
+# The ~20 estimators behind ``sp.synth(method=...)`` do not agree on what
+# they call the two series inside ``trajectory`` / ``effects_by_period``:
+# gsynth/cluster say ``treated`` + ``synthetic``, bsts says ``observed`` +
+# ``counterfactual``, fdid/kernel/kernel_ridge/bayesian say ``treated`` +
+# ``counterfactual``. The plotting layer used to hard-code one spelling per
+# branch, so ``sp.synth_compare(...).plot()`` raised ``KeyError`` as soon as
+# a method using the other spelling was in the pool — which the DEFAULT
+# method list always is. Resolve the alias here instead of renaming any
+# estimator's output column: that would be a breaking change for anyone
+# reading these frames directly (CLAUDE.md §12).
+_TREATED_COLS = ("treated", "observed")
+_SYNTH_COLS = ("synthetic", "counterfactual")
+
+
+def _column(frame: Any, *names: str) -> np.ndarray:
+    """Return the first present column among ``names`` as an ndarray."""
+    for name in names:
+        if name in frame:
+            col = frame[name]
+            return col.values if hasattr(col, "values") else np.asarray(col)
+    raise KeyError(
+        f"none of {names!r} found in trajectory frame; got "
+        f"{list(getattr(frame, 'columns', frame))}"
+    )
+
+
 def _extract_trajectories(
     result: CausalResult,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any, Any]:
@@ -280,25 +306,13 @@ def _extract_trajectories(
             ),
         )
 
-    # --- GSynth ---
+    # --- GSynth / BSTS ---
     if "trajectory" in mi:
         tj = mi["trajectory"]
         return (
-            (
-                tj["time"].values
-                if hasattr(tj["time"], "values")
-                else np.array(tj["time"])
-            ),
-            (
-                tj["treated"].values
-                if hasattr(tj["treated"], "values")
-                else np.array(tj["treated"])
-            ),
-            (
-                tj["synthetic"].values
-                if hasattr(tj["synthetic"], "values")
-                else np.array(tj["synthetic"])
-            ),
+            _column(tj, "time"),
+            _column(tj, *_TREATED_COLS),
+            _column(tj, *_SYNTH_COLS),
             mi.get("treatment_time"),
             mi.get("treated_unit", "Treated"),
         )
@@ -307,9 +321,9 @@ def _extract_trajectories(
     if "effects_by_period" in mi and "Y_synth" not in mi:
         ep = mi["effects_by_period"]
         return (
-            ep["time"].values,
-            ep["treated"].values,
-            ep["counterfactual"].values,
+            _column(ep, "time"),
+            _column(ep, *_TREATED_COLS),
+            _column(ep, *_SYNTH_COLS),
             mi.get("treatment_time"),
             mi.get("treated_unit", "Treated"),
         )

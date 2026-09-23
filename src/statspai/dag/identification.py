@@ -61,6 +61,62 @@ class IdentificationResult:
         status = "identifiable" if self.identifiable else "NOT identifiable"
         return f"IdentificationResult({status}: {self.estimand})"
 
+    def summary(self) -> str:
+        """Return a formatted multi-line summary of the ID query.
+
+        Every StatsPAI result object exposes ``.summary()`` (CLAUDE.md §3.3);
+        this one renders the identifiability verdict, the do-free estimand or
+        the hedge witnessing non-identifiability, and the c-components of the
+        ancestral semi-Markovian graph.
+
+        Examples
+        --------
+        >>> import statspai as sp
+        >>> g = sp.dag("Z -> X; Z -> Y; X -> Y")
+        >>> res = sp.identify(g, treatment="X", outcome="Y")
+        >>> "IDENTIFIABLE" in res.summary()
+        True
+        """
+        width = 70
+        verdict = "IDENTIFIABLE" if self.identifiable else "NOT IDENTIFIABLE"
+        lines = [
+            "=" * width,
+            "  Causal Identification (Shpitser-Pearl ID)",
+            "=" * width,
+            "",
+            f"  Verdict:   {verdict}",
+        ]
+        label = "Estimand" if self.identifiable else "Obstruction"
+        lines.append(f"  {label}:  {self.estimand}")
+        lines.append("")
+
+        if self.c_components:
+            lines.append("-" * width)
+            lines.append("  C-components of G[An(Y)]")
+            lines.append("-" * width)
+            for comp in self.c_components:
+                lines.append("    {" + ", ".join(sorted(comp)) + "}")
+            lines.append("")
+
+        if self.hedge is not None:
+            f_set, f_prime = self.hedge
+            lines.append("-" * width)
+            lines.append("  Hedge witness (proves non-identifiability)")
+            lines.append("-" * width)
+            lines.append("    F  = {" + ", ".join(sorted(f_set)) + "}")
+            lines.append("    F' = {" + ", ".join(sorted(f_prime)) + "}")
+            lines.append("")
+
+        if self.explanation:
+            lines.append("-" * width)
+            lines.append("  Explanation")
+            lines.append("-" * width)
+            lines.append(f"    {self.explanation}")
+            lines.append("")
+
+        lines.append("=" * width)
+        return "\n".join(lines)
+
 
 def identify(
     dag: Any,

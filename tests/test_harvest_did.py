@@ -98,5 +98,19 @@ def test_harvest_different_weighting_schemes_all_finite():
             continue
 
 
+def test_harvest_summary_renders_and_keeps_both_pretrend_keys():
+    """``.summary()`` died with ``KeyError: 'statistic'``: the shared DiD
+    machinery reads ``pretrend_test['statistic']`` and harvest_did emitted
+    only ``chi2``. Both keys are now present and must stay equal."""
+    res = sp.harvest_did(
+        _staggered_panel(), unit="id", time="t", outcome="y", cohort="g"
+    )
+    text = res.summary()
+    assert isinstance(text, str) and len(text) > 0
+    pretrend = res.model_info["pretrend_test"]
+    assert pretrend["statistic"] == pretrend["chi2"]
+    assert set(pretrend) >= {"statistic", "chi2", "df", "pvalue"}
+
+
 def test_harvest_registered():
     assert "harvest_did" in sp.list_functions()

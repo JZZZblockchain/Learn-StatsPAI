@@ -464,9 +464,26 @@ def harvest_did(
             )
         chi2 = float(b_pre @ np.linalg.pinv(V_pre) @ b_pre)
         pv = float(_chi2.sf(chi2, df=rank))
-        pretrend = {"chi2": chi2, "df": rank, "pvalue": pv}
+        # ``statistic`` is the DiD family's canonical key for this payload
+        # (_core / callaway_santanna / bjs_inference / did_multiplegt /
+        # did_imputation all use it, and CausalResult.summary() reads it).
+        # harvest_did emitted only ``chi2``, so .summary() died with
+        # ``KeyError: 'statistic'``. Emit both: the canonical key for the
+        # shared machinery, ``chi2`` kept as an alias so anything already
+        # reading it keeps working.
+        pretrend = {
+            "statistic": chi2,
+            "chi2": chi2,
+            "df": rank,
+            "pvalue": pv,
+        }
     else:
-        pretrend = {"chi2": float("nan"), "df": 0, "pvalue": float("nan")}
+        pretrend = {
+            "statistic": float("nan"),
+            "chi2": float("nan"),
+            "df": 0,
+            "pvalue": float("nan"),
+        }
 
     # --- CI / p-value -----------------------------------------------------
     from scipy.stats import norm

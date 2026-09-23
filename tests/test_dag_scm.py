@@ -8,6 +8,23 @@ import statspai as sp
 # ---------- ID algorithm ----------
 
 
+def test_identification_summary_renders_both_verdicts():
+    """Every result object owes a .summary(); this one must render the
+    verdict, the estimand or the hedge, and the c-components."""
+    ident = sp.identify(sp.dag("Z -> X; Z -> Y; X -> Y"), treatment="X", outcome="Y")
+    text = ident.summary()
+    assert "IDENTIFIABLE" in text and "NOT IDENTIFIABLE" not in text
+    assert ident.estimand in text
+    assert "C-components" in text
+    assert "Hedge" not in text
+
+    bowed = sp.identify(sp.dag("X -> Y; X <-> Y"), treatment="X", outcome="Y")
+    hedged = bowed.summary()
+    assert "NOT IDENTIFIABLE" in hedged
+    assert "Hedge witness" in hedged
+    assert "F' =" in hedged
+
+
 def test_id_backdoor_is_identifiable():
     """Classic confounder DAG -- P(Y | do(X)) identifiable via backdoor."""
     g = sp.dag("Z -> X; Z -> Y; X -> Y")

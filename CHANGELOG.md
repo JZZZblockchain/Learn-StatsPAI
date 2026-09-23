@@ -63,6 +63,19 @@ All notable changes to StatsPAI will be documented in this file.
   StatsPAI's defaults and 0.53 with `min_samples_leaf=20, max_depth=4`
   (GRF criterion: 0.50 either way), and a warning fires on the deep
   default.
+- **`sp.identify(...).summary()`**: the identification result now renders the
+  verdict, the do-free estimand or the hedge that witnesses
+  non-identifiability, and the c-components of `G[An(Y)]`, like every other
+  StatsPAI result object.
+- **Stata parity for `sp.truncreg`'s covariance options**
+  (`tests/reference_parity/test_truncreg_vce_parity.py`). Track A module 62
+  pinned only the default estimates; `robust=` and `cluster=` were accepted
+  and silently ignored before 1.29 and nothing pinned them afterwards. The
+  new fixture freezes the full covariance matrix Stata 18 reports under
+  `vce(oim)`, `vce(robust)` and `vce(cluster cl)` on module 62's data.
+  StatsPAI matches it entrywise to 9.3e-7 in correlation units (standard
+  errors to 4.6e-7 relative), against the 1e-3 / 2e-2 a missing
+  finite-sample factor would cost.
 - **`sp.datasets.currency_union_panel`**: a simulated dyadic trade panel
   with staggered currency-union adoption, known pair-level effects, and an
   optional late-adopter wave during a common downturn; its layout follows
@@ -125,6 +138,16 @@ bit-identical numbers (pinned regression tests in the new test files).
 
 ### Fixed
 
+- **`sp.synth_compare(...).plot()` raised `KeyError: 'counterfactual'`** on
+  the default method pool. The ~20 estimators behind `sp.synth(method=...)`
+  spell their trajectory columns differently (`treated` + `synthetic`,
+  `observed` + `counterfactual`, `treated` + `counterfactual`) and the
+  plotting layer hard-coded one spelling per branch. The extraction helper
+  now resolves the aliases; no estimator's output columns were renamed.
+- **`sp.harvest_did(...).summary()` raised `KeyError: 'statistic'`.** The
+  shared DiD machinery reads `pretrend_test["statistic"]`, which
+  `harvest_did` never emitted. It now emits both `statistic` and the
+  original `chi2` alias.
 - **`sp.causal_forest(data=, y=, d=, x=[...])` dropped the feature names**,
   so `cf.effect(df[x])`, `cf.predict(df)` and the BLP / importance tables
   saw `X0, X1, ...`, and a DataFrame with the right columns raised "missing
