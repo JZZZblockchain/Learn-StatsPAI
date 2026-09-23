@@ -2,6 +2,22 @@
 
 All notable changes to StatsPAI will be documented in this file.
 
+## [1.30.1] — 2026-09-24
+
+Documentation-only release. No code, default, or numerical output changes
+from 1.30.0; the estimators are byte-identical.
+
+### Fixed
+
+- **`docs/guides/stability.md` and `docs/jss_source_audit_dossier.md` still
+  quoted the 1.29.0 registry census.** 1.30.0 shipped them with 1,189
+  registered functions and 414 / 129 / 643 / 3 certified / validated /
+  api_stable / experimental symbols; the 1.30.0 registry has 1,195 and
+  414 / 130 / 648 / 3, with 544 certified-or-validated symbols backed by 483
+  registry-evidence source files. The JSS replication archive is built from
+  a tagged release and its claim linter checks these figures, so the
+  correction ships as a release rather than only on `main`.
+
 ## [1.30.0] — 2026-09-23
 
 Inference, mostly. Two lines of work land together: fixed-effect causal
