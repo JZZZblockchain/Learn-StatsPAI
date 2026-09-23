@@ -2078,6 +2078,10 @@ class CausalForest(BaseModel):
         .. versionchanged:: 1.29.0
            The float value was the plug-in average before 1.29.  See
            ``MIGRATION.md``.
+
+        .. versionchanged:: 1.30.0
+           Raises :class:`MethodIncompatibility` for a non-binary
+           treatment instead of averaging over the rows with ``T == 1``.
         """
         if not self.fitted_:
             raise MethodIncompatibility(
@@ -2114,6 +2118,17 @@ class CausalForest(BaseModel):
             raise MethodIncompatibility(
                 "CausalForest.att() requires finite treatment values.",
                 recovery_hint="Drop or impute rows with NaN or infinite treatments.",
+            )
+        # Refuse before aggregating: _scalar_effect falls back to the
+        # plug-in value when inference fails, and for a continuous
+        # treatment that value would be the mean CATE over rows whose dose
+        # equals one -- not an ATT.
+        if not np.all(np.isin(np.unique(T_arr), (0.0, 1.0))):
+            raise MethodIncompatibility(
+                "CausalForest.att() needs a binary treatment; with a "
+                "continuous treatment there is no treated group.",
+                recovery_hint="Use ate() for the average partial effect, or "
+                "refit with a binary treatment.",
             )
         mask = T_arr == 1
         if not np.any(mask):

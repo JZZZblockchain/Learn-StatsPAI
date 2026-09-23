@@ -1582,6 +1582,22 @@ def average_treatment_effect(
             "average_treatment_effect(): T contains NaN or infinite values.",
             recovery_hint="Drop or impute non-finite treatment rows.",
         )
+    # ATT and ATC condition on a treated / untreated group, which a
+    # continuous treatment does not define: ``T == 1`` there selects the
+    # rows whose dose happens to equal one (one year of schooling on the
+    # Card design), not a treated arm. grf refuses these targets for a
+    # non-binary W; so does StatsPAI, on both engines, rather than
+    # returning an average over an arbitrary slice labelled "ATT".
+    if target in ("treated", "control") and not np.all(
+        np.isin(np.unique(T_), (0.0, 1.0))
+    ):
+        raise MethodIncompatibility(
+            f"average_treatment_effect(): target_sample={target!r} needs a "
+            "binary treatment; with a continuous treatment there is no "
+            "treated or control group to average over.",
+            recovery_hint="Use target_sample='all' (average partial effect) "
+            "or 'overlap', or refit with a binary treatment.",
+        )
     if target == "treated" and not np.any(T_ == 1):
         raise DataInsufficient(
             "average_treatment_effect(): no treated observations for ATT.",
@@ -1610,11 +1626,10 @@ def average_treatment_effect(
     # into [clip, 1-clip]: on the Card design E[educ | X] is about 13
     # years, which clips to 0.99 and makes (T - e) / (e(1 - e)) about
     # 1{,}200. The score then returned an "ATE" of -1266 against a mean
-    # CATE of 0.086, with a p-value of 0.0000 attached. grf refuses the
-    # aggregation outright for non-binary treatment; StatsPAI reports the
-    # quantity that *is* defined -- the average of the fitted tau(x) --
-    # and says so, rather than raising on a fitted forest a user may only
-    # want a descriptive average from.
+    # CATE of 0.086, with a p-value of 0.0000 attached. The GRF engine
+    # uses grf's continuous-treatment score for the 'all' and 'overlap'
+    # targets, as grf does; the legacy engine has no such score and
+    # reports the average of the fitted tau(x), labelled as descriptive.
     binary_treatment = bool(np.all(np.isin(np.unique(T_), (0.0, 1.0))))
     if grf_forest:
         _require_training_rows(forest, X, None, T, "average_treatment_effect()")

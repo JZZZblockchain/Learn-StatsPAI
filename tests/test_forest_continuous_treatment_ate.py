@@ -9,9 +9,11 @@ clipped "propensity" ``E[educ | X]`` turned it into a ~1,200x multiplier and an
   doubly-robust score, whose debiasing weight is ``(W - W_hat) / Var(W | X)``
   with ``Var(W | X)`` estimated by an out-of-bag regression forest (the Riesz
   representer of the average effect in the partially linear model); ``overlap``
-  is the partially linear coefficient.  ``treated`` still falls back to the
-  descriptive plug-in average with a warning, and ``control`` fails loudly.
-* Legacy engine: every target falls back to the plug-in average with a warning.
+  is the partially linear coefficient.
+* ``treated`` and ``control`` raise on both engines, as in grf: a continuous
+  treatment defines no treated group, and ``T == 1`` would select the rows
+  with one year of schooling.
+* Legacy engine: ``all`` falls back to the plug-in average with a warning.
 """
 
 from __future__ import annotations
@@ -69,12 +71,15 @@ class TestContinuousTreatmentAggregation:
         beta = np.linalg.lstsq(design, Y_res, rcond=None)[0]
         assert payload["estimate"] == pytest.approx(beta[1], rel=1e-10)
 
-    def test_treated_target_warns_and_falls_back_to_plug_in(self, educ_forest):
-        with pytest.warns(AssumptionWarning, match="requires a binary treatment"):
-            payload = educ_forest.average_treatment_effect(target_sample="treated")
-        assert payload["method"] == "plug_in"
-        assert payload["plug_in_reason"] == "non_binary_treatment"
-        assert abs(payload["estimate"]) < 1.0
+    def test_treated_target_raises(self, educ_forest):
+        with pytest.raises(sp.MethodIncompatibility, match="needs a binary treatment"):
+            educ_forest.average_treatment_effect(target_sample="treated")
+
+    def test_att_raises_instead_of_averaging_the_dose_one_rows(self, educ_forest):
+        # Before 1.30 this returned the mean CATE over rows with educ == 1,
+        # printed as "ATT" with a zero-width interval.
+        with pytest.raises(sp.MethodIncompatibility, match="needs a binary treatment"):
+            educ_forest.att()
 
     def test_binary_treatment_still_uses_the_aipw_score(self, card):
         forest = _forest(card, "nearc4", discrete=True)
@@ -88,11 +93,8 @@ class TestContinuousTreatmentAggregation:
         forest = _forest(card, "nearc4", discrete=True)
         assert "descriptive SE" not in str(forest.ate())
 
-    def test_atc_on_a_continuous_treatment_raises_before_the_guard(self, educ_forest):
-        """``target_sample='control'`` needs ``T == 0`` rows; nobody has zero
-        years of schooling, so this fails loudly rather than aggregating over
-        an empty group."""
-        with pytest.raises(sp.DataInsufficient, match="no control observations"):
+    def test_atc_on_a_continuous_treatment_raises(self, educ_forest):
+        with pytest.raises(sp.MethodIncompatibility, match="needs a binary treatment"):
             educ_forest.average_treatment_effect(target_sample="control")
 
 
@@ -119,3 +121,7 @@ class TestLegacyEngineContinuousTreatment:
         with pytest.warns(AssumptionWarning):
             effect = legacy.ate()
         assert "descriptive SE" in str(effect)
+
+    def test_legacy_treated_target_raises(self, legacy):
+        with pytest.raises(sp.MethodIncompatibility, match="needs a binary treatment"):
+            legacy.average_treatment_effect(target_sample="treated")

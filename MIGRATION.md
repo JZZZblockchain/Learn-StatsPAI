@@ -5,6 +5,62 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="forest-continuous-att"></a>
+
+## Unreleased — ⚠️ causal forests with a continuous treatment refuse ATT and ATC
+
+**Who is affected.** Code that calls `cf.att()`, or
+`cf.average_treatment_effect(target_sample="treated")` / `"control"`, on a
+forest fitted with a non-binary treatment (`discrete_treatment=False`).
+
+**What changed.** These calls used to select the "treated" rows as
+`T == 1`. For a dose such as years of schooling, that is the handful of units
+whose dose happens to equal one, so the returned "ATT" was an average over an
+arbitrary slice, printed with a zero-width interval. They now raise
+`MethodIncompatibility`, as grf does for a non-binary treatment.
+
+```python
+cf.ate()                                                   # average partial effect (unchanged)
+cf.average_treatment_effect(target_sample="overlap")       # partially linear coefficient (unchanged)
+cf.att()                                                   # now raises MethodIncompatibility
+```
+
+**What to use instead.** `ate()` for the average partial effect. For effects
+among units above some dose, fit a forest on the binary indicator you mean
+(for example, `educ >= 16`) and call `att()` on that forest.
+
+---
+
+<a id="forest-grf-defaults"></a>
+
+## 1.29.0 — ⚠️ `sp.causal_forest` follows grf's defaults, and fitted effects move
+
+*(Added after release. The 1.29.0 CHANGELOG listed this under Changed.)*
+
+**Who is affected.** Anyone who reports CATE predictions, their spread, group
+effects, or calibration results from `sp.causal_forest` fitted with 1.28.0
+or earlier.
+
+**What changed.** The default forest is now grf's: `n_estimators=2000` (was
+100), honest subsampling without replacement (`bootstrap=True` raises), and
+nuisances from out-of-bag regression forests. Fitted effects are less noisy.
+On the bundled Card data (`educ` as a continuous treatment; `exper`,
+`expersq`, `black`, `south`, `smsa`; `random_state=42`):
+
+| | 1.28.0 | 1.29.0 | R grf 2.6.1 |
+| --- | --- | --- | --- |
+| CATE mean | 0.0793 | 0.0766 | 0.0762 |
+| CATE std. dev. | 0.0810 | 0.0164 | 0.0168 |
+| CATE Q25 / Q75 | 0.0575 / 0.1031 | 0.0633 / 0.0869 | 0.0634 / 0.0869 |
+
+The 1.28.0 spread was about five times what grf estimates on the same bytes.
+The difference comes from the engine, not the tree count: all three columns
+use 2,000 trees. Refit instead of reusing earlier heterogeneity results. To
+reproduce an old number, pass `split_rule="legacy"` (deprecated) with the
+same arguments. On this design it returns the 1.28.0 column exactly.
+
+---
+
 <a id="fe-forest-imputation"></a>
 
 ## Unreleased — ⚠️ causal forests with fixed effects: calibration uses imputation scores
@@ -85,9 +141,16 @@ mean of `cf.effect(X)` directly. Note that the old float does not have a
 valid standard error attached to it: the dispersion of fitted effects is not
 an influence-function variance for their mean.
 
-**Continuous treatments are unaffected**: there the aggregation already
-falls back to the plug-in average (see the 1.25.0 entry below), the method
-is reported as `plug_in`, and the float stays the plug-in value.
+**Continuous treatments.** *(Corrected after release. This paragraph
+originally said continuous treatments were unaffected.)* 1.29.0 also
+replaced the 1.25.0 plug-in fallback with grf's continuous-treatment
+debiased score, so `ate()` on a continuous treatment changed as well: it
+reports `method="aipw_continuous"`, and the float is that estimate. On the
+bundled Card data (`educ`, five covariates, `random_state=42`) the float went
+from 0.0793 in 1.28.0 to 0.0785; R grf 2.6.1 gives 0.0787. The plug-in value
+is still available in `e.detail["plug_in_estimate"]`. See also
+[forest-grf-defaults](#forest-grf-defaults) and, for `att()`,
+[forest-continuous-att](#forest-continuous-att).
 
 ---
 

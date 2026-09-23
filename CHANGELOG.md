@@ -4,6 +4,32 @@ All notable changes to StatsPAI will be documented in this file.
 
 ## [Unreleased]
 
+### ⚠️ Correctness
+
+- **`sp.causal_forest` with a continuous treatment: `cf.att()` and
+  `average_treatment_effect(target_sample="treated" | "control")` now raise
+  `MethodIncompatibility`.** A continuous treatment defines no treated group,
+  yet `T == 1` was used to select one. On the Card returns-to-schooling design
+  with `educ` as the treatment, `cf.att()` averaged the CATE over the rows
+  with exactly one year of schooling and printed the result as "ATT" with a
+  zero-width interval. grf refuses these targets for a non-binary treatment,
+  and both StatsPAI engines now do too. `target_sample="all"` (the average
+  partial effect) and `"overlap"` are unchanged. See
+  [MIGRATION.md](MIGRATION.md#forest-continuous-att).
+- **Record correction for 1.29.0: the switch to grf defaults in
+  `sp.causal_forest` changed its output.** The 1.29.0 entry lists the new
+  defaults (2,000 honest subsampled trees, out-of-bag forest nuisances) under
+  *Changed*, but they moved the fitted effects materially. On the bundled
+  Card data (`educ` as a continuous treatment; `exper`, `expersq`, `black`,
+  `south`, `smsa` as covariates; `random_state=42`) the CATE standard
+  deviation went from 0.081 in 1.28.0 to 0.016, and the interquartile range
+  went from 0.058–0.103 to 0.063–0.087. R grf 2.6.1 on the same bytes gives
+  0.017 and 0.063–0.087. Refit forest-based heterogeneity results produced
+  with 1.28.0 or earlier. The 1.29.0 MIGRATION entry also said continuous
+  treatments still used the plug-in average. Since 1.29.0 they have used
+  grf's continuous-treatment debiased score (`method="aipw_continuous"`).
+  See [MIGRATION.md](MIGRATION.md#forest-grf-defaults).
+
 ### Added
 
 - **Inference for causal forests with fixed effects (`fe="twoway"` /
