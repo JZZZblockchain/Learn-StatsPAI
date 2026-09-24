@@ -13,7 +13,7 @@
 | --- | --- | --- | --- |
 | `dml`（PLR） | `bit-exact` | `DoubleML::DoubleMLPLR` | 无。三方 py/R/Stata，rel 0.0 |
 | `dml`（IRM/PLIV/IIVM） | 未单列 | `doubleml-for-py`（可选 import） | 无 R 侧；未装即 skip；index 上不可见 |
-| `causal_forest` | `aligned` | `grf::causal_forest` | 点估计 0.19% 已达 T3；SE 容差 `rel_se<=0.50` |
+| `causal_forest` | `aligned` | `grf::causal_forest` | 点估计 0.26%（最坏行，1.31 种子修复后）T3；SE 容差 `rel_se<=0.05`，实测 0.68% |
 | `tmle` | `bit-exact` | base R `stats::glm` 手搭 | 锚的是自建参考，不是 `tmle` 包 |
 | `metalearner` | `external-replication` | CausalML Book DGP 真值 | **零跨包数值 pin** |
 | `policy_tree` | `analytical-only` | oracle 恢复 + 会计恒等式 | **零跨包 pin**；`policytree` 未对 |

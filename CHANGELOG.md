@@ -260,6 +260,106 @@ All notable changes to StatsPAI will be documented in this file.
   covariate — the practice the paper argues against — returns **-0.18**.
   `tests/test_did_bad_controls.py` measures every number quoted here.
 
+- **The rest of the GRF family, on the StatsPAI engine.** Six new tree kinds
+  (instrumental, multi-causal, multi-regression, quantile, survival,
+  causal-survival) reuse the engine's sampling, honesty, pruning and
+  little-bag variances, so every forest below is honest, cluster-aware and
+  reports out-of-bag predictions:
+  - `sp.lm_forest` -- varying coefficients `h_k(x)` in `Y = c(x) + W'h(x)`,
+    with vector-gradient splits (grf `lm_forest`).
+  - `sp.regression_forest`, `sp.multi_regression_forest`,
+    `sp.probability_forest`, `sp.quantile_forest` (class-count splitting on
+    the node's quantile bins, forest-weighted quantiles), and
+    `sp.survival_forest` (log-rank splits evaluated exactly with Fenwick
+    trees in O(log T) per candidate, forest-weighted Kaplan-Meier or
+    Nelson-Aalen curves).
+  - `sp.variable_importance`, `sp.best_linear_projection`, `sp.get_scores`
+    -- grf's post-estimation for any forest that supports it, including
+    `sp.causal_forest` (`best_linear_projection` there follows grf: no
+    propensity clipping, `vce="HC0".."HC3"`, `vcov_type=` accepted).
+- **Evidence.** Fed grf 2.6.1's own forest weights and inputs, every
+  operator after the forest reproduces grf to <= 7e-14: the IV, multi-arm,
+  lm and causal-survival local solves, the doubly-robust scores, averages,
+  standard errors and best linear projections, the Kaplan-Meier and
+  Nelson-Aalen curves, weighted quantiles, class frequencies and the
+  variable importance of eight forest types
+  (`tests/reference_parity/test_grf_family_operator_parity.py`). The
+  causal-survival score map -- nuisance curves to the censoring-adjusted
+  numerator -- matches grf to 1.2e-15 on a fixture with tied event and
+  censoring times and rows past the horizon
+  (`test_csf_psi_operator_parity.py`). Forests themselves are T3: on
+  known-truth designs against three grf seeds the CATE RMSE ratio is
+  0.97-1.02, pointwise coverage within 0.013, median variance ratio
+  0.89-1.13, average effects within 0.30 grf standard errors and SE ratios
+  0.98-1.03 over five StatsPAI seeds
+  (`test_grf_family_statistical_parity.py`).
+- `tests/test_lazy_exports_in_all.py`: a name reachable as `sp.<name>` but
+  missing from `statspai.__all__` is invisible to `sp.list_functions()`;
+  this ratchet stops new ones (55 outside the GRF family are frozen in
+  `scripts/lazy_export_all_baseline.json`).
+
+### ⚠️ Correctness
+
+- **`sp.iv_forest` was not an instrumental forest.** Its neighbourhood
+  forest was a scikit-learn random forest trained on `Y`, not honest and
+  not split on the IV gradient; residuals came from in-sample predictions,
+  and the reported "LATE" was a global Robinson-Wald ratio whose bootstrap
+  SE resampled fixed residuals. It is now the GRF instrumental forest (ATW
+  2019, Sec. 5) with out-of-bag nuisances, little-bag variances and the
+  doubly-robust average conditional LATE with a compliance-score Riesz
+  representer. `late` now means that average, `cate` is out-of-bag.
+- **`sp.multi_arm_forest` scored in-sample.** Outcome regressions and the
+  multinomial propensity were fitted and evaluated on the same rows, so the
+  AIPW scores were overfitted and the SEs too small; a failed propensity
+  fit fell back silently to the marginal shares. It is now the multi-arm
+  causal forest (grf `multi_arm_causal_forest`): one forest for all
+  contrasts, out-of-bag probability-forest propensities, no silent
+  fallback, no propensity clipping by default (`propensity_bounds=` opts
+  in).
+- **`sp.causal_survival_forest` did not implement Cui et al. (2023).** The
+  docstring promised honest trees split on doubly-robust pseudo-outcomes;
+  the code fitted one random forest on `[X, W]` to an IPCW pseudo-outcome
+  (marginal Kaplan-Meier censoring per arm) and read the CATE off it,
+  which a forest that never splits on `W` shrinks to zero. It is now the
+  causal survival forest: survival and censoring forests on `[X, W]`
+  (out-of-bag, counterfactual arm read from the same trees), the
+  censoring-robust estimating equation discretised as grf does, trees
+  split on eq. (14) with failure-count constraints, and doubly-robust
+  averages. `target="survival_probability"` is new; `ate_rmst` is kept.
+  Over 40 replications the RMST average has bias 0.0007 (MC se 0.0038)
+  and 100% coverage, the survival-probability average -0.0024 (0.0039)
+  and 97.5%.
+- **GRF engine seeding (affects `sp.causal_forest` and every GRF forest).**
+  Little-bag group `g` was seeded with `seed + g`, so `random_state=5` and
+  `random_state=6` shared all but one group of trees -- a seed-robustness
+  check compared a forest with itself -- and two forests grown from one
+  seed drew identical subsamples, correlating the nuisance forests' errors
+  with each other. Group seeds now come from
+  `numpy.random.SeedSequence(seed)` and every nuisance forest has its own
+  stream. Numbers for a given `random_state` change within Monte Carlo
+  error. On the instrumental forest the coupling had cost 4.6% CATE RMSE
+  against grf (0.485 vs 0.463; now 0.464); on Track A module 13 the
+  causal forest's gaps to grf fell from 0.24% / 0.38% (ATE / ATT) to
+  0.03% / 0.26%.
+
+### Changed
+
+- `iv_forest`, `multi_arm_forest` and `causal_survival_forest` take the
+  forest options of `sp.causal_forest` (`n_estimators`, `min_samples_leaf`,
+  `max_samples`, `honest`, ... ; `n_trees` / `min_leaf` still accepted) plus
+  `split_alpha` for grf's `alpha` -- `alpha` keeps its old meaning, the
+  significance level. They accept arrays as well as a DataFrame, and
+  `clusters=` / `weights=`. See MIGRATION.md.
+- `sp.iv_forest`, `sp.multi_arm_forest` and `sp.causal_survival_forest`
+  are now registered (they were reachable but absent from `__all__`).
+
+### Deprecated
+
+- `iv_forest(n_bootstrap=)` is ignored with a `DeprecationWarning`.
+- `CausalForest.variable_importance()` without `method=` warns: the default
+  changes from `"permutation"` (in-sample effect changes) to grf's
+  `"split"` importance in 1.33.
+
 ## [1.30.1] — 2026-09-24
 
 Documentation-only release. No code, default, or numerical output changes

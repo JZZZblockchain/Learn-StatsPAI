@@ -126,6 +126,7 @@ nav:
       - "PSM-DID and the Stata psmatch2 workflow": guides/psm_did.md
       - "Choosing an ML causal estimator (DML / TMLE / metalearner / causal_forest)": guides/choosing_ml_causal_estimator.md
       - "Heterogeneous effects with panel data (clustered / fixed-effects / DiD causal forests)": guides/heterogeneity_panel_forests.md
+      - "The GRF family: instrumental, multi-arm, survival and prediction forests": guides/grf_forests.md
       - "Panel data — FE / RE / Hausman / HDFE / dynamic GMM": guides/panel_data.md
       - "Social network analysis (centrality / community / QAP / ERGM)": guides/social_network_analysis.md
       - "Migrating from R to StatsPAI": guides/migration-from-r.md

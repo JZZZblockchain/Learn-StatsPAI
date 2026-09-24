@@ -45,6 +45,7 @@ import numpy as np
 
 from ..exceptions import DataInsufficient, MethodIncompatibility
 from . import _grf_engine as engine
+from ._grf_family import with_stream
 from ._grf_fit import (
     _crossfit,
     _nuisance_mtry,
@@ -220,7 +221,7 @@ def fit_fe(
                 mtry=_nuisance_mtry(cf.mtry, features.shape[1]),
                 min_node_size=5,
                 ci_group_size=1,
-                **common,
+                **with_stream(common, name),
             )
             fitted, _ = forest.predict_oob(features)
             if not np.isfinite(fitted).all():

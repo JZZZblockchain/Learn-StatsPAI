@@ -1516,6 +1516,599 @@
     }
   },
   {
+    "description": "Instrumental forest (grf::instrumental_forest): heterogeneous local average treatment effects tau(x) = Cov[Y,Z|x]/Cov[W,Z|x] from an honest generalized random forest that splits on the IV gradient and uses the instrument in its split constraints. Reports out-of-bag CATEs with little-bag variances and the doubly-robust average conditional LATE (compliance-weighted scores). Given grf's forest, the local solve, scores, average and BLP match grf to 1e-13 (T2); the forest itself is T3. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "iv_forest",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "Precomputed E[W|X]; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "Y_hat": {
+          "description": "Precomputed E[Y|X]; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "Z_hat": {
+          "description": "Precomputed E[Z|X]; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level of the reported interval.",
+          "type": "number"
+        },
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag; 1 disables variance estimates.",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids: trees sample whole clusters and every standard error is cluster-robust.",
+          "type": "string"
+        },
+        "compliance_score": {
+          "description": "``Delta(X_i)`` for the average-effect scores; by default estimated by an auxiliary 500-tree causal forest of ``W`` on ``Z``.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Effect modifiers ``X``; the nuisances are also regressed on them.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data. When omitted, ``y``, ``treat``, ``instrument`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "Give every cluster the same weight (incompatible with ``weights``).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "Share of the drawn sample used to grow the tree.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "Prune leaves left empty by the estimation half.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "grf imbalance.penalty on unbalanced splits.",
+          "type": "number"
+        },
+        "instrument": {
+          "description": "Instrument (binary or continuous).",
+          "type": "string"
+        },
+        "max_depth": {
+          "description": "Depth cap (no grf analogue).",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Fraction of clusters drawn per tree (grf ``sample.fraction``).",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Candidate variables per split (grf default ``min(ceil(sqrt(p) + 20), p)``).",
+          "type": "string"
+        },
+        "n_bootstrap": {
+          "description": "Ignored. Standard errors now come from the doubly-robust scores.",
+          "type": "string"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads used to grow trees (-1 = all cores).",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Seed; different seeds give independent forests.",
+          "type": "integer"
+        },
+        "reduced_form_weight": {
+          "default": 0.0,
+          "description": "Mix the IV split criterion with the causal-forest criterion that treats ``W`` as exogenous (grf ``reduced.form.weight``).",
+          "type": "number"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha``: minimum share of the parent's instrument variation each child of a stabilised split keeps.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "default": true,
+          "description": "Use the instrument in the split constraints.",
+          "type": "boolean"
+        },
+        "treat": {
+          "description": "Treatment (binary or continuous).",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome (column name or array).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Multi-arm causal forest (grf::multi_arm_causal_forest): CATEs of K-1 arms against a reference, estimated jointly by one forest whose trees split on the gradient of all contrasts (multi-arm R-learner with GRF weights). Propensities from a probability forest, doubly-robust per-arm ATEs, BLPs per contrast. Operators match grf to 1e-13 (T2); forest statistics match grf within Monte Carlo error (T3). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "multi_arm_forest",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "``(n, K)`` arm propensities in the order of ``.arms``; default out-of-bag probability forest.",
+          "type": "string"
+        },
+        "Y_hat": {
+          "description": "``E[Y | X]``; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for the reported intervals.",
+          "type": "number"
+        },
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag; 1 disables variance estimates.",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, the other inputs are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "Give every cluster equal weight (incompatible with weights).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "Share of the drawn sample used to grow the tree.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "Prune leaves left empty by the estimation half.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "grf imbalance.penalty on unbalanced splits.",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "Optional depth cap (no grf analogue).",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf min.node.size: nodes with at most this many growing samples are not split.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+          "type": "string"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf num.trees).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads used to grow trees (-1 = all cores).",
+          "type": "integer"
+        },
+        "propensity_bounds": {
+          "description": "Clip the estimated propensities to these bounds in the average- effect scores (not done by default, as in grf).",
+          "type": "string"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Seed; different seeds give independent forests.",
+          "type": "integer"
+        },
+        "reference": {
+          "description": "Reference arm; defaults to the smallest label (``0`` for integer arms, matching the previous API).",
+          "type": "string"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf alpha: minimum share of the parent each child keeps.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "default": true,
+          "description": "Apply the treatment/instrument split constraints (grf stabilize.splits).",
+          "type": "boolean"
+        },
+        "treat": {
+          "description": "Arm labels (any values; at least two arms).",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Sample weights (grf sample.weights).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Linear-model forest (grf::lm_forest): covariate-varying coefficients h_k(x) in Y = c(x) + sum_k h_k(x) W_k, by forest-weighted local least squares of the centred outcome(s) on the centred regressors. Use for varying-coefficient models and continuous multi-dimensional treatments; for mutually exclusive arms use sp.multi_arm_forest. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "lm_forest",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "Precomputed E[W|X], (n, K); default out-of-bag (multi-task) regression forest.",
+          "type": "string"
+        },
+        "Y_hat": {
+          "description": "Precomputed E[Y|X], (n, q); default out-of-bag (multi-task) regression forest.",
+          "type": "string"
+        },
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag; 1 disables variance estimates.",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "The covariates ``X`` along which the coefficients vary.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, the other inputs are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "Give every cluster equal weight (incompatible with weights).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "Share of the drawn sample used to grow the tree.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "Prune leaves left empty by the estimation half.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "grf imbalance.penalty on unbalanced splits.",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "Optional depth cap (no grf analogue).",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf min.node.size: nodes with at most this many growing samples are not split.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+          "type": "string"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf num.trees).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads used to grow trees (-1 = all cores).",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Seed; different seeds give independent forests.",
+          "type": "integer"
+        },
+        "regressors": {
+          "description": "The regressors ``W_1..W_K`` whose coefficients vary with ``x``.",
+          "type": "string"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf alpha: minimum share of the parent each child keeps.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "default": false,
+          "description": "Apply the causal-forest split constraints to every regressor.",
+          "type": "boolean"
+        },
+        "weights": {
+          "description": "Sample weights (grf sample.weights).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome(s); several outcomes are modelled jointly.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Causal survival forest (Cui et al. 2023; grf::causal_survival_forest): heterogeneous effects on right-censored outcomes -- RMST or survival-probability difference at a horizon -- under unconfoundedness and conditionally independent censoring. Nuisance survival and censoring curves come from out-of-bag survival forests on [X, W]; the censoring-robust scores follow grf's discretisation exactly (T2 on the score map), with doubly-robust averages and BLPs. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "causal_survival_forest",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "Precomputed propensities; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level of the reported interval.",
+          "type": "number"
+        },
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag; 1 disables variance estimates.",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X`` (confounders and effect modifiers).",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, the other inputs are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "Give every cluster equal weight (incompatible with weights).",
+          "type": "boolean"
+        },
+        "event": {
+          "description": "1 = event observed, 0 = censored.",
+          "type": "string"
+        },
+        "failure_times": {
+          "description": "Grid for the survival nuisance forests (default: observed times).",
+          "type": "string"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "Share of the drawn sample used to grow the tree.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "Prune leaves left empty by the estimation half.",
+          "type": "boolean"
+        },
+        "horizon": {
+          "description": "``h`` of the estimand. Defaults to the 80th percentile of observed event times (recorded in ``detail``); grf requires it -- choose it from the study design.",
+          "type": "string"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "grf imbalance.penalty on unbalanced splits.",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "Optional depth cap (no grf analogue).",
+          "type": "string"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf min.node.size: nodes with at most this many growing samples are not split.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+          "type": "string"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf num.trees).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Threads used to grow trees (-1 = all cores).",
+          "type": "integer"
+        },
+        "propensity_bounds": {
+          "description": "Clip ``e`` in the average-effect score denominators (off by default, as in grf).",
+          "type": "string"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Seed; different seeds give independent forests.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha``; each child must also hold ``split_alpha`` of the parent's size in failures.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "default": true,
+          "description": "Apply the treatment/instrument split constraints (grf stabilize.splits).",
+          "type": "boolean"
+        },
+        "target": {
+          "default": "RMST",
+          "description": "Estimand: 'RMST' or 'survival_probability'.",
+          "type": "string"
+        },
+        "time": {
+          "description": "Observed time ``min(T, C)``, non-negative.",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Binary treatment.",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Sample weights (grf sample.weights).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Split-frequency variable importance of any GRF-engine forest (grf::variable_importance): depth-weighted shares of splits per covariate, summing to one. Describes how the forest uses covariates; it is not a test of heterogeneity -- use sp.calibration_test or sp.best_linear_projection for that. Matches grf to 1e-15 given the same split counts. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "variable_importance",
+    "parameters": {
+      "properties": {
+        "decay_exponent": {
+          "default": 2.0,
+          "description": "How quickly deeper splits lose weight.",
+          "type": "number"
+        },
+        "forest": {
+          "description": "Any of ``sp.causal_forest`` (GRF engine), ``sp.iv_forest``, ``sp.multi_arm_forest``, ``sp.lm_forest``, ``sp.regression_forest``, ``sp.multi_regression_forest``, ``sp.probability_forest``, ``sp.quantile_forest``, ``sp.survival_forest``, ``sp",
+          "type": "string"
+        },
+        "max_depth": {
+          "default": 4,
+          "description": "Deepest level counted.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Best linear projection of a forest's conditional effect on covariates (grf::best_linear_projection): OLS of the doubly-robust scores on (1, A) with HC0-HC3 (cluster-robust when the forest has clusters) standard errors -- valid inference on a low-dimensional summary of tau(x) (Semenova and Chernozhukov 2021). Works for causal, instrumental, multi-arm and causal-survival forests; matches grf to 1e-15 given the scores. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "best_linear_projection",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "Projection covariates, one row per training observation (after missing-value removal).",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for the intervals.",
+          "type": "number"
+        },
+        "forest": {
+          "description": "``sp.causal_forest`` (GRF engine), ``sp.iv_forest``, ``sp.multi_arm_forest`` (one projection per contrast, stacked), ``sp.causal_survival_forest``.",
+          "type": "string"
+        },
+        "vce": {
+          "default": "HC3",
+          "description": "Covariance type HC0-HC3 (sandwich::vcovCL conventions; grf's vcov.type). vcov_type= is accepted as an alias.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Doubly-robust scores behind a forest's average effect (grf::get_scores): AIPW for causal and multi-arm forests, compliance-weighted for instrumental forests, censoring-adjusted for causal survival forests. Their mean is the average effect; use them for custom averages, subgroup contrasts or policy values. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "get_scores",
+    "parameters": {
+      "properties": {
+        "forest": {
+          "description": "``sp.causal_forest`` (GRF engine, binary or continuous treatment), ``sp.iv_forest`` (average conditional LATE), ``sp.multi_arm_forest`` (one column per contrast), ``sp.causal_survival_forest``.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forest"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Rank-weighted average treatment effect (AUTOC / QINI) of a causal forest's targeting rule, fitted and evaluated on disjoint units. sp.rate ranks the rows it also scores, which for a fe= forest is not a valid test -- every imputation score carries -gamma_hat_t from the periods the forest saw, so a nominal 5% test rejected 17.5% of the time under no heterogeneity at all (AUTOC averaged -0.025, not 0). Splitting units (or dyadic members) brings that to 7.5% and +0.0008, at 99.5% power. Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
     "name": "rate_split",
     "parameters": {
@@ -60431,6 +61024,846 @@
         "point",
         "alpha"
       ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Instrumental forest: heterogeneous local average treatment effects.",
+    "name": "instrumental_forest",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "Precomputed ``E[Y|X]``, ``E[W|X]``, ``E[Z|X]``; by default each is the out-of-bag prediction of a regression forest with ``max(50, n_estimators // 4)`` trees.",
+          "type": "string"
+        },
+        "Y_hat": {
+          "description": "Precomputed ``E[Y|X]``, ``E[W|X]``, ``E[Z|X]``; by default each is the out-of-bag prediction of a regression forest with ``max(50, n_estimators // 4)`` trees.",
+          "type": "string"
+        },
+        "Z_hat": {
+          "description": "Precomputed ``E[Y|X]``, ``E[W|X]``, ``E[Z|X]``; by default each is the out-of-bag prediction of a regression forest with ``max(50, n_estimators // 4)`` trees.",
+          "type": "string"
+        },
+        "alpha": {
+          "description": "Significance level of the reported interval.",
+          "type": "number"
+        },
+        "ci_group_size": {
+          "description": "Trees per little bag; 1 disables variance estimates.",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids: trees sample whole clusters and every standard error is cluster-robust.",
+          "type": "string"
+        },
+        "compliance_score": {
+          "description": "``Delta(X_i)`` for the average-effect scores; by default estimated by an auxiliary 500-tree causal forest of ``W`` on ``Z``.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Effect modifiers ``X``; the nuisances are also regressed on them.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data. When omitted, ``y``, ``treat``, ``instrument`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "description": "Give every cluster the same weight (incompatible with ``weights``).",
+          "type": "boolean"
+        },
+        "honest": {
+          "description": "grf honesty options.",
+          "type": "string"
+        },
+        "honesty_fraction": {
+          "description": "grf honesty options.",
+          "type": "string"
+        },
+        "honesty_prune_leaves": {
+          "description": "grf honesty options.",
+          "type": "string"
+        },
+        "imbalance_penalty": {
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
+        "instrument": {
+          "description": "Outcome, treatment (binary or continuous) and instrument (binary or continuous).",
+          "type": "string"
+        },
+        "max_depth": {
+          "description": "Depth cap (no grf analogue).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "description": "Fraction of clusters drawn per tree (grf ``sample.fraction``).",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Candidate variables per split (grf default ``min(ceil(sqrt(p) + 20), p)``).",
+          "type": "integer"
+        },
+        "n_bootstrap": {
+          "description": "Ignored. Standard errors now come from the doubly-robust scores.",
+          "type": "string"
+        },
+        "n_estimators": {
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "random_state": {
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "reduced_form_weight": {
+          "description": "Mix the IV split criterion with the causal-forest criterion that treats ``W`` as exogenous (grf ``reduced.form.weight``).",
+          "type": "number"
+        },
+        "split_alpha": {
+          "description": "grf ``alpha``: minimum share of the parent's instrument variation each child of a stabilised split keeps.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "description": "Use the instrument in the split constraints.",
+          "type": "boolean"
+        },
+        "treat": {
+          "description": "Outcome, treatment (binary or continuous) and instrument (binary or continuous).",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome, treatment (binary or continuous) and instrument (binary or continuous).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted instrumental forest.",
+    "name": "IVForestResult",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted multi-arm causal forest.",
+    "name": "MultiArmForestResult",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted linear-model forest.",
+    "name": "LMForestResult",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Honest regression forest for ``E[Y | X]`` (``grf::regression_forest``).",
+    "name": "regression_forest",
+    "parameters": {
+      "properties": {
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag (variance estimates need >= 2).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids (trees sample whole clusters).",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, ``y`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "equalize_cluster_weights parameter (bool).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "grf honesty options.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "max_depth parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "grf ``sample.fraction``.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "mtry parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha`` (minimum child share).",
+          "type": "number"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Multi-task regression forest for ``E[Y_1, ..., Y_q | X]``",
+    "name": "multi_regression_forest",
+    "parameters": {
+      "properties": {
+        "ci_group_size": {
+          "default": 1,
+          "description": "Trees per little bag (variance estimates need >= 2).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids (trees sample whole clusters).",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, ``y`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "equalize_cluster_weights parameter (bool).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "grf honesty options.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "max_depth parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "grf ``sample.fraction``.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "mtry parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha`` (minimum child share).",
+          "type": "number"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcomes.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Probability forest for ``P[Y = k | X]`` (``grf::probability_forest``).",
+    "name": "probability_forest",
+    "parameters": {
+      "properties": {
+        "ci_group_size": {
+          "default": 2,
+          "description": "Trees per little bag (variance estimates need >= 2).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "Cluster ids (trees sample whole clusters).",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, ``y`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "equalize_cluster_weights parameter (bool).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "grf honesty options.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "max_depth parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "grf ``sample.fraction``.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "mtry parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha`` (minimum child share).",
+          "type": "number"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Class labels (any hashable values; classes are sorted).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Quantile forest for conditional quantiles of ``Y`` (``grf::quantile_forest``). Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "quantile_forest",
+    "parameters": {
+      "properties": {
+        "clusters": {
+          "description": "Cluster ids (trees sample whole clusters).",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, ``y`` and ``covariates`` are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "equalize_cluster_weights parameter (bool).",
+          "type": "boolean"
+        },
+        "honest": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "grf honesty options.",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "grf honesty options.",
+          "type": "boolean"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "imbalance_penalty parameter (float).",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "max_depth parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "grf ``sample.fraction``.",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "grf ``min.node.size``.",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "mtry parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Trees (grf ``num.trees``).",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "quantiles": {
+          "default": [
+            0.1,
+            0.5,
+            0.9
+          ],
+          "description": "Quantiles that calibrate the splits and are predicted by default.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "regression_splitting": {
+          "default": false,
+          "description": "Use ordinary regression splits instead (grf ``regression.splitting``; the quantile regression forest of Meinshausen 2006).",
+          "type": "boolean"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha`` (minimum child share).",
+          "type": "number"
+        },
+        "weights": {
+          "description": "Sample weights (grf ``sample.weights``).",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted regression / multi-regression / probability / quantile forest.",
+    "name": "PredictionForest",
+    "parameters": {
+      "properties": {
+        "kind_name": {
+          "description": "kind_name parameter (str).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind_name"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Survival forest: conditional survival curves ``S(t | x)`` from Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "survival_forest",
+    "parameters": {
+      "properties": {
+        "clusters": {
+          "description": "Cluster-sampled trees; sample weights enter the curve estimates (not the log-rank splits, as in grf).",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X``.",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, the other inputs are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "Cluster-sampled trees; sample weights enter the curve estimates (not the log-rank splits, as in grf).",
+          "type": "boolean"
+        },
+        "event": {
+          "description": "1 = event observed, 0 = censored.",
+          "type": "string"
+        },
+        "failure_times": {
+          "description": "Increasing grid of times for the curves; default all distinct event times.",
+          "type": "string"
+        },
+        "honest": {
+          "default": true,
+          "description": "Forest options (grf names ``sample.fraction``, ...).",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "Forest options (grf names ``sample.fraction``, ...).",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "Forest options (grf names ``sample.fraction``, ...).",
+          "type": "boolean"
+        },
+        "max_depth": {
+          "description": "max_depth parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "Forest options (grf names ``sample.fraction``, ...).",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 15,
+          "description": "min_samples_leaf parameter (int).",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "Forest options (grf names ``sample.fraction``, ...).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 1000,
+          "description": "Number of estimators.",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "prediction_type": {
+          "default": "Kaplan-Meier",
+          "description": "prediction_type parameter (str).",
+          "enum": [
+            "Kaplan-Meier",
+            "Nelson-Aalen"
+          ],
+          "type": "string"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "Each child must hold at least ``max(1, split_alpha * n_parent)`` failures (grf ``alpha``).",
+          "type": "number"
+        },
+        "time": {
+          "description": "Observed time (event or censoring), non-negative.",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Cluster-sampled trees; sample weights enter the curve estimates (not the log-rank splits, as in grf).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted survival forest.",
+    "name": "SurvivalForestResult",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Causal survival forest: heterogeneous effects on censored survival.",
+    "name": "causal_survival",
+    "parameters": {
+      "properties": {
+        "W_hat": {
+          "description": "Precomputed propensities; default out-of-bag regression forest.",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level of the reported interval.",
+          "type": "number"
+        },
+        "ci_group_size": {
+          "default": 2,
+          "description": "Forest options (grf names).",
+          "type": "integer"
+        },
+        "clusters": {
+          "description": "As in :func:`statspai.causal_forest`.",
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Covariates ``X`` (confounders and effect modifiers).",
+          "type": "string"
+        },
+        "data": {
+          "description": "Input data; when omitted, the other inputs are arrays.",
+          "type": "string"
+        },
+        "equalize_cluster_weights": {
+          "default": false,
+          "description": "As in :func:`statspai.causal_forest`.",
+          "type": "boolean"
+        },
+        "event": {
+          "description": "1 = event observed, 0 = censored.",
+          "type": "string"
+        },
+        "failure_times": {
+          "description": "Grid for the survival nuisance forests (default: observed times).",
+          "type": "string"
+        },
+        "honest": {
+          "default": true,
+          "description": "honest parameter (bool).",
+          "type": "boolean"
+        },
+        "honesty_fraction": {
+          "default": 0.5,
+          "description": "honesty_fraction parameter (float).",
+          "type": "number"
+        },
+        "honesty_prune_leaves": {
+          "default": true,
+          "description": "honesty_prune_leaves parameter (bool).",
+          "type": "boolean"
+        },
+        "horizon": {
+          "description": "``h`` of the estimand. Defaults to the 80th percentile of observed event times (recorded in ``detail``); grf requires it -- choose it from the study design.",
+          "type": "number"
+        },
+        "imbalance_penalty": {
+          "default": 0.0,
+          "description": "Forest options (grf names).",
+          "type": "number"
+        },
+        "max_depth": {
+          "description": "Forest options (grf names).",
+          "type": "integer"
+        },
+        "max_samples": {
+          "default": 0.5,
+          "description": "max_samples parameter (float).",
+          "type": "number"
+        },
+        "min_samples_leaf": {
+          "default": 5,
+          "description": "min_samples_leaf parameter (int).",
+          "type": "integer"
+        },
+        "mtry": {
+          "description": "mtry parameter (Optional[int]).",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 2000,
+          "description": "Number of estimators.",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": 1,
+          "description": "Number of jobs.",
+          "type": "integer"
+        },
+        "propensity_bounds": {
+          "description": "Clip ``e`` in the average-effect score denominators (off by default, as in grf).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "split_alpha": {
+          "default": 0.05,
+          "description": "grf ``alpha``; each child must also hold ``split_alpha`` of the parent's size in failures.",
+          "type": "number"
+        },
+        "stabilize_splits": {
+          "default": true,
+          "description": "Forest options (grf names).",
+          "type": "boolean"
+        },
+        "target": {
+          "default": "RMST",
+          "description": "target parameter (str).",
+          "enum": [
+            "RMST",
+            "survival_probability"
+          ],
+          "type": "string"
+        },
+        "time": {
+          "description": "Observed time ``min(T, C)``, non-negative.",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Binary treatment.",
+          "type": "string"
+        },
+        "weights": {
+          "description": "As in :func:`statspai.causal_forest`.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "A fitted causal survival forest.",
+    "name": "CausalSurvivalForestResult",
+    "parameters": {
+      "properties": {},
+      "required": [],
       "type": "object"
     }
   },

@@ -22,6 +22,7 @@ import numpy as np
 
 from ..exceptions import DataInsufficient, MethodIncompatibility
 from . import _grf_engine as engine
+from ._grf_family import with_stream
 
 
 def _validate_nuisance_vector(values: Any, name: str, n: int) -> Optional[np.ndarray]:
@@ -182,7 +183,7 @@ def fit_grf(
                 mtry=_nuisance_mtry(cf.mtry, nuisance_features.shape[1]),
                 min_node_size=5,
                 ci_group_size=1,
-                **common,
+                **with_stream(common, "Y_hat"),
             )
             y_hat_arr, _ = forest_y.predict_oob(nuisance_features)
             nuisance_source["Y_hat"] = "grf regression forest (OOB)"
@@ -213,7 +214,7 @@ def fit_grf(
                 mtry=_nuisance_mtry(cf.mtry, nuisance_features.shape[1]),
                 min_node_size=5,
                 ci_group_size=1,
-                **common,
+                **with_stream(common, "W_hat"),
             )
             w_hat_arr, _ = forest_w.predict_oob(nuisance_features)
             nuisance_source["W_hat"] = "grf regression forest (OOB)"

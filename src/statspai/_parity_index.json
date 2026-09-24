@@ -885,6 +885,23 @@
       "tolerance": "exact (atol 1e-15; observed 0)"
     },
     {
+      "function": "best_linear_projection",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_operator_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "additional_tests": [
         "tests/reference_parity/test_vce_grammar_stata_parity.py"
       ],
@@ -1650,7 +1667,7 @@
       "function": "causal_forest",
       "headline": {
         "metric": "rel_est",
-        "rel_vs_R": 0.002361374953604632,
+        "rel_vs_R": 0.0002647160750271421,
         "rel_vs_Stata": null,
         "statistic": [
           "ate_causal_forest"
@@ -1664,7 +1681,7 @@
         "Factored evidence: the AIPW operator -- the closed-form map from (Y, W, tau.hat, Y.hat, W.hat) to the score vector, point estimate and standard error -- is pinned exactly. Fed grf's own forest outputs, StatsPAI reproduces grf::get_scores elementwise to 2.3e-14 and grf's reported ATE and ATT (estimate and std.err) to 1e-15 (tests/reference_parity/test_grf_aipw_operator_parity.py). The module tolerance below covers the forest itself, which is not pinnable across implementations; its calibration is evidenced by the Track B coverage sweep."
       ],
       "point_estimate_rel": {
-        "R": 0.002361374953604632,
+        "R": 0.0002647160750271421,
         "Stata": null
       },
       "python_call": "sp.causal_forest",
@@ -1674,7 +1691,7 @@
         "grf": "2.6.1"
       },
       "se_rel": {
-        "R": 0.0021814686927770334,
+        "R": 0.0015783465479781312,
         "Stata": null
       },
       "sides": [
@@ -1738,6 +1755,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_ope_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "causal_survival_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
       ],
       "tolerance": ""
     },
@@ -5469,6 +5503,23 @@
       "tolerance": ""
     },
     {
+      "function": "get_scores",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_operator_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],
@@ -6701,6 +6752,24 @@
       "tolerance": "2SLS / OLS coefficients and SEs, classical first-stage F, effective F, tF critical value and interval: rel 1e-9 on 6 designs (observed <= 6e-12)"
     },
     {
+      "function": "iv_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_operator_parity.py",
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "ivqreg",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -7353,6 +7422,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_causal_discovery_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "lm_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
       ],
       "tolerance": ""
     },
@@ -9452,6 +9538,23 @@
       "tolerance": "coefficients and cluster SEs 1e-9 rel (observed 1.5e-13); Stata regress / logit [pw] 1e-7"
     },
     {
+      "function": "multi_arm_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "also_verified_by": [
         "reference_parity"
       ],
@@ -11433,6 +11536,23 @@
       "status": "analytical-only",
       "test": [
         "tests/reference_parity/test_hd_panel_qte.py"
+      ],
+      "tolerance": ""
+    },
+    {
+      "function": "quantile_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
       ],
       "tolerance": ""
     },
@@ -14492,6 +14612,23 @@
       "tolerance": ""
     },
     {
+      "function": "survival_forest",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_statistical_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "function": "survival_sensitivity",
       "notes": [
         "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
@@ -15565,6 +15702,23 @@
       ],
       "tier": "machine",
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
+    },
+    {
+      "function": "variable_importance",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_grf_family_operator_parity.py"
+      ],
+      "tolerance": ""
     },
     {
       "also_verified_by": [

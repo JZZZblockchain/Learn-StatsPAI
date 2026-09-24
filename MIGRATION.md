@@ -5,6 +5,63 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="grf-family-rebuild"></a>
+
+## Unreleased — ⚠️ `iv_forest`, `multi_arm_forest`, `causal_survival_forest` rebuilt on the GRF engine; engine seeding fixed
+
+**Who is affected.** Anyone calling these three functions, and anyone who
+compares `sp.causal_forest` (or any GRF-engine forest) numbers across
+releases for a fixed `random_state`.
+
+**What changed.**
+
+1. The three estimators were stand-ins (see CHANGELOG, ⚠️ Correctness) and
+   now implement the methods their names promise. Their numbers change --
+   not within Monte Carlo error, but because the old estimates were of
+   something else (a global Wald ratio, in-sample AIPW scores, a CATE from
+   a forest that could ignore the treatment).
+2. Forest options follow `sp.causal_forest`; the old spellings keep working:
+
+   | old | new |
+   | --- | --- |
+   | `n_trees=` | `n_estimators=` (alias kept) |
+   | `min_leaf=` | `min_samples_leaf=` (alias kept) |
+   | `n_bootstrap=` (`iv_forest`) | removed from the method; ignored with `DeprecationWarning` |
+   | `propensity_bounds=(0.05, 0.95)` default | default `None` (no clipping, as grf); pass bounds to clip |
+   | — | `split_alpha=` for grf's `alpha`; `alpha=` is still the significance level |
+
+   Defaults are grf's: 2000 trees, `min_samples_leaf=5`,
+   `ci_group_size=2`. The old defaults (200-300 trees) are much smaller;
+   pass `n_estimators=` to keep runs short.
+3. Result fields are kept: `iv_forest(...).late / se / ci / pvalue / cate /
+   n_obs / detail` (`late` is now the doubly-robust average conditional
+   LATE, `cate` is out-of-bag); `multi_arm_forest(...).arms / ate / ate_se /
+   ci / cate / n_obs / detail`; `causal_survival_forest(...).ate_rmst / se /
+   ci / pvalue / cate / horizon / n_obs / n_trees / detail`. New: `predict()`,
+   `get_scores()`, `average_treatment_effect()`, `best_linear_projection()`,
+   `variable_importance()`, and `target=` for survival probabilities.
+4. **Seeding.** GRF-engine forests used `seed + g` for tree group `g`, so
+   consecutive seeds shared nearly every tree and nuisance forests shared
+   subsamples with the main forest. For a given `random_state` every GRF
+   forest -- including `sp.causal_forest` -- now returns a different (and
+   independent) draw. Differences are Monte Carlo noise; if you pinned
+   exact forest outputs in tests, re-pin them.
+
+```python
+# before
+r = sp.iv_forest(df, y="y", treat="d", instrument="z", covariates=X, n_trees=300, n_bootstrap=50)
+# after (same call works; this is the idiomatic form)
+r = sp.iv_forest(df, y="y", treat="d", instrument="z", covariates=X, n_estimators=2000)
+r.late, r.se                       # doubly-robust ACLATE and its SE
+sp.best_linear_projection(r, A=df[["age"]])
+```
+
+**`CausalForest.variable_importance()`** now takes `method=`. Without it
+you get the old permutation measure and a `FutureWarning`; from 1.33 the
+default is `"split"` (grf's `variable_importance`, also `sp.variable_importance`).
+
+---
+
 <a id="forest-continuous-att"></a>
 
 ## Unreleased — ⚠️ causal forests with a continuous treatment refuse ATT and ATC

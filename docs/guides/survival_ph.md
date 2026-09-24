@@ -121,8 +121,15 @@ import statspai as sp
 csf = sp.causal_survival_forest(
     data=df, time="time", event="event",
     treat="arm", covariates=["age", "sex", "ldl"],
+    horizon=36, target="RMST",        # or target="survival_probability"
 )
+csf.ate, csf.se                       # doubly-robust average effect
 ```
+
+Choose the horizon from the study design; the estimator weights by the
+probability of staying uncensored up to it. See
+[the GRF family guide](grf_forests.md) for the method, its evidence against
+grf, and `sp.survival_forest` for conditional survival curves.
 
 ---
 

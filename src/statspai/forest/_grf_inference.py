@@ -331,6 +331,7 @@ def continuous_debiasing_weights(forest: Any) -> np.ndarray:
     if cached is not None:
         return np.asarray(cached)
     from . import _grf_engine as engine
+    from ._grf_family import with_stream
 
     W = np.asarray(forest._T_original, dtype=float)
     resid = W - np.asarray(forest._e_insample, dtype=float)
@@ -345,7 +346,7 @@ def continuous_debiasing_weights(forest: Any) -> np.ndarray:
         num_trees=500,
         ci_group_size=1,
         clusters=getattr(forest, "_clusters", None),
-        seed=seed,
+        seed=with_stream({"seed": seed}, "var_w")["seed"],
         n_jobs=getattr(forest, "n_jobs", 1),
     )
     V_hat, _ = vforest.predict_oob(X)

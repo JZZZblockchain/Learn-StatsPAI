@@ -12,6 +12,9 @@ comparison is made on outputs only (evidence tier T3, see
 
 Algorithm
 ---------
+* Seeding: each little-bag group gets its own seed from
+  ``numpy.random.SeedSequence(seed)``, so different seeds give independent
+  forests.
 * Sampling: trees are grown in little-bag groups of ``ci_group_size``
   trees sharing a half-sample of clusters; each tree draws a subsample of
   that half (``sample_fraction`` of all clusters when ``ci_group_size ==
@@ -75,7 +78,7 @@ except ImportError:  # pragma: no cover
 
     prange = range  # type: ignore[assignment,misc]
 
-_CACHE = HAS_NUMBA and Path(__file__).exists()
+_CACHE: bool = HAS_NUMBA and Path(__file__).exists()
 
 KIND_REGRESSION = 0
 KIND_CAUSAL = 1
@@ -500,6 +503,9 @@ def _grow_tree(
     fe_max_iter,
     fe_tol,
     tau_split,
+    M,
+    params,
+    rho_mat,
 ):  # type: ignore[no-untyped-def]
     """Grow one tree on ``grow_samples``.
 
@@ -540,7 +546,25 @@ def _grow_tree(
             i += 1
             continue
         idx = work[s:e]
-        if kind == KIND_CAUSAL:
+        if kind >= KIND_INSTRUMENTAL:
+            found, var, val = relabel_and_split(
+                kind,
+                X,
+                idx,
+                M,
+                G,
+                vars_,
+                min_node_size,
+                alpha,
+                imbalance_penalty,
+                stabilize_splits,
+                params,
+                rho_mat,
+            )
+            if not found:
+                i += 1
+                continue
+        elif kind == KIND_CAUSAL:
             if _relabel_causal(idx, Y, W, G, rho):
                 i += 1
                 continue
@@ -567,7 +591,9 @@ def _grow_tree(
         else:
             for t in range(size):
                 rho[idx[t]] = Y[idx[t]]
-        if kind == KIND_CAUSAL and stabilize_splits:
+        if kind >= KIND_INSTRUMENTAL:
+            pass
+        elif kind == KIND_CAUSAL and stabilize_splits:
             found, var, val = _split_instrumental(
                 X, idx, rho, W, G, vars_, min_node_size, alpha, imbalance_penalty
             )
@@ -856,6 +882,9 @@ def _train_group(
     fe_max_iter,
     fe_tol,
     tau_split,
+    M,
+    params,
+    rho_width,
 ):  # type: ignore[no-untyped-def]
     """Train one little-bag group of ``ci_group_size`` trees.
 
@@ -868,6 +897,7 @@ def _train_group(
     n_clusters = cl_offsets.size - 1
     all_clusters = np.arange(n_clusters)
     rho = np.zeros(n)
+    rho_mat = np.zeros((n if kind >= KIND_INSTRUMENTAL else 1, rho_width))
     Yr = np.zeros(n)
     Wr = np.zeros(n)
     fe_scratch = (
@@ -929,6 +959,9 @@ def _train_group(
             fe_max_iter,
             fe_tol,
             tau_split,
+            M,
+            params,
+            rho_mat,
         )
         root = 0
         if honesty and est_samples.size > 0:
@@ -952,21 +985,26 @@ def _train_group(
                     for t in range(node_start[node], node_end[node]):
                         leaf_members[a] = work[t]
                         a += 1
-        vals, nonempty = _leaf_values(
-            kind,
-            leaf_offsets,
-            leaf_members,
-            Y,
-            W,
-            G,
-            unit,
-            time,
-            fe_scratch,
-            Yr,
-            Wr,
-            fe_max_iter,
-            fe_tol,
-        )
+        if kind >= KIND_INSTRUMENTAL:
+            vals, nonempty = leaf_values_ext(
+                kind, leaf_offsets, leaf_members, M, G, params
+            )
+        else:
+            vals, nonempty = _leaf_values(
+                kind,
+                leaf_offsets,
+                leaf_members,
+                Y,
+                W,
+                G,
+                unit,
+                time,
+                fe_scratch,
+                Yr,
+                Wr,
+                fe_max_iter,
+                fe_tol,
+            )
         trees.append(
             (
                 root,
@@ -1220,6 +1258,8 @@ class GRFForest:
     member_base: np.ndarray
     drawn_bitmap: np.ndarray
     options: Dict[str, Any] = field(default_factory=dict)
+    params: np.ndarray = field(default_factory=lambda: np.zeros(1))
+    aux: Dict[str, np.ndarray] = field(default_factory=dict)
 
     @property
     def num_trees(self) -> int:
@@ -1241,6 +1281,8 @@ class GRFForest:
             )
         X = np.ascontiguousarray(X, dtype=np.float64)
         rows = np.arange(X.shape[0], dtype=np.int64)
+        if self.kind >= KIND_INSTRUMENTAL:
+            return self._predict_moments(X, rows, False, estimate_variance)
         return _predict_kernel(
             self.kind,
             X,
@@ -1266,6 +1308,8 @@ class GRFForest:
         if X_train.shape[0] != self.n_train:
             raise MethodIncompatibility("predict_oob needs the training matrix")
         rows = np.arange(self.n_train, dtype=np.int64)
+        if self.kind >= KIND_INSTRUMENTAL:
+            return self._predict_moments(X_train, rows, True, estimate_variance)
         return _predict_kernel(
             self.kind,
             X_train,
@@ -1283,6 +1327,107 @@ class GRFForest:
             self.ci_group_size,
             bool(estimate_variance),
         )
+
+    def _predict_moments(
+        self, X: np.ndarray, rows: np.ndarray, oob: bool, estimate_variance: bool
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """``(pred, var)`` of shape ``(n_rows, n_outputs)`` for the moment
+        kinds of :mod:`._grf_ext`."""
+        if self.kind not in MOMENT_KINDS:
+            raise MethodIncompatibility(
+                "This forest predicts through predict_survival() or "
+                "predict_quantiles(), not predict()."
+            )
+        out: Tuple[np.ndarray, np.ndarray] = predict_moment_kernel(
+            self.kind,
+            self.params,
+            X,
+            rows,
+            bool(oob),
+            self.roots,
+            self.node_offsets,
+            self.split_var,
+            self.split_val,
+            self.left,
+            self.right,
+            self.leaf_values,
+            self.leaf_nonempty,
+            self.drawn_bitmap,
+            self.ci_group_size,
+            bool(estimate_variance),
+        )
+        return out
+
+    def _weight_args(self) -> Tuple[Any, ...]:
+        return (
+            self.n_train,
+            self.roots,
+            self.node_offsets,
+            self.split_var,
+            self.split_val,
+            self.left,
+            self.right,
+            self.leaf_offsets,
+            self.leaf_offset_base,
+            self.leaf_members,
+            self.member_base,
+            self.leaf_nonempty,
+            self.drawn_bitmap,
+        )
+
+    def _rows_for(self, X: np.ndarray, oob: bool) -> np.ndarray:
+        if oob and X.shape[0] != self.n_train:
+            raise MethodIncompatibility(
+                "out-of-bag prediction needs one row per training observation"
+            )
+        return np.arange(X.shape[0], dtype=np.int64)
+
+    def predict_survival(
+        self, X: np.ndarray, oob: bool = False, nelson_aalen: bool = False
+    ) -> np.ndarray:
+        """Survival curves ``(n_rows, n_failure_times)`` (survival kind).
+
+        With ``oob=True`` row ``i`` of ``X`` is predicted from the trees that
+        did not draw training observation ``i``; ``X`` may differ from the
+        training matrix (e.g. a counterfactual treatment column), which is
+        how cross-fitted counterfactual curves are obtained.
+        """
+        if self.kind != KIND_SURVIVAL:
+            raise MethodIncompatibility("predict_survival() needs a survival forest")
+        X = np.ascontiguousarray(X, dtype=np.float64)
+        rows = self._rows_for(X, oob)
+        curves: np.ndarray = predict_survival_kernel(
+            X,
+            rows,
+            bool(oob),
+            *self._weight_args(),
+            self.aux["time_index"],
+            self.aux["event"],
+            self.aux["sample_weight"],
+            int(self.aux["failure_times"].size),
+            bool(nelson_aalen),
+        )
+        return curves
+
+    def predict_quantiles(
+        self, X: np.ndarray, quantiles: np.ndarray, oob: bool = False
+    ) -> np.ndarray:
+        """Conditional quantiles ``(n_rows, len(quantiles))``."""
+        if self.kind != KIND_QUANTILE:
+            raise MethodIncompatibility("predict_quantiles() needs a quantile forest")
+        X = np.ascontiguousarray(X, dtype=np.float64)
+        rows = self._rows_for(X, oob)
+        quant: np.ndarray = predict_quantile_kernel(
+            X,
+            rows,
+            bool(oob),
+            *self._weight_args(),
+            self.aux["y_order"],
+            self.aux["y"],
+            self.aux["sample_weight"],
+            np.ascontiguousarray(quantiles, dtype=np.float64),
+        )
+        return quant
 
     def forest_weights(self, X: np.ndarray, oob: bool = False) -> np.ndarray:
         """Dense ``(n_rows, n_train)`` matrix of forest weights alpha_i(x)."""
@@ -1372,8 +1517,17 @@ def train_forest(
     fe_max_iter: int = 1000,
     fe_tol: float = 1e-10,
     tau_split: bool = False,
+    M: Optional[np.ndarray] = None,
+    params: Optional[np.ndarray] = None,
+    aux: Optional[Dict[str, np.ndarray]] = None,
 ) -> GRFForest:
     """Train a regression (``kind=0``) or causal (``kind=1``) forest.
+
+    The GRF family members of :mod:`._grf_ext` (``kind >= 3``) take their
+    per-observation data in ``M`` and kind parameters in ``params`` (see
+    that module); ``Y`` and ``W`` are then ignored.  ``aux`` stores arrays
+    the prediction step needs (survival and quantile forests predict from
+    the training outcomes).
 
     For a causal forest ``Y`` and ``W`` must already be centred by their
     nuisance predictions (``Y - Y.hat`` and ``W - W.hat``), as grf does
@@ -1430,11 +1584,37 @@ def train_forest(
         raise DataInsufficient("honesty_fraction leaves no samples to grow trees on.")
 
     # num_trees is rounded to a multiple of ci_group_size.
+    if int(kind) >= KIND_INSTRUMENTAL:
+        if M is None or params is None:
+            raise MethodIncompatibility(
+                "train_forest(): GRF-family kinds need the data matrix M "
+                "and the kind parameters."
+            )
+        M_arr = np.ascontiguousarray(M, dtype=np.float64)
+        if M_arr.ndim != 2 or M_arr.shape[0] != n:
+            raise MethodIncompatibility("train_forest(): M must be (n, m).")
+        if not np.isfinite(M_arr).all():
+            raise MethodIncompatibility("train_forest(): M has non-finite values.")
+        params_arr = np.ascontiguousarray(params, dtype=np.float64).ravel()
+        rho_width = int(rho_dim(int(kind), params_arr))
+    else:
+        M_arr = np.zeros((1, 1))
+        params_arr = np.zeros(1)
+        rho_width = 1
+
     L = int(ci_group_size)
     num_trees = int(num_trees) + (int(num_trees) % L)
     n_groups = num_trees // L
     mtry_value = default_mtry(p) if mtry is None else int(min(max(mtry, 1), p))
     depth_cap = 0 if max_depth is None else int(max_depth)
+
+    # Independent per-group seeds derived from the user's seed.  (Seeding
+    # group g with ``seed + g`` made forests for consecutive seeds share all
+    # but one group of trees, and forests grown from one seed draw identical
+    # subsamples group by group.)
+    group_seeds = np.random.SeedSequence(int(seed) % (2**63)).generate_state(
+        max(n_groups, 1), dtype=np.uint32
+    )
 
     def _run(group: int) -> List[Tuple[Any, ...]]:
         return list(
@@ -1458,7 +1638,7 @@ def train_forest(
                 bool(stabilize_splits),
                 L,
                 depth_cap,
-                (int(seed) + group) % (2**32 - 1),
+                int(group_seeds[group]),
                 unit_codes,
                 time_codes,
                 n_units,
@@ -1466,6 +1646,9 @@ def train_forest(
                 int(fe_max_iter),
                 float(fe_tol),
                 bool(tau_split),
+                M_arr,
+                params_arr,
+                rho_width,
             )
         )
 
@@ -1476,7 +1659,10 @@ def train_forest(
         with ThreadPoolExecutor(max_workers=workers) as pool:
             groups = list(pool.map(_run, range(n_groups)))
     trees = [tree for group in groups for tree in group]
-    return _assemble(trees, int(kind), n, p, L, codes, locals())
+    forest = _assemble(trees, int(kind), n, p, L, codes, locals())
+    forest.params = params_arr
+    forest.aux = dict(aux or {})
+    return forest
 
 
 def _resolve_n_jobs(n_jobs: Optional[int]) -> int:
@@ -1553,3 +1739,23 @@ def _assemble(
         drawn_bitmap=drawn_bitmap,
         options=options,
     )
+
+
+# The GRF-family kinds (instrumental, multi-causal, multi-regression,
+# quantile, survival, causal-survival) live in their own module; it imports
+# helpers defined above, so it is bound here, after them.
+from ._grf_ext import (  # noqa: E402,F401  (KIND_* are re-exported)
+    KIND_CAUSAL_SURV,
+    KIND_INSTRUMENTAL,
+    KIND_MULTI_CAUSAL,
+    KIND_MULTI_REG,
+    KIND_QUANTILE,
+    KIND_SURVIVAL,
+    MOMENT_KINDS,
+    leaf_values_ext,
+    predict_moment_kernel,
+    predict_quantile_kernel,
+    predict_survival_kernel,
+    relabel_and_split,
+    rho_dim,
+)

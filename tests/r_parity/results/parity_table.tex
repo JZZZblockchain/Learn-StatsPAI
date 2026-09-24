@@ -26,7 +26,7 @@ Module & Method & Worst headline diff & Verdict \\
 \code{10\_honest\_did} & Honest DiD bounds & abs $\le 4.88e-15$ {\footnotesize (FLCI via HonestDiD backend; Stata port within 0.0005)} & \textbf{PASS} \\
 \code{11\_psm} & PSM 1:1 NN & rel $\le 1.2e-15$ {\footnotesize (se\_teffects\_ai joins Stata teffects psmatch's Abadie-Imbens 2016 estimated-score variance at rel 7e-8 via the abadie\_imbens\_2016 SE option; the default psmatch2 ai(1) SE is a documented convention (sample vs population ATT, no score term))} & \textbf{PASS} \\
 \code{12\_sdid} & Synthetic DID & rel $\le 7.8e-16$ {\footnotesize (native Frank-Wolfe/zeta ATT parity; backend-native placebo SE diagnostics)} & \textbf{PASS} \\
-\code{13\_causal\_forest} & Causal forest (AIPW) & rel $\le 0.0024$ {\footnotesize (T3 combined-MC-error pass; like-for-like AIPW vs grf within $\sim 0.05$ combined SE on clean-overlap DGP)} & \textbf{PASS} \\
+\code{13\_causal\_forest} & Causal forest (AIPW) & rel $\le 0.00026$ {\footnotesize (T3 combined-MC-error pass; like-for-like AIPW vs grf within $\sim 0.05$ combined SE on clean-overlap DGP)} & \textbf{PASS} \\
 \code{14\_ols\_cluster} & OLS + cluster-robust SE & rel $\le 3e-14$ & \textbf{PASS} \\
 \code{15\_hdfe\_cluster} & HDFE + cluster SE & rel $\le 5.2e-15$ {\footnotesize (fixest/reghdfe nested-FE cluster correction)} & \textbf{PASS} \\
 \code{16\_bjs} & BJS imputation & rel $\le 4.8e-08$ {\footnotesize (R/Stata simple-ATT point parity; SE rows side-specific)} & \textbf{PASS} \\

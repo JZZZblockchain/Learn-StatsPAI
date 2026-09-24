@@ -2418,6 +2418,28 @@ __all__ = [
     # of the agent-native design contract ("help tools must resolve for every
     # public symbol").  All run cleanly and build valid schemas; listing them
     # here closes the drift and makes ``from statspai import *`` complete.
+    # GRF family: these were reachable as sp.<name> through _register_lazy
+    # but absent from __all__, so sp.list_functions() never saw them.
+    "iv_forest",
+    "instrumental_forest",
+    "IVForestResult",
+    "multi_arm_forest",
+    "MultiArmForestResult",
+    "lm_forest",
+    "LMForestResult",
+    "regression_forest",
+    "multi_regression_forest",
+    "probability_forest",
+    "quantile_forest",
+    "PredictionForest",
+    "survival_forest",
+    "SurvivalForestResult",
+    "causal_survival_forest",
+    "causal_survival",
+    "CausalSurvivalForestResult",
+    "variable_importance",
+    "best_linear_projection",
+    "get_scores",
     # BCF extensions
     "bcf_factor_exposure",
     "bcf_longitudinal",
@@ -2853,7 +2875,32 @@ _register_lazy(
 _register_lazy(
     "forest.iv_forest",
     "iv_forest",
+    "instrumental_forest",
     "IVForestResult",
+)
+_register_lazy(
+    "forest.lm_forest",
+    "lm_forest",
+    "LMForestResult",
+)
+_register_lazy(
+    "forest.regression_forests",
+    "regression_forest",
+    "multi_regression_forest",
+    "probability_forest",
+    "quantile_forest",
+    "PredictionForest",
+)
+_register_lazy(
+    "forest.survival_forest",
+    "survival_forest",
+    "SurvivalForestResult",
+)
+_register_lazy(
+    "forest.forest_tools",
+    "variable_importance",
+    "best_linear_projection",
+    "get_scores",
 )
 _register_lazy(
     "conformal_causal",

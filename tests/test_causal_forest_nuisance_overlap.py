@@ -40,7 +40,11 @@ def _fit(df, **kw):
     return sp.causal_forest("y ~ d | x1 + x2 + x3", data=df, **kw)
 
 
-# Pinned from the pre-change code (origin/main 4bf29552) on macOS/arm64.
+# Re-pinned for the engine seeding fix (independent per-group seeds and
+# per-nuisance random streams; see CHANGELOG): the forest for random_state=1
+# is a different draw, the ATE moving 1.322 -> 1.394 on this n = 300 design
+# (SE ~ 0.15, truth ~ 1.5). Originally pinned from origin/main 4bf29552 on
+# macOS/arm64.
 # These are coarse regression canaries, NOT a cross-platform contract: the
 # engine is bit-deterministic for a given random_state on a given machine
 # (verified for 1, 2, 4 and 8 numba threads), but a split is an argmax over
@@ -63,14 +67,14 @@ def test_estimate_unchanged_and_nuisances_exposed():
     assert not _overlap_warnings(rec)
     np.testing.assert_allclose(
         cf.diagnostics["average_treatment_effect"],
-        1.3218728216088307,
+        1.394246631218219,
         rtol=_ATE_PIN_RTOL,
     )
-    np.testing.assert_allclose(float(cf.ate()), 1.3757088560133564, rtol=_ATE_PIN_RTOL)
+    np.testing.assert_allclose(float(cf.ate()), 1.3552878639464825, rtol=_ATE_PIN_RTOL)
     nu = cf.get_nuisances()
     np.testing.assert_array_equal(nu["W_hat"], cf._e_insample)
     np.testing.assert_array_equal(nu["Y_hat"], cf._m_insample)
-    np.testing.assert_allclose(nu["W_hat"].sum(), 162.80336902315491, rtol=_W_PIN_RTOL)
+    np.testing.assert_allclose(nu["W_hat"].sum(), 158.89617422293276, rtol=_W_PIN_RTOL)
     assert not nu["W_hat"].flags.writeable and not nu["Y_hat"].flags.writeable
     assert nu["W_hat"] is not cf._e_insample  # a copy, internals untouched
     assert nu["source"] == {

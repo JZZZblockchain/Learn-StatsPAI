@@ -531,15 +531,17 @@ TOLERANCES: dict[str, dict[str, float]] = {
         "rel_est": 0.01,  # B/T3: graded against combined Monte Carlo error
         # of two independent forests. Since 1.29 sp.causal_forest runs its
         # own GRF engine (gradient splits, OOB nuisances, little bags);
-        # observed ATE 0.24% / ATT 0.38% (2.6x margin). The engine's
+        # observed ATE 0.03% / ATT 0.26% (3.9x margin) since 1.31's engine
+        # seeding fix (independent per-group seeds and nuisance streams;
+        # before it: 0.24% / 0.38%). The engine's
         # statistical parity with grf (RMSE, pointwise variances, coverage)
         # is gated in tests/reference_parity/test_grf_engine_statistical_parity.py.
         "rel_se": 0.05,  # B: the AIPW *operator* is pinned exactly (see
         # tests/reference_parity/test_grf_aipw_operator_parity.py and the
         # clustered operator parity), so this band covers forest RNG only.
         # Tightened from 0.25 in 1.29: with the GRF engine the observed
-        # worst is 0.63% (ATT; ATE 0.22%, was 7.7% under the pre-1.29
-        # engine), a 7.9x margin.
+        # worst is 0.68% (ATT; ATE 0.16%) after 1.31's seeding fix (0.63%
+        # before; 7.7% under the pre-1.29 engine), a 7.3x margin.
     },  # clean-overlap AIPW vs grf (post-nuisance-regularisation MC gap)
     "14_ols_cluster": {
         "rel_est": 1e-6,

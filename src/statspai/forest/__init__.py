@@ -7,9 +7,15 @@ companions:
 - :func:`causal_forest` / :class:`CausalForest` — heterogeneous
   treatment-effect estimation via honest random forests
   (Wager-Athey 2018; Athey-Tibshirani-Wager 2019).
-- :func:`iv_forest` — instrumental-variable causal forests
-  (Athey-Tibshirani-Wager 2019).
-- :func:`multi_arm_forest` — multi-arm extension.
+- :func:`iv_forest` / :func:`instrumental_forest` — instrumental forests
+  for conditional LATEs (Athey-Tibshirani-Wager 2019).
+- :func:`multi_arm_forest` / :func:`lm_forest` — multi-arm causal forests
+  and conditionally linear models (Nie-Wager 2021 with GRF weights).
+- :func:`regression_forest`, :func:`multi_regression_forest`,
+  :func:`probability_forest`, :func:`quantile_forest`,
+  :func:`survival_forest` — the prediction forests of the GRF family.
+- :func:`variable_importance`, :func:`best_linear_projection`,
+  :func:`get_scores` — grf's post-estimation for any of them.
 - :func:`forest_group_effects` / :func:`forest_support` /
   :func:`cate_pretrend_test` -- group effects with valid SEs (imputation
   scores for ``fe=`` forests), support of counterfactual predictions, and
@@ -40,8 +46,18 @@ from .forest_inference import (
     rate,
     test_calibration,
 )
-from .iv_forest import IVForestResult, iv_forest
+from .forest_tools import best_linear_projection, get_scores, variable_importance
+from .iv_forest import IVForestResult, instrumental_forest, iv_forest
+from .lm_forest import LMForestResult, lm_forest
 from .multi_arm_forest import MultiArmForestResult, multi_arm_forest
+from .regression_forests import (
+    PredictionForest,
+    multi_regression_forest,
+    probability_forest,
+    quantile_forest,
+    regression_forest,
+)
+from .survival_forest import SurvivalForestResult, survival_forest
 
 __all__ = [
     "CausalForest",
@@ -61,5 +77,18 @@ __all__ = [
     "multi_arm_forest",
     "MultiArmForestResult",
     "iv_forest",
+    "instrumental_forest",
     "IVForestResult",
+    "lm_forest",
+    "LMForestResult",
+    "regression_forest",
+    "multi_regression_forest",
+    "probability_forest",
+    "quantile_forest",
+    "PredictionForest",
+    "survival_forest",
+    "SurvivalForestResult",
+    "variable_importance",
+    "best_linear_projection",
+    "get_scores",
 ]

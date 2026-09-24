@@ -56,7 +56,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `fast` | 7,693 | 16 | 0 |
 | `diagnostics` | 7,921 | 14 | 25 |
 | `spatial` | 7,818 | 30 | 38 |
-| `forest` | 10,629 | 11 | 14 |
+| `forest` | 15,769 | 17 | 31 |
 | `plots` | 6,002 | 7 | 8 |
 | `bayes` | 5,170 | 12 | 19 |
 | `mendelian` | 5,124 | 13 | 38 |
@@ -72,7 +72,7 @@ Sorted by LOC. This table is generated from the live source tree by `python scri
 | `dag` | 3,556 | 9 | 23 |
 | `tmle` | 3,573 | 6 | 11 |
 | `timeseries` | 5,645 | 11 | 20 |
-| `survival` | 3,824 | 6 | 12 |
+| `survival` | 4,163 | 6 | 15 |
 | `neural_causal` | 3,297 | 6 | 16 |
 | `robustness` | 3,098 | 6 | 11 |
 | `causal_llm` | 2,960 | 10 | 14 |
@@ -141,7 +141,7 @@ Legend: B = broad API coverage within this comparison table; Y = implemented ent
 |  4 | Synthetic Control (ADH / ASCM / gsynth / BSTS / Bayesian / PenSCM / FDID — 20 methods + 6 inference strategies) | P (`synth` SSC) | P (7 pkgs: Synth, gsynth, CausalImpact, MSCMT, …) | N | N | B | `sp.synth(method=...)`, `sp.synth_compare`, `sp.synth_recommend`, `sp.synth_power`, `sp.synth_sensitivity` |
 |  5 | Matching — PS / CEM / optimal / cardinality / one-to-many     | P (`psmatch2` SSC) | Y (`MatchIt`, `optmatch`) | N | N | Y | `sp.match`, `sp.cem`, `sp.optimal_match`, `sp.cardinality_match` |
 |  6 | Double / Debiased ML                                          | N | Y (`DoubleML`) | N | Y | Y | `sp.dml(model=...)`, `sp.dml_model_averaging`, `sp.kernel_dml` |
-|  7 | Meta-Learners (S/T/X/R/DR) + Causal Forest / GRF              | N | Y (`grf`, `rlearner`) | N | N | Y | `sp.s_learner`, `sp.t_learner`, `sp.x_learner`, `sp.r_learner`, `sp.dr_learner`, `sp.causal_forest` |
+|  7 | Meta-Learners (S/T/X/R/DR) + Causal Forest / GRF family       | N | Y (`grf`, `rlearner`) | N | N | Y | `sp.s_learner`, `sp.t_learner`, `sp.x_learner`, `sp.r_learner`, `sp.dr_learner`, `sp.causal_forest`, `sp.iv_forest`, `sp.multi_arm_forest`, `sp.lm_forest`, `sp.causal_survival_forest`, `sp.quantile_forest`, `sp.survival_forest` |
 |  8 | TMLE / HAL-TMLE                                               | N | Y (`tmle`, `hal9001`) | N | N | Y | `sp.tmle`, `sp.hal_tmle`, `sp.ctmle` |
 |  9 | Neural causal (TARNet / CFRNet / DragonNet / CEVAE)           | N | N | N | N | B | `sp.tarnet`, `sp.cfrnet`, `sp.dragonnet`, `sp.cevae` |
 | 10 | Causal discovery (NOTEARS / PC / LiNGAM / GES + deep variants) | N | P (`pcalg`) | N | N | B | `sp.notears`, `sp.pc_algorithm`, `sp.lingam`, `sp.ges` |

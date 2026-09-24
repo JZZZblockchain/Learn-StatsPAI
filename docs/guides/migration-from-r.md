@@ -129,7 +129,17 @@ report = sp.cs_report(data, y="y", t="t", g="g", i="id",
 | `grf::causal_forest(X, Y, W, clusters = g)`  | `sp.causal_forest(Y=Y, T=W, X=X, clusters=g)`       |
 | `predict(cf, X.new)` / `predict(cf)`         | `forest.effect(X_new)` / `forest.predict()` (OOB)   |
 | `grf::test_calibration(cf)`                  | `sp.calibration_test(forest)`                       |
-| `grf::instrumental_forest(...)`              | `sp.iv_forest(...)`                                 |
+| `grf::instrumental_forest(X, Y, W, Z)`       | `sp.iv_forest(y=Y, treat=W, instrument=Z, covariates=X)`|
+| `grf::multi_arm_causal_forest(X, Y, W)`      | `sp.multi_arm_forest(y=Y, treat=W, covariates=X)`   |
+| `grf::lm_forest(X, Y, W)`                    | `sp.lm_forest(y=Y, regressors=W, covariates=X)`     |
+| `grf::causal_survival_forest(X, Y, W, D, horizon = h)`| `sp.causal_survival_forest(time=Y, event=D, treat=W, covariates=X, horizon=h)`|
+| `grf::survival_forest(X, Y, D)`              | `sp.survival_forest(time=Y, event=D, covariates=X)` |
+| `grf::quantile_forest(X, Y)`                 | `sp.quantile_forest(y=Y, covariates=X)`             |
+| `grf::probability_forest(X, Y)`              | `sp.probability_forest(y=Y, covariates=X)`          |
+| `grf::regression_forest(X, Y)`               | `sp.regression_forest(y=Y, covariates=X)`           |
+| `grf::variable_importance(forest)`           | `sp.variable_importance(forest)`                    |
+| `grf::best_linear_projection(forest, A)`     | `sp.best_linear_projection(forest, A=A)`            |
+| `grf::get_scores(forest)`                    | `sp.get_scores(forest)`                             |
 | `SuperLearner::SuperLearner(...)`            | `sp.tmle(...)` with custom learners                 |
 | `policytree::policy_tree(...)`               | `sp.policy_tree(X, reward)`                         |
 | `causalTree::honest.causalTree(...)`         | `sp.causal_forest(..., honest=True)`                |

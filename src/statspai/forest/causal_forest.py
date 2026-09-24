@@ -1709,20 +1709,54 @@ class CausalForest(BaseModel):
     #  GRF-inspired extensions
     # ------------------------------------------------------------------ #
 
-    def variable_importance(self) -> pd.Series:
-        """Permutation-based variable importance for the causal forest.
+    def variable_importance(
+        self,
+        method: Optional[str] = None,
+        decay_exponent: float = 2.0,
+        max_depth: int = 4,
+    ) -> pd.Series:
+        """Variable importance of the causal forest.
 
-        For each feature j, shuffle its column in the effect-modifier
-        matrix and measure how much the cross-validated CATE predictions
-        degrade (MSE increase). Higher degradation → more important for
-        treatment-effect heterogeneity.
+        Parameters
+        ----------
+        method : {"split", "permutation"}, optional
+            ``"split"`` is ``grf::variable_importance``: the depth-weighted
+            share of splits on each covariate (see
+            :func:`statspai.variable_importance`).  ``"permutation"`` is the
+            earlier StatsPAI measure: shuffle one covariate and record the
+            mean squared change of ``effect(X)`` on the training rows (which
+            uses in-bag trees, so it reflects the fitted function, not
+            out-of-sample relevance).  Omitting ``method`` keeps
+            ``"permutation"`` for now and warns: the default becomes
+            ``"split"`` in 1.33.
+        decay_exponent, max_depth
+            Options of the ``"split"`` measure.
 
-        Returns a normalised importance score (sums to 1).
+        Returns a normalised importance (sums to 1).
         """
         if not self.fitted_:
             raise MethodIncompatibility(
                 "CausalForest.variable_importance() requires a fitted model.",
                 recovery_hint="Call fit() before computing variable importance.",
+            )
+        if method is None:
+            warnings.warn(
+                "CausalForest.variable_importance(): the default measure "
+                "changes from 'permutation' to grf's 'split' importance in "
+                "1.33. Pass method='split' (grf) or method='permutation' "
+                "(current default) to silence this warning.",
+                FutureWarning,
+                stacklevel=_external_stacklevel(),
+            )
+            method = "permutation"
+        if method == "split":
+            from .forest_tools import variable_importance as _vi
+
+            return _vi(self, decay_exponent=decay_exponent, max_depth=max_depth)
+        if method != "permutation":
+            raise MethodIncompatibility(
+                f"CausalForest.variable_importance(): unknown method {method!r}.",
+                recovery_hint="Use method='split' or method='permutation'.",
             )
         X = self._X_original.copy()
         cate_baseline = self.effect(X)

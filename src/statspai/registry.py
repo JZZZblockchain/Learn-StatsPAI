@@ -2637,6 +2637,1018 @@ def _build_registry() -> None:
 
     register(
         FunctionSpec(
+            name="iv_forest",
+            category="causal",
+            description=(
+                "Instrumental forest (grf::instrumental_forest): heterogeneous local "
+                "average treatment effects tau(x) = Cov[Y,Z|x]/Cov[W,Z|x] from an "
+                "honest generalized random forest that splits on the IV gradient and "
+                "uses the instrument in its split constraints. Reports out-of-bag CATEs"
+                " with little-bag variances and the doubly-robust average conditional "
+                "LATE (compliance-weighted scores). Given grf's forest, the local "
+                "solve, scores, average and BLP match grf to 1e-13 (T2); the forest "
+                "itself is T3."
+            ),
+            params=[
+                ParamSpec(
+                    "data",
+                    "any",
+                    False,
+                    None,
+                    "Input data. When omitted, ``y``, ``treat``, ``instrument`` and ``covariates`` are arrays.",
+                ),
+                ParamSpec("y", "any", False, None, "Outcome (column name or array)."),
+                ParamSpec(
+                    "treat", "any", False, None, "Treatment (binary or continuous)."
+                ),
+                ParamSpec(
+                    "instrument",
+                    "any",
+                    False,
+                    None,
+                    "Instrument (binary or continuous).",
+                ),
+                ParamSpec(
+                    "covariates",
+                    "any",
+                    False,
+                    None,
+                    "Effect modifiers ``X``; the nuisances are also regressed on them.",
+                ),
+                ParamSpec(
+                    "clusters",
+                    "any",
+                    False,
+                    None,
+                    "Cluster ids: trees sample whole clusters and every standard error is cluster-robust.",
+                ),
+                ParamSpec(
+                    "weights",
+                    "any",
+                    False,
+                    None,
+                    "Sample weights (grf ``sample.weights``).",
+                ),
+                ParamSpec(
+                    "equalize_cluster_weights",
+                    "bool",
+                    False,
+                    False,
+                    "Give every cluster the same weight (incompatible with ``weights``).",
+                ),
+                ParamSpec(
+                    "Y_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed E[Y|X]; default out-of-bag regression forest.",
+                ),
+                ParamSpec(
+                    "W_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed E[W|X]; default out-of-bag regression forest.",
+                ),
+                ParamSpec(
+                    "Z_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed E[Z|X]; default out-of-bag regression forest.",
+                ),
+                ParamSpec(
+                    "compliance_score",
+                    "any",
+                    False,
+                    None,
+                    "``Delta(X_i)`` for the average-effect scores; by default estimated by an auxiliary 500-tree causal forest of ``W`` on ``Z``.",
+                ),
+                ParamSpec(
+                    "n_estimators", "int", False, 2000, "Trees (grf ``num.trees``)."
+                ),
+                ParamSpec(
+                    "min_samples_leaf", "int", False, 5, "grf ``min.node.size``."
+                ),
+                ParamSpec(
+                    "max_samples",
+                    "float",
+                    False,
+                    0.5,
+                    "Fraction of clusters drawn per tree (grf ``sample.fraction``).",
+                ),
+                ParamSpec(
+                    "mtry",
+                    "any",
+                    False,
+                    None,
+                    "Candidate variables per split (grf default ``min(ceil(sqrt(p) + 20), p)``).",
+                ),
+                ParamSpec(
+                    "honest",
+                    "bool",
+                    False,
+                    True,
+                    "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+                ),
+                ParamSpec(
+                    "honesty_fraction",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of the drawn sample used to grow the tree.",
+                ),
+                ParamSpec(
+                    "honesty_prune_leaves",
+                    "bool",
+                    False,
+                    True,
+                    "Prune leaves left empty by the estimation half.",
+                ),
+                ParamSpec(
+                    "split_alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "grf ``alpha``: minimum share of the parent's instrument variation each child of a stabilised split keeps.",
+                ),
+                ParamSpec(
+                    "imbalance_penalty",
+                    "float",
+                    False,
+                    0.0,
+                    "grf imbalance.penalty on unbalanced splits.",
+                ),
+                ParamSpec(
+                    "stabilize_splits",
+                    "bool",
+                    False,
+                    True,
+                    "Use the instrument in the split constraints.",
+                ),
+                ParamSpec(
+                    "ci_group_size",
+                    "int",
+                    False,
+                    2,
+                    "Trees per little bag; 1 disables variance estimates.",
+                ),
+                ParamSpec(
+                    "reduced_form_weight",
+                    "float",
+                    False,
+                    0.0,
+                    "Mix the IV split criterion with the causal-forest criterion that treats ``W`` as exogenous (grf ``reduced.form.weight``).",
+                ),
+                ParamSpec(
+                    "max_depth", "any", False, None, "Depth cap (no grf analogue)."
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    42,
+                    "Seed; different seeds give independent forests.",
+                ),
+                ParamSpec(
+                    "n_jobs",
+                    "int",
+                    False,
+                    1,
+                    "Threads used to grow trees (-1 = all cores).",
+                ),
+                ParamSpec(
+                    "alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "Significance level of the reported interval.",
+                ),
+                ParamSpec(
+                    "n_bootstrap",
+                    "any",
+                    False,
+                    None,
+                    "Ignored. Standard errors now come from the doubly-robust scores.",
+                ),
+            ],
+            returns=(
+                "IVForestResult: late / se / ci / pvalue (ACLATE), cate (OOB), "
+                "cate_variance, predict(newdata), get_scores(), "
+                "average_treatment_effect(), best_linear_projection(A), "
+                "variable_importance(), detail (nuisance sources, compliance range)."
+            ),
+            example='sp.iv_forest(df, y="y", treat="d", instrument="z", covariates=["x1", "x2"])',
+            tags=["forest", "iv", "late", "heterogeneous", "causal", "grf"],
+            reference="[@athey2019generalized], [@aronow2013beyond], [@chernozhukov2022locally]",
+            pre_conditions=[
+                "instrument varies within covariate cells",
+                "first stage not near zero anywhere",
+            ],
+            assumptions=[
+                "instrument relevance, exclusion and independence given X",
+                "monotonicity for a complier interpretation of tau(x)",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: the instrument has no variation",
+                    exception="statspai.DataInsufficient",
+                    remedy="Use a varying instrument.",
+                    alternative="sp.ivreg",
+                ),
+                FailureMode(
+                    symptom="UserWarning: compliance score near zero",
+                    exception="UserWarning",
+                    remedy="Locally weak instrument; trim covariate regions or report the ATE with caution.",
+                    alternative="sp.weakrobust",
+                ),
+            ],
+            alternatives=["ivreg", "dml", "causal_forest"],
+            typical_n_min=1000,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="multi_arm_forest",
+            category="causal",
+            description=(
+                "Multi-arm causal forest (grf::multi_arm_causal_forest): CATEs of K-1 "
+                "arms against a reference, estimated jointly by one forest whose trees "
+                "split on the gradient of all contrasts (multi-arm R-learner with GRF "
+                "weights). Propensities from a probability forest, doubly-robust per-"
+                "arm ATEs, BLPs per contrast. Operators match grf to 1e-13 (T2); forest"
+                " statistics match grf within Monte Carlo error (T3)."
+            ),
+            params=[
+                ParamSpec(
+                    "data",
+                    "any",
+                    False,
+                    None,
+                    "Input data; when omitted, the other inputs are arrays.",
+                ),
+                ParamSpec("y", "any", False, None, "Outcome."),
+                ParamSpec(
+                    "treat",
+                    "any",
+                    False,
+                    None,
+                    "Arm labels (any values; at least two arms).",
+                ),
+                ParamSpec("covariates", "any", False, None, "Covariates ``X``."),
+                ParamSpec(
+                    "reference",
+                    "any",
+                    False,
+                    None,
+                    "Reference arm; defaults to the smallest label (``0`` for integer arms, matching the previous API).",
+                ),
+                ParamSpec(
+                    "clusters",
+                    "any",
+                    False,
+                    None,
+                    "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+                ),
+                ParamSpec(
+                    "weights",
+                    "any",
+                    False,
+                    None,
+                    "Sample weights (grf sample.weights).",
+                ),
+                ParamSpec(
+                    "equalize_cluster_weights",
+                    "bool",
+                    False,
+                    False,
+                    "Give every cluster equal weight (incompatible with weights).",
+                ),
+                ParamSpec(
+                    "Y_hat",
+                    "any",
+                    False,
+                    None,
+                    "``E[Y | X]``; default out-of-bag regression forest.",
+                ),
+                ParamSpec(
+                    "W_hat",
+                    "any",
+                    False,
+                    None,
+                    "``(n, K)`` arm propensities in the order of ``.arms``; default out-of-bag probability forest.",
+                ),
+                ParamSpec("n_estimators", "int", False, 2000, "Trees (grf num.trees)."),
+                ParamSpec(
+                    "min_samples_leaf",
+                    "int",
+                    False,
+                    5,
+                    "grf min.node.size: nodes with at most this many growing samples are not split.",
+                ),
+                ParamSpec(
+                    "max_samples",
+                    "float",
+                    False,
+                    0.5,
+                    "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+                ),
+                ParamSpec(
+                    "mtry",
+                    "any",
+                    False,
+                    None,
+                    "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+                ),
+                ParamSpec(
+                    "honest",
+                    "bool",
+                    False,
+                    True,
+                    "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+                ),
+                ParamSpec(
+                    "honesty_fraction",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of the drawn sample used to grow the tree.",
+                ),
+                ParamSpec(
+                    "honesty_prune_leaves",
+                    "bool",
+                    False,
+                    True,
+                    "Prune leaves left empty by the estimation half.",
+                ),
+                ParamSpec(
+                    "split_alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "grf alpha: minimum share of the parent each child keeps.",
+                ),
+                ParamSpec(
+                    "imbalance_penalty",
+                    "float",
+                    False,
+                    0.0,
+                    "grf imbalance.penalty on unbalanced splits.",
+                ),
+                ParamSpec(
+                    "stabilize_splits",
+                    "bool",
+                    False,
+                    True,
+                    "Apply the treatment/instrument split constraints (grf stabilize.splits).",
+                ),
+                ParamSpec(
+                    "ci_group_size",
+                    "int",
+                    False,
+                    2,
+                    "Trees per little bag; 1 disables variance estimates.",
+                ),
+                ParamSpec(
+                    "max_depth",
+                    "any",
+                    False,
+                    None,
+                    "Optional depth cap (no grf analogue).",
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    42,
+                    "Seed; different seeds give independent forests.",
+                ),
+                ParamSpec(
+                    "n_jobs",
+                    "int",
+                    False,
+                    1,
+                    "Threads used to grow trees (-1 = all cores).",
+                ),
+                ParamSpec(
+                    "alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "Significance level for the reported intervals.",
+                ),
+                ParamSpec(
+                    "propensity_bounds",
+                    "any",
+                    False,
+                    None,
+                    "Clip the estimated propensities to these bounds in the average- effect scores (not done by default, as in grf).",
+                ),
+            ],
+            returns=(
+                "MultiArmForestResult: arms, reference, ate / ate_se / ci / pvalue "
+                "(dicts by arm), cate (OOB, per arm), propensities, predict(newdata), "
+                "average_treatment_effect(), best_linear_projection(A), get_scores()."
+            ),
+            example='sp.multi_arm_forest(df, y="y", treat="arm", covariates=["x1", "x2"])',
+            tags=["forest", "multi-arm", "heterogeneous", "causal", "grf"],
+            reference="[@athey2019generalized], [@nie2021quasi]",
+            pre_conditions=[
+                "every arm observed",
+                "propensities bounded away from zero",
+            ],
+            assumptions=["unconfoundedness given X", "overlap for every arm"],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: need at least two treatment arms",
+                    exception="statspai.DataInsufficient",
+                    remedy="Pass a treatment with two or more values.",
+                    alternative="sp.causal_forest",
+                ),
+                FailureMode(
+                    symptom="UserWarning: smallest estimated arm propensity",
+                    exception="UserWarning",
+                    remedy="Poor overlap: pass propensity_bounds= or trim.",
+                    alternative="sp.trimming",
+                ),
+            ],
+            alternatives=["causal_forest", "multi_treatment", "metalearner"],
+            typical_n_min=1000,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="lm_forest",
+            category="causal",
+            description=(
+                "Linear-model forest (grf::lm_forest): covariate-varying coefficients "
+                "h_k(x) in Y = c(x) + sum_k h_k(x) W_k, by forest-weighted local least "
+                "squares of the centred outcome(s) on the centred regressors. Use for "
+                "varying-coefficient models and continuous multi-dimensional "
+                "treatments; for mutually exclusive arms use sp.multi_arm_forest."
+            ),
+            params=[
+                ParamSpec(
+                    "data",
+                    "any",
+                    False,
+                    None,
+                    "Input data; when omitted, the other inputs are arrays.",
+                ),
+                ParamSpec(
+                    "y",
+                    "any",
+                    False,
+                    None,
+                    "Outcome(s); several outcomes are modelled jointly.",
+                ),
+                ParamSpec(
+                    "regressors",
+                    "any",
+                    False,
+                    None,
+                    "The regressors ``W_1..W_K`` whose coefficients vary with ``x``.",
+                ),
+                ParamSpec(
+                    "covariates",
+                    "any",
+                    False,
+                    None,
+                    "The covariates ``X`` along which the coefficients vary.",
+                ),
+                ParamSpec(
+                    "clusters",
+                    "any",
+                    False,
+                    None,
+                    "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+                ),
+                ParamSpec(
+                    "weights",
+                    "any",
+                    False,
+                    None,
+                    "Sample weights (grf sample.weights).",
+                ),
+                ParamSpec(
+                    "equalize_cluster_weights",
+                    "bool",
+                    False,
+                    False,
+                    "Give every cluster equal weight (incompatible with weights).",
+                ),
+                ParamSpec(
+                    "Y_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed E[Y|X], (n, q); default out-of-bag (multi-task) regression forest.",
+                ),
+                ParamSpec(
+                    "W_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed E[W|X], (n, K); default out-of-bag (multi-task) regression forest.",
+                ),
+                ParamSpec("n_estimators", "int", False, 2000, "Trees (grf num.trees)."),
+                ParamSpec(
+                    "min_samples_leaf",
+                    "int",
+                    False,
+                    5,
+                    "grf min.node.size: nodes with at most this many growing samples are not split.",
+                ),
+                ParamSpec(
+                    "max_samples",
+                    "float",
+                    False,
+                    0.5,
+                    "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+                ),
+                ParamSpec(
+                    "mtry",
+                    "any",
+                    False,
+                    None,
+                    "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+                ),
+                ParamSpec(
+                    "honest",
+                    "bool",
+                    False,
+                    True,
+                    "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+                ),
+                ParamSpec(
+                    "honesty_fraction",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of the drawn sample used to grow the tree.",
+                ),
+                ParamSpec(
+                    "honesty_prune_leaves",
+                    "bool",
+                    False,
+                    True,
+                    "Prune leaves left empty by the estimation half.",
+                ),
+                ParamSpec(
+                    "split_alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "grf alpha: minimum share of the parent each child keeps.",
+                ),
+                ParamSpec(
+                    "imbalance_penalty",
+                    "float",
+                    False,
+                    0.0,
+                    "grf imbalance.penalty on unbalanced splits.",
+                ),
+                ParamSpec(
+                    "stabilize_splits",
+                    "bool",
+                    False,
+                    False,
+                    "Apply the causal-forest split constraints to every regressor.",
+                ),
+                ParamSpec(
+                    "ci_group_size",
+                    "int",
+                    False,
+                    2,
+                    "Trees per little bag; 1 disables variance estimates.",
+                ),
+                ParamSpec(
+                    "max_depth",
+                    "any",
+                    False,
+                    None,
+                    "Optional depth cap (no grf analogue).",
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    42,
+                    "Seed; different seeds give independent forests.",
+                ),
+                ParamSpec(
+                    "n_jobs",
+                    "int",
+                    False,
+                    1,
+                    "Threads used to grow trees (-1 = all cores).",
+                ),
+            ],
+            returns=(
+                "LMForestResult: coefficients (n, K, q) OOB, coefficient_variance, "
+                "predict(newdata), variable_importance()."
+            ),
+            example="sp.lm_forest(y=Y, regressors=W, covariates=X)",
+            tags=["forest", "varying-coefficient", "heterogeneous", "grf"],
+            reference="[@athey2019generalized], [@nie2021quasi]",
+            pre_conditions=["regressors vary conditionally on X"],
+            assumptions=["the conditional model is linear in W given X"],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: coefficient forest left rows without an out-of-bag prediction",
+                    exception="statspai.DataInsufficient",
+                    remedy="Increase n_estimators.",
+                ),
+            ],
+            alternatives=["multi_arm_forest", "causal_forest"],
+            typical_n_min=500,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="causal_survival_forest",
+            category="causal",
+            description=(
+                "Causal survival forest (Cui et al. 2023; grf::causal_survival_forest):"
+                " heterogeneous effects on right-censored outcomes -- RMST or survival-"
+                "probability difference at a horizon -- under unconfoundedness and "
+                "conditionally independent censoring. Nuisance survival and censoring "
+                "curves come from out-of-bag survival forests on [X, W]; the censoring-"
+                "robust scores follow grf's discretisation exactly (T2 on the score "
+                "map), with doubly-robust averages and BLPs."
+            ),
+            params=[
+                ParamSpec(
+                    "data",
+                    "any",
+                    False,
+                    None,
+                    "Input data; when omitted, the other inputs are arrays.",
+                ),
+                ParamSpec(
+                    "time",
+                    "any",
+                    False,
+                    None,
+                    "Observed time ``min(T, C)``, non-negative.",
+                ),
+                ParamSpec(
+                    "event", "any", False, None, "1 = event observed, 0 = censored."
+                ),
+                ParamSpec("treat", "any", False, None, "Binary treatment."),
+                ParamSpec(
+                    "covariates",
+                    "any",
+                    False,
+                    None,
+                    "Covariates ``X`` (confounders and effect modifiers).",
+                ),
+                ParamSpec(
+                    "horizon",
+                    "any",
+                    False,
+                    None,
+                    "``h`` of the estimand. Defaults to the 80th percentile of observed event times (recorded in ``detail``); grf requires it -- choose it from the study design.",
+                ),
+                ParamSpec(
+                    "target",
+                    "str",
+                    False,
+                    "RMST",
+                    "Estimand: 'RMST' or 'survival_probability'.",
+                ),
+                ParamSpec(
+                    "failure_times",
+                    "any",
+                    False,
+                    None,
+                    "Grid for the survival nuisance forests (default: observed times).",
+                ),
+                ParamSpec(
+                    "clusters",
+                    "any",
+                    False,
+                    None,
+                    "Cluster ids: trees sample whole clusters; SEs are cluster-robust.",
+                ),
+                ParamSpec(
+                    "weights",
+                    "any",
+                    False,
+                    None,
+                    "Sample weights (grf sample.weights).",
+                ),
+                ParamSpec(
+                    "equalize_cluster_weights",
+                    "bool",
+                    False,
+                    False,
+                    "Give every cluster equal weight (incompatible with weights).",
+                ),
+                ParamSpec(
+                    "W_hat",
+                    "any",
+                    False,
+                    None,
+                    "Precomputed propensities; default out-of-bag regression forest.",
+                ),
+                ParamSpec("n_estimators", "int", False, 2000, "Trees (grf num.trees)."),
+                ParamSpec(
+                    "min_samples_leaf",
+                    "int",
+                    False,
+                    5,
+                    "grf min.node.size: nodes with at most this many growing samples are not split.",
+                ),
+                ParamSpec(
+                    "max_samples",
+                    "float",
+                    False,
+                    0.5,
+                    "Fraction of clusters drawn per tree (grf sample.fraction); at most 0.5 when ci_group_size > 1.",
+                ),
+                ParamSpec(
+                    "mtry",
+                    "any",
+                    False,
+                    None,
+                    "Candidate variables per split (grf default min(ceil(sqrt(p) + 20), p)).",
+                ),
+                ParamSpec(
+                    "honest",
+                    "bool",
+                    False,
+                    True,
+                    "grf honesty: grow on one half of the drawn sample, estimate leaves on the other.",
+                ),
+                ParamSpec(
+                    "honesty_fraction",
+                    "float",
+                    False,
+                    0.5,
+                    "Share of the drawn sample used to grow the tree.",
+                ),
+                ParamSpec(
+                    "honesty_prune_leaves",
+                    "bool",
+                    False,
+                    True,
+                    "Prune leaves left empty by the estimation half.",
+                ),
+                ParamSpec(
+                    "split_alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "grf ``alpha``; each child must also hold ``split_alpha`` of the parent's size in failures.",
+                ),
+                ParamSpec(
+                    "imbalance_penalty",
+                    "float",
+                    False,
+                    0.0,
+                    "grf imbalance.penalty on unbalanced splits.",
+                ),
+                ParamSpec(
+                    "stabilize_splits",
+                    "bool",
+                    False,
+                    True,
+                    "Apply the treatment/instrument split constraints (grf stabilize.splits).",
+                ),
+                ParamSpec(
+                    "ci_group_size",
+                    "int",
+                    False,
+                    2,
+                    "Trees per little bag; 1 disables variance estimates.",
+                ),
+                ParamSpec(
+                    "max_depth",
+                    "any",
+                    False,
+                    None,
+                    "Optional depth cap (no grf analogue).",
+                ),
+                ParamSpec(
+                    "propensity_bounds",
+                    "any",
+                    False,
+                    None,
+                    "Clip ``e`` in the average-effect score denominators (off by default, as in grf).",
+                ),
+                ParamSpec(
+                    "random_state",
+                    "int",
+                    False,
+                    42,
+                    "Seed; different seeds give independent forests.",
+                ),
+                ParamSpec(
+                    "n_jobs",
+                    "int",
+                    False,
+                    1,
+                    "Threads used to grow trees (-1 = all cores).",
+                ),
+                ParamSpec(
+                    "alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "Significance level of the reported interval.",
+                ),
+            ],
+            returns=(
+                "CausalSurvivalForestResult: ate / se / ci / pvalue, ate_rmst (RMST "
+                "target), cate (OOB), cate_variance, horizon, target, predict(newdata),"
+                " best_linear_projection(A)."
+            ),
+            example='sp.causal_survival_forest(df, time="t", event="d", treat="w", covariates=["x1"], horizon=5)',
+            tags=["forest", "survival", "rmst", "heterogeneous", "causal", "grf"],
+            reference="[@cui2023estimating], [@athey2019generalized]",
+            pre_conditions=[
+                "binary treatment",
+                "events before the horizon",
+                "censoring survival positive up to the horizon",
+            ],
+            assumptions=[
+                "unconfoundedness given X",
+                "censoring independent of T given (X, W)",
+                "positivity of treatment and of remaining uncensored up to the horizon",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="DataInsufficient: censoring survival ... is zero",
+                    exception="statspai.DataInsufficient",
+                    remedy="Choose a shorter horizon.",
+                ),
+                FailureMode(
+                    symptom="MethodIncompatibility: treat must be binary",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Encode a binary treatment.",
+                    alternative="sp.cox",
+                ),
+            ],
+            alternatives=["survival_forest", "cox", "ltmle_survival"],
+            typical_n_min=1000,
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="variable_importance",
+            category="causal",
+            description=(
+                "Split-frequency variable importance of any GRF-engine forest "
+                "(grf::variable_importance): depth-weighted shares of splits per "
+                "covariate, summing to one. Describes how the forest uses covariates; "
+                "it is not a test of heterogeneity -- use sp.calibration_test or "
+                "sp.best_linear_projection for that. Matches grf to 1e-15 given the "
+                "same split counts."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "any",
+                    True,
+                    None,
+                    "Any of ``sp.causal_forest`` (GRF engine), ``sp.iv_forest``, ``sp.multi_arm_forest``, ``sp.lm_forest``, ``sp.regression_forest``, ``sp.multi_regression_forest``, ``sp.probability_forest``, ``sp.quantile_forest``, ``sp.survival_forest``, ``sp",
+                ),
+                ParamSpec(
+                    "decay_exponent",
+                    "float",
+                    False,
+                    2.0,
+                    "How quickly deeper splits lose weight.",
+                ),
+                ParamSpec("max_depth", "int", False, 4, "Deepest level counted."),
+            ],
+            returns=("pd.Series of importances (sums to one), indexed by covariate."),
+            example="sp.variable_importance(cf)",
+            tags=["forest", "importance", "diagnostics", "grf"],
+            reference="[@athey2019generalized]",
+            pre_conditions=["forest fitted by a StatsPAI GRF-family function"],
+            assumptions=[],
+            failure_modes=[
+                FailureMode(
+                    symptom="MethodIncompatibility: unsupported object",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Pass a GRF-family forest.",
+                ),
+            ],
+            alternatives=["best_linear_projection", "calibration_test"],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="best_linear_projection",
+            category="causal",
+            description=(
+                "Best linear projection of a forest's conditional effect on covariates "
+                "(grf::best_linear_projection): OLS of the doubly-robust scores on (1, "
+                "A) with HC0-HC3 (cluster-robust when the forest has clusters) standard"
+                " errors -- valid inference on a low-dimensional summary of tau(x) "
+                "(Semenova and Chernozhukov 2021). Works for causal, instrumental, "
+                "multi-arm and causal-survival forests; matches grf to 1e-15 given the "
+                "scores."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "any",
+                    True,
+                    None,
+                    "``sp.causal_forest`` (GRF engine), ``sp.iv_forest``, ``sp.multi_arm_forest`` (one projection per contrast, stacked), ``sp.causal_survival_forest``.",
+                ),
+                ParamSpec(
+                    "A",
+                    "any",
+                    False,
+                    None,
+                    "Projection covariates, one row per training observation (after missing-value removal).",
+                ),
+                ParamSpec(
+                    "vce",
+                    "str",
+                    False,
+                    "HC3",
+                    "Covariance type HC0-HC3 (sandwich::vcovCL conventions; "
+                    "grf's vcov.type). vcov_type= is accepted as an alias.",
+                ),
+                ParamSpec(
+                    "alpha",
+                    "float",
+                    False,
+                    0.05,
+                    "Significance level for the intervals.",
+                ),
+            ],
+            returns=(
+                "pd.DataFrame with coef, se, t, p, ci_lower, ci_upper per term "
+                "(Intercept first)."
+            ),
+            example="sp.best_linear_projection(cf, A=df[['age']])",
+            tags=["forest", "blp", "heterogeneity", "inference", "grf"],
+            reference="[@semenova2021debiased], [@athey2019generalized]",
+            pre_conditions=["A has one row per training observation"],
+            assumptions=[
+                "the forest's nuisances are consistent (doubly-robust scores)"
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="MethodIncompatibility: A must have one row per training observation",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Align A with the rows the forest was fitted on.",
+                ),
+            ],
+            alternatives=["calibration_test", "rate", "forest_group_effects"],
+        )
+    )
+
+    register(
+        FunctionSpec(
+            name="get_scores",
+            category="causal",
+            description=(
+                "Doubly-robust scores behind a forest's average effect "
+                "(grf::get_scores): AIPW for causal and multi-arm forests, compliance-"
+                "weighted for instrumental forests, censoring-adjusted for causal "
+                "survival forests. Their mean is the average effect; use them for "
+                "custom averages, subgroup contrasts or policy values."
+            ),
+            params=[
+                ParamSpec(
+                    "forest",
+                    "any",
+                    True,
+                    None,
+                    "``sp.causal_forest`` (GRF engine, binary or continuous treatment), ``sp.iv_forest`` (average conditional LATE), ``sp.multi_arm_forest`` (one column per contrast), ``sp.causal_survival_forest``.",
+                ),
+            ],
+            returns=("np.ndarray of scores, (n,) or (n, K-1) for a multi-arm forest."),
+            example="sp.get_scores(cf)",
+            tags=["forest", "scores", "aipw", "grf"],
+            reference="[@athey2019generalized], [@robins1994estimation]",
+            pre_conditions=["forest with doubly-robust scores"],
+            assumptions=["the forest's nuisances are consistent"],
+            failure_modes=[
+                FailureMode(
+                    symptom="MethodIncompatibility: has no doubly-robust scores",
+                    exception="statspai.MethodIncompatibility",
+                    remedy="Prediction forests have no causal scores.",
+                ),
+            ],
+            alternatives=["best_linear_projection", "policy_tree"],
+        )
+    )
+
+    register(
+        FunctionSpec(
             name="rate_split",
             category="causal",
             description=(

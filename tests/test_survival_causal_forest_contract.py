@@ -30,7 +30,7 @@ def test_causal_survival_forest_accepts_scalar_covariate() -> None:
         event="event",
         treat="treat",
         covariates="x",
-        n_trees=5,
+        n_trees=50,
         min_leaf=2,
         random_state=133,
     )
@@ -38,6 +38,23 @@ def test_causal_survival_forest_accepts_scalar_covariate() -> None:
     assert res.n_obs == len(df)
     assert res.cate.shape == (len(df),)
     assert np.isfinite(res.ate_rmst)
+
+
+def test_causal_survival_forest_too_few_trees_fails_loudly() -> None:
+    """A forest so small that some rows are in every tree has no out-of-bag
+    effect for them; the average would silently drop them, so it refuses."""
+    df = _survival_frame()
+    with pytest.raises(DataInsufficient, match="out-of-bag"):
+        sp.causal_survival_forest(
+            df,
+            time="time",
+            event="event",
+            treat="treat",
+            covariates="x",
+            n_trees=5,
+            min_leaf=2,
+            random_state=133,
+        )
 
 
 def test_causal_survival_forest_rejects_missing_column_with_taxonomy() -> None:
