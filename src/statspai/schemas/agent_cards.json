@@ -44578,6 +44578,364 @@
   },
   {
     "alternatives": [
+      "q_learning",
+      "snmm"
+    ],
+    "assumptions": [
+      "Sequential ignorability: each stage-k action is as good as random given the observed history H_k",
+      "Positivity: stage propensities bounded away from 0 and 1",
+      "Stage contrast (blip) function linear in the history",
+      "Stage propensity model (logistic in the history) correctly specified"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "G-estimation / A-learning for a K-stage binary-action DTR.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "q_learning",
+        "exception": "ValueError",
+        "remedy": "Pass one covariate list per decision stage (an empty list for a stage with no new covariates)",
+        "symptom": "actions and stage_covariates have different lengths"
+      },
+      {
+        "alternative": "q_learning",
+        "exception": "(none -- informational)",
+        "remedy": "Positivity is doubtful; inspect overlap by stage and treat estimates at clipped histories with caution",
+        "symptom": "Propensities pile up at the clipping bounds"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "a_learning",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "Binary (0/1) action at every stage",
+      "One final outcome, higher is better"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "G-estimation / A-learning for a K-stage binary-action DTR.",
+      "name": "a_learning",
+      "parameters": {
+        "properties": {
+          "actions": {
+            "description": "actions parameter (Sequence[str]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "baseline": {
+            "description": "baseline parameter (Optional[Sequence[str]]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "propensity_bounds": {
+            "default": [
+              0.05,
+              0.95
+            ],
+            "description": "Clip propensity to avoid division blow-up.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "stage_covariates": {
+            "description": "Covariates observed just before stage k's decision.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Final outcome column (``outcome=`` is accepted as an alias).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "actions",
+          "stage_covariates"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "manski_bounds",
+      "iv_bounds",
+      "iv"
+    ],
+    "assumptions": [
+      "Instrument independent of potential outcomes and potential treatments (Z independent of Y(0), Y(1), D(0), D(1))",
+      "Exclusion restriction: Z affects Y only through D",
+      "No monotonicity assumed; the ATE is partially identified"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Compute Balke-Pearl bounds on the ATE.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "manski_bounds",
+        "exception": "ValueError",
+        "remedy": "Recode to 0/1; for non-binary outcomes use bounds that allow a bounded continuous outcome",
+        "symptom": "A column is not coded 0/1"
+      },
+      {
+        "alternative": "iv",
+        "exception": "(none -- informational)",
+        "remedy": "Expected without further assumptions; if monotonicity is credible, point-identify the LATE instead",
+        "symptom": "Bounds are wide and include zero"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "balke_pearl",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "Outcome, treatment and instrument all binary (0/1)"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Compute Balke-Pearl bounds on the ATE.",
+      "name": "balke_pearl",
+      "parameters": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Significance level for confidence intervals and tests.",
+            "type": "number"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "instrument": {
+            "description": "instrument parameter (str).",
+            "type": "string"
+          },
+          "treat": {
+            "description": "Treatment indicator or first-treatment-period column.",
+            "type": "string"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "treat",
+          "instrument"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "a_learning",
+      "snmm"
+    ],
+    "assumptions": [
+      "Sequential ignorability: each stage-k action is as good as random given the observed history H_k",
+      "Positivity: both actions have positive probability at every history that occurs",
+      "Stage-wise Q-functions are correctly specified as linear in the history (with A_k x H_k interactions)"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "Backward-induction Q-learning for a K-stage binary-action DTR.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "a_learning",
+        "exception": "ValueError",
+        "remedy": "Pass one covariate list per decision stage (an empty list for a stage with no new covariates)",
+        "symptom": "actions and stage_covariates have different lengths"
+      },
+      {
+        "alternative": "a_learning",
+        "exception": "(none -- informational)",
+        "remedy": "Q-learning needs the whole Q-function right; compare with A-learning, which models only the contrast and needs a propensity model instead",
+        "symptom": "Estimated rule is sensitive to the main-effect part of the Q-model"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "q_learning",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "Binary (0/1) action at every stage",
+      "One final outcome, higher is better"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "Backward-induction Q-learning for a K-stage binary-action DTR.",
+      "name": "q_learning",
+      "parameters": {
+        "properties": {
+          "actions": {
+            "description": "Column names for the stage-k actions (binary 0/1).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "baseline": {
+            "description": "Baseline covariates in the history at all stages.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "include_interactions": {
+            "default": true,
+            "description": "If True, Q-models include :math:`A_k \\times H_k` interactions, enabling nontrivial optimal rules.",
+            "type": "boolean"
+          },
+          "stage_covariates": {
+            "description": "Covariates observed *before* the stage-k decision (may be empty).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Final-stage outcome column, higher is better (``outcome=`` is accepted as an alias).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "actions",
+          "stage_covariates"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
+      "a_learning",
+      "q_learning"
+    ],
+    "assumptions": [
+      "Sequential ignorability: each stage-k action is as good as random given the observed history H_k",
+      "Positivity: stage propensities bounded away from 0 and 1",
+      "Linear structural nested mean (blip) model at each stage",
+      "Stage propensity model (logistic in the history) correctly specified"
+    ],
+    "category": "causal",
+    "cost_profile": "",
+    "description": "G-estimation of a linear structural nested mean model.",
+    "example": "",
+    "failure_modes": [
+      {
+        "alternative": "a_learning",
+        "exception": "ValueError",
+        "remedy": "Pass one covariate list per decision stage (an empty list for a stage with no new covariates)",
+        "symptom": "actions and stage_covariates have different lengths"
+      }
+    ],
+    "inherits_from": null,
+    "limitations": [],
+    "name": "snmm",
+    "not_recommended_when": [],
+    "pre_conditions": [
+      "Binary (0/1) action at every stage"
+    ],
+    "reference": "",
+    "signature": {
+      "description": "G-estimation of a linear structural nested mean model.",
+      "name": "snmm",
+      "parameters": {
+        "properties": {
+          "actions": {
+            "description": "actions parameter (Sequence[str]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "baseline": {
+            "description": "baseline parameter (Optional[Sequence[str]]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data": {
+            "description": "pandas DataFrame containing the variables used by the estimator.",
+            "type": "string"
+          },
+          "propensity_bounds": {
+            "default": [
+              0.05,
+              0.95
+            ],
+            "description": "propensity_bounds parameter (tuple).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "stage_covariates": {
+            "description": "stage_covariates parameter (Sequence[Sequence[str]]).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "y": {
+            "description": "Outcome variable column name or outcome array.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "y",
+          "actions",
+          "stage_covariates"
+        ],
+        "type": "object"
+      }
+    },
+    "stability": "stable",
+    "typical_n_min": 200,
+    "validation_notes": [],
+    "validation_status": "api_stable"
+  },
+  {
+    "alternatives": [
       "proximal",
       "proximal_regression",
       "frontdoor"

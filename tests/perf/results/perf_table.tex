@@ -3,15 +3,15 @@
 \centering
 \begingroup
 \footnotesize
-\setlength{\tabcolsep}{2.5pt}
-\begin{tabular}{@{}p{0.14\linewidth}p{0.21\linewidth}p{0.09\linewidth}r r r l r@{}}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{0.21\linewidth}l r r r l r@{}}
 \toprule
-Estimator & Common task & Ref. & Max.~$N$ & \statspai{} & Reference & Faster & Agree \\
+Estimator & Common task & Ref. & Max.~$N$ & \statspai{} (s) & Ref. (s) & Faster & Agree \\
 \midrule
-HDFE 2-way FE & OLS, 2 absorbed FE, iid SE & \pkg{fixest} & 1{,}000{,}000 & 0.127 (0.004) & 0.080 (0.001) & ref. $\mathbf{1.6\times}$ & 2e-14 \\
-CS-DiD & ATT(g,t), pre-test, simple + dynamic agg. & \pkg{did} & 125{,}000 & 0.025 (0.000) & 0.467 (0.010) & sp $\mathbf{18.8\times}$ & 4e-13 \\
-Classical SCM (ADH) & special predictors, nested V, no placebos & \pkg{Synth} & 100 & 264.565 (0.758) & 4.551 (0.093) & ref. $\mathbf{58\times}$ & 0.000 \\
-DML PLR (lin. learners) & PLR, linear learners, 5 folds & \pkg{DoubleML} Py & 10{,}000 & 0.0080 (0.0000) & 0.0090 (0.0001) & tie $1.13\times$ & 0.00 SE \\
+HDFE & OLS, two absorbed FE, iid SE & \pkg{fixest} & 1{,}000{,}000 & 0.127 (0.004) & 0.080 (0.001) & ref. $\mathbf{1.6\times}$ & 2e-14 \\
+CS-DiD & ATT(g,t), pre-test, simple and dynamic aggregation & \pkg{did} & 125{,}000 & 0.025 (0.000) & 0.467 (0.010) & sp $\mathbf{18.8\times}$ & 4e-13 \\
+SCM & ADH special predictors, nested V, no placebos & \pkg{Synth} & 100 & 264.565 (0.758) & 4.551 (0.093) & ref. $\mathbf{58\times}$ & 0.000 \\
+DML & PLR, linear learners, 5 folds & \pkg{DoubleML} & 10{,}000 & 0.0080 (0.0000) & 0.0090 (0.0001) & tie $1.13\times$ & 0.00 SE \\
 \bottomrule
 \end{tabular}
 \endgroup

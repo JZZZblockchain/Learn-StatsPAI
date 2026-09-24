@@ -46,6 +46,7 @@ ESTIMATORS = {
     "01_hdfe": {
         "name": "HDFE 2-way FE",
         "task": "OLS, 2 absorbed FE, iid SE",
+        "short": ("HDFE", "OLS, two absorbed FE, iid SE"),
         "ref": "fixest::feols",
         "ref_side": "R",
         "x_label": "N (observations)",
@@ -54,6 +55,7 @@ ESTIMATORS = {
     "02_csdid": {
         "name": "CS-DiD",
         "task": "ATT(g,t), pre-test, simple + dynamic agg.",
+        "short": ("CS-DiD", "ATT(g,t), pre-test, simple and dynamic aggregation"),
         "ref": "did::att_gt",
         "ref_side": "R",
         "x_label": "N (observations)",
@@ -62,6 +64,7 @@ ESTIMATORS = {
     "03_scm": {
         "name": "Classical SCM (ADH)",
         "task": "special predictors, nested V, no placebos",
+        "short": ("SCM", "ADH special predictors, nested V, no placebos"),
         "ref": "Synth::synth",
         "ref_side": "R",
         "x_label": "n_donors",
@@ -70,6 +73,7 @@ ESTIMATORS = {
     "04_dml": {
         "name": "DML PLR (lin. learners)",
         "task": "PLR, linear learners, 5 folds",
+        "short": ("DML", "PLR, linear learners, 5 folds"),
         "ref": "doubleml-for-py",
         "ref_side": "doubleml_py",
         "x_label": "N (observations)",
@@ -223,7 +227,7 @@ def render_tex() -> str:
         "fixest::feols": "\\pkg{fixest}",
         "did::att_gt": "\\pkg{did}",
         "Synth::synth": "\\pkg{Synth}",
-        "doubleml-for-py": "\\pkg{DoubleML} Py",
+        "doubleml-for-py": "\\pkg{DoubleML}",
     }
     for est, cfg in ESTIMATORS.items():
         py = load(est, "py")
@@ -253,7 +257,7 @@ def render_tex() -> str:
             return f"{m:.{digits}f} ({q:.{digits}f})"
 
         rows.append(
-            f"{_tex(cfg['name'])} & {_tex(cfg['task'])} & "
+            f"{_tex(cfg['short'][0])} & {_tex(cfg['short'][1])} & "
             f"{ref_tex.get(cfg['ref'], _tex(cfg['ref']))} & {max_n_tex} & "
             f"{fmt(last)} & {fmt(rlast)} & {faster} & "
             f"{_tex(agreement(est, last, rlast))} \\\\"
@@ -265,11 +269,11 @@ def render_tex() -> str:
         "\\centering\n"
         "\\begingroup\n"
         "\\footnotesize\n"
-        "\\setlength{\\tabcolsep}{2.5pt}\n"
-        "\\begin{tabular}{@{}p{0.14\\linewidth}p{0.21\\linewidth}"
-        "p{0.09\\linewidth}r r r l r@{}}\n"
+        "\\setlength{\\tabcolsep}{2pt}\n"
+        "\\begin{tabular}{@{}l>{\\raggedright\\arraybackslash}p{0.21\\linewidth}"
+        "l r r r l r@{}}\n"
         "\\toprule\n"
-        "Estimator & Common task & Ref. & Max.~$N$ & \\statspai{} & Reference "
+        "Estimator & Common task & Ref. & Max.~$N$ & \\statspai{} (s) & Ref. (s) "
         "& Faster & Agree \\\\\n"
         "\\midrule\n"
         f"{body}\n"

@@ -467,6 +467,11 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Added (JSS review response, 2026-09)
 
+- **Agent cards for four newly exported causal functions.** `sp.q_learning`,
+  `sp.a_learning`, `sp.snmm` and `sp.balke_pearl` became reachable as
+  `sp.<name>` in this release but carried no assumptions / failure-mode card,
+  which pulled causal-category agent-native coverage below its 55% floor.
+  `SurrogateResult` is recorded as a non-function `__all__` export.
 - **`sp.validation_scope(result)`: which artifacts cover the configuration
   you actually ran.** A registry tier is attached to a function; the evidence
   behind it is attached to configurations. For the twelve validation-suite

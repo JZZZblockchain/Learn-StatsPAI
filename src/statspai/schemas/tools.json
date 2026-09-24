@@ -1,6 +1,6 @@
 [
   {
-    "description": "G-estimation / A-learning for a K-stage binary-action DTR.",
+    "description": "G-estimation / A-learning for a K-stage binary-action DTR. Assumptions: Sequential ignorability: each stage-k action is as good as random given the observed history H_k; Positivity: stage propensities bounded away from 0 and 1; Stage contrast (blip) function linear in the history. Pre-conditions: Binary (0/1) action at every stage; One final outcome, higher is better. Failure modes: actions and stage_covariates have different lengths -> Pass one covariate list per decision stage (an empty list for a stage with no new covariates); Propensities pile up at the clipping bounds -> Positivity is doubtful; inspect overlap by stage and treat estimates at clipped histories with caution. Alternatives: sp.q_learning, sp.snmm. Typical minimum N: 200.",
     "input_schema": {
       "properties": {
         "actions": {
@@ -1213,7 +1213,7 @@
     "name": "balanceplot"
   },
   {
-    "description": "Compute Balke-Pearl bounds on the ATE.",
+    "description": "Compute Balke-Pearl bounds on the ATE. Assumptions: Instrument independent of potential outcomes and potential treatments (Z independent of Y(0), Y(1), D(0), D(1)); Exclusion restriction: Z affects Y only through D; No monotonicity assumed; the ATE is partially identified. Pre-conditions: Outcome, treatment and instrument all binary (0/1). Failure modes: A column is not coded 0/1 -> Recode to 0/1; for non-binary outcomes use bounds that allow a bounded continuous outcome; Bounds are wide and include zero -> Expected without further assumptions; if monotonicity is credible, point-identify the LATE instead. Alternatives: sp.manski_bounds, sp.iv_bounds, sp.iv. Typical minimum N: 200.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -21091,7 +21091,7 @@
     "name": "pwcompare"
   },
   {
-    "description": "Backward-induction Q-learning for a K-stage binary-action DTR.",
+    "description": "Backward-induction Q-learning for a K-stage binary-action DTR. Assumptions: Sequential ignorability: each stage-k action is as good as random given the observed history H_k; Positivity: both actions have positive probability at every history that occurs; Stage-wise Q-functions are correctly specified as linear in the history (with A_k x H_k interactions). Pre-conditions: Binary (0/1) action at every stage; One final outcome, higher is better. Failure modes: actions and stage_covariates have different lengths -> Pass one covariate list per decision stage (an empty list for a stage with no new covariates); Estimated rule is sensitive to the main-effect part of the Q-model -> Q-learning needs the whole Q-function right; compare with A-learning, which models only the contrast and needs a propensity model instead. Alternatives: sp.a_learning, sp.snmm. Typical minimum N: 200.",
     "input_schema": {
       "properties": {
         "actions": {
@@ -26771,7 +26771,7 @@
     "name": "snips"
   },
   {
-    "description": "G-estimation of a linear structural nested mean model.",
+    "description": "G-estimation of a linear structural nested mean model. Assumptions: Sequential ignorability: each stage-k action is as good as random given the observed history H_k; Positivity: stage propensities bounded away from 0 and 1; Linear structural nested mean (blip) model at each stage. Pre-conditions: Binary (0/1) action at every stage. Failure modes: actions and stage_covariates have different lengths -> Pass one covariate list per decision stage (an empty list for a stage with no new covariates). Alternatives: sp.a_learning, sp.q_learning. Typical minimum N: 200.",
     "input_schema": {
       "properties": {
         "actions": {

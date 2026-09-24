@@ -651,12 +651,14 @@ def test_coverage_findings_track_b1000_artifacts() -> None:
     assert "947/1000 = 0.947" in findings
     assert "twelve known-truth DGPs" in findings
     assert "twelve known-truth" in parity_long
-    assert "holds\ntwelve" in parity_compact or "holds twelve" in parity_compact
-    assert "materialized twelve-row" in computational_details
-    assert "twelve materialized nominal rows" in root_readme
-    assert "12 个已物化 nominal 行" in root_readme_cn
-    assert "twelve" in manuscript_md_export
-    assert "全部 12 个 known-truth nominal 行" in manuscript_zh_export
+    # Thirteen rows since the JSS v2 review: sp.fast.feols joins sp.panel
+    # on the same FE-panel DGP, so the DGP count stays at twelve.
+    assert "holds\nthirteen" in parity_compact or "holds thirteen" in parity_compact
+    assert "materialized thirteen-row" in computational_details
+    assert "thirteen materialized nominal rows" in root_readme
+    assert "13 个已物化 nominal 行" in root_readme_cn
+    assert "thirteen" in manuscript_md_export
+    assert "十三个 $B=1{,}000$ 行" in manuscript_zh_export
 
     for row in canonical:
         for narrative in rate_narratives:

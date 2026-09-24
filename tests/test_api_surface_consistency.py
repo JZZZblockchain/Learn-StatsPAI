@@ -37,6 +37,7 @@ ALL_NOT_REGISTERED_BASELINE = frozenset(
         "OOFPredictions",
         "PAPER_TABLE_TEMPLATES",
         "STABILITY_TIERS",
+        "SurrogateResult",
         "VALIDATION_STATUSES",
         "epi",
         "exceptions",
