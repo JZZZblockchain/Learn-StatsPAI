@@ -344,10 +344,34 @@ def _dispatch(
         robust = kwargs.pop("robust", "nonrobust")
         cluster = kwargs.pop("cluster", None)
         absorb = kwargs.pop("absorb", None)
+        vce = kwargs.pop("vce", None)
+        vcov = kwargs.pop("vcov", None)
 
         from ..regression.iv import _iv_absorb_run, _normalise_absorb
 
         absorb_terms = _normalise_absorb(absorb)
+        if vce is not None or vcov is not None:
+            # ``vce=`` / ``vcov=`` used to fall through ``**kwargs`` into
+            # ``IVRegression.fit``, which ignored them: ``sp.iv(...,
+            # vce="cr2", cluster=g)`` silently returned CR1 standard errors.
+            robust, cluster, delegate = _resolve_iv_vce(
+                robust, cluster, vce, vcov, canon, bool(absorb_terms)
+            )
+            if delegate is not None:
+                from ..regression.iv import ivreg as _ivreg
+
+                result = _ivreg(
+                    formula=formula,
+                    data=data,
+                    cluster=cluster,
+                    vce=delegate,
+                    **kwargs,
+                )
+                if augmented_diagnostics:
+                    model = IVRegression(formula=formula, data=data, method=canon)
+                    model.fit(robust="nonrobust", cluster=cluster)
+                    _attach_augmented_diagnostics(model, result)
+                return result
         if absorb_terms:
             result, model, _pre = _iv_absorb_run(
                 formula=formula,
@@ -538,6 +562,71 @@ def fit(
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────
+
+
+#: Covariance requests the k-class fit computes itself (after the shared
+#: Stata grammar has been applied); anything else needs the ``ivreg`` paths.
+_KCLASS_VCE = frozenset(
+    {"nonrobust", "robust", "hc0", "hc1", "hc2", "hc3", "cluster", "white"}
+)
+
+
+def _resolve_iv_vce(
+    robust: Any,
+    cluster: Any,
+    vce: Any,
+    vcov: Any,
+    canon: str,
+    absorbed: bool,
+) -> tuple[Any, Any, Optional[str]]:
+    """Fold ``vce=`` / ``vcov=`` into the k-class fit's ``robust`` / ``cluster``.
+
+    Returns ``(robust, cluster, delegate)``. ``delegate`` is the ``vce``
+    value to hand to :func:`statspai.regression.iv.ivreg` when the request
+    is one only that path computes (CR2/CR3, wild cluster bootstrap,
+    Conley, jackknife); it is ``None`` when the k-class fit handles the
+    request. A request neither path supports for this ``method`` raises
+    rather than returning some other standard error.
+    """
+    from ..core._vcov_spec import normalize_vcov
+    from ..exceptions import MethodIncompatibility
+
+    if vcov is not None:
+        _robust, cluster, _vce = normalize_vcov(
+            vcov=vcov, robust=robust, cluster=cluster, vce=vce, function="iv"
+        )
+        if _vce is not None:
+            vce = _vce
+        elif _robust is not None:
+            robust = _robust
+    if vce is None:
+        return robust, cluster, None
+    if (
+        robust not in (None, "nonrobust", False)
+        and str(robust).lower() != str(vce).lower()
+    ):
+        raise MethodIncompatibility(
+            f"iv: robust={robust!r} and vce={vce!r} request different standard errors.",
+            recovery_hint="Pass one of robust= or vce=.",
+            diagnostics={"robust": repr(robust), "vce": repr(vce)},
+        )
+    head = str(vce).strip().lower()
+    head = head[4:-1] if head.startswith("vce(") and head.endswith(")") else head
+    first = head.split()[0] if head.split() else head
+    if first in _KCLASS_VCE:
+        return vce, cluster, None
+    if canon == "2sls" and not absorbed:
+        return "nonrobust", cluster, vce
+    raise MethodIncompatibility(
+        f"iv: vce={vce!r} is implemented for method='2sls' without absorb=, "
+        f"not for method={canon!r}"
+        + (" with absorbed fixed effects." if absorbed else "."),
+        recovery_hint=(
+            "Use vce in {'nonrobust', 'robust', 'hc0'-'hc3', 'cluster'} for this "
+            "method, or fit method='2sls' without absorb=."
+        ),
+        diagnostics={"vce": repr(vce), "method": canon, "absorb": absorbed},
+    )
 
 
 def _rename(kwargs: Dict[str, Any], mapping: Dict[str, str]) -> None:

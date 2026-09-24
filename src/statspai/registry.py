@@ -2647,7 +2647,8 @@ def _build_registry() -> None:
                 " with little-bag variances and the doubly-robust average conditional "
                 "LATE (compliance-weighted scores). Given grf's forest, the local "
                 "solve, scores, average and BLP match grf to 1e-13 (T2); the forest "
-                "itself is T3."
+                "itself is checked only statistically (a stochastic screen against grf on "
+                "known-truth designs, not a seed-replicated equivalence test)."
             ),
             params=[
                 ParamSpec(
@@ -2878,7 +2879,8 @@ def _build_registry() -> None:
                 "split on the gradient of all contrasts (multi-arm R-learner with GRF "
                 "weights). Propensities from a probability forest, doubly-robust per-"
                 "arm ATEs, BLPs per contrast. Operators match grf to 1e-13 (T2); forest"
-                " statistics match grf within Monte Carlo error (T3)."
+                " statistics are screened against grf on known-truth designs (a stochastic "
+                "screen, not a seed-replicated equivalence test)."
             ),
             params=[
                 ParamSpec(
@@ -18120,8 +18122,10 @@ _CERTIFIED_VARIANT_LIMITATIONS: Dict[str, Dict[str, List[str]]] = {
             "influence function inflates the standard error (conservative, "
             "over-covering inference), so inspect the sp.audit overlap "
             "diagnostic before interpreting the ATE on that kind of sample.",
-            "The forest is compared with grf only statistically (tier T3: "
-            "RMSE, pointwise variances, coverage), not bit-for-bit; given a "
+            "The forest is compared with grf only statistically, not bit-for-"
+            "bit: the AIPW ATE/ATT by seed-replicated equivalence (T3, within "
+            "0.1 sampling SE at 500-8,000 trees), CATE RMSE, pointwise "
+            "variances and coverage by a stochastic screen; given a "
             "fitted forest, the inference operators match grf / sandwich "
             "to 1e-14.",
             "Doubly-robust averages (average_treatment_effect, "

@@ -23,11 +23,22 @@ fixture is touched, under a profiler that records
 * every subprocess launched (an ``Rscript`` launch is a reference
   backend by definition).
 
+The trace is bound to what it describes. For each module it records the
+SHA-256 of the module script, of every StatsPAI source file whose code ran
+while the module estimated (imports of ``statspai`` itself happen before
+the profiler starts, so the set is the estimation path, not the package),
+and of the committed ``<module>_py.json`` result, plus the versions of the
+packages the module crossed into. Changing *any* of those files -- including
+an internal delegation change behind an unchanged entry script -- makes the
+trace stale, and the contract test refuses it until the module is re-traced.
+
 The result is ``tests/r_parity/results/_implementation_trace.json``.
 ``tests/test_parity_implementation_provenance.py`` then asserts that the
 hand-registered classification in
 ``tests/r_parity/compare.py::IMPLEMENTATION_PROVENANCE`` agrees with the
-trace, so a module cannot silently change evidence type.
+trace, so a module cannot silently change evidence type. A package that is
+neither substrate nor in ``KNOWN`` classifies the module as
+``unclassified`` -- it must be reviewed and added, never assumed native.
 
 Usage::
 
@@ -106,10 +117,15 @@ def _top_package(filename: str) -> str | None:
     return None
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _run_one(module_path: Path) -> dict:
     """Execute one Track A module in-process under the boundary profiler."""
     src_root = str(REPO / "src" / "statspai")
     calls: Counter = Counter()
+    exercised: set = set()
     launched: list[list[str]] = []
 
     real_popen_init = subprocess.Popen.__init__
@@ -124,6 +140,7 @@ def _run_one(module_path: Path) -> dict:
             return
         callee = frame.f_code.co_filename
         if callee.startswith(src_root):
+            exercised.add(callee)
             return
         caller = frame.f_back
         if caller is None or not caller.f_code.co_filename.startswith(src_root):
@@ -142,6 +159,11 @@ def _run_one(module_path: Path) -> dict:
     sys.argv = [str(module_path)]
     sys.path.insert(0, str(PARITY))
     error = None
+    # Import the package before profiling starts: the files recorded as
+    # exercised are then the ones on this module's estimation path, not
+    # every module ``import statspai`` loads.
+    import statspai  # noqa: F401
+
     sys.setprofile(profiler)
     try:
         runpy.run_path(str(module_path), run_name="__main__")
@@ -159,14 +181,59 @@ def _run_one(module_path: Path) -> dict:
         for (p, c, w), n in sorted(calls.items())
     ]
     r_launch = [a for a in launched if any("Rscript" in x or x == "R" for x in a[:1])]
+    packages = sorted({b["package"] for b in boundary})
+    versions = {}
+    from importlib import metadata
+
+    for pkg in packages + ["numpy", "scipy", "pandas", "scikit-learn"]:
+        dist = {"sklearn": "scikit-learn"}.get(pkg, pkg)
+        try:
+            versions[dist] = metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            versions[dist] = None
+    repo = str(REPO) + os.sep
     return {
         "seconds": round(time.perf_counter() - t0, 2),
         "error": error,
         "boundary_calls": boundary,
-        "packages": sorted({b["package"] for b in boundary}),
+        "packages": packages,
         "rscript_launches": len(r_launch),
         "subprocesses": [a[:2] for a in launched],
+        "exercised_sources": {
+            f[len(repo) :].replace(os.sep, "/"): _sha256(Path(f))
+            for f in sorted(exercised)
+            if f.endswith(".py") and Path(f).exists()
+        },
+        "dependency_versions": versions,
     }
+
+
+def stale_reasons(stem: str, rec: dict, root: Path = REPO) -> list:
+    """Why a module's trace no longer describes the current tree ([] if current).
+
+    The trace is stale if the entry script, any StatsPAI file on the traced
+    estimation path, or the committed result changed since it was recorded,
+    or if the trace predates exercised-source recording.
+    """
+    parity = root / "tests" / "r_parity"
+    reasons = []
+    script = parity / f"{stem}.py"
+    if rec.get("source_sha256") != (_sha256(script) if script.exists() else None):
+        reasons.append(f"entry script {script.relative_to(root)} changed")
+    sources = rec.get("exercised_sources")
+    if not sources:
+        reasons.append("trace predates exercised-source recording")
+    else:
+        for rel, digest in sources.items():
+            path = root / rel
+            if not path.exists() or _sha256(path) != digest:
+                reasons.append(f"{rel} changed")
+    result = parity / "results" / f"{stem}_py.json"
+    if "result_sha256" not in rec or rec["result_sha256"] != (
+        _sha256(result) if result.exists() else None
+    ):
+        reasons.append(f"result {result.relative_to(root)} changed")
+    return reasons
 
 
 def _worker(stem: str, scratch: str) -> dict:
@@ -226,9 +293,9 @@ def main() -> None:
             rec = _worker(stem, scratch)
             # The trace is evidence about *this* source; a later edit to the
             # module invalidates it, and the contract test checks the hash.
-            rec["source_sha256"] = hashlib.sha256(
-                (PARITY / f"{stem}.py").read_bytes()
-            ).hexdigest()
+            rec["source_sha256"] = _sha256(PARITY / f"{stem}.py")
+            result = PARITY / "results" / f"{stem}_py.json"
+            rec["result_sha256"] = _sha256(result) if result.exists() else None
             modules[stem] = rec
             status = "ERROR" if rec.get("error") else "ok"
             print(

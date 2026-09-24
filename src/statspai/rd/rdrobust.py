@@ -995,6 +995,16 @@ def rdrobust(
         "rho": float(rho) if rho is not None else None,
         "first_stage_F": fs_F,
         "n_unique_running": n_unique,
+        # Options that change the computation, recorded for
+        # sp.validation_scope (which reads, never infers, the configuration).
+        "vce": vce,
+        "covariates": list(covs) if covs else None,
+        "cluster": (
+            cluster
+            if isinstance(cluster, str)
+            else (None if cluster is None else "set")
+        ),
+        "weighted": weights is not None,
         "cct_delegation": False,
         "reference_backend": "statspai",
     }

@@ -916,6 +916,7 @@ def callaway_santanna(
         ),
         "weights": weights,
         "weighted": weights is not None,
+        "covariates": list(x) if x else None,
         "n_units": n_units,
         # Treated *clusters*, not cohorts: what the few-treated-cluster
         # literature counts (sp.did_few_treated, sp.cs_jackknife).

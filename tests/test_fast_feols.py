@@ -337,16 +337,18 @@ def test_feols_result_protocol_json_safe():
 
 
 def test_feols_df_resid_accounting():
-    """df_resid = n_kept - p - sum(G_k - 1) — pin the convention."""
+    """ssc='statspai': df_resid = n_kept - p - sum(G_k - 1) — pin the convention."""
     df = _ols_panel(seed=21, n_units=30, n_periods=10)
-    fit = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df)
+    fit = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, ssc="statspai")
     expected = fit.n_kept - fit.coef_vec.size - sum(c - 1 for c in fit.fe_cardinality)
     assert fit.df_resid == expected
 
 
 def test_feols_fixest_ssc_uses_full_fe_rank_for_iid():
     df = _ols_panel(seed=22, n_units=30, n_periods=10)
-    fit_default = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, vcov="iid")
+    fit_default = sp.fast.feols(
+        "y ~ x1 + x2 | fe1 + fe2", df, vcov="iid", ssc="statspai"
+    )
     fit_fixest = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, vcov="iid", ssc="fixest")
 
     expected_default_df = (
@@ -373,7 +375,7 @@ def test_feols_fixest_ssc_uses_full_fe_rank_for_iid():
 def test_feols_fixest_ssc_excludes_cluster_nested_fe_from_cr1():
     df = _ols_panel(seed=23, n_units=30, n_periods=10)
     fit_default = sp.fast.feols(
-        "y ~ x1 + x2 | fe1 + fe2", df, vcov="cr1", cluster="fe1"
+        "y ~ x1 + x2 | fe1 + fe2", df, vcov="cr1", cluster="fe1", ssc="statspai"
     )
     fit_fixest = sp.fast.feols(
         "y ~ x1 + x2 | fe1 + fe2",
@@ -480,6 +482,7 @@ def test_feols_se_cluster_close_to_r_fixest(tmp_path):
         df,
         vcov="cr1",
         cluster="fe1",
+        ssc="statspai",
     )
 
     r_script = (
@@ -504,3 +507,19 @@ def test_feols_se_cluster_close_to_r_fixest(tmp_path):
         r_se = float(r_out["se"][k])
         rel = abs(sp_se - r_se) / max(abs(r_se), 1e-15)
         assert rel < 0.02, f"cluster SE drift at {k}: sp={sp_se:.6e} fixest={r_se:.6e}"
+
+
+def test_feols_default_ssc_is_fixest():
+    """1.31.0: the default follows fixest / reghdfe (the parity rows' setting).
+
+    The historical ``ssc='statspai'`` default charged absorbed effects nested
+    in the cluster variable, inflating CR1 SEs (Track B: SE/SD 1.08, coverage
+    0.979 at 50 clusters x 6 periods), and under-charged the two-way FE rank
+    by one for iid / HC1.
+    """
+    df = _ols_panel(seed=24, n_units=30, n_periods=10)
+    for kw in ({"vcov": "iid"}, {"vcov": "hc1"}, {"vcov": "cr1", "cluster": "fe1"}):
+        a = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, **kw)
+        b = sp.fast.feols("y ~ x1 + x2 | fe1 + fe2", df, ssc="fixest", **kw)
+        assert a.ssc == "fixest"
+        np.testing.assert_array_equal(a.vcov_matrix, b.vcov_matrix)

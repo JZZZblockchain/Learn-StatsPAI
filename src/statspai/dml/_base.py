@@ -266,6 +266,10 @@ class _DoubleMLBase:
 
         self._validate()
 
+        # Recorded for sp.validation_scope: coverage evidence is specific
+        # to the default learners, and a user-supplied learner is not them
+        # even when it has the same class.
+        self._default_learners = ml_g is None and ml_m is None and ml_r is None
         self.ml_g = (
             self._default_ml_g()
             if ml_g is None
@@ -803,6 +807,7 @@ class _DoubleMLBase:
             "n_rep": self.n_rep,
             "ml_g": type(self.ml_g).__name__,
             "ml_m": type(self.ml_m).__name__,
+            "default_learners": bool(getattr(self, "_default_learners", False)),
             "n_covariates": len(self.covariates),
             "fold_source": fold_source,
         }
