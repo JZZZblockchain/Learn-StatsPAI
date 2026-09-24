@@ -14,6 +14,13 @@ rows <- list()
 for (n_units in c(1000L, 5000L, 25000L)) {
   d <- read_perf_data(EST, n_units)
   df <- d$df
+  # did recodes never-treated first_treat = 0 to Inf inside a data.table; on
+  # an integer column that assignment becomes NA and those units are dropped
+  # silently ("No never-treated group is available"), so the fit uses the
+  # last cohort as controls. read.csv parses the column as integer. The
+  # previous version of this benchmark built it with integer() and timed
+  # that degenerate problem; the output check in compare_perf.py caught it.
+  df$first_treat <- as.numeric(df$first_treat)
   fn <- function() {
     fit <- did::att_gt(
       yname = "y", tname = "year", idname = "unit", gname = "first_treat",

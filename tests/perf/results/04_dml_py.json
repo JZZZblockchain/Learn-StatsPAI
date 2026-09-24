@@ -6,54 +6,54 @@
       "estimator": "04_dml",
       "side": "py",
       "n": 1000,
-      "n_reps": 3,
-      "median_time_s": 0.003884625039063394,
-      "iqr_time_s": 0.00018508301582187414,
-      "min_time_s": 0.003850333974696696,
-      "max_time_s": 0.00403541699051857,
-      "peak_mem_mb": 250.125,
+      "n_reps": 15,
+      "median_time_s": 0.0038901660591363907,
+      "iqr_time_s": 5.1875016652047634e-05,
+      "min_time_s": 0.0038351250113919377,
+      "max_time_s": 0.003988916985690594,
+      "peak_mem_mb": 254.078125,
       "peak_gpu_hbm_mb": null,
       "extra": {
-        "model": "plr",
-        "ml_g": "LinearRegression",
-        "ml_m": "LinearRegression",
-        "n_folds": 5
+        "data_sha256": "35cadc890c7e3c111dedf655be3818244ed4b094e8d21517277d57f44222f98f",
+        "task": "PLR, linear learners, 5 folds",
+        "estimate": 0.4319267466673039,
+        "se": 0.08013307611964171
       }
     },
     {
       "estimator": "04_dml",
       "side": "py",
       "n": 5000,
-      "n_reps": 3,
-      "median_time_s": 0.005750957992859185,
-      "iqr_time_s": 0.00018858409021049738,
-      "min_time_s": 0.0056757909478619695,
-      "max_time_s": 0.005864375038072467,
-      "peak_mem_mb": 252.09375,
+      "n_reps": 15,
+      "median_time_s": 0.005737000028602779,
+      "iqr_time_s": 3.337510861456394e-05,
+      "min_time_s": 0.005703208036720753,
+      "max_time_s": 0.005899666924960911,
+      "peak_mem_mb": 260.421875,
       "peak_gpu_hbm_mb": null,
       "extra": {
-        "model": "plr",
-        "ml_g": "LinearRegression",
-        "ml_m": "LinearRegression",
-        "n_folds": 5
+        "data_sha256": "30823a99ccce20820029ff64aa2e3cd8aec6ac4dc825ba3ddb6bb757c13dcbc5",
+        "task": "PLR, linear learners, 5 folds",
+        "estimate": 0.49994292057848,
+        "se": 0.0346988307327052
       }
     },
     {
       "estimator": "04_dml",
       "side": "py",
       "n": 10000,
-      "n_reps": 3,
-      "median_time_s": 0.007961416966281831,
-      "iqr_time_s": 7.49579630792141e-05,
-      "min_time_s": 0.007939000031910837,
-      "max_time_s": 0.00801395799499005,
-      "peak_mem_mb": 254.3125,
+      "n_reps": 15,
+      "median_time_s": 0.008008375065401196,
+      "iqr_time_s": 3.629201091825962e-05,
+      "min_time_s": 0.007989916950464249,
+      "max_time_s": 0.008078542072325945,
+      "peak_mem_mb": 265.15625,
       "peak_gpu_hbm_mb": null,
       "extra": {
-        "model": "plr",
-        "ml_g": "LinearRegression",
-        "ml_m": "LinearRegression",
-        "n_folds": 5
+        "data_sha256": "c5f9c82bc676d6e97600275a1bb84e0a9cbdf5b3717113c78f0e3dfd9abb1482",
+        "task": "PLR, linear learners, 5 folds",
+        "estimate": 0.5057546764313139,
+        "se": 0.025405747133195204
       }
     }
   ],
@@ -65,10 +65,19 @@
     "cpu_logical": 8,
     "cpu_physical": 8,
     "mem_gb": 24.0,
-    "load_avg_1m_at_start": 1.67,
-    "git_commit": "3afb4353882a321037c755188e309c8329b9846b",
-    "statspai_version": "1.30.1",
-    "statspai_commit": "a24a25347c9d56815f15f6abef09498de014d894"
+    "load_avg_1m_at_start": 1.76,
+    "git_commit": "17b524f09a3a13f7a3763ab8aa162bf1da1e0130",
+    "statspai_version": "1.31.0",
+    "statspai_commit": "17b524f09a3a13f7a3763ab8aa162bf1da1e0130",
+    "run_id": "20260924T234944",
+    "thread_env": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "numba_threads": 1
   },
   "extra": {}
 }
