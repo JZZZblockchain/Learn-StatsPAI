@@ -7,10 +7,10 @@
       "side": "R",
       "n": 1000,
       "n_reps": 3,
-      "median_time_s": 0.142999172210693,
-      "iqr_time_s": 0.00298154354095459,
-      "min_time_s": 0.142574787139893,
-      "max_time_s": 0.148537874221802,
+      "median_time_s": 0.102702140808105,
+      "iqr_time_s": 0.00134241580963135,
+      "min_time_s": 0.100649118423462,
+      "max_time_s": 0.103333950042725,
       "peak_mem_mb": null,
       "extra": {
         "model": "plr",
@@ -23,10 +23,10 @@
       "side": "R",
       "n": 5000,
       "n_reps": 3,
-      "median_time_s": 0.211127996444702,
-      "iqr_time_s": 0.00656092166900635,
-      "min_time_s": 0.205236196517944,
-      "max_time_s": 0.218358039855957,
+      "median_time_s": 0.116173028945923,
+      "iqr_time_s": 0.00172853469848633,
+      "min_time_s": 0.114094018936157,
+      "max_time_s": 0.11755108833313,
       "peak_mem_mb": null,
       "extra": {
         "model": "plr",
@@ -39,10 +39,10 @@
       "side": "R",
       "n": 10000,
       "n_reps": 3,
-      "median_time_s": 0.222676992416382,
-      "iqr_time_s": 0.0646669864654541,
-      "min_time_s": 0.189196825027466,
-      "max_time_s": 0.318530797958374,
+      "median_time_s": 0.131477117538452,
+      "iqr_time_s": 0.0013124942779541,
+      "min_time_s": 0.129187107086182,
+      "max_time_s": 0.13181209564209,
       "peak_mem_mb": null,
       "extra": {
         "model": "plr",
@@ -52,6 +52,7 @@
     }
   ],
   "hardware": {
+    "reference_package": "DoubleML 1.0.2",
     "R_version": "R version 4.5.2 (2025-10-31)"
   },
   "extra": []

@@ -83,7 +83,8 @@ payload <- list(
   estimator = jsonlite::unbox("02_csdid"),
   side = jsonlite::unbox("R"),
   rows = rows,
-  hardware = list(R_version = jsonlite::unbox(R.version$version.string)),
+  hardware = list(reference_package = jsonlite::unbox(paste("did", as.character(utils::packageVersion("did")))),
+                R_version = jsonlite::unbox(R.version$version.string)),
   extra = list()
 )
 writeLines(

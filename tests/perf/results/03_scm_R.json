@@ -6,11 +6,11 @@
       "estimator": "03_scm",
       "side": "R",
       "n": 20,
-      "n_reps": 2,
-      "median_time_s": 1.55512499809265,
-      "iqr_time_s": 0.0323460102081299,
-      "min_time_s": 1.52277898788452,
-      "max_time_s": 1.58747100830078,
+      "n_reps": 3,
+      "median_time_s": 1.1590781211853,
+      "iqr_time_s": 0.0199320316314697,
+      "min_time_s": 1.13795900344849,
+      "max_time_s": 1.17782306671143,
       "peak_mem_mb": null,
       "extra": {
         "n_donors": 20,
@@ -21,11 +21,11 @@
       "estimator": "03_scm",
       "side": "R",
       "n": 50,
-      "n_reps": 2,
-      "median_time_s": 1.8532954454422,
-      "iqr_time_s": 0.007515549659729,
-      "min_time_s": 1.84577989578247,
-      "max_time_s": 1.86081099510193,
+      "n_reps": 3,
+      "median_time_s": 1.51156115531921,
+      "iqr_time_s": 0.0258309841156006,
+      "min_time_s": 1.47112607955933,
+      "max_time_s": 1.52278804779053,
       "peak_mem_mb": null,
       "extra": {
         "n_donors": 50,
@@ -36,11 +36,11 @@
       "estimator": "03_scm",
       "side": "R",
       "n": 100,
-      "n_reps": 2,
-      "median_time_s": 2.4108384847641,
-      "iqr_time_s": 0.052944540977478,
-      "min_time_s": 2.35789394378662,
-      "max_time_s": 2.46378302574158,
+      "n_reps": 3,
+      "median_time_s": 1.87089991569519,
+      "iqr_time_s": 0.122602939605713,
+      "min_time_s": 1.83104395866394,
+      "max_time_s": 2.07624983787537,
       "peak_mem_mb": null,
       "extra": {
         "n_donors": 100,
@@ -49,6 +49,7 @@
     }
   ],
   "hardware": {
+    "reference_package": "Synth 1.1.10",
     "R_version": "R version 4.5.2 (2025-10-31)"
   },
   "extra": []

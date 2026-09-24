@@ -77,6 +77,22 @@ def load(estimator: str, side: str) -> list[dict]:
     return json.loads(path.read_text())["rows"]
 
 
+def measured_versions() -> list[str]:
+    """StatsPAI versions recorded by the Python-side result files.
+
+    Older files predate the field and contribute "unrecorded"; a table
+    built from them should say so rather than imply the current release.
+    """
+    versions = set()
+    for est, cfg in ESTIMATORS.items():
+        path = RESULTS_DIR / f"{est}_py.json"
+        if not path.exists():
+            continue
+        hw = json.loads(path.read_text()).get("hardware") or {}
+        versions.add(hw.get("statspai_version") or "unrecorded")
+    return sorted(versions)
+
+
 def render_md() -> str:
     lines: list[str] = [
         "# Track C performance report",
@@ -188,7 +204,8 @@ def render_tex() -> str:
         "\\end{tabular}\n"
         "\\endgroup\n"
         "\\caption{Track C measured performance on Apple Silicon arm64 / "
-        "8 cores / 24~GB. "
+        "8 cores / 24~GB, "
+        f"\\statspai{{}} {' / '.join(measured_versions())}. "
         "Times are median seconds at the largest sample size, "
         "across 3 or 5 repetitions after one warmup, "
         "using seed-fixed DGPs. Bold denotes a gap of at least $1.5\\times$. "

@@ -8,13 +8,13 @@
 \toprule
 Module & Estimator & Reference & Max. $N$ & sp & Ref. & Faster path \\
 \midrule
-\code{01\_hdfe} & HDFE 2-way FE & \pkg{fixest} & 1{,}000{,}000 & 0.188 & 0.088 & R $\mathbf{2.1\times}$ \\
-\code{02\_csdid} & CS-DiD simple ATT & \pkg{did} & 125{,}000 & 0.033 & 0.241 & sp $\mathbf{7.4\times}$ \\
-\code{03\_scm} & Classical SCM & \pkg{Synth} & 100 & 11.636 & 2.411 & R $\mathbf{4.8\times}$ \\
-\code{04\_dml} & DML PLR (lin. learners) & \pkg{DoubleML} Python & 10{,}000 & 0.008 & 0.009 & tie $1.12\times$ \\
+\code{01\_hdfe} & HDFE 2-way FE & \pkg{fixest} & 1{,}000{,}000 & 0.120 & 0.049 & R $\mathbf{2.5\times}$ \\
+\code{02\_csdid} & CS-DiD simple ATT & \pkg{did} & 125{,}000 & 0.027 & 0.175 & sp $\mathbf{6.5\times}$ \\
+\code{03\_scm} & Classical SCM & \pkg{Synth} & 100 & 7.476 & 1.871 & R $\mathbf{4.0\times}$ \\
+\code{04\_dml} & DML PLR (lin. learners) & \pkg{DoubleML} Python & 10{,}000 & 0.008 & 0.009 & tie $1.14\times$ \\
 \bottomrule
 \end{tabular}
 \endgroup
-\caption{Track C measured performance on Apple Silicon arm64 / 8 cores / 24~GB. Times are median seconds at the largest sample size, across 3 or 5 repetitions after one warmup, using seed-fixed DGPs. Bold denotes a gap of at least $1.5\times$. The DML row uses \pkg{DoubleML} Python with the same linear learners, five folds, and public-workflow construction cost. The Callaway--Sant'Anna row uses a homogeneous-effect DGP favourable to the vectorised group-time loop.}
+\caption{Track C measured performance on Apple Silicon arm64 / 8 cores / 24~GB, \statspai{} 1.30.1. Times are median seconds at the largest sample size, across 3 or 5 repetitions after one warmup, using seed-fixed DGPs. Bold denotes a gap of at least $1.5\times$. The DML row uses \pkg{DoubleML} Python with the same linear learners, five folds, and public-workflow construction cost. The Callaway--Sant'Anna row uses a homogeneous-effect DGP favourable to the vectorised group-time loop.}
 \label{tab:track-c-perf}
 \end{table}

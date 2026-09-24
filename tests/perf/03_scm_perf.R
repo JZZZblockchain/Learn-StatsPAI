@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
 
 N_DONORS_LIST <- c(20L, 50L, 100L)
 T_PERIODS <- 30L
-N_REPS <- 2L  # Synth is slow at large donor counts
+N_REPS <- 3L  # matches the Python side; Synth is slow at 100 donors
 
 make_panel <- function(n_donors, t = T_PERIODS, seed = 42L) {
   set.seed(seed)
@@ -95,7 +95,8 @@ for (n_donors in N_DONORS_LIST) {
 
 payload <- list(estimator = jsonlite::unbox("03_scm"),
                 side = jsonlite::unbox("R"), rows = rows,
-                hardware = list(R_version = jsonlite::unbox(R.version$version.string)),
+                hardware = list(reference_package = jsonlite::unbox(paste("Synth", as.character(utils::packageVersion("Synth")))),
+                R_version = jsonlite::unbox(R.version$version.string)),
                 extra = list())
 writeLines(
   jsonlite::toJSON(payload, pretty = TRUE, na = "null", null = "null", digits = NA),

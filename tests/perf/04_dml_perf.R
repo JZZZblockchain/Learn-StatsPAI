@@ -81,7 +81,8 @@ for (n in N_LIST) {
 
 payload <- list(estimator = jsonlite::unbox("04_dml"),
                 side = jsonlite::unbox("R"), rows = rows,
-                hardware = list(R_version = jsonlite::unbox(R.version$version.string)),
+                hardware = list(reference_package = jsonlite::unbox(paste("DoubleML", as.character(utils::packageVersion("DoubleML")))),
+                R_version = jsonlite::unbox(R.version$version.string)),
                 extra = list())
 writeLines(
   jsonlite::toJSON(payload, pretty = TRUE, na = "null", null = "null", digits = NA),

@@ -117,9 +117,47 @@ def hardware_record() -> dict[str, Any]:
         rec["cpu_logical"] = psutil.cpu_count(logical=True)
         rec["cpu_physical"] = psutil.cpu_count(logical=False)
         rec["mem_gb"] = round(psutil.virtual_memory().total / (1024**3), 1)
+    # Wall-clock timings on a shared machine are only as good as its idle
+    # state; record the load so a contaminated run is visible in the data
+    # rather than only in the memory of whoever ran it.
+    try:
+        load1 = os.getloadavg()[0]
+        rec["load_avg_1m_at_start"] = round(load1, 2)
+        ncpu = os.cpu_count() or 1
+        if load1 > 0.25 * ncpu:
+            import warnings
+
+            warnings.warn(
+                f"1-minute load average is {load1:.1f} on {ncpu} CPUs; "
+                "timings from a busy machine are not comparable.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+    except (AttributeError, OSError):
+        pass
     sha = _git_commit_sha()
     if sha:
         rec["git_commit"] = sha
+    # The package under test need not be this checkout (a benchmark can
+    # run the harness from main against a release tree on PYTHONPATH), so
+    # record the version and source commit of the statspai actually
+    # imported. Without these a timing cannot be tied to a release.
+    try:
+        import statspai
+
+        rec["statspai_version"] = statspai.__version__
+        src = Path(statspai.__file__).resolve().parent
+        out = subprocess.run(
+            ["git", "-C", str(src), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            rec["statspai_commit"] = out.stdout.strip()
+    except ImportError:
+        pass
     jax_rec = _jax_record()
     if jax_rec:
         rec["jax"] = jax_rec

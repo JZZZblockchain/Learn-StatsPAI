@@ -76,7 +76,8 @@ payload <- list(
   estimator = jsonlite::unbox("01_hdfe"),
   side = jsonlite::unbox("R"),
   rows = rows,
-  hardware = list(platform = jsonlite::unbox(R.version$os),
+  hardware = list(reference_package = jsonlite::unbox(paste("fixest", as.character(utils::packageVersion("fixest")))),
+                platform = jsonlite::unbox(R.version$os),
                   R_version = jsonlite::unbox(R.version$version.string)),
   extra = list()
 )
