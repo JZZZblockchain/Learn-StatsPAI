@@ -579,7 +579,20 @@ SCOPE_FUNCTIONS = tuple(sorted(SCOPES))
 
 
 class ValidationScope(dict):
-    """Evidence for one fitted configuration (a ``dict``; prints as a table)."""
+    """Evidence for one fitted configuration (a ``dict``; prints as a table).
+
+    Returned by :func:`validation_scope`. Keys: ``function``,
+    ``configuration``, ``status`` (``"covered"``, ``"stochastic_only"`` or
+    ``"not_covered"``), ``matched``, ``near_misses`` and ``note``.
+
+    Examples
+    --------
+    >>> import statspai as sp
+    >>> scope = sp.validation_scope(function="causal_forest",
+    ...                             treatment="binary", trees=">=2000")
+    >>> scope["status"]
+    'stochastic_only'
+    """
 
     __slots__ = ()
 
