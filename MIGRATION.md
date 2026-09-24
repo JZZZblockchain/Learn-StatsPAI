@@ -36,6 +36,21 @@ and `invariant`; `status` can now be `estimate_only` or `disclosure_only`;
 explicit dimension values outside the domain raise; the forest `trees`
 dimension is the exact count (`"2000"`, not `">=2000"`) and the DML
 `learners` dimension is `linear` / `default` / `other` (not `flexible`).
+<a id="surrogate-result-deprecated"></a>
+
+## Unreleased — `SurrogateResult` deprecated
+
+**Who is affected.** Code that imports or constructs
+`statspai.SurrogateResult`.
+
+**What changed.** Nothing in StatsPAI ever returned this class:
+`sp.surrogate_index`, `sp.long_term_from_short` and
+`sp.proximal_surrogate_index` return `sp.CausalResult`. Constructing it now
+raises a `DeprecationWarning`; it will be removed in 1.33. Use the
+`CausalResult` the estimators return (`.estimate`, `.se`, `.ci`,
+`.model_info`).
+
+---
 
 <a id="grf-family-rebuild"></a>
 

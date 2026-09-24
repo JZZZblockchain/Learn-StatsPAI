@@ -1,5 +1,55 @@
 [
   {
+    "description": "G-estimation / A-learning for a K-stage binary-action DTR.",
+    "input_schema": {
+      "properties": {
+        "actions": {
+          "description": "actions parameter (Sequence[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "baseline parameter (Optional[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.05,
+            0.95
+          ],
+          "description": "Clip propensity to avoid division blow-up.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_covariates": {
+          "description": "Covariates observed just before stage k's decision.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final outcome column (``outcome=`` is accepted as an alias).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actions",
+        "stage_covariates",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "a_learning"
+  },
+  {
     "description": "OLS with absorbed high-dimensional fixed effects (reghdfe-style). Validation: certified parity evidence.",
     "input_schema": {
       "properties": {
@@ -1161,6 +1211,37 @@
       "type": "object"
     },
     "name": "balanceplot"
+  },
+  {
+    "description": "Compute Balke-Pearl bounds on the ATE.",
+    "input_schema": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "instrument": {
+          "description": "instrument parameter (str).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument",
+        "treat",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "balke_pearl"
   },
   {
     "description": "Bartik / shift-share IV estimator (Adao-Kolesar-Morales 2019; Borusyak-Hull-Jaravel 2022). Uses pre-period industry / group shares x exogenous shocks as an instrument for local outcome exposure. Validation: certified parity evidence. Assumptions: Exogeneity of shocks conditional on pre-period exposure structure (Borusyak-Hull-Jaravel); Shock-level IV: shocks are independent of region-level unobserved trends; Asymptotic framework: many shocks (L -> inf) -- check via sp.ssaggregate Herfindahl. Pre-conditions: pre-period shares are pre-determined (measured strictly before the outcome window); shocks are as-good-as-random conditional on unit-level controls; >= 50 regions for AKM shift-share SE to be well-sized. Failure modes: Herfindahl of shares too concentrated (one industry dominates) -> Shift-share SE unreliable -- use Adao-Kolesar-Morales shock-level SE via sp.shift_share_se; First-stage F < 10 -> Shares don't predict exposure enough -- report weak-IV-robust CI (sp.anderson_rubin_ci); Shocks correlate with pre-trends -> Shock exogeneity fails -- drop the violating shock dimension or add trend controls. Alternatives: sp.iv, sp.shift_share_se, sp.shift_share_political, sp.shift_sha...",
@@ -21010,6 +21091,50 @@
     "name": "pwcompare"
   },
   {
+    "description": "Backward-induction Q-learning for a K-stage binary-action DTR.",
+    "input_schema": {
+      "properties": {
+        "actions": {
+          "description": "Column names for the stage-k actions (binary 0/1).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "Baseline covariates in the history at all stages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "include_interactions": {
+          "default": true,
+          "description": "If True, Q-models include :math:`A_k \\times H_k` interactions, enabling nontrivial optimal rules.",
+          "type": "boolean"
+        },
+        "stage_covariates": {
+          "description": "Covariates observed *before* the stage-k decision (may be empty).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final-stage outcome column, higher is better (``outcome=`` is accepted as an alias).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actions",
+        "stage_covariates",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "q_learning"
+  },
+  {
     "description": "Quantile Difference-in-Differences (QDiD): applies the DiD contrast to quantiles, [Q11(t)-Q10(t)] - [Q01(t)-Q00(t)], on a 2x2 design with bootstrap SE. This is NOT changes-in-changes -- Athey & Imbens (2006) propose CiC and explicitly criticise QDiD; use sp.cic for CiC. Validation: certified parity evidence. Assumptions: CIC rank invariance: the quantile rank in the untreated distribution is stable across groups; Continuous outcome support covering both groups in both periods; SUTVA (no cross-group spillovers). Pre-conditions: panel or repeated cross-section; group is binary 0/1; time is binary 0/1 (pre / post). Failure modes: Outcome heavily discrete / zero-inflated -> CIC rank-matching is unstable on discrete supports -- use QTE regression (sp.qte) or Firpo-RIF; Bootstrap CI across quantiles varies wildly -> Thin tails at extreme quantiles -- restrict to [0.2, 0.8] or raise n_boot to 2000. Alternatives: sp.qte, sp.did, sp.rifreg. Typical minimum N: 500.",
     "input_schema": {
       "properties": {
@@ -26644,6 +26769,56 @@
       "type": "object"
     },
     "name": "snips"
+  },
+  {
+    "description": "G-estimation of a linear structural nested mean model.",
+    "input_schema": {
+      "properties": {
+        "actions": {
+          "description": "actions parameter (Sequence[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "baseline parameter (Optional[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.05,
+            0.95
+          ],
+          "description": "propensity_bounds parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_covariates": {
+          "description": "stage_covariates parameter (Sequence[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actions",
+        "stage_covariates",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "snmm"
   },
   {
     "description": "Lerman-Yitzhaki (1985) Gini source decomposition. Validation: certified parity evidence.",

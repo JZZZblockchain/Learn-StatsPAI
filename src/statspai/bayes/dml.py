@@ -31,7 +31,20 @@ __all__ = ["bayes_dml", "BayesianDMLResult"]
 
 @dataclass
 class BayesianDMLResult(ResultProtocolMixin):
-    """Bayesian DML posterior summary."""
+    """Bayesian DML posterior summary.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd, statspai as sp
+    >>> rng = np.random.default_rng(0)
+    >>> df = pd.DataFrame({"x1": rng.normal(size=300), "x2": rng.normal(size=300)})
+    >>> df["d"] = df.x1 + rng.normal(size=300)
+    >>> df["y"] = 0.5 * df.d + df.x2 + rng.normal(size=300)
+    >>> res = sp.bayes_dml(df, y="y", treatment="d", covariates=["x1", "x2"],
+    ...                    n_folds=2)
+    >>> isinstance(res, sp.BayesianDMLResult)
+    True
+    """
 
     posterior_mean: float
     posterior_sd: float

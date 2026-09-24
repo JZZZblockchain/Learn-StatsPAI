@@ -342,8 +342,36 @@ All notable changes to StatsPAI will be documented in this file.
   causal forest's gaps to grf fell from 0.24% / 0.38% (ATE / ATT) to
   0.03% / 0.26%.
 
+- **55 more public names reach the registry.** 30 estimators and helpers
+  (among them `sp.q_learning`, `sp.a_learning`, `sp.snmm`,
+  `sp.balke_pearl`, `sp.gnn_causal`, `sp.bayes_dml`, `sp.causal_bandit`,
+  `sp.mr_bma`, `sp.mr_multivariable`, `sp.fairness_audit`,
+  `sp.conformal_continuous`, `sp.long_term_from_short`) and 24 result
+  classes were reachable as `sp.<name>` but missing from `__all__`, so
+  `sp.list_functions()` / `sp.function_schema()` never showed them. All
+  are registered, every one carries a runnable example, and
+  `tests/test_lazy_export_results.py` checks each producer returns the class
+  it names and serializes. The ratchet baseline is now empty.
+
+### Parity
+
+- **Track A module 17 (ETWFE) reproduces again.** 1.30.0's ETWFE work moved
+  `sp.etwfe(cgroup='nevertreated')` from unit fixed effects onto the cohort
+  + period basis the not-yet-treated branch uses (R `etwfe`'s default),
+  whose CR1 factor counts the cohort levels; the R reference still set
+  `ivar=countyreal`, so the committed Python golden no longer reproduced
+  and the simple never-treated SE sat 6.0e-4 from R. The reference now
+  uses `etwfe`'s default design for that row (2.0e-6 from R) and keeps
+  `ivar` for the per-cohort rows, which validate `sp.wooldridge_did`. The
+  6.0e-4 gap to Stata `jwdid, ivar()` on the simple rows is reconstructed
+  exactly -- `sqrt((2500-17)/(2500-20))`, unit effects nested in the
+  cluster left out of K -- and regraded A; `jwdid` without `ivar()`
+  reproduces our SEs to 3e-7 but moves its point estimates by 1e-6.
+
 ### Changed
 
+- `sp.q_learning`, `sp.a_learning` and `sp.snmm` name their outcome `y=`
+  (the house-style spelling); `outcome=` keeps working as an alias.
 - `iv_forest`, `multi_arm_forest` and `causal_survival_forest` take the
   forest options of `sp.causal_forest` (`n_estimators`, `min_samples_leaf`,
   `max_samples`, `honest`, ... ; `n_trees` / `min_leaf` still accepted) plus
@@ -355,6 +383,9 @@ All notable changes to StatsPAI will be documented in this file.
 
 ### Deprecated
 
+- `sp.SurrogateResult`: no function ever returned it (the surrogate
+  estimators return `CausalResult`); constructing it warns, removal in 1.33.
+  It is not offered to agents.
 - `iv_forest(n_bootstrap=)` is ignored with a `DeprecationWarning`.
 - `CausalForest.variable_importance()` without `method=` warns: the default
   changes from `"permutation"` (in-sample effect changes) to grf's

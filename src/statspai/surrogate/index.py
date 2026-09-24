@@ -53,7 +53,14 @@ __all__ = [
 
 @dataclass
 class SurrogateResult(ResultProtocolMixin):
-    """Structured container for surrogate-index estimation artefacts."""
+    """Deprecated: an unused container, removed in 1.33.
+
+    No StatsPAI function returns this class -- ``sp.surrogate_index``,
+    ``sp.long_term_from_short`` and ``sp.proximal_surrogate_index`` all
+    return :class:`statspai.CausalResult`. It stays importable for one
+    release so code that referenced it keeps running, and warns when
+    constructed.
+    """
 
     estimate: float
     se: float
@@ -63,6 +70,17 @@ class SurrogateResult(ResultProtocolMixin):
     method: str
     surrogate_fn: Optional[Callable] = None
     diagnostics: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
+        import warnings
+
+        warnings.warn(
+            "SurrogateResult is deprecated and will be removed in 1.33: no "
+            "StatsPAI function returns it (the surrogate estimators return "
+            "CausalResult).",
+            DeprecationWarning,
+            stacklevel=3,
+        )
 
     def summary(self) -> str:
         lo, hi = self.ci

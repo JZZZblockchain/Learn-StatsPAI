@@ -657,7 +657,14 @@ TOLERANCES: dict[str, dict[str, float]] = {
         # (se_cluster_if / se_didimputation / se_stata_did_imputation).
     },  # point row; side-specific SE diagnostics
     "17_etwfe": {"rel_est": 1e-6, "rel_se": 1e-3},  # emfx + cluster SE
-    # parity; B: observed worst 6.0e-4 on the Stata side (1.7x margin).
+    # parity. R side <= 5.5e-6 (marginaleffects' forward-difference emfx;
+    # see the module note). A: the 6.0e-4 Stata rows (simple ATT on both
+    # control groups, not-yet cohort rows; 1.7x margin) are a K convention,
+    # reconstructed exactly: jwdid ivar() absorbs unit effects nested in the
+    # cluster and leaves them out of K (17), sp.etwfe and R etwfe's default
+    # fit cohort + period effects and count them (20), and
+    # sqrt((2500-17)/(2500-20)) = 1.000605. The per-cohort never rows, where
+    # both sides absorb unit effects, agree with Stata to 2e-15.
     # A on est: the 7.9e-6 R-side residual is augsynth's OSQP solver
     # tolerance (synth_qp runs OSQP at eps=1e-8); with OSQP tightened to
     # 1e-13 augsynth returns -0.36277067318038575, which agrees with the

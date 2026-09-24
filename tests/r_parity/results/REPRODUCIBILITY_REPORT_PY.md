@@ -78,7 +78,7 @@ This is the Python counterpart of `REPRODUCIBILITY_REPORT.md`. Both sides matter
 | `70_policy_tree` | ✅ reproduces | same bytes | 8/8 | 0.00e+00 | 0.00e+00 |
 | `71_dml_family` | ✅ reproduces | same bytes | 3/3 | 0.00e+00 | 0.00e+00 |
 | `72_tmle` | ✅ reproduces | same bytes | 1/1 | 0.00e+00 | 0.00e+00 |
-| `73_did2s` | ✅ reproduces | same bytes | 2/2 | 0.00e+00 | 0.00e+00 |
+| `73_did2s` | ✅ reproduces | same bytes | 2/2 | 5.52e-15 | 1.73e-18 |
 | `74_cic` | ✅ reproduces | same bytes | 10/10 | 0.00e+00 | 0.00e+00 |
 | `75_stacked` | ✅ reproduces | same bytes | 14/14 | 0.00e+00 | 0.00e+00 |
 | `76_pretrends` | ✅ reproduces | in-script | 8/8 | 0.00e+00 | 0.00e+00 |

@@ -61064,6 +61064,1412 @@
     }
   },
   {
+    "description": "Result of :func:`statspai.a_learning`.",
+    "name": "ALearningResult",
+    "parameters": {
+      "properties": {
+        "K": {
+          "description": "K parameter (int).",
+          "type": "integer"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "optimal_actions": {
+          "description": "optimal_actions parameter (np.ndarray).",
+          "type": "string"
+        },
+        "psi": {
+          "description": "psi parameter (List[np.ndarray]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "value": {
+          "description": "value parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "psi",
+        "value",
+        "optimal_actions",
+        "K",
+        "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`assimilative_causal` / :func:`causal_kalman`.",
+    "name": "AssimilationResult",
+    "parameters": {
+      "properties": {
+        "diagnostics": {
+          "default": null,
+          "description": "diagnostics parameter (Dict[str, Any]).",
+          "type": "object"
+        },
+        "ess": {
+          "description": "ess parameter (np.ndarray).",
+          "type": "string"
+        },
+        "final_ci": {
+          "description": "final_ci parameter (Tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "final_mean": {
+          "description": "final_mean parameter (float).",
+          "type": "number"
+        },
+        "final_sd": {
+          "description": "final_sd parameter (float).",
+          "type": "number"
+        },
+        "innovations": {
+          "description": "innovations parameter (np.ndarray).",
+          "type": "string"
+        },
+        "method": {
+          "default": "causal_kalman",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "posterior_ci": {
+          "description": "posterior_ci parameter (np.ndarray).",
+          "type": "string"
+        },
+        "posterior_mean": {
+          "description": "posterior_mean parameter (np.ndarray).",
+          "type": "string"
+        },
+        "posterior_sd": {
+          "description": "posterior_sd parameter (np.ndarray).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "posterior_mean",
+        "posterior_sd",
+        "posterior_ci",
+        "innovations",
+        "ess",
+        "final_mean",
+        "final_sd",
+        "final_ci"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.balke_pearl`.",
+    "name": "BalkePearlResult",
+    "parameters": {
+      "properties": {
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "joint_probs": {
+          "description": "joint_probs parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "lower": {
+          "description": "lower parameter (float).",
+          "type": "number"
+        },
+        "lower_monotone": {
+          "description": "lower_monotone parameter (float).",
+          "type": "number"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "upper": {
+          "description": "upper parameter (float).",
+          "type": "number"
+        },
+        "upper_monotone": {
+          "description": "upper_monotone parameter (float).",
+          "type": "number"
+        },
+        "width": {
+          "description": "width parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lower",
+        "upper",
+        "width",
+        "lower_monotone",
+        "upper_monotone",
+        "joint_probs",
+        "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Bayesian DML posterior summary.",
+    "name": "BayesianDMLResult",
+    "parameters": {
+      "properties": {
+        "ci": {
+          "description": "ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dml_point": {
+          "description": "dml_point parameter (float).",
+          "type": "number"
+        },
+        "dml_se": {
+          "description": "dml_se parameter (float).",
+          "type": "number"
+        },
+        "draws": {
+          "description": "draws parameter (Optional[np.ndarray]).",
+          "type": "string"
+        },
+        "mode": {
+          "description": "mode parameter (str).",
+          "type": "string"
+        },
+        "posterior_mean": {
+          "description": "posterior_mean parameter (float).",
+          "type": "number"
+        },
+        "posterior_prob_negative": {
+          "description": "posterior_prob_negative parameter (float).",
+          "type": "number"
+        },
+        "posterior_prob_positive": {
+          "description": "posterior_prob_positive parameter (float).",
+          "type": "number"
+        },
+        "posterior_sd": {
+          "description": "posterior_sd parameter (float).",
+          "type": "number"
+        },
+        "prior_mean": {
+          "description": "prior_mean parameter (float).",
+          "type": "number"
+        },
+        "prior_sd": {
+          "description": "prior_sd parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "posterior_mean",
+        "posterior_sd",
+        "ci",
+        "prior_mean",
+        "prior_sd",
+        "dml_point",
+        "dml_se",
+        "posterior_prob_positive",
+        "posterior_prob_negative",
+        "mode"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.counterfactual_policy_optimization`.",
+    "name": "CFPolicyResult",
+    "parameters": {
+      "properties": {
+        "expected_value_logged": {
+          "description": "expected_value_logged parameter (float).",
+          "type": "number"
+        },
+        "expected_value_target": {
+          "description": "expected_value_target parameter (float).",
+          "type": "number"
+        },
+        "improvement": {
+          "description": "improvement parameter (float).",
+          "type": "number"
+        },
+        "n_trajectories": {
+          "description": "Number of trajectories.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_value_logged",
+        "expected_value_target",
+        "improvement",
+        "n_trajectories"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.causal_bandit`.",
+    "name": "CausalBanditResult",
+    "parameters": {
+      "properties": {
+        "arm_labels": {
+          "description": "arm_labels parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "context": {
+          "description": "context parameter (Optional[dict]).",
+          "type": "object"
+        },
+        "expected_rewards": {
+          "description": "expected_rewards parameter (np.ndarray).",
+          "type": "string"
+        },
+        "optimal_arm": {
+          "description": "optimal_arm parameter (int).",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "optimal_arm",
+        "expected_rewards",
+        "arm_labels",
+        "context"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Structured output of :func:`causal_mas`.",
+    "name": "CausalMASResult",
+    "parameters": {
+      "properties": {
+        "backend": {
+          "default": "heuristic",
+          "description": "backend parameter (str).",
+          "type": "string"
+        },
+        "confidence": {
+          "description": "confidence parameter (Dict[Tuple[str, str], float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "description": "edges parameter (List[Tuple[str, str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "final_threshold": {
+          "default": 0.5,
+          "description": "final_threshold parameter (float).",
+          "type": "number"
+        },
+        "roles": {
+          "description": "roles parameter (Dict[str, str]).",
+          "type": "object"
+        },
+        "rounds": {
+          "description": "rounds parameter (int).",
+          "type": "integer"
+        },
+        "transcript": {
+          "description": "transcript parameter (List[Dict[str, Any]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "edges",
+        "confidence",
+        "roles",
+        "transcript",
+        "rounds"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`causal_policy_forest`.",
+    "name": "CausalPolicyForestResult",
+    "parameters": {
+      "properties": {
+        "action_counts": {
+          "description": "action_counts parameter (Dict[int, int]).",
+          "type": "object"
+        },
+        "assignments": {
+          "description": "assignments parameter (np.ndarray).",
+          "type": "string"
+        },
+        "depth": {
+          "description": "depth parameter (int).",
+          "type": "integer"
+        },
+        "n_trees": {
+          "description": "Number of trees.",
+          "type": "integer"
+        },
+        "policy_value": {
+          "description": "policy_value parameter (float).",
+          "type": "number"
+        },
+        "policy_value_se": {
+          "description": "policy_value_se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "policy_value",
+        "policy_value_se",
+        "assignments",
+        "action_counts",
+        "n_trees",
+        "depth"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "RCT-vs-RWD concordance report.",
+    "name": "ConcordanceResult",
+    "parameters": {
+      "properties": {
+        "relative_difference": {
+          "description": "relative_difference parameter (float).",
+          "type": "number"
+        },
+        "rwd_inside_rct_ci": {
+          "description": "rwd_inside_rct_ci parameter (bool).",
+          "type": "boolean"
+        },
+        "zscore_difference": {
+          "description": "zscore_difference parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rwd_inside_rct_ci",
+        "relative_difference",
+        "zscore_difference"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`conformal_continuous`.",
+    "name": "ContinuousConformalResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "dose_curves": {
+          "description": "dose_curves parameter (Optional[pd.DataFrame]).",
+          "type": "string"
+        },
+        "dose_grid": {
+          "description": "Grid of dose values to evaluate.",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model variant or parameterisation to fit.",
+          "type": "string"
+        },
+        "predictions": {
+          "description": "predictions parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "quantile": {
+          "description": "quantile parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alpha",
+        "quantile",
+        "predictions",
+        "model"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`synthesise_evidence`.",
+    "name": "EvidenceSynthesisResult",
+    "parameters": {
+      "properties": {
+        "pooled_ci": {
+          "description": "pooled_ci parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pooled_estimate": {
+          "description": "pooled_estimate parameter (float).",
+          "type": "number"
+        },
+        "pooled_se": {
+          "description": "pooled_se parameter (float).",
+          "type": "number"
+        },
+        "rct_estimate": {
+          "description": "rct_estimate parameter (float).",
+          "type": "number"
+        },
+        "rct_se": {
+          "description": "rct_se parameter (float).",
+          "type": "number"
+        },
+        "rwd_estimate": {
+          "description": "rwd_estimate parameter (float).",
+          "type": "number"
+        },
+        "rwd_se": {
+          "description": "rwd_se parameter (float).",
+          "type": "number"
+        },
+        "transport_shift": {
+          "description": "transport_shift parameter (float).",
+          "type": "number"
+        },
+        "weights": {
+          "description": "Observation weights.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "pooled_estimate",
+        "pooled_se",
+        "pooled_ci",
+        "rct_estimate",
+        "rct_se",
+        "rwd_estimate",
+        "rwd_se",
+        "transport_shift",
+        "weights"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Extended fairness result with bootstrap CI and per-alt statistics.",
+    "name": "EvidenceWithoutInjusticeResult",
+    "parameters": {
+      "properties": {
+        "admissible_features": {
+          "default": null,
+          "description": "admissible_features parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (Optional[tuple]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "metric": {
+          "description": "metric parameter (str).",
+          "type": "string"
+        },
+        "n_boot": {
+          "default": 0,
+          "description": "Number of bootstrap replications.",
+          "type": "integer"
+        },
+        "notes": {
+          "default": "",
+          "description": "notes parameter (str).",
+          "type": "string"
+        },
+        "passes": {
+          "description": "passes parameter (Optional[bool]).",
+          "type": "boolean"
+        },
+        "per_group": {
+          "default": null,
+          "description": "per_group parameter (Dict[Any, float]).",
+          "type": "object"
+        },
+        "pvalue": {
+          "description": "pvalue parameter (Optional[float]).",
+          "type": "number"
+        },
+        "threshold": {
+          "description": "threshold parameter (Optional[float]).",
+          "type": "number"
+        },
+        "value": {
+          "description": "value parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "metric",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "One-shot dashboard of fairness diagnostics.",
+    "name": "FairnessAudit",
+    "parameters": {
+      "properties": {
+        "counterfactual_fairness": {
+          "description": "counterfactual_fairness parameter (Optional[FairnessResult]).",
+          "type": "string"
+        },
+        "demographic_parity": {
+          "description": "demographic_parity parameter (FairnessResult).",
+          "type": "string"
+        },
+        "equalized_odds": {
+          "description": "equalized_odds parameter (Optional[FairnessResult]).",
+          "type": "string"
+        },
+        "n": {
+          "description": "n parameter (int).",
+          "type": "integer"
+        },
+        "protected_attribute": {
+          "description": "protected_attribute parameter (str).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "demographic_parity",
+        "equalized_odds",
+        "counterfactual_fairness",
+        "n",
+        "protected_attribute"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Single fairness diagnostic.",
+    "name": "FairnessResult",
+    "parameters": {
+      "properties": {
+        "metric": {
+          "description": "metric parameter (str).",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "description": "notes parameter (str).",
+          "type": "string"
+        },
+        "passes": {
+          "description": "passes parameter (Optional[bool]).",
+          "type": "boolean"
+        },
+        "per_group": {
+          "default": null,
+          "description": "per_group parameter (Dict[Any, float]).",
+          "type": "object"
+        },
+        "threshold": {
+          "description": "threshold parameter (Optional[float]).",
+          "type": "number"
+        },
+        "value": {
+          "description": "value parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "metric",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.gnn_causal`.",
+    "name": "GNNCausalResult",
+    "parameters": {
+      "properties": {
+        "ate": {
+          "description": "ate parameter (float).",
+          "type": "number"
+        },
+        "ci": {
+          "description": "ci parameter (tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "feature_map": {
+          "description": "feature_map parameter (np.ndarray).",
+          "type": "string"
+        },
+        "n_layers": {
+          "description": "Number of layers.",
+          "type": "integer"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "pvalue": {
+          "description": "pvalue parameter (float).",
+          "type": "number"
+        },
+        "se": {
+          "description": "se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "ate",
+        "se",
+        "ci",
+        "pvalue",
+        "feature_map",
+        "n_obs",
+        "n_layers"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`conformal_interference`.",
+    "name": "InterferenceConformalResult",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "cluster_scores": {
+          "description": "cluster_scores parameter (pd.Series).",
+          "type": "string"
+        },
+        "predictions": {
+          "description": "predictions parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "quantile": {
+          "description": "quantile parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alpha",
+        "quantile",
+        "predictions",
+        "cluster_scores"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "ATE bounds produced by :func:`ml_bounds`.",
+    "name": "MLBoundsResult",
+    "parameters": {
+      "properties": {
+        "adaptive_lower": {
+          "description": "adaptive_lower parameter (float).",
+          "type": "number"
+        },
+        "adaptive_upper": {
+          "description": "adaptive_upper parameter (float).",
+          "type": "number"
+        },
+        "alpha": {
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "learner": {
+          "description": "learner parameter (str).",
+          "type": "string"
+        },
+        "lower": {
+          "description": "lower parameter (float).",
+          "type": "number"
+        },
+        "lower_ci": {
+          "description": "lower_ci parameter (Tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "manski_lower": {
+          "description": "manski_lower parameter (float).",
+          "type": "number"
+        },
+        "manski_upper": {
+          "description": "manski_upper parameter (float).",
+          "type": "number"
+        },
+        "method": {
+          "default": "ML-enhanced Manski bounds (Kennedy et al. 2024)",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "upper": {
+          "description": "upper parameter (float).",
+          "type": "number"
+        },
+        "upper_ci": {
+          "description": "upper_ci parameter (Tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y_range": {
+          "description": "y_range parameter (Tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "lower",
+        "upper",
+        "lower_ci",
+        "upper_ci",
+        "y_range",
+        "manski_lower",
+        "manski_upper",
+        "adaptive_lower",
+        "adaptive_upper",
+        "n_obs",
+        "alpha",
+        "learner"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "MR-BMA (Bayesian Model Averaging) output.",
+    "name": "MRBMAResult",
+    "parameters": {
+      "properties": {
+        "best_models": {
+          "description": "best_models parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "exposures": {
+          "description": "exposures parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "marginal_inclusion": {
+          "description": "marginal_inclusion parameter (pd.Series).",
+          "type": "string"
+        },
+        "method": {
+          "default": "bf",
+          "description": "Estimator or algorithm variant to use.",
+          "type": "string"
+        },
+        "model_averaged_estimate": {
+          "description": "model_averaged_estimate parameter (Optional[pd.Series]).",
+          "type": "string"
+        },
+        "model_priors": {
+          "description": "model_priors parameter (np.ndarray).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "exposures",
+        "marginal_inclusion",
+        "best_models",
+        "model_priors"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Multivariable MR output.",
+    "name": "MVMRResult",
+    "parameters": {
+      "properties": {
+        "conditional_f_stats": {
+          "description": "conditional_f_stats parameter (Dict[str, float]).",
+          "type": "object"
+        },
+        "direct_effect": {
+          "description": "direct_effect parameter (pd.DataFrame).",
+          "type": "string"
+        },
+        "exposures": {
+          "description": "exposures parameter (List[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_snps": {
+          "description": "Number of snps.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "exposures",
+        "direct_effect",
+        "conditional_f_stats",
+        "n_snps"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Two-step MR output.",
+    "name": "MediationMRResult",
+    "parameters": {
+      "properties": {
+        "direct_effect": {
+          "description": "direct_effect parameter (float).",
+          "type": "number"
+        },
+        "direct_effect_se": {
+          "description": "direct_effect_se parameter (float).",
+          "type": "number"
+        },
+        "exposure": {
+          "description": "Exposure term or exposure column.",
+          "type": "string"
+        },
+        "indirect_effect": {
+          "description": "indirect_effect parameter (float).",
+          "type": "number"
+        },
+        "indirect_effect_se": {
+          "description": "indirect_effect_se parameter (float).",
+          "type": "number"
+        },
+        "mediator": {
+          "description": "mediator parameter (str).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        },
+        "proportion_mediated": {
+          "description": "proportion_mediated parameter (float).",
+          "type": "number"
+        },
+        "total_effect": {
+          "description": "total_effect parameter (float).",
+          "type": "number"
+        },
+        "total_effect_se": {
+          "description": "total_effect_se parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "exposure",
+        "mediator",
+        "outcome",
+        "total_effect",
+        "total_effect_se",
+        "direct_effect",
+        "direct_effect_se",
+        "indirect_effect",
+        "indirect_effect_se",
+        "proportion_mediated"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.q_learning`.",
+    "name": "QLearningResult",
+    "parameters": {
+      "properties": {
+        "K": {
+          "description": "K parameter (int).",
+          "type": "integer"
+        },
+        "actions": {
+          "description": "actions parameter (Sequence[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "optimal_actions": {
+          "description": "optimal_actions parameter (np.ndarray).",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        },
+        "stage_coefs": {
+          "description": "stage_coefs parameter (List[Dict[str, float]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "value": {
+          "description": "value parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "stage_coefs",
+        "value",
+        "optimal_actions",
+        "K",
+        "n_obs",
+        "outcome",
+        "actions"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.snmm`.",
+    "name": "SNMMResult",
+    "parameters": {
+      "properties": {
+        "K": {
+          "description": "K parameter (int).",
+          "type": "integer"
+        },
+        "blip_params": {
+          "description": "blip_params parameter (List[np.ndarray]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "default": null,
+          "description": "Amount of result detail to return.",
+          "type": "object"
+        },
+        "n_obs": {
+          "description": "Number of obs.",
+          "type": "integer"
+        },
+        "optimal_actions": {
+          "description": "optimal_actions parameter (np.ndarray).",
+          "type": "string"
+        },
+        "value": {
+          "description": "value parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "blip_params",
+        "optimal_actions",
+        "value",
+        "K",
+        "n_obs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Output of :func:`sharp_ope_unobserved`.",
+    "name": "SharpOPEResult",
+    "parameters": {
+      "properties": {
+        "gamma": {
+          "description": "gamma parameter (float).",
+          "type": "number"
+        },
+        "lower_bound": {
+          "description": "lower_bound parameter (float).",
+          "type": "number"
+        },
+        "n": {
+          "description": "n parameter (int).",
+          "type": "integer"
+        },
+        "point_estimate": {
+          "description": "point_estimate parameter (float).",
+          "type": "number"
+        },
+        "upper_bound": {
+          "description": "upper_bound parameter (float).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "gamma",
+        "point_estimate",
+        "lower_bound",
+        "upper_bound",
+        "n"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Result of :func:`statspai.structural_mdp`.",
+    "name": "StructuralMDPResult",
+    "parameters": {
+      "properties": {
+        "A": {
+          "description": "A parameter (np.ndarray).",
+          "type": "string"
+        },
+        "B": {
+          "description": "B parameter (np.ndarray).",
+          "type": "string"
+        },
+        "action_dim": {
+          "description": "action_dim parameter (int).",
+          "type": "integer"
+        },
+        "reward_coef": {
+          "description": "reward_coef parameter (np.ndarray).",
+          "type": "string"
+        },
+        "state_dim": {
+          "description": "state_dim parameter (int).",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "state_dim",
+        "action_dim",
+        "A",
+        "B",
+        "reward_coef"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "G-estimation / A-learning for a K-stage binary-action DTR.",
+    "name": "a_learning",
+    "parameters": {
+      "properties": {
+        "actions": {
+          "description": "actions parameter (Sequence[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "baseline parameter (Optional[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.05,
+            0.95
+          ],
+          "description": "Clip propensity to avoid division blow-up.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_covariates": {
+          "description": "Covariates observed just before stage k's decision.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final outcome column (``outcome=`` is accepted as an alias).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "actions",
+        "stage_covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute Balke-Pearl bounds on the ATE.",
+    "name": "balke_pearl",
+    "parameters": {
+      "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "instrument": {
+          "description": "instrument parameter (str).",
+          "type": "string"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "instrument"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "GCN-featurised AIPW ATE estimator under network interference.",
+    "name": "gnn_causal",
+    "parameters": {
+      "properties": {
+        "adjacency": {
+          "description": "adjacency parameter (DataFrame).",
+          "type": "string"
+        },
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "covariates": {
+          "description": "Covariate matrix, DataFrame, or column names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "min_leaf": {
+          "default": 5,
+          "description": "min_leaf parameter (int).",
+          "type": "integer"
+        },
+        "n_layers": {
+          "default": 2,
+          "description": "Number of GCN propagation layers applied to the covariate matrix.",
+          "type": "integer"
+        },
+        "n_trees": {
+          "default": 200,
+          "description": "Number of trees.",
+          "type": "integer"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.02,
+            0.98
+          ],
+          "description": "propensity_bounds parameter (tuple[float, float]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "random_state": {
+          "default": 42,
+          "description": "Random seed or RandomState for reproducible stochastic steps.",
+          "type": "integer"
+        },
+        "treat": {
+          "description": "Treatment indicator or first-treatment-period column.",
+          "type": "string"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "treat",
+        "covariates",
+        "adjacency"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Backward-induction Q-learning for a K-stage binary-action DTR.",
+    "name": "q_learning",
+    "parameters": {
+      "properties": {
+        "actions": {
+          "description": "Column names for the stage-k actions (binary 0/1).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "Baseline covariates in the history at all stages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "include_interactions": {
+          "default": true,
+          "description": "If True, Q-models include :math:`A_k \\times H_k` interactions, enabling nontrivial optimal rules.",
+          "type": "boolean"
+        },
+        "stage_covariates": {
+          "description": "Covariates observed *before* the stage-k decision (may be empty).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Final-stage outcome column, higher is better (``outcome=`` is accepted as an alias).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "actions",
+        "stage_covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "G-estimation of a linear structural nested mean model.",
+    "name": "snmm",
+    "parameters": {
+      "properties": {
+        "actions": {
+          "description": "actions parameter (Sequence[str]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "description": "baseline parameter (Optional[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data": {
+          "description": "pandas DataFrame containing the variables used by the estimator.",
+          "type": "string"
+        },
+        "propensity_bounds": {
+          "default": [
+            0.05,
+            0.95
+          ],
+          "description": "propensity_bounds parameter (tuple).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_covariates": {
+          "description": "stage_covariates parameter (Sequence[Sequence[str]]).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "y": {
+          "description": "Outcome variable column name or outcome array.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "y",
+        "actions",
+        "stage_covariates"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Instrumental forest: heterogeneous local average treatment effects.",
     "name": "instrumental_forest",
     "parameters": {

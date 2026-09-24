@@ -97,7 +97,7 @@ to a published design (`source == "simulated"`), including the
 Callaway–Sant'Anna `mpdta` panel used below; their numbers are not the numbers
 from the original data.
 
-At a glance: 1,220 registered functions across 87 submodules; 405k LOC (core) + 260k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
+At a glance: 1,249 registered functions across 87 submodules; 405k LOC (core) + 260k LOC (tests). Run `python scripts/registry_stats.py` to reproduce these numbers.
 
 ---
 
@@ -786,16 +786,14 @@ compared as well as the point estimates.
 Beyond point-parity, a Track-B coverage study runs `B=1000` Monte Carlo
 replications per estimator and checks that 95% confidence intervals hit their
 nominal rate on known-truth DGPs, against a 99% Wilson acceptance band of
-`[0.935, 0.967]`. The twelve materialized nominal rows — OLS on an RCT (0.952),
+`[0.935, 0.967]`. The eleven materialized nominal rows — OLS on an RCT (0.952),
 a 2×2 DiD (0.955), strong-instrument IV (0.962), Callaway–Sant'Anna staggered
-ATT (0.947), Sun–Abraham overall ATT (0.950), a two-way FE panel (0.948),
-entropy balancing (0.945), a causal-forest AIPW ATE at 2,000 trees (0.959), DML
-IRM ATE (0.968), SDID with placebo SEs (0.928), sharp RD with the robust CI
-(0.934), and DML PLR with the default learners (0.883) — each also record bias,
-Monte Carlo SD and SE calibration. The SDID and RD shortfalls come with
-calibrated SEs (RD's intervals equal R `rdrobust`'s draw by draw); the PLR
-shortfall is regularisation bias of the default gradient-boosting nuisances
-(0.95 with the true nuisances); see `tests/coverage_monte_carlo/FINDINGS.md`. The committed artifacts live under
+ATT (0.947), Sun–Abraham overall ATT (0.950), a two-way FE panel (0.948), SDID
+with placebo SEs (0.939), sharp RD with the robust CI (0.934), entropy
+balancing (1.000), DML IRM ATE (0.968), and a causal-forest AIPW ATE (0.977) —
+fall inside the band for the first seven; the RD row sits just below it (mild
+finite-sample under-coverage on a curved DGP), and the last three are above it
+(conservative). The committed artifacts live under
 `tests/coverage_monte_carlo/results_b1000/`.
 
 ---

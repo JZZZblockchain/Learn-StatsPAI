@@ -33,7 +33,7 @@ Read the two evidence kinds separately. Only the first answers "does StatsPAI ag
 | **No external software reference** | analytical-only (T1) | 140 |
 | | external-replication (published numbers) | 2 |
 | | **subtotal** | **142** |
-| No numerical evidence yet | unverified | 663 |
+| No numerical evidence yet | unverified | 692 |
 
 ### Honest denominators
 
@@ -41,10 +41,10 @@ The all-registered denominator understates coverage: it counts result and except
 
 | denominator | cross-language | any evidence | total | cross-lang share |
 | --- | ---: | ---: | ---: | ---: |
-| estimator callables | 415 | 555 | 800 | 51.9% |
+| estimator callables | 415 | 555 | 805 | 51.6% |
 | infrastructure (parity N/A) | 0 | 1 | 126 | 0.0% |
-| result / exception classes | 0 | 1 | 294 | 0.0% |
-| **all registered** | 415 | 557 | 1220 | 34.0% |
+| result / exception classes | 0 | 1 | 318 | 0.0% |
+| **all registered** | 415 | 557 | 1249 | 33.2% |
 
 ### Coverage by estimator family
 
@@ -52,7 +52,7 @@ Families with zero cross-language rows are the highest-leverage targets when a r
 
 | family | cross-language | any evidence | estimator callables |
 | --- | ---: | ---: | ---: |
-| causal | 147 | 222 | 357 |
+| causal | 147 | 222 | 361 |
 | regression | 32 | 36 | 37 |
 | spatial | 28 | 29 | 34 |
 | panel | 27 | 28 | 30 |
@@ -64,9 +64,9 @@ Families with zero cross-language rows are the highest-leverage targets when a r
 | epi | 16 | 17 | 17 |
 | dag | 0 | 0 | 15 |
 | bayes | 0 | 7 | 14 |
+| neural_causal | 0 | 0 | 12 |
 | postestimation | 6 | 6 | 12 |
 | timeseries | 11 | 12 | 12 |
-| neural_causal | 0 | 0 | 11 |
 | power | 6 | 7 | 11 |
 | conformal_causal | 0 | 3 | 10 |
 | structural | 5 | 7 | 10 |
@@ -681,6 +681,6 @@ Recovers a known DGP truth / closed-form identity within tolerance; no cross-pac
 | `xlearner` | [`test_ml_causal_recovery_parity.py`](../tests/reference_parity/test_ml_causal_recovery_parity.py) |
 | `yatchew_linearity_test` | [`test_did_had_parity.py`](../tests/reference_parity/test_did_had_parity.py) |
 
-## unverified — 663 functions
+## unverified — 692 functions
 
 These are registered public functions with no cross-language or published-reference parity evidence attached **yet**. This is the honest coverage gap, not a claim of incorrectness — many are frontier methods with no Stata/R sibling to align against. Query any of them with `sp.parity_status(name)`; the closing roadmap lives in [`docs/dev/parity_status_roadmap.md`](dev/parity_status_roadmap.md).
