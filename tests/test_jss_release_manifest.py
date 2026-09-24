@@ -638,7 +638,8 @@ def test_coverage_findings_track_b1000_artifacts() -> None:
 
     assert "results_b1000/coverage_b1000.json" in findings
     assert "results_b1000/coverage_robustness_b1000.json" in findings
-    assert len(canonical) == 12
+    # Twelve rows plus sp.fast.feols through its own entry point (JSS v2 review).
+    assert len(canonical) == 13
     # Every row carries the diagnostics that explain its rate (JSS review,
     # 2026-09): bias, Monte Carlo SD, mean SE and their ratio.
     for row in canonical:

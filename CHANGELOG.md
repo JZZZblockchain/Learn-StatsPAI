@@ -360,6 +360,80 @@ All notable changes to StatsPAI will be documented in this file.
   changes from `"permutation"` (in-sample effect changes) to grf's
   `"split"` importance in 1.33.
 
+### ⚠️ Correctness (JSS review v2, 2026-09)
+
+- **`sp.iv(..., vce=...)` silently ignored the option.** `vce=` (and
+  `vcov=`) fell through `**kwargs` into the k-class fit, which dropped them:
+  `sp.iv(f, data, vce="cr2", cluster="g")` returned CR1 standard errors
+  labelled as nothing in particular, and `vce="cr3"` / `"wild"` did the same.
+  `sp.iv` now honours every covariance `sp.ivreg` computes -- HC0-HC3 and
+  CR1 in the k-class fit; CR2 / CR3 / wild cluster bootstrap / Conley /
+  jackknife through the `ivreg` paths, bit-identical to `sp.ivreg` -- and
+  raises `MethodIncompatibility` for a request its `method=` cannot compute
+  (e.g. LIML with CR2) instead of returning some other SE.
+- **`sp.fast.feols` now defaults to `ssc="fixest"`.** The old default
+  (`"statspai"`) charged every absorbed effect in the CR1 small-sample factor,
+  including effects nested in the cluster variable, and under-charged the
+  two-way FE rank by one for iid / HC1. Track A pinned `ssc="fixest"`, so the
+  default configuration users ran had no reference row. On the Track B panel
+  (50 units x 6 periods, unit + period effects, CR1 by unit) the old default's
+  SE was 8% above the Monte Carlo SD and covered 0.979; the new default covers
+  0.955 with SE/SD 0.987 (`tests/coverage_monte_carlo/mechanisms/
+  feols_ssc.py`). Point estimates are unchanged; `ssc="statspai"` reproduces
+  old SEs. See MIGRATION.md.
+
+### Changed (JSS review v2, 2026-09)
+
+- **`sp.validation_scope` grades outputs, not only configurations.** Each
+  evidence row now lists the values it actually ran on every dimension (no
+  wildcards) and the outputs it compared (`estimate`, `se`, `coverage`,
+  `diagnostic`). A point-estimate row no longer vouches for a standard error
+  it did not compare: `sp.iv(..., robust="hc3")` on Card is now
+  `estimate_only` (the Card reference pins classical / HC1 / CR1), where it
+  was `covered`. Statuses are `covered` / `estimate_only` / `stochastic_only`
+  / `disclosure_only` / `not_covered`; T4 non-uniqueness disclosures are no
+  longer folded into `stochastic_only`. Explicit queries with a value outside
+  a dimension's domain raise. New dimensions record what changes the
+  computation: IV estimator and absorption; the feols `ssc`; CS covariates,
+  anticipation and clustering; RD covariance and covariates; DML score,
+  learners (linear / default / other), folds, repetitions and IPW trimming;
+  forest tree count (exact), tuning (grf defaults or custom) and design; PSM
+  distance, bias correction and SE method. `sp.causal_question` results are
+  unwrapped to the estimator they ran. Dimensions a fit did not record are
+  listed under `unchecked` and never match.
+- New reference rows behind the map: `sp.sun_abraham`'s default event-time
+  aggregate against the same linear combination of `fixest::sunab`
+  coefficients (8e-12;
+  `tests/reference_parity/test_sunab_event_time_aggregate_parity.py`);
+  `sp.iv(method="liml")` against `ivmodel` on Track A module 59's bytes
+  (module 59 itself runs `sp.liml`, a separate code path); `sp.iv` and
+  `sp.ivreg` asserted bit-identical on the configurations whose rows they
+  share (`test_validation_entry_points.py`); and a Track B row that runs
+  `sp.fast.feols` itself rather than `sp.panel`.
+- **The implementation-provenance trace is bound to the implementation.** It
+  records the SHA-256 of every StatsPAI file whose code ran while each Track A
+  module estimated, of the committed result, and the dependency versions; a
+  change to any of them makes the trace stale, so an internal delegation
+  change behind an unchanged entry script can no longer pass. A package
+  outside the reviewed lists classifies a module as `unclassified` rather
+  than native.
+- **"T3" is reserved for seed-replicated equivalence.** Stochastic checks that
+  are not TOST equivalence tests -- the CS multiplier bootstrap against `did`,
+  the `fect` / `interflex` cross-validation selectors, the GRF-family
+  forests' known-truth screens, the HonestDiD C-LF grid -- are now described
+  as stochastic screens, in docstrings, registry notes and the evidence map
+  (kind `S`). The forest equivalence test adds a Welch-t version of its TOST
+  (20 seeds at 8,000 trees).
+- **Track C compares like with like.** Both sides of every benchmark read
+  one input file written by `tests/perf/_data.py` (SHA-256 recorded on each
+  side), run on one thread, under one run id; `compare_perf.py` refuses rows
+  whose sides differ in input or run. The CS panel now uses the same
+  calendar on both sides (periods 1-5; it was 0-4 in Python and 1-5 in R
+  with the same cohorts), both sides compute the pre-test and the simple and
+  dynamic aggregations, and the SCM row times the same ADH specification
+  (special predictors, nested V, no placebos) on both sides, with the
+  package-default workflow (V = I plus donor placebos) reported separately.
+
 ### Added (JSS review response, 2026-09)
 
 - **`sp.validation_scope(result)`: which artifacts cover the configuration

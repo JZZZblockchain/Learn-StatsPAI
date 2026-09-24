@@ -40,8 +40,9 @@ Current JSS source-snapshot audit counts: 414 `certified`, 142 `validated`, 661 
 surface is therefore 556 symbols, while 568 stable auto-registered symbols
 remain API-stable but not parity-backed.
 
-The `validated` tier requires known-truth, reference-parity, external-parity,
-coverage, or explicit convention evidence. Unit and regression tests support
+The `validated` tier requires known-truth recovery or replication of
+published numbers; Monte Carlo coverage rows and convention disclosures are
+recorded but never earn a tier on their own. Unit and regression tests support
 API stability; they do not by themselves promote a function to `validated`.
 `certified` is reserved for entries in the main cross-language or published
 reference parity harness.

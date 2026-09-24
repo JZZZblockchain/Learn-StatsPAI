@@ -5,6 +5,38 @@ Internal version-to-version migrations are at the top; the long-form
 
 ---
 
+<a id="feols-ssc-default"></a>
+
+## Unreleased — ⚠️ `sp.fast.feols` small-sample correction and `sp.iv(vce=)`
+
+**`sp.fast.feols`.** The default `ssc` is now `"fixest"`, the convention of
+`fixest::feols` and `reghdfe` (and of the parity rows). Coefficients do not
+change. Standard errors change:
+
+* `vcov="cr1"` with absorbed effects nested in the cluster variable (e.g.
+  unit effects, clustered by unit): smaller, because those effects no longer
+  enter the small-sample factor. The old factor over-covered.
+* `vcov="iid"` / `"hc1"` with two or more absorbed dimensions: the residual
+  degrees of freedom fall by one per extra dimension (`n - p - (ΣG_k - 1)`
+  instead of `n - p - Σ(G_k - 1)`), so SEs rise slightly.
+
+```python
+sp.fast.feols("y ~ x | i + t", data=df, vcov="cr1", cluster="i")                  # new default
+sp.fast.feols("y ~ x | i + t", data=df, vcov="cr1", cluster="i", ssc="statspai")  # old numbers
+```
+
+**`sp.iv`.** `vce=` / `vcov=` used to be ignored (CR1 was returned for
+`vce="cr2"`). They are now honoured, bit-identically to `sp.ivreg`, or
+rejected with `MethodIncompatibility` when the chosen `method=` cannot
+compute them. If you passed `vce=` to `sp.iv` before, your SEs change to the
+ones you asked for.
+
+**`sp.validation_scope`.** The return value gained `outputs`, `unchecked`
+and `invariant`; `status` can now be `estimate_only` or `disclosure_only`;
+explicit dimension values outside the domain raise; the forest `trees`
+dimension is the exact count (`"2000"`, not `">=2000"`) and the DML
+`learners` dimension is `linear` / `default` / `other` (not `flexible`).
+
 <a id="grf-family-rebuild"></a>
 
 ## Unreleased — ⚠️ `iv_forest`, `multi_arm_forest`, `causal_survival_forest` rebuilt on the GRF engine; engine seeding fixed
