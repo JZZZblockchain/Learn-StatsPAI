@@ -33,11 +33,58 @@ def _ci_covers(ci, truth) -> bool:
     return lo <= truth <= hi
 
 
+class _Draws:
+    """Per-draw estimate / SE / interval, summarised beyond a coverage rate.
+
+    A coverage rate alone cannot say *why* an interval over- or
+    under-covers. Recording every draw lets the table report the bias, the
+    Monte Carlo SD of the estimator, the mean reported SE, their ratio (the
+    SE calibration), and the mean interval length next to the rate.
+    """
+
+    def __init__(self, truth: float) -> None:
+        self.truth = truth
+        self.est: list[float] = []
+        self.se: list[float] = []
+        self.lo: list[float] = []
+        self.hi: list[float] = []
+
+    def add(self, est, se, ci) -> bool:
+        self.est.append(float(est))
+        self.se.append(float(se) if se is not None else float("nan"))
+        self.lo.append(float(ci[0]))
+        self.hi.append(float(ci[1]))
+        return _ci_covers(ci, self.truth)
+
+    def summary(self, name: str) -> dict:
+        est = np.asarray(self.est)
+        se = np.asarray(self.se)
+        lo, hi = np.asarray(self.lo), np.asarray(self.hi)
+        covered = int(np.sum((lo <= self.truth) & (self.truth <= hi)))
+        mc_sd = float(np.std(est, ddof=1))
+        mean_se = float(np.nanmean(se))
+        return {
+            "name": name,
+            "B": int(est.size),
+            "covered": covered,
+            "rate": covered / est.size,
+            "truth": self.truth,
+            "bias": float(np.mean(est) - self.truth),
+            "mc_sd": mc_sd,
+            "mean_se": mean_se,
+            "median_se": float(np.nanmedian(se)),
+            "se_sd_ratio": mean_se / mc_sd if mc_sd > 0 else float("nan"),
+            "rmse": float(np.sqrt(np.mean((est - self.truth) ** 2))),
+            "mean_ci_length": float(np.mean(hi - lo)),
+            "failures": int(np.sum(~np.isfinite(est))),
+        }
+
+
 def coverage_ols() -> dict:
     """OLS on RCT with covariates."""
     truth = 1.5
     rng = np.random.default_rng(2026)
-    covered = 0
+    acc = _Draws(truth)
     for b in range(B):
         n = 800
         x = rng.normal(size=n)
@@ -48,20 +95,14 @@ def coverage_ols() -> dict:
         beta = float(fit.params["d"])
         se = float(fit.std_errors["d"])
         ci = (beta - 1.96 * se, beta + 1.96 * se)
-        if _ci_covers(ci, truth):
-            covered += 1
-    return {
-        "name": "sp.regress (HC1) on RCT",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(beta, se, ci)
+    return acc.summary("sp.regress (HC1) on RCT")
 
 
 def coverage_did_2x2() -> dict:
     truth = 2.0
     rng = np.random.default_rng(2026)
-    covered = 0
+    acc = _Draws(truth)
     for b in range(B):
         n_per = 100
         # 2x2: 100 treated, 100 control, pre and post
@@ -87,20 +128,14 @@ def coverage_did_2x2() -> dict:
                 beta = float(fit.params[key])
                 se = float(fit.std_errors[key])
         ci = (beta - 1.96 * se, beta + 1.96 * se)
-        if _ci_covers(ci, truth):
-            covered += 1
-    return {
-        "name": "sp.regress 2x2 DiD",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(beta, se, ci)
+    return acc.summary("sp.regress 2x2 DiD")
 
 
 def coverage_iv() -> dict:
     truth = 1.5
     rng = np.random.default_rng(2026)
-    covered = 0
+    acc = _Draws(truth)
     for b in range(B):
         n = 800
         z = rng.binomial(1, 0.5, n)
@@ -114,14 +149,8 @@ def coverage_iv() -> dict:
         beta = float(fit.params["d"])
         se = float(fit.std_errors["d"])
         ci = (beta - 1.96 * se, beta + 1.96 * se)
-        if _ci_covers(ci, truth):
-            covered += 1
-    return {
-        "name": "sp.ivreg (HC1) on strong-Z IV",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(beta, se, ci)
+    return acc.summary("sp.ivreg (HC1) on strong-Z IV")
 
 
 def coverage_cs() -> dict:
@@ -132,7 +161,7 @@ def coverage_cs() -> dict:
     B=1000 materialised audit.
     """
     truth = 1.5
-    covered = 0
+    acc = _Draws(truth)
     cohorts = [3, 5, 7, 0]
     for seed in range(B):
         rng = np.random.default_rng(seed)
@@ -147,20 +176,14 @@ def coverage_cs() -> dict:
                 rows.append({"i": i, "t": t, "g": g, "y": y})
         df = pd.DataFrame(rows)
         r = sp.callaway_santanna(df, y="y", g="g", t="t", i="i", estimator="reg")
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.callaway_santanna simple ATT (staggered)",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.callaway_santanna simple ATT (staggered)")
 
 
 def coverage_ebalance() -> dict:
     """Entropy balancing on a CIA DGP (same DGP as the pytest row)."""
     truth = 2.0
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n = 500
@@ -171,20 +194,14 @@ def coverage_ebalance() -> dict:
         y = 1.0 + 1.5 * X1 - 0.8 * X2 + truth * d + rng.normal(scale=0.8, size=n)
         df = pd.DataFrame({"y": y, "d": d, "X1": X1, "X2": X2})
         r = sp.ebalance(df, y="y", treat="d", covariates=["X1", "X2"])
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.ebalance (CIA, ATT)",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.ebalance (CIA, ATT)")
 
 
 def coverage_dml() -> dict:
     """DML IRM ATE via ``sp.causal_question(design='dml')`` (binary D)."""
     truth = 1.0
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n = 500
@@ -198,14 +215,33 @@ def coverage_dml() -> dict:
             treatment="d", outcome="y", design="dml", covariates=["x1", "x2"], data=df
         )
         r = q.estimate()
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.causal_question(design='dml') IRM ATE",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.causal_question(design='dml') IRM ATE")
+
+
+def coverage_dml_plr() -> dict:
+    """DML partially linear model (the suite's DML member) on a PLR DGP.
+
+    The IRM row above answers a different question (binary treatment,
+    interactive model). The twelve-estimator suite lists ``sp.dml(model=
+    "plr")``, so it gets its own row: continuous treatment, nonlinear
+    nuisances, ``theta = 1``, five-fold cross-fitting with the default
+    learners.
+    """
+    truth = 1.0
+    acc = _Draws(truth)
+    for seed in range(B):
+        rng = np.random.default_rng(seed)
+        n = 500
+        x1 = rng.normal(size=n)
+        x2 = rng.normal(size=n)
+        d = 0.5 * x1 + 0.3 * np.sin(2 * x2) + rng.normal(size=n)
+        y = truth * d + x1 + 0.5 * x2**2 + rng.normal(size=n)
+        df = pd.DataFrame({"y": y, "d": d, "x1": x1, "x2": x2})
+        r = sp.dml(df, y="y", d="d", X=["x1", "x2"], model="plr",
+                   n_folds=5, random_state=seed)
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.dml(model='plr') theta")
 
 
 def coverage_causal_forest() -> dict:
@@ -216,7 +252,7 @@ def coverage_causal_forest() -> dict:
     estimator grf::average_treatment_effect reports.
     """
     truth = 1.0
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n = 500
@@ -233,21 +269,17 @@ def coverage_causal_forest() -> dict:
             covariates=["x1", "x2"],
             data=df,
         )
-        r = q.estimate(n_estimators=30, random_state=seed)
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.causal_question(design='causal_forest') AIPW ATE",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        # grf-default 2,000 trees: since 1.31 the ATE is the forest's own AIPW,
+        # and a 30-tree forest leaves rows without out-of-bag predictions.
+        r = q.estimate(random_state=seed)
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.causal_question(design='causal_forest') AIPW ATE")
 
 
 def coverage_panel_fe() -> dict:
     """Two-way FE panel on a known-coefficient DGP (same as the pytest row)."""
     truth = 1.5
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n_units, n_time = 50, 6
@@ -261,14 +293,8 @@ def coverage_panel_fe() -> dict:
         df = pd.DataFrame(rows)
         r = sp.panel(df, formula="y ~ d", entity="i", time="t", method="fe")
         lo, hi = r.conf_int().loc["d"].values
-        if lo <= truth <= hi:
-            covered += 1
-    return {
-        "name": "sp.panel two-way FE",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.params["d"], r.std_errors["d"], (lo, hi))
+    return acc.summary("sp.panel two-way FE")
 
 
 def coverage_sdid() -> dict:
@@ -279,7 +305,7 @@ def coverage_sdid() -> dict:
     recommended variance estimator for a single treated unit.
     """
     truth = 3.0
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n_ctrl, t0, t1 = 20, 12, 6
@@ -307,14 +333,8 @@ def coverage_sdid() -> dict:
             n_reps=100,
             seed=seed,
         )
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.sdid placebo (1 treated)",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.sdid placebo (1 treated)")
 
 
 def coverage_rd() -> dict:
@@ -325,7 +345,7 @@ def coverage_rd() -> dict:
     rather than only the slow-suite pytest check.
     """
     truth = 1.0
-    covered = 0
+    acc = _Draws(truth)
     for seed in range(B):
         rng = np.random.default_rng(seed)
         n = 1000
@@ -339,14 +359,8 @@ def coverage_rd() -> dict:
         )
         df = pd.DataFrame({"y": y, "x": x})
         r = sp.rdrobust(df, y="y", x="x", c=0.0)
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.rdrobust sharp (robust CI)",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.rdrobust sharp (robust CI)")
 
 
 def coverage_sun_abraham() -> dict:
@@ -357,7 +371,7 @@ def coverage_sun_abraham() -> dict:
     rather than only through cross-estimator agreement.
     """
     truth = 1.5
-    covered = 0
+    acc = _Draws(truth)
     cohorts = [3, 5, 7, 0]
     for seed in range(B):
         rng = np.random.default_rng(seed)
@@ -372,14 +386,8 @@ def coverage_sun_abraham() -> dict:
                 rows.append({"i": i, "t": t, "g": g, "y": y})
         df = pd.DataFrame(rows)
         r = sp.sun_abraham(df, y="y", g="g", t="t", i="i")
-        if r.ci[0] <= truth <= r.ci[1]:
-            covered += 1
-    return {
-        "name": "sp.sun_abraham overall ATT (staggered)",
-        "B": B,
-        "covered": covered,
-        "rate": covered / B,
-    }
+        acc.add(r.estimate, r.se, r.ci)
+    return acc.summary("sp.sun_abraham overall ATT (staggered)")
 
 
 def main() -> None:
@@ -399,15 +407,19 @@ def main() -> None:
         coverage_sdid,
         coverage_ebalance,
         coverage_dml,
+        coverage_dml_plr,
         coverage_causal_forest,
     ]
+    only = set(os.environ.get("STATSPAI_B1000_ONLY", "").split(",")) - {""}
+    if only:
+        fns = [f for f in fns if f.__name__ in only]
     for fn in fns:
         t0 = time.time()
         rec = fn()
         rec["wall_s"] = round(time.time() - t0, 1)
         out.append(rec)
         print(f"  {rec['name']:<40} cov={rec['rate']:.3f}  ({rec['wall_s']}s)")
-    out_path = RESULTS_DIR / "coverage_b1000.json"
+    out_path = RESULTS_DIR / os.environ.get("STATSPAI_B1000_OUT", "coverage_b1000.json")
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
     print(f"OK -- wrote {out_path}")
 

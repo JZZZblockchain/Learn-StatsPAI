@@ -1,5 +1,6 @@
 # Include essential files for PyPI distribution
 include LICENSE
+include THIRD_PARTY_NOTICES.md
 include README.md
 include CHANGELOG.md
 include CONTRIBUTING.md

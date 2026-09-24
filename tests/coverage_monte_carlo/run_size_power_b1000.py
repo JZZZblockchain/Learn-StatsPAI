@@ -41,7 +41,7 @@ PLAN = [
     (_fit_rd, "sp.rdrobust sharp", RD_CAP, [0.0, 0.20, 0.40, 0.60]),
     (_fit_panel, "sp.panel two-way FE", B, [0.0, 0.15, 0.30, 0.45]),
     (_fit_cs, "sp.callaway_santanna staggered", CS_CAP, [0.0, 0.30, 0.60, 0.90]),
-    (_fit_ebalance, "sp.ebalance (conservative)", B, [0.0, 0.40, 0.70, 1.00]),
+    (_fit_ebalance, "sp.ebalance (M-estimation SE)", B, [0.0, 0.40, 0.70, 1.00]),
 ]
 
 

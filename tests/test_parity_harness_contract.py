@@ -240,9 +240,14 @@ def test_strictness_tier_breakdown_matches_current_artifacts():
     # lme4's own optimisers scatter by 1e-6..1e-5 around bobyqa at the
     # same deviance to 1e-10. The budget is the measured reference-side
     # optimiser noise floor; see compare.py and r_parity_tolerances.md.
+    # 10_honest_did moved from the iterative tier to the machine tier in
+    # 1.31 (abs_est 5e-4 -> 1e-6) when it stopped calling the R backend: the
+    # native FLCI is held against HonestDiD with the exact folded-normal
+    # quantile and against the closed form at M = 0, and the old 5e-4 budget
+    # only ever covered HonestDiD's simulated quantile.
     assert compare.tier_breakdown(rendered_modules) == {
-        "machine": 79,
-        "iterative": 8,
+        "machine": 80,
+        "iterative": 7,
         "moderate": 1,
         "methodological": 1,
     }
@@ -609,7 +614,13 @@ def test_sdid_att_row_is_point_only_with_backend_se_diagnostics():
     assert "native_parity_note" in py_payload["extra"]
 
 
-def test_rd_default_rows_use_cct_delegation_not_legacy_internal_selector():
+def test_rd_default_rows_run_the_native_selector_not_the_port():
+    """Module 06's headline is StatsPAI's own CCT cascade.
+
+    ``bwselect="cct"`` delegates to the official rdrobust Python port; its
+    rows are kept as a port-vs-native convergence check under names that
+    never join an R or Stata row.
+    """
     compare = _load_compare()
     py = _read_json(R_RESULTS / "06_rd_py.json")
     r_stats = {
@@ -620,14 +631,15 @@ def test_rd_default_rows_use_cct_delegation_not_legacy_internal_selector():
         for row in _read_json(STATA_RESULTS / "06_rd_Stata.json")["rows"]
     }
 
-    assert py["extra"]["bwselect"] == "cct"
+    assert py["extra"]["bwselect"] == "mserd"
+    assert py["extra"]["backend"] == "native"
     assert "bandwidth_selector_gap" not in py["extra"]
 
     py_stats = {row["statistic"] for row in py["rows"]}
     assert "default_robust_est" in py_stats & r_stats & stata_stats
     assert "default_bandwidth_h" in py_stats & r_stats & stata_stats
-    assert "legacy_internal_mserd_bandwidth_h" in py_stats
-    assert "legacy_internal_mserd_bandwidth_h" not in r_stats | stata_stats
+    assert "cct_port_default_bandwidth_h" in py_stats
+    assert "cct_port_default_bandwidth_h" not in r_stats | stata_stats
 
     cfg, rows = _headline_rows(compare, "06_rd")
     assert cfg["metric"] == "rel_est"
@@ -1084,27 +1096,49 @@ def test_stata_headline_over_budget_modules_are_explicitly_registered():
     assert set(over_budget) == set(compare.STATA_HEADLINE_GAP_EXCEPTIONS)
 
 
-def test_honest_did_smoothness_uses_reference_backend_with_tight_stata_port():
+def test_honest_did_smoothness_runs_the_native_flci():
+    """Module 10 must exercise the native FLCI, not the R backend.
+
+    Comparing ``backend="honestdid"`` with R HonestDiD compares R with
+    itself. The native solver is held to 1e-6 against HonestDiD with the
+    exact folded-normal quantile (M > 0) and against the closed form at
+    M = 0, where HonestDiD's own solver is the less accurate of the two.
+    """
     compare = _load_compare()
     py_payload = _read_json(R_RESULTS / "10_honest_did_py.json")
 
-    assert py_payload["extra"]["backend"] == "HonestDiD"
-    assert "backend='honestdid'" in py_payload["extra"]["reference_backend_note"]
-    assert compare.TOLERANCES["10_honest_did"]["abs_est"] == 5e-4
+    assert py_payload["extra"]["backend"] == "native"
+    assert py_payload["extra"]["interval"] == "flci"
+    assert compare.TOLERANCES["10_honest_did"]["abs_est"] == 1e-6
     assert compare.HEADLINE["10_honest_did"]["metric"] == "abs_est"
-    assert "Stata port within 0.0005" in compare.HEADLINE["10_honest_did"]["gap_note"]
 
-    rows = [
+    rows = {row.statistic: row for row in compare.collect("10_honest_did")}
+    headline = [
         row
-        for row in compare.collect("10_honest_did")
-        if row.statistic.startswith("ci_")
+        for row in rows.values()
+        if compare.HEADLINE["10_honest_did"]["headline_filter"](row)
     ]
-    assert rows
-    assert max(row.abs_est or 0.0 for row in rows) < 1e-12
-    assert max(row.abs_est_st or 0.0 for row in rows) < 3.5e-4
+    assert {r.statistic for r in headline} >= {
+        "analytic_ci_lower_M_0",
+        "analytic_ci_upper_M_0",
+        "ci_lower_M_0.5",
+    }
+    assert max(row.abs_est for row in headline) < 1e-7
+    # The Stata honestdid port joins the like-for-like rows.
+    assert max(row.abs_est_st for row in headline if row.abs_est_st is not None) < 1e-7
+    # At M = 0 HonestDiD's cone solver is further from the closed form than
+    # the native solver: the reference, not StatsPAI, carries that gap.
+    assert rows["ci_lower_M_0"].abs_est > 10 * rows["analytic_ci_lower_M_0"].abs_est
+    # The shipped simulated quantile is displayed, never a headline row.
+    assert 1e-4 < rows["shipped_ci_lower_M_0.05"].abs_est < 1e-3
 
 
 def test_honest_relmags_conditional_bridge_is_exact_and_versioned():
+    """Module 21 runs the native ARP conditional set, not the R backend.
+
+    A correct port of a finite-grid confidence set agrees exactly: both
+    sides report the smallest and largest accepted grid point.
+    """
     compare = _load_compare()
     py_payload = _read_json(R_RESULTS / "21_honest_relmags_py.json")
     r_payload = _read_json(R_RESULTS / "21_honest_relmags_R.json")
@@ -1114,6 +1148,8 @@ def test_honest_relmags_conditional_bridge_is_exact_and_versioned():
     stata_rows = {row["statistic"]: row["estimate"] for row in stata_payload["rows"]}
     extra = stata_payload["extra"]
 
+    assert py_payload["extra"]["backend"] == "native"
+    assert py_payload["extra"]["interval"] == "arp_conditional"
     assert py_payload["extra"]["honestdid_method"] == "Conditional"
     assert r_payload["extra"]["honestdid_method"] == ["Conditional"]
     assert extra["honestdid_method"] == "Conditional"

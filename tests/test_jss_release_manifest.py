@@ -638,17 +638,24 @@ def test_coverage_findings_track_b1000_artifacts() -> None:
 
     assert "results_b1000/coverage_b1000.json" in findings
     assert "results_b1000/coverage_robustness_b1000.json" in findings
-    assert len(canonical) == 11
-    assert "DML sits just above the upper edge" in findings
+    assert len(canonical) == 12
+    # Every row carries the diagnostics that explain its rate (JSS review,
+    # 2026-09): bias, Monte Carlo SD, mean SE and their ratio.
+    for row in canonical:
+        for key in ("bias", "mc_sd", "mean_se", "se_sd_ratio", "mean_ci_length"):
+            assert key in row, (row["name"], key)
+    assert (
+        "DML PLR with the default gradient-boosting learners under-covers" in findings
+    )
     assert "947/1000 = 0.947" in findings
-    assert "eleven known-truth DGPs" in findings
-    assert "eleven known-truth" in parity_long
-    assert "all eleven" in parity_compact
-    assert "materialized eleven-row" in computational_details
-    assert "eleven materialized nominal rows" in root_readme
-    assert "11 个已物化 nominal 行" in root_readme_cn
-    assert "all eleven materialized nominal" in manuscript_md_export
-    assert "全部 11 个 known-truth nominal 行" in manuscript_zh_export
+    assert "twelve known-truth DGPs" in findings
+    assert "twelve known-truth" in parity_long
+    assert "holds\ntwelve" in parity_compact or "holds twelve" in parity_compact
+    assert "materialized twelve-row" in computational_details
+    assert "twelve materialized nominal rows" in root_readme
+    assert "12 个已物化 nominal 行" in root_readme_cn
+    assert "twelve" in manuscript_md_export
+    assert "全部 12 个 known-truth nominal 行" in manuscript_zh_export
 
     for row in canonical:
         for narrative in rate_narratives:

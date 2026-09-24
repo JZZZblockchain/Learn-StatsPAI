@@ -145,6 +145,18 @@ class _Check:
         keep the check live on results that report a Bayesian method
         but have not yet written rhat evidence (e.g. an in-progress
         fit, or one that ran the sampler in a different code path).
+    applicability : str | None
+        Optional name of a statistical-applicability rule in
+        :data:`_APPLICABILITY_RULES`. The gates above decide whether a
+        check is *listed*; this rule decides whether a listed check can
+        be *asked* of this particular fit. When the rule returns a reason
+        (e.g. an over-identification test on a just-identified IV fit,
+        which has no over-identifying restriction to test), the check is
+        reported with status ``"not_applicable"`` and that reason instead
+        of ``"missing"`` -- so neither a human nor an agent is told to
+        run a test that does not exist for the model. When the rule cannot
+        decide from the stored metadata it returns ``None`` and the check
+        is evaluated normally.
     """
 
     name: str
@@ -159,6 +171,7 @@ class _Check:
     model_type_any: Tuple[str, ...] = ()
     requires_evidence: Tuple[str, ...] = ()
     requires_signature: Tuple[str, ...] = ()
+    applicability: Optional[str] = None
 
 
 def _p(*keys: str) -> EvidencePaths:
@@ -281,7 +294,8 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
     # --- IV ---------------------------------------------------------- #
     _Check(
         name="weak_instrument",
-        question="Is the first-stage F above the weak-instrument threshold?",
+        question="Does the first-stage F clear the F > 10 rule-of-thumb "
+        "screen for weak instruments?",
         applies_to=("iv",),
         # Three aliases mirror ``causal_violations`` (see
         # core/_agent_summary.py) so audit and violations agree on the
@@ -295,9 +309,12 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         compare="greater_passes",
         suggest_function=None,
         importance="high",
-        rationale="Stock-Yogo (2005): below F≈10 the 2SLS sampling "
-        "distribution is far from normal and inference is "
-        "untrustworthy.",
+        rationale="Staiger-Stock (1997) / Stock-Yogo (2005): below F≈10 "
+        "the 2SLS sampling distribution is far from normal. F > 10 is an "
+        "empirical screen, not a test of instrument validity (exclusion "
+        "cannot be tested in a just-identified model) and not a "
+        "guarantee against weak-IV distortion; pair it with "
+        "weak-IV-robust inference.",
     ),
     _Check(
         name="overid_test",
@@ -306,13 +323,23 @@ _CAUSAL_CHECKS: Tuple[_Check, ...] = (
         evidence_paths=_pp(
             ("hansen_j", "pvalue"),
             ("sargan", "pvalue"),
+            # Flat keys written by sp.iv / sp.ivreg / panel IV into
+            # ``result.diagnostics`` (merged into the audit view).
+            ("Hansen J p-value",),
+            ("Hansen p-value",),
+            ("Sargan p-value",),
+            ("hansen_p",),
+            ("sargan_p",),
         ),
         threshold=0.05,
         compare="greater_passes",
         suggest_function="sp.iv_diag",
         importance="medium",
-        rationale="With ≥2 instruments, a J test rejection is direct "
-        "evidence one of them is invalid.",
+        rationale="With more excluded instruments than endogenous "
+        "regressors, a J test rejection is evidence that at least one "
+        "instrument is invalid. A just-identified model has no "
+        "over-identifying restriction, so the test does not exist there.",
+        applicability="overidentified",
     ),
     _Check(
         name="anderson_rubin_ci",
@@ -567,6 +594,95 @@ _REGRESSION_CHECKS: Tuple[_Check, ...] = (
 
 
 # ====================================================================== #
+#  Statistical applicability
+# ====================================================================== #
+
+
+def _as_int(value: Any) -> Optional[int]:
+    """Integer view of a stored count, or ``None`` when absent/non-numeric."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if f != f or f in (float("inf"), float("-inf")):  # NaN / inf
+        return None
+    return int(round(f))
+
+
+def _overid_degree(model_info: Dict[str, Any]) -> Optional[int]:
+    """Number of over-identifying restrictions, or ``None`` if unknown.
+
+    Read, in order of reliability, from (i) the degrees of freedom of a
+    stored J / Sargan statistic, (ii) the moment and parameter counts of a
+    GMM fit, and (iii) the excluded-instrument and endogenous-regressor
+    counts of a linear IV fit. The last pair follows the convention of
+    ``sp.iv`` / ``sp.ivreg``, whose ``"N instruments"`` counts *excluded*
+    instruments only.
+    """
+    for key in (
+        "overid_df",
+        "Sargan df",
+        "Hansen J df",
+        "Hansen df",
+        "sargan_df",
+        "hansen_df",
+    ):
+        df = _as_int(model_info.get(key))
+        if df is not None:
+            return df
+    for path in (("hansen_j", "df"), ("sargan", "df")):
+        df = _as_int(_safe_get(model_info, *path))
+        if df is not None:
+            return df
+    q, k = _as_int(model_info.get("n_moments")), _as_int(model_info.get("n_params"))
+    if q is not None and k is not None:
+        return q - k
+    for n_z_key, n_x_key in (
+        ("N instruments", "N endogenous"),
+        ("n_excluded_instruments", "n_endogenous"),
+        ("n_instruments", "n_regressors"),
+    ):
+        n_z, n_x = _as_int(model_info.get(n_z_key)), _as_int(model_info.get(n_x_key))
+        if n_z is not None and n_x is not None:
+            return n_z - n_x
+    overid = model_info.get("overidentified")
+    if isinstance(overid, bool) and not overid:
+        return 0
+    return None
+
+
+def _rule_overidentified(model_info: Dict[str, Any]) -> Optional[str]:
+    """Reason the over-identification test does not apply, else ``None``."""
+    degree = _overid_degree(model_info)
+    if degree is None or degree > 0:
+        return None
+    if degree == 0:
+        return "just-identified; no restriction to test"
+    return "under-identified; fewer excluded instruments than endogenous regressors"
+
+
+#: Applicability rules referenced by ``_Check.applicability``. Each takes the
+#: merged ``model_info``/``diagnostics`` view and returns a reason string when
+#: the check cannot be asked of this fit, or ``None`` when it can (or when the
+#: stored metadata is insufficient to decide -- the check is then evaluated
+#: normally rather than silently dropped).
+_APPLICABILITY_RULES: Dict[str, Any] = {
+    "overidentified": _rule_overidentified,
+}
+
+
+def _not_applicable_reason(
+    check: "_Check", model_info: Dict[str, Any]
+) -> Optional[str]:
+    if not check.applicability:
+        return None
+    rule = _APPLICABILITY_RULES[check.applicability]
+    return rule(model_info)
+
+
+# ====================================================================== #
 #  Status evaluation
 # ====================================================================== #
 
@@ -640,7 +756,8 @@ def _check_signature_predicate(
 def _evaluate(check: _Check, model_info: Dict[str, Any]) -> Tuple[str, Any]:
     """Return ``(status, raw_value)`` for one check on this result.
 
-    ``status`` is one of ``"passed"`` / ``"failed"`` / ``"missing"``.
+    ``status`` is one of ``"passed"`` / ``"failed"`` / ``"missing"``;
+    ``"not_applicable"`` is decided before evaluation, in :func:`audit`.
     """
     raw = _resolve_evidence(model_info, check.evidence_paths)
 
@@ -713,14 +830,19 @@ class AuditReport(dict):
 
     #: Column width of the check-name column in the rendered table.
     _NAME_WIDTH = 22
+    #: Rendered label for each status; the JSON payload keeps the
+    #: underscore spelling agents branch on.
+    _STATUS_LABEL = {"not_applicable": "n/a"}
 
     @property
     def checks_by_status(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Checks grouped into ``passed`` / ``failed`` / ``missing``."""
+        """Checks grouped into ``passed`` / ``failed`` / ``missing`` /
+        ``not_applicable``."""
         grouped: Dict[str, List[Dict[str, Any]]] = {
             "passed": [],
             "failed": [],
             "missing": [],
+            "not_applicable": [],
         }
         for check in self.get("checks", []):
             grouped.setdefault(str(check.get("status")), []).append(check)
@@ -735,6 +857,11 @@ class AuditReport(dict):
     def failed(self) -> List[Dict[str, Any]]:
         """Checks that were run and did not meet their threshold."""
         return self.checks_by_status["failed"]
+
+    @property
+    def not_applicable(self) -> List[Dict[str, Any]]:
+        """Checks that do not exist for this fit (each carries a ``reason``)."""
+        return self.checks_by_status["not_applicable"]
 
     def to_frame(self):
         """The checklist as a :class:`pandas.DataFrame`, one row per check."""
@@ -754,17 +881,24 @@ class AuditReport(dict):
         family = self.get("method_family")
         if family:
             head += f" [{family}]"
+        n_na = int(counts.get("not_applicable", 0) or 0)
+        tally = (
+            f"(passed {n_passed}, failed {int(counts.get('failed', 0) or 0)}, "
+            f"missing {int(counts.get('missing', 0) or 0)}"
+        )
+        tally += f"; {n_na} n/a)" if n_na else ")"
         lines = [
             head,
-            f"{n_passed} of {n_total} checks satisfied "
-            f"(passed {n_passed}, failed {int(counts.get('failed', 0) or 0)}, "
-            f"missing {int(counts.get('missing', 0) or 0)})",
+            f"{n_passed} of {n_total} applicable checks satisfied {tally}",
             "",
         ]
         for check in self.get("checks", []):
             status = str(check.get("status", ""))
             name = str(check.get("name", ""))[: self._NAME_WIDTH]
-            if status == "missing":
+            label = self._STATUS_LABEL.get(status, status)
+            if status == "not_applicable":
+                note = str(check.get("reason", "") or "does not apply to this fit")
+            elif status == "missing":
                 note = f"run {check.get('suggest_function') or '(no suggestion)'}"
             else:
                 value, threshold = check.get("value"), check.get("threshold")
@@ -773,13 +907,15 @@ class AuditReport(dict):
                     if value is not None or threshold is not None
                     else str(check.get("question", ""))
                 )
-            lines.append(f"  {status:<8}{name:<{self._NAME_WIDTH + 2}}{note}")
+            lines.append(f"  {label:<8}{name:<{self._NAME_WIDTH + 2}}{note}")
         if not self.get("checks"):
             lines.append("  (no checks apply to this result)")
         lines += [
             "",
             "Missing checks are evidence a reviewer will expect, not errors.",
         ]
+        if n_na:
+            lines.append("n/a checks do not exist for this fit and are not counted.")
         return "\n".join(lines)
 
     __str__ = _render
@@ -853,11 +989,16 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> "AuditReport":
         - ``method_family`` (str) — one of ``"did"`` / ``"rd"`` / ``"iv"``
           / ``"synth"`` / ``"matching"`` / ``"dml"`` / ``"hte"`` /
           ``"regression"`` / ``"generic"``
-        - ``checks`` (list[dict]) — every applicable check, each with
-          ``name`` / ``question`` / ``status`` / ``severity`` / ``value``
-          / ``threshold`` / ``suggest_function`` / ``rationale``
+        - ``checks`` (list[dict]) — every check the estimator family
+          lists, each with ``name`` / ``question`` / ``status`` /
+          ``severity`` / ``value`` / ``threshold`` / ``suggest_function``
+          / ``rationale``. ``status`` is ``"passed"``, ``"failed"``,
+          ``"missing"`` or ``"not_applicable"``; a not-applicable check
+          (e.g. an over-identification test on a just-identified IV fit)
+          also carries a ``reason`` and never a ``suggest_function``.
         - ``summary`` (dict) — count of ``passed`` / ``failed`` /
-          ``missing`` / ``n_total``
+          ``missing`` / ``not_applicable``, and ``n_total``, the number
+          of *applicable* checks (``passed + failed + missing``)
         - ``coverage`` (float in [0, 1]) — ``passed / n_total``; agents
           can sort multiple results by reviewer-readiness
 
@@ -926,9 +1067,31 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> "AuditReport":
     )
 
     checks: List[Dict[str, Any]] = []
-    counts = {"passed": 0, "failed": 0, "missing": 0}
+    counts = {"passed": 0, "failed": 0, "missing": 0, "not_applicable": 0}
 
     def _record(chk: _Check) -> None:
+        # Statistical applicability is decided before any evidence is read:
+        # a test that does not exist for this fit (an over-identification
+        # test on a just-identified IV model) must be neither "missing" --
+        # which tells the user to go and run it -- nor "passed".
+        na_reason = _not_applicable_reason(chk, model_info)
+        if na_reason is not None:
+            counts["not_applicable"] += 1
+            checks.append(
+                {
+                    "name": chk.name,
+                    "question": chk.question,
+                    "status": "not_applicable",
+                    "severity": "info",
+                    "importance": chk.importance,
+                    "value": None,
+                    "threshold": chk.threshold,
+                    "suggest_function": None,
+                    "rationale": chk.rationale,
+                    "reason": na_reason,
+                }
+            )
+            return
         status, value = _evaluate(chk, model_info)
         # ``severity`` and ``importance`` carry orthogonal vocabularies
         # so agents can branch on either without ambiguity:
@@ -1054,7 +1217,11 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> "AuditReport":
     n_passed = counts["passed"]
     n_failed = counts["failed"]
     n_missing = counts["missing"]
-    n_total = len(checks)
+    n_na = counts["not_applicable"]
+    # ``n_total`` counts the *applicable* checks, so the invariant
+    # ``passed + failed + missing == n_total`` holds and ``coverage`` is not
+    # diluted (or inflated) by checks that do not exist for this fit.
+    n_total = len(checks) - n_na
     coverage = (n_passed / n_total) if n_total else 0.0
 
     return AuditReport(
@@ -1066,6 +1233,7 @@ def audit(result: Any, *, treatment: Optional[str] = None) -> "AuditReport":
                 "passed": n_passed,
                 "failed": n_failed,
                 "missing": n_missing,
+                "not_applicable": n_na,
                 "n_total": n_total,
             },
             "coverage": round(coverage, 3),

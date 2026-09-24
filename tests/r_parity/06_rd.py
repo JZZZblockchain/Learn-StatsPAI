@@ -1,12 +1,18 @@
 """StatsPAI RD CCT bias-corrected parity (Python side) -- Module 06.
 
-Runs sp.rdrobust(..., bwselect="cct") on the Lee 2008 senate replica
-so the Track A row exercises the same Calonico-Cattaneo-Titiunik
-``rdrobust`` bandwidth selector used by R and Stata.  The legacy
-StatsPAI internal ``mserd`` selector is still recorded as a diagnostic
-row, but the parity headline is the canonical CCT path.
+Runs the **native** ``sp.rdrobust(...)`` default -- StatsPAI's own
+implementation of the Calonico-Cattaneo-Titiunik MSE-optimal bandwidth
+cascade and robust bias-corrected inference -- on the Lee 2008 senate
+replica, and compares it with R and Stata ``rdrobust`` defaults.
 
-Tolerance: rel < 1e-6 against R/Stata CCT defaults.
+Until 1.31 the headline rows came from ``bwselect="cct"``, which hands the
+computation to the official ``rdrobust`` Python port maintained by the
+method's authors. That is a same-language port, not an R shell-out, but
+it is still not evidence about StatsPAI's own algorithm, so it is now a
+secondary, recorded convergence check (``cct_port_*`` rows, no R or Stata
+counterpart, never joined) rather than the parity headline.
+
+Tolerance: rel < 1e-6 against R/Stata CCT defaults (observed ~3e-14).
 """
 from __future__ import annotations
 
@@ -21,65 +27,49 @@ MODULE = "06_rd"
 FORCED_BANDWIDTH = 15.0
 
 
-def main() -> None:
-    df = sp.datasets.lee_2008_senate()
-    dump_csv(df, MODULE)
-
-    # Canonical R/Stata rdrobust bandwidth selector via the official
-    # rdrobust Python port.
-    fit = sp.rdrobust(df, y="y", x="x", c=0.0, bwselect="cct")
-
-    rows: list[ParityRecord] = []
+def _rows(fit, prefix: str, n: int) -> list[ParityRecord]:
+    out = []
     for label in ("conventional", "robust"):
         d = fit.model_info[label]
-        rows.append(
+        out.append(
             ParityRecord(
-                module=MODULE, side="py", statistic=f"default_{label}_est",
+                module=MODULE, side="py", statistic=f"{prefix}_{label}_est",
                 estimate=float(d["estimate"]),
                 se=float(d["se"]),
                 ci_lo=float(d["ci"][0]),
                 ci_hi=float(d["ci"][1]),
-                n=int(len(df)),
+                n=n,
             )
         )
+    for bw in ("h", "b"):
+        out.append(
+            ParityRecord(
+                module=MODULE, side="py", statistic=f"{prefix}_bandwidth_{bw}",
+                estimate=float(fit.model_info[f"bandwidth_{bw}"]), n=n,
+            )
+        )
+    return out
 
-    rows.append(
-        ParityRecord(
-            module=MODULE, side="py", statistic="default_bandwidth_h",
-            estimate=float(fit.model_info["bandwidth_h"]), n=int(len(df)),
-        )
-    )
-    rows.append(
-        ParityRecord(
-            module=MODULE, side="py", statistic="default_bandwidth_b",
-            estimate=float(fit.model_info["bandwidth_b"]), n=int(len(df)),
-        )
-    )
 
-    # Default-spelling cross-check. sp.rdrobust(...) with no bwselect
-    # reaches the same CCT cascade as bwselect='cct'; these rows pin that
-    # the two spellings converge rather than preserving a historical gap.
-    # Kept out of the parity join deliberately -- they have no R or Stata
-    # counterpart, so compare.collect drops them.
-    legacy = sp.rdrobust(df, y="y", x="x", c=0.0)
-    rows.append(
-        ParityRecord(
-            module=MODULE, side="py",
-            statistic="legacy_internal_mserd_bandwidth_h",
-            estimate=float(legacy.model_info["bandwidth_h"]), n=int(len(df)),
-        )
-    )
-    rows.append(
-        ParityRecord(
-            module=MODULE, side="py",
-            statistic="legacy_internal_mserd_robust_est",
-            estimate=float(legacy.model_info["robust"]["estimate"]),
-            se=float(legacy.model_info["robust"]["se"]),
-            ci_lo=float(legacy.model_info["robust"]["ci"][0]),
-            ci_hi=float(legacy.model_info["robust"]["ci"][1]),
-            n=int(len(df)),
-        )
-    )
+def main() -> None:
+    df = sp.datasets.lee_2008_senate()
+    dump_csv(df, MODULE)
+    n = int(len(df))
+
+    # Headline: the native default (bwselect="mserd", StatsPAI's own CCT
+    # cascade). No third-party package is called on this path.
+    fit = sp.rdrobust(df, y="y", x="x", c=0.0)
+    rows: list[ParityRecord] = _rows(fit, "default", n)
+
+    # Convergence check against the official rdrobust Python port
+    # (bwselect="cct"; optional extra `rd-cct`). Named so it never joins an
+    # R or Stata row: agreement here is port-vs-native, not parity.
+    try:
+        port = sp.rdrobust(df, y="y", x="x", c=0.0, bwselect="cct")
+    except ImportError:  # the GPL port is an opt-in extra
+        port = None
+    if port is not None:
+        rows += _rows(port, "cct_port_default", n)
 
     # Forced-bandwidth replicate so the local-polynomial estimator math stays
     # pinned separately from the bandwidth selector. Both sides hard-code the
@@ -110,19 +100,17 @@ def main() -> None:
             "p": fit.model_info["polynomial_p"],
             "q": fit.model_info["polynomial_q"],
             "bwselect": fit.model_info["bwselect"],
+            "backend": "native",
             "bandwidth_parity_note": (
-                "Track A uses sp.rdrobust(..., bwselect='cct'), which "
-                "delegates to the official rdrobust Python port and "
-                "matches R/Stata rdrobust default mserd bandwidths on "
-                "the Lee-2008 fixture. The legacy_internal_mserd_* rows "
-                "record the *default* spelling, sp.rdrobust(...) with no "
-                "bwselect, which once ran a separate rule-of-thumb "
-                "selector and now reaches the same CCT cascade. The name "
-                "is historical; the rows are kept as a convergence check "
-                "between the two spellings, and they agree to 1.7e-12 on "
-                "the bandwidth and 3e-14 on the robust estimate. They "
-                "have no R or Stata counterpart, so they never enter the "
-                "parity join."
+                "Track A headline rows run the native sp.rdrobust(...) "
+                "default (bwselect='mserd', StatsPAI's own CCT cascade), "
+                "which matches R/Stata rdrobust default mserd bandwidths "
+                "and robust estimates on the Lee-2008 fixture. The "
+                "cct_port_default_* rows record sp.rdrobust(..., "
+                "bwselect='cct'), which delegates to the official "
+                "rdrobust Python port; they are a port-vs-native "
+                "convergence check with no R or Stata counterpart and "
+                "never enter the parity join."
             ),
         },
     )

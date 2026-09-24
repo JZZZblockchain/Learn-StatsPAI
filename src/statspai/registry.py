@@ -20385,7 +20385,21 @@ def _index_evidence_note(record: Dict[str, Any]) -> str:
     tolerance = str(record.get("tolerance") or "").strip()
     module = str(record.get("module_id") or "").strip()
 
-    if status in CROSS_LANGUAGE_STATUSES:
+    grade = str(record.get("evidence_grade") or "")
+    if status in CROSS_LANGUAGE_STATUSES and grade in {"T3", "T4"}:
+        # Not a parity claim: a stochastic equivalence (T3) or a documented
+        # disagreement between references (T4) must read as what it is.
+        label = (
+            "seed-replicated stochastic equivalence, T3"
+            if grade == "T3"
+            else "documented reference disagreement, T4"
+        )
+        head = f"Cross-language comparison ({label})"
+        if reference:
+            head += f" vs {reference}"
+        if version_txt:
+            head += f" [{version_txt}]"
+    elif status in CROSS_LANGUAGE_STATUSES:
         head = f"Cross-language parity ({status})"
         if reference:
             head += f" vs {reference}"
@@ -20404,6 +20418,13 @@ def _index_evidence_note(record: Dict[str, Any]) -> str:
         head += f"; tolerance {tolerance}"
     if module:
         head += f"; parity module {module}"
+    implementation = str(record.get("implementation") or "native")
+    if implementation != "native":
+        # The parity row validates what this function returns, but the
+        # StatsPAI side delegates the estimation (e.g. to a third-party Python
+        # library), so it is wrapper evidence, not evidence about a native
+        # algorithm. Say so where the user reads the tier.
+        head += f"; implementation: {implementation.replace('_', ' ')}"
     if citation:
         head += f" -- {citation}"
     return head

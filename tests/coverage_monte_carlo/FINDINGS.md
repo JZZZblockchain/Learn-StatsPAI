@@ -18,41 +18,51 @@ The suite now validates all three faces of the inference machinery:
 
 ## Headline B=1000 Coverage Audit
 
-The canonical Track B audit materializes eleven known-truth DGPs at
-`B=1000` (each row records B=1000 draws). The 99% Wilson band around
-nominal 0.95 is approximately
-`[0.935, 0.967]`; rows above the band are treated as conservative
-over-coverage, not as evidence of under-calibrated standard errors, and
-the one row marginally below it is reported as mild under-coverage.
+The canonical Track B audit materializes twelve known-truth DGPs at
+`B=1000` (each row records B=1000 draws), and since the 2026-09 JSS review
+each row records every draw's estimate, SE and interval, so the table
+reports why a rate is what it is: bias, Monte Carlo SD, mean reported SE
+and their ratio (SE calibration). The 99% Wilson band around nominal 0.95
+is approximately `[0.935, 0.967]`.
 
-| Estimator | DGP | Coverage |
-| --- | --- | --- |
-| `sp.regress` (HC1) | RCT with covariates | 0.952 |
-| `sp.regress` 2x2 DiD | 2-period homogeneous DiD | 0.955 |
-| `sp.ivreg` (HC1) | Strong binary-Z IV | 0.962 |
-| `sp.callaway_santanna` (REG, simple ATT) | Homogeneous staggered timing | 0.947 |
-| `sp.sun_abraham` (overall ATT) | Homogeneous staggered timing | 0.950 |
-| `sp.panel` two-way FE | Known-coefficient FE panel | 0.948 |
-| `sp.rdrobust` sharp (robust CI) | Known-jump curved RD | 0.934 |
-| `sp.sdid` (placebo SE) | Factor-model panel, 1 treated | 0.939 |
-| `sp.ebalance` | CIA with 2 covariates | 1.000 |
-| `sp.causal_question(design="dml")` | Binary-treatment IRM ATE | 0.968 |
-| `sp.causal_question(design="causal_forest")` | AIPW-IF ATE DGP | 0.977 |
+| Estimator | DGP | Coverage | Bias | MC SD | Mean SE | SE/SD |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sp.regress` (HC1) | RCT with covariates | 0.952 | -0.0028 | 0.0707 | 0.0708 | 1.00 |
+| `sp.regress` 2x2 DiD | 2-period homogeneous DiD | 0.955 | +0.0017 | 0.0974 | 0.0999 | 1.03 |
+| `sp.ivreg` (HC1) | Strong binary-Z IV | 0.962 | -0.0041 | 0.3687 | 0.3627 | 0.98 |
+| `sp.callaway_santanna` (REG, simple ATT) | Homogeneous staggered timing | 0.947 | -0.0007 | 0.1080 | 0.1090 | 1.01 |
+| `sp.sun_abraham` (overall ATT) | Homogeneous staggered timing | 0.950 | -0.0007 | 0.1214 | 0.1234 | 1.02 |
+| `sp.panel` two-way FE | Known-coefficient FE panel | 0.948 | -0.0024 | 0.1245 | 0.1233 | 0.99 |
+| `sp.rdrobust` sharp (robust CI) | Known-jump curved RD | 0.934 | -0.0061 | 0.1222 | 0.1201 | 0.98 |
+| `sp.sdid` (placebo SE) | Factor-model panel, 1 treated | 0.928 | +0.0003 | 0.3095 | 0.3071 | 0.99 |
+| `sp.ebalance` (M-estimation SE) | CIA with 2 covariates | 0.945 | -0.0014 | 0.0799 | 0.0774 | 0.97 |
+| `sp.causal_question(design="dml")` | Binary-treatment IRM ATE | 0.968 | -0.0074 | 0.1582 | 0.1653 | 1.04 |
+| `sp.dml(model="plr")`, default learners | Continuous-treatment PLR | 0.883 | -0.0261 | 0.0533 | 0.0472 | 0.88 |
+| `sp.causal_question(design="causal_forest")`, 2,000 trees | AIPW-IF ATE DGP | 0.959 | +0.0095 | 0.0934 | 0.0968 | 1.04 |
 
 Interpretation:
 
 - Closed-form OLS, DiD, IV, both staggered aggregations
-  (Callaway-Sant'Anna and Sun-Abraham), the two-way FE panel, and SDID's
-  placebo interval sit inside the Wilson band.
-- The sharp-RD robust bias-corrected interval sits marginally below the
-  band (0.934) on this curved DGP: mild finite-sample under-coverage,
-  reported as such rather than absorbed into a wider claim.
-- DML sits just above the upper edge; ebalance and causal forest are more
-  visibly conservative. These are over-coverage findings, not hidden
-  under-coverage.
-- The expensive DML, causal-forest, and SDID rows are no longer supported
-  only by the lower-B pytest caps; the committed JSS artifacts record
-  their explicit B=1000 rates.
+  (Callaway-Sant'Anna and Sun-Abraham), the two-way FE panel, entropy
+  balancing and the causal forest sit inside the Wilson band with SE/SD
+  within a few percent of 1.
+- Sharp RD (0.934) and SDID (0.928) have calibrated SEs (0.98, 0.99); the
+  shortfall is in the shape of the sampling distribution. For RD it is the
+  reference procedure's own finite-sample behaviour: R `rdrobust` 4.0.0
+  returns the same intervals draw by draw to 6e-12 and covers in exactly
+  the same draws (`mechanisms/rd_drawwise_reference.py`).
+- DML PLR with the default gradient-boosting learners under-covers (0.883):
+  bias is half a Monte Carlo SD. `sp.dml` equals DoubleML to 1e-16 on the
+  same folds and learners; with the true nuisances coverage is 0.952, with a
+  random forest 0.940, with a spline Lasso 0.938, and with the default
+  learner 0.936 at n = 2,000 (`mechanisms/dml_plr_learners.py`). The DML
+  IRM row (0.968) is a different configuration and does not stand in for PLR.
+- Entropy balancing covered 1.000 before 2026-09 because its SE held the
+  weights fixed (twice the Monte Carlo SD); the M-estimation SE is calibrated.
+- The causal-forest row covered 0.977 before 2026-09 because
+  `causal_question(design="causal_forest")` reported a separate AIPW
+  estimator; it now reports the forest's own doubly-robust ATE at 2,000
+  trees (`mechanisms/forest_trees.py` checks 300 trees too).
 
 ## Size and Power Audit (B=1000; RD at B=500, CS at B=300)
 
@@ -66,31 +76,25 @@ null point and equals the size.
 
 | Estimator | Size (nominal 0.05) | Deltas | Power |
 | --- | --- | --- | --- |
-| `sp.regress` (HC1) RCT | 0.043 | [0, .10, .20, .30] | [.043, .208, .596, .903] |
-| `sp.did` 2x2 | 0.024 | [0, .20, .40, .60] | [.024, .291, .871, .996] |
-| `sp.ivreg` strong-Z | 0.046 | [0, .20, .40, .60] | [.046, .453, .935, .996] |
-| `sp.rdrobust` sharp | 0.040 | [0, .20, .40, .60] | [.040, .148, .558, .824] |
-| `sp.panel` two-way FE | 0.052 | [0, .15, .30, .45] | [.052, .231, .652, .954] |
-| `sp.callaway_santanna` staggered | 0.050 | [0, .30, .60, .90] | [.050, .780, 1.0, 1.0] |
-| `sp.ebalance` (conservative) | 0.000 | [0, .40, .70, 1.0] | [.000, .827, 1.0, 1.0] |
+| `sp.regress` (HC1) RCT | 0.043 | [0, .100, .200, .300] | [.043, .208, .596, .903] |
+| `sp.did` 2x2 | 0.024 | [0, .200, .400, .600] | [.024, .291, .871, .996] |
+| `sp.ivreg` strong-Z | 0.046 | [0, .200, .400, .600] | [.046, .453, .935, .996] |
+| `sp.rdrobust` sharp | 0.076 | [0, .200, .400, .600] | [.076, .404, .888, 1.0] |
+| `sp.panel` two-way FE | 0.052 | [0, .150, .300, .450] | [.052, .231, .652, .954] |
+| `sp.callaway_santanna` staggered | 0.050 | [0, .300, .600, .900] | [.050, .777, 1.0, 1.0] |
+| `sp.ebalance` (M-estimation SE) | 0.055 | [0, .400, .700, 1.0] | [.055, 1.0, 1.0, 1.0] |
 
 Interpretation:
 
-- Empirical size never exceeds the nominal 5% Wilson upper bound — there is
-  no false-positive inflation. The size test is deliberately one-sided:
-  over-rejection (anti-conservative SEs) fails; under-rejection is
-  conservative-but-valid and is documented rather than failed.
-- `sp.did` 2x2 sizes at 0.024 — conservative, exactly mirroring its 0.955
-  over-coverage. The two findings are the same fact seen from two sides.
-- `sp.callaway_santanna` sizes at 0.050 — textbook-calibrated, the size-side
-  twin of its 0.947 simple-ATT coverage.
-- `sp.ebalance` sizes at 0.000: it almost never rejects under the null, the
-  direct counterpart of its ~1.0 over-coverage. Its power therefore rises
-  later (needs the effect to clear its wider intervals) but still reaches
-  0.83 by delta=0.40 and 1.0 by delta=0.70 — conservative yet discriminating,
-  not a degenerate never-reject.
-- Every power curve is monotone in the effect size and reaches >=0.82 at the
-  largest delta, so each estimator is calibrated *and* discriminating.
+- At the tested null no row over-rejects except sharp RD (0.076 at B=500),
+  consistent with its 0.934 coverage and reproduced by the reference
+  procedure; 2x2 DiD is conservative (0.024), mirroring its 0.955 coverage.
+- `sp.ebalance` now sizes at 0.055. Under the pre-2026-09 SE it sized at
+  0.000, the direct counterpart of its 1.000 over-coverage.
+- `sp.callaway_santanna` sizes at 0.050, the size-side twin of its 0.947
+  simple-ATT coverage.
+- Every power curve is monotone in the effect size and reaches >=0.90 at the
+  largest delta.
 - Cross-fit DML, causal forest, and resampling-based SDID keep
   coverage-only rows: a multi-delta power sweep at B=1000 is too expensive
   for them, and their coverage rows already exercise the same SE machinery.
@@ -130,7 +134,7 @@ changed and the finding must be reviewed.
 | --- | --- | --- | --- |
 | `sp.ivreg` (HC1) | Weak instrument: pi=0.10, median F = 2.51 | 0.882 (B=1000) | [0.85, 0.95] |
 | `sp.callaway_santanna` (REG) | Heterogeneous timing and magnitude | 0.946 (B=1000) | [0.92, 0.96] |
-| `sp.causal_question(causal_forest)` | Severe propensity-overlap loss | 0.983 (B=300) | [0.85, 0.99] |
+| `sp.causal_question(causal_forest)` | Severe propensity-overlap loss | 0.900 (B=300) | [0.85, 0.99] |
 
 Findings interpretation:
 
@@ -141,10 +145,12 @@ Findings interpretation:
 - CS-DiD remains calibrated under the heterogeneous timing/magnitude DGP,
   consistent with cell-level ATT(g, t) estimation and simple-ATT
   aggregation.
-- Causal forest under severe overlap loss over-covers. Extreme
-  propensities inflate the AIPW influence-function variance and produce
-  wide intervals; the audit treats this as a diagnostic warning, not as an
-  efficiency claim.
+- Causal forest under severe overlap loss under-covers (0.900, B=300) now
+  that the row reports the forest's own AIPW ATE: with propensities near 0
+  and 1 the doubly-robust score is unstable and its interval too narrow.
+  (Before 2026-09 the row measured a separate AIPW estimator and read
+  0.983.) The audit flags overlap before interpretation; this is a
+  failure-mode record, not a calibration claim.
 
 ## How to Run
 

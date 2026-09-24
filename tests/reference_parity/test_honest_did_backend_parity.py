@@ -39,6 +39,7 @@ import shutil
 import subprocess
 import warnings
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -107,10 +108,33 @@ def test_smoothness_does_not_warn(cs_result):
         sp.honest_did(cs_result, e=0, method="smoothness", m_grid=_M_GRID)
 
 
-def test_relative_magnitude_still_warns(cs_result):
-    """That path is still an approximation and must announce itself."""
-    with pytest.warns(UserWarning, match="worst-case-bias"):
-        sp.honest_did(cs_result, e=0, method="relative_magnitude", m_grid=_M_GRID)
+def test_relative_magnitude_is_native_and_equals_the_r_backend(cs_result):
+    """Since 1.31 the native relative-magnitudes path is the ARP set itself.
+
+    It no longer warns, and on this Callaway-Sant'Anna fit (joint covariance
+    from the influence functions) the Conditional set returns the same
+    accepted grid points as R HonestDiD through the backend.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        native = sp.honest_did(
+            cs_result,
+            e=0,
+            method="relative_magnitude",
+            m_grid=_M_GRID,
+            honestdid_method="Conditional",
+        )
+    assert native.attrs["interval"] == "arp_conditional"
+    r = sp.honest_did(
+        cs_result,
+        e=0,
+        method="relative_magnitude",
+        backend="r",
+        m_grid=_M_GRID,
+        honestdid_method="Conditional",
+    )
+    np.testing.assert_allclose(native["ci_lower"], r["ci_lower"], atol=1e-10)
+    np.testing.assert_allclose(native["ci_upper"], r["ci_upper"], atol=1e-10)
 
 
 def test_native_smoothness_is_not_additive_in_m(cs_result):

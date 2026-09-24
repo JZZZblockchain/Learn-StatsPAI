@@ -16850,7 +16850,7 @@
         },
         "backend": {
           "default": "native",
-          "description": "``'native'`` solves the problem in Python. For ``method='smoothness'`` it computes the true Rambachan-Roth **fixed-length confidence interval**: the optimal affine estimator under ``Delta^SD(M)``, obtained from a convex program over the event-study covariance. With ``HonestDiD``'s Monte-Carlo folded-normal quantile replaced by the exact one, the half-length agrees with R ``HonestDiD::findOptimalFLCI`` to 1e-8 and the bounds to ~2e-5 (HonestDiD's coarser search over ``h``); against the shipped package the gap is that quantile's simulation error, ~1e-3 (``tests/reference_parity/test_did_synth_R_parity.py``). This needs the joint event-study covariance, which is recovered from a Callaway-Sant'Anna fit's influence functions; if it is unavailable the function falls back to a worst-case-bias interval and warns. For ``method='relative_magnitude'`` the native path is still the worst-case-bias approximation ``theta +/- M*max|delta_pre| +/- z*SE``. It tracks the reference closely but is not exact, and it warns. ``'honestdid'``/``'r'`` delegates to the R ``HonestDiD`` package through ``Rscript``. It is handed the same full covariance when one is recoverable; only when it is not does it fall back to ``diag(se2)``, which discards the (large, positive) cross-period covariance and materially changes the confidence set.",
+          "description": "``'native'`` solves the problem in Python. For ``method='smoothness'`` it computes the true Rambachan-Roth **fixed-length confidence interval**: the optimal affine estimator under ``Delta^SD(M)``, obtained from a convex program over the event-study covariance. With ``HonestDiD``'s Monte-Carlo folded-normal quantile replaced by the exact one, the half-length agrees with R ``HonestDiD::findOptimalFLCI`` to 1e-8 and the bounds to ~2e-5 (HonestDiD's coarser search over ``h``); against the shipped package the gap is that quantile's simulation error, ~1e-3 (``tests/reference_parity/test_did_synth_R_parity.py``). This needs the joint event-study covariance, which is recovered from a Callaway-Sant'Anna fit's influence functions; if it is unavailable the function falls back to a worst-case-bias interval and warns. For ``method='relative_magnitude'`` it inverts the Andrews-Roth-Pakes conditional test (``honestdid_method='Conditional'``) or the conditional least-favourable hybrid (``'C-LF'``, the default, as in ``HonestDiD``) over the union of ``Delta^RM`` pieces, on ``HonestDiD``'s default grid of 1,000 points spanning +/-20 standard deviations of the target. On identical inputs the ``'Conditional'`` set equals R ``HonestDiD::createSensitivityResults_relativeMagnitudes`` exactly (same accepted grid points); the ``'C-LF'`` hybrid simulates its first-stage critical value (NumPy draws, not R's), so it agrees up to that Monte Carlo error. Like the FLCI it needs the joint event-study covariance; without it the function falls back to the worst-case-bias approximation ``theta +/- M*max|delta_pre| +/- z*SE`` and warns. A set that reaches either end of the grid is reported with a warning, because its true bound lies outside the grid. ``'honestdid'``/``'r'`` delegates to the R ``HonestDiD`` package through ``Rscript``. It is handed the same full covariance when one is recoverable; only when it is not does it fall back to ``diag(se2)``, which discards the (large, positive) cross-period covariance and materially changes the confidence set.",
           "enum": [
             "native",
             "honestdid",
@@ -16864,7 +16864,7 @@
           "type": "integer"
         },
         "honestdid_method": {
-          "description": "Solver method passed to the R ``HonestDiD`` backend. The default preserves HonestDiD defaults: ``'C-LF'`` for ``method='relative_magnitude'`` and ``'FLCI'`` for ``method='smoothness'``. Ignored by ``backend='native'``.",
+          "description": "Inference method. The default preserves HonestDiD defaults: ``'C-LF'`` for ``method='relative_magnitude'`` and ``'FLCI'`` for ``method='smoothness'``. The native backend implements ``'FLCI'`` (smoothness) and ``'C-LF'`` / ``'Conditional'`` (relative magnitudes); the R backend accepts all four.",
           "enum": [
             "C-LF",
             "Conditional",
@@ -21361,6 +21361,15 @@
         },
         "treat": {
           "description": "Binary treatment indicator (0/1).",
+          "type": "string"
+        },
+        "vce": {
+          "default": "mestimation",
+          "description": "Standard error of the ATT. - ``'mestimation'``: the sandwich variance of the stacked estimating equations -- treated moment means, the entropy-balancing dual conditions, and the two outcome means -- so the uncertainty from estimating the weights is propagated. This is the variance R ``WeightIt::lm_weightit(..., vcov = \"asympt\")`` reports for ``method = \"ebal\", estimand = \"ATT\"``, and it agrees with it to ~1e-9 (``tests/reference_parity/test_ebalance_weightit_parity.py``). Because the weights balance the covariates exactly, outcome variation that the covariates explain cancels out of the ATT, and this variance reflects that. - ``'naive'``: the pre-1.31 formula, a weighted two-sample variance that treats the weights as fixed. It ignores the balancing, so it overstates the standard error whenever the covariates predict the outcome (by about 2x on the Track B design: coverage 1.000, size 0.000). Retained only to reproduce earlier numbers.",
+          "enum": [
+            "mestimation",
+            "naive"
+          ],
           "type": "string"
         },
         "y": {
@@ -37183,6 +37192,33 @@
   {
     "description": "Headline counts of the parity matrix -- the honest coverage snapshot.",
     "name": "parity_summary",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Which validation artifacts cover the configuration that was run? Validation: validated evidence tier (known-truth, reference, external-parity, or Monte Carlo artifact).",
+    "name": "validation_scope",
+    "parameters": {
+      "properties": {
+        "function": {
+          "description": "Name of the estimator (``\"dml\"``, ``\"callaway_santanna\"``, ...), required when ``result`` is omitted and otherwise inferred.",
+          "type": "string"
+        },
+        "result": {
+          "description": "A result from one of the validation-suite estimators. Its configuration (estimator variant, inference option, treatment type, code path, ...) is read from the fitted object.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Evidence for one fitted configuration (a ``dict``; prints as a table).",
+    "name": "ValidationScope",
     "parameters": {
       "properties": {},
       "required": [],

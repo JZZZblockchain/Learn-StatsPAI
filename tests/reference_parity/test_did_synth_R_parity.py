@@ -491,7 +491,11 @@ def test_public_breakdown_m_routes_to_the_flci_breakdown():
     es = cs.model_info["event_study"].set_index("relative_time")
     old_closed_form = (abs(es.loc[0, "att"]) - 1.959963984540054 * es.loc[0, "se"]) / 1
     assert abs(got - old_closed_form) / old_closed_form > 0.5
-    # method is honoured: relative magnitudes gives a different number.
-    with pytest.warns(UserWarning, match="relative_magnitude"):
+    # method is honoured: relative magnitudes gives a different number, and
+    # since 1.31 it inverts the native ARP / C-LF set (no approximation
+    # warning when the fit carries the joint covariance).
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         rm = sp.breakdown_m(cs, e=0, method="relative_magnitude")
     assert rm != pytest.approx(got, rel=1e-3)
+    assert rm > 0

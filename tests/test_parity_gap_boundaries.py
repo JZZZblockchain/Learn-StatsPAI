@@ -252,7 +252,10 @@ def test_dml_dfl_rif_and_cr2_have_materialized_stata_mata_bridges():
 
 def test_rd_default_cct_bandwidth_matches_r_and_stata():
     extra = _extra("06_rd")
-    assert extra["bwselect"] == "cct"
+    # The headline is the native selector, not the official port it once
+    # delegated to (a port is not evidence about StatsPAI's own algorithm).
+    assert extra["bwselect"] == "mserd"
+    assert extra["backend"] == "native"
     assert "bandwidth_selector_gap" not in extra
     assert "matches R/Stata rdrobust" in extra["bandwidth_parity_note"]
 
@@ -272,7 +275,7 @@ def test_rd_default_cct_bandwidth_matches_r_and_stata():
             < 1e-8
         )
 
-    # The "legacy" row is sp.rdrobust() called with no bwselect=, i.e. the
+    # The headline row is sp.rdrobust() called with no bwselect=, i.e. the
     # internal mserd default. It used to be a separate code path: a
     # single-step rule of thumb whose 1/5 exponent only equals CCT's
     # 1/(2p+3) at p=1, which returned h ~= 0.042 on this fixture -- orders
@@ -280,11 +283,11 @@ def test_rd_default_cct_bandwidth_matches_r_and_stata():
     # to 12.39 where R reports 7.41. That selector was rebuilt against
     # rdrobust 4.0.0 across a bwselect x p x kernel grid (36 cells) in
     # `fix(rd): sp.rdrobust reported 12.39 where rdrobust reports 7.41`, so
-    # the internal default now lands on the same bandwidth as the explicit
-    # cct path. Pin the convergence, not the historical gap -- if the two
-    # ever diverge again, that is the regression worth catching.
-    legacy_h = _estimate("06_rd", "py", "legacy_internal_mserd_bandwidth_h")
-    assert _rel_gap(legacy_h, py_h) < 1e-6
+    # the internal default now lands on the same bandwidth as the official
+    # port. Pin the convergence, not the historical gap -- if the two ever
+    # diverge again, that is the regression worth catching.
+    port_h = _estimate("06_rd", "py", "cct_port_default_bandwidth_h")
+    assert _rel_gap(port_h, py_h) < 1e-9
 
     # The forced-bandwidth replicate pins the local-polynomial math apart
     # from the selector, so both sides hard-code the same constant. That

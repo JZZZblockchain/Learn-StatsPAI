@@ -1067,6 +1067,7 @@ from .validation import (
     reproduce_jss_tables,
     validation_report,
 )
+from .validation_scope import ValidationScope, validation_scope
 
 # === End-to-end workflow orchestrator ===
 # After ``import statspai.causal`` (the deprecated forest-shim) Python rebinds
@@ -1723,6 +1724,8 @@ __all__ = [
     "parity_matrix",
     "parity_status",
     "parity_summary",
+    "validation_scope",
+    "ValidationScope",
     "help",
     "HelpResult",
     # Data Generating Processes

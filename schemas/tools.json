@@ -551,7 +551,7 @@
     "name": "audit"
   },
   {
-    "description": "Reviewer-grade audit on a previously-fitted result. Pass the result_id returned by an earlier tool call (with as_handle=true). Returns the same checklist sp.audit() produces -- every robustness check the literature expects for the design, with status='present|missing|run' and concrete suggested_function names for the missing ones.",
+    "description": "Reviewer-grade audit on a previously-fitted result. Pass the result_id returned by an earlier tool call (with as_handle=true). Returns the same checklist sp.audit() produces -- every robustness check the literature expects for the design, each with status 'passed|failed|missing|not_applicable' and a concrete suggest_function for the missing ones. A not_applicable check (e.g. an over-identification test on a just-identified IV fit) carries a 'reason' and is excluded from the summary's n_total.",
     "input_schema": {
       "properties": {
         "result_id": {

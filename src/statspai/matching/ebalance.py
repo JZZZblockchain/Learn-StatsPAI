@@ -34,6 +34,7 @@ def ebalance(
     covariates: List[str],
     moments: int = 1,
     alpha: float = 0.05,
+    vce: str = "mestimation",
 ) -> CausalResult:
     """
     Entropy Balancing treatment effect estimator.
@@ -56,6 +57,24 @@ def ebalance(
         - 2: means and variances
         - 3: means, variances, and skewness
     alpha : float, default 0.05
+    vce : {'mestimation', 'naive'}, default 'mestimation'
+        Standard error of the ATT.
+
+        - ``'mestimation'``: the sandwich variance of the stacked
+          estimating equations -- treated moment means, the entropy-balancing
+          dual conditions, and the two outcome means -- so the uncertainty
+          from estimating the weights is propagated. This is the variance
+          R ``WeightIt::lm_weightit(..., vcov = "asympt")`` reports for
+          ``method = "ebal", estimand = "ATT"``, and it agrees with it to
+          ~1e-9 (``tests/reference_parity/test_ebalance_weightit_parity.py``).
+          Because the weights balance the covariates exactly, outcome
+          variation that the covariates explain cancels out of the ATT, and
+          this variance reflects that.
+        - ``'naive'``: the pre-1.31 formula, a weighted two-sample variance
+          that treats the weights as fixed. It ignores the balancing, so it
+          overstates the standard error whenever the covariates predict the
+          outcome (by about 2x on the Track B design: coverage 1.000, size
+          0.000). Retained only to reproduce earlier numbers.
 
     Returns
     -------
@@ -162,12 +181,39 @@ def ebalance(
     # ATT = mean(Y_t) - weighted_mean(Y_c)
     att = float(np.mean(Y_t) - np.average(Y_c, weights=weights))
 
-    # SE via weighted variance
-    var_t = np.var(Y_t, ddof=1) / n_t
-    var_c = (
-        np.average((Y_c - np.average(Y_c, weights=weights)) ** 2, weights=weights) / n_c
-    )
-    se = float(np.sqrt(var_t + var_c))
+    vce_l = str(vce).lower()
+    if vce_l not in {"mestimation", "naive"}:
+        from statspai.exceptions import MethodIncompatibility
+
+        raise MethodIncompatibility(
+            f"vce must be 'mestimation' or 'naive', got {vce!r}.",
+            recovery_hint="Use vce='mestimation' (default).",
+            diagnostics={"vce": vce},
+        )
+    if vce_l == "mestimation" and weights_fallback:
+        import warnings
+
+        warnings.warn(
+            "Entropy balancing did not find balancing weights, so the "
+            "M-estimation standard error (which assumes the balance conditions "
+            "hold) is unavailable; reporting the naive weighted-difference SE.",
+            UserWarning,
+            stacklevel=2,
+        )
+        vce_l = "naive"
+    if vce_l == "mestimation":
+        C_all = np.empty((len(D), C_matrix.shape[1]))
+        C_all[c_mask] = C_matrix
+        C_all[t_mask] = _constraint_functions(X_t, moments)
+        se = _mestimation_se(Y, D, C_all, weights)
+    else:
+        # Weighted two-sample variance with the weights held fixed.
+        var_t = np.var(Y_t, ddof=1) / n_t
+        var_c = (
+            np.average((Y_c - np.average(Y_c, weights=weights)) ** 2, weights=weights)
+            / n_c
+        )
+        se = float(np.sqrt(var_t + var_c))
 
     z_crit = stats.norm.ppf(1 - alpha / 2)
     z = att / se if se > 0 else 0
@@ -196,6 +242,7 @@ def ebalance(
         "weights_full": weights_full,
         "max_standardized_moment_gap": max_imbalance,
         "weights_fallback": weights_fallback,
+        "vce": vce_l,
     }
 
     return CausalResult(
@@ -211,6 +258,67 @@ def ebalance(
         model_info=model_info,
         _citation_key="ebalance",
     )
+
+
+def _constraint_functions(X: np.ndarray, moments: int) -> np.ndarray:
+    """Raw-moment constraint functions ``c(X)`` in ``_build_constraints`` order."""
+    cols = [X**power for power in range(1, moments + 1)]
+    return np.asarray(np.column_stack(cols), dtype=float)
+
+
+def _mestimation_se(
+    Y: np.ndarray, D: np.ndarray, C: np.ndarray, weights_c: np.ndarray
+) -> float:
+    """Sandwich SE of the entropy-balancing ATT from its estimating equations.
+
+    Parameters are ``theta = (m, lambda, mu1, mu0)`` with, per unit,
+
+    * ``D (c - m)``                      -- ``m``: treated means of ``c(X)``
+    * ``(1 - D) w (c - m)``              -- balance, ``w = exp(lambda'(c - m))``
+    * ``D (Y - mu1)``                    -- treated outcome mean
+    * ``(1 - D) w (Y - mu0)``            -- reweighted control outcome mean
+
+    and ``ATT = mu1 - mu0``. The variance is ``A^{-1} B A^{-T} / n`` with
+    ``A`` the mean Jacobian (analytic) and ``B`` the mean outer product of
+    the estimating functions. ``lambda`` is recovered from the solver's
+    weights, which are exactly log-linear in ``c(X)``.
+    """
+    t = D == 1
+    ctrl = ~t
+    n, k = C.shape
+    m = C[t].mean(axis=0)
+    R = C - m
+    # log w = lambda' R + const on the controls; recover lambda exactly.
+    design = np.column_stack([np.ones(int(ctrl.sum())), R[ctrl]])
+    coef, *_ = np.linalg.lstsq(design, np.log(weights_c), rcond=None)
+    lam = coef[1:]
+    w = np.zeros(n)
+    w[ctrl] = np.exp(R[ctrl] @ lam)
+    d = D.astype(float)
+    mu1 = float(Y[t].mean())
+    mu0 = float(np.sum(w * Y) / w.sum())
+
+    psi = np.column_stack(
+        [d[:, None] * R, w[:, None] * R, d * (Y - mu1), w * (Y - mu0)]
+    )
+    p = 2 * k + 2
+    a = np.zeros((p, p))
+    wr_sum = (w[:, None] * R).sum(axis=0)
+    a[:k, :k] = -d.sum() * np.eye(k)
+    a[k : 2 * k, :k] = -(w.sum() * np.eye(k) + np.outer(wr_sum, lam))
+    a[k : 2 * k, k : 2 * k] = (w[:, None] * R).T @ R
+    a[2 * k, 2 * k] = -d.sum()
+    resid0 = w * (Y - mu0)
+    a[2 * k + 1, :k] = -resid0.sum() * lam
+    a[2 * k + 1, k : 2 * k] = resid0 @ R
+    a[2 * k + 1, 2 * k + 1] = -w.sum()
+    a /= n
+    b = psi.T @ psi / n
+    a_inv = np.linalg.inv(a)
+    v = a_inv @ b @ a_inv.T / n
+    g = np.zeros(p)
+    g[2 * k], g[2 * k + 1] = 1.0, -1.0
+    return float(np.sqrt(g @ v @ g))
 
 
 def _build_constraints(

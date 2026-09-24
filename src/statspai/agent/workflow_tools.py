@@ -59,8 +59,12 @@ WORKFLOW_TOOL_SPECS: List[Dict[str, Any]] = [
             "the result_id returned by an earlier tool call (with "
             "as_handle=true). Returns the same checklist sp.audit() "
             "produces — every robustness check the literature expects "
-            "for the design, with status='present|missing|run' and "
-            "concrete suggested_function names for the missing ones."
+            "for the design, each with status "
+            "'passed|failed|missing|not_applicable' and a concrete "
+            "suggest_function for the missing ones. A not_applicable "
+            "check (e.g. an over-identification test on a just-identified "
+            "IV fit) carries a 'reason' and is excluded from the "
+            "summary's n_total."
         ),
         "input_schema": _result_id_schema(
             "Handle returned by an earlier estimator call. Must be in "

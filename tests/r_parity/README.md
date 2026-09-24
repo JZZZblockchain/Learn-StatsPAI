@@ -66,11 +66,11 @@ a shared explicit fold partition.
 | 03 | HDFE 2-way FE | `sp.fast.feols` | `fixest::feols` |
 | 04 | CS-DiD simple ATT | `sp.callaway_santanna` | `did::att_gt` + `aggte` |
 | 05 | Sun-Abraham event study | `sp.sun_abraham` | `fixest::sunab` |
-| 06 | RD CCT bias-corrected | `sp.rdrobust` | `rdrobust::rdrobust` |
+| 06 | RD CCT bias-corrected | `sp.rdrobust` (native CCT; port recorded separately) | `rdrobust::rdrobust` |
 | 07 | Classical SCM | `sp.synth(method="classic", backend="native")` | `Synth::synth` |
 | 08 | DML PLR | `sp.dml("plr")` | `DoubleML::DoubleMLPLR` |
 | 09 | RD density (CJM) | `sp.rddensity(backend="native")` | `rddensity::rddensity` |
-| 10 | Honest DiD smoothness | `sp.honest_did` | `HonestDiD::createSensitivityResults` |
+| 10 | Honest DiD smoothness | `sp.honest_did` (native FLCI) | `HonestDiD::createSensitivityResults` (exact quantile) + closed form at M = 0 |
 | 11 | PSM 1:1 NN | `sp.psm` | `MatchIt::matchit` |
 | 12 | Synthetic DID | `sp.sdid(backend="native")` | `synthdid::synthdid_estimate` |
 | 13 | Causal forest (AIPW) | `sp.causal_forest` | `grf::causal_forest` |
@@ -81,7 +81,7 @@ a shared explicit fold partition.
 | 18 | Augmented SCM | `sp.augsynth(backend="native")` | `augsynth::augsynth` |
 | 19 | Generalized SCM | `sp.gsynth(backend="native")` | `gsynth::gsynth` |
 | 20 | Goodman--Bacon decomp | `sp.bacon_decomposition` | `bacondecomp::bacon` |
-| 21 | Honest DiD relative-mags | `sp.honest_did(method="relative_magnitude", backend="honestdid")` | `HonestDiD::createSensitivityResults_relativeMagnitudes` |
+| 21 | Honest DiD relative-mags | `sp.honest_did(method="relative_magnitude")` (native ARP set) | `HonestDiD::createSensitivityResults_relativeMagnitudes` |
 | 22 | sensemakr | `sp.sensemakr` | `sensemakr::sensemakr` |
 | 23 | E-value | `sp.evalue` | `EValue::evalues.RR` |
 | 24 | Cox proportional hazards | `sp.survival.cox` | `survival::coxph` |

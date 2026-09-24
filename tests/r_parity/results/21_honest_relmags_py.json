@@ -116,7 +116,8 @@
   "extra": {
     "method": "relative_magnitude",
     "honestdid_method": "Conditional",
-    "backend": "HonestDiD",
+    "backend": "native",
+    "interval": "arp_conditional",
     "Mbar_grid": [
       0.0,
       0.5,
@@ -125,6 +126,6 @@
       2.0
     ],
     "alpha": 0.05,
-    "reference_backend_note": "sp.honest_did(..., backend='honestdid') delegates the relative-magnitudes CI to the R HonestDiD Conditional reference implementation, giving exact compatibility with HonestDiD::createSensitivityResults_relativeMagnitudes(..., method='Conditional'). The default backend='native' path is retained as a dependency-light analytic sensitivity bound and is not the claim exercised by this parity row."
+    "implementation": "native Python ARP conditional confidence set (statspai.did._arp.rm_confidence_set) on HonestDiD's default 1,000-point grid; no R call."
   }
 }

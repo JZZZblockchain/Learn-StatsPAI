@@ -131,7 +131,7 @@ TRACK_A_SNAPSHOT_ROWS: list[dict[str, Any]] = [
         "label": r"robust RD, default CCT \(h\)",
         "data": "RDsenate",
         "tol": r"\(10^{-6}\)",
-        "verdict": r"T2; official Py port, default \(h\)",
+        "verdict": r"T2; native, default \(h\)",
     },
     {
         "module": "08_dml",
@@ -149,7 +149,7 @@ TRACK_A_SNAPSHOT_ROWS: list[dict[str, Any]] = [
         "label": "AIPW ATE",
         "data": "clean-overlap DGP",
         "tol": "0.01",
-        "verdict": "T3; combined MC error, operator exact",
+        "verdict": "T3; seed-replicated, operator exact",
     },
     {
         "module": "11_psm",
@@ -256,6 +256,96 @@ STATA_SE_GAP_NOTES: dict[str, str] = {
         "orthogonalised score has no such factor."
     ),
 }
+
+
+#: What the StatsPAI side of each Track A module actually executes. A parity
+#: row is evidence about a StatsPAI-native algorithm only when the Python side
+#: ran one; a row whose Python side hands the computation to the R reference
+#: itself would compare R with R, and a row served by a third-party Python
+#: library or by an official port tests StatsPAI's wrapper, argument mapping
+#: and conventions -- worth recording, but a different kind of evidence.
+#:
+#: Every module not listed is ``"native"``. The classification is not taken
+#: on trust: ``scripts/trace_parity_provenance.py`` runs each module under a
+#: profiler that records every call from StatsPAI into a non-substrate
+#: package and every subprocess, and
+#: ``tests/test_parity_implementation_provenance.py`` fails if this table and
+#: the committed trace disagree. Kinds:
+#:
+#: * ``native`` -- StatsPAI's own implementation (NumPy/SciPy substrate only;
+#:   scikit-learn only as user-chosen nuisance learners).
+#: * ``official_python_port`` -- a Python port maintained by the method's
+#:   authors.
+#: * ``third_party_python`` -- an estimator implemented by another Python
+#:   library, wrapped by StatsPAI.
+#: * ``reference_backend`` -- the R (or Stata) reference itself, called from
+#:   Python. Never counted as parity; none remain since 1.31 (modules 10 and
+#:   21 moved to native HonestDiD implementations).
+IMPLEMENTATION_PROVENANCE: dict[str, tuple[str, str]] = {
+    "35_panel": (
+        "third_party_python",
+        "sp.panel(method='fe'/'re') fits through linearmodels PanelOLS / "
+        "RandomEffects (a core dependency); the Hausman statistic is computed "
+        "by StatsPAI from those fits.",
+    ),
+    "39_arima": (
+        "third_party_python",
+        "sp.arima wraps statsmodels' ARIMA / SARIMAX likelihood "
+        "(method='innovations_mle' here).",
+    ),
+    "67_panel_glm": (
+        "third_party_python",
+        "sp.feglm / sp.fepois route to pyfixest's feglm / fepois.",
+    ),
+}
+
+#: Packages a *native* module may still touch, but only to produce rows that
+#: never join a reference (so they cannot enter a parity verdict). Declared
+#: here so the provenance test can tell a side check from a delegated
+#: headline; the module's own contract test pins that those rows stay
+#: unjoined.
+IMPLEMENTATION_SIDE_CHECKS: dict[str, dict[str, str]] = {
+    "06_rd": {
+        "rdrobust": "cct_port_default_* rows: port-vs-native convergence check",
+    },
+}
+
+#: Modules whose cross-language comparison is stochastic by construction and
+#: is graded T3 (seed-replicated equivalence), not T2. The single draw in the
+#: module is interpreted through the named seed-replication artifact.
+STOCHASTIC_T3_MODULES: dict[str, str] = {
+    "13_causal_forest": "tests/reference_parity/test_grf_seed_mc_equivalence.py",
+}
+
+
+def evidence_grade(module: str) -> str:
+    """T2 / T3 / T4 grade of a Track A module's headline comparison."""
+    if tolerance_tier(module) == "methodological":
+        return "T4"
+    if module in STOCHASTIC_T3_MODULES:
+        return "T3"
+    return "T2"
+
+
+IMPLEMENTATION_KINDS = (
+    "native",
+    "official_python_port",
+    "third_party_python",
+    "reference_backend",
+)
+
+
+def implementation_kind(module: str) -> str:
+    """Evidence kind of a Track A module's StatsPAI side (default native)."""
+    return IMPLEMENTATION_PROVENANCE.get(module, ("native", ""))[0]
+
+
+def implementation_census(modules: list[str]) -> dict[str, int]:
+    """Count of rendered modules by implementation kind."""
+    out = {k: 0 for k in IMPLEMENTATION_KINDS}
+    for m in modules:
+        out[implementation_kind(m)] += 1
+    return out
 
 
 # Pre-registered tolerance per module. Every entry with rel_est or
@@ -493,10 +583,11 @@ TOLERANCES: dict[str, dict[str, float]] = {
     "05_sunab": {"rel_est": 1e-6, "rel_se": 3e-2},
     "06_rd": {
         "rel_est": 1e-6,
-        "rel_se": 0.10,
-    },  # A: default-h rows machine-level via official CCT port; budget is
-    # bound by the deliberately retained legacy-internal SE diagnostic
-    # rows at the forced common h (observed 6.7%, 1.5x margin).
+        "rel_se": 1e-6,
+    },  # native CCT cascade: default-h and forced-h rows machine-level
+    # (observed rel <= 7e-14 on estimates, SEs and bandwidths). The 0.10 SE
+    # budget carried until 1.31 was bound by legacy forced-h diagnostic
+    # rows that have agreed to 2e-15 since the 1.24 selector port.
     "07_scm": {
         "rel_est": 1.0,  # A/T4: Basque weight non-uniqueness; R Synth and
         # Stata synth land on different local optima (donor weights rel
@@ -512,10 +603,16 @@ TOLERANCES: dict[str, dict[str, float]] = {
         "rel_est": 1e-6,
         "rel_se": 1e-6,
     },  # native CJM/rddensity default parity
+    # Native FLCI (no R call) vs HonestDiD with the exact folded-normal
+    # quantile for M > 0 (<= 1.4e-8) and vs the closed form at M = 0
+    # (2.2e-9). Shipped HonestDiD simulates that quantile (~3e-4) and its
+    # cone solver misses the M = 0 closed form by 5.7e-6; both are
+    # displayed rows, not headline rows. Tightened from 5e-4 when the
+    # module stopped calling backend="honestdid" (1.31).
     "10_honest_did": {
-        "abs_est": 5e-4,
-        "abs_se": 5e-4,
-    },  # R backend exact; Stata package port <3.3e-4
+        "abs_est": 1e-6,
+        "abs_se": 1e-6,  # sentinel: CI-bound rows are point-only
+    },
     # A + sentinel (tightened 2026-06-10 from 5.0): att_psm carries
     # se=None on all three sides by design -- SE estimators differ by
     # construction (sp matched-pair effect dispersion vs MatchIt
@@ -528,8 +625,11 @@ TOLERANCES: dict[str, dict[str, float]] = {
         # placebo SEs are backend-native diagnostics under distinct names.
     },  # point-only native FW/zeta ATT parity
     "13_causal_forest": {
-        "rel_est": 0.01,  # B/T3: graded against combined Monte Carlo error
-        # of two independent forests. Since 1.29 sp.causal_forest runs its
+        "rel_est": 0.01,  # B/T3: a single draw per engine. The T3 grade rests
+        # on the seed-replicated comparison on fixed data
+        # (tests/reference_parity/test_grf_seed_mc_equivalence.py: equivalence
+        # within 0.1 sampling SE at 500-8,000 trees on two designs); this budget only bounds
+        # the one draw. Since 1.29 sp.causal_forest runs its
         # own GRF engine (gradient splits, OOB nuisances, little bags);
         # observed ATE 0.03% / ATT 0.26% (3.9x margin) since 1.31's engine
         # seeding fix (independent per-group seeds and nuisance streams;
@@ -574,6 +674,8 @@ TOLERANCES: dict[str, dict[str, float]] = {
     # rel_se sentinel (was 1.0): the Goodman-Bacon decomposition emits
     # no SEs on any side.
     "20_bacon": {"rel_est": 1e-6, "rel_se": 1e-6},  # TWFE-only headline
+    # Native ARP conditional set (no R call since 1.31): identical accepted
+    # grid points to HonestDiD's Conditional method.
     "21_honest_relmags": {"abs_est": 1e-6, "abs_se": 1e-6},
     "22_sensemakr": {"rel_est": 1e-6, "rel_se": 1e-6},
     "23_evalue": {"rel_est": 1e-6, "rel_se": 1e-6},
@@ -839,7 +941,7 @@ TIER_LABEL_MD = {
 
 METHODOLOGICAL_DISCLOSURE_NOTES = {
     "13_causal_forest": (
-        "T3 combined-Monte-Carlo-error pass, with the estimator's two "
+        "T3 seed-replicated equivalence, with the estimator's two "
         "factors graded separately. (1) The AIPW *operator* -- the "
         "closed-form map from (Y, W, tau.hat, Y.hat, W.hat) to the score "
         "vector, point estimate and influence-function SE -- is pinned "
@@ -847,21 +949,21 @@ METHODOLOGICAL_DISCLOSURE_NOTES = {
         "reproduces grf::get_scores elementwise to 2.3e-14 and grf's "
         "reported ATE and ATT (estimate and std.err) to 1e-15 "
         "(tests/reference_parity/test_grf_aipw_operator_parity.py). "
-        "(2) The *forest* is not pinnable across implementations, so the "
-        "rows below are graded against combined sampling error: both "
-        "sides report the same doubly-robust AIPW estimands, agree within "
-        "~0.05 combined SE on the clean-overlap DGP, and the AIPW "
-        "recovery tests certify truth recovery within 4 SE across "
-        "multiple seeds. Because the operator is exact, the residual SE "
-        "gap is attributable to forest RNG alone rather than to an "
-        "unresolved formula difference -- which is what the previous 50% "
-        "rel_se band could not distinguish."
+        "(2) The *forest* is not pinnable across implementations. The rows "
+        "below are one draw from each engine; the grade rests on refitting "
+        "both engines under 50 seeds on fixed data "
+        "(tests/reference_parity/test_grf_seed_mc_equivalence.py): their "
+        "gap is below 0.1 sampling SE (TOST) at 500, 2,000 and 8,000 trees on "
+        "this design and a second fixture, and the two engines' seed-to-seed "
+        "SDs agree within a factor of two at every tree count. Because the "
+        "operator is exact, the residual gap is attributable to the forest "
+        "algorithm rather than to an unresolved formula difference."
     ),
 }
 
 
 def _display_meta_value(module: str, key: str, value: Any) -> Any:
-    """Normalise the causal-forest note to the T3 combined-MC-error framing."""
+    """Normalise the causal-forest note to the T3 seed-replicated framing."""
     if (
         module == "13_causal_forest"
         and key == "note"
@@ -871,10 +973,10 @@ def _display_meta_value(module: str, key: str, value: Any) -> Any:
         return value.replace(
             "so they are like-for-like and must agree within combined "
             "Monte Carlo error",
-            "so they agree within combined Monte Carlo error "
-            "(worst rel gap below 0.3%, ~0.05 combined SE on the clean DGP), "
-            "the multi-seed truth-recovery guard passes, and the row is graded T3 "
-            "(combined-MC-error pass)",
+            "so they are like-for-like; this row is one draw per engine "
+            "(worst rel gap below 0.3%), and the T3 grade rests on the "
+            "seed-replicated comparison in "
+            "tests/reference_parity/test_grf_seed_mc_equivalence.py",
         )
     return value
 
@@ -1402,7 +1504,7 @@ HEADLINE: dict[str, dict[str, Any]] = {
         ),
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "R/Stata default-$h$ via CCT delegation",
+        "gap_note": "native CCT default-$h$; official Py port recorded separately",
     },
     "07_scm": {
         "name": "Classical SCM",
@@ -1430,10 +1532,18 @@ HEADLINE: dict[str, dict[str, Any]] = {
     },
     "10_honest_did": {
         "name": "Honest DiD bounds",
-        "headline_filter": lambda d: d.statistic.startswith("ci_"),
+        # M > 0: HonestDiD with the exact quantile; M = 0: the closed form,
+        # which adjudicates HonestDiD's own 5.7e-6 cone-solver error there.
+        "headline_filter": lambda d: (
+            d.statistic.startswith("ci_") and not d.statistic.endswith("_M_0")
+        )
+        or d.statistic.startswith("analytic_"),
         "metric": "abs_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "FLCI via HonestDiD backend; Stata port within 0.0005",
+        "gap_note": (
+            "native FLCI; vs HonestDiD with exact quantile, and closed form "
+            "at M=0; shipped HonestDiD's simulated quantile shown separately"
+        ),
     },
     "11_psm": {
         "name": "PSM 1:1 NN",
@@ -1464,8 +1574,8 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "metric": "rel_est",
         "verdict": "\\textbf{PASS}",
         "gap_note": (
-            "T3 combined-MC-error pass; like-for-like AIPW vs grf within "
-            "$\\sim 0.05$ combined SE on clean-overlap DGP"
+            "T3; single draw per engine, graded by seed-replicated "
+            "equivalence within 0.1 sampling SE"
         ),
     },
     "14_ols_cluster": {
@@ -1501,7 +1611,7 @@ HEADLINE: dict[str, dict[str, Any]] = {
         "headline_filter": lambda d: d.statistic.startswith("ci_"),
         "metric": "abs_est",
         "verdict": "\\textbf{PASS}",
-        "gap_note": "HonestDiD reference backend",
+        "gap_note": "native ARP conditional set; identical grid points",
     },
     "22_sensemakr": {
         "name": "sensemakr robustness",
@@ -2053,6 +2163,39 @@ def render_tex(modules: list[str]) -> str:
     )
 
 
+_IMPLEMENTATION_MARKER = {
+    "official_python_port": "$^{\\ddagger}$",
+    "third_party_python": "$^{\\dagger}$",
+    "reference_backend": "$^{\\ast}$",
+}
+
+
+def _implementation_sentence(modules: list[str]) -> str:
+    rendered = [m for m in modules if collect(m)]
+    c = implementation_census(rendered)
+    parts = [
+        f"Of the {len(rendered)} modules, {c['native']} exercise a "
+        "\\statspai{}-native implementation on the \\proglang{Python} side"
+    ]
+    if c["third_party_python"]:
+        parts.append(
+            f"{c['third_party_python']} (marked $^{{\\dagger}}$) are served by a "
+            "third-party \\proglang{Python} estimation library that \\statspai{} wraps, "
+            "so they validate the wrapper and its conventions rather than a native algorithm"
+        )
+    if c["official_python_port"]:
+        parts.append(
+            f"{c['official_python_port']} (marked $^{{\\ddagger}}$) run a port "
+            "maintained by the method's authors"
+        )
+    parts.append(
+        f"{c['reference_backend']} call the reference implementation itself; "
+        "the classification is checked against a call trace of every module "
+        "(\\code{scripts/trace\\_parity\\_provenance.py})"
+    )
+    return "; ".join(parts) + "."
+
+
 def render_tex_3way(modules: list[str]) -> str:
     """Five-column 3-way table: ID / Method / vs R / vs Stata / Verdict."""
     rows: list[str] = []
@@ -2107,8 +2250,9 @@ def render_tex_3way(modules: list[str]) -> str:
             f" {{\\footnotesize ({_tex_free_text(gap_note)})}}" if gap_note else ""
         )
         m_safe = m.split("_", 1)[0]
+        marker = _IMPLEMENTATION_MARKER.get(implementation_kind(m), "")
         rows.append(
-            f"\\code{{{m_safe}}} & {_tex_free_text(cfg['name'])} & "
+            f"\\code{{{m_safe}}} & {_tex_free_text(cfg['name'])}{marker} & "
             f"{primary_r}{gap_cell} & {primary_s} & "
             f"{cfg['verdict']} \\\\"
         )
@@ -2140,7 +2284,7 @@ def render_tex_3way(modules: list[str]) -> str:
         "\\code{extra} block in "
         "\\code{tests/r\\_parity/results/} and \\code{tests/stata\\_parity/results/}. "
         "Strictness-tier breakdown by registered point-estimate tolerance: "
-        f"{tier_sentence}.}}\n"
+        f"{tier_sentence}. {_implementation_sentence(modules)}}}\n"
         "\\label{tab:track-a-parity}\\\\\n"
         "\\toprule\n"
         "ID & Method & Worst diff vs \\proglang{R} & "
@@ -2197,6 +2341,11 @@ def render_md_3way(modules: list[str]) -> str:
         lines.append(
             f"- **strictness_tier**: `{tolerance_tier(m)}` "
             f"({TIER_LABEL_MD[tolerance_tier(m)]})"
+        )
+        kind = implementation_kind(m)
+        lines.append(
+            f"- **implementation**: `{kind}`"
+            + (f" -- {IMPLEMENTATION_PROVENANCE[m][1]}" if m in IMPLEMENTATION_PROVENANCE else "")
         )
         if m in METHODOLOGICAL_DISCLOSURE_NOTES:
             lines.append(

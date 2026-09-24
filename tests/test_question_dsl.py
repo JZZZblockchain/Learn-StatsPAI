@@ -478,7 +478,7 @@ def test_estimate_causal_forest_returns_finite_se_via_aipw(confounded_data):
         covariates=["x"],
         data=confounded_data,
     )
-    r = q.estimate(n_estimators=30, random_state=0)
+    r = q.estimate(n_estimators=200, random_state=0)
     assert r.estimator == "causal_forest"
     assert np.isfinite(r.estimate)
     assert np.isfinite(r.se) and r.se > 0
@@ -513,7 +513,7 @@ def test_causal_forest_aipw_coverage():
             covariates=["x"],
             data=df,
         )
-        r = q.estimate(n_estimators=30, random_state=0)
+        r = q.estimate(n_estimators=200, random_state=0)
         if r.ci[0] < ate_pop < r.ci[1]:
             covered += 1
     rate = covered / nsim
@@ -866,20 +866,24 @@ def test_bug_b_causal_forest_handles_numeric_strings():
         covariates=["x"],
         data=df,
     )
-    r = q.estimate(n_estimators=20, random_state=0)
+    r = q.estimate(n_estimators=200, random_state=0)
     assert r.estimator == "causal_forest"
     assert np.isfinite(r.estimate)
     assert np.isfinite(r.se) and r.se > 0
 
 
-def test_bug_c_random_state_none_is_symmetric(confounded_data):
-    """Oracle-flagged Bug C: passing no random_state (or None) means
-    BOTH forest and AIPW use np global state — no hidden determinism
-    in the AIPW SE while the forest CATE varies. Two unseeded runs
-    must produce different ATE point estimates AND different SEs.
+def test_causal_forest_branch_is_determined_by_the_forest(confounded_data):
+    """The ATE, SE and CI come from the fitted forest itself (1.31).
+
+    Until 1.31 this branch fitted the forest and then reported a separate
+    cross-fit AIPW with its own learners, so the answer did not depend on
+    the forest. Now it is ``cf.average_treatment_effect()``: the result
+    equals that call exactly, and changes when the forest's seed changes.
+    (``sp.causal_forest`` maps ``random_state=None`` to a fixed seed, so
+    unseeded runs are reproducible by design.)
     """
 
-    def run_unseeded():
+    def run(seed):
         q = sp.causal_question(
             treatment="treat",
             outcome="y",
@@ -887,17 +891,13 @@ def test_bug_c_random_state_none_is_symmetric(confounded_data):
             covariates=["x"],
             data=confounded_data,
         )
-        # Explicitly NOT passing random_state — let it default.
-        return q.estimate(n_estimators=30)
+        return q.estimate(n_estimators=200, random_state=seed)
 
-    r1 = run_unseeded()
-    r2 = run_unseeded()
-    # The forest is non-deterministic without a seed; the AIPW path
-    # now also lacks a fixed seed, so the SE varies across runs.
-    assert (r1.estimate != r2.estimate) or (r1.se != r2.se), (
-        "without a seed, forest CATE and AIPW SE should both vary; "
-        "if they're identical, AIPW is silently using a hidden seed"
-    )
+    r0, r1 = run(0), run(1)
+    direct = r0.underlying.average_treatment_effect(target_sample="all")
+    assert r0.estimate == direct["estimate"]
+    assert r0.se == direct["se"]
+    assert (r0.estimate, r0.se) != (r1.estimate, r1.se)
 
 
 def test_dml_continuous_treatment_uses_plr():

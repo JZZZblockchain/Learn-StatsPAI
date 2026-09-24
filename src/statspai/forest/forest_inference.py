@@ -1276,8 +1276,10 @@ def aipw_scores(
 
     Separating it out matters for verification. Two independently grown
     forests never share :math:`\hat\tau`, so an end-to-end comparison
-    against ``grf`` can only be graded against combined Monte Carlo
-    error. The operator, by contrast, is a closed form and is pinned
+    against ``grf`` can only be statistical: both engines are refitted
+    under many seeds on fixed data and their seed distributions compared
+    (``tests/reference_parity/test_grf_seed_mc_equivalence.py``). The
+    operator, by contrast, is a closed form and is pinned
     *exactly* to ``grf::get_scores`` given the same forest outputs -- see
     ``tests/reference_parity/test_grf_aipw_operator_parity.py``.
 

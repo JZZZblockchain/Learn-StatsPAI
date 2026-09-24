@@ -297,6 +297,7 @@
       "tolerance": "Statistic 1.1e-15, p-value 1.2e-13, degrees of freedom exact, and the analytic AR confidence set 1.2e-14."
     },
     {
+      "evidence_grade": "T2",
       "function": "arima",
       "headline": {
         "metric": "rel_est",
@@ -308,6 +309,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "third_party_python",
       "label": "ARIMA(2,0,0)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "39_arima",
@@ -490,6 +492,7 @@
       "tolerance": "1e-10 rel (observed 2e-16)"
     },
     {
+      "evidence_grade": "T2",
       "function": "augsynth",
       "headline": {
         "metric": "rel_est",
@@ -500,6 +503,7 @@
         ],
         "tolerance": 2e-05
       },
+      "implementation": "native",
       "label": "Augmented SCM",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "18_augsynth",
@@ -603,6 +607,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "bacon_decomposition",
       "headline": {
         "metric": "rel_est",
@@ -613,6 +618,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Goodman--Bacon decomp",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "20_bacon",
@@ -671,6 +677,7 @@
       "tolerance": "1e-9 rel"
     },
     {
+      "evidence_grade": "T2",
       "function": "balance_panel",
       "headline": {
         "metric": "rel_est",
@@ -688,6 +695,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Panel balance filter",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "69_balance_panel",
@@ -908,6 +916,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "betareg",
       "headline": {
         "metric": "rel_est",
@@ -921,6 +930,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Beta regression",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "61_betareg",
@@ -1068,6 +1078,7 @@
       "tolerance": "coef / rho 1e-6 abs (observed <= 2e-7); logLik 1e-6 rel"
     },
     {
+      "evidence_grade": "T2",
       "function": "bjs",
       "headline": {
         "metric": "rel_est",
@@ -1078,6 +1089,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "BJS imputation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "16_bjs",
@@ -1262,6 +1274,7 @@
       "tolerance": ""
     },
     {
+      "evidence_grade": "T2",
       "function": "borusyak_jaravel_spiess",
       "headline": {
         "metric": "rel_est",
@@ -1272,6 +1285,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "BJS imputation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "16_bjs",
@@ -1362,7 +1376,8 @@
     },
     {
       "additional_tests": [
-        "tests/external_parity/test_honest_did_paper_parity.py"
+        "tests/external_parity/test_honest_did_paper_parity.py",
+        "tests/reference_parity/test_honest_rm_R_parity.py"
       ],
       "also_verified_by": [
         "external_parity",
@@ -1555,6 +1570,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "callaway_santanna",
       "headline": {
         "metric": "rel_est",
@@ -1565,6 +1581,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "CS-DiD simple ATT",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "04_csdid",
@@ -1658,12 +1675,14 @@
         "tests/reference_parity/test_forest_rate_honest_parity.py",
         "tests/reference_parity/test_grf_engine_statistical_parity.py",
         "tests/reference_parity/test_grf_parity.py",
+        "tests/reference_parity/test_grf_seed_mc_equivalence.py",
         "tests/reference_parity/test_panel_forest_recovery.py"
       ],
       "also_verified_by": [
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T3",
       "function": "causal_forest",
       "headline": {
         "metric": "rel_est",
@@ -1674,6 +1693,7 @@
         ],
         "tolerance": 0.01
       },
+      "implementation": "native",
       "label": "Causal forest (AIPW)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "13_causal_forest",
@@ -1859,6 +1879,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "cgs_continuous_did",
       "headline": {
         "metric": "rel_est",
@@ -1874,6 +1895,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Continuous-treatment DiD (CGS)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "80_contdid",
@@ -1929,6 +1951,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "cic",
       "headline": {
         "metric": "rel_est",
@@ -1948,6 +1971,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Changes-in-Changes (ATT + QTE)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "74_cic",
@@ -1987,6 +2011,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "clogit",
       "headline": {
         "metric": "rel_est",
@@ -1997,6 +2022,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Conditional logit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "46_clogit",
@@ -2482,6 +2508,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "cox",
       "headline": {
         "metric": "rel_est",
@@ -2493,6 +2520,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Cox proportional hazards",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "24_coxph",
@@ -2558,6 +2586,7 @@
       "tolerance": "fixed theta: beta and SE 1e-9, integrated log likelihood 1e-10 (observed 4e-14); theta maximiser 1e-6 vs R optimize (observed 5e-8) and 5e-5 vs Stata e(theta) (observed 7.5e-6)"
     },
     {
+      "evidence_grade": "T2",
       "function": "cr2_se",
       "headline": {
         "metric": "rel_se",
@@ -2573,6 +2602,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Cluster-robust CR2 SE (+ CR3 jackknife)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "53_cr2",
@@ -2777,6 +2807,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "ddd_heterogeneous",
       "headline": {
         "metric": "rel_est",
@@ -2792,6 +2823,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Triple differences (staggered DDD)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "77_ddd",
@@ -2835,6 +2867,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "decompose",
       "headline": {
         "metric": "rel_est",
@@ -2845,6 +2878,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Blinder--Oaxaca",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "30_oaxaca",
@@ -2911,6 +2945,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "demean",
       "headline": {
         "metric": "rel_est",
@@ -2930,6 +2965,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Within transformation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "68_demean_within",
@@ -3012,6 +3048,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "dfl_decompose",
       "headline": {
         "metric": "rel_est",
@@ -3024,6 +3061,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "DFL reweighting",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "31_dfl",
@@ -3112,6 +3150,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "did_2stage",
       "headline": {
         "metric": "rel_est",
@@ -3122,6 +3161,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Gardner two-stage DiD",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "73_did2s",
@@ -3270,6 +3310,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "did_imputation",
       "headline": {
         "metric": "rel_est",
@@ -3280,6 +3321,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "BJS imputation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "16_bjs",
@@ -3321,6 +3363,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "did_multiplegt",
       "headline": {
         "metric": "rel_est",
@@ -3333,6 +3376,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "dCDH 2020 DID_M (on/off switching)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "81_didm",
@@ -3374,6 +3418,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "did_multiplegt_dyn",
       "headline": {
         "metric": "rel_est",
@@ -3388,6 +3433,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "dCDH intertemporal event study",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "78_multiplegt_dyn",
@@ -3641,6 +3687,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "dml",
       "headline": {
         "metric": "rel_est",
@@ -3651,6 +3698,7 @@
         ],
         "tolerance": 1e-10
       },
+      "implementation": "native",
       "label": "DML PLR",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "08_dml",
@@ -3844,6 +3892,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "drdid",
       "headline": {
         "metric": "rel_est",
@@ -3854,6 +3903,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "DR-DID (Sant'Anna-Zhao)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "38_drdid",
@@ -3932,6 +3982,7 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_ebalance_weightit_parity.py",
         "tests/reference_parity/test_matching_parity.py",
         "tests/reference_parity/test_paper_parity.py"
       ],
@@ -4125,6 +4176,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "etwfe",
       "headline": {
         "metric": "rel_est",
@@ -4135,6 +4187,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Wooldridge ETWFE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "17_etwfe",
@@ -4176,6 +4229,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "etwfe_emfx",
       "headline": {
         "metric": "rel_est",
@@ -4186,6 +4240,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Wooldridge ETWFE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "17_etwfe",
@@ -4228,6 +4283,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "evalue",
       "headline": {
         "metric": "rel_est",
@@ -4263,6 +4319,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "E-value",
       "last_verified": "R version 4.2.3 (2023-03-15)",
       "module_id": "23_evalue",
@@ -4376,6 +4433,7 @@
       "also_verified_by": [
         "external_parity"
       ],
+      "evidence_grade": "T2",
       "function": "event_study",
       "headline": {
         "metric": "rel_est",
@@ -4387,6 +4445,7 @@
         ],
         "tolerance": 1e-09
       },
+      "implementation": "native",
       "label": "Dynamic TWFE event study",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "85_twfe_event_study",
@@ -4506,6 +4565,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "fect",
       "headline": {
         "metric": "rel_est",
@@ -4518,6 +4578,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "fect counterfactual estimators (fe / ife / mc)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "86_fect",
@@ -4558,6 +4619,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "feglm",
       "headline": {
         "metric": "rel_est",
@@ -4571,6 +4633,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "third_party_python",
       "label": "Panel GLM (feglm / fepois)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "67_panel_glm",
@@ -4621,6 +4684,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "feols",
       "headline": {
         "metric": "rel_est",
@@ -4632,6 +4696,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "HDFE 2-way FE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "03_hdfe",
@@ -4673,6 +4738,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "fepois",
       "headline": {
         "metric": "rel_est",
@@ -4686,6 +4752,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "third_party_python",
       "label": "Panel GLM (feglm / fepois)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "67_panel_glm",
@@ -5022,6 +5089,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "frontier",
       "headline": {
         "metric": "rel_est",
@@ -5034,6 +5102,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "SFA cross-section",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "28_frontier",
@@ -5075,6 +5144,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "functional_form_test",
       "headline": {
         "metric": "rel_est",
@@ -5100,6 +5170,7 @@
         ],
         "tolerance": 0.001
       },
+      "implementation": "native",
       "label": "Functional-form test for parallel trends",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "79_didff",
@@ -5252,6 +5323,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "gardner_did",
       "headline": {
         "metric": "rel_est",
@@ -5262,6 +5334,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Gardner two-stage DiD",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "73_did2s",
@@ -5420,6 +5493,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "geographic_rd",
       "headline": {
         "metric": "rel_est",
@@ -5432,6 +5506,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Multi-score / geographic RD at boundary points",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "89_rdms",
@@ -5735,6 +5810,7 @@
       "tolerance": "sandwich at GRAPPLE's estimates 1e-6 (l2 1e-12); fitted beta 1e-3, tau2 / SE 1e-4"
     },
     {
+      "evidence_grade": "T2",
       "function": "gsynth",
       "headline": {
         "metric": "rel_est",
@@ -5745,6 +5821,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Generalized SCM",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "19_gsynth",
@@ -5896,6 +5973,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "hdfe_ols",
       "headline": {
         "metric": "rel_est",
@@ -5907,6 +5985,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "HDFE 2-way FE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "03_hdfe",
@@ -5951,6 +6030,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "heckman",
       "headline": {
         "metric": "rel_est",
@@ -5962,6 +6042,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Heckman selection",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "43_heckman",
@@ -6095,48 +6176,51 @@
     },
     {
       "additional_tests": [
-        "tests/r_parity/10_honest_did.py",
-        "tests/r_parity/10_honest_did.R",
-        "tests/stata_parity/10_honest_did.do",
+        "tests/r_parity/21_honest_relmags.py",
+        "tests/r_parity/21_honest_relmags.R",
+        "tests/stata_parity/21_honest_relmags.do",
         "tests/external_parity/test_honest_did_paper_parity.py",
-        "tests/reference_parity/test_honest_did_backend_parity.py"
+        "tests/reference_parity/test_honest_did_backend_parity.py",
+        "tests/reference_parity/test_honest_rm_R_parity.py"
       ],
       "also_in_modules": [
-        "10_honest_did"
+        "21_honest_relmags"
       ],
       "also_verified_by": [
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "honest_did",
       "headline": {
         "metric": "abs_est",
-        "rel_vs_R": 4.440892098500626e-16,
-        "rel_vs_Stata": 5.551115123125783e-17,
+        "rel_vs_R": 1.410518768452107e-08,
+        "rel_vs_Stata": 9.375003273692784e-09,
         "statistic": [
-          "ci_lower_Mbar_0",
-          "ci_upper_Mbar_0",
-          "ci_lower_Mbar_0.5",
-          "ci_upper_Mbar_0.5",
-          "ci_lower_Mbar_1",
-          "ci_upper_Mbar_1",
-          "ci_lower_Mbar_1.5",
-          "ci_upper_Mbar_1.5",
-          "ci_lower_Mbar_2",
-          "ci_upper_Mbar_2"
+          "analytic_ci_lower_M_0",
+          "analytic_ci_upper_M_0",
+          "ci_lower_M_0.05",
+          "ci_upper_M_0.05",
+          "ci_lower_M_0.1",
+          "ci_upper_M_0.1",
+          "ci_lower_M_0.2",
+          "ci_upper_M_0.2",
+          "ci_lower_M_0.5",
+          "ci_upper_M_0.5"
         ],
         "tolerance": 1e-06
       },
-      "label": "Honest DiD relative-mags",
+      "implementation": "native",
+      "label": "Honest DiD smoothness",
       "last_verified": "R version 4.5.2 (2025-10-31)",
-      "module_id": "21_honest_relmags",
+      "module_id": "10_honest_did",
       "notes": [],
       "point_estimate_rel": {
-        "R": 1.7195547311636164e-15,
-        "Stata": 2.591385050468534e-16
+        "R": 5.3275414047616095e-08,
+        "Stata": 3.591356021991531e-08
       },
-      "python_call": "sp.honest_did(method=\"relative_magnitude\", backend=\"honestdid\")",
-      "reference": "HonestDiD::createSensitivityResults_relativeMagnitudes",
+      "python_call": "sp.honest_did (native FLCI)",
+      "reference": "HonestDiD::createSensitivityResults (exact quantile) + closed form at M = 0",
       "reference_versions": {
         "HonestDiD": "0.2.8",
         "R": "R version 4.5.2 (2025-10-31)"
@@ -6153,9 +6237,9 @@
       "source": "track_a",
       "status": "bit-exact",
       "test": [
-        "tests/r_parity/21_honest_relmags.py",
-        "tests/r_parity/21_honest_relmags.R",
-        "tests/stata_parity/21_honest_relmags.do"
+        "tests/r_parity/10_honest_did.py",
+        "tests/r_parity/10_honest_did.R",
+        "tests/stata_parity/10_honest_did.do"
       ],
       "tier": "machine",
       "tolerance": "abs_est<=1e-06, abs_se<=1e-06"
@@ -6470,6 +6554,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "interflex",
       "headline": {
         "metric": "rel_est",
@@ -6487,6 +6572,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "interflex marginal effects (linear / binning / kernel)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "87_interflex",
@@ -6662,12 +6748,14 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_iv_card_aer_parity.py",
         "tests/reference_parity/test_iv_hdfe_stata_parity.py",
         "tests/reference_parity/test_regress_weights_iv_robust_parity.py"
       ],
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "iv",
       "headline": {
         "metric": "rel_est",
@@ -6684,6 +6772,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "2SLS + HC1 SE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "02_iv",
@@ -6805,6 +6894,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "ivreg",
       "headline": {
         "metric": "rel_est",
@@ -6821,6 +6911,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "2SLS + HC1 SE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "02_iv",
@@ -7308,6 +7399,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "liml",
       "headline": {
         "metric": "rel_est",
@@ -7320,6 +7412,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "LIML k-class IV",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "59_liml",
@@ -7473,6 +7566,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "local_projections",
       "headline": {
         "metric": "rel_est",
@@ -7494,6 +7588,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Local projections",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "34_lp",
@@ -7536,6 +7631,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "logit",
       "headline": {
         "metric": "rel_est",
@@ -7548,6 +7644,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Binary logit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "57_logit",
@@ -7664,6 +7761,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "lp_did",
       "headline": {
         "metric": "rel_est",
@@ -7675,6 +7773,7 @@
         ],
         "tolerance": 1e-10
       },
+      "implementation": "native",
       "label": "LP-DiD event study",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "83_lpdid",
@@ -8185,6 +8284,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "mediate",
       "headline": {
         "metric": "rel_est",
@@ -8197,6 +8297,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Causal mediation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "36_mediation",
@@ -8293,6 +8394,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "mediation",
       "headline": {
         "metric": "rel_est",
@@ -8305,6 +8407,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Causal mediation",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "36_mediation",
@@ -8457,6 +8560,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "melogit",
       "headline": {
         "metric": "rel_est",
@@ -8468,6 +8572,7 @@
         ],
         "tolerance": 0.0002
       },
+      "implementation": "native",
       "label": "GLMM logit (Laplace)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "26_glmm_logit",
@@ -8757,6 +8862,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "mixed",
       "headline": {
         "metric": "rel_est",
@@ -8768,6 +8874,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "LMM",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "25_lmm",
@@ -8832,6 +8939,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "mlogit",
       "headline": {
         "metric": "rel_est",
@@ -8847,6 +8955,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Multinomial logit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "44_mlogit",
@@ -9634,6 +9743,7 @@
       "tolerance": "1e-10 rel on both contrasts, potential-outcome means and sandwich SEs"
     },
     {
+      "evidence_grade": "T2",
       "function": "multiway_cluster_vcov",
       "headline": {
         "metric": "rel_se",
@@ -9645,6 +9755,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Three-way cluster-robust SE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "56_multiway_cluster",
@@ -9686,6 +9797,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "nbreg",
       "headline": {
         "metric": "rel_est",
@@ -9698,6 +9810,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Negative binomial",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "42_nbreg",
@@ -9997,6 +10110,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "oaxaca",
       "headline": {
         "metric": "rel_est",
@@ -10007,6 +10121,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Blinder--Oaxaca",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "30_oaxaca",
@@ -10104,6 +10219,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "ologit",
       "headline": {
         "metric": "rel_est",
@@ -10116,6 +10232,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Ordered logit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "45_ologit",
@@ -10156,6 +10273,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "oprobit",
       "headline": {
         "metric": "rel_est",
@@ -10168,6 +10286,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Ordered probit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "49_oprobit",
@@ -10367,6 +10486,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "panel",
       "headline": {
         "metric": "rel_est",
@@ -10382,6 +10502,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "third_party_python",
       "label": "Panel FE/RE/Hausman",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "35_panel",
@@ -10646,6 +10767,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "poisson",
       "headline": {
         "metric": "rel_est",
@@ -10658,6 +10780,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Poisson ML (no FE)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "58_poisson",
@@ -10698,6 +10821,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "policy_tree",
       "headline": {
         "metric": "rel_est",
@@ -10709,6 +10833,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Policy tree (exact, depth 1--2)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "70_policy_tree",
@@ -10997,6 +11122,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "ppmlhdfe",
       "headline": {
         "metric": "rel_est",
@@ -11010,6 +11136,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "PPML + HDFE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "37_ppmlhdfe",
@@ -11067,6 +11194,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "pretrends_power",
       "headline": {
         "metric": "rel_est",
@@ -11078,6 +11206,7 @@
         ],
         "tolerance": 0.001
       },
+      "implementation": "native",
       "label": "Pre-trends power (Roth 2022)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "76_pretrends",
@@ -11117,6 +11246,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "pretrends_slope_for_power",
       "headline": {
         "metric": "rel_est",
@@ -11128,6 +11258,7 @@
         ],
         "tolerance": 0.001
       },
+      "implementation": "native",
       "label": "Pre-trends power (Roth 2022)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "76_pretrends",
@@ -11222,6 +11353,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "probit",
       "headline": {
         "metric": "rel_est",
@@ -11233,6 +11365,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Binary probit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "48_probit",
@@ -11318,6 +11451,7 @@
       "tolerance": ""
     },
     {
+      "evidence_grade": "T2",
       "function": "psm",
       "headline": {
         "metric": "rel_est",
@@ -11328,6 +11462,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "PSM 1:1 NN",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "11_psm",
@@ -11451,6 +11586,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "qreg",
       "headline": {
         "metric": "rel_est",
@@ -11463,6 +11599,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Quantile regression",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "40_qreg",
@@ -11834,6 +11971,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "rdbwselect",
       "headline": {
         "metric": "rel_est",
@@ -11863,6 +12001,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "RD bandwidth selection (all ten CCT selectors)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "88_rdbwselect",
@@ -11900,17 +12039,19 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "rdd",
       "headline": {
         "metric": "rel_est",
-        "rel_vs_R": 2.4847453064359826e-14,
-        "rel_vs_Stata": 9.444860042150157e-11,
+        "rel_vs_R": 5.703082084295922e-14,
+        "rel_vs_Stata": 9.441641705371993e-11,
         "statistic": [
           "default_conventional_est",
           "default_robust_est"
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "RD CCT bias-corrected",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "06_rd",
@@ -11919,18 +12060,18 @@
         "sp.rdd renames running= / cutoff= to x= / c= and returns rdrobust(data=..., y=..., x=running, c=cutoff, fuzzy=..., **kwargs) (src/statspai/_article_aliases.py), so the agreement is exact by construction as well as by measurement."
       ],
       "point_estimate_rel": {
-        "R": 2.4847453064359826e-14,
-        "Stata": 9.444860042150157e-11
+        "R": 5.703082084295922e-14,
+        "Stata": 9.441641705371993e-11
       },
-      "python_call": "sp.rdrobust",
+      "python_call": "sp.rdrobust (native CCT; port recorded separately)",
       "reference": "rdrobust::rdrobust",
       "reference_versions": {
         "R": "R version 4.5.2 (2025-10-31)",
         "rdrobust": "3.0.0"
       },
       "se_rel": {
-        "R": 3.4553761368861975e-14,
-        "Stata": 1.605410374834779e-10
+        "R": 1.039657225327433e-13,
+        "Stata": 1.604716255223029e-10
       },
       "sides": [
         "py",
@@ -11946,7 +12087,7 @@
         "tests/reference_parity/test_track_a_alias_equivalence.py"
       ],
       "tier": "machine",
-      "tolerance": "rel_est<=1e-06, rel_se<=0.1"
+      "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
       "additional_tests": [
@@ -11955,6 +12096,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "rddensity",
       "headline": {
         "metric": "rel_est",
@@ -11965,6 +12107,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "RD density (CJM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "09_rddensity",
@@ -12082,6 +12225,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "rdms",
       "headline": {
         "metric": "rel_est",
@@ -12094,6 +12238,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Multi-score / geographic RD at boundary points",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "89_rdms",
@@ -12271,34 +12416,36 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "rdrobust",
       "headline": {
         "metric": "rel_est",
-        "rel_vs_R": 2.4847453064359826e-14,
-        "rel_vs_Stata": 9.444860042150157e-11,
+        "rel_vs_R": 5.703082084295922e-14,
+        "rel_vs_Stata": 9.441641705371993e-11,
         "statistic": [
           "default_conventional_est",
           "default_robust_est"
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "RD CCT bias-corrected",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "06_rd",
       "notes": [],
       "point_estimate_rel": {
-        "R": 2.4847453064359826e-14,
-        "Stata": 9.444860042150157e-11
+        "R": 5.703082084295922e-14,
+        "Stata": 9.441641705371993e-11
       },
-      "python_call": "sp.rdrobust",
+      "python_call": "sp.rdrobust (native CCT; port recorded separately)",
       "reference": "rdrobust::rdrobust",
       "reference_versions": {
         "R": "R version 4.5.2 (2025-10-31)",
         "rdrobust": "3.0.0"
       },
       "se_rel": {
-        "R": 3.4553761368861975e-14,
-        "Stata": 1.605410374834779e-10
+        "R": 1.039657225327433e-13,
+        "Stata": 1.604716255223029e-10
       },
       "sides": [
         "py",
@@ -12313,7 +12460,7 @@
         "tests/stata_parity/06_rd.do"
       ],
       "tier": "machine",
-      "tolerance": "rel_est<=1e-06, rel_se<=0.1"
+      "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
       "also_verified_by": [
@@ -12481,6 +12628,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "regress",
       "headline": {
         "metric": "rel_est",
@@ -12497,6 +12645,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "OLS + HC1 SE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "01_ols",
@@ -12617,6 +12766,7 @@
       "tolerance": "p exact (k / N_assignments); statistic 1e-12 rel vs R, 2^-23 vs Stata"
     },
     {
+      "evidence_grade": "T2",
       "function": "rif_decomposition",
       "headline": {
         "metric": "rel_est",
@@ -12627,6 +12777,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "RIF / UQR (median)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "32_rif",
@@ -13114,6 +13265,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "sar",
       "headline": {
         "metric": "rel_est",
@@ -13137,6 +13289,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Spatial ML (SAR/SEM/SDM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "65_spatial",
@@ -13171,6 +13324,7 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "evidence_grade": "T2",
       "function": "sar_gmm",
       "headline": {
         "metric": "rel_est",
@@ -13188,6 +13342,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Spatial GMM (SAR-2SLS/SEM-GMM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "66_spatial_gmm",
@@ -13386,6 +13541,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "sdid",
       "headline": {
         "metric": "rel_est",
@@ -13396,6 +13552,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Synthetic DID",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "12_sdid",
@@ -13430,6 +13587,7 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "evidence_grade": "T2",
       "function": "sdm",
       "headline": {
         "metric": "rel_est",
@@ -13453,6 +13611,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Spatial ML (SAR/SEM/SDM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "65_spatial",
@@ -13504,6 +13663,7 @@
       "tolerance": ""
     },
     {
+      "evidence_grade": "T2",
       "function": "sem",
       "headline": {
         "metric": "rel_est",
@@ -13527,6 +13687,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Spatial ML (SAR/SEM/SDM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "65_spatial",
@@ -13561,6 +13722,7 @@
       "tolerance": "rel_est<=1e-06, rel_se<=1e-06"
     },
     {
+      "evidence_grade": "T2",
       "function": "sem_gmm",
       "headline": {
         "metric": "rel_est",
@@ -13578,6 +13740,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Spatial GMM (SAR-2SLS/SEM-GMM)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "66_spatial_gmm",
@@ -13618,6 +13781,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "sensemakr",
       "headline": {
         "metric": "rel_est",
@@ -13629,6 +13793,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "sensemakr",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "22_sensemakr",
@@ -14141,6 +14306,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "stacked_did",
       "headline": {
         "metric": "rel_est",
@@ -14157,6 +14323,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Stacked DiD (CDLZ)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "75_stacked",
@@ -14223,6 +14390,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "staggered_rollout",
       "headline": {
         "metric": "rel_est",
@@ -14234,6 +14402,7 @@
         ],
         "tolerance": 1e-10
       },
+      "implementation": "native",
       "label": "Design-based staggered rollout",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "82_staggered",
@@ -14471,6 +14640,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "sun_abraham",
       "headline": {
         "metric": "rel_est",
@@ -14495,6 +14665,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Sun-Abraham event study",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "05_sunab",
@@ -14546,6 +14717,7 @@
       "tolerance": ""
     },
     {
+      "evidence_grade": "T2",
       "function": "sureg",
       "headline": {
         "metric": "rel_est",
@@ -14561,6 +14733,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "SUR one-step FGLS",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "60_sureg",
@@ -14823,6 +14996,7 @@
         "external_parity",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "synth",
       "headline": {
         "metric": "rel_est",
@@ -14833,6 +15007,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Identified classical SCM DGP",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "52_scm_unique",
@@ -15032,6 +15207,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "synthdid_estimate",
       "headline": {
         "metric": "rel_est",
@@ -15042,6 +15218,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Synthetic DID",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "12_sdid",
@@ -15316,6 +15493,7 @@
         "reference_parity_frozen",
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "tmle",
       "headline": {
         "metric": "rel_est",
@@ -15326,6 +15504,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "TMLE (targeting step)",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "72_tmle",
@@ -15366,6 +15545,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "tobit",
       "headline": {
         "metric": "rel_est",
@@ -15377,6 +15557,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Tobit",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "41_tobit",
@@ -15501,6 +15682,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "truncreg",
       "headline": {
         "metric": "rel_est",
@@ -15514,6 +15696,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Truncated regression",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "62_truncreg",
@@ -15565,6 +15748,7 @@
       "tolerance": ""
     },
     {
+      "evidence_grade": "T2",
       "function": "twoway_cluster",
       "headline": {
         "metric": "rel_se",
@@ -15576,6 +15760,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Two-way cluster-robust SE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "54_twoway_cluster",
@@ -15634,6 +15819,23 @@
       "tolerance": "1e-10 rel"
     },
     {
+      "function": "validation_scope",
+      "notes": [
+        "Recovers a known population parameter / closed-form identity on a deterministic DGP within tolerance; no cross-package reference. See tests/reference_parity/REFERENCES.md."
+      ],
+      "reference": "",
+      "reference_versions": {},
+      "sides": [
+        "py"
+      ],
+      "source": "reference_parity",
+      "status": "analytical-only",
+      "test": [
+        "tests/reference_parity/test_iv_card_aer_parity.py"
+      ],
+      "tolerance": ""
+    },
+    {
       "additional_tests": [
         "tests/reference_parity/test_timeseries_R_parity.py",
         "tests/reference_parity/test_timeseries_parity.py"
@@ -15641,6 +15843,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "var",
       "headline": {
         "metric": "rel_est",
@@ -15670,6 +15873,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "VAR",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "33_var",
@@ -15892,6 +16096,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "wooldridge_did",
       "headline": {
         "metric": "rel_est",
@@ -15902,6 +16107,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Wooldridge ETWFE",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "17_etwfe",
@@ -15983,6 +16189,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "xtabond",
       "headline": {
         "metric": "rel_est",
@@ -15994,6 +16201,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Arellano--Bond GMM",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "50_xtabond",
@@ -16052,6 +16260,7 @@
       "tolerance": "abdata, n on L.n (and w k): coefficients and SEs at 1e-9 (observed <= 6e-12) for one-step robust, two-step Windmeijer and classical one-step, instrument count equal; xtabond2 with iv(w k, eq(diff)) h(2) reproduces the same numbers."
     },
     {
+      "evidence_grade": "T2",
       "function": "xtfrontier",
       "headline": {
         "metric": "rel_est",
@@ -16063,6 +16272,7 @@
         ],
         "tolerance": 0.001
       },
+      "implementation": "native",
       "label": "Panel SFA Pitt-Lee",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "29_panel_sfa",
@@ -16196,6 +16406,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "zinb",
       "headline": {
         "metric": "rel_est",
@@ -16210,6 +16421,7 @@
         ],
         "tolerance": 1e-05
       },
+      "implementation": "native",
       "label": "Zero-inflated NB",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "64_zinb",
@@ -16251,6 +16463,7 @@
       "also_verified_by": [
         "reference_parity"
       ],
+      "evidence_grade": "T2",
       "function": "zip_model",
       "headline": {
         "metric": "rel_est",
@@ -16265,6 +16478,7 @@
         ],
         "tolerance": 1e-06
       },
+      "implementation": "native",
       "label": "Zero-inflated Poisson",
       "last_verified": "R version 4.5.2 (2025-10-31)",
       "module_id": "63_zip",

@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from ..exceptions import DataInsufficient, MethodIncompatibility
 from .._result_serialize import ResultProtocolMixin
+from ..exceptions import DataInsufficient, MethodIncompatibility
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -1439,8 +1439,8 @@ def _dispatch_estimator(
         meta_random_state = kwargs.pop("random_state", None)
         if meta_random_state is not None:
             from sklearn.ensemble import (
-                GradientBoostingRegressor,
                 GradientBoostingClassifier,
+                GradientBoostingRegressor,
             )
 
             kwargs.setdefault(
@@ -1500,15 +1500,12 @@ def _dispatch_estimator(
             "causal_forest",
             reserved=("data", "Y", "T", "X", "formula"),
         )
-        # AIPW kwargs we recognise (mirrors sp.metalearner). All other
-        # kwargs flow through to sp.causal_forest. `random_state` is
-        # *peeked* — left in kwargs so the forest receives it AND
-        # forwarded to AIPW so a single seed reproduces the whole
-        # branch (forest CATE + ATE/SE/CI). Passing nothing → both
-        # random; passing an int → both reproducible (no asymmetry).
-        aipw_n_folds = kwargs.pop("aipw_n_folds", 5)
+        # All kwargs flow through to sp.causal_forest except the two the
+        # ATE summary needs. ``aipw_n_folds`` is accepted for backward
+        # compatibility and ignored: the doubly-robust ATE now comes from the
+        # fitted forest's own out-of-bag nuisances (see below).
+        kwargs.pop("aipw_n_folds", None)
         alpha = kwargs.pop("alpha", 0.05)
-        aipw_random_state = kwargs.get("random_state", None)
         Y = data[q.outcome].to_numpy()
         T_raw = data[q.treatment].to_numpy()
         X = data[list(q.covariates)].to_numpy()
@@ -1540,21 +1537,21 @@ def _dispatch_estimator(
         # Use the cleaned numeric array everywhere downstream.
         T = T_numeric
         cf = sp.causal_forest(Y=Y, T=T, X=X, **kwargs)
-        # The forest is preserved as `underlying` for CATE access via
-        # cf.effect(X). Population ATE inference uses the cross-fit
-        # AIPW influence function (van der Laan & Robins 2003;
-        # Chernozhukov et al. 2018) — semiparametrically efficient and
-        # B-independent, exactly the approach
-        # grf::average_treatment_effect uses in R for ATE inference on
-        # top of a causal forest.
-        ate, se, ci = _ate_inference_aipw(
-            X=X,
-            Y=Y,
-            D=T,
-            n_folds=aipw_n_folds,
-            alpha=alpha,
-            random_state=aipw_random_state,
-        )
+        # The population ATE is the forest's own doubly-robust (AIPW) average
+        # over its out-of-bag CATE and nuisance predictions -- the estimand
+        # grf::average_treatment_effect reports on top of a causal forest.
+        # Until 1.31 this branch fitted the forest and then reported a
+        # *separate* cross-fit AIPW with its own nuisance learners, so the
+        # estimate, SE and interval did not depend on the forest at all (the
+        # number of trees had no effect on them), and a coverage study of
+        # this design measured a different estimator from sp.causal_forest.
+        summary = cf.average_treatment_effect(target_sample="all")
+        ate = float(summary["estimate"])
+        se = float(summary["se"])
+        from scipy import stats as _st
+
+        z = float(_st.norm.ppf(1 - alpha / 2))
+        ci = (ate - z * se, ate + z * se)
         return EstimationResult(
             estimand=plan.estimand,
             estimator=est_name,
@@ -1588,92 +1585,6 @@ def _reject_reserved_kwargs(
             "the CausalQuestion's treatment/outcome/covariates/data.",
             diagnostics={"design": design, "reserved_kwargs": bad},
         )
-
-
-def _ate_inference_aipw(
-    *,
-    X: Any,
-    Y: Any,
-    D: Any,
-    n_folds: int = 5,
-    alpha: float = 0.05,
-    random_state: Optional[int] = 42,
-) -> tuple[float, float, tuple[float, float]]:
-    """Population ATE point + SE + Wald CI via cross-fit AIPW (DR)
-    influence function — semiparametrically efficient under
-    conditional ignorability (van der Laan & Robins 2003;
-    Chernozhukov et al. 2018).
-
-    Used by the ``causal_forest`` dispatch branch to attach valid
-    inference to the forest's CATE estimator: forest provides
-    heterogeneous tau(x), AIPW provides the population ATE summary.
-    This mirrors what grf::average_treatment_effect does in R.
-
-    Nuisance hyper-parameters (n_estimators=200, max_depth=4,
-    learning_rate=0.05, subsample=0.8) match
-    :func:`sp.metalearner`'s ``_default_outcome_model`` /
-    ``_default_propensity_model`` so the two dispatch paths share the
-    same effective regularisation. ``random_state`` is threaded to
-    BOTH nuisance models AND the cross-fit fold split, so a single
-    seed makes the whole estimator branch reproducible.
-
-    Treatment must be binary (0/1); for continuous treatments use
-    ``design='dml'`` instead.
-    """
-    from ..metalearners.metalearners import _cross_fit_aipw_phi
-    from sklearn.ensemble import (
-        GradientBoostingRegressor,
-        GradientBoostingClassifier,
-    )
-
-    Y = np.asarray(Y).astype(float).ravel()
-    # Cast to float so isnan works on originally-int treatments too.
-    D_raw = np.asarray(D).astype(float).ravel()
-    D_clean = D_raw[~np.isnan(D_raw)]
-    if set(np.unique(D_clean).tolist()) - {0.0, 1.0}:
-        raise MethodIncompatibility(
-            "AIPW-IF for ATE requires binary treatment (0/1); for "
-            "continuous treatments use design='dml'.",
-            diagnostics={"treatment_values": np.unique(D_clean).tolist()},
-        )
-    D = D_raw.astype(int)
-    X = np.asarray(X)
-    n = len(Y)
-
-    outcome_model = GradientBoostingRegressor(
-        n_estimators=200,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        random_state=random_state,
-    )
-    propensity_model = GradientBoostingClassifier(
-        n_estimators=200,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        random_state=random_state,
-    )
-
-    # KFold inherits the same seed: passing None → sklearn uses np
-    # global state (genuinely random); passing int → deterministic.
-    # _cross_fit_aipw_phi accepts None via KFold's standard semantics.
-    phi, _diag = _cross_fit_aipw_phi(
-        X=X,
-        Y=Y,
-        D=D,
-        outcome_model=outcome_model,
-        propensity_model=propensity_model,
-        n_folds=n_folds,
-        seed=random_state,  # type: ignore[arg-type]
-    )
-    ate = float(np.mean(phi))
-    se = float(np.std(phi, ddof=1) / np.sqrt(n))
-    from scipy.stats import norm
-
-    z = float(norm.ppf(1.0 - alpha / 2.0))
-    ci = (ate - z * se, ate + z * se)
-    return ate, se, ci
 
 
 def _extract_generic(res: Any) -> tuple[float, float, tuple[float, float]]:

@@ -4,12 +4,17 @@ Both engines report the **AIPW doubly-robust** average treatment effect
 (``grf::average_treatment_effect`` on the R side;
 ``sp.causal_forest.average_treatment_effect`` on the Python side), so
 the comparison is like-for-like.  The two implementations use different
-RNGs and different nuisance learners, so the estimates are not
-bit-identical; the principled parity criterion is therefore that the
-two AIPW point estimates agree **within combined Monte Carlo error**
-(``|sp - grf| < 3 * sqrt(se_sp^2 + se_grf^2)``), the same combined-SE
-standard the package uses for cross-estimator parity, rather than an
-arbitrary fixed relative band.
+RNGs, so a single fit on each side is one draw from each engine's
+algorithmic distribution *given the data*.
+
+What this file checks is deliberately weak: one draw each, compared on the
+scale of the ATE's **sampling** standard error. That is a plausibility
+screen, not an equivalence test -- the sampling SE describes variation
+across datasets, not the forest's own Monte Carlo error on fixed data, and
+the two single draws share the data, so their sampling errors are not
+independent. The algorithmic comparison proper -- many seeds per engine on
+fixed data, tree-count scaling, and an equivalence margin -- is
+``test_grf_seed_mc_equivalence.py``.
 
 This replaces the previous test, which compared the *plug-in* mean of
 the CATE predictions (``cf.ate()``) against grf's AIPW estimate with a
@@ -64,25 +69,23 @@ def fitted_cf(grf_data):
     )
 
 
-def test_grf_ate_aipw_within_combined_se(fitted_cf, r_reference):
-    """sp AIPW ATE must agree with grf AIPW ATE within 3 combined SE.
+def test_grf_ate_aipw_single_draw_screen(fitted_cf, r_reference):
+    """One sp draw and one grf draw differ by far less than the sampling SE.
 
-    This is the headline causal-forest parity claim: same estimand
-    (doubly-robust AIPW ATE), agreement within combined Monte Carlo
-    error.
+    A screen, not an equivalence claim (module docstring): the threshold is
+    a quarter of grf's reported ATE standard error, which is ~20x the
+    seed-to-seed spread of either engine at 2,000 trees.
     """
     aipw = fitted_cf.average_treatment_effect(target_sample="all")
     assert aipw["method"] == "aipw", "headline ATE must use the AIPW score"
-    py_ate, py_se = float(aipw["estimate"]), float(aipw["se"])
+    py_ate = float(aipw["estimate"])
     r_ate, r_se = r_reference["ate"]["estimate"], r_reference["ate"]["se"]
-    combined_se = math.sqrt(py_se**2 + r_se**2)
-    z = abs(py_ate - r_ate) / combined_se
-    assert z < 3.0, (
-        f"sp AIPW ATE={py_ate:.4f} (SE {py_se:.4f}) vs grf AIPW "
-        f"ATE={r_ate:.4f} (SE {r_se:.4f}): {z:.2f} combined SE apart "
-        f"(threshold 3). The two doubly-robust estimates are not within "
-        f"combined Monte Carlo error -- investigate the AIPW score or "
-        f"the nuisance cross-fitting."
+    gap = abs(py_ate - r_ate) / r_se
+    assert gap < 0.25, (
+        f"sp AIPW ATE={py_ate:.4f} vs grf AIPW ATE={r_ate:.4f}: "
+        f"{gap:.2f} sampling SEs apart (screen threshold 0.25). Investigate "
+        f"the AIPW score or the nuisance cross-fitting, then the seed-"
+        f"replicated comparison in test_grf_seed_mc_equivalence.py."
     )
 
 

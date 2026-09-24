@@ -196,7 +196,9 @@ def coverage_causal_forest_overlap() -> dict:
             covariates=["x1", "x2"],
             data=df,
         )
-        r = q.estimate(n_estimators=30, random_state=seed)
+        # grf-default 2,000 trees: since 1.31 the ATE is the forest's own AIPW,
+        # and a 30-tree forest leaves rows without out-of-bag predictions.
+        r = q.estimate(random_state=seed)
         bias.append(float(r.estimate) - truth)
         if r.ci[0] <= truth <= r.ci[1]:
             covered += 1

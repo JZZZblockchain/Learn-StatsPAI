@@ -196,6 +196,18 @@ def dml(
       (unit-clustered panel PLR), not in this cross-sectional entry
       point.
 
+    Default learners and coverage. When no learners are passed, the
+    nuisances are fitted by gradient boosting (100 trees, depth 3). That
+    default is a convenience, not a validated choice: on the Track B PLR
+    design (n = 500, nonlinear nuisances) its regularisation bias is about
+    half a Monte Carlo SD and the 95% interval covers 0.89 (0.94 at
+    n = 2,000), while the true nuisance functions give 0.95 and a random
+    forest or a spline Lasso about 0.94
+    (``tests/coverage_monte_carlo/mechanisms/dml_plr_learners.py``). The
+    orthogonal score makes nuisance error second order, not zero; pass
+    learners suited to the problem, and check ``sp.validation_scope`` for
+    which learner configurations carry evidence.
+
     Examples
     --------
     >>> # Partially Linear Regression

@@ -6365,6 +6365,12 @@ def build_track_a_records(
                     "reference": meta["reference"],
                     "reference_versions": ref_versions,
                     "python_call": meta["py_api"],
+                    # What the StatsPAI side of the module executes; checked
+                    # against a call trace (test_parity_implementation_provenance).
+                    "implementation": compare.implementation_kind(module_id),
+                    # T2 same-byte parity, T3 seed-replicated stochastic
+                    # equivalence, or T4 documented reference disagreement.
+                    "evidence_grade": compare.evidence_grade(module_id),
                     "tolerance": tol_str,
                     "tier": tier,
                     "sides": sides,

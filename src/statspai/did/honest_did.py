@@ -38,6 +38,7 @@ from scipy import stats
 
 from ..core.results import CausalResult
 from ..exceptions import ConvergenceFailure, DataInsufficient, MethodIncompatibility
+from ._arp import rm_confidence_set
 from ._flci import breakdown_m_sd, event_study_moments, flci_delta_sd
 
 
@@ -163,9 +164,20 @@ def honest_did(
         unavailable the function falls back to a worst-case-bias interval
         and warns.
 
-        For ``method='relative_magnitude'`` the native path is still the
-        worst-case-bias approximation ``θ̂ ± M̄·max|δ_pre| ± z·SE``. It
-        tracks the reference closely but is not exact, and it warns.
+        For ``method='relative_magnitude'`` it inverts the Andrews-Roth-Pakes
+        conditional test (``honestdid_method='Conditional'``) or the
+        conditional least-favourable hybrid (``'C-LF'``, the default, as in
+        ``HonestDiD``) over the union of ``Δ^RM`` pieces, on
+        ``HonestDiD``'s default grid of 1,000 points spanning ±20 standard
+        deviations of the target. On identical inputs the ``'Conditional'``
+        set equals R ``HonestDiD::createSensitivityResults_relativeMagnitudes``
+        exactly (same accepted grid points); the ``'C-LF'`` hybrid simulates
+        its first-stage critical value (NumPy draws, not R's), so it agrees
+        up to that Monte Carlo error. Like the FLCI it needs the joint
+        event-study covariance; without it the function falls back to the
+        worst-case-bias approximation ``θ̂ ± M̄·max|δ_pre| ± z·SE`` and warns.
+        A set that reaches either end of the grid is reported with a warning,
+        because its true bound lies outside the grid.
 
         ``'honestdid'``/``'r'`` delegates to the R ``HonestDiD`` package
         through ``Rscript``. It is handed the same full covariance when
@@ -173,10 +185,11 @@ def honest_did(
         ``diag(se²)``, which discards the (large, positive) cross-period
         covariance and materially changes the confidence set.
     honestdid_method : {'C-LF', 'Conditional', 'FLCI', 'C-F'}, optional
-        Solver method passed to the R ``HonestDiD`` backend. The default
-        preserves HonestDiD defaults: ``'C-LF'`` for
-        ``method='relative_magnitude'`` and ``'FLCI'`` for
-        ``method='smoothness'``. Ignored by ``backend='native'``.
+        Inference method. The default preserves HonestDiD defaults:
+        ``'C-LF'`` for ``method='relative_magnitude'`` and ``'FLCI'`` for
+        ``method='smoothness'``. The native backend implements ``'FLCI'``
+        (smoothness) and ``'C-LF'`` / ``'Conditional'`` (relative
+        magnitudes); the R backend accepts all four.
 
     Returns
     -------
@@ -256,21 +269,25 @@ def honest_did(
             diagnostics={"backend": backend},
         )
 
-    # method='smoothness' now solves the actual Rambachan-Roth FLCI (see
-    # below), so only the relative-magnitudes path is still an approximation.
-    if str(method).lower() in {"relative_magnitude", "relative_magnitudes"}:
-        warnings.warn(
-            "honest_did(method='relative_magnitude', backend='native') "
-            "returns a worst-case-bias interval (theta_hat +/- Mbar*max|pre| "
-            "+/- z*SE), not the Rambachan-Roth ARP conditional/hybrid "
-            "confidence set: it ignores the pre-period covariance structure. "
-            "It tracks the reference closely on typical designs but is not "
-            "exact. Pass backend='r' (requires R + the HonestDiD package) for "
-            "reference-backed relative-magnitude intervals; "
-            "method='smoothness' is solved exactly and needs no fallback.",
-            UserWarning,
-            stacklevel=2,
-        )
+    method_l = str(method).lower()
+    if method_l == "relative_magnitudes":
+        method = method_l = "relative_magnitude"
+    if honestdid_method is not None:
+        _hm = str(honestdid_method).upper().replace("_", "-")
+        _allowed = {
+            "relative_magnitude": {"C-LF", "CONDITIONAL"},
+            "smoothness": {"FLCI"},
+        }
+        if method_l in _allowed and _hm not in _allowed[method_l]:
+            raise MethodIncompatibility(
+                f"honestdid_method={honestdid_method!r} is not implemented by "
+                f"backend='native' for method={method!r}.",
+                recovery_hint=(
+                    "Use 'C-LF' or 'Conditional' for relative magnitudes and "
+                    "'FLCI' for smoothness, or pass backend='r'."
+                ),
+                diagnostics={"method": method, "honestdid_method": honestdid_method},
+            )
 
     _mi = getattr(result, "model_info", None) or {}
     if _mi.get("event_vcov") is not None and "cohorts" in _mi:
@@ -379,6 +396,24 @@ def honest_did(
             )
 
     elif method == "relative_magnitude":
+        # Preferred path: the Rambachan-Roth / ARP confidence set, which needs
+        # the joint event-study covariance (as the FLCI does).
+        _moments = event_study_moments(result)
+        _rm = _native_rm_table(_moments, e, m_grid, alpha, honestdid_method)
+        if _rm is not None:
+            return _rm
+
+        warnings.warn(
+            "honest_did(method='relative_magnitude'): the event-study "
+            "covariance is unavailable, so this falls back to a worst-case-bias "
+            "interval (theta_hat +/- Mbar*max|pre| +/- z*SE) rather than the "
+            "Rambachan-Roth conditional / hybrid confidence set. It ignores the "
+            "pre-period covariance and can overstate robustness. Refit with an "
+            "estimator that exposes the joint event-study covariance (see "
+            "sp.event_study_vcov), or pass backend='r'.",
+            UserWarning,
+            stacklevel=2,
+        )
         # Relative magnitude: |δ_post| ≤ M̄ × max|δ_pre|
         if len(pre_atts) == 0:
             max_pre = 0
@@ -410,6 +445,78 @@ def honest_did(
     _out = pd.DataFrame(rows)
     _out.attrs["interval"] = "worst_case_bias"
     return _out
+
+
+def _rm_inputs(moments: Optional[tuple], e: int) -> Optional[tuple]:
+    """(betahat, sigma, n_pre, n_post, l_post) in HonestDiD order, or None."""
+    if moments is None:
+        return None
+    beta, sigma, times = moments
+    post_mask = times >= 0
+    n_pre = int((~post_mask).sum())
+    post_times = times[post_mask]
+    if n_pre < 1 or e not in set(post_times.tolist()):
+        return None
+    order = np.concatenate([np.where(~post_mask)[0], np.where(post_mask)[0]])
+    return (
+        beta[order],
+        sigma[np.ix_(order, order)],
+        n_pre,
+        int(post_mask.sum()),
+        (post_times == e).astype(float),
+    )
+
+
+def _native_rm_table(
+    moments: Optional[tuple],
+    e: int,
+    m_grid: Sequence[float],
+    alpha: float,
+    honestdid_method: Optional[str],
+) -> Optional[pd.DataFrame]:
+    """Native Delta^RM confidence sets over ``m_grid`` (None if no covariance)."""
+    inputs = _rm_inputs(moments, e)
+    if inputs is None:
+        return None
+    b, s, n_pre, n_post, l_post = inputs
+    rm_method = "C-LF" if honestdid_method is None else str(honestdid_method)
+    rows = []
+    open_at: List[float] = []
+    for m_bar in m_grid:
+        lo, hi, grid, accept = rm_confidence_set(
+            b,
+            s,
+            n_pre,
+            n_post,
+            float(m_bar),
+            l_vec=l_post,
+            alpha=alpha,
+            method=rm_method,
+        )
+        if accept.size and (accept[0] == 1 or accept[-1] == 1):
+            open_at.append(float(m_bar))
+        rows.append(
+            {
+                "M": float(m_bar),
+                "ci_lower": lo,
+                "ci_upper": hi,
+                "rejects_zero": bool(np.isfinite(lo) and not (lo <= 0 <= hi)),
+            }
+        )
+    if open_at:
+        warnings.warn(
+            "honest_did(method='relative_magnitude'): the confidence set reaches "
+            f"the edge of the +/-20 SD grid at Mbar = {open_at}; the reported "
+            "bound is the grid edge, not the true bound (HonestDiD reports the "
+            "same and warns likewise).",
+            UserWarning,
+            stacklevel=3,
+        )
+    out = pd.DataFrame(rows)
+    out.attrs["interval"] = (
+        "arp_conditional" if rm_method.upper() == "CONDITIONAL" else "arp_c_lf"
+    )
+    return out
 
 
 def _honest_did_r_backend(
@@ -750,10 +857,13 @@ def breakdown_m(
       z SE)``, and so does this function, giving the closed form
       ``(|theta_hat| - z SE) / (e + 1)``. It warns, as :func:`honest_did`
       does.
-    * ``method='relative_magnitude'``: :func:`honest_did`'s native interval
-      is the approximation ``theta_hat +/- (Mbar max|pre| + z SE)``, so the
-      breakdown is ``(|theta_hat| - z SE) / max|pre|``. It warns that this
-      is not the Rambachan-Roth conditional / hybrid confidence set.
+    * ``method='relative_magnitude'`` with the covariance: the
+      conditional least-favourable hybrid confidence set under
+      ``Delta^RM(Mbar)`` (HonestDiD's default), bisected in ``Mbar`` to
+      1e-3. The set is nested in ``Mbar``, so the crossing is unique.
+    * ``method='relative_magnitude'`` without it: the worst-case-bias
+      approximation ``theta_hat +/- (Mbar max|pre| + z SE)``, giving
+      ``(|theta_hat| - z SE) / max|pre|``, with a warning.
 
     Through 1.28.0 this function returned ``(|theta_hat| - z SE) / (e + 1)``
     for every input: ``method`` was validated and then ignored, and the
@@ -824,10 +934,15 @@ def breakdown_m(
         # M* such that |theta| - M* x n_drift - z x SE = 0
         return float(max((abs(theta) - z_crit * se) / n_drift, 0.0))
 
+    inputs = _rm_inputs(event_study_moments(result), e)
+    if inputs is not None:
+        return _breakdown_rm(*inputs, alpha=alpha)
+
     warnings.warn(
-        "breakdown_m(method='relative_magnitude') inverts honest_did's native "
-        "worst-case-bias interval (theta_hat +/- Mbar*max|pre| +/- z*SE), not "
-        "the Rambachan-Roth conditional / hybrid confidence set.",
+        "breakdown_m(method='relative_magnitude'): the event-study covariance "
+        "is unavailable, so this inverts honest_did's worst-case-bias fallback "
+        "interval (theta_hat +/- Mbar*max|pre| +/- z*SE), not the "
+        "Rambachan-Roth conditional / hybrid confidence set.",
         UserWarning,
         stacklevel=2,
     )
@@ -835,6 +950,38 @@ def breakdown_m(
     max_pre = float(np.max(np.abs(pre_atts))) if pre_atts.size else 0.0
     scale = max_pre if max_pre > 0 else se
     return float(max((abs(theta) - z_crit * se) / scale, 0.0))
+
+
+def _breakdown_rm(
+    b, s, n_pre, n_post, l_post, *, alpha: float, tol: float = 1e-3
+) -> float:
+    """Largest Mbar whose C-LF Delta^RM set excludes zero (bisection).
+
+    The set is nested in Mbar, so ``0 in CI(Mbar)`` is monotone and the
+    crossing can be bracketed and bisected to ``tol``.
+    """
+
+    def excludes_zero(m_bar: float) -> bool:
+        lo, hi, _, _ = rm_confidence_set(
+            b, s, n_pre, n_post, m_bar, l_vec=l_post, alpha=alpha, method="C-LF"
+        )
+        return bool(np.isfinite(lo) and not (lo <= 0 <= hi))
+
+    if not excludes_zero(0.0):
+        return 0.0
+    hi = 1.0
+    while excludes_zero(hi):
+        hi *= 2.0
+        if hi > 1e4:
+            return float("inf")
+    lo = hi / 2.0 if hi > 1.0 else 0.0
+    while hi - lo > tol:
+        mid = 0.5 * (lo + hi)
+        if excludes_zero(mid):
+            lo = mid
+        else:
+            hi = mid
+    return float(lo)
 
 
 # ======================================================================

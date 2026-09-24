@@ -360,6 +360,118 @@ All notable changes to StatsPAI will be documented in this file.
   changes from `"permutation"` (in-sample effect changes) to grf's
   `"split"` importance in 1.33.
 
+### Added (JSS review response, 2026-09)
+
+- **`sp.validation_scope(result)`: which artifacts cover the configuration
+  you actually ran.** A registry tier is attached to a function; the evidence
+  behind it is attached to configurations. For the twelve validation-suite
+  estimators the map records, per artifact, the method variant, inference
+  option, data condition and code path it exercises, and the call reports
+  `covered` (a T1/T2 row matches exactly), `stochastic_only` (only T3 / T4 /
+  coverage rows match) or `not_covered`, plus the rows that differ in one
+  dimension. It already found a gap: `sp.iv`'s default classical 2SLS
+  covariance -- the one printed in the JSS Card listing -- had no
+  deterministic reference row; it is now pinned against `AER::ivreg` +
+  `sandwich` on the original Card extract (classical / HC1 / CR1, just- and
+  over-identified, Sargan) at <= 8e-11
+  (`tests/reference_parity/test_iv_card_aer_parity.py`).
+- **Native relative-magnitudes Honest DiD.** `sp.honest_did(method=
+  "relative_magnitude")` now inverts the Andrews-Roth-Pakes conditional test
+  (`honestdid_method="Conditional"`) or the conditional least-favourable
+  hybrid (`"C-LF"`, the default, as in HonestDiD) over the union of
+  `Delta^RM` pieces, in Python ([andrews2023inference], a port of the
+  MIT-licensed R HonestDiD 0.2.8; notice in `THIRD_PARTY_NOTICES.md`). On
+  sixteen cases (diagonal / correlated covariance, a non-basis target, a
+  single post period) the Conditional set returns the *same* accepted grid
+  points as `HonestDiD::createSensitivityResults_relativeMagnitudes`; C-LF,
+  whose first stage is simulated, agrees within one grid step
+  (`tests/reference_parity/test_honest_rm_R_parity.py`). `sp.breakdown_m(...,
+  method="relative_magnitude")` bisects the same set. A vertex enumeration of
+  the dual polytope, which does not depend on theta, makes the grid inversion
+  about 20x faster than one LP per evaluation.
+- **Seed-replicated forest comparison.** `sp.causal_forest` and `grf` are
+  refitted under 50 seeds on fixed data at 500 / 2,000 / 8,000 trees on two
+  datasets (`tests/reference_parity/test_grf_seed_mc_equivalence.py`). They
+  are equivalent within 0.1 sampling SE (TOST) at every tree count on both
+  datasets, and their seed-to-seed SDs agree within a factor of two (about
+  6-8% of the sampling SE at the default 2,000 trees). Seeds are spaced 1e5
+  apart on both sides: grf forests from *consecutive* seeds share most of
+  their draws, and an intermediate version of this comparison that used
+  consecutive R seeds wrongly reported StatsPAI's forest as several times
+  noisier than grf's. T3 now means this, not "within combined Monte Carlo
+  error" computed from sampling SEs.
+- **Implementation provenance of every Track A row, verified by call trace.**
+  `scripts/trace_parity_provenance.py` runs each module under a profiler and
+  records every call from StatsPAI into a non-substrate package and every
+  subprocess; `compare.py::IMPLEMENTATION_PROVENANCE` registers the
+  exceptions and `tests/test_parity_implementation_provenance.py` holds the
+  two together (with a source-hash freshness check). 86 of 89 modules are
+  native; 35 (panel FE/RE via linearmodels), 39 (ARIMA via statsmodels) and
+  67 (panel GLM via pyfixest) are marked as third-party wrappers; none call a
+  reference backend. The parity index and `sp.describe_function` notes carry
+  the kind.
+- `sp.audit` gains a `not_applicable` status (see Fixed) and
+  `AuditReport.not_applicable`.
+
+### Changed (JSS review response, 2026-09)
+
+- **Track A modules 10 and 21 no longer compare R with R.** Both called
+  `sp.honest_did(..., backend="honestdid")`, which runs the R package, so
+  their rows were wrapper checks. Module 10 now runs the native FLCI and is
+  compared with HonestDiD after its simulated folded-normal quantile is
+  replaced by the exact one (<= 1.4e-8 for M > 0) and, at M = 0, with the
+  closed form (GLS linear extrapolation; native 2.2e-9, HonestDiD's cone
+  solver 5.7e-6). Its budget tightened from 5e-4 to 1e-6. Module 21 runs the
+  native ARP set; its numbers are byte-identical to the backend's.
+- **Track A module 06 headline is the native CCT selector**, not the
+  official rdrobust Python port (`bwselect="cct"`), which is kept as an
+  unjoined convergence check (agreement 1.7e-13). Its SE budget tightened
+  from 0.10 to 1e-6: the forced-bandwidth rows that bound it have agreed to
+  2e-15 since 1.24.
+- `result.next_steps()` on an IV fit no longer recommends
+  `sp.estat(result, 'overid')` for a just-identified model, and suggests
+  re-estimating robust SEs with `sp.iv`, not `sp.regress` (which would drop
+  the instruments).
+
+### ⚠️ Correctness (JSS review response, 2026-09)
+
+- **`sp.ebalance` standard error.** The SE was a weighted two-sample
+  variance with the weights held fixed. It ignores that entropy balancing
+  equalises the covariate moments exactly, so outcome variation the
+  covariates explain cancels out of the ATT; on the Track B design it was
+  twice the estimator's Monte Carlo SD (coverage 1.000, size 0.000). The
+  default is now the M-estimation sandwich of the stacked estimating
+  equations (`vce="mestimation"`), which matches
+  `WeightIt::lm_weightit(vcov = "asympt")` to <= 3e-9 on simulated designs
+  and on `MatchIt::lalonde`
+  (`tests/reference_parity/test_ebalance_weightit_parity.py`). Point
+  estimates are unchanged; `vce="naive"` reproduces the old SE. See
+  MIGRATION.md.
+- **`sp.causal_question(design="causal_forest").estimate()` reported an
+  estimate that did not come from the forest.** The branch fitted
+  `sp.causal_forest` and then returned the ATE, SE and interval of a
+  *separate* cross-fit AIPW with its own gradient-boosting nuisances, so the
+  number of trees (or anything else about the forest) had no effect on the
+  answer, and the Track B "causal forest" coverage row measured that other
+  estimator. It now returns the fitted forest's own doubly-robust ATE,
+  `cf.average_treatment_effect(target_sample="all")` -- the estimand
+  `grf::average_treatment_effect` reports -- exactly. `aipw_n_folds=` is
+  accepted and ignored. Forests too small to give every training row an
+  out-of-bag prediction now raise `DataInsufficient` instead of silently
+  returning an unrelated estimate; the Track B rows use the default 2,000
+  trees.
+- **`sp.audit` asked for an over-identification test on just-identified IV
+  fits**, and did not read the Sargan / Hansen J statistic an over-identified
+  fit already carried (it looked only under nested keys, so it reported
+  "missing" either way). The check is now `not_applicable`, with a reason and
+  no suggested function, when excluded instruments equal endogenous
+  regressors, and reads the flat `Sargan p-value` / `Hansen J p-value` keys
+  otherwise. `summary["n_total"]` counts applicable checks only, so
+  `passed + failed + missing == n_total` still holds; `summary
+  ["not_applicable"]` is new. The same semantics reach the MCP
+  `audit_result` tool, whose description had also advertised statuses the
+  function never returned.
+
 ## [1.30.1] — 2026-09-24
 
 Documentation-only release. No code, default, or numerical output changes

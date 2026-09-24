@@ -207,9 +207,14 @@ def econometric_next_steps(result: Any) -> List[Step]:
 
     # Robust SEs suggestion
     if robust == "nonrobust":
+        # Re-estimate with the estimator that produced the fit: an IV fit
+        # re-run through sp.regress would silently drop the instruments.
+        refit = (
+            "sp.iv" if ("iv" in model_type or "2sls" in model_type) else "sp.regress"
+        )
         steps.append(
             Step(
-                f"sp.regress('{dep_var} ~ ...', data=df, robust='hc1')",
+                f"{refit}('{dep_var} ~ ...', data=df, robust='hc1')",
                 "Re-estimate with heteroskedasticity-robust standard errors",
                 priority="recommended",
                 category="robustness",
@@ -278,17 +283,30 @@ def econometric_next_steps(result: Any) -> List[Step]:
                 category="diagnostics",
             ),
         )
+        # The J test has (excluded instruments - endogenous regressors)
+        # degrees of freedom; on a just-identified fit it does not exist,
+        # so recommending it would send the user after a non-test. When
+        # the counts are unknown the step is kept (the audit does the same).
+        from ..smart.audit import _overid_degree
+
+        overid_view = dict(result.model_info or {})
+        for k, v in (getattr(result, "diagnostics", None) or {}).items():
+            overid_view.setdefault(k, v)
+        overid_degree = _overid_degree(overid_view)
+        pos = 1
+        if overid_degree is None or overid_degree > 0:
+            steps.insert(
+                pos,
+                Step(
+                    "sp.estat(result, 'overid')",
+                    "Sargan/Hansen J test of the over-identifying restrictions",
+                    priority="essential",
+                    category="diagnostics",
+                ),
+            )
+            pos += 1
         steps.insert(
-            1,
-            Step(
-                "sp.estat(result, 'overid')",
-                "Sargan/Hansen J test for over-identification (instrument validity)",
-                priority="essential",
-                category="diagnostics",
-            ),
-        )
-        steps.insert(
-            2,
+            pos,
             Step(
                 "sp.estat(result, 'endogenous')",
                 "Durbin-Wu-Hausman test: is IV actually needed vs OLS?",

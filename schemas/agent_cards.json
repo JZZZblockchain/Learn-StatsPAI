@@ -1477,7 +1477,7 @@
       "Track A parity seed",
       "R parity module 06_rd",
       "Stata parity module 06_rd",
-      "Cross-language parity (bit-exact) vs rdrobust::rdrobust [R R version 4.5.2 (2025-10-31), rdrobust 3.0.0]; tolerance rel_est<=1e-06, rel_se<=0.1; parity module 06_rd -- tests/r_parity/06_rd.py",
+      "Cross-language parity (bit-exact) vs rdrobust::rdrobust [R R version 4.5.2 (2025-10-31), rdrobust 3.0.0]; tolerance rel_est<=1e-06, rel_se<=1e-06; parity module 06_rd -- tests/r_parity/06_rd.py",
       "Variant-level certification: bwselect='cct' delegates to official rdrobust for canonical R parity; default mserd is documented as a bandwidth-convention gap."
     ],
     "validation_status": "certified"
@@ -2388,7 +2388,7 @@
     "validation_notes": [
       "Track A parity seed",
       "R parity module 13_causal_forest",
-      "Cross-language parity (aligned) vs grf::causal_forest [R R version 4.5.2 (2025-10-31), grf 2.6.1]; tolerance rel_est<=0.01, rel_se<=0.05; parity module 13_causal_forest -- tests/r_parity/13_causal_forest.py",
+      "Cross-language comparison (seed-replicated stochastic equivalence, T3) vs grf::causal_forest [R R version 4.5.2 (2025-10-31), grf 2.6.1]; tolerance rel_est<=0.01, rel_se<=0.05; parity module 13_causal_forest -- tests/r_parity/13_causal_forest.py",
       "Causal-forest parity evidence is overlap-sensitive; the paper documents the NSW-DW row as an overlap failure mode."
     ],
     "validation_status": "certified"
@@ -4669,7 +4669,7 @@
       "Track A parity seed",
       "R parity module 35_panel",
       "Stata parity module 35_panel",
-      "Cross-language parity (bit-exact) vs plm::plm + plm::phtest [R R version 4.5.2 (2025-10-31), plm 2.6.7]; tolerance rel_est<=1e-06, rel_se<=0.001; parity module 35_panel -- tests/r_parity/35_panel.py"
+      "Cross-language parity (bit-exact) vs plm::plm + plm::phtest [R R version 4.5.2 (2025-10-31), plm 2.6.7]; tolerance rel_est<=1e-06, rel_se<=0.001; parity module 35_panel; implementation: third party python -- tests/r_parity/35_panel.py"
     ],
     "validation_status": "certified"
   },
@@ -27779,7 +27779,7 @@
           },
           "backend": {
             "default": "native",
-            "description": "``'native'`` solves the problem in Python. For ``method='smoothness'`` it computes the true Rambachan-Roth **fixed-length confidence interval**: the optimal affine estimator under ``Delta^SD(M)``, obtained from a convex program over the event-study covariance. With ``HonestDiD``'s Monte-Carlo folded-normal quantile replaced by the exact one, the half-length agrees with R ``HonestDiD::findOptimalFLCI`` to 1e-8 and the bounds to ~2e-5 (HonestDiD's coarser search over ``h``); against the shipped package the gap is that quantile's simulation error, ~1e-3 (``tests/reference_parity/test_did_synth_R_parity.py``). This needs the joint event-study covariance, which is recovered from a Callaway-Sant'Anna fit's influence functions; if it is unavailable the function falls back to a worst-case-bias interval and warns. For ``method='relative_magnitude'`` the native path is still the worst-case-bias approximation ``theta +/- M*max|delta_pre| +/- z*SE``. It tracks the reference closely but is not exact, and it warns. ``'honestdid'``/``'r'`` delegates to the R ``HonestDiD`` package through ``Rscript``. It is handed the same full covariance when one is recoverable; only when it is not does it fall back to ``diag(se2)``, which discards the (large, positive) cross-period covariance and materially changes the confidence set.",
+            "description": "``'native'`` solves the problem in Python. For ``method='smoothness'`` it computes the true Rambachan-Roth **fixed-length confidence interval**: the optimal affine estimator under ``Delta^SD(M)``, obtained from a convex program over the event-study covariance. With ``HonestDiD``'s Monte-Carlo folded-normal quantile replaced by the exact one, the half-length agrees with R ``HonestDiD::findOptimalFLCI`` to 1e-8 and the bounds to ~2e-5 (HonestDiD's coarser search over ``h``); against the shipped package the gap is that quantile's simulation error, ~1e-3 (``tests/reference_parity/test_did_synth_R_parity.py``). This needs the joint event-study covariance, which is recovered from a Callaway-Sant'Anna fit's influence functions; if it is unavailable the function falls back to a worst-case-bias interval and warns. For ``method='relative_magnitude'`` it inverts the Andrews-Roth-Pakes conditional test (``honestdid_method='Conditional'``) or the conditional least-favourable hybrid (``'C-LF'``, the default, as in ``HonestDiD``) over the union of ``Delta^RM`` pieces, on ``HonestDiD``'s default grid of 1,000 points spanning +/-20 standard deviations of the target. On identical inputs the ``'Conditional'`` set equals R ``HonestDiD::createSensitivityResults_relativeMagnitudes`` exactly (same accepted grid points); the ``'C-LF'`` hybrid simulates its first-stage critical value (NumPy draws, not R's), so it agrees up to that Monte Carlo error. Like the FLCI it needs the joint event-study covariance; without it the function falls back to the worst-case-bias approximation ``theta +/- M*max|delta_pre| +/- z*SE`` and warns. A set that reaches either end of the grid is reported with a warning, because its true bound lies outside the grid. ``'honestdid'``/``'r'`` delegates to the R ``HonestDiD`` package through ``Rscript``. It is handed the same full covariance when one is recoverable; only when it is not does it fall back to ``diag(se2)``, which discards the (large, positive) cross-period covariance and materially changes the confidence set.",
             "enum": [
               "native",
               "honestdid",
@@ -27793,7 +27793,7 @@
             "type": "integer"
           },
           "honestdid_method": {
-            "description": "Solver method passed to the R ``HonestDiD`` backend. The default preserves HonestDiD defaults: ``'C-LF'`` for ``method='relative_magnitude'`` and ``'FLCI'`` for ``method='smoothness'``. Ignored by ``backend='native'``.",
+            "description": "Inference method. The default preserves HonestDiD defaults: ``'C-LF'`` for ``method='relative_magnitude'`` and ``'FLCI'`` for ``method='smoothness'``. The native backend implements ``'FLCI'`` (smoothness) and ``'C-LF'`` / ``'Conditional'`` (relative magnitudes); the R backend accepts all four.",
             "enum": [
               "C-LF",
               "Conditional",
@@ -27833,7 +27833,7 @@
       "R parity module 21_honest_relmags",
       "Stata parity module 10_honest_did",
       "Stata parity module 21_honest_relmags",
-      "Cross-language parity (bit-exact) vs HonestDiD::createSensitivityResults_relativeMagnitudes [HonestDiD 0.2.8, R R version 4.5.2 (2025-10-31)]; tolerance abs_est<=1e-06, abs_se<=1e-06; parity module 21_honest_relmags -- tests/r_parity/21_honest_relmags.py"
+      "Cross-language parity (bit-exact) vs HonestDiD::createSensitivityResults (exact quantile) + closed form at M = 0 [HonestDiD 0.2.8, R R version 4.5.2 (2025-10-31)]; tolerance abs_est<=1e-06, abs_se<=1e-06; parity module 10_honest_did -- tests/r_parity/10_honest_did.py"
     ],
     "validation_status": "certified"
   },
@@ -27915,6 +27915,7 @@
     "typical_n_min": 100,
     "validation_notes": [
       "tests/reference_parity/test_did_synth_R_parity.py",
+      "tests/reference_parity/test_honest_rm_R_parity.py",
       "tests/external_parity/test_honest_did_paper_parity.py",
       "Cross-language parity (aligned) vs HonestDiD::findOptimalFLCI 0.2.8 (Rambachan & Roth), breakdown by uniroot on the bound facing zero [CVXR 1.8.2, HonestDiD 0.2.8, R R version 4.5.2 (2025-10-31)]; tolerance vs HonestDiD with its Monte-Carlo folded-normal quantile replaced by the exact one: 1e-9 (observed 6.1e-11); vs HonestDiD as shipped: 1e-3 (observed 4.3e-4), the simulation error of .qfoldednormal (1e6 draws, seed 0; 1.96224 vs exact 1.95996 at mu = 0) -- tests/reference_parity/test_did_synth_R_parity.py"
     ],
@@ -31205,6 +31206,15 @@
             "description": "Binary treatment indicator (0/1).",
             "type": "string"
           },
+          "vce": {
+            "default": "mestimation",
+            "description": "Standard error of the ATT. - ``'mestimation'``: the sandwich variance of the stacked estimating equations -- treated moment means, the entropy-balancing dual conditions, and the two outcome means -- so the uncertainty from estimating the weights is propagated. This is the variance R ``WeightIt::lm_weightit(..., vcov = \"asympt\")`` reports for ``method = \"ebal\", estimand = \"ATT\"``, and it agrees with it to ~1e-9 (``tests/reference_parity/test_ebalance_weightit_parity.py``). Because the weights balance the covariates exactly, outcome variation that the covariates explain cancels out of the ATT, and this variance reflects that. - ``'naive'``: the pre-1.31 formula, a weighted two-sample variance that treats the weights as fixed. It ignores the balancing, so it overstates the standard error whenever the covariates predict the outcome (by about 2x on the Track B design: coverage 1.000, size 0.000). Retained only to reproduce earlier numbers.",
+            "enum": [
+              "mestimation",
+              "naive"
+            ],
+            "type": "string"
+          },
           "y": {
             "description": "Outcome variable.",
             "type": "string"
@@ -31222,6 +31232,7 @@
     "stability": "stable",
     "typical_n_min": 200,
     "validation_notes": [
+      "tests/reference_parity/test_ebalance_weightit_parity.py",
       "tests/reference_parity/test_matching_parity.py",
       "tests/reference_parity/test_matching_r_parity.py",
       "tests/reference_parity/test_paper_parity.py",
@@ -38327,7 +38338,7 @@
     "validation_notes": [
       "R parity module 67_panel_glm",
       "Stata parity module 67_panel_glm",
-      "Cross-language parity (bit-exact) vs fixest::feglm (family=\"logit\") / fixest::fepois [R R version 4.5.2 (2025-10-31), fixest 0.14.0]; tolerance rel_est<=1e-06, rel_se<=5e-05; parity module 67_panel_glm -- tests/r_parity/67_panel_glm.py"
+      "Cross-language parity (bit-exact) vs fixest::feglm (family=\"logit\") / fixest::fepois [R R version 4.5.2 (2025-10-31), fixest 0.14.0]; tolerance rel_est<=1e-06, rel_se<=5e-05; parity module 67_panel_glm; implementation: third party python -- tests/r_parity/67_panel_glm.py"
     ],
     "validation_status": "certified"
   },

@@ -60,6 +60,85 @@ sp.best_linear_projection(r, A=df[["age"]])
 you get the old permutation measure and a `FutureWarning`; from 1.33 the
 default is `"split"` (grf's `variable_importance`, also `sp.variable_importance`).
 
+<a id="ebalance-mestimation-se"></a>
+
+## Unreleased — ⚠️ `sp.ebalance` standard errors account for the balancing
+
+**Who is affected.** Anyone reading `.se`, `.ci` or `.pvalue` from
+`sp.ebalance`. Point estimates do not change.
+
+**What changed.** The standard error treated the entropy-balancing weights
+as fixed and ignored that they balance the covariates exactly, so it
+overstated the uncertainty whenever the covariates predict the outcome --
+by about 2x on a design where they explain most of its variance. The default
+is now the M-estimation sandwich (`vce="mestimation"`), the variance R
+`WeightIt::lm_weightit(vcov = "asympt")` reports for `method = "ebal",
+estimand = "ATT"`.
+
+```python
+r = sp.ebalance(df, y="y", treat="d", covariates=["x1", "x2"])          # new SE
+r_old = sp.ebalance(df, y="y", treat="d", covariates=["x1", "x2"],
+                    vce="naive")                                         # old SE
+```
+
+**What to do.** Re-run inference that used `sp.ebalance`; intervals will
+usually be narrower. Use `vce="naive"` only to reproduce earlier numbers.
+
+---
+
+<a id="causal-question-forest-ate"></a>
+
+## Unreleased — ⚠️ `causal_question(design="causal_forest")` reports the forest's own ATE
+
+**Who is affected.** Anyone reading `.estimate`, `.se` or `.ci` from
+`sp.causal_question(..., design="causal_forest").estimate()`.
+
+**What changed.** The ATE, SE and interval used to come from a separate
+cross-fit AIPW with gradient-boosting nuisances; the fitted forest was kept
+only on `result.underlying`. They now equal
+`result.underlying.average_treatment_effect(target_sample="all")`, the
+forest's own doubly-robust average over its out-of-bag predictions.
+
+**What to do.** Re-run. If you passed a very small `n_estimators` (e.g. 30),
+some rows may have no out-of-bag prediction and the call raises
+`DataInsufficient`; use the default 2,000 trees. `aipw_n_folds=` no longer
+has an effect.
+
+---
+
+<a id="honest-did-native-rm"></a>
+
+## Unreleased — `sp.honest_did(method="relative_magnitude")` is the Rambachan-Roth set natively
+
+**Who is affected.** Calls with `method="relative_magnitude"` and the
+default `backend="native"`.
+
+**What changed.** The native path returned a worst-case-bias approximation
+(`theta_hat +/- Mbar*max|pre| +/- z*SE`) and warned. When the fit carries the
+joint event-study covariance it now returns the Andrews-Roth-Pakes confidence
+set HonestDiD reports (`honestdid_method="C-LF"` by default, or
+`"Conditional"`), reported on HonestDiD's +/-20 SD grid, so bounds are grid
+points. `result.attrs["interval"]` says which you got (`"arp_c_lf"`,
+`"arp_conditional"`, or `"worst_case_bias"` when no covariance is
+available, still with a warning). `sp.breakdown_m(...,
+method="relative_magnitude")` follows.
+
+---
+
+<a id="audit-not-applicable"></a>
+
+## Unreleased — `sp.audit` reports checks that do not exist for a fit as `not_applicable`
+
+**Who is affected.** Code that branches on `sp.audit(...)["checks"][i]
+["status"]` or on `summary["n_total"]`, for IV fits.
+
+**What changed.** An over-identification check on a just-identified IV fit
+now has `status == "not_applicable"` (with a `reason`, and
+`suggest_function` is `None`) instead of `"missing"`. `summary["n_total"]`
+counts applicable checks only (`passed + failed + missing`), and
+`summary["not_applicable"]` counts the rest, so `coverage` is no longer
+diluted by checks that cannot be run.
+
 ---
 
 <a id="forest-continuous-att"></a>

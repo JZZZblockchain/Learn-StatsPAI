@@ -8,7 +8,7 @@ version = "1.30.1"
 description = "Validation-tiered causal inference and econometrics workflows for Python"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [
     {name = "Biaoyue Wang", email = "brycew6m@stanford.edu"},
     {name = "Scott Rozelle", email = "rozelle@stanford.edu"},
