@@ -5411,7 +5411,7 @@
     "name": "das_gupta"
   },
   {
-    "description": "Triple Differences (DDD) estimator. Adds a within-treatment-group subgroup that is unaffected by treatment as an additional control dimension, relaxing parallel trends from 'same trend across groups' to 'same differential trend across subgroups within groups'. Validation: certified parity evidence. Assumptions: Parallel trends in the DDD differential (weaker than DID PT); No anticipation; SUTVA. Pre-conditions: treat x time x subgroup variation exists; subgroup is binary and meaningful within treatment group. Failure modes: Staggered adoption with heterogeneous effects -> Textbook DDD can have negative weights with staggered timing. The Olden-Men (2022) / Strezhnev (2023) heterogeneity-robust DDD is on the roadmap (see docs/rfc/did_roadmap_gap_audit.md Section 4). Alternatives: sp.did_2x2, sp.callaway_santanna. Typical minimum N: 100.",
+    "description": "Triple Differences (DDD). Extends 2x2 DID with a within-unit subgroup comparison to eliminate additional confounders. method='3wfe' (default) is the triple-interaction regression; covariates there are additive and do not identify the covariate-adjusted ATT, so method='dr'/'reg'/'ipw' with id= routes to the conditional estimators of sp.ddd_heterogeneous. Validation: certified parity evidence. Assumptions: Parallel trends in the DDD differential (weaker than DID PT); No anticipation; SUTVA. Pre-conditions: treat x time x subgroup variation exists; subgroup is binary and meaningful within the treatment group; method != '3wfe' also needs id= and both periods per unit. Failure modes: Staggered adoption with heterogeneous effects -> Textbook DDD can carry negative weights with staggered timing. Use sp.ddd_heterogeneous, the Ortiz-Villavicencio and Sant'Anna (2025) estimators pinned against R triplediff; covariates= passed with the default method='3wfe' -> Additive covariates do not identify the covariate-adjusted ATT. Pass method='dr' with id=. Alternatives: sp.ddd_heterogeneous, sp.did_2x2, sp.callaway_santanna. Typical minimum N: 100.",
     "input_schema": {
       "properties": {
         "alpha": {
@@ -5420,39 +5420,54 @@
           "type": "number"
         },
         "cluster": {
-          "description": "Cluster identifier column for clustered standard errors.",
+          "description": "Cluster variable for standard errors",
           "type": "string"
         },
         "covariates": {
-          "description": "Covariate matrix, DataFrame, or column names.",
+          "description": "Covariates. Under method='3wfe' they enter additively and do NOT identify the covariate-adjusted ATT (the caveat is recorded in model_info['diagnostics']); for conditional-parallel-trends DDD use method='dr' with id=.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
+        "id": {
+          "description": "Unit identifier; required by every method other than '3wfe', which pairs each unit's two periods",
+          "type": "string"
+        },
+        "method": {
+          "default": "3wfe",
+          "description": "'3wfe' is the triple-interaction regression; 'dr' / 'reg' / 'ipw' hand the design to sp.ddd_heterogeneous, whose covariate adjustment identifies the DDD ATT under conditional parallel trends",
+          "enum": [
+            "3wfe",
+            "dr",
+            "reg",
+            "ipw"
+          ],
+          "type": "string"
+        },
         "robust": {
           "default": true,
-          "description": "Robust standard-error or covariance estimator option.",
+          "description": "HC1 heteroskedasticity-robust standard errors.",
           "type": "boolean"
         },
         "subgroup": {
-          "description": "Within-group subgroup (1=affected, 0=not)",
+          "description": "Binary affected-subgroup indicator (1=affected, 0=unaffected)",
           "type": "string"
         },
         "time": {
-          "description": "Time period column.",
+          "description": "Binary time period indicator",
           "type": "string"
         },
         "treat": {
-          "description": "Primary treatment indicator",
+          "description": "Binary treatment group indicator",
           "type": "string"
         },
         "weights": {
-          "description": "Observation weights.",
+          "description": "Analytical weights column, as Stata's [aweight=...].",
           "type": "string"
         },
         "y": {
-          "description": "Outcome variable column name or outcome array.",
+          "description": "Outcome variable",
           "type": "string"
         }
       },
@@ -6117,6 +6132,48 @@
     "description": "Workflow wrapper that runs a full DiD pipeline: auto-detects 2x2 vs. staggered, runs the right estimator (CS by default), optionally runs Bacon decomposition, event study, and Rambachan-Roth sensitivity, and aggregates into a DIDAnalysis report object. Assumptions: Parallel trends between treated and control (2x2) or across cohorts (staggered) after any covariate adjustment; No anticipation: pre-treatment outcomes unaffected by future treatment; SUTVA / no interference across units; correct design auto-detection (2x2 vs staggered). Pre-conditions: Panel or repeated cross-section with y, treat, time; id required for staggered designs; treat is binary 0/1 for 2x2, or first-treatment period (0 = never-treated) for staggered; event_window within observed periods when run_event_study is enabled. Failure modes: Staggered design detected but no id column supplied, so cohorts cannot be formed -> Pass the unit identifier via id= so first-treatment cohorts can be inferred; Event-study pre-trend test rejects parallel trends in the bundled report -> Inspect the included honest_did sensitivity output and report bounds rather than the point ATT; Requested method incompatible with the detected d...",
     "input_schema": {
       "properties": {
+        "alpha": {
+          "default": 0.05,
+          "description": "Significance level for confidence intervals and tests.",
+          "type": "number"
+        },
+        "cluster": {
+          "description": "Cluster variable for the SEs.",
+          "type": "string"
+        },
+        "control_group": {
+          "default": "nevertreated",
+          "description": "For the CS / SA estimators.",
+          "enum": [
+            "nevertreated",
+            "notyettreated"
+          ],
+          "type": "string"
+        },
+        "covariates": {
+          "description": "Control variables.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "estimator": {
+          "default": "dr",
+          "description": "For CS: doubly robust, IPW, or outcome regression.",
+          "enum": [
+            "dr",
+            "ipw",
+            "reg"
+          ],
+          "type": "string"
+        },
+        "event_window": {
+          "description": "Event-study window, e.g. (-5, 5); auto-detected if None.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "id": {
           "description": "Unit, subject, or panel identifier column.",
           "type": "string"
@@ -6132,6 +6189,11 @@
             "sdid"
           ],
           "type": "string"
+        },
+        "robust": {
+          "default": true,
+          "description": "HC1 robust standard errors.",
+          "type": "boolean"
         },
         "run_bacon": {
           "default": true,
@@ -9444,6 +9506,10 @@
           "description": "Significance level for confidence intervals and tests.",
           "type": "number"
         },
+        "bin_width": {
+          "description": "Group relative time into bins of this width instead of one coefficient per period. Bins are anchored at the treatment boundary, so post-treatment bins tile [0, k-1], [k, 2k-1], ... and pre-treatment bins tile [-k, -1], [-2k, -k-1], ...",
+          "type": "integer"
+        },
         "cluster": {
           "description": "Cluster identifier column for clustered standard errors.",
           "type": "string"
@@ -9454,6 +9520,11 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "expose_pre_vcov": {
+          "default": false,
+          "description": "Publish the true pre-period covariance into model_info['vcv_pre']. With True, pretrends_test / pretrends_power / sensitivity_rr / honest_did use the full covariance of the pre-treatment coefficients; with False (default) the key is withheld and those tools fall back to a diagonal covariance and warn.",
+          "type": "boolean"
         },
         "ref_period": {
           "default": -1,
@@ -9470,6 +9541,10 @@
         },
         "unit": {
           "description": "Unit identifier",
+          "type": "string"
+        },
+        "weights": {
+          "description": "Analytical weights column, as Stata's [aweight=...].",
           "type": "string"
         },
         "window": {
@@ -12029,6 +12104,16 @@
         },
         "unit": {
           "description": "Unit identifier column.",
+          "type": "string"
+        },
+        "weighting": {
+          "default": "precision",
+          "description": "How the harvested 2x2 estimates are aggregated: 'precision' inverse-variance (minimum-variance under independence), 'equal' unweighted, 'n_treated' by each comparison's treated-unit count.",
+          "enum": [
+            "precision",
+            "equal",
+            "n_treated"
+          ],
           "type": "string"
         }
       },

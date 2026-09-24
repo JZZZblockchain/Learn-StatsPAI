@@ -3333,6 +3333,7 @@
     },
     {
       "additional_tests": [
+        "tests/reference_parity/test_dcdh_options_parity.py",
         "tests/reference_parity/test_multiplegt_dyn_options_parity.py",
         "tests/reference_parity/test_multiplegt_dyn_parity.py"
       ],

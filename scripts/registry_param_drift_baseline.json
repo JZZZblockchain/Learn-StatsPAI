@@ -244,15 +244,6 @@
       "wild_reps",
       "wild_weight_type"
     ],
-    "did_analysis": [
-      "alpha",
-      "cluster",
-      "control_group",
-      "covariates",
-      "estimator",
-      "event_window",
-      "robust"
-    ],
     "dl_propensity_score": [
       "max_iter",
       "random_state"
@@ -314,11 +305,6 @@
       "t",
       "title"
     ],
-    "event_study": [
-      "bin_width",
-      "expose_pre_vcov",
-      "weights"
-    ],
     "evidence_without_injustice": [
       "random_state"
     ],
@@ -357,9 +343,6 @@
     ],
     "hal_tmle": [
       "propensity_bounds"
-    ],
-    "harvest_did": [
-      "weighting"
     ],
     "inward_outward_spillover": [
       "alpha",

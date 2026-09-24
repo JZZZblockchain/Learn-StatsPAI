@@ -1229,6 +1229,31 @@ def _build_registry() -> None:
                     "Cluster variable for standard errors",
                 ),
                 ParamSpec(
+                    "covariates",
+                    "list",
+                    False,
+                    None,
+                    "Covariates. Under method='3wfe' they enter additively and "
+                    "do NOT identify the covariate-adjusted ATT (the caveat is "
+                    "recorded in model_info['diagnostics']); for "
+                    "conditional-parallel-trends DDD use method='dr' with id=.",
+                ),
+                ParamSpec(
+                    "robust",
+                    "bool",
+                    False,
+                    True,
+                    "HC1 heteroskedasticity-robust standard errors.",
+                ),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Analytical weights column, as Stata's [aweight=...].",
+                ),
+                ParamSpec(
                     "id",
                     "str",
                     False,
@@ -1251,72 +1276,41 @@ def _build_registry() -> None:
             returns="CausalResult",
             example='sp.ddd(df, y="employment", treat="nj", time="post", subgroup="low_wage")',
             tags=["ddd", "triple", "did", "causal", "subgroup"],
-            reference="Gruber (1994); Olden & Møen (2022)",
-        )
-    )
-
-    register(
-        FunctionSpec(
-            name="did_analysis",
-            category="causal",
-            description="DID workflow helper: design detection, Bacon decomposition, estimation, event study, and sensitivity analysis.",
-            params=[
-                ParamSpec("data", "DataFrame", True),
-                ParamSpec("y", "str", True, description="Outcome variable"),
-                ParamSpec(
-                    "treat",
-                    "str",
-                    True,
-                    description="Treatment indicator or first-treatment-period column",
+            reference="Gruber (1994); Olden & Møen (2022) [@olden2022triple]",
+            pre_conditions=[
+                "treat x time x subgroup variation exists",
+                "subgroup is binary and meaningful within the treatment group",
+                "method != '3wfe' also needs id= and both periods per unit",
+            ],
+            assumptions=[
+                "Parallel trends in the DDD differential (weaker than DID PT)",
+                "No anticipation",
+                "SUTVA",
+            ],
+            failure_modes=[
+                FailureMode(
+                    symptom="Staggered adoption with heterogeneous effects",
+                    exception="statspai.AssumptionWarning",
+                    remedy=(
+                        "Textbook DDD can carry negative weights with staggered "
+                        "timing. Use sp.ddd_heterogeneous, the "
+                        "Ortiz-Villavicencio and Sant'Anna (2025) estimators "
+                        "pinned against R triplediff."
+                    ),
+                    alternative="sp.ddd_heterogeneous",
                 ),
-                ParamSpec("time", "str", True, description="Time period column"),
-                ParamSpec(
-                    "id",
-                    "str",
-                    False,
-                    description="Unit identifier (for staggered DID)",
-                ),
-                ParamSpec(
-                    "method",
-                    "str",
-                    False,
-                    "auto",
-                    "Estimator: 'auto', '2x2', 'cs', 'sa', 'sdid'",
-                ),
-                ParamSpec(
-                    "run_bacon",
-                    "bool",
-                    False,
-                    True,
-                    "Run Bacon decomposition for staggered designs",
-                ),
-                ParamSpec(
-                    "run_event_study",
-                    "bool",
-                    False,
-                    True,
-                    "Run event study for dynamic effects",
-                ),
-                ParamSpec(
-                    "run_sensitivity",
-                    "bool",
-                    False,
-                    True,
-                    "Run honest_did sensitivity analysis",
+                FailureMode(
+                    symptom="covariates= passed with the default method='3wfe'",
+                    exception="statspai.AssumptionWarning",
+                    remedy=(
+                        "Additive covariates do not identify the "
+                        "covariate-adjusted ATT. Pass method='dr' with id=."
+                    ),
+                    alternative="sp.ddd_heterogeneous",
                 ),
             ],
-            returns="DIDAnalysis",
-            example='report = sp.did_analysis(df, y="earnings", treat="first_treat", time="year", id="worker")\nprint(report.summary())',
-            tags=[
-                "did",
-                "workflow",
-                "analysis",
-                "bacon",
-                "event_study",
-                "sensitivity",
-                "diagnostic",
-            ],
-            reference="Cunningham (2021, The Mixtape Ch.9)",
+            alternatives=["ddd_heterogeneous", "did_2x2", "callaway_santanna"],
+            typical_n_min=100,
         )
     )
 
@@ -4577,33 +4571,6 @@ def _build_registry() -> None:
     )
 
     # -- Event Study ------------------------------------------------------ #
-    register(
-        FunctionSpec(
-            name="event_study",
-            category="causal",
-            description="Traditional OLS event study with lead/lag dummies, TWFE, and pre-trend test.",
-            params=[
-                ParamSpec("data", "DataFrame", True),
-                ParamSpec("y", "str", True),
-                ParamSpec(
-                    "treat_time",
-                    "str",
-                    True,
-                    description="Column with unit's treatment time",
-                ),
-                ParamSpec("time", "str", True, description="Calendar time column"),
-                ParamSpec("unit", "str", True, description="Unit identifier column"),
-                ParamSpec(
-                    "window", "list", False, [-4, 4], "Relative time window [min, max]"
-                ),
-            ],
-            returns="CausalResult with event_study DataFrame and pre-trend test",
-            example='sp.event_study(df, y="wage", treat_time="first_treat", time="year", unit="worker")',
-            tags=["event-study", "did", "lead-lag", "twfe", "parallel-trends"],
-            reference="Freyaldenhoven, Hansen & Shapiro (2019)",
-        )
-    )
-
     # -- Augmented Synthetic Control -------------------------------------- #
     register(
         FunctionSpec(
@@ -7032,30 +6999,6 @@ def _build_registry() -> None:
     # -- Overlap-weighted DID + DL propensity ------------------------ #
     register(
         FunctionSpec(
-            name="overlap_weighted_did",
-            category="causal",
-            description=(
-                "2x2 DID with overlap weights w=e(X)(1-e(X)), focusing the "
-                "ATT on the subpopulation where treatment assignment is most "
-                "ambiguous (Econ Letters 2025)."
-            ),
-            params=[
-                ParamSpec("data", "DataFrame", True),
-                ParamSpec("y", "str", True),
-                ParamSpec("treat", "str", True),
-                ParamSpec("time", "str", True),
-                ParamSpec("covariates", "list", False),
-                ParamSpec(
-                    "ps_model", "str", False, "logit", enum=["logit", "gbm", "dl"]
-                ),
-            ],
-            returns="CausalResult",
-            tags=["did", "overlap", "propensity", "causal"],
-            reference="Li, Morgan, Zaslavsky (JASA 2018); Econ Letters 2025.",
-        )
-    )
-    register(
-        FunctionSpec(
             name="dl_propensity_score",
             category="causal",
             description=(
@@ -9226,47 +9169,6 @@ def _build_registry() -> None:
             ),
             tags=["fairness", "counterfactual", "algorithmic_bias", "kwak_pleasants"],
             reference="Loi, Di Bello & Cangiotti (arXiv:2510.12822, 2025).",
-        )
-    )
-
-    register(
-        FunctionSpec(
-            name="harvest_did",
-            category="did",
-            description=(
-                "Harvesting DID / event study: every Callaway-Sant'Anna ATT(g, g+e) "
-                "cell with not-yet-treated controls and a universal base period "
-                "(did::att_gt(control_group='notyettreated', "
-                "base_period='universal')), "
-                "aggregated per horizon and then across horizons by inverse variance "
-                "with the joint influence-function covariance; reports the event study "
-                "and pretrend Wald tests. The name follows the title of Abadie, "
-                "Angrist, "
-                "Frandsen & Pischke (NBER WP 34550, 2025), which does not define this "
-                "estimator."
-            ),
-            params=[
-                ParamSpec("data", "DataFrame", True),
-                ParamSpec("unit", "str", True),
-                ParamSpec("time", "str", True),
-                ParamSpec("outcome", "str", True),
-                ParamSpec("treat", "str", False),
-                ParamSpec("cohort", "str", False),
-                ParamSpec("horizons", "list", False),
-                ParamSpec("reference", "int", False, -1),
-                ParamSpec("alpha", "float", False, 0.05),
-                ParamSpec(
-                    "weighting",
-                    "str",
-                    False,
-                    "precision",
-                    enum=["precision", "equal", "n_treated"],
-                ),
-            ],
-            returns="CausalResult",
-            example="sp.harvest_did(df, unit='u', time='t', outcome='y', treat='D')",
-            tags=["did", "event_study", "harvest", "staggered"],
-            reference="MIT / NBER WP 34550, 2025.",
         )
     )
 
@@ -12836,72 +12738,6 @@ def _build_registry() -> None:
 
     register(
         FunctionSpec(
-            name="ddd",
-            category="causal",
-            description=(
-                "Triple Differences (DDD) estimator. Adds a within-treatment-group "
-                "subgroup that is unaffected by treatment as an additional "
-                "control dimension, relaxing parallel trends from 'same trend "
-                "across groups' to 'same differential trend across subgroups "
-                "within groups'."
-            ),
-            params=[
-                ParamSpec("data", "DataFrame", True),
-                ParamSpec("y", "str", True),
-                ParamSpec(
-                    "treat", "str", True, description="Primary treatment indicator"
-                ),
-                ParamSpec("time", "str", True),
-                ParamSpec(
-                    "subgroup",
-                    "str",
-                    True,
-                    description="Within-group subgroup (1=affected, 0=not)",
-                ),
-                ParamSpec("covariates", "list", False, None),
-                ParamSpec("cluster", "str", False, None),
-                ParamSpec("robust", "bool", False, True),
-                ParamSpec("alpha", "float", False, 0.05),
-                ParamSpec("weights", "str", False, None),
-            ],
-            returns="CausalResult",
-            example=(
-                'sp.ddd(df, y="y", treat="policy_state", time="year", '
-                'subgroup="eligible")'
-            ),
-            tags=["did", "ddd", "triple", "causal"],
-            reference=(
-                "Gruber (1994) JPE — classical DDD; Olden & Møen (2022) "
-                "[@olden2022triple] — heterogeneity-robust variant (separate "
-                "function on the roadmap)."
-            ),
-            pre_conditions=[
-                "treat × time × subgroup variation exists",
-                "subgroup is binary and meaningful within treatment group",
-            ],
-            assumptions=[
-                "Parallel trends in the DDD differential (weaker than DID PT)",
-                "No anticipation",
-                "SUTVA",
-            ],
-            failure_modes=[
-                FailureMode(
-                    symptom="Staggered adoption with heterogeneous effects",
-                    exception="AssumptionWarning",
-                    remedy="Textbook DDD can have negative weights with staggered "
-                    "timing. The Olden-Møen (2022) / Strezhnev (2023) "
-                    "heterogeneity-robust DDD is on the roadmap "
-                    "(see docs/rfc/did_roadmap_gap_audit.md §4).",
-                    alternative="",
-                ),
-            ],
-            alternatives=["did_2x2", "callaway_santanna"],
-            typical_n_min=100,
-        )
-    )
-
-    register(
-        FunctionSpec(
             name="cic",
             category="causal",
             description=(
@@ -13077,6 +12913,36 @@ def _build_registry() -> None:
                 ParamSpec("covariates", "list", False, None),
                 ParamSpec("cluster", "str", False, None),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "bin_width",
+                    "int",
+                    False,
+                    None,
+                    "Group relative time into bins of this width instead of "
+                    "one coefficient per period. Bins are anchored at the "
+                    "treatment boundary, so post-treatment bins tile "
+                    "[0, k-1], [k, 2k-1], ... and pre-treatment bins tile "
+                    "[-k, -1], [-2k, -k-1], ...",
+                ),
+                ParamSpec(
+                    "weights",
+                    "str",
+                    False,
+                    None,
+                    "Analytical weights column, as Stata's [aweight=...].",
+                ),
+                ParamSpec(
+                    "expose_pre_vcov",
+                    "bool",
+                    False,
+                    False,
+                    "Publish the true pre-period covariance into "
+                    "model_info['vcv_pre']. With True, pretrends_test / "
+                    "pretrends_power / sensitivity_rr / honest_did use the "
+                    "full covariance of the pre-treatment coefficients; with "
+                    "False (default) the key is withheld and those tools fall "
+                    "back to a diagonal covariance and warn.",
+                ),
             ],
             returns="CausalResult with event_study DataFrame",
             example=(
@@ -13142,6 +13008,35 @@ def _build_registry() -> None:
                 ParamSpec("run_bacon", "bool", False, True),
                 ParamSpec("run_event_study", "bool", False, True),
                 ParamSpec("run_sensitivity", "bool", False, True),
+                ParamSpec("covariates", "list", False, None, "Control variables."),
+                ParamSpec(
+                    "cluster", "str", False, None, "Cluster variable for the SEs."
+                ),
+                ParamSpec("robust", "bool", False, True, "HC1 robust standard errors."),
+                ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "control_group",
+                    "str",
+                    False,
+                    "nevertreated",
+                    "For the CS / SA estimators.",
+                    ["nevertreated", "notyettreated"],
+                ),
+                ParamSpec(
+                    "estimator",
+                    "str",
+                    False,
+                    "dr",
+                    "For CS: doubly robust, IPW, or outcome regression.",
+                    ["dr", "ipw", "reg"],
+                ),
+                ParamSpec(
+                    "event_window",
+                    "tuple",
+                    False,
+                    None,
+                    "Event-study window, e.g. (-5, 5); auto-detected if None.",
+                ),
             ],
             returns="DIDAnalysis",
             example=(
@@ -13198,6 +13093,17 @@ def _build_registry() -> None:
                     "Pre-treatment reference horizon relative to each cohort",
                 ),
                 ParamSpec("alpha", "float", False, 0.05),
+                ParamSpec(
+                    "weighting",
+                    "str",
+                    False,
+                    "precision",
+                    "How the harvested 2x2 estimates are aggregated: "
+                    "'precision' inverse-variance (minimum-variance under "
+                    "independence), 'equal' unweighted, 'n_treated' by each "
+                    "comparison's treated-unit count.",
+                    ["precision", "equal", "n_treated"],
+                ),
             ],
             returns="CausalResult with all 2x2 comparisons in detail",
             example=(
@@ -14755,16 +14661,6 @@ def _build_registry() -> None:
                 ParamSpec("n_boot", "int", False, 1000),
                 ParamSpec("cband", "bool", False, True, "Uniform confidence band"),
                 ParamSpec("alpha", "float", False, 0.05),
-                ParamSpec(
-                    "agg_weights",
-                    "str",
-                    False,
-                    "did",
-                    "Aggregation-weight convention: R did's cohort shares, "
-                    "or Stata csdid's per-cell treated-observation counts "
-                    "(repeated cross-sections only; simple and group)",
-                    ["did", "csdid"],
-                ),
                 ParamSpec("random_state", "int", False, None),
                 ParamSpec(
                     "share_variance",
@@ -14774,6 +14670,16 @@ def _build_registry() -> None:
                     "Carry the estimated-cohort-share term (R did:::wif) into the "
                     "aggregated variance; False holds the shares fixed as Stata "
                     "csdid's estat group does",
+                ),
+                ParamSpec(
+                    "agg_weights",
+                    "str",
+                    False,
+                    "did",
+                    "Aggregation-weight convention: R did's cohort shares, "
+                    "or Stata csdid's per-cell treated-observation counts "
+                    "(repeated cross-sections only; simple and group)",
+                    ["did", "csdid"],
                 ),
             ],
             returns="CausalResult",

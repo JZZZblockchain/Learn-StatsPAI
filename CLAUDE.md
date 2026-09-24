@@ -209,7 +209,25 @@ PyPI 凭据在 `~/.pypirc`——**不要**提交仓库、不要写进 memory。�
 
 **开工前先看这条。** 如果另一个 Claude 窗口（或同事）正在本仓库作业，**不要**两边都在主工作树的 `main` 上改。
 
-实测代价（2026-08-01，两条线并行一晚）：八个文件进入永久争用——`registry.py`、`__init__.py`、`CHANGELOG.md`、`MIGRATION.md` 是手工追加点，`schemas/*`、`_parity_index.json`、`docs/parity.md`、`docs/stats.md` 是**生成产物**（后者纯粹因为两边都重新生成才冲突）。每次提交要手工做「备份共享文件 → 还原到 HEAD → 重生成派生产物 → 提交 → 还原」五步，做了四轮；推送闸门按*已提交*状态检查而工作区混着两边改动，两个视角每次都打架。更糟的是有一次 `-A` 式全量提交把另一条线未提交的工作整个扫了进去，代码上了 main 却挂在毫不相关的 commit message 下。
+实测代价（2026-08-01，两条线并行一晚）：多个文件进入永久争用。每次提交要手工做「备份共享文件 → 还原到 HEAD → 重生成派生产物 → 提交 → 还原」五步，做了四轮；推送闸门按*已提交*状态检查而工作区混着两边改动，两个视角每次都打架。更糟的是有一次 `-A` 式全量提交把另一条线未提交的工作整个扫了进去，代码上了 main 却挂在毫不相关的 commit message 下。
+
+**争用点清单**（2026-09-24 更新；原先只列了八个，实测不止）：
+
+| 类别 | 文件 | 为什么争 |
+| --- | --- | --- |
+| 手工追加点 | `registry.py`、`__init__.py`（三处：import 块 / `__all__` / `_register_lazy`）、`CHANGELOG.md`、`MIGRATION.md`、`CLAUDE.md` 本身 | 两边都往同一段尾部追加 |
+| **计数行** | `README.md`、`README_CN.md`、`docs/index.md`、`docs/reference/index.md` | 四处手写的「N 个注册函数」，由 `registry_stats.py --check` 门控。**对方加一个函数，你这四行同时作废** |
+| 生成产物 | `schemas/*` **与** `src/statspai/schemas/*`（包内镜像）、`_parity_index.json`、`docs/parity.md`、`docs/stats.md`（两类冲突：at-a-glance 行 + 按模块行） | 纯粹因为两边都重新生成 |
+| 字节同步对 | `paper.bib` ↔ `src/statspai/paper.bib` | 必须逐字节一致 |
+| 棘轮基线 | `scripts/signature_house_style_baseline.json`、`quality_gate` 的 mypy / flake8 基线 | 只降不升，两边都想动 |
+
+**计数行不要自己算。** 别拿「我加了 2 个函数所以 1,190 → 1,192」去改——并行期间对方也在加。跑 `python scripts/registry_stats.py --check`，**它报什么数字就填什么**，再用 `--table` 重生 `docs/stats.md` 的对应模块行。2026-09-23/24 一晚上这个数被推了四次（1,189 → 1,190 → 1,192 → 1,197 → 1,198）。
+
+**派生产物有生成顺序：`build_parity_index.py` 必须在 `dump_schemas.py` 之前。** registry 的证据备注由 parity index 派生（§5.1 末句），schema 包又把备注嵌进去；顺序反了，推送时 `schema-drift` 闸门会拦，而报错只说 schemas 陈旧，不会提示是索引的锅。
+
+**rebase 撞到生成产物时不要手工合并冲突**——取对方的版本再重生（`checkout origin/main -- <那批派生文件>`，然后按上面的顺序重跑两个脚本，最后按 `registry_stats.py --check` 报的数字改那四行计数）。只有手工追加点（`CHANGELOG.md` / `CLAUDE.md` / `registry.py`）才逐块合。注意对方**发版**时会把你的 `## [Unreleased]` 段整个提升成 `## [X.Y.Z]`——你的条目要另起一个新的 Unreleased 段，不要塞回已发布的版本里。
+
+**提交被 hook 改文件而失败之后，不要顺手 `--amend`。** pre-commit 的 black / isort 会重写文件并让本次提交失败；此时最自然的下一步「重新 add 再 `--amend --no-edit`」会把新改动并进**上一个、很可能已经推送过的** commit，挂在毫不相干的 message 下。2026-09-23 真发生过，靠 `reset --soft <那个已推送的 sha>` 才救回来。正确做法是重新暂存后**新起一次**提交。
 
 **做法**：
 
